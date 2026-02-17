@@ -110,20 +110,20 @@ export default function ProjectDetailPage() {
       const teamRes = await API.get(`/projects/${projectId}/team`);
       setTeam(teamRes.data);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to add member");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setAddingMember(false);
     }
   };
 
   const handleRemoveMember = async (memberId) => {
-    if (!window.confirm("Remove this team member?")) return;
+    if (!window.confirm(t("projects.removeTeamMemberConfirm"))) return;
     try {
       await API.delete(`/projects/${projectId}/team/${memberId}`);
       const teamRes = await API.get(`/projects/${projectId}/team`);
       setTeam(teamRes.data);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to remove member");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     }
   };
 
