@@ -89,10 +89,10 @@ export default function RemindersPage() {
         user_ids: userIds,
         project_id: projectId || null,
       });
-      alert(`Sent ${res.data.sent} of ${res.data.total} reminders`);
+      alert(t("reminders.sentXofY", { sent: res.data.sent, total: res.data.total }));
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setSending(false);
     }
