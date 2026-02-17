@@ -85,7 +85,7 @@ export default function MyDayPage() {
       await fetchToday();
       setNote("");
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to mark attendance");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setMarking(false);
     }
