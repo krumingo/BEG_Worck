@@ -2436,12 +2436,13 @@ async def generate_payroll(run_id: str, user: dict = Depends(get_current_user)):
     # Log users without profiles
     all_users = await db.users.find(
         {"org_id": org_id, "role": {"$nin": ["Admin", "Owner", "Accountant"]}},
-        {"_id": 0, "id": 1, "name": 1}
+        {"_id": 0, "id": 1, "name": 1, "email": 1}
     ).to_list(500)
     profile_user_ids = {p["user_id"] for p in profiles}
     for u in all_users:
         if u["id"] not in profile_user_ids:
-            warnings.append(f"{u['name']} has no pay profile")
+            name = u.get("name", u.get("email", "Unknown").split("@")[0])
+            warnings.append(f"{name} has no pay profile")
     
     await log_audit(org_id, user["id"], user["email"], "payroll_generated", "payroll_run", run_id,
                     {"created": created, "profiles": len(profiles)})
