@@ -88,12 +88,12 @@ export default function OffersListPage() {
     <div className="p-8 max-w-[1400px]" data-testid="offers-list-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Estimates & Offers</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage quotes and bill of quantities</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("offers.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("offers.subtitle")}</p>
         </div>
         {canCreate && (
           <Button onClick={() => navigate("/offers/new")} data-testid="create-offer-btn">
-            <Plus className="w-4 h-4 mr-2" /> New Offer
+            <Plus className="w-4 h-4 mr-2" /> {t("offers.newOffer")}
           </Button>
         )}
       </div>
@@ -103,7 +103,7 @@ export default function OffersListPage() {
         <div className="relative flex-1 min-w-[200px] max-w-[300px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search offers..."
+            placeholder={t("offers.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-card"
@@ -118,10 +118,10 @@ export default function OffersListPage() {
         }}>
           <SelectTrigger className="w-[200px] bg-card" data-testid="project-filter">
             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="All Projects" />
+            <SelectValue placeholder={t("common.allProjects")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
+            <SelectItem value="all">{t("common.allProjects")}</SelectItem>
             {projects.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
             ))}
@@ -129,14 +129,14 @@ export default function OffersListPage() {
         </Select>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[150px] bg-card" data-testid="status-filter">
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder={t("common.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
-            <SelectItem value="Sent">Sent</SelectItem>
-            <SelectItem value="Accepted">Accepted</SelectItem>
-            <SelectItem value="Rejected">Rejected</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
+            <SelectItem value="Draft">{t("offers.status.draft")}</SelectItem>
+            <SelectItem value="Sent">{t("offers.status.sent")}</SelectItem>
+            <SelectItem value="Accepted">{t("offers.status.accepted")}</SelectItem>
+            <SelectItem value="Rejected">{t("offers.status.rejected")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -151,13 +151,13 @@ export default function OffersListPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Offer</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Project</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Version</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lines</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Total</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.offer")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.project")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.version")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.lines")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.total")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -165,10 +165,10 @@ export default function OffersListPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No offers found</p>
+                    <p>{t("offers.noOffers")}</p>
                     {canCreate && (
                       <Button variant="outline" className="mt-4" onClick={() => navigate("/offers/new")}>
-                        Create your first offer
+                        {t("offers.createFirstOffer")}
                       </Button>
                     )}
                   </TableCell>
@@ -191,7 +191,7 @@ export default function OffersListPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-xs ${STATUS_COLORS[offer.status] || ""}`}>
-                        {offer.status}
+                        {t(`offers.status.${offer.status.toLowerCase()}`)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">v{offer.version}</TableCell>
