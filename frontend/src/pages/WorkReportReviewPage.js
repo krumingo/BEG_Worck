@@ -86,7 +86,7 @@ export default function WorkReportReviewPage() {
     try {
       await API.post(`/work-reports/${reportId}/approve`);
       await fetchReports();
-    } catch (err) { alert(err.response?.data?.detail || "Failed"); }
+    } catch (err) { alert(err.response?.data?.detail || t("toast.errorOccurred")); }
     finally { setActing(false); }
   };
 
@@ -103,7 +103,7 @@ export default function WorkReportReviewPage() {
       await API.post(`/work-reports/${rejectTarget.id}/reject`, { reason: rejectReason });
       setRejectOpen(false);
       await fetchReports();
-    } catch (err) { alert(err.response?.data?.detail || "Failed"); }
+    } catch (err) { alert(err.response?.data?.detail || t("toast.errorOccurred")); }
     finally { setActing(false); }
   };
 
