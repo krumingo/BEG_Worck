@@ -1068,7 +1068,7 @@ class BEGWorkAPITester:
 
     def run_all_tests(self):
         """Run all backend API tests"""
-        print("🔬 Starting BEG_Work API Tests - M0 Core + M1 Projects")
+        print("🔬 Starting BEG_Work API Tests - M0 Core + M1 Projects + M3 Attendance")
         print("=" * 60)
         
         # M0 Core tests (existing)
