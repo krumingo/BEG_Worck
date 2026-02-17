@@ -32,6 +32,7 @@
     "inactive": "Inactive",
     "required": "Required",
     "optional": "Optional",
+    "optionalNote": "Optional note...",
     "success": "Success",
     "error": "Error",
     "warning": "Warning",
@@ -103,7 +104,13 @@
     "allDirections": "All Directions",
     "allAccounts": "All Accounts",
     "noProject": "No project",
-    "free": "free"
+    "free": "free",
+    "send": "Send",
+    "user": "User",
+    "last": "Last",
+    "approve": "Approve",
+    "reject": "Reject",
+    "accept": "Accept"
   },
   "auth": {
     "login": "Login",
