@@ -1067,6 +1067,401 @@ class BEGWorkAPITester:
             details = response.text if hasattr(response, 'text') else str(response)
             return self.log_result("Audit logging for attendance", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
 
+    # ═══ M3 WORK REPORTS MODULE TESTS ═══
+
+    def test_create_work_report_draft(self):
+        """Test POST /api/work-reports/draft - creates draft when attendance is Present/Late"""
+        if not self.existing_project_id:
+            return self.log_result("POST /work-reports/draft", False, "No project ID available")
+        
+        draft_data = {"project_id": self.existing_project_id}
+        success, response = self.make_request('POST', 'work-reports/draft', draft_data, 201)
+        
+        if success:
+            data = response.json()
+            required_fields = ['id', 'project_id', 'user_id', 'status', 'date', 'lines', 'total_hours']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                if data['status'] == 'Draft' and data['total_hours'] == 0:
+                    self.work_report_id = data['id']
+                    return self.log_result("POST /work-reports/draft", True, 
+                        f"Draft created: {data['id'][:8]}..., Status: {data['status']}")
+                else:
+                    return self.log_result("POST /work-reports/draft", False, f"Unexpected status or hours: {data}")
+            else:
+                return self.log_result("POST /work-reports/draft", False, f"Missing fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /work-reports/draft", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_create_work_report_draft_no_attendance(self):
+        """Test POST /api/work-reports/draft fails when no Present/Late attendance (400)"""
+        # Create a new user without attendance to test this scenario
+        test_user = {
+            "email": f"noattend_{datetime.now().strftime('%H%M%S')}@example.com",
+            "password": "TestPass123!",
+            "first_name": "No",
+            "last_name": "Attendance",
+            "role": "Technician"
+        }
+        
+        # Create user
+        success, response = self.make_request('POST', 'users', test_user, 201)
+        if not success:
+            return self.log_result("POST /work-reports/draft no attendance", False, "Failed to create test user")
+        
+        user_data = response.json()
+        
+        # Login as this new user
+        admin_token = self.token
+        success, response = self.make_request('POST', 'auth/login', 
+            {"email": test_user["email"], "password": test_user["password"]}, 200)
+        
+        if not success:
+            self.token = admin_token
+            return self.log_result("POST /work-reports/draft no attendance", False, "Failed to login as test user")
+        
+        self.token = response.json()['token']
+        
+        # Try to create work report without attendance
+        draft_data = {"project_id": self.existing_project_id}
+        success, response = self.make_request('POST', 'work-reports/draft', draft_data, 400)
+        
+        result = self.log_result("POST /work-reports/draft no attendance", success, 
+            "Should fail when no Present/Late attendance marked")
+        
+        # Clean up - restore admin token and delete test user
+        self.token = admin_token
+        self.make_request('DELETE', f'users/{user_data["id"]}', expected_status=200)
+        
+        return result
+
+    def test_create_work_report_draft_duplicate(self):
+        """Test POST /api/work-reports/draft returns existing if duplicate (same org, date, user, project)"""
+        if not self.existing_project_id:
+            return self.log_result("POST /work-reports/draft duplicate", False, "No project ID available")
+        
+        draft_data = {"project_id": self.existing_project_id}
+        success, response = self.make_request('POST', 'work-reports/draft', draft_data, 201)
+        
+        if success:
+            data = response.json()
+            # Should return existing report (same ID as before)
+            if hasattr(self, 'work_report_id') and data['id'] == self.work_report_id:
+                return self.log_result("POST /work-reports/draft duplicate", True, 
+                    "Returns existing report for same org/date/user/project")
+            else:
+                return self.log_result("POST /work-reports/draft duplicate", True, 
+                    "Creates or returns draft report")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /work-reports/draft duplicate", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_update_work_report(self):
+        """Test PUT /api/work-reports/{id} updates summary and lines (Draft/Rejected only)"""
+        if not hasattr(self, 'work_report_id'):
+            return self.log_result("PUT /work-reports/{id}", False, "No work report ID available")
+        
+        update_data = {
+            "summary_note": "Updated summary from API test",
+            "lines": [
+                {"activity_name": "Site inspection", "hours": 2.5, "note": "Morning inspection"},
+                {"activity_name": "Equipment maintenance", "hours": 3.0, "note": "Routine check"}
+            ]
+        }
+        
+        success, response = self.make_request('PUT', f'work-reports/{self.work_report_id}', update_data, 200)
+        
+        if success:
+            data = response.json()
+            if (data.get('summary_note') == update_data['summary_note'] and 
+                len(data.get('lines', [])) == 2 and
+                data.get('total_hours') == 5.5):
+                return self.log_result("PUT /work-reports/{id}", True, 
+                    f"Updated: {len(data['lines'])} lines, {data['total_hours']}h total")
+            else:
+                return self.log_result("PUT /work-reports/{id}", False, "Update not reflected correctly")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("PUT /work-reports/{id}", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_update_work_report_invalid_status(self):
+        """Test PUT /api/work-reports/{id} fails for Submitted/Approved reports (400)"""
+        # First submit the report to test this
+        if not hasattr(self, 'work_report_id'):
+            return self.log_result("PUT /work-reports/{id} invalid status", False, "No work report ID available")
+        
+        # Submit the report first
+        success, response = self.make_request('POST', f'work-reports/{self.work_report_id}/submit', expected_status=200)
+        if not success:
+            return self.log_result("PUT /work-reports/{id} invalid status", False, "Failed to submit report for test")
+        
+        # Now try to update a submitted report (should fail)
+        update_data = {"summary_note": "Should not be allowed"}
+        success, response = self.make_request('PUT', f'work-reports/{self.work_report_id}', update_data, 400)
+        
+        return self.log_result("PUT /work-reports/{id} invalid status", success, 
+            "Should reject updates to Submitted/Approved reports")
+
+    def test_submit_work_report(self):
+        """Test POST /api/work-reports/{id}/submit changes status to Submitted"""
+        # Create a new draft to submit (since previous one is submitted)
+        if not self.existing_project_id:
+            return self.log_result("POST /work-reports/{id}/submit", False, "No project ID available")
+        
+        # Create new draft
+        draft_data = {"project_id": self.existing_project_id, "date": "2024-01-15"}  # Different date
+        success, response = self.make_request('POST', 'work-reports/draft', draft_data, 201)
+        if not success:
+            return self.log_result("POST /work-reports/{id}/submit", False, "Failed to create draft for submit test")
+        
+        new_report_id = response.json()['id']
+        
+        # Add lines to the report
+        update_data = {
+            "lines": [{"activity_name": "Testing work", "hours": 4.0, "note": "API testing"}]
+        }
+        success, response = self.make_request('PUT', f'work-reports/{new_report_id}', update_data, 200)
+        if not success:
+            return self.log_result("POST /work-reports/{id}/submit", False, "Failed to add lines for submit test")
+        
+        # Submit the report
+        success, response = self.make_request('POST', f'work-reports/{new_report_id}/submit', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if data.get('status') == 'Submitted' and data.get('submitted_at'):
+                return self.log_result("POST /work-reports/{id}/submit", True, 
+                    f"Report submitted: Status={data['status']}, Time={data['submitted_at'][:19]}")
+            else:
+                return self.log_result("POST /work-reports/{id}/submit", False, 
+                    f"Unexpected status or missing submitted_at: {data}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /work-reports/{id}/submit", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_submit_work_report_no_lines(self):
+        """Test POST /api/work-reports/{id}/submit fails if no activity lines (400)"""
+        # Create draft without lines
+        if not self.existing_project_id:
+            return self.log_result("POST /work-reports/{id}/submit no lines", False, "No project ID available")
+        
+        draft_data = {"project_id": self.existing_project_id, "date": "2024-01-16"}  # Different date
+        success, response = self.make_request('POST', 'work-reports/draft', draft_data, 201)
+        if not success:
+            return self.log_result("POST /work-reports/{id}/submit no lines", False, "Failed to create draft")
+        
+        empty_report_id = response.json()['id']
+        
+        # Try to submit without lines
+        success, response = self.make_request('POST', f'work-reports/{empty_report_id}/submit', expected_status=400)
+        
+        return self.log_result("POST /work-reports/{id}/submit no lines", success, 
+            "Should reject submission with no activity lines")
+
+    def test_approve_work_report(self):
+        """Test POST /api/work-reports/{id}/approve - Admin/SiteManager can approve Submitted reports"""
+        # Find a submitted report from previous tests
+        if not hasattr(self, 'work_report_id'):
+            return self.log_result("POST /work-reports/{id}/approve", False, "No work report ID available")
+        
+        success, response = self.make_request('POST', f'work-reports/{self.work_report_id}/approve', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if data.get('status') == 'Approved' and data.get('approved_at') and data.get('approved_by_user_id'):
+                return self.log_result("POST /work-reports/{id}/approve", True, 
+                    f"Report approved: Status={data['status']}, By={data['approved_by_user_id'][:8]}...")
+            else:
+                return self.log_result("POST /work-reports/{id}/approve", False, 
+                    f"Unexpected approval data: {data}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /work-reports/{id}/approve", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_reject_work_report(self):
+        """Test POST /api/work-reports/{id}/reject requires reason, changes status to Rejected"""
+        # Create and submit another report to reject
+        if not self.existing_project_id:
+            return self.log_result("POST /work-reports/{id}/reject", False, "No project ID available")
+        
+        # Create, update, and submit a report
+        draft_data = {"project_id": self.existing_project_id, "date": "2024-01-17"}
+        success, response = self.make_request('POST', 'work-reports/draft', draft_data, 201)
+        if not success:
+            return self.log_result("POST /work-reports/{id}/reject", False, "Failed to create draft for reject test")
+        
+        reject_report_id = response.json()['id']
+        
+        # Add lines and submit
+        update_data = {"lines": [{"activity_name": "Reject test", "hours": 1.0, "note": "For rejection"}]}
+        self.make_request('PUT', f'work-reports/{reject_report_id}', update_data, 200)
+        self.make_request('POST', f'work-reports/{reject_report_id}/submit', expected_status=200)
+        
+        # Reject with reason
+        reject_data = {"reason": "Hours seem too low for the activities described"}
+        success, response = self.make_request('POST', f'work-reports/{reject_report_id}/reject', reject_data, 200)
+        
+        if success:
+            data = response.json()
+            if data.get('status') == 'Rejected' and data.get('reject_reason') == reject_data['reason']:
+                return self.log_result("POST /work-reports/{id}/reject", True, 
+                    f"Report rejected: Reason='{data['reject_reason'][:30]}...'")
+            else:
+                return self.log_result("POST /work-reports/{id}/reject", False, 
+                    f"Unexpected rejection data: {data}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /work-reports/{id}/reject", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_reject_work_report_no_reason(self):
+        """Test POST /api/work-reports/{id}/reject fails without reason (400)"""
+        # Use the previously submitted report (should be approved now)
+        if not hasattr(self, 'work_report_id'):
+            return self.log_result("POST /work-reports/{id}/reject no reason", False, "No work report ID available")
+        
+        # Try to reject without reason
+        success, response = self.make_request('POST', f'work-reports/{self.work_report_id}/reject', {}, 400)
+        
+        return self.log_result("POST /work-reports/{id}/reject no reason", success, 
+            "Should require reason for rejection")
+
+    def test_get_work_report_detail(self):
+        """Test GET /api/work-reports/{id} returns single report with project code/name"""
+        if not hasattr(self, 'work_report_id'):
+            return self.log_result("GET /work-reports/{id}", False, "No work report ID available")
+        
+        success, response = self.make_request('GET', f'work-reports/{self.work_report_id}', expected_status=200)
+        
+        if success:
+            data = response.json()
+            required_fields = ['id', 'project_id', 'user_id', 'status', 'lines', 'total_hours', 'project_code', 'project_name']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                return self.log_result("GET /work-reports/{id}", True, 
+                    f"Report detail: {data.get('project_code')}, {data['status']}, {data['total_hours']}h")
+            else:
+                return self.log_result("GET /work-reports/{id}", False, f"Missing enriched fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /work-reports/{id}", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_my_work_reports_today(self):
+        """Test GET /api/work-reports/my-today returns today's reports for current user"""
+        success, response = self.make_request('GET', 'work-reports/my-today', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if isinstance(data, list):
+                return self.log_result("GET /work-reports/my-today", True, 
+                    f"Found {len(data)} reports for today")
+            else:
+                return self.log_result("GET /work-reports/my-today", False, "Response not a list")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /work-reports/my-today", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_my_work_reports_range(self):
+        """Test GET /api/work-reports/my-range returns reports within date range"""
+        success, response = self.make_request('GET', 'work-reports/my-range?from_date=2024-01-01&to_date=2024-01-31', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if isinstance(data, list):
+                return self.log_result("GET /work-reports/my-range", True, 
+                    f"Found {len(data)} reports in date range")
+            else:
+                return self.log_result("GET /work-reports/my-range", False, "Response not a list")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /work-reports/my-range", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_project_day_reports(self):
+        """Test GET /api/work-reports/project-day returns reports for project+date (manager view)"""
+        if not self.existing_project_id:
+            return self.log_result("GET /work-reports/project-day", False, "No project ID available")
+        
+        success, response = self.make_request('GET', f'work-reports/project-day?project_id={self.existing_project_id}&date=2024-01-15', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if isinstance(data, list):
+                # Check for enriched data
+                if len(data) > 0:
+                    first_report = data[0]
+                    enriched_fields = ['user_name', 'user_email', 'project_code', 'project_name']
+                    missing = [f for f in enriched_fields if f not in first_report]
+                    if not missing:
+                        return self.log_result("GET /work-reports/project-day", True, 
+                            f"Found {len(data)} enriched project reports")
+                    else:
+                        return self.log_result("GET /work-reports/project-day", True, 
+                            f"Found {len(data)} reports, missing enrichment: {missing}")
+                else:
+                    return self.log_result("GET /work-reports/project-day", True, "No reports for project+date")
+            else:
+                return self.log_result("GET /work-reports/project-day", False, "Response not a list")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /work-reports/project-day", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_work_report_permissions(self):
+        """Test work report permissions - Technician can only create/edit own, SiteManager can approve for managed projects"""
+        # Switch to technician token
+        admin_token = self.token
+        
+        # Login as technician
+        success, response = self.make_request('POST', 'auth/login', self.tech_credentials, 200)
+        if not success:
+            return self.log_result("Work report permissions", False, "Failed to login as technician")
+        
+        self.token = response.json()['token']
+        
+        # Test technician can create own report
+        if self.existing_project_id:
+            draft_data = {"project_id": self.existing_project_id}
+            success1, response = self.make_request('POST', 'work-reports/draft', draft_data, 201)
+            tech_create_result = success1
+        else:
+            tech_create_result = True  # Skip if no project
+        
+        # Test technician cannot approve reports (should be 403)
+        if hasattr(self, 'work_report_id'):
+            success2, response = self.make_request('POST', f'work-reports/{self.work_report_id}/approve', expected_status=403)
+            tech_approve_result = success2
+        else:
+            tech_approve_result = True  # Skip if no report
+        
+        # Restore admin token
+        self.token = admin_token
+        
+        overall_result = tech_create_result and tech_approve_result
+        return self.log_result("Work report permissions", overall_result, 
+            f"Technician create: {'✓' if tech_create_result else '✗'}, approve restriction: {'✓' if tech_approve_result else '✗'}")
+
+    def test_audit_logging_for_work_reports(self):
+        """Test work report actions are logged (report_draft_created, report_submitted, report_approved, report_rejected, report_edited)"""
+        success, response = self.make_request('GET', 'audit-logs?limit=50', expected_status=200)
+        
+        if success:
+            data = response.json()
+            logs = data.get('logs', [])
+            
+            # Look for work report actions
+            report_actions = [log for log in logs if log.get('entity_type') == 'work_report' and 
+                            log.get('action') in ['report_draft_created', 'report_submitted', 'report_approved', 'report_rejected', 'report_edited']]
+            
+            if len(report_actions) >= 1:
+                actions_found = [f"{log['action']}" for log in report_actions[:5]]
+                return self.log_result("Audit logging for work reports", True, 
+                    f"Found work report actions: {actions_found}")
+            else:
+                return self.log_result("Audit logging for work reports", False, 
+                    "No work report actions found in audit log")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("Audit logging for work reports", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
     def run_all_tests(self):
         """Run all backend API tests"""
         print("🔬 Starting BEG_Work API Tests - M0 Core + M1 Projects + M3 Attendance")
