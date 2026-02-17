@@ -32,7 +32,7 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 
 ## What's Been Implemented
 
-### December 2025 - i18n Patch (CURRENT SESSION)
+### February 2026 - i18n Patch COMPLETE ✅
 - ✅ Installed and configured react-i18next with Bulgarian (bg) as default language
 - ✅ Created comprehensive translation files: `/app/frontend/src/i18n/en.json` and `bg.json`
 - ✅ Translated core pages: Login, Dashboard, all M5 Finance pages
@@ -43,6 +43,8 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - ✅ Translated admin pages: Users, CompanySettings, ModuleToggles, AuditLog
 - ✅ Added formatDate, formatTime, formatDateTime utility functions for locale-aware formatting
 - ✅ Translated all navigation menu items in DashboardLayout
+- ✅ Language Switcher (BG/EN toggle) working with localStorage persistence
+- ✅ **BG Mode Sweep PASSED: ZERO English UI strings visible in Bulgarian mode**
 
 ### Previous Sessions
 - M0-M5 modules fully implemented
@@ -52,7 +54,7 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 ## Prioritized Backlog
 
 ### P0 - Critical
-- Complete i18n verification (BG Mode Sweep) - IN PROGRESS
+- NONE - i18n patch completed
 
 ### P1 - Next Iteration
 - M9: Overhead Cost System - Admin Console/BI statistics
