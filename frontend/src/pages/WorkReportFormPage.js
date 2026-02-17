@@ -264,6 +264,25 @@ export default function WorkReportFormPage() {
             {lines.map((line, idx) => (
               <div key={line.id || idx} className="p-3 rounded-lg bg-background border border-border" data-testid={`line-${idx}`}>
                 <div className="flex items-start gap-2 mb-2">
+                  {activities.length > 0 && isEditable && (
+                    <Select
+                      value=""
+                      onValueChange={(actId) => {
+                        const act = activities.find(a => a.id === actId);
+                        if (act) updateLine(idx, "activity_name", act.name);
+                      }}
+                    >
+                      <SelectTrigger className="w-[100px] bg-card h-9 text-xs" data-testid={`pick-activity-${idx}`}>
+                        <Layers className="w-3 h-3 mr-1" />
+                        <span>Pick</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activities.map((act) => (
+                          <SelectItem key={act.id} value={act.id}>{act.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Input
                     value={line.activity_name}
                     onChange={(e) => updateLine(idx, "activity_name", e.target.value)}
