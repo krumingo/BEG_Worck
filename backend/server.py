@@ -74,6 +74,8 @@ class OrgUpdate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    attendance_start: Optional[str] = None
+    attendance_end: Optional[str] = None
 
 class ModuleToggle(BaseModel):
     module_code: str
@@ -129,6 +131,23 @@ class PhaseUpdate(BaseModel):
     status: Optional[str] = None
     planned_start: Optional[str] = None
     planned_end: Optional[str] = None
+
+# ── Attendance Models ────────────────────────────────────────────
+
+ATTENDANCE_STATUSES = ["Present", "Absent", "Late", "SickLeave", "Vacation"]
+
+class AttendanceMarkSelf(BaseModel):
+    project_id: Optional[str] = None
+    status: str = "Present"
+    note: str = ""
+    source: str = "Web"
+
+class AttendanceMarkForUser(BaseModel):
+    user_id: str
+    project_id: Optional[str] = None
+    status: str = "Present"
+    note: str = ""
+    source: str = "Web"
 
 # ── Auth Helpers ─────────────────────────────────────────────────
 
