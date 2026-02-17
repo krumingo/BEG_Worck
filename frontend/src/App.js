@@ -17,6 +17,9 @@ import WorkReportFormPage from "@/pages/WorkReportFormPage";
 import WorkReportReviewPage from "@/pages/WorkReportReviewPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import RemindersPage from "@/pages/RemindersPage";
+import OffersListPage from "@/pages/OffersListPage";
+import OfferEditorPage from "@/pages/OfferEditorPage";
+import ActivityCatalogPage from "@/pages/ActivityCatalogPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -55,6 +58,10 @@ function App() {
           <Route path="/review-reports" element={<ProtectedRoute><WorkReportReviewPage /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/reminders" element={<ProtectedRoute><RemindersPage /></ProtectedRoute>} />
+          <Route path="/offers" element={<ProtectedRoute><OffersListPage /></ProtectedRoute>} />
+          <Route path="/offers/new" element={<ProtectedRoute><OfferEditorPage /></ProtectedRoute>} />
+          <Route path="/offers/:offerId" element={<ProtectedRoute><OfferEditorPage /></ProtectedRoute>} />
+          <Route path="/activity-catalog" element={<ProtectedRoute><ActivityCatalogPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
