@@ -39,6 +39,7 @@ import {
 const ADVANCE_TYPES = ["Advance", "Loan"];
 
 export default function AdvancesPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [advances, setAdvances] = useState([]);
   const [employees, setEmployees] = useState([]);
