@@ -186,7 +186,7 @@ export default function OfferEditorPage() {
 
   const handleSave = async () => {
     if (!projectId || !title) {
-      alert("Project and title are required");
+      alert(t("offers.projectTitleRequired"));
       return;
     }
     setSaving(true);
@@ -229,7 +229,7 @@ export default function OfferEditorPage() {
         await fetchData();
       }
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -237,7 +237,7 @@ export default function OfferEditorPage() {
 
   const handleSend = async () => {
     if (lines.length === 0) {
-      alert("Add at least one line before sending");
+      alert(t("offers.addLineBeforeSend"));
       return;
     }
     setSaving(true);
@@ -245,7 +245,7 @@ export default function OfferEditorPage() {
       await API.post(`/offers/${offerId}/send`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to send");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setSaving(false);
     }
@@ -257,20 +257,20 @@ export default function OfferEditorPage() {
       await API.post(`/offers/${offerId}/accept`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to accept");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleReject = async () => {
-    const reason = prompt("Rejection reason (optional):");
+    const reason = prompt(t("offers.rejectionReasonPrompt"));
     setSaving(true);
     try {
       await API.post(`/offers/${offerId}/reject`, { reason });
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to reject");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setSaving(false);
     }
@@ -282,7 +282,7 @@ export default function OfferEditorPage() {
       const res = await API.post(`/offers/${offerId}/new-version`);
       navigate(`/offers/${res.data.id}`, { replace: true });
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to create version");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setSaving(false);
     }
