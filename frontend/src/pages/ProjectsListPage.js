@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +52,7 @@ const EMPTY_FORM = {
 };
 
 export default function ProjectsListPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
@@ -115,7 +118,7 @@ export default function ProjectsListPage() {
         tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         start_date: form.start_date || null,
         end_date: form.end_date || null,
-        default_site_manager_id: form.default_site_manager_id || null,
+        default_site_manager_id: form.default_site_manager_id === "none" ? null : form.default_site_manager_id || null,
       };
       if (editing) {
         const { code, ...updatePayload } = payload;
@@ -126,11 +129,14 @@ export default function ProjectsListPage() {
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save project");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
+
+  const getStatusKey = (status) => status.toLowerCase();
+  const getTypeKey = (type) => type.toLowerCase();
 
   if (loading) {
     return (
@@ -144,11 +150,11 @@ export default function ProjectsListPage() {
     <div className="p-8 max-w-[1400px]" data-testid="projects-list-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-          <p className="text-sm text-muted-foreground mt-1">{projects.length} projects</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("projects.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("projects.projectsCount", { count: projects.length })}</p>
         </div>
         <Button onClick={openCreate} data-testid="create-project-button">
-          <Plus className="w-4 h-4 mr-2" /> New Project
+          <Plus className="w-4 h-4 mr-2" /> {t("projects.newProject")}
         </Button>
       </div>
 
@@ -157,7 +163,7 @@ export default function ProjectsListPage() {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by code or name..."
+            placeholder={t("projects.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-card border-border"
@@ -166,23 +172,23 @@ export default function ProjectsListPage() {
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-[150px] bg-card" data-testid="project-status-filter">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t("common.status")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
             {["Draft", "Active", "Paused", "Completed", "Cancelled"].map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
+              <SelectItem key={s} value={s}>{t(`projects.status.${getStatusKey(s)}`)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[150px] bg-card" data-testid="project-type-filter">
-            <SelectValue placeholder="Type" />
+            <SelectValue placeholder={t("common.type")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {["Billable", "Overhead", "Warranty"].map((t) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
+            <SelectItem value="all">{t("common.allTypes")}</SelectItem>
+            {["Billable", "Overhead", "Warranty"].map((tp) => (
+              <SelectItem key={tp} value={tp}>{t(`projects.type.${getTypeKey(tp)}`)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -193,14 +199,14 @@ export default function ProjectsListPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Code</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Name</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Type</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Manager</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Period</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Team</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.projectCode")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.name")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.siteManager")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.period")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.team")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -208,7 +214,7 @@ export default function ProjectsListPage() {
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-16">
                   <FolderKanban className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-muted-foreground">No projects yet</p>
+                  <p className="text-muted-foreground">{t("projects.noProjects")}</p>
                 </TableCell>
               </TableRow>
             ) : (
@@ -217,14 +223,18 @@ export default function ProjectsListPage() {
                   <TableCell className="font-mono text-sm text-primary font-semibold">{p.code}</TableCell>
                   <TableCell className="font-medium text-foreground">{p.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-xs ${STATUS_COLORS[p.status] || ""}`}>{p.status}</Badge>
+                    <Badge variant="outline" className={`text-xs ${STATUS_COLORS[p.status] || ""}`}>
+                      {t(`projects.status.${getStatusKey(p.status)}`)}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-xs ${TYPE_COLORS[p.type] || ""}`}>{p.type}</Badge>
+                    <Badge variant="outline" className={`text-xs ${TYPE_COLORS[p.type] || ""}`}>
+                      {t(`projects.type.${getTypeKey(p.type)}`)}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.site_manager_name || "-"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {p.start_date || "?"} - {p.end_date || "?"}
+                    {p.start_date ? formatDate(p.start_date) : "?"} - {p.end_date ? formatDate(p.end_date) : "?"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -237,7 +247,7 @@ export default function ProjectsListPage() {
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(p); }} data-testid={`edit-project-${p.id}`}>
-                        Edit
+                        {t("common.edit")}
                       </Button>
                     </div>
                   </TableCell>
@@ -252,12 +262,12 @@ export default function ProjectsListPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[560px] bg-card border-border max-h-[90vh] overflow-y-auto" data-testid="project-dialog">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Project" : "Create Project"}</DialogTitle>
+            <DialogTitle>{editing ? t("projects.editProject") : t("projects.createProject")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Code *</Label>
+                <Label className="text-muted-foreground">{t("projects.projectCode")} *</Label>
                 <Input
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
@@ -268,11 +278,11 @@ export default function ProjectsListPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Name *</Label>
+                <Label className="text-muted-foreground">{t("projects.projectName")} *</Label>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Project name"
+                  placeholder={t("projects.projectName")}
                   className="bg-background"
                   data-testid="project-name-input"
                 />
@@ -280,27 +290,27 @@ export default function ProjectsListPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Status</Label>
+                <Label className="text-muted-foreground">{t("common.status")}</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                   <SelectTrigger className="bg-background" data-testid="project-status-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {["Draft", "Active", "Paused", "Completed", "Cancelled"].map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                      <SelectItem key={s} value={s}>{t(`projects.status.${getStatusKey(s)}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Type</Label>
+                <Label className="text-muted-foreground">{t("common.type")}</Label>
                 <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                   <SelectTrigger className="bg-background" data-testid="project-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {["Billable", "Overhead", "Warranty"].map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    {["Billable", "Overhead", "Warranty"].map((tp) => (
+                      <SelectItem key={tp} value={tp}>{t(`projects.type.${getTypeKey(tp)}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -308,49 +318,49 @@ export default function ProjectsListPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Start Date</Label>
+                <Label className="text-muted-foreground">{t("projects.startDate")}</Label>
                 <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="bg-background" data-testid="project-start-date" />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">End Date</Label>
+                <Label className="text-muted-foreground">{t("projects.endDate")}</Label>
                 <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} className="bg-background" data-testid="project-end-date" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Planned Days</Label>
+                <Label className="text-muted-foreground">{t("projects.plannedDays")}</Label>
                 <Input type="number" value={form.planned_days} onChange={(e) => setForm({ ...form, planned_days: e.target.value })} className="bg-background" data-testid="project-planned-days" />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Budget (EUR)</Label>
+                <Label className="text-muted-foreground">{t("projects.budgetEur")}</Label>
                 <Input type="number" step="0.01" value={form.budget_planned} onChange={(e) => setForm({ ...form, budget_planned: e.target.value })} className="bg-background" data-testid="project-budget" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Site Manager</Label>
-              <Select value={form.default_site_manager_id} onValueChange={(v) => setForm({ ...form, default_site_manager_id: v })}>
+              <Label className="text-muted-foreground">{t("projects.siteManager")}</Label>
+              <Select value={form.default_site_manager_id || "none"} onValueChange={(v) => setForm({ ...form, default_site_manager_id: v })}>
                 <SelectTrigger className="bg-background" data-testid="project-manager-select">
-                  <SelectValue placeholder="Select manager..." />
+                  <SelectValue placeholder={t("projects.selectManager")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">{t("common.none")}</SelectItem>
                   {managers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name} ({m.role})</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name} ({t(`users.roles.${m.role.toLowerCase()}`)})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Tags (comma-separated)</Label>
-              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="renovation, residential" className="bg-background" data-testid="project-tags" />
+              <Label className="text-muted-foreground">{t("projects.tags")} ({t("projects.tagsHint")})</Label>
+              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder={t("projects.tagsPlaceholder")} className="bg-background" data-testid="project-tags" />
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Notes</Label>
+              <Label className="text-muted-foreground">{t("common.notes")}</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="bg-background min-h-[80px]" data-testid="project-notes" />
             </div>
             <Button onClick={handleSave} disabled={saving || !form.code || !form.name} className="w-full" data-testid="project-save-button">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {editing ? "Update Project" : "Create Project"}
+              {editing ? t("projects.updateProject") : t("projects.createProject")}
             </Button>
           </div>
         </DialogContent>
