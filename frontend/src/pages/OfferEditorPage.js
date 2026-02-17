@@ -309,17 +309,17 @@ export default function OfferEditorPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/offers")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
           </Button>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-foreground">
-                {isNew ? "New Offer" : `${offer?.offer_no}`}
+                {isNew ? t("offers.newOffer") : `${offer?.offer_no}`}
               </h1>
               {offer && (
                 <>
                   <Badge variant="outline" className={`text-xs ${STATUS_COLORS[offer.status] || ""}`}>
-                    {offer.status}
+                    {t(`offers.status.${offer.status.toLowerCase()}`)}
                   </Badge>
                   <span className="text-sm text-muted-foreground">v{offer.version}</span>
                 </>
@@ -333,11 +333,11 @@ export default function OfferEditorPage() {
             <>
               <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-                Save
+                {t("common.save")}
               </Button>
               {!isNew && (
                 <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
-                  <Send className="w-4 h-4 mr-1" /> Send
+                  <Send className="w-4 h-4 mr-1" /> {t("common.send")}
                 </Button>
               )}
             </>
@@ -345,16 +345,16 @@ export default function OfferEditorPage() {
           {offer?.status === "Sent" && canAcceptReject && (
             <>
               <Button variant="outline" className="text-emerald-400 border-emerald-500/30" onClick={handleAccept} disabled={saving} data-testid="accept-btn">
-                <Check className="w-4 h-4 mr-1" /> Accept
+                <Check className="w-4 h-4 mr-1" /> {t("common.accept")}
               </Button>
               <Button variant="outline" className="text-red-400 border-red-500/30" onClick={handleReject} disabled={saving} data-testid="reject-btn">
-                <X className="w-4 h-4 mr-1" /> Reject
+                <X className="w-4 h-4 mr-1" /> {t("common.reject")}
               </Button>
             </>
           )}
           {offer && offer.status !== "Draft" && canManage && (
             <Button variant="outline" onClick={handleNewVersion} disabled={saving} data-testid="new-version-btn">
-              <Copy className="w-4 h-4 mr-1" /> New Version
+              <Copy className="w-4 h-4 mr-1" /> {t("offers.newVersion")}
             </Button>
           )}
           {offer && (
@@ -371,14 +371,14 @@ export default function OfferEditorPage() {
           {/* Basic Info */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" /> Offer Details
+              <FileText className="w-4 h-4 text-primary" /> {t("offers.offerDetails")}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Project *</Label>
+                <Label>{t("offers.project")} *</Label>
                 <Select value={projectId} onValueChange={setProjectId} disabled={!isNew}>
                   <SelectTrigger className="bg-background" data-testid="project-select">
-                    <SelectValue placeholder="Select project" />
+                    <SelectValue placeholder={t("workReports.selectProject")} />
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((p) => (
@@ -388,18 +388,18 @@ export default function OfferEditorPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Title *</Label>
+                <Label>{t("offers.offerTitle")} *</Label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Offer title"
+                  placeholder={t("offers.offerTitle")}
                   disabled={!canEdit}
                   className="bg-background"
                   data-testid="title-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Currency</Label>
+                <Label>{t("offers.currency")}</Label>
                 <Select value={currency} onValueChange={setCurrency} disabled={!canEdit}>
                   <SelectTrigger className="bg-background" data-testid="currency-select">
                     <SelectValue />
@@ -413,7 +413,7 @@ export default function OfferEditorPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>VAT %</Label>
+                <Label>{t("offers.vatPercent")}</Label>
                 <Input
                   type="number"
                   value={vatPercent}
@@ -430,11 +430,11 @@ export default function OfferEditorPage() {
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Calculator className="w-4 h-4 text-primary" /> BOQ Lines ({lines.length})
+                <Calculator className="w-4 h-4 text-primary" /> {t("offers.boqLines")} ({lines.length})
               </h2>
               {canEdit && (
                 <Button size="sm" onClick={addLine} data-testid="add-line-btn">
-                  <Plus className="w-4 h-4 mr-1" /> Add Line
+                  <Plus className="w-4 h-4 mr-1" /> {t("offers.addLine")}
                 </Button>
               )}
             </div>
@@ -442,14 +442,14 @@ export default function OfferEditorPage() {
               <table className="w-full text-sm" data-testid="lines-table">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">Activity</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Unit</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Qty</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Mat/Unit</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Lab/Unit</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Material</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Labor</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[110px]">Total</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">{t("offers.activity")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.unit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.qty")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.matPerUnit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.labPerUnit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.material")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.labor")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[110px]">{t("common.total")}</th>
                     {canEdit && <th className="w-[50px]"></th>}
                   </tr>
                 </thead>
@@ -457,7 +457,7 @@ export default function OfferEditorPage() {
                   {computedLines.length === 0 ? (
                     <tr>
                       <td colSpan={canEdit ? 9 : 8} className="text-center py-8 text-muted-foreground">
-                        No lines added yet
+                        {t("offers.noLinesYet")}
                       </td>
                     </tr>
                   ) : (
