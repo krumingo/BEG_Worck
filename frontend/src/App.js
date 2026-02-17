@@ -25,6 +25,11 @@ import AdvancesPage from "@/pages/AdvancesPage";
 import PayrollRunsPage from "@/pages/PayrollRunsPage";
 import PayrollDetailPage from "@/pages/PayrollDetailPage";
 import MyPayslipsPage from "@/pages/MyPayslipsPage";
+import FinanceOverviewPage from "@/pages/FinanceOverviewPage";
+import FinancialAccountsPage from "@/pages/FinancialAccountsPage";
+import InvoicesPage from "@/pages/InvoicesPage";
+import InvoiceEditorPage from "@/pages/InvoiceEditorPage";
+import PaymentsPage from "@/pages/PaymentsPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -72,6 +77,13 @@ function App() {
           <Route path="/payroll" element={<ProtectedRoute><PayrollRunsPage /></ProtectedRoute>} />
           <Route path="/payroll/:runId" element={<ProtectedRoute><PayrollDetailPage /></ProtectedRoute>} />
           <Route path="/my-payslips" element={<ProtectedRoute><MyPayslipsPage /></ProtectedRoute>} />
+          <Route path="/finance" element={<ProtectedRoute><FinanceOverviewPage /></ProtectedRoute>} />
+          <Route path="/finance/accounts" element={<ProtectedRoute><FinancialAccountsPage /></ProtectedRoute>} />
+          <Route path="/finance/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
+          <Route path="/finance/invoices/new" element={<ProtectedRoute><InvoiceEditorPage /></ProtectedRoute>} />
+          <Route path="/finance/invoices/:invoiceId" element={<ProtectedRoute><InvoiceEditorPage /></ProtectedRoute>} />
+          <Route path="/finance/payments" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
+          <Route path="/finance/payments/new" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
