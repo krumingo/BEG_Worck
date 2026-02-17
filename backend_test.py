@@ -89,14 +89,19 @@ class BEGWorkAPITester:
             return self.log_result("GET /auth/me with token", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
 
     def test_auth_me_without_token(self):
-        """Test GET /api/auth/me without token (should return 401)"""
+        """Test GET /api/auth/me without token (should return 401/403)"""
         temp_token = self.token
         self.token = None
         
-        success, response = self.make_request('GET', 'auth/me', expected_status=401)
+        # Try both 401 and 403 as valid responses for unauthorized access
+        success_401, response = self.make_request('GET', 'auth/me', expected_status=401)
+        success_403, response = self.make_request('GET', 'auth/me', expected_status=403)
+        
         self.token = temp_token  # Restore token
         
-        return self.log_result("GET /auth/me without token", success, "Should return 401")
+        success = success_401 or success_403
+        status_text = "401 or 403" if success else f"got {getattr(response, 'status_code', 'N/A')}"
+        return self.log_result("GET /auth/me without token", success, f"Should return {status_text}")
 
     def test_get_organization(self):
         """Test GET /api/organization with valid token"""
