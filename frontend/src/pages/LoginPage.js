@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HardHat, Loader2, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -22,7 +24,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      setError(err.response?.data?.detail || t("auth.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -45,7 +47,7 @@ export default function LoginPage() {
             <HardHat className="w-7 h-7 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">BEG_Work</h1>
-          <p className="text-sm text-muted-foreground mt-1">Construction Management Platform</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("nav.dashboard")} - {t("projects.title")}</p>
         </div>
 
         {/* Form */}
@@ -59,7 +61,7 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-muted-foreground">Email</Label>
+              <Label htmlFor="email" className="text-sm text-muted-foreground">{t("auth.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -73,13 +75,13 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm text-muted-foreground">Password</Label>
+              <Label htmlFor="password" className="text-sm text-muted-foreground">{t("auth.password")}</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder={t("auth.enterPassword")}
                 required
                 className="bg-background border-border"
                 data-testid="login-password-input"
@@ -93,12 +95,12 @@ export default function LoginPage() {
               data-testid="login-submit-button"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Sign In
+              {t("auth.signIn")}
             </Button>
           </form>
 
           <p className="text-center text-xs text-muted-foreground mt-4">
-            Demo: admin@begwork.com / admin123
+            {t("auth.demo")}: admin@begwork.com / admin123
           </p>
         </div>
       </div>
