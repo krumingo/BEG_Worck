@@ -111,7 +111,7 @@ export default function SiteAttendancePage() {
       setMarkDialogOpen(false);
       await fetchSiteData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to mark attendance");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setMarking(false);
     }
@@ -121,9 +121,9 @@ export default function SiteAttendancePage() {
     <div className="p-8 max-w-[1200px]" data-testid="site-attendance-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Site Attendance</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("attendance.siteAttendance")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            {formatDate(new Date(), i18n.language, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
         {siteData && (
@@ -131,7 +131,7 @@ export default function SiteAttendancePage() {
             {siteData.missing_count > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30" data-testid="missing-badge">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-semibold text-amber-400">{siteData.missing_count} Missing</span>
+                <span className="text-sm font-semibold text-amber-400">{siteData.missing_count} {t("reminders.missing")}</span>
               </div>
             )}
           </div>
@@ -142,10 +142,10 @@ export default function SiteAttendancePage() {
       <div className="flex items-center gap-3 mb-6">
         <Select value={selectedProject} onValueChange={setSelectedProject}>
           <SelectTrigger className="w-[300px] bg-card" data-testid="site-project-filter">
-            <SelectValue placeholder="Filter by project..." />
+            <SelectValue placeholder={t("projects.filterByProject")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Active Projects</SelectItem>
+            <SelectItem value="all">{t("reminders.allActiveProjects")}</SelectItem>
             {projects.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
             ))}
@@ -163,12 +163,12 @@ export default function SiteAttendancePage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">User</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Role</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Marked At</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Note</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Action</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.user")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.role")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("attendance.markedAt")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.note")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -176,7 +176,7 @@ export default function SiteAttendancePage() {
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-16">
                     <UserX className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-muted-foreground">No team members in active projects</p>
+                    <p className="text-muted-foreground">{t("attendance.noTeamMembers")}</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -191,23 +191,23 @@ export default function SiteAttendancePage() {
                           <p className="text-xs text-muted-foreground">{row.user_email}</p>
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{row.user_role}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{t(`users.roles.${row.user_role.toLowerCase()}`, row.user_role)}</TableCell>
                       <TableCell>
                         {entry ? (
                           <div className="flex items-center gap-2">
                             <StatusIcon className={`w-4 h-4 ${STATUS_COLORS[entry.status]?.split(" ")[1] || ""}`} />
                             <Badge variant="outline" className={`text-xs ${STATUS_COLORS[entry.status] || ""}`}>
-                              {entry.status}
+                              {t(`attendance.statusLabels.${entry.status.toLowerCase()}`, entry.status)}
                             </Badge>
                           </div>
                         ) : (
                           <Badge variant="outline" className="text-xs bg-gray-500/10 text-gray-400 border-gray-500/30">
-                            Not Marked
+                            {t("attendance.notMarked")}
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {entry ? new Date(entry.marked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-"}
+                        {entry ? formatTime(entry.marked_at, i18n.language) : "-"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">
                         {entry?.note || "-"}
@@ -215,7 +215,7 @@ export default function SiteAttendancePage() {
                       <TableCell className="text-right">
                         {!row.marked && (
                           <Button size="sm" onClick={() => openMarkDialog(row)} data-testid={`mark-for-${row.user_id}`}>
-                            <CalendarCheck className="w-3.5 h-3.5 mr-1" /> Mark
+                            <CalendarCheck className="w-3.5 h-3.5 mr-1" /> {t("attendance.mark")}
                           </Button>
                         )}
                       </TableCell>
@@ -232,29 +232,29 @@ export default function SiteAttendancePage() {
       <Dialog open={markDialogOpen} onOpenChange={setMarkDialogOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="mark-dialog">
           <DialogHeader>
-            <DialogTitle>Mark Attendance for {markTarget?.user_name}</DialogTitle>
+            <DialogTitle>{t("attendance.markAttendanceFor")} {markTarget?.user_name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Status</label>
+              <label className="text-sm text-muted-foreground">{t("common.status")}</label>
               <Select value={markStatus} onValueChange={setMarkStatus}>
                 <SelectTrigger className="bg-background" data-testid="mark-status-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {["Present", "Absent", "Late", "SickLeave", "Vacation"].map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                    <SelectItem key={s} value={s}>{t(`attendance.statusLabels.${s.toLowerCase()}`)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Note</label>
-              <Input value={markNote} onChange={(e) => setMarkNote(e.target.value)} placeholder="Optional note..." className="bg-background" data-testid="mark-note-input" />
+              <label className="text-sm text-muted-foreground">{t("common.note")}</label>
+              <Input value={markNote} onChange={(e) => setMarkNote(e.target.value)} placeholder={t("common.optionalNote")} className="bg-background" data-testid="mark-note-input" />
             </div>
             <Button onClick={handleMark} disabled={marking} className="w-full" data-testid="mark-confirm-button">
               {marking && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Confirm
+              {t("common.confirm")}
             </Button>
           </div>
         </DialogContent>
