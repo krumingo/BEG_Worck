@@ -20,6 +20,11 @@ import RemindersPage from "@/pages/RemindersPage";
 import OffersListPage from "@/pages/OffersListPage";
 import OfferEditorPage from "@/pages/OfferEditorPage";
 import ActivityCatalogPage from "@/pages/ActivityCatalogPage";
+import EmployeesPage from "@/pages/EmployeesPage";
+import AdvancesPage from "@/pages/AdvancesPage";
+import PayrollRunsPage from "@/pages/PayrollRunsPage";
+import PayrollDetailPage from "@/pages/PayrollDetailPage";
+import MyPayslipsPage from "@/pages/MyPayslipsPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -62,6 +67,11 @@ function App() {
           <Route path="/offers/new" element={<ProtectedRoute><OfferEditorPage /></ProtectedRoute>} />
           <Route path="/offers/:offerId" element={<ProtectedRoute><OfferEditorPage /></ProtectedRoute>} />
           <Route path="/activity-catalog" element={<ProtectedRoute><ActivityCatalogPage /></ProtectedRoute>} />
+          <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
+          <Route path="/advances" element={<ProtectedRoute><AdvancesPage /></ProtectedRoute>} />
+          <Route path="/payroll" element={<ProtectedRoute><PayrollRunsPage /></ProtectedRoute>} />
+          <Route path="/payroll/:runId" element={<ProtectedRoute><PayrollDetailPage /></ProtectedRoute>} />
+          <Route path="/my-payslips" element={<ProtectedRoute><MyPayslipsPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
