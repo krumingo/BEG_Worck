@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +41,7 @@ import {
 } from "lucide-react";
 
 export default function FinancialAccountsPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
@@ -47,7 +50,6 @@ export default function FinancialAccountsPage() {
 
   const canManage = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
-  // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [formData, setFormData] = useState({
@@ -98,7 +100,7 @@ export default function FinancialAccountsPage() {
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      alert("Account name is required");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -111,24 +113,20 @@ export default function FinancialAccountsPage() {
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (account) => {
-    if (!window.confirm(`Delete account "${account.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(t("finance.confirmDeleteAccount", { name: account.name }))) return;
     try {
       await API.delete(`/finance/accounts/${account.id}`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete");
+      alert(err.response?.data?.detail || t("toast.deleteFailed"));
     }
-  };
-
-  const formatCurrency = (amount, currency = "EUR") => {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount || 0);
   };
 
   return (
@@ -137,16 +135,16 @@ export default function FinancialAccountsPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/finance")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Financial Accounts</h1>
-            <p className="text-sm text-muted-foreground mt-1">Manage cash and bank accounts</p>
+            <h1 className="text-2xl font-bold text-foreground">{t("finance.financialAccounts")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("finance.accountsSubtitle")}</p>
           </div>
         </div>
         {canManage && (
           <Button onClick={openCreateDialog} data-testid="create-account-btn">
-            <Plus className="w-4 h-4 mr-2" /> Add Account
+            <Plus className="w-4 h-4 mr-2" /> {t("finance.newAccount")}
           </Button>
         )}
       </div>
@@ -161,13 +159,13 @@ export default function FinancialAccountsPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Account</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Type</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Currency</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Opening Balance</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Current Balance</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                {canManage && <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>}
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.accounts")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.currency")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.openingBalance")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.currentBalance")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                {canManage && <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -175,10 +173,10 @@ export default function FinancialAccountsPage() {
                 <TableRow>
                   <TableCell colSpan={canManage ? 7 : 6} className="text-center py-12 text-muted-foreground">
                     <Wallet className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No accounts found</p>
+                    <p>{t("finance.noAccounts")}</p>
                     {canManage && (
                       <Button variant="outline" className="mt-4" onClick={openCreateDialog}>
-                        Create your first account
+                        {t("finance.createFirstAccount")}
                       </Button>
                     )}
                   </TableCell>
@@ -200,7 +198,7 @@ export default function FinancialAccountsPage() {
                         <span className="font-medium text-foreground">{account.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{account.type}</TableCell>
+                    <TableCell className="text-muted-foreground">{t(`finance.accountType.${account.type.toLowerCase()}`)}</TableCell>
                     <TableCell className="font-mono text-muted-foreground">{account.currency}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {formatCurrency(account.opening_balance, account.currency)}
@@ -213,7 +211,7 @@ export default function FinancialAccountsPage() {
                         ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
                         : "bg-gray-500/20 text-gray-400 border-gray-500/30"
                       }>
-                        {account.active ? "Active" : "Inactive"}
+                        {account.active ? t("common.active") : t("common.inactive")}
                       </Badge>
                     </TableCell>
                     {canManage && (
@@ -246,34 +244,34 @@ export default function FinancialAccountsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="account-dialog">
           <DialogHeader>
-            <DialogTitle>{editingAccount ? "Edit Account" : "New Account"}</DialogTitle>
+            <DialogTitle>{editingAccount ? t("finance.editAccount") : t("finance.newAccount")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Account Name *</Label>
+              <Label>{t("finance.accountName")} *</Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Main Cash, Business Bank"
+                placeholder={t("finance.accountNamePlaceholder")}
                 className="bg-background"
                 data-testid="account-name-input"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Type</Label>
+                <Label>{t("common.type")}</Label>
                 <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
                   <SelectTrigger className="bg-background" data-testid="account-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Bank">Bank</SelectItem>
+                    <SelectItem value="Cash">{t("finance.accountType.cash")}</SelectItem>
+                    <SelectItem value="Bank">{t("finance.accountType.bank")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Currency</Label>
+                <Label>{t("common.currency")}</Label>
                 <Select value={formData.currency} onValueChange={(v) => setFormData({ ...formData, currency: v })} disabled={!!editingAccount}>
                   <SelectTrigger className="bg-background" data-testid="account-currency-select">
                     <SelectValue />
@@ -288,7 +286,7 @@ export default function FinancialAccountsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Opening Balance</Label>
+              <Label>{t("finance.openingBalance")}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -307,15 +305,15 @@ export default function FinancialAccountsPage() {
                   onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                   className="rounded border-border"
                 />
-                <Label htmlFor="active">Active</Label>
+                <Label htmlFor="active">{t("common.active")}</Label>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleSave} disabled={saving} data-testid="save-account-btn">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {editingAccount ? "Update" : "Create"}
+              {editingAccount ? t("common.update") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
