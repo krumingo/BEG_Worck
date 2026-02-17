@@ -2203,8 +2203,8 @@ async def list_advances(
     
     # Enrich with user name
     for adv in advances:
-        u = await db.users.find_one({"id": adv["user_id"]}, {"_id": 0, "name": 1})
-        adv["user_name"] = u["name"] if u else "Unknown"
+        u = await db.users.find_one({"id": adv["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+        adv["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
     
     return advances
 
