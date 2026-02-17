@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,8 @@ import {
   AlertTriangle,
   Loader2,
   CalendarDays,
+  FileText,
+  ArrowRight,
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -30,9 +33,18 @@ const STATUS_CONFIG = {
   Vacation: { icon: Palmtree, color: "text-cyan-400", bg: "bg-cyan-500/20 border-cyan-500/40 hover:bg-cyan-500/30", label: "Vacation" },
 };
 
+const REPORT_STATUS_COLORS = {
+  Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  Submitted: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  Approved: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  Rejected: "bg-red-500/20 text-red-400 border-red-500/30",
+};
+
 export default function MyDayPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
   const [note, setNote] = useState("");
@@ -40,10 +52,14 @@ export default function MyDayPage() {
 
   const fetchToday = useCallback(async () => {
     try {
-      const res = await API.get("/attendance/my-today");
-      setData(res.data);
-      if (res.data.active_projects?.length === 1) {
-        setSelectedProject(res.data.active_projects[0].id);
+      const [attRes, repRes] = await Promise.all([
+        API.get("/attendance/my-today"),
+        API.get("/work-reports/my-today"),
+      ]);
+      setData(attRes.data);
+      setReports(repRes.data);
+      if (attRes.data.active_projects?.length === 1) {
+        setSelectedProject(attRes.data.active_projects[0].id);
       }
     } catch (err) {
       console.error(err);
@@ -82,6 +98,12 @@ export default function MyDayPage() {
 
   const alreadyMarked = data?.entry != null;
   const pastDeadline = data?.past_deadline;
+  const needsReport = alreadyMarked && ["Present", "Late"].includes(data?.entry?.status);
+  const activeProjects = data?.active_projects || [];
+
+  // Reports that exist for today
+  const reportMap = {};
+  reports.forEach((r) => { reportMap[r.project_id] = r; });
 
   return (
     <div className="p-6 max-w-[480px] mx-auto" data-testid="my-day-page">
@@ -110,7 +132,7 @@ export default function MyDayPage() {
 
       {/* Already Marked */}
       {alreadyMarked ? (
-        <div className="rounded-xl border border-border bg-card p-6 text-center" data-testid="attendance-already-marked">
+        <div className="rounded-xl border border-border bg-card p-6 text-center mb-6" data-testid="attendance-already-marked">
           {(() => {
             const cfg = STATUS_CONFIG[data.entry.status] || STATUS_CONFIG.Present;
             const Icon = cfg.icon;
@@ -134,7 +156,7 @@ export default function MyDayPage() {
       ) : (
         <>
           {/* Project Selection */}
-          {data?.active_projects?.length > 0 && (
+          {activeProjects.length > 0 && (
             <div className="mb-6">
               <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Active Project</label>
               <Select value={selectedProject} onValueChange={setSelectedProject}>
@@ -142,7 +164,7 @@ export default function MyDayPage() {
                   <SelectValue placeholder="Select project..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {data.active_projects.map((p) => (
+                  {activeProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -192,6 +214,71 @@ export default function MyDayPage() {
             />
           </div>
         </>
+      )}
+
+      {/* Work Report CTA */}
+      {needsReport && (
+        <div className="space-y-3" data-testid="work-report-section">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" /> End-of-Day Reports
+          </h3>
+
+          {activeProjects.length === 0 && reports.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <Button
+                onClick={() => navigate("/work-reports/new")}
+                className="w-full h-14 text-base rounded-xl bg-primary hover:bg-primary/90"
+                data-testid="fill-report-button"
+              >
+                <FileText className="w-5 h-5 mr-2" /> Fill End-of-Day Report
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              {activeProjects.map((proj) => {
+                const rep = reportMap[proj.id];
+                return (
+                  <div key={proj.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between" data-testid={`report-cta-${proj.id}`}>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{proj.code} - {proj.name}</p>
+                      {rep ? (
+                        <Badge variant="outline" className={`text-xs mt-1 ${REPORT_STATUS_COLORS[rep.status] || ""}`}>
+                          {rep.status} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
+                        </Badge>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">No report yet</p>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={rep ? "outline" : "default"}
+                      onClick={() => rep ? navigate(`/work-reports/${rep.id}`) : navigate(`/work-reports/new?projectId=${proj.id}`)}
+                      data-testid={`report-action-${proj.id}`}
+                    >
+                      {rep && rep.status === "Draft" ? "Continue" : rep ? "View" : "Fill Report"}
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+                );
+              })}
+              {/* For reports on projects not in active list */}
+              {reports.filter((r) => !activeProjects.find((p) => p.id === r.project_id)).map((rep) => (
+                <div key={rep.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{rep.project_code || "Project"}</p>
+                    <Badge variant="outline" className={`text-xs mt-1 ${REPORT_STATUS_COLORS[rep.status] || ""}`}>
+                      {rep.status} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
+                    </Badge>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/work-reports/${rep.id}`)}>
+                    View <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       )}
     </div>
   );
