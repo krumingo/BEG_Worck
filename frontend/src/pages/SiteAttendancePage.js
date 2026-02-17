@@ -52,6 +52,7 @@ const STATUS_ICONS = {
 };
 
 export default function SiteAttendancePage() {
+  const { t, i18n } = useTranslation();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState("all");
   const [siteData, setSiteData] = useState(null);
