@@ -58,6 +58,7 @@ const TEAM_ROLE_COLORS = {
 };
 
 export default function ProjectDetailPage() {
+  const { t } = useTranslation();
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
