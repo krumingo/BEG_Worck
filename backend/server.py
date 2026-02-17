@@ -79,6 +79,57 @@ class ModuleToggle(BaseModel):
     module_code: str
     enabled: bool
 
+# ── Project Models ───────────────────────────────────────────────
+
+PROJECT_STATUSES = ["Draft", "Active", "Paused", "Completed", "Cancelled"]
+PROJECT_TYPES = ["Billable", "Overhead", "Warranty"]
+PROJECT_TEAM_ROLES = ["SiteManager", "Technician", "Viewer"]
+
+class ProjectCreate(BaseModel):
+    code: str
+    name: str
+    status: str = "Draft"
+    type: str = "Billable"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    planned_days: Optional[int] = None
+    budget_planned: Optional[float] = None
+    default_site_manager_id: Optional[str] = None
+    tags: List[str] = []
+    notes: str = ""
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+    type: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    planned_days: Optional[int] = None
+    budget_planned: Optional[float] = None
+    default_site_manager_id: Optional[str] = None
+    tags: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+class TeamMemberAdd(BaseModel):
+    user_id: str
+    role_in_project: str = "Technician"
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+
+class PhaseCreate(BaseModel):
+    name: str
+    order: int = 0
+    status: str = "Draft"
+    planned_start: Optional[str] = None
+    planned_end: Optional[str] = None
+
+class PhaseUpdate(BaseModel):
+    name: Optional[str] = None
+    order: Optional[int] = None
+    status: Optional[str] = None
+    planned_start: Optional[str] = None
+    planned_end: Optional[str] = None
+
 # ── Auth Helpers ─────────────────────────────────────────────────
 
 def hash_password(pw: str) -> str:
@@ -110,6 +161,26 @@ async def require_admin(user: dict = Depends(get_current_user)):
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+# ── Project Permission Helpers ───────────────────────────────────
+
+async def get_user_project_ids(user_id: str) -> List[str]:
+    members = await db.project_team.find({"user_id": user_id, "active": True}, {"_id": 0, "project_id": 1}).to_list(1000)
+    return [m["project_id"] for m in members]
+
+async def can_access_project(user: dict, project_id: str) -> bool:
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True})
+    return member is not None
+
+async def can_manage_project(user: dict, project_id: str) -> bool:
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    if user["role"] == "SiteManager":
+        member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
+        return member is not None
+    return False
 
 # ── Audit Helper ─────────────────────────────────────────────────
 
