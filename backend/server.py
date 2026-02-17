@@ -1611,6 +1611,20 @@ async def startup():
     await db.work_reports.create_index([("org_id", 1), ("date", 1), ("user_id", 1), ("project_id", 1)], unique=True)
     await db.work_reports.create_index([("org_id", 1), ("date", 1)])
     await db.work_reports.create_index([("org_id", 1), ("user_id", 1)])
+    await db.reminder_logs.create_index([("org_id", 1), ("type", 1), ("date", 1), ("user_id", 1)])
+    await db.notifications.create_index([("org_id", 1), ("user_id", 1), ("created_at", -1)])
+    await db.notifications.create_index([("org_id", 1), ("user_id", 1), ("is_read", 1)])
+
+    # Start background reminder scheduler
+    async def reminder_loop():
+        while True:
+            await asyncio.sleep(900)  # 15 minutes
+            try:
+                await run_reminder_jobs()
+                logger.info("Reminder jobs completed")
+            except Exception as e:
+                logger.error(f"Reminder job error: {e}")
+    asyncio.create_task(reminder_loop())
 
 @app.on_event("shutdown")
 async def shutdown():
