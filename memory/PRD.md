@@ -156,8 +156,43 @@
 - `/api/finance/stats` - finance overview stats
 
 ## Next Tasks (Priority Order)
-1. **i18n Hardening** - full translation pass for all UI strings
+1. **i18n Full Page Coverage** - complete remaining 20+ pages with translations
 2. **M9 Overhead Cost System** - cost tracking, allocation, reporting
 3. **M6 AI Invoice Capture** - upload, OCR/AI parsing, approval queue
 4. **M7 Inventory** - items, stock movements, warehouses
 5. **M8 Assets & QR** - checkout/checkin, maintenance, warranty
+
+## i18n Hardening Patch (2026-02-17)
+**Status:** PARTIALLY COMPLETE (Core pages done, remaining pages need coverage)
+
+**Implemented:**
+- react-i18next framework configured with BG default, EN fallback
+- Translation files: `/app/frontend/src/i18n/bg.json` (700+ keys), `en.json` (700+ keys)
+- Localization utility: `/app/frontend/src/lib/i18nUtils.js` (date, time, currency, number with locale)
+- Language switcher: persists in localStorage key "lang", visible in top bar
+
+**Pages Updated with t() translations:**
+- LoginPage
+- DashboardPage  
+- DashboardLayout (navigation)
+- FinanceOverviewPage
+- FinancialAccountsPage
+- InvoicesPage
+- InvoiceEditorPage
+- PaymentsPage
+
+**Translation Categories:**
+- common (70+ keys): loading, save, cancel, status, actions, etc.
+- auth: login, logout, credentials
+- nav (20+ keys): dashboard, projects, finance, etc.
+- dashboard: stats, widgets
+- projects, offers, activities, attendance, workReports, reminders, notifications
+- employees, advances, payroll, myPayslips
+- finance (60+ keys): accounts, invoices, payments, status enums
+- users, settings, modules, auditLog
+- validation, toast, confirm, empty, units
+
+**Remaining Work:**
+- Update remaining pages: MyDayPage, ProjectsListPage, ProjectDetailPage, OffersListPage, OfferEditorPage, etc.
+- Ensure 100% translation coverage across all 28 pages
+
