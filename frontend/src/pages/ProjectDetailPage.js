@@ -194,14 +194,14 @@ export default function ProjectDetailPage() {
     <div className="p-8 max-w-[1200px]" data-testid="project-detail-page">
       {/* Back button + header */}
       <Button variant="ghost" size="sm" className="mb-4 text-muted-foreground" onClick={() => navigate("/projects")} data-testid="back-to-projects">
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back to Projects
+        <ArrowLeft className="w-4 h-4 mr-2" /> {t("projects.backToProjects")}
       </Button>
 
       <div className="flex items-start justify-between mb-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <span className="font-mono text-sm text-primary font-bold">{project.code}</span>
-            <Badge variant="outline" className={`text-xs ${STATUS_COLORS[project.status] || ""}`}>{project.status}</Badge>
+            <Badge variant="outline" className={`text-xs ${STATUS_COLORS[project.status] || ""}`}>{t(`projects.status.${project.status.toLowerCase()}`)}</Badge>
           </div>
           <h1 className="text-2xl font-bold text-foreground" data-testid="project-title">{project.name}</h1>
         </div>
@@ -212,14 +212,14 @@ export default function ProjectDetailPage() {
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Layers className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">Type</span>
+            <span className="text-xs uppercase tracking-wider">{t("common.type")}</span>
           </div>
-          <p className="text-sm font-semibold text-foreground">{project.type}</p>
+          <p className="text-sm font-semibold text-foreground">{t(`projects.type.${project.type.toLowerCase()}`)}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <CalendarDays className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">Period</span>
+            <span className="text-xs uppercase tracking-wider">{t("projects.period")}</span>
           </div>
           <p className="text-sm font-semibold text-foreground">
             {project.start_date || "?"} &mdash; {project.end_date || "?"}
@@ -228,17 +228,17 @@ export default function ProjectDetailPage() {
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Hash className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">Planned Days</span>
+            <span className="text-xs uppercase tracking-wider">{t("projects.plannedDays")}</span>
           </div>
           <p className="text-sm font-semibold text-foreground">{project.planned_days ?? "-"}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <DollarSign className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">Budget</span>
+            <span className="text-xs uppercase tracking-wider">{t("projects.budget")}</span>
           </div>
           <p className="text-sm font-semibold text-foreground">
-            {project.budget_planned != null ? `${project.budget_planned.toLocaleString()} EUR` : "-"}
+            {project.budget_planned != null ? formatCurrency(project.budget_planned) : "-"}
           </p>
         </div>
       </div>
@@ -249,8 +249,8 @@ export default function ProjectDetailPage() {
           {project.tags?.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-              {project.tags.map((t) => (
-                <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+              {project.tags.map((tg) => (
+                <Badge key={tg} variant="secondary" className="text-xs">{tg}</Badge>
               ))}
             </div>
           )}
@@ -267,46 +267,46 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue="team" className="w-full" data-testid="project-tabs">
         <TabsList className="bg-card border border-border">
           <TabsTrigger value="team" data-testid="tab-team">
-            <Users className="w-4 h-4 mr-2" /> Team ({team.length})
+            <Users className="w-4 h-4 mr-2" /> {t("projects.team")} ({team.length})
           </TabsTrigger>
           <TabsTrigger value="phases" data-testid="tab-phases">
-            <Layers className="w-4 h-4 mr-2" /> Phases ({phases.length})
+            <Layers className="w-4 h-4 mr-2" /> {t("projects.phases")} ({phases.length})
           </TabsTrigger>
         </TabsList>
 
         {/* Team Tab */}
         <TabsContent value="team" className="mt-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Team Members</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t("projects.teamMembers")}</h3>
             <Button size="sm" onClick={() => setTeamDialogOpen(true)} data-testid="add-team-member-button">
-              <Plus className="w-4 h-4 mr-1" /> Add Member
+              <Plus className="w-4 h-4 mr-1" /> {t("projects.addMember")}
             </Button>
           </div>
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="team-table">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Name</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Email</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Org Role</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Project Role</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.name")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("users.email")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.orgRole")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.projectRole")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {team.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No team members assigned</TableCell>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("projects.noTeamMembers")}</TableCell>
                   </TableRow>
                 ) : (
                   team.map((m) => (
                     <TableRow key={m.id} className="table-row-hover" data-testid={`team-member-${m.id}`}>
                       <TableCell className="font-medium text-foreground">{m.user_name}</TableCell>
                       <TableCell className="text-muted-foreground">{m.user_email}</TableCell>
-                      <TableCell className="text-muted-foreground">{m.user_role}</TableCell>
+                      <TableCell className="text-muted-foreground">{t(`users.roles.${m.user_role.toLowerCase()}`, m.user_role)}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-xs ${TEAM_ROLE_COLORS[m.role_in_project] || ""}`}>
-                          {m.role_in_project}
+                          {t(`projects.projectRoles.${m.role_in_project.toLowerCase()}`, m.role_in_project)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -325,9 +325,9 @@ export default function ProjectDetailPage() {
         {/* Phases Tab */}
         <TabsContent value="phases" className="mt-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Project Phases</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t("projects.projectPhases")}</h3>
             <Button size="sm" onClick={openCreatePhase} data-testid="add-phase-button">
-              <Plus className="w-4 h-4 mr-1" /> Add Phase
+              <Plus className="w-4 h-4 mr-1" /> {t("projects.addPhase")}
             </Button>
           </div>
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="phases-table">
@@ -335,17 +335,17 @@ export default function ProjectDetailPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-16">#</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Name</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Start</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">End</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.name")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.start")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.end")}</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {phases.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No phases defined</TableCell>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("projects.noPhases")}</TableCell>
                   </TableRow>
                 ) : (
                   phases.map((ph) => (
@@ -353,13 +353,13 @@ export default function ProjectDetailPage() {
                       <TableCell className="font-mono text-muted-foreground">{ph.order}</TableCell>
                       <TableCell className="font-medium text-foreground">{ph.name}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-xs ${STATUS_COLORS[ph.status] || ""}`}>{ph.status}</Badge>
+                        <Badge variant="outline" className={`text-xs ${STATUS_COLORS[ph.status] || ""}`}>{t(`projects.status.${ph.status.toLowerCase()}`)}</Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{ph.planned_start || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{ph.planned_end || "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEditPhase(ph)}>Edit</Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEditPhase(ph)}>{t("common.edit")}</Button>
                           <Button variant="ghost" size="sm" onClick={() => handleDeletePhase(ph.id)} className="hover:text-destructive">
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -378,38 +378,38 @@ export default function ProjectDetailPage() {
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent className="sm:max-w-[420px] bg-card border-border" data-testid="team-dialog">
           <DialogHeader>
-            <DialogTitle>Add Team Member</DialogTitle>
+            <DialogTitle>{t("projects.addTeamMember")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label className="text-muted-foreground">User</Label>
+              <Label className="text-muted-foreground">{t("common.user")}</Label>
               <Select value={teamForm.user_id} onValueChange={(v) => setTeamForm({ ...teamForm, user_id: v })}>
                 <SelectTrigger className="bg-background" data-testid="team-user-select">
-                  <SelectValue placeholder="Select a user..." />
+                  <SelectValue placeholder={t("projects.selectUser")} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.role})</SelectItem>
+                    <SelectItem key={u.id} value={u.id}>{u.first_name} {u.last_name} ({t(`users.roles.${u.role.toLowerCase()}`)})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Role in Project</Label>
+              <Label className="text-muted-foreground">{t("projects.roleInProject")}</Label>
               <Select value={teamForm.role_in_project} onValueChange={(v) => setTeamForm({ ...teamForm, role_in_project: v })}>
                 <SelectTrigger className="bg-background" data-testid="team-role-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {["SiteManager", "Technician", "Viewer"].map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                    <SelectItem key={r} value={r}>{t(`projects.projectRoles.${r.toLowerCase()}`)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <Button onClick={handleAddMember} disabled={addingMember || !teamForm.user_id} className="w-full" data-testid="team-add-button">
               {addingMember && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Add to Team
+              {t("projects.addToTeam")}
             </Button>
           </div>
         </DialogContent>
@@ -419,27 +419,27 @@ export default function ProjectDetailPage() {
       <Dialog open={phaseDialogOpen} onOpenChange={setPhaseDialogOpen}>
         <DialogContent className="sm:max-w-[420px] bg-card border-border" data-testid="phase-dialog">
           <DialogHeader>
-            <DialogTitle>{editingPhase ? "Edit Phase" : "Add Phase"}</DialogTitle>
+            <DialogTitle>{editingPhase ? t("projects.editPhase") : t("projects.addPhase")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Name *</Label>
+              <Label className="text-muted-foreground">{t("common.name")} *</Label>
               <Input value={phaseForm.name} onChange={(e) => setPhaseForm({ ...phaseForm, name: e.target.value })} className="bg-background" data-testid="phase-name-input" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Order</Label>
+                <Label className="text-muted-foreground">{t("projects.order")}</Label>
                 <Input type="number" value={phaseForm.order} onChange={(e) => setPhaseForm({ ...phaseForm, order: e.target.value })} className="bg-background" data-testid="phase-order-input" />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Status</Label>
+                <Label className="text-muted-foreground">{t("common.status")}</Label>
                 <Select value={phaseForm.status} onValueChange={(v) => setPhaseForm({ ...phaseForm, status: v })}>
                   <SelectTrigger className="bg-background" data-testid="phase-status-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {["Draft", "Active", "Paused", "Completed", "Cancelled"].map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                      <SelectItem key={s} value={s}>{t(`projects.status.${s.toLowerCase()}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -447,17 +447,17 @@ export default function ProjectDetailPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Start</Label>
+                <Label className="text-muted-foreground">{t("projects.start")}</Label>
                 <Input type="date" value={phaseForm.planned_start} onChange={(e) => setPhaseForm({ ...phaseForm, planned_start: e.target.value })} className="bg-background" data-testid="phase-start-input" />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">End</Label>
+                <Label className="text-muted-foreground">{t("projects.end")}</Label>
                 <Input type="date" value={phaseForm.planned_end} onChange={(e) => setPhaseForm({ ...phaseForm, planned_end: e.target.value })} className="bg-background" data-testid="phase-end-input" />
               </div>
             </div>
             <Button onClick={handleSavePhase} disabled={savingPhase || !phaseForm.name} className="w-full" data-testid="phase-save-button">
               {savingPhase && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {editingPhase ? "Update Phase" : "Add Phase"}
+              {editingPhase ? t("projects.updatePhase") : t("projects.addPhase")}
             </Button>
           </div>
         </DialogContent>
