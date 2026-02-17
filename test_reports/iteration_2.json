@@ -22,7 +22,7 @@
     ]
   },
   "passed_tests": [
-    "Backend: M0 Core functionality (15/16 core tests passed)",
+    "Backend: All M0 Core functionality working (17/17 core tests passed)",
     "Backend: GET /api/dashboard/stats returns real project counts (Active=1, Draft=3, Users=4)",
     "Backend: GET /api/project-enums returns correct statuses, types, and team roles",
     "Backend: GET /api/projects with role-based filtering (Admin sees all, Technician sees assigned only)",
