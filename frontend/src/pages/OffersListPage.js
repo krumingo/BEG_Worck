@@ -39,6 +39,7 @@ const STATUS_COLORS = {
 };
 
 export default function OffersListPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
