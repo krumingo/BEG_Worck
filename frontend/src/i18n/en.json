@@ -317,11 +317,19 @@
     "myDaySubtitle": "Your attendance and reports",
     "history": "History",
     "historySubtitle": "Attendance history",
+    "last14Days": "Last 14 days",
     "markAttendance": "Mark Attendance",
+    "mark": "Mark",
+    "markAttendanceFor": "Mark Attendance for",
+    "markedAt": "Marked At",
     "checkIn": "Check In",
     "checkOut": "Check Out",
     "checkedIn": "Checked In",
     "notCheckedIn": "Not Checked In",
+    "notMarked": "Not Marked",
+    "notMarkedYet": "Not marked yet",
+    "noRecord": "No record",
+    "weekend": "Weekend",
     "present": "Present",
     "absent": "Absent",
     "late": "Late",
@@ -336,12 +344,15 @@
     "yourAttendance": "Your Attendance",
     "workReportsToday": "Work Reports Today",
     "noReportsToday": "No reports for today",
+    "noTeamMembers": "No team members in active projects",
     "statusLabels": {
       "present": "Present",
       "absent": "Absent",
       "late": "Late",
       "excused": "Excused",
-      "holiday": "Holiday"
+      "holiday": "Holiday",
+      "sickleave": "Sick Leave",
+      "vacation": "Vacation"
     }
   },
   "workReports": {
