@@ -16,6 +16,9 @@ import {
   Bell,
   FileText,
   Layers,
+  Receipt,
+  Wallet,
+  UserCog,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
@@ -29,6 +32,9 @@ const ADMIN_NAV = [
   { to: "/site-attendance", icon: ClipboardList, label: "Site Attendance" },
   { to: "/review-reports", icon: CalendarCheck, label: "Review Reports" },
   { to: "/reminders", icon: Bell, label: "Reminders" },
+  { to: "/employees", icon: UserCog, label: "Employees" },
+  { to: "/advances", icon: Wallet, label: "Advances" },
+  { to: "/payroll", icon: Receipt, label: "Payroll" },
   { to: "/users", icon: Users, label: "Users & Roles" },
   { to: "/settings", icon: Building2, label: "Company Settings" },
   { to: "/modules", icon: Blocks, label: "Modules" },
@@ -40,6 +46,7 @@ const WORKER_NAV = [
   { to: "/my-day", icon: CalendarCheck, label: "My Day" },
   { to: "/attendance-history", icon: CalendarDays, label: "History" },
   { to: "/projects", icon: FolderKanban, label: "Projects" },
+  { to: "/my-payslips", icon: Receipt, label: "My Payslips" },
 ];
 
 export default function DashboardLayout({ children }) {
