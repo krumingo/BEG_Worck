@@ -37,6 +37,7 @@ const STATUS_COLORS = {
 };
 
 export default function WorkReportFormPage() {
+  const { t } = useTranslation();
   const { reportId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
