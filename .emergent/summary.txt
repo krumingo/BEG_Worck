@@ -2,7 +2,7 @@
 The user wants to build a modular, sellable SaaS application named BEG_Work for construction company management.
 
 **PRODUCT REQUIREMENTS:**
-- The development must proceed in 10 distinct iterations, with a strict progress reporting format required in every agent response.
+- The development must proceed in 10 distinct iterations.
 - The application should be multi-tenant, with data isolated by company/organization.
 - It must support a detailed role-based access control system (Admin, Owner, SiteManager, Technician, etc.).
 - The system is composed of several feature-flagged modules:
@@ -21,133 +21,127 @@ The user wants to build a modular, sellable SaaS application named BEG_Work for 
 **User's preferred language**: English
 
 **what currently exists?**
-The application has been developed over four full iterations, with the fifth currently in progress.
-- **M0 (Core/SaaS):** Complete. Includes multi-tenancy, user/role management, JWT authentication, and basic frontend screens for login, settings, and user administration.
-- **M1 (Projects):** Complete. Implemented project management with data models for projects, teams, and phases. Includes full CRUD APIs with role-based permissions and corresponding frontend pages.
-- **M3 (Attendance & Daily Reports):** Complete. This module was built in two parts: morning attendance marking and end-of-day work reporting. Both include mobile-first UIs for technicians and management/review screens for Site Managers.
-- **M9 (Alerts - Partial):** In Progress. The backend for reminders and notifications related to missing attendance/reports is mostly complete, including data models, APIs, and a background scheduler (). The base frontend components have been created but are not yet integrated into the application.
+The application has completed modules M0-M5 and the Alerts part of M9. An extensive PATCH TASK to fully internationalize (i18n) the frontend is currently in progress. The  library is configured with Bulgarian () as the default language. The previous agent updated a large number of pages (~20) and significantly expanded the  and  translation files. However, the task is incomplete, and the user has provided explicit instructions to finish it before moving on.
 
 **Last working item**:
-- **Last item agent was working:** Iteration 5 - M9 Alerts (scoped to reminders for Missing Attendance and Missing Work Reports). The agent implemented the backend logic, including data models (, , ), service functions, API endpoints, and an  background job for automation. It also added auto-resolve hooks into the existing attendance and work report submission endpoints. Finally, it created the initial files for the new frontend components: , , and .
+- **Last item agent was working:** The user interrupted the previous agent, which was about to incorrectly finish the i18n task. The current directive is to CONTINUE i18n PATCH — DO NOT START OVERHEAD YET. This involves finishing translation for all remaining pages, adding a language switcher, and performing a final verification sweep.
 - **Status:** IN PROGRESS
-- **Agent Testing Done:** N
-- **Which testing method agent to use?** both. First, the agent should complete the frontend integration. Then, it should use  to test the new backend APIs. After that, it should use the  tool to verify the UI. Finally, it must run the  for a full end-to-end test of the reminder and notification functionality.
+- **Agent Testing Done:** N (Partial screenshot verification was done, but a full, final sweep is still required).
+- **Which testing method agent to use?** Frontend testing. First, use the  tool to manually complete the user's mandatory BG Mode Sweep checklist, ensuring zero English strings are visible. After all code changes, a final run with the  is recommended to catch any remaining issues.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- There are no known bugs or issues. The primary pending item is the completion of the current task.
+- There are no known application-breaking bugs. The main pending work is the completion of the i18n hardening task.
 
 **In progress Task List**:
-- **Task 1: Complete Frontend Integration for M9 Reminders (P0)**
-    - **Where to resume:** The agent has created , , and . The next step is to edit  to add the  and update navigation links. Then, edit  to add the routes for the  and . Finally, add the new Missing Attendance/Reports widgets to the Site Manager's dashboard.
-    - **What will be achieved with this?** The UI for the reminders and notifications feature will be fully integrated and accessible to users based on their roles.
+- **Task 1: Complete i18n Hardening Patch (P0)**
+    - **Where to resume:** The user has provided a clear multi-step plan:
+        1.  **Add Language Switcher:** Implement a simple / language toggle in the top bar within . The selection should persist to .
+        2.  **Translate Remaining Pages:** Systematically update all remaining pages listed by the user: , , , , , , . Ensure all UI text (placeholders, dialogs, toasts, errors) is converted to use .
+        3.  **Fix Test Agent Issues:** Review the test report at  and fix ALL outstanding issues. The previous agent only fixed the  issue.
+        4.  **Final Verification:** Perform the BG Mode Sweep to confirm ZERO visible English strings remain in the UI when set to Bulgarian.
+    - **What will be achieved with this?** The frontend will be 100% internationalized, fulfilling the patch requirements.
     - **Status:** IN PROGRESS
-    - **Should Test frontend/backend/both after fix?** both
+    - **Should Test frontend/backend/both after fix?** frontend
     - **Blocked on something:** None
 
-- **Task 2: Test M9 Reminders and Notifications (P1)**
-    - **Where to resume:** After Task 1 is complete.
-    - **What will be achieved with this?** This will verify that the entire Iteration 5 feature works as expected, including automated reminders via the scheduler, manual reminders, UI updates (notification bell, pages), and proper role-based access.
-    - **Status:** NOT STARTED
-    - **Should Test frontend/backend/both after fix?** both
-    - **Blocked on something:** Task 1
-
 **Upcoming and Future Tasks**
-- **Upcoming Tasks (Iteration 6):**
-  - **Propose the next module to implement.** The user has asked for a recommendation between **M2 (Estimates/BOQ)** and the **Overhead Cost System (part of M9)**. M2 is the more logical next step as it builds upon the core project structure.
-
+- **Upcoming Tasks:**
+    - **P1: Iteration 9 (M9 Overhead Cost System):** Implement the overhead cost system as part of the Admin Console/BI module.
 - **Future Tasks (Project Backlog):**
-  - M2: Estimates/BOQ (offers + activities)
-  - M4: HR/Payroll-lite (hourly/daily/monthly pay, advances/loans, payslip)
-  - M5: Finance (invoices issued/received, payments)
-  - M6: AI Invoice Capture (upload/parse invoices)
-  - M7: Inventory (items + movements)
-  - M8: Assets & QR (checkout/checkin, maintenance)
-  - M9: Complete Admin Console/BI (full statistics, alerts, and the Overhead Cost System)
-  - Optional Module: Mobile features for Drivers.
+    - M6: AI Invoice Capture (upload/parse invoices)
+    - M7: Inventory (items + movements)
+    - M8: Assets & QR (checkout/checkin, maintenance)
+    - M9: Complete Admin Console/BI (full statistics dashboard)
+    - **Refactor :** Propose a dedicated task to break down the monolithic backend file into a modular structure.
 
 **Completed work in this session**
-- **Iteration 1: M0 Core/SaaS** - Implemented tenancy, auth, roles, and settings.
-- **Iteration 2: M1 Projects** - Implemented project and team management.
-- **Iteration 3: M3 Attendance** - Implemented morning attendance marking.
-- **Iteration 4: M3 Daily Work Reports** - Implemented end-of-day reporting tied to attendance.
+- **i18n Refactoring (Partial):**
+  - Updated ~20 React pages/components to use   functions instead of hardcoded strings.
+  - Added dozens of new translation keys to  and .
+  - Fixed an i18n issue in  that was identified by the testing agent.
+  - Verified that the core i18n setup is working correctly, with Bulgarian () loading by default.
 
 **Earlier issues found/mentioned but not fixed**
-- None.
+- **Issue 1: Unresolved Test Agent Findings**
+    - **Debug checklist:** Read the JSON report at . It contains a list of UI pages with remaining hardcoded English text.
+    - **Why to solve this issue and what will be achieved with this?** To complete the mandatory i18n hardening task and ensure 100% translation coverage as requested by the user.
+    - **Should Test frontend/backend/both after fix:** frontend
+    - **Is recurring issue?** N
+- **Issue 2: Hardcoded Strings in SiteAttendancePage**
+    - **Debug checklist:** The previous agent's screenshot test revealed All Active Projects and MARKED AT were still in English. The agent added some keys but did not re-verify. The  file needs to be checked again to ensure these are now correctly translated.
+    - **Why to solve this issue and what will be achieved with this?** To fix a known i18n gap.
+    - **Should Test frontend/backend/both after fix:** frontend
+    - **Is recurring issue?** N
 
 **Known issue recurrence from previous fork**
-- None.
+- **Issue recurrence in previous fork:**  in  when a user document was missing the  field.
+- **Recurrence count:** 1
+- **Status:** RESOLVED
+- **Note:** The fix was a defensive  call. The underlying risk remains due to the monolithic structure of .
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Backend:** FastAPI, Pydantic, Motor (async MongoDB driver), JWT, APScheduler.
-- **Frontend:** React, TailwindCSS, Axios, React Router.
+- **Backend:** FastAPI, Pydantic, Motor (async MongoDB driver), JWT.
+- **Frontend:** React, TailwindCSS, Axios, React Router, .
 - **Architecture:** Multi-tenant SaaS, Modular (by feature), Role-Based Access Control (RBAC).
 
 **key DB schema**
-- : Core tenant information and settings.
-- : User accounts with roles and .
-- : Project details, linked to an .
-- : Associates users with projects and roles within them.
-- : Daily attendance records for users (, , etc.).
-- : End-of-day work logs, linked to .
-- : Tracks reminders sent for missing attendance/reports.
-- : In-app notifications for users.
+- **Finance (M5):** , , , 
+- **Core:** , , , , , , , 
 
 **changes in tech stack**
--  was added to the backend to handle scheduled jobs for sending reminders.
+-  and  were added in a previous session. No new stack changes.
 
 **All files of reference**
-- : The single, large file for all backend logic. It has been modified in every iteration and is the most critical file.
-- : Contains all frontend routing.
-- : The main application shell with navigation.
-- **New files from the current task:**
-  - : To be added to the layout to show unread notifications.
-  - : A new page for users to view their notifications.
-  - : A new page for managers to view and manage reminders.
+- : The Bulgarian translation file (heavily modified).
+- : The English translation file (heavily modified).
+- : File to modify for the new language switcher.
+- : **Crucial test report with outstanding issues that must be fixed.**
+- : The backend monolith.
 
 **Areas that need refactoring**:
--  is over 1500 lines long and contains models, routes, and services for all modules. It is becoming a monolith and should be refactored into a more maintainable, modular structure (e.g., separating routes, models, and services into different directories/files per feature).
+- **CRITICAL:**  is a large monolith and is a high-priority candidate for future refactoring into a modular structure (e.g., , ).
 
 **key api endpoints**
-- 
-- 
-- 
-- 
--  (new)
--  (new)
+-  (CRUD)
+-  (CRUD, send, cancel)
+-  (CRUD, allocate)
+-  (GET)
 
 **Critical Info for New Agent**
-- You MUST follow the user's strict response format at the end of every message, including , , , etc.
-- Development is strictly iterative. Only implement the scope defined for the current iteration.
-- The agent is expected to make reasonable assumptions and proceed, rather than asking for clarification.
-- Testing is mandatory after each iteration. Use  for backend,  for frontend, and  for comprehensive E2E tests before finishing an iteration.
-- The  file is very large; be precise with edits, using specific anchors for .
-- Remember to update  using the  tool at the end of each iteration.
+- Your only priority is to complete the PATCH TASK — i18n HARDENING FINISH as defined by the user in their last message. DO NOT start the M9 overhead system.
+- The task is NOT complete. You must implement the language switcher, translate all remaining pages, and fix all outstanding issues from the test report ().
+- The final acceptance criteria is ZERO visible English strings in the UI when the language is set to Bulgarian. This must be verified with a full BG Mode Sweep.
+- The user has provided a mandatory PATCH OUTPUT FORMAT. You must follow it when finishing the task.
 
 **documents and test reports created in this job**
 - 
-- 
 
 **Last 10 User Messages and any pending HUMAN messages**
-- **Msg 143 (USER):** Defined the scope for Iteration 5 (M9 Alerts), focusing on reminders for missing attendance and work reports. This includes models, APIs, a scheduler for automation, and frontend UI for notifications and reminder management. (PENDING: Agent needs to complete this iteration).
-- **Msg 144-163 (AGENT):** The agent began work on Iteration 5. It viewed the code, planned its approach, and executed a series of parallel tool calls to implement the backend models, routes, scheduler, and auto-resolve logic in . The last action was creating the initial files for the frontend components (, , ). The work is mid-flight.
+- **User (PENDING):** Gave explicit instructions to continue the i18n patch, not start a new task. The user specified the remaining work:
+    1.  Finish translating a list of 7 specific pages.
+    2.  Fix all edge cases where English still appears.
+    3.  Add a visible language switcher to the top bar.
+    4.  Perform a final BG Mode Sweep and confirm zero remaining English strings before finishing.
 
 **Project Health Check:**
-- **Working:** All features from Iterations 1-4 are functional and tested.
+- **Working:** Modules M0, M1, M2, M3, M4, M5, M9 (Alerts).
 - **Broken:** None.
+- **In Progress:** i18n Patch (full coverage task).
 - **Mocked:** None.
 
 **3rd Party Integrations**
 - None.
 
 **Testing status**
-- **Testing agent used after significant changes:** YES (after each of the first 4 iterations).
+- **Testing agent used after significant changes:** YES.
 - **Troubleshoot agent used after agent stuck in loop:** NO.
-- **Test files created:** None (testing agent performs tests and generates reports).
+- **Test files created:** None in this session.
 - **Known regressions:** None.
+- **Outstanding Test Report:**  contains unresolved issues that MUST be addressed.
 
 **Credentials to test flow:**
 - **Admin:**  / 
@@ -155,4 +149,5 @@ The application has been developed over four full iterations, with the fifth cur
 - **Technician:**  / 
 
 **What agent forgot to execute**
-The agent is in the middle of Iteration 5. It has correctly implemented the backend changes and created the necessary frontend files. However, it has not yet integrated these new frontend components into the main application. The next logical steps are to update  with new routes and modify  to include the notification bell and navigation links.</analysis>
+- The previous agent failed to address all the issues reported by the testing agent in . It only fixed one issue () before incorrectly attempting to finish the entire task.
+- The agent did not realize the i18n task was incomplete and missed several pages and a new user requirement (language switcher), forcing the user to intervene and provide explicit corrective instructions.</analysis>
