@@ -362,6 +362,20 @@
       "vacation": "Vacation"
     }
   },
+  "myDay": {
+    "imAtWork": "I'm at Work",
+    "imAtWorkLate": "I'm at Work (Late)",
+    "sickLeave": "Sick Leave",
+    "vacation": "Vacation",
+    "pastDeadline": "Past Deadline",
+    "markedAsLate": "Your attendance will be marked as Late",
+    "attendanceRecorded": "Attendance Recorded",
+    "markedAt": "Marked at",
+    "activeProject": "Active Project",
+    "noReportYet": "No report yet",
+    "continue": "Continue",
+    "addNote": "Add a note (optional)..."
+  },
   "workReports": {
     "title": "Work Reports",
     "reviewReports": "Review Reports",
