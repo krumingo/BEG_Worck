@@ -8,6 +8,8 @@ import UsersPage from "@/pages/UsersPage";
 import CompanySettingsPage from "@/pages/CompanySettingsPage";
 import ModuleTogglesPage from "@/pages/ModuleTogglesPage";
 import AuditLogPage from "@/pages/AuditLogPage";
+import ProjectsListPage from "@/pages/ProjectsListPage";
+import ProjectDetailPage from "@/pages/ProjectDetailPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -36,6 +38,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/projects" element={<ProtectedRoute><ProjectsListPage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />

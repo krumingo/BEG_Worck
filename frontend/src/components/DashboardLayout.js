@@ -9,12 +9,14 @@ import {
   LogOut,
   ChevronRight,
   HardHat,
+  FolderKanban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/projects", icon: FolderKanban, label: "Projects" },
   { to: "/users", icon: Users, label: "Users & Roles" },
   { to: "/settings", icon: Building2, label: "Company Settings" },
   { to: "/modules", icon: Blocks, label: "Modules" },

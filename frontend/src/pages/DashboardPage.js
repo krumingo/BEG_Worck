@@ -1,36 +1,32 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import {
   Users,
-  Blocks,
-  ScrollText,
-  CreditCard,
+  FolderKanban,
+  PlayCircle,
+  PauseCircle,
+  CheckCircle2,
   ArrowUpRight,
   Clock,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const { org } = useAuth();
-  const [stats, setStats] = useState({ users: 0, modules: 0, logs: 0, plan: "" });
+  const navigate = useNavigate();
+  const [stats, setStats] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [usersRes, flagsRes, logsRes, subRes] = await Promise.all([
-          API.get("/users"),
-          API.get("/feature-flags"),
+        const [dashRes, logsRes] = await Promise.all([
+          API.get("/dashboard/stats"),
           API.get("/audit-logs?limit=8"),
-          API.get("/subscription"),
         ]);
-        setStats({
-          users: usersRes.data.length,
-          modules: flagsRes.data.filter((f) => f.enabled).length,
-          logs: logsRes.data.total,
-          plan: subRes.data?.plan || "N/A",
-        });
+        setStats(dashRes.data);
         setRecentLogs(logsRes.data.logs);
       } catch (err) {
         console.error("Failed to load dashboard", err);
@@ -41,14 +37,7 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const statCards = [
-    { label: "Total Users", value: stats.users, icon: Users, color: "text-blue-400" },
-    { label: "Active Modules", value: `${stats.modules}/10`, icon: Blocks, color: "text-primary" },
-    { label: "Audit Events", value: stats.logs, icon: ScrollText, color: "text-emerald-400" },
-    { label: "Plan", value: stats.plan.charAt(0).toUpperCase() + stats.plan.slice(1), icon: CreditCard, color: "text-violet-400" },
-  ];
-
-  if (loading) {
+  if (loading || !stats) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -56,16 +45,18 @@ export default function DashboardPage() {
     );
   }
 
+  const statCards = [
+    { label: "Active Projects", value: stats.active_projects, icon: PlayCircle, color: "text-emerald-400", onClick: () => navigate("/projects") },
+    { label: "Paused Projects", value: stats.paused_projects, icon: PauseCircle, color: "text-amber-400", onClick: () => navigate("/projects") },
+    { label: "Completed", value: stats.completed_projects, icon: CheckCircle2, color: "text-blue-400", onClick: () => navigate("/projects") },
+    { label: "Total Users", value: stats.users_count, icon: Users, color: "text-violet-400", onClick: () => navigate("/users") },
+  ];
+
   return (
     <div className="p-8 max-w-[1200px]" data-testid="dashboard-page">
-      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground" data-testid="dashboard-title">
-          Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Welcome back to {org?.name || "BEG_Work"}
-        </p>
+        <h1 className="text-2xl font-bold text-foreground" data-testid="dashboard-title">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1">Welcome back to {org?.name || "BEG_Work"}</p>
       </div>
 
       {/* Stats */}
@@ -73,19 +64,45 @@ export default function DashboardPage() {
         {statCards.map((card, i) => (
           <div
             key={card.label}
-            className="stat-card animate-in"
+            className="stat-card animate-in cursor-pointer"
             style={{ animationDelay: `${i * 80}ms` }}
+            onClick={card.onClick}
             data-testid={`stat-${card.label.toLowerCase().replace(/\s+/g, "-")}`}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {card.label}
-              </span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{card.label}</span>
               <card.icon className={`w-4 h-4 ${card.color}`} />
             </div>
             <p className="text-2xl font-bold text-foreground">{card.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Projects summary row */}
+      <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="projects-summary">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FolderKanban className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Projects Overview</h2>
+          </div>
+          <button onClick={() => navigate("/projects")} className="text-xs text-primary hover:underline flex items-center gap-1">
+            View all <ArrowUpRight className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="grid grid-cols-5 gap-4 text-center">
+          {[
+            { label: "Total", val: stats.total_projects, cls: "text-foreground" },
+            { label: "Draft", val: stats.draft_projects, cls: "text-gray-400" },
+            { label: "Active", val: stats.active_projects, cls: "text-emerald-400" },
+            { label: "Paused", val: stats.paused_projects, cls: "text-amber-400" },
+            { label: "Completed", val: stats.completed_projects, cls: "text-blue-400" },
+          ].map((item) => (
+            <div key={item.label}>
+              <p className={`text-xl font-bold ${item.cls}`}>{item.val}</p>
+              <p className="text-xs text-muted-foreground">{item.label}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Recent Activity */}
