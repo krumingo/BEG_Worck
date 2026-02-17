@@ -48,6 +48,7 @@ const STATUS_COLORS = {
 const UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"];
 
 export default function OfferEditorPage() {
+  const { t } = useTranslation();
   const { offerId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
