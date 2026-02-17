@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard,
   Users,
@@ -19,38 +20,42 @@ import {
   Receipt,
   Wallet,
   UserCog,
+  Landmark,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 const ADMIN_NAV = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/projects", icon: FolderKanban, label: "Projects" },
-  { to: "/offers", icon: FileText, label: "Offers" },
-  { to: "/activity-catalog", icon: Layers, label: "Activities" },
-  { to: "/site-attendance", icon: ClipboardList, label: "Site Attendance" },
-  { to: "/review-reports", icon: CalendarCheck, label: "Review Reports" },
-  { to: "/reminders", icon: Bell, label: "Reminders" },
-  { to: "/employees", icon: UserCog, label: "Employees" },
-  { to: "/advances", icon: Wallet, label: "Advances" },
-  { to: "/payroll", icon: Receipt, label: "Payroll" },
-  { to: "/users", icon: Users, label: "Users & Roles" },
-  { to: "/settings", icon: Building2, label: "Company Settings" },
-  { to: "/modules", icon: Blocks, label: "Modules" },
-  { to: "/audit-log", icon: ScrollText, label: "Audit Log" },
+  { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
+  { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
+  { to: "/offers", icon: FileText, labelKey: "nav.offers" },
+  { to: "/activity-catalog", icon: Layers, labelKey: "nav.activities" },
+  { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
+  { to: "/review-reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
+  { to: "/reminders", icon: Bell, labelKey: "nav.reminders" },
+  { to: "/employees", icon: UserCog, labelKey: "nav.employees" },
+  { to: "/advances", icon: Wallet, labelKey: "nav.advances" },
+  { to: "/payroll", icon: Receipt, labelKey: "nav.payroll" },
+  { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
+  { to: "/users", icon: Users, labelKey: "nav.users" },
+  { to: "/settings", icon: Building2, labelKey: "nav.companySettings" },
+  { to: "/modules", icon: Blocks, labelKey: "nav.modules" },
+  { to: "/audit-log", icon: ScrollText, labelKey: "nav.auditLog" },
 ];
 
 const WORKER_NAV = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/my-day", icon: CalendarCheck, label: "My Day" },
-  { to: "/attendance-history", icon: CalendarDays, label: "History" },
-  { to: "/projects", icon: FolderKanban, label: "Projects" },
-  { to: "/my-payslips", icon: Receipt, label: "My Payslips" },
+  { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
+  { to: "/my-day", icon: CalendarCheck, labelKey: "nav.myDay" },
+  { to: "/attendance-history", icon: CalendarDays, labelKey: "nav.history" },
+  { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
+  { to: "/my-payslips", icon: Receipt, labelKey: "nav.myPayslips" },
 ];
 
 export default function DashboardLayout({ children }) {
   const { user, org, logout } = useAuth();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -70,14 +75,14 @@ export default function DashboardLayout({ children }) {
           </div>
           <div className="flex-1">
             <h1 className="text-sm font-bold tracking-tight text-foreground">BEG_Work</h1>
-            <p className="text-[11px] text-muted-foreground truncate max-w-[150px]">{org?.name || "Loading..."}</p>
+            <p className="text-[11px] text-muted-foreground truncate max-w-[150px]">{org?.name || t("common.loading")}</p>
           </div>
           <NotificationBell />
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" data-testid="sidebar-nav">
-          {(["Admin","Owner","SiteManager"].includes(user?.role) ? ADMIN_NAV : WORKER_NAV).map((item) => (
+          {(["Admin","Owner","SiteManager","Accountant"].includes(user?.role) ? ADMIN_NAV : WORKER_NAV).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -85,10 +90,10 @@ export default function DashboardLayout({ children }) {
               className={({ isActive }) =>
                 `sidebar-link ${isActive ? "active" : "text-muted-foreground"}`
               }
-              data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+              data-testid={`nav-${item.labelKey.split(".")[1]}`}
             >
               <item.icon className="w-[18px] h-[18px]" />
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{t(item.labelKey)}</span>
               {location.pathname === item.to && (
                 <ChevronRight className="w-4 h-4 opacity-50" />
               )}
@@ -110,6 +115,7 @@ export default function DashboardLayout({ children }) {
               </p>
               <p className="text-[11px] text-muted-foreground truncate">{user?.role}</p>
             </div>
+            <LanguageSwitcher />
           </div>
           <Button
             variant="ghost"
@@ -119,7 +125,7 @@ export default function DashboardLayout({ children }) {
             data-testid="logout-button"
           >
             <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
+            {t("auth.signOut")}
           </Button>
         </div>
       </aside>
