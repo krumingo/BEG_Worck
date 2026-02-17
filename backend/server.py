@@ -1085,6 +1085,8 @@ async def submit_work_report(report_id: str, user: dict = Depends(get_current_us
         "status": "Submitted", "submitted_at": now, "reject_reason": None, "updated_at": now
     }})
     await log_audit(user["org_id"], user["id"], user["email"], "report_submitted", "work_report", report_id, {"date": report["date"]})
+    # Auto-resolve MissingWorkReport reminders
+    await auto_resolve_reminders(user["org_id"], "MissingWorkReport", report["date"], user["id"], user["id"])
     updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
     return enrich_report(updated)
 
