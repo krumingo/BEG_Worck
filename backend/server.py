@@ -2774,6 +2774,14 @@ async def startup():
     await db.offers.create_index([("org_id", 1), ("status", 1)])
     await db.activity_catalog.create_index([("org_id", 1), ("project_id", 1)])
     await db.activity_catalog.create_index([("org_id", 1), ("project_id", 1), ("active", 1)])
+    # M4 Payroll indexes
+    await db.employee_profiles.create_index([("org_id", 1), ("user_id", 1)], unique=True)
+    await db.advances.create_index([("org_id", 1), ("user_id", 1)])
+    await db.advances.create_index([("org_id", 1), ("status", 1)])
+    await db.payroll_runs.create_index([("org_id", 1), ("status", 1)])
+    await db.payslips.create_index([("org_id", 1), ("payroll_run_id", 1)])
+    await db.payslips.create_index([("org_id", 1), ("user_id", 1)])
+    await db.payroll_payments.create_index([("org_id", 1), ("payroll_run_id", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
