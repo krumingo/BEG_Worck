@@ -2102,6 +2102,12 @@ async def startup():
     await db.reminder_logs.create_index([("org_id", 1), ("type", 1), ("date", 1), ("user_id", 1)])
     await db.notifications.create_index([("org_id", 1), ("user_id", 1), ("created_at", -1)])
     await db.notifications.create_index([("org_id", 1), ("user_id", 1), ("is_read", 1)])
+    # M2 Estimates indexes
+    await db.offers.create_index([("org_id", 1), ("offer_no", 1)])
+    await db.offers.create_index([("org_id", 1), ("project_id", 1)])
+    await db.offers.create_index([("org_id", 1), ("status", 1)])
+    await db.activity_catalog.create_index([("org_id", 1), ("project_id", 1)])
+    await db.activity_catalog.create_index([("org_id", 1), ("project_id", 1), ("active", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
