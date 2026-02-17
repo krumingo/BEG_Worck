@@ -119,9 +119,9 @@ export default function WorkReportReviewPage() {
     <div className="p-8 max-w-[1200px]" data-testid="report-review-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Review Reports</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("workReports.reviewReports")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {reports.length} reports &middot; {submitted} pending &middot; {approved} approved
+            {reports.length} {t("workReports.reports")} &middot; {submitted} {t("workReports.pending")} &middot; {approved} {t("workReports.approved")}
           </p>
         </div>
       </div>
@@ -137,10 +137,10 @@ export default function WorkReportReviewPage() {
         />
         <Select value={selectedProject} onValueChange={setSelectedProject}>
           <SelectTrigger className="w-[280px] bg-card" data-testid="report-project-filter">
-            <SelectValue placeholder="Filter project..." />
+            <SelectValue placeholder={t("projects.filterByProject")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
+            <SelectItem value="all">{t("common.allProjects")}</SelectItem>
             {projects.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
             ))}
@@ -158,12 +158,12 @@ export default function WorkReportReviewPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">User</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Project</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lines</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Hours</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.user")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.project")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("workReports.lines")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("workReports.hours")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -171,7 +171,7 @@ export default function WorkReportReviewPage() {
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-16">
                     <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-muted-foreground">No reports for this date</p>
+                    <p className="text-muted-foreground">{t("workReports.noReportsForDate")}</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -187,7 +187,7 @@ export default function WorkReportReviewPage() {
                       <span className="font-mono text-xs text-primary">{r.project_code}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={`text-xs ${STATUS_COLORS[r.status] || ""}`}>{r.status}</Badge>
+                      <Badge variant="outline" className={`text-xs ${STATUS_COLORS[r.status] || ""}`}>{t(`workReports.status.${r.status.toLowerCase()}`)}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.lines?.length || 0}</TableCell>
                     <TableCell>
@@ -204,10 +204,10 @@ export default function WorkReportReviewPage() {
                         {r.status === "Submitted" && (
                           <>
                             <Button size="sm" onClick={() => handleApprove(r.id)} disabled={acting} className="bg-emerald-600 hover:bg-emerald-700 h-8" data-testid={`approve-report-${r.id}`}>
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> {t("common.approve")}
                             </Button>
                             <Button size="sm" variant="destructive" onClick={() => openReject(r)} disabled={acting} className="h-8" data-testid={`reject-report-${r.id}`}>
-                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                              <XCircle className="w-3.5 h-3.5 mr-1" /> {t("common.reject")}
                             </Button>
                           </>
                         )}
@@ -225,22 +225,22 @@ export default function WorkReportReviewPage() {
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card border-border max-h-[80vh] overflow-y-auto" data-testid="report-detail-dialog">
           <DialogHeader>
-            <DialogTitle>Work Report — {detailReport?.user_name}</DialogTitle>
+            <DialogTitle>{t("workReports.workReport")} — {detailReport?.user_name}</DialogTitle>
           </DialogHeader>
           {detailReport && (
             <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">{detailReport.date} &middot; {detailReport.project_code}</span>
-                <Badge variant="outline" className={`text-xs ${STATUS_COLORS[detailReport.status] || ""}`}>{detailReport.status}</Badge>
+                <Badge variant="outline" className={`text-xs ${STATUS_COLORS[detailReport.status] || ""}`}>{t(`workReports.status.${detailReport.status.toLowerCase()}`)}</Badge>
               </div>
               {detailReport.summary_note && (
                 <div className="p-3 rounded-lg bg-background border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Summary</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("workReports.summary")}</p>
                   <p className="text-sm text-foreground">{detailReport.summary_note}</p>
                 </div>
               )}
               <div>
-                <p className="text-xs text-muted-foreground mb-2">Activities ({detailReport.lines?.length || 0})</p>
+                <p className="text-xs text-muted-foreground mb-2">{t("workReports.activities")} ({detailReport.lines?.length || 0})</p>
                 {(detailReport.lines || []).map((line, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div className="flex-1">
@@ -251,7 +251,7 @@ export default function WorkReportReviewPage() {
                   </div>
                 ))}
                 <div className="flex items-center justify-between pt-3 mt-2 border-t border-border">
-                  <span className="text-sm font-medium text-muted-foreground">Total</span>
+                  <span className="text-sm font-medium text-muted-foreground">{t("common.total")}</span>
                   <span className="text-lg font-bold text-foreground">{detailReport.total_hours}h</span>
                 </div>
               </div>
@@ -264,17 +264,17 @@ export default function WorkReportReviewPage() {
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="reject-dialog">
           <DialogHeader>
-            <DialogTitle>Reject Report</DialogTitle>
+            <DialogTitle>{t("workReports.rejectReport")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <p className="text-sm text-muted-foreground">Rejecting report for {rejectTarget?.user_name}</p>
+            <p className="text-sm text-muted-foreground">{t("workReports.rejectingReportFor")} {rejectTarget?.user_name}</p>
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Reason *</label>
-              <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Enter reason for rejection..." className="bg-background" data-testid="reject-reason-input" />
+              <label className="text-sm text-muted-foreground">{t("workReports.reason")} *</label>
+              <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder={t("workReports.enterRejectReason")} className="bg-background" data-testid="reject-reason-input" />
             </div>
             <Button onClick={handleReject} disabled={acting || !rejectReason} variant="destructive" className="w-full" data-testid="reject-confirm-button">
               {acting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Reject Report
+              {t("workReports.rejectReport")}
             </Button>
           </div>
         </DialogContent>
