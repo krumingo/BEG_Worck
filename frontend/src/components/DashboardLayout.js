@@ -14,6 +14,8 @@ import {
   CalendarDays,
   ClipboardList,
   Bell,
+  FileText,
+  Layers,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,8 @@ import { Separator } from "@/components/ui/separator";
 const ADMIN_NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/projects", icon: FolderKanban, label: "Projects" },
+  { to: "/offers", icon: FileText, label: "Offers" },
+  { to: "/activity-catalog", icon: Layers, label: "Activities" },
   { to: "/site-attendance", icon: ClipboardList, label: "Site Attendance" },
   { to: "/review-reports", icon: CalendarCheck, label: "Review Reports" },
   { to: "/reminders", icon: Bell, label: "Reminders" },
