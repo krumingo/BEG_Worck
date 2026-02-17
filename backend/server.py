@@ -934,6 +934,239 @@ async def get_missing_attendance_today(user: dict = Depends(get_current_user), p
 async def get_attendance_statuses():
     return ATTENDANCE_STATUSES
 
+# ── Work Report Helpers ──────────────────────────────────────────
+
+async def can_access_report(user: dict, report: dict) -> bool:
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    if report["user_id"] == user["id"]:
+        return True
+    if user["role"] == "SiteManager":
+        mgr = await db.project_team.find_one({
+            "project_id": report["project_id"], "user_id": user["id"],
+            "active": True, "role_in_project": "SiteManager"
+        })
+        return mgr is not None
+    return False
+
+async def can_review_report(user: dict, report: dict) -> bool:
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    if user["role"] == "SiteManager":
+        mgr = await db.project_team.find_one({
+            "project_id": report["project_id"], "user_id": user["id"],
+            "active": True, "role_in_project": "SiteManager"
+        })
+        return mgr is not None
+    return False
+
+def enrich_report(report: dict) -> dict:
+    r = {k: v for k, v in report.items() if k != "_id"}
+    r["total_hours"] = sum(line.get("hours", 0) for line in r.get("lines", []))
+    return r
+
+# ── Work Report Routes ───────────────────────────────────────────
+
+@api_router.post("/work-reports/draft", status_code=201)
+async def create_or_get_draft(data: WorkReportDraftCreate, user: dict = Depends(get_current_user)):
+    date = data.date or today_str()
+    org_id = user["org_id"]
+
+    # Check attendance
+    att = await db.attendance_entries.find_one({
+        "org_id": org_id, "date": date, "user_id": user["id"],
+        "status": {"$in": ["Present", "Late"]}
+    })
+    if not att:
+        raise HTTPException(status_code=400, detail="Attendance must be marked as Present or Late before creating a work report")
+
+    # Check project exists
+    project = await db.projects.find_one({"id": data.project_id, "org_id": org_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check existing
+    existing = await db.work_reports.find_one({
+        "org_id": org_id, "date": date, "user_id": user["id"], "project_id": data.project_id
+    }, {"_id": 0})
+    if existing:
+        return enrich_report(existing)
+
+    now = datetime.now(timezone.utc).isoformat()
+    report = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "date": date,
+        "project_id": data.project_id,
+        "user_id": user["id"],
+        "attendance_entry_id": att["id"],
+        "status": "Draft",
+        "summary_note": "",
+        "lines": [],
+        "submitted_at": None,
+        "approved_at": None,
+        "approved_by_user_id": None,
+        "reject_reason": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.work_reports.insert_one(report)
+    await log_audit(org_id, user["id"], user["email"], "report_draft_created", "work_report", report["id"], {"date": date, "project": data.project_id})
+    return enrich_report(report)
+
+@api_router.put("/work-reports/{report_id}")
+async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict = Depends(get_current_user)):
+    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Can only edit your own reports")
+    if report["status"] not in ["Draft", "Rejected"]:
+        raise HTTPException(status_code=400, detail="Can only edit Draft or Rejected reports")
+
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.summary_note is not None:
+        update["summary_note"] = data.summary_note
+    if data.lines is not None:
+        update["lines"] = [
+            {"id": str(uuid.uuid4()), "activity_name": l.activity_name, "hours": l.hours, "note": l.note}
+            for l in data.lines
+        ]
+    # If rejected, re-open as Draft
+    if report["status"] == "Rejected":
+        update["status"] = "Draft"
+        update["reject_reason"] = None
+
+    await db.work_reports.update_one({"id": report_id}, {"$set": update})
+    await log_audit(user["org_id"], user["id"], user["email"], "report_edited", "work_report", report_id)
+    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    return enrich_report(updated)
+
+@api_router.post("/work-reports/{report_id}/submit")
+async def submit_work_report(report_id: str, user: dict = Depends(get_current_user)):
+    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Can only submit your own reports")
+    if report["status"] not in ["Draft", "Rejected"]:
+        raise HTTPException(status_code=400, detail="Report already submitted")
+    if not report.get("lines") or len(report["lines"]) == 0:
+        raise HTTPException(status_code=400, detail="Report must have at least one activity line")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.work_reports.update_one({"id": report_id}, {"$set": {
+        "status": "Submitted", "submitted_at": now, "reject_reason": None, "updated_at": now
+    }})
+    await log_audit(user["org_id"], user["id"], user["email"], "report_submitted", "work_report", report_id, {"date": report["date"]})
+    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    return enrich_report(updated)
+
+@api_router.post("/work-reports/{report_id}/approve")
+async def approve_work_report(report_id: str, user: dict = Depends(get_current_user)):
+    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not await can_review_report(user, report):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to approve")
+    if report["status"] != "Submitted":
+        raise HTTPException(status_code=400, detail="Only submitted reports can be approved")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.work_reports.update_one({"id": report_id}, {"$set": {
+        "status": "Approved", "approved_at": now, "approved_by_user_id": user["id"], "updated_at": now
+    }})
+    await log_audit(user["org_id"], user["id"], user["email"], "report_approved", "work_report", report_id, {"date": report["date"]})
+    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    return enrich_report(updated)
+
+@api_router.post("/work-reports/{report_id}/reject")
+async def reject_work_report(report_id: str, data: WorkReportReject, user: dict = Depends(get_current_user)):
+    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not await can_review_report(user, report):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to reject")
+    if report["status"] != "Submitted":
+        raise HTTPException(status_code=400, detail="Only submitted reports can be rejected")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.work_reports.update_one({"id": report_id}, {"$set": {
+        "status": "Rejected", "reject_reason": data.reason, "updated_at": now
+    }})
+    await log_audit(user["org_id"], user["id"], user["email"], "report_rejected", "work_report", report_id, {"reason": data.reason})
+    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    return enrich_report(updated)
+
+@api_router.get("/work-reports/my-today")
+async def get_my_work_reports_today(user: dict = Depends(get_current_user)):
+    date = today_str()
+    reports = await db.work_reports.find(
+        {"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0}
+    ).to_list(50)
+    return [enrich_report(r) for r in reports]
+
+@api_router.get("/work-reports/my-range")
+async def get_my_work_reports_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):
+    if not from_date:
+        from_date = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%d")
+    if not to_date:
+        to_date = today_str()
+    reports = await db.work_reports.find(
+        {"org_id": user["org_id"], "user_id": user["id"], "date": {"$gte": from_date, "$lte": to_date}},
+        {"_id": 0}
+    ).sort("date", -1).to_list(200)
+    return [enrich_report(r) for r in reports]
+
+@api_router.get("/work-reports/project-day")
+async def get_project_day_reports(user: dict = Depends(get_current_user), project_id: str = "", date: str = ""):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+    if not date:
+        date = today_str()
+
+    query = {"org_id": user["org_id"], "date": date}
+    if project_id:
+        if user["role"] == "SiteManager":
+            mgr = await db.project_team.find_one({
+                "project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"
+            })
+            if not mgr:
+                raise HTTPException(status_code=403, detail="Not managing this project")
+        query["project_id"] = project_id
+    elif user["role"] == "SiteManager":
+        mgr_projects = await db.project_team.find(
+            {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
+        ).to_list(100)
+        pids = [m["project_id"] for m in mgr_projects]
+        query["project_id"] = {"$in": pids}
+
+    reports = await db.work_reports.find(query, {"_id": 0}).to_list(200)
+    enriched = []
+    for r in reports:
+        er = enrich_report(r)
+        u = await db.users.find_one({"id": r["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        er["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
+        er["user_email"] = u["email"] if u else ""
+        p = await db.projects.find_one({"id": r["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+        er["project_code"] = p["code"] if p else ""
+        er["project_name"] = p["name"] if p else ""
+        enriched.append(er)
+    return enriched
+
+@api_router.get("/work-reports/{report_id}")
+async def get_work_report(report_id: str, user: dict = Depends(get_current_user)):
+    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not await can_access_report(user, report):
+        raise HTTPException(status_code=403, detail="Access denied")
+    er = enrich_report(report)
+    p = await db.projects.find_one({"id": report["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+    er["project_code"] = p["code"] if p else ""
+    er["project_name"] = p["name"] if p else ""
+    return er
+
 # ── Dashboard Stats ──────────────────────────────────────────────
 
 @api_router.get("/dashboard/stats")
