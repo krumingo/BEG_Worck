@@ -160,20 +160,20 @@ export default function ProjectDetailPage() {
       const phasesRes = await API.get(`/projects/${projectId}/phases`);
       setPhases(phasesRes.data);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save phase");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSavingPhase(false);
     }
   };
 
   const handleDeletePhase = async (phaseId) => {
-    if (!window.confirm("Delete this phase?")) return;
+    if (!window.confirm(t("projects.deletePhaseConfirm"))) return;
     try {
       await API.delete(`/projects/${projectId}/phases/${phaseId}`);
       const phasesRes = await API.get(`/projects/${projectId}/phases`);
       setPhases(phasesRes.data);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete phase");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     }
   };
 
