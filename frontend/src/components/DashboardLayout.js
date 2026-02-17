@@ -21,6 +21,7 @@ const ADMIN_NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/projects", icon: FolderKanban, label: "Projects" },
   { to: "/site-attendance", icon: ClipboardList, label: "Site Attendance" },
+  { to: "/review-reports", icon: CalendarCheck, label: "Review Reports" },
   { to: "/users", icon: Users, label: "Users & Roles" },
   { to: "/settings", icon: Building2, label: "Company Settings" },
   { to: "/modules", icon: Blocks, label: "Modules" },

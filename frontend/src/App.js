@@ -13,6 +13,8 @@ import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import MyDayPage from "@/pages/MyDayPage";
 import AttendanceHistoryPage from "@/pages/AttendanceHistoryPage";
 import SiteAttendancePage from "@/pages/SiteAttendancePage";
+import WorkReportFormPage from "@/pages/WorkReportFormPage";
+import WorkReportReviewPage from "@/pages/WorkReportReviewPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -46,6 +48,9 @@ function App() {
           <Route path="/my-day" element={<ProtectedRoute><MyDayPage /></ProtectedRoute>} />
           <Route path="/attendance-history" element={<ProtectedRoute><AttendanceHistoryPage /></ProtectedRoute>} />
           <Route path="/site-attendance" element={<ProtectedRoute><SiteAttendancePage /></ProtectedRoute>} />
+          <Route path="/work-reports/new" element={<ProtectedRoute><WorkReportFormPage /></ProtectedRoute>} />
+          <Route path="/work-reports/:reportId" element={<ProtectedRoute><WorkReportFormPage /></ProtectedRoute>} />
+          <Route path="/review-reports" element={<ProtectedRoute><WorkReportReviewPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
