@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
