@@ -106,13 +106,13 @@ export default function EmployeesPage() {
       setDialogOpen(false);
       await fetchEmployees();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrencyLocal = (amount) => {
     if (!amount) return "-";
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR" }).format(amount);
   };
@@ -120,9 +120,9 @@ export default function EmployeesPage() {
   const getRateDisplay = (emp) => {
     const p = emp.profile;
     if (!p) return "-";
-    if (p.pay_type === "Hourly") return `${formatCurrency(p.hourly_rate)}/hr`;
-    if (p.pay_type === "Daily") return `${formatCurrency(p.daily_rate)}/day`;
-    if (p.pay_type === "Monthly") return `${formatCurrency(p.monthly_salary)}/mo`;
+    if (p.pay_type === "Hourly") return `${formatCurrencyLocal(p.hourly_rate)}/${t("employees.hr")}`;
+    if (p.pay_type === "Daily") return `${formatCurrencyLocal(p.daily_rate)}/${t("employees.day")}`;
+    if (p.pay_type === "Monthly") return `${formatCurrencyLocal(p.monthly_salary)}/${t("employees.mo")}`;
     return "-";
   };
 
@@ -130,8 +130,8 @@ export default function EmployeesPage() {
     <div className="p-8 max-w-[1200px]" data-testid="employees-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Employees & Pay Rates</h1>
-          <p className="text-sm text-muted-foreground mt-1">Configure employee pay types and rates</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("employees.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("employees.subtitle")}</p>
         </div>
       </div>
 
@@ -144,13 +144,13 @@ export default function EmployeesPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Employee</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Role</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Pay Type</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Rate</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Schedule</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.employee")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.role")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.payType")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.rate")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.schedule")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -158,7 +158,7 @@ export default function EmployeesPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No employees found</p>
+                    <p>{t("employees.noEmployees")}</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -169,7 +169,7 @@ export default function EmployeesPage() {
                       <p className="text-xs text-muted-foreground">{emp.email}</p>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">{emp.role}</Badge>
+                      <Badge variant="outline" className="text-xs">{t(`users.roles.${emp.role.toLowerCase()}`, emp.role)}</Badge>
                     </TableCell>
                     <TableCell>
                       {emp.profile ? (
@@ -177,23 +177,23 @@ export default function EmployeesPage() {
                           {emp.profile.pay_type === "Hourly" && <Clock className="w-3 h-3 text-blue-400" />}
                           {emp.profile.pay_type === "Daily" && <Calendar className="w-3 h-3 text-emerald-400" />}
                           {emp.profile.pay_type === "Monthly" && <DollarSign className="w-3 h-3 text-amber-400" />}
-                          <span className="text-sm">{emp.profile.pay_type}</span>
+                          <span className="text-sm">{t(`employees.payTypes.${emp.profile.pay_type.toLowerCase()}`)}</span>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground text-sm">Not set</span>
+                        <span className="text-muted-foreground text-sm">{t("employees.notSet")}</span>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{getRateDisplay(emp)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {emp.profile?.pay_schedule || "-"}
+                      {emp.profile?.pay_schedule ? t(`employees.schedules.${emp.profile.pay_schedule.toLowerCase()}`) : "-"}
                     </TableCell>
                     <TableCell>
                       {emp.profile ? (
                         <Badge variant="outline" className={`text-xs ${emp.profile.active ? "text-emerald-400 border-emerald-500/30" : "text-gray-400 border-gray-500/30"}`}>
-                          {emp.profile.active ? "Active" : "Inactive"}
+                          {emp.profile.active ? t("employees.active") : t("employees.inactive")}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs text-gray-400 border-gray-500/30">No Profile</Badge>
+                        <Badge variant="outline" className="text-xs text-gray-400 border-gray-500/30">{t("employees.noProfile")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
