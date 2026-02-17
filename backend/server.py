@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 from jose import jwt, JWTError
+from zoneinfo import ZoneInfo
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -76,6 +78,10 @@ class OrgUpdate(BaseModel):
     email: Optional[str] = None
     attendance_start: Optional[str] = None
     attendance_end: Optional[str] = None
+    work_report_deadline: Optional[str] = None
+    max_reminders_per_day: Optional[int] = None
+    escalation_after_days: Optional[int] = None
+    org_timezone: Optional[str] = None
 
 class ModuleToggle(BaseModel):
     module_code: str
@@ -167,6 +173,24 @@ class WorkReportUpdate(BaseModel):
     lines: Optional[List[WorkReportLineInput]] = None
 
 class WorkReportReject(BaseModel):
+    reason: str
+
+# ── Reminder / Notification Models ───────────────────────────────
+
+REMINDER_TYPES = ["MissingAttendance", "MissingWorkReport"]
+REMINDER_STATUSES = ["Open", "Reminded", "Resolved", "Excused"]
+
+class SendReminderRequest(BaseModel):
+    type: str
+    date: Optional[str] = None
+    user_ids: List[str]
+    project_id: Optional[str] = None
+
+class ExcuseRequest(BaseModel):
+    type: str
+    date: str
+    user_id: str
+    project_id: Optional[str] = None
     reason: str
 
 # ── Auth Helpers ─────────────────────────────────────────────────
