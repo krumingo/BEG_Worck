@@ -13,7 +13,9 @@ import {
   CalendarCheck,
   CalendarDays,
   ClipboardList,
+  Bell,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
@@ -22,6 +24,7 @@ const ADMIN_NAV = [
   { to: "/projects", icon: FolderKanban, label: "Projects" },
   { to: "/site-attendance", icon: ClipboardList, label: "Site Attendance" },
   { to: "/review-reports", icon: CalendarCheck, label: "Review Reports" },
+  { to: "/reminders", icon: Bell, label: "Reminders" },
   { to: "/users", icon: Users, label: "Users & Roles" },
   { to: "/settings", icon: Building2, label: "Company Settings" },
   { to: "/modules", icon: Blocks, label: "Modules" },
@@ -54,10 +57,11 @@ export default function DashboardLayout({ children }) {
           <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
             <HardHat className="w-5 h-5 text-primary-foreground" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-sm font-bold tracking-tight text-foreground">BEG_Work</h1>
             <p className="text-[11px] text-muted-foreground truncate max-w-[150px]">{org?.name || "Loading..."}</p>
           </div>
+          <NotificationBell />
         </div>
 
         {/* Nav */}
