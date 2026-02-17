@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,12 +41,8 @@ const STATUS_COLORS = {
   Cancelled: "bg-gray-500/20 text-gray-400 border-gray-500/30",
 };
 
-const DIRECTION_LABELS = {
-  Issued: "Sales Invoices",
-  Received: "Bills / Purchases",
-};
-
 export default function InvoicesPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -108,13 +106,28 @@ export default function InvoicesPage() {
       )
     : invoices;
 
-  const formatCurrency = (amount, currency = "EUR") => {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount || 0);
+  const getStatusKey = (status) => {
+    const map = {
+      Draft: "draft",
+      Sent: "sent",
+      PartiallyPaid: "partiallyPaid",
+      Paid: "paid",
+      Overdue: "overdue",
+      Cancelled: "cancelled",
+    };
+    return map[status] || status.toLowerCase();
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const getTitle = () => {
+    if (directionFilter === "Issued") return t("finance.salesInvoices");
+    if (directionFilter === "Received") return t("finance.bills");
+    return t("finance.invoices");
+  };
+
+  const getSubtitle = () => {
+    if (directionFilter === "Issued") return t("finance.issuedSales");
+    if (directionFilter === "Received") return t("finance.receivedBills");
+    return t("finance.invoicesSubtitle");
   };
 
   return (
@@ -123,22 +136,16 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/finance")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {directionFilter ? DIRECTION_LABELS[directionFilter] : "All Invoices"}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {directionFilter === "Issued" ? "Invoices you've sent to clients" : 
-               directionFilter === "Received" ? "Bills from suppliers" : 
-               "Manage all invoices and bills"}
-            </p>
+            <h1 className="text-2xl font-bold text-foreground">{getTitle()}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{getSubtitle()}</p>
           </div>
         </div>
         {canCreate && (
           <Button onClick={() => navigate("/finance/invoices/new")} data-testid="create-invoice-btn">
-            <Plus className="w-4 h-4 mr-2" /> New Invoice
+            <Plus className="w-4 h-4 mr-2" /> {t("finance.newInvoice")}
           </Button>
         )}
       </div>
@@ -148,7 +155,7 @@ export default function InvoicesPage() {
         <div className="relative flex-1 min-w-[200px] max-w-[300px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search invoices..."
+            placeholder={t("finance.searchInvoices")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-card"
@@ -158,34 +165,34 @@ export default function InvoicesPage() {
         <Select value={directionFilter || "all"} onValueChange={(v) => updateFilter("direction", v)}>
           <SelectTrigger className="w-[180px] bg-card" data-testid="direction-filter">
             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="All Directions" />
+            <SelectValue placeholder={t("common.allDirections")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Directions</SelectItem>
-            <SelectItem value="Issued">Issued (Sales)</SelectItem>
-            <SelectItem value="Received">Received (Bills)</SelectItem>
+            <SelectItem value="all">{t("common.allDirections")}</SelectItem>
+            <SelectItem value="Issued">{t("finance.issuedSales")}</SelectItem>
+            <SelectItem value="Received">{t("finance.receivedBills")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter || "all"} onValueChange={(v) => updateFilter("status", v)}>
           <SelectTrigger className="w-[160px] bg-card" data-testid="status-filter">
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder={t("common.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
-            <SelectItem value="Sent">Sent</SelectItem>
-            <SelectItem value="PartiallyPaid">Partially Paid</SelectItem>
-            <SelectItem value="Paid">Paid</SelectItem>
-            <SelectItem value="Overdue">Overdue</SelectItem>
-            <SelectItem value="Cancelled">Cancelled</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
+            <SelectItem value="Draft">{t("finance.status.draft")}</SelectItem>
+            <SelectItem value="Sent">{t("finance.status.sent")}</SelectItem>
+            <SelectItem value="PartiallyPaid">{t("finance.status.partiallyPaid")}</SelectItem>
+            <SelectItem value="Paid">{t("finance.status.paid")}</SelectItem>
+            <SelectItem value="Overdue">{t("finance.status.overdue")}</SelectItem>
+            <SelectItem value="Cancelled">{t("finance.status.cancelled")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={projectFilter || "all"} onValueChange={(v) => updateFilter("projectId", v)}>
           <SelectTrigger className="w-[200px] bg-card" data-testid="project-filter">
-            <SelectValue placeholder="All Projects" />
+            <SelectValue placeholder={t("common.allProjects")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
+            <SelectItem value="all">{t("common.allProjects")}</SelectItem>
             {projects.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
             ))}
@@ -203,16 +210,16 @@ export default function InvoicesPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Invoice</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Type</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Counterparty</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Project</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Issue Date</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Due Date</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Total</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Remaining</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.invoiceNo")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.counterparty")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.project")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.issueDate")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.dueDate")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.total")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.remainingAmount")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -220,10 +227,10 @@ export default function InvoicesPage() {
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                     <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No invoices found</p>
+                    <p>{t("finance.noInvoices")}</p>
                     {canCreate && (
                       <Button variant="outline" className="mt-4" onClick={() => navigate("/finance/invoices/new")}>
-                        Create your first invoice
+                        {t("finance.createFirstInvoice")}
                       </Button>
                     )}
                   </TableCell>
@@ -245,7 +252,7 @@ export default function InvoicesPage() {
                           ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
                           : "bg-amber-500/20 text-amber-400 border-amber-500/30"
                       }>
-                        {invoice.direction === "Issued" ? "Sale" : "Bill"}
+                        {invoice.direction === "Issued" ? t("finance.invoiceType.sale") : t("finance.invoiceType.bill")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-foreground max-w-[150px] truncate">
@@ -259,7 +266,7 @@ export default function InvoicesPage() {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Badge variant="outline" className={`text-xs ${STATUS_COLORS[invoice.status] || ""}`}>
-                          {invoice.status}
+                          {t(`finance.status.${getStatusKey(invoice.status)}`)}
                         </Badge>
                         {invoice.is_overdue && (
                           <AlertTriangle className="w-3 h-3 text-red-400" />
