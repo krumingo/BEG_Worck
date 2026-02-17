@@ -2525,8 +2525,8 @@ async def list_payslips(
     
     # Enrich
     for ps in payslips:
-        u = await db.users.find_one({"id": ps["user_id"]}, {"_id": 0, "name": 1})
-        ps["user_name"] = u["name"] if u else "Unknown"
+        u = await db.users.find_one({"id": ps["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+        ps["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
         run = await db.payroll_runs.find_one({"id": ps["payroll_run_id"]}, {"_id": 0, "period_start": 1, "period_end": 1})
         if run:
             ps["period_start"] = run["period_start"]
@@ -2546,8 +2546,8 @@ async def get_payslip(payslip_id: str, user: dict = Depends(get_current_user)):
     
     # Enrich
     u = await db.users.find_one({"id": payslip["user_id"]}, {"_id": 0, "name": 1, "email": 1})
-    payslip["user_name"] = u["name"] if u else "Unknown"
-    payslip["user_email"] = u["email"] if u else ""
+    payslip["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
+    payslip["user_email"] = u.get("email", "") if u else ""
     
     run = await db.payroll_runs.find_one({"id": payslip["payroll_run_id"]}, {"_id": 0})
     payslip["payroll_run"] = run
