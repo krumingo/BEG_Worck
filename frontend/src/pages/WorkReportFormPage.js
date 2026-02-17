@@ -178,17 +178,17 @@ export default function WorkReportFormPage() {
     return (
       <div className="p-6 max-w-[480px] mx-auto" data-testid="work-report-create">
         <Button variant="ghost" size="sm" className="mb-4 text-muted-foreground" onClick={() => navigate("/my-day")} data-testid="back-button">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          <ArrowLeft className="w-4 h-4 mr-2" /> {t("common.back")}
         </Button>
-        <h1 className="text-xl font-bold text-foreground mb-2">New Work Report</h1>
-        <p className="text-sm text-muted-foreground mb-6">Select a project to start your daily report</p>
+        <h1 className="text-xl font-bold text-foreground mb-2">{t("workReports.newReport")}</h1>
+        <p className="text-sm text-muted-foreground mb-6">{t("workReports.selectProjectToStart")}</p>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label className="text-muted-foreground">Project</Label>
+            <Label className="text-muted-foreground">{t("offers.project")}</Label>
             <Select value={selectedProject} onValueChange={setSelectedProject}>
               <SelectTrigger className="bg-card h-12" data-testid="report-project-select">
-                <SelectValue placeholder="Select project..." />
+                <SelectValue placeholder={t("workReports.selectProject")} />
               </SelectTrigger>
               <SelectContent>
                 {projects.map((p) => (
@@ -199,7 +199,7 @@ export default function WorkReportFormPage() {
           </div>
           <Button onClick={createDraft} disabled={!selectedProject || saving} className="w-full h-12" data-testid="create-draft-button">
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            <FileText className="w-4 h-4 mr-2" /> Start Report
+            <FileText className="w-4 h-4 mr-2" /> {t("workReports.startReport")}
           </Button>
         </div>
       </div>
@@ -212,16 +212,16 @@ export default function WorkReportFormPage() {
   return (
     <div className="p-6 max-w-[540px] mx-auto" data-testid="work-report-form">
       <Button variant="ghost" size="sm" className="mb-4 text-muted-foreground" onClick={() => navigate("/my-day")} data-testid="back-button">
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back
+        <ArrowLeft className="w-4 h-4 mr-2" /> {t("common.back")}
       </Button>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Daily Report</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("workReports.dailyReport")}</h1>
           <p className="text-sm text-muted-foreground">{report.date} &middot; {report.project_code}</p>
         </div>
-        <Badge variant="outline" className={`${STATUS_COLORS[report.status] || ""}`}>{report.status}</Badge>
+        <Badge variant="outline" className={`${STATUS_COLORS[report.status] || ""}`}>{t(`workReports.status.${report.status.toLowerCase()}`)}</Badge>
       </div>
 
       {/* Reject reason */}
@@ -229,7 +229,7 @@ export default function WorkReportFormPage() {
         <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 mb-6" data-testid="reject-reason">
           <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-400">Rejected</p>
+            <p className="text-sm font-medium text-red-400">{t("workReports.status.rejected")}</p>
             <p className="text-sm text-muted-foreground">{report.reject_reason}</p>
           </div>
         </div>
@@ -237,11 +237,11 @@ export default function WorkReportFormPage() {
 
       {/* Summary */}
       <div className="rounded-xl border border-border bg-card p-4 mb-4">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Summary Note</Label>
+        <Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">{t("workReports.summaryNote")}</Label>
         <Textarea
           value={summaryNote}
           onChange={(e) => setSummaryNote(e.target.value)}
-          placeholder="Brief summary of today's work..."
+          placeholder={t("workReports.summaryPlaceholder")}
           className="bg-background min-h-[60px]"
           disabled={!isEditable}
           data-testid="summary-note"
@@ -251,16 +251,16 @@ export default function WorkReportFormPage() {
       {/* Activity Lines */}
       <div className="rounded-xl border border-border bg-card p-4 mb-4" data-testid="lines-section">
         <div className="flex items-center justify-between mb-3">
-          <Label className="text-xs text-muted-foreground uppercase tracking-wider">Activities</Label>
+          <Label className="text-xs text-muted-foreground uppercase tracking-wider">{t("workReports.activities")}</Label>
           {isEditable && (
             <Button variant="ghost" size="sm" onClick={addLine} data-testid="add-line-button">
-              <Plus className="w-4 h-4 mr-1" /> Add
+              <Plus className="w-4 h-4 mr-1" /> {t("common.add")}
             </Button>
           )}
         </div>
 
         {lines.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No activities yet. Add your first one.</p>
+          <p className="text-sm text-muted-foreground text-center py-4">{t("workReports.noActivitiesYet")}</p>
         ) : (
           <div className="space-y-3">
             {lines.map((line, idx) => (
@@ -276,7 +276,7 @@ export default function WorkReportFormPage() {
                     >
                       <SelectTrigger className="w-[100px] bg-card h-9 text-xs" data-testid={`pick-activity-${idx}`}>
                         <Layers className="w-3 h-3 mr-1" />
-                        <span>Pick</span>
+                        <span>{t("workReports.pick")}</span>
                       </SelectTrigger>
                       <SelectContent>
                         {activities.map((act) => (
@@ -288,7 +288,7 @@ export default function WorkReportFormPage() {
                   <Input
                     value={line.activity_name}
                     onChange={(e) => updateLine(idx, "activity_name", e.target.value)}
-                    placeholder="Activity name..."
+                    placeholder={t("workReports.activityName")}
                     className="flex-1 bg-card text-sm h-9"
                     disabled={!isEditable}
                     data-testid={`line-activity-${idx}`}
@@ -315,7 +315,7 @@ export default function WorkReportFormPage() {
                   <Input
                     value={line.note}
                     onChange={(e) => updateLine(idx, "note", e.target.value)}
-                    placeholder="Note..."
+                    placeholder={t("common.note")}
                     className="flex-1 bg-card text-xs h-8"
                     disabled={!isEditable}
                     data-testid={`line-note-${idx}`}
@@ -328,14 +328,14 @@ export default function WorkReportFormPage() {
 
         {/* Total */}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-          <span className="text-sm font-medium text-muted-foreground">Total Hours</span>
+          <span className="text-sm font-medium text-muted-foreground">{t("workReports.totalHours")}</span>
           <span className={`text-lg font-bold ${totalHours > 8 ? "text-amber-400" : "text-foreground"}`} data-testid="total-hours">
             {totalHours}h
           </span>
         </div>
         {totalHours > 8 && (
           <p className="text-xs text-amber-400 mt-1 flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" /> Over 8 hours — will require manager approval
+            <AlertTriangle className="w-3 h-3" /> {t("workReports.over8Hours")}
           </p>
         )}
       </div>
@@ -345,7 +345,7 @@ export default function WorkReportFormPage() {
         <div className="flex gap-3">
           <Button variant="outline" onClick={handleSave} disabled={saving} className="flex-1" data-testid="save-draft-button">
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            <Save className="w-4 h-4 mr-2" /> Save Draft
+            <Save className="w-4 h-4 mr-2" /> {t("workReports.saveDraft")}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -354,14 +354,14 @@ export default function WorkReportFormPage() {
             data-testid="submit-report-button"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            <Send className="w-4 h-4 mr-2" /> Submit
+            <Send className="w-4 h-4 mr-2" /> {t("common.submit")}
           </Button>
         </div>
       )}
 
       {isSubmitted && (
         <div className="text-center text-sm text-muted-foreground">
-          {report.status === "Approved" ? "This report has been approved." : "Waiting for manager review."}
+          {report.status === "Approved" ? t("workReports.reportApproved") : t("workReports.waitingForReview")}
         </div>
       )}
     </div>
