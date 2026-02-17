@@ -830,6 +830,7 @@
   "toast": {
     "saveSuccess": "Успешно запазено",
     "saveFailed": "Неуспешно запазване",
+    "submitFailed": "Неуспешно подаване",
     "deleteSuccess": "Успешно изтрито",
     "deleteFailed": "Неуспешно изтриване",
     "createSuccess": "Успешно създадено",
