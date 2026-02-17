@@ -43,6 +43,7 @@ const REPORT_STATUS_COLORS = {
 };
 
 export default function MyDayPage() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
