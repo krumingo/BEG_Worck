@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +42,7 @@ const UNITS = ["pcs", "m", "m2", "m3", "hours", "lot", "kg", "l"];
 const COST_CATEGORIES = ["Materials", "Labor", "Subcontract", "Other"];
 
 export default function InvoiceEditorPage() {
+  const { t } = useTranslation();
   const { invoiceId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -54,7 +57,6 @@ export default function InvoiceEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Form state
   const [direction, setDirection] = useState(directionParam);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -87,7 +89,6 @@ export default function InvoiceEditorPage() {
         setNotes(inv.notes || "");
         setLines(inv.lines || []);
       } else {
-        // Set default due date to 30 days from now
         const defaultDue = new Date();
         defaultDue.setDate(defaultDue.getDate() + 30);
         setDueDate(defaultDue.toISOString().split("T")[0]);
@@ -104,10 +105,7 @@ export default function InvoiceEditorPage() {
   const computeLineTotals = (line) => {
     const qty = parseFloat(line.qty) || 0;
     const unitPrice = parseFloat(line.unit_price) || 0;
-    return {
-      ...line,
-      line_total: qty * unitPrice,
-    };
+    return { ...line, line_total: qty * unitPrice };
   };
 
   const computedLines = lines.map(computeLineTotals);
@@ -140,11 +138,11 @@ export default function InvoiceEditorPage() {
 
   const handleSave = async () => {
     if (!invoiceNo.trim()) {
-      alert("Invoice number is required");
+      alert(t("validation.required"));
       return;
     }
     if (!issueDate || !dueDate) {
-      alert("Issue date and due date are required");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -159,7 +157,7 @@ export default function InvoiceEditorPage() {
         currency,
         vat_percent: vatPercent,
         notes: notes || null,
-        lines: lines.map((l, i) => ({
+        lines: lines.map((l) => ({
           description: l.description,
           unit: l.unit,
           qty: parseFloat(l.qty) || 0,
@@ -183,7 +181,7 @@ export default function InvoiceEditorPage() {
           notes: notes || null,
         });
         await API.put(`/finance/invoices/${invoiceId}/lines`, {
-          lines: lines.map((l, i) => ({
+          lines: lines.map((l) => ({
             description: l.description,
             unit: l.unit,
             qty: parseFloat(l.qty) || 0,
@@ -195,7 +193,7 @@ export default function InvoiceEditorPage() {
         await fetchData();
       }
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -203,7 +201,7 @@ export default function InvoiceEditorPage() {
 
   const handleSend = async () => {
     if (lines.length === 0) {
-      alert("Add at least one line before sending");
+      alert(t("finance.noLines"));
       return;
     }
     setSaving(true);
@@ -211,37 +209,43 @@ export default function InvoiceEditorPage() {
       await API.post(`/finance/invoices/${invoiceId}/send`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to send");
+      alert(err.response?.data?.detail || t("toast.sendFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleCancel = async () => {
-    if (!window.confirm("Are you sure you want to cancel this invoice?")) return;
+    if (!window.confirm(t("finance.confirmCancel"))) return;
     setSaving(true);
     try {
       await API.post(`/finance/invoices/${invoiceId}/cancel`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to cancel");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Delete this draft invoice? This cannot be undone.")) return;
+    if (!window.confirm(t("finance.confirmDeleteInvoice"))) return;
     try {
       await API.delete(`/finance/invoices/${invoiceId}`);
       navigate("/finance/invoices");
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete");
+      alert(err.response?.data?.detail || t("toast.deleteFailed"));
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "EUR" }).format(amount || 0);
+  const getStatusKey = (status) => {
+    const map = { Draft: "draft", Sent: "sent", PartiallyPaid: "partiallyPaid", Paid: "paid", Overdue: "overdue", Cancelled: "cancelled" };
+    return map[status] || status.toLowerCase();
+  };
+
+  const getCostCategoryKey = (cat) => {
+    if (!cat) return "none";
+    return cat.toLowerCase();
   };
 
   const isDraft = !invoice || invoice.status === "Draft";
@@ -262,22 +266,22 @@ export default function InvoiceEditorPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/finance/invoices")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
           </Button>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-foreground">
-                {isNew ? `New ${direction === "Issued" ? "Invoice" : "Bill"}` : invoice?.invoice_no}
+                {isNew ? `${t("common.new")} ${direction === "Issued" ? t("finance.invoiceType.sale") : t("finance.invoiceType.bill")}` : invoice?.invoice_no}
               </h1>
               {invoice && (
                 <Badge variant="outline" className={`text-xs ${STATUS_COLORS[invoice.status] || ""}`}>
-                  {invoice.status}
+                  {t(`finance.status.${getStatusKey(invoice.status)}`)}
                 </Badge>
               )}
             </div>
             {invoice && (
               <p className="text-sm text-muted-foreground">
-                {invoice.direction === "Issued" ? "Sales Invoice" : "Purchase Bill"}
+                {invoice.direction === "Issued" ? t("finance.issuedSales") : t("finance.receivedBills")}
                 {invoice.project_code && ` • ${invoice.project_code}`}
               </p>
             )}
@@ -288,11 +292,11 @@ export default function InvoiceEditorPage() {
             <>
               <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-                Save
+                {t("common.save")}
               </Button>
               {!isNew && (
                 <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
-                  <Send className="w-4 h-4 mr-1" /> Send
+                  <Send className="w-4 h-4 mr-1" /> {t("finance.send")}
                 </Button>
               )}
               {!isNew && (
@@ -304,12 +308,12 @@ export default function InvoiceEditorPage() {
           )}
           {canCancel && (
             <Button variant="outline" className="text-red-400 border-red-500/30" onClick={handleCancel} disabled={saving} data-testid="cancel-btn">
-              <X className="w-4 h-4 mr-1" /> Cancel Invoice
+              <X className="w-4 h-4 mr-1" /> {t("finance.cancelInvoice")}
             </Button>
           )}
           {invoice && invoice.status !== "Draft" && invoice.status !== "Cancelled" && invoice.remaining_amount > 0 && (
             <Button variant="outline" onClick={() => navigate(`/finance/payments/new?invoice_id=${invoice.id}`)} data-testid="record-payment-btn">
-              <CreditCard className="w-4 h-4 mr-1" /> Record Payment
+              <CreditCard className="w-4 h-4 mr-1" /> {t("finance.recordPayment")}
             </Button>
           )}
         </div>
@@ -321,40 +325,40 @@ export default function InvoiceEditorPage() {
           {/* Basic Info */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" /> Invoice Details
+              <FileText className="w-4 h-4 text-primary" /> {t("finance.invoiceDetails")}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Type *</Label>
+                <Label>{t("common.type")} *</Label>
                 <Select value={direction} onValueChange={setDirection} disabled={!isNew}>
                   <SelectTrigger className="bg-background" data-testid="direction-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Issued">Issued (Sale)</SelectItem>
-                    <SelectItem value="Received">Received (Bill)</SelectItem>
+                    <SelectItem value="Issued">{t("finance.issuedSales")}</SelectItem>
+                    <SelectItem value="Received">{t("finance.receivedBills")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Invoice No. *</Label>
+                <Label>{t("finance.invoiceNo")} *</Label>
                 <Input
                   value={invoiceNo}
                   onChange={(e) => setInvoiceNo(e.target.value)}
-                  placeholder={direction === "Issued" ? "INV-0001" : "BILL-0001"}
+                  placeholder={direction === "Issued" ? t("finance.invoiceNoPlaceholder") : t("finance.billNoPlaceholder")}
                   disabled={!canEdit}
                   className="bg-background font-mono"
                   data-testid="invoice-no-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Project</Label>
+                <Label>{t("offers.project")}</Label>
                 <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)} disabled={!canEdit}>
                   <SelectTrigger className="bg-background" data-testid="project-select">
-                    <SelectValue placeholder="No project" />
+                    <SelectValue placeholder={t("common.noProject")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No project</SelectItem>
+                    <SelectItem value="none">{t("common.noProject")}</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
                     ))}
@@ -362,18 +366,18 @@ export default function InvoiceEditorPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>{direction === "Issued" ? "Customer" : "Supplier"}</Label>
+                <Label>{direction === "Issued" ? t("finance.customer") : t("finance.supplier")}</Label>
                 <Input
                   value={counterpartyName}
                   onChange={(e) => setCounterpartyName(e.target.value)}
-                  placeholder="Company name"
+                  placeholder={t("finance.companyName")}
                   disabled={!canEdit}
                   className="bg-background"
                   data-testid="counterparty-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Issue Date *</Label>
+                <Label>{t("finance.issueDate")} *</Label>
                 <Input
                   type="date"
                   value={issueDate}
@@ -384,7 +388,7 @@ export default function InvoiceEditorPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Due Date *</Label>
+                <Label>{t("finance.dueDate")} *</Label>
                 <Input
                   type="date"
                   value={dueDate}
@@ -395,7 +399,7 @@ export default function InvoiceEditorPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Currency</Label>
+                <Label>{t("common.currency")}</Label>
                 <Select value={currency} onValueChange={setCurrency} disabled={!isNew}>
                   <SelectTrigger className="bg-background" data-testid="currency-select">
                     <SelectValue />
@@ -409,7 +413,7 @@ export default function InvoiceEditorPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>VAT %</Label>
+                <Label>{t("offers.vatPercent")}</Label>
                 <Input
                   type="number"
                   value={vatPercent}
@@ -426,11 +430,11 @@ export default function InvoiceEditorPage() {
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Calculator className="w-4 h-4 text-primary" /> Line Items ({lines.length})
+                <Calculator className="w-4 h-4 text-primary" /> {t("finance.lineItems")} ({lines.length})
               </h2>
               {canEdit && (
                 <Button size="sm" onClick={addLine} data-testid="add-line-btn">
-                  <Plus className="w-4 h-4 mr-1" /> Add Line
+                  <Plus className="w-4 h-4 mr-1" /> {t("finance.addLine")}
                 </Button>
               )}
             </div>
@@ -438,12 +442,12 @@ export default function InvoiceEditorPage() {
               <table className="w-full text-sm" data-testid="lines-table">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">Description</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Unit</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Qty</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Unit Price</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">Category</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[110px]">Total</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">{t("common.description")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.unit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.qty")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("finance.unitPrice")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">{t("finance.costCategory.materials").split(' ')[0]}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[110px]">{t("common.total")}</th>
                     {canEdit && <th className="w-[50px]"></th>}
                   </tr>
                 </thead>
@@ -451,7 +455,7 @@ export default function InvoiceEditorPage() {
                   {computedLines.length === 0 ? (
                     <tr>
                       <td colSpan={canEdit ? 7 : 6} className="text-center py-8 text-muted-foreground">
-                        No lines added yet
+                        {t("finance.noLines")}
                       </td>
                     </tr>
                   ) : (
@@ -461,7 +465,7 @@ export default function InvoiceEditorPage() {
                           <Input
                             value={line.description}
                             onChange={(e) => updateLine(idx, "description", e.target.value)}
-                            placeholder="Item description"
+                            placeholder={t("finance.itemDescription")}
                             disabled={!canEdit}
                             className="bg-background h-8 text-sm"
                           />
@@ -472,7 +476,7 @@ export default function InvoiceEditorPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                              {UNITS.map((u) => <SelectItem key={u} value={u}>{t(`units.${u}`)}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </td>
@@ -501,13 +505,13 @@ export default function InvoiceEditorPage() {
                               <SelectValue placeholder="-" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {COST_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                              <SelectItem value="none">{t("finance.costCategory.none")}</SelectItem>
+                              {COST_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{t(`finance.costCategory.${getCostCategoryKey(c)}`)}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </td>
                         <td className="p-2 text-right font-mono font-medium text-foreground">
-                          {formatCurrency(line.line_total)}
+                          {formatCurrency(line.line_total, currency)}
                         </td>
                         {canEdit && (
                           <td className="p-2">
@@ -526,23 +530,23 @@ export default function InvoiceEditorPage() {
 
           {/* Notes */}
           <div className="rounded-xl border border-border bg-card p-5">
-            <Label className="mb-2 block">Notes</Label>
+            <Label className="mb-2 block">{t("common.notes")}</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Additional notes..."
+              placeholder={t("common.notes")}
               disabled={!canEdit}
               className="bg-background min-h-[80px]"
               data-testid="notes-textarea"
             />
           </div>
 
-          {/* Payment Allocations (for existing invoices) */}
+          {/* Payment Allocations */}
           {invoice && invoice.allocations && invoice.allocations.length > 0 && (
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="p-4 border-b border-border">
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-primary" /> Payment History
+                  <CreditCard className="w-4 h-4 text-primary" /> {t("finance.paymentHistory")}
                 </h2>
               </div>
               <div className="p-4 space-y-2">
@@ -550,14 +554,14 @@ export default function InvoiceEditorPage() {
                   <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                     <div>
                       <p className="text-sm text-foreground">
-                        {alloc.payment_reference || "Payment"} • {alloc.payment_method}
+                        {alloc.payment_reference || t("finance.payments")} • {t(`finance.paymentMethod.${alloc.payment_method?.toLowerCase()}`)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(alloc.payment_date).toLocaleDateString("en-GB")}
+                        {formatDate(alloc.payment_date)}
                       </p>
                     </div>
                     <p className="font-mono text-sm font-medium text-emerald-400">
-                      +{formatCurrency(alloc.amount_allocated)}
+                      +{formatCurrency(alloc.amount_allocated, currency)}
                     </p>
                   </div>
                 ))}
@@ -569,30 +573,30 @@ export default function InvoiceEditorPage() {
         {/* Sidebar - Totals */}
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5 sticky top-6" data-testid="totals-card">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Summary</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-4">{t("offers.summary")}</h3>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono text-foreground">{formatCurrency(subtotal)}</span>
+                <span className="text-muted-foreground">{t("offers.subtotal")}</span>
+                <span className="font-mono text-foreground">{formatCurrency(subtotal, currency)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">VAT ({vatPercent}%)</span>
-                <span className="font-mono text-foreground">{formatCurrency(vatAmount)}</span>
+                <span className="text-muted-foreground">{t("offers.vat")} ({vatPercent}%)</span>
+                <span className="font-mono text-foreground">{formatCurrency(vatAmount, currency)}</span>
               </div>
               <div className="border-t border-border pt-3 flex justify-between">
-                <span className="font-semibold text-foreground">Total</span>
-                <span className="font-mono text-lg font-bold text-primary">{formatCurrency(total)}</span>
+                <span className="font-semibold text-foreground">{t("common.total")}</span>
+                <span className="font-mono text-lg font-bold text-primary">{formatCurrency(total, currency)}</span>
               </div>
               {invoice && invoice.status !== "Draft" && (
                 <>
                   <div className="border-t border-border pt-3 flex justify-between text-sm">
-                    <span className="text-muted-foreground">Paid</span>
-                    <span className="font-mono text-emerald-400">{formatCurrency(invoice.paid_amount)}</span>
+                    <span className="text-muted-foreground">{t("finance.paidAmount")}</span>
+                    <span className="font-mono text-emerald-400">{formatCurrency(invoice.paid_amount, currency)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Remaining</span>
+                    <span className="text-muted-foreground">{t("finance.remainingAmount")}</span>
                     <span className={`font-mono ${invoice.remaining_amount > 0 ? "text-amber-400" : "text-emerald-400"}`}>
-                      {formatCurrency(invoice.remaining_amount)}
+                      {formatCurrency(invoice.remaining_amount, currency)}
                     </span>
                   </div>
                 </>
