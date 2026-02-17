@@ -496,12 +496,12 @@ export default function InvoiceEditorPage() {
                           />
                         </td>
                         <td className="p-2">
-                          <Select value={line.cost_category || ""} onValueChange={(v) => updateLine(idx, "cost_category", v || null)} disabled={!canEdit}>
+                          <Select value={line.cost_category || "none"} onValueChange={(v) => updateLine(idx, "cost_category", v === "none" ? null : v)} disabled={!canEdit}>
                             <SelectTrigger className="bg-background h-8 text-xs">
                               <SelectValue placeholder="-" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None</SelectItem>
+                              <SelectItem value="none">None</SelectItem>
                               {COST_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                             </SelectContent>
                           </Select>
