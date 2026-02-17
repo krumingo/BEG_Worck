@@ -136,10 +136,10 @@ export default function AdvancesPage() {
         </Select>
         <Select value={userFilter} onValueChange={(v) => setUserFilter(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[200px] bg-card" data-testid="user-filter">
-            <SelectValue placeholder={t("employees.noEmployees")} />
+            <SelectValue placeholder={t("employees.allEmployees")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("employees.noEmployees")}</SelectItem>
+            <SelectItem value="all">{t("employees.allEmployees")}</SelectItem>
             {employees.map((e) => (
               <SelectItem key={e.id} value={e.id}>{e.name || e.email}</SelectItem>
             ))}
