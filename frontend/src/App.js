@@ -15,6 +15,8 @@ import AttendanceHistoryPage from "@/pages/AttendanceHistoryPage";
 import SiteAttendancePage from "@/pages/SiteAttendancePage";
 import WorkReportFormPage from "@/pages/WorkReportFormPage";
 import WorkReportReviewPage from "@/pages/WorkReportReviewPage";
+import NotificationsPage from "@/pages/NotificationsPage";
+import RemindersPage from "@/pages/RemindersPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -51,6 +53,8 @@ function App() {
           <Route path="/work-reports/new" element={<ProtectedRoute><WorkReportFormPage /></ProtectedRoute>} />
           <Route path="/work-reports/:reportId" element={<ProtectedRoute><WorkReportFormPage /></ProtectedRoute>} />
           <Route path="/review-reports" element={<ProtectedRoute><WorkReportReviewPage /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/reminders" element={<ProtectedRoute><RemindersPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
