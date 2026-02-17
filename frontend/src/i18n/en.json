@@ -494,6 +494,7 @@
     "title": "Employees & Pay Rates",
     "subtitle": "Configure pay types and rates",
     "employee": "Employee",
+    "allEmployees": "All Employees",
     "configurePayRate": "Configure Pay Rate",
     "editPayRate": "Edit Pay Rate",
     "payType": "Pay Type",
