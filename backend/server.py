@@ -761,6 +761,8 @@ async def create_attendance_entry(org_id, date, project_id, user_id, status, not
         "source": source,
     }
     await db.attendance_entries.insert_one(entry)
+    # Auto-resolve any MissingAttendance reminders
+    await auto_resolve_reminders(org_id, "MissingAttendance", date, user_id, user_id)
     return {k: v for k, v in entry.items() if k != "_id"}
 
 # ── Attendance Routes ────────────────────────────────────────────
