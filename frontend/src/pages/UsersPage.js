@@ -119,11 +119,11 @@ export default function UsersPage() {
     <div className="p-8 max-w-[1200px]" data-testid="users-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Users & Roles</h1>
-          <p className="text-sm text-muted-foreground mt-1">{users.length} users in organization</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("users.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{users.length} {t("users.usersInOrg")}</p>
         </div>
         <Button onClick={openCreate} data-testid="add-user-button">
-          <Plus className="w-4 h-4 mr-2" /> Add User
+          <Plus className="w-4 h-4 mr-2" /> {t("users.newUser")}
         </Button>
       </div>
 
@@ -131,11 +131,11 @@ export default function UsersPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">User</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Email</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Role</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.user")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("users.email")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.role")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -151,11 +151,11 @@ export default function UsersPage() {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{u.email}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`text-xs ${ROLE_COLORS[u.role] || ""}`}>{u.role}</Badge>
+                  <Badge variant="outline" className={`text-xs ${ROLE_COLORS[u.role] || ""}`}>{t(`users.roles.${u.role.toLowerCase()}`, u.role)}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant={u.is_active ? "default" : "destructive"} className="text-xs">
-                    {u.is_active ? "Active" : "Disabled"}
+                    {u.is_active ? t("common.active") : t("users.disabled")}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
@@ -178,12 +178,12 @@ export default function UsersPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[440px] bg-card border-border" data-testid="user-dialog">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit User" : "Create User"}</DialogTitle>
+            <DialogTitle>{editing ? t("users.editUser") : t("users.createUser")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             {!editing && (
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Email</Label>
+                <Label className="text-muted-foreground">{t("users.email")}</Label>
                 <Input
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -195,12 +195,12 @@ export default function UsersPage() {
             )}
             {!editing && (
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Password</Label>
+                <Label className="text-muted-foreground">{t("users.password")}</Label>
                 <Input
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Set password"
+                  placeholder={t("users.setPassword")}
                   className="bg-background"
                   data-testid="user-password-input"
                 />
@@ -208,7 +208,7 @@ export default function UsersPage() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">First Name</Label>
+                <Label className="text-muted-foreground">{t("users.firstName")}</Label>
                 <Input
                   value={form.first_name}
                   onChange={(e) => setForm({ ...form, first_name: e.target.value })}
@@ -217,7 +217,7 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Last Name</Label>
+                <Label className="text-muted-foreground">{t("users.lastName")}</Label>
                 <Input
                   value={form.last_name}
                   onChange={(e) => setForm({ ...form, last_name: e.target.value })}
@@ -227,20 +227,20 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Role</Label>
+              <Label className="text-muted-foreground">{t("common.role")}</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
                 <SelectTrigger className="bg-background" data-testid="user-role-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                    <SelectItem key={r} value={r}>{t(`users.roles.${r.toLowerCase()}`, r)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Phone</Label>
+              <Label className="text-muted-foreground">{t("users.phone")}</Label>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -251,7 +251,7 @@ export default function UsersPage() {
             </div>
             <Button onClick={handleSave} disabled={saving} className="w-full" data-testid="user-save-button">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {editing ? "Update User" : "Create User"}
+              {editing ? t("users.updateUser") : t("users.createUser")}
             </Button>
           </div>
         </DialogContent>
