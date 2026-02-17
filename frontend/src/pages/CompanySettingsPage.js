@@ -9,14 +9,19 @@ import { Loader2, Save, Building2 } from "lucide-react";
 
 export default function CompanySettingsPage() {
   const { org, refreshOrg } = useAuth();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", attendance_start: "06:00", attendance_end: "10:00" });
   const [sub, setSub] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (org) {
-      setForm({ name: org.name || "", email: org.email || "", phone: org.phone || "", address: org.address || "" });
+      setForm({
+        name: org.name || "", email: org.email || "", phone: org.phone || "",
+        address: org.address || "",
+        attendance_start: org.attendance_start || "06:00",
+        attendance_end: org.attendance_end || "10:00",
+      });
     }
     API.get("/subscription").then((r) => setSub(r.data)).catch(() => {});
   }, [org]);
@@ -101,6 +106,42 @@ export default function CompanySettingsPage() {
             {saved ? "Saved!" : "Save Changes"}
           </Button>
         </div>
+      </div>
+
+      {/* Attendance Settings */}
+      <div className="rounded-xl border border-border bg-card p-6 mb-6" data-testid="attendance-settings">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+            <Save className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Attendance Window</h2>
+            <p className="text-xs text-muted-foreground">Configure daily attendance check-in times</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-muted-foreground">Window Opens</Label>
+            <Input
+              type="time"
+              value={form.attendance_start}
+              onChange={(e) => setForm({ ...form, attendance_start: e.target.value })}
+              className="bg-background"
+              data-testid="attendance-start-input"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-muted-foreground">Late After</Label>
+            <Input
+              type="time"
+              value={form.attendance_end}
+              onChange={(e) => setForm({ ...form, attendance_end: e.target.value })}
+              className="bg-background"
+              data-testid="attendance-end-input"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">Marking after the "Late After" time will auto-flag as Late</p>
       </div>
 
       {/* Subscription Info */}
