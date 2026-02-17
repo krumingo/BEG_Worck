@@ -149,6 +149,26 @@ class AttendanceMarkForUser(BaseModel):
     note: str = ""
     source: str = "Web"
 
+# ── Work Report Models ───────────────────────────────────────────
+
+REPORT_STATUSES = ["Draft", "Submitted", "Approved", "Rejected"]
+
+class WorkReportLineInput(BaseModel):
+    activity_name: str
+    hours: float
+    note: str = ""
+
+class WorkReportDraftCreate(BaseModel):
+    project_id: str
+    date: Optional[str] = None
+
+class WorkReportUpdate(BaseModel):
+    summary_note: Optional[str] = None
+    lines: Optional[List[WorkReportLineInput]] = None
+
+class WorkReportReject(BaseModel):
+    reason: str
+
 # ── Auth Helpers ─────────────────────────────────────────────────
 
 def hash_password(pw: str) -> str:
