@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,14 +9,12 @@ import {
   ThermometerSun,
   Palmtree,
   CalendarDays,
+  FileText,
 } from "lucide-react";
 
 const STATUS_ICONS = {
-  Present: CheckCircle2,
-  Absent: XCircle,
-  Late: Clock,
-  SickLeave: ThermometerSun,
-  Vacation: Palmtree,
+  Present: CheckCircle2, Absent: XCircle, Late: Clock,
+  SickLeave: ThermometerSun, Vacation: Palmtree,
 };
 
 const STATUS_COLORS = {
@@ -26,14 +25,27 @@ const STATUS_COLORS = {
   Vacation: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
 };
 
+const REPORT_COLORS = {
+  Draft: "text-gray-400",
+  Submitted: "text-blue-400",
+  Approved: "text-emerald-400",
+  Rejected: "text-red-400",
+};
+
 export default function AttendanceHistoryPage() {
+  const navigate = useNavigate();
   const [entries, setEntries] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await API.get("/attendance/my-range");
-      setEntries(res.data);
+      const [attRes, repRes] = await Promise.all([
+        API.get("/attendance/my-range"),
+        API.get("/work-reports/my-range"),
+      ]);
+      setEntries(attRes.data);
+      setReports(repRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -43,7 +55,6 @@ export default function AttendanceHistoryPage() {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  // Generate last 14 days
   const days = [];
   for (let i = 0; i < 14; i++) {
     const d = new Date();
@@ -53,6 +64,12 @@ export default function AttendanceHistoryPage() {
 
   const entryMap = {};
   entries.forEach((e) => { entryMap[e.date] = e; });
+
+  const reportsByDate = {};
+  reports.forEach((r) => {
+    if (!reportsByDate[r.date]) reportsByDate[r.date] = [];
+    reportsByDate[r.date].push(r);
+  });
 
   if (loading) {
     return (
@@ -73,13 +90,13 @@ export default function AttendanceHistoryPage() {
       <div className="space-y-2" data-testid="history-list">
         {days.map((dateStr) => {
           const entry = entryMap[dateStr];
+          const dayReports = reportsByDate[dateStr] || [];
           const d = new Date(dateStr + "T12:00:00");
           const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
           const dayNum = d.getDate();
           const month = d.toLocaleDateString("en-US", { month: "short" });
           const isToday = dateStr === new Date().toISOString().split("T")[0];
           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
           const Icon = entry ? (STATUS_ICONS[entry.status] || CheckCircle2) : null;
 
           return (
@@ -90,22 +107,27 @@ export default function AttendanceHistoryPage() {
               } ${isWeekend && !entry ? "opacity-50" : ""}`}
               data-testid={`history-${dateStr}`}
             >
-              {/* Date */}
               <div className="w-14 text-center flex-shrink-0">
                 <p className="text-xs text-muted-foreground">{dayName}</p>
                 <p className="text-lg font-bold text-foreground">{dayNum}</p>
                 <p className="text-[10px] text-muted-foreground">{month}</p>
               </div>
 
-              {/* Status */}
               <div className="flex-1 min-w-0">
                 {entry ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Icon className={`w-4 h-4 ${STATUS_COLORS[entry.status]?.split(" ")[1] || "text-muted-foreground"}`} />
                     <Badge variant="outline" className={`text-xs ${STATUS_COLORS[entry.status] || ""}`}>{entry.status}</Badge>
-                    {entry.note && (
-                      <span className="text-xs text-muted-foreground truncate">- {entry.note}</span>
-                    )}
+                    {dayReports.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => navigate(`/work-reports/${r.id}`)}
+                        className="flex items-center gap-1 text-xs hover:underline"
+                      >
+                        <FileText className={`w-3 h-3 ${REPORT_COLORS[r.status] || ""}`} />
+                        <span className={REPORT_COLORS[r.status]}>{r.status}</span>
+                      </button>
+                    ))}
                   </div>
                 ) : (
                   <span className="text-xs text-muted-foreground">
@@ -114,7 +136,6 @@ export default function AttendanceHistoryPage() {
                 )}
               </div>
 
-              {/* Time */}
               {entry && (
                 <span className="text-[11px] text-muted-foreground flex-shrink-0">
                   {new Date(entry.marked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
