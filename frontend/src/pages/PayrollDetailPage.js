@@ -46,6 +46,7 @@ const STATUS_COLORS = {
 };
 
 export default function PayrollDetailPage() {
+  const { t } = useTranslation();
   const { runId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -94,20 +95,20 @@ export default function PayrollDetailPage() {
       setWarnings(res.data.warnings || []);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to generate");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setGenerating(false);
     }
   };
 
   const handleFinalize = async () => {
-    if (!confirm("Finalize this payroll? After finalization, payslips cannot be edited.")) return;
+    if (!confirm(t("payroll.confirmFinalize"))) return;
     setFinalizing(true);
     try {
       await API.post(`/payroll-runs/${runId}/finalize`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to finalize");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setFinalizing(false);
     }
@@ -130,7 +131,7 @@ export default function PayrollDetailPage() {
       setPayslipDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSavingPayslip(false);
     }
@@ -153,7 +154,7 @@ export default function PayrollDetailPage() {
       setPayDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to mark paid");
+      alert(err.response?.data?.detail || t("toast.paidFailed"));
     } finally {
       setPaying(false);
     }
@@ -184,7 +185,7 @@ export default function PayrollDetailPage() {
 
   if (!run) {
     return (
-      <div className="p-8 text-center text-muted-foreground">Payroll run not found</div>
+      <div className="p-8 text-center text-muted-foreground">{t("payroll.noPayrollRuns")}</div>
     );
   }
 
@@ -198,19 +199,19 @@ export default function PayrollDetailPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/payroll")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
           </Button>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-foreground">
-                Payroll: {run.period_start} - {run.period_end}
+                {t("payroll.title")}: {run.period_start} - {run.period_end}
               </h1>
               <Badge variant="outline" className={`text-xs ${STATUS_COLORS[run.status] || ""}`}>
                 {run.status === "Finalized" && <Lock className="w-3 h-3 mr-1" />}
-                {run.status}
+                {t(`payroll.status.${run.status.toLowerCase()}`)}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{run.period_type} payroll</p>
+            <p className="text-sm text-muted-foreground">{t(`payroll.periodTypes.${run.period_type.toLowerCase()}`)} {t("payroll.title").toLowerCase()}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -218,12 +219,12 @@ export default function PayrollDetailPage() {
             <>
               <Button variant="outline" onClick={handleGenerate} disabled={generating} data-testid="generate-btn">
                 {generating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Play className="w-4 h-4 mr-1" />}
-                Generate
+                {t("payroll.generate")}
               </Button>
               {payslips.length > 0 && (
                 <Button onClick={handleFinalize} disabled={finalizing} data-testid="finalize-btn">
                   {finalizing ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Lock className="w-4 h-4 mr-1" />}
-                  Finalize
+                  {t("payroll.finalize")}
                 </Button>
               )}
             </>
@@ -236,7 +237,7 @@ export default function PayrollDetailPage() {
         <div className="mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30" data-testid="warnings">
           <div className="flex items-center gap-2 text-amber-400 mb-2">
             <AlertTriangle className="w-4 h-4" />
-            <span className="font-medium">Warnings</span>
+            <span className="font-medium">{t("payroll.warnings")}</span>
           </div>
           <ul className="text-sm text-amber-300 list-disc list-inside">
             {warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -247,15 +248,15 @@ export default function PayrollDetailPage() {
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-sm text-muted-foreground mb-1">Total Employees</p>
+          <p className="text-sm text-muted-foreground mb-1">{t("payroll.totalEmployees")}</p>
           <p className="text-2xl font-bold text-foreground">{payslips.length}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-sm text-muted-foreground mb-1">Paid</p>
+          <p className="text-sm text-muted-foreground mb-1">{t("payroll.paid")}</p>
           <p className="text-2xl font-bold text-emerald-400">{paidCount} / {payslips.length}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
-          <p className="text-sm text-muted-foreground mb-1">Total Net Pay</p>
+          <p className="text-sm text-muted-foreground mb-1">{t("payroll.totalNetPay")}</p>
           <p className="text-2xl font-bold text-primary">{formatCurrency(totalNet)}</p>
         </div>
       </div>
@@ -265,24 +266,24 @@ export default function PayrollDetailPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Employee</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Pay Type</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Base</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Deductions</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Advances</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Net Pay</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.employee")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.payType")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("payroll.base")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("payroll.deductions")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("payroll.advancesDeducted")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("payroll.netPay")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {payslips.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                  <p>No payslips generated yet</p>
+                  <p>{t("payroll.noPayslips")}</p>
                   {run.status === "Draft" && (
                     <Button variant="outline" className="mt-4" onClick={handleGenerate}>
-                      Generate Payslips
+                      {t("payroll.generatePayslips")}
                     </Button>
                   )}
                 </TableCell>
@@ -295,12 +296,12 @@ export default function PayrollDetailPage() {
                     <p className="text-xs text-muted-foreground">{ps.user_email}</p>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {ps.details_json?.pay_type || "-"}
+                    {ps.details_json?.pay_type ? t(`employees.payTypes.${ps.details_json.pay_type.toLowerCase()}`, ps.details_json.pay_type) : "-"}
                     {ps.details_json?.days_present !== undefined && (
-                      <span className="text-xs text-muted-foreground ml-1">({ps.details_json.days_present} days)</span>
+                      <span className="text-xs text-muted-foreground ml-1">({ps.details_json.days_present} {t("common.days")})</span>
                     )}
                     {ps.details_json?.total_hours !== undefined && (
-                      <span className="text-xs text-muted-foreground ml-1">({ps.details_json.total_hours}h)</span>
+                      <span className="text-xs text-muted-foreground ml-1">({ps.details_json.total_hours}{t("employees.hr")})</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">{formatCurrency(ps.base_amount)}</TableCell>
@@ -313,7 +314,7 @@ export default function PayrollDetailPage() {
                   <TableCell className="text-right font-mono text-sm font-bold text-primary">{formatCurrency(ps.net_pay)}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`text-xs ${STATUS_COLORS[ps.status] || ""}`}>
-                      {ps.status}
+                      {t(`payroll.payslipStatus.${ps.status.toLowerCase()}`)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -325,11 +326,11 @@ export default function PayrollDetailPage() {
                       )}
                       {run.status === "Finalized" && ps.status !== "Paid" && (
                         <Button size="sm" onClick={() => openPayDialog(ps)} data-testid={`pay-btn-${ps.id}`}>
-                          <CheckCircle2 className="w-4 h-4 mr-1" /> Pay
+                          <CheckCircle2 className="w-4 h-4 mr-1" /> {t("payroll.markPaid")}
                         </Button>
                       )}
                       {ps.status === "Paid" && (
-                        <span className="text-xs text-emerald-400">Paid</span>
+                        <span className="text-xs text-emerald-400">{t("payroll.paid")}</span>
                       )}
                     </div>
                   </TableCell>
@@ -344,23 +345,23 @@ export default function PayrollDetailPage() {
       <Dialog open={payslipDialogOpen} onOpenChange={setPayslipDialogOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card border-border" data-testid="payslip-edit-dialog">
           <DialogHeader>
-            <DialogTitle>Edit Deductions</DialogTitle>
+            <DialogTitle>{t("payroll.setDeductions")}</DialogTitle>
           </DialogHeader>
           {selectedPayslip && (
             <div className="space-y-4 py-4">
               <div className="p-3 rounded-lg bg-muted/50">
                 <p className="font-medium text-foreground">{selectedPayslip.user_name}</p>
-                <p className="text-sm text-muted-foreground">Base: {formatCurrency(selectedPayslip.base_amount)}</p>
+                <p className="text-sm text-muted-foreground">{t("payroll.base")}: {formatCurrency(selectedPayslip.base_amount)}</p>
               </div>
 
               <div className="space-y-2">
-                <Label>Manual Deductions (€)</Label>
+                <Label>{t("payroll.deductions")} (€)</Label>
                 <Input type="number" value={deductions} onChange={(e) => setDeductions(e.target.value)} className="bg-background" data-testid="deductions-input" />
               </div>
 
               {userAdvances(selectedPayslip.user_id).length > 0 && (
                 <div className="space-y-2">
-                  <Label>Deduct from Advances/Loans</Label>
+                  <Label>{t("payroll.selectAdvances")}</Label>
                   <div className="space-y-2 max-h-[200px] overflow-y-auto">
                     {userAdvances(selectedPayslip.user_id).map((adv) => {
                       const isSelected = selectedAdvances.some(a => a.advance_id === adv.id);
@@ -373,8 +374,8 @@ export default function PayrollDetailPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="text-sm font-medium">{adv.type} - {adv.issued_date}</p>
-                              <p className="text-xs text-muted-foreground">Remaining: {formatCurrency(adv.remaining_amount)}</p>
+                              <p className="text-sm font-medium">{t(`advances.typeLabels.${adv.type.toLowerCase()}`)} - {adv.issued_date}</p>
+                              <p className="text-xs text-muted-foreground">{t("advances.remaining")}: {formatCurrency(adv.remaining_amount)}</p>
                             </div>
                             {isSelected && <CheckCircle2 className="w-4 h-4 text-primary" />}
                           </div>
@@ -387,19 +388,19 @@ export default function PayrollDetailPage() {
 
               <div className="p-3 rounded-lg bg-muted/50 border-t border-border">
                 <div className="flex justify-between text-sm">
-                  <span>Base</span>
+                  <span>{t("payroll.base")}</span>
                   <span>{formatCurrency(selectedPayslip.base_amount)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-red-400">
-                  <span>Deductions</span>
+                  <span>{t("payroll.deductions")}</span>
                   <span>-{formatCurrency(deductions)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-amber-400">
-                  <span>Advances</span>
+                  <span>{t("advances.title")}</span>
                   <span>-{formatCurrency(selectedAdvances.reduce((s, a) => s + a.amount, 0))}</span>
                 </div>
                 <div className="flex justify-between font-bold text-foreground border-t border-border pt-2 mt-2">
-                  <span>Net Pay</span>
+                  <span>{t("payroll.netPay")}</span>
                   <span className="text-primary">
                     {formatCurrency(
                       selectedPayslip.base_amount 
@@ -412,10 +413,10 @@ export default function PayrollDetailPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPayslipDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPayslipDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleSavePayslip} disabled={savingPayslip} data-testid="save-deductions-btn">
               {savingPayslip && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              Save
+              {t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -425,7 +426,7 @@ export default function PayrollDetailPage() {
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="pay-dialog">
           <DialogHeader>
-            <DialogTitle>Mark as Paid</DialogTitle>
+            <DialogTitle>{t("payroll.markPaid")}</DialogTitle>
           </DialogHeader>
           {selectedPayslip && (
             <div className="space-y-4 py-4">
@@ -435,31 +436,31 @@ export default function PayrollDetailPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Payment Method</Label>
+                <Label>{t("payroll.paymentMethod")}</Label>
                 <Select value={payMethod} onValueChange={setPayMethod}>
                   <SelectTrigger className="bg-background" data-testid="pay-method-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="BankTransfer">Bank Transfer</SelectItem>
+                    <SelectItem value="Cash">{t("payroll.cash")}</SelectItem>
+                    <SelectItem value="BankTransfer">{t("payroll.bankTransfer")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {payMethod === "BankTransfer" && (
                 <div className="space-y-2">
-                  <Label>Reference</Label>
-                  <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="Transfer reference" className="bg-background" data-testid="pay-reference-input" />
+                  <Label>{t("payroll.reference")}</Label>
+                  <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder={t("payroll.reference")} className="bg-background" data-testid="pay-reference-input" />
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleMarkPaid} disabled={paying} data-testid="confirm-pay-btn">
               {paying && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              Mark Paid
+              {t("payroll.markPaid")}
             </Button>
           </DialogFooter>
         </DialogContent>
