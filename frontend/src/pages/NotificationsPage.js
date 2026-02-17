@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 export default function NotificationsPage() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
