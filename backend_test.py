@@ -343,42 +343,476 @@ class BEGWorkAPITester:
             details = response.text if hasattr(response, 'text') else str(response)
             return self.log_result("GET /subscription", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
 
+    # ═══ M1 PROJECTS MODULE TESTS ═══
+
+    def test_get_dashboard_stats(self):
+        """Test GET /api/dashboard/stats returns real project counts"""
+        success, response = self.make_request('GET', 'dashboard/stats', expected_status=200)
+        
+        if success:
+            data = response.json()
+            required_fields = ['active_projects', 'paused_projects', 'completed_projects', 'draft_projects', 'total_projects', 'users_count']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                return self.log_result("GET /dashboard/stats", True, 
+                    f"Stats: Active={data['active_projects']}, Draft={data['draft_projects']}, Users={data['users_count']}")
+            else:
+                return self.log_result("GET /dashboard/stats", False, f"Missing fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /dashboard/stats", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_project_enums(self):
+        """Test GET /api/project-enums"""
+        success, response = self.make_request('GET', 'project-enums', expected_status=200)
+        
+        if success:
+            data = response.json()
+            expected_keys = ['statuses', 'types', 'team_roles']
+            if all(key in data for key in expected_keys):
+                statuses = data['statuses']
+                types = data['types'] 
+                roles = data['team_roles']
+                expected_statuses = ["Draft", "Active", "Paused", "Completed", "Cancelled"]
+                expected_types = ["Billable", "Overhead", "Warranty"]
+                expected_roles = ["SiteManager", "Technician", "Viewer"]
+                
+                if (set(statuses) == set(expected_statuses) and 
+                    set(types) == set(expected_types) and
+                    set(roles) == set(expected_roles)):
+                    return self.log_result("GET /project-enums", True, "All enums present and correct")
+                else:
+                    return self.log_result("GET /project-enums", False, "Enum values don't match expected")
+            else:
+                return self.log_result("GET /project-enums", False, f"Missing keys: {[k for k in expected_keys if k not in data]}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /project-enums", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_list_projects_admin(self):
+        """Test GET /api/projects as Admin (should see all projects)"""
+        success, response = self.make_request('GET', 'projects', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if isinstance(data, list):
+                # Should have at least existing test projects
+                if len(data) >= 2:
+                    # Look for expected test projects
+                    project_codes = [p.get('code') for p in data]
+                    if 'PRJ-001' in project_codes or 'PRJ-002' in project_codes:
+                        # Store an existing project for later tests
+                        self.existing_project_id = data[0]['id']
+                        return self.log_result("GET /projects (Admin)", True, 
+                            f"Found {len(data)} projects, codes: {project_codes[:3]}")
+                    else:
+                        return self.log_result("GET /projects (Admin)", True, 
+                            f"Found {len(data)} projects, codes: {project_codes[:3]}")
+                else:
+                    return self.log_result("GET /projects (Admin)", True, f"Found {len(data)} projects")
+            else:
+                return self.log_result("GET /projects (Admin)", False, "Response not a list")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /projects (Admin)", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_list_projects_with_filters(self):
+        """Test GET /api/projects with status and type filters"""
+        # Test status filter
+        success, response = self.make_request('GET', 'projects?status=Active', expected_status=200)
+        if success:
+            data = response.json()
+            active_projects = [p for p in data if p.get('status') == 'Active']
+            if len(active_projects) == len(data):
+                filter_result = self.log_result("GET /projects?status=Active", True, f"Found {len(data)} active projects")
+            else:
+                filter_result = self.log_result("GET /projects?status=Active", False, "Filter not working correctly")
+        else:
+            filter_result = self.log_result("GET /projects?status=Active", False, "Filter request failed")
+
+        # Test type filter
+        success, response = self.make_request('GET', 'projects?type=Billable', expected_status=200)
+        if success:
+            data = response.json()
+            billable_projects = [p for p in data if p.get('type') == 'Billable']
+            type_result = len(billable_projects) == len(data)
+        else:
+            type_result = False
+
+        return filter_result and self.log_result("GET /projects with filters", type_result, "Type filter working")
+
+    def test_create_project_admin(self):
+        """Test POST /api/projects as Admin (should work)"""
+        test_project = {
+            "code": f"TEST-{datetime.now().strftime('%H%M%S')}",
+            "name": "Test Project Creation",
+            "status": "Draft",
+            "type": "Billable",
+            "start_date": "2024-01-01",
+            "end_date": "2024-06-30",
+            "planned_days": 180,
+            "budget_planned": 50000.00,
+            "tags": ["test", "automated"],
+            "notes": "Created by automated test"
+        }
+        
+        success, response = self.make_request('POST', 'projects', test_project, 201)
+        
+        if success:
+            data = response.json()
+            if (data.get('code') == test_project['code'] and 
+                data.get('name') == test_project['name'] and
+                'id' in data):
+                self.created_project_id = data['id']
+                return self.log_result("POST /projects (Admin)", True, f"Project created: {test_project['code']}")
+            else:
+                return self.log_result("POST /projects (Admin)", False, "Response missing expected fields")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /projects (Admin)", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_create_project_duplicate_code(self):
+        """Test POST /api/projects with duplicate code (should fail)"""
+        if not self.created_project_id:
+            return self.log_result("POST /projects duplicate code", False, "No project created to duplicate")
+        
+        # Try to create project with same code
+        duplicate_project = {
+            "code": f"TEST-{datetime.now().strftime('%H%M%S')}",  # Use same format but might be different time
+            "name": "Duplicate Test",
+            "status": "Draft", 
+            "type": "Billable"
+        }
+        
+        # First create one
+        self.make_request('POST', 'projects', duplicate_project, 201)
+        
+        # Now try duplicate
+        success, response = self.make_request('POST', 'projects', duplicate_project, 400)
+        return self.log_result("POST /projects duplicate code", success, "Should reject duplicate code")
+
+    def test_create_project_invalid_enum(self):
+        """Test POST /api/projects with invalid status/type (should fail)"""
+        invalid_project = {
+            "code": f"INVALID-{datetime.now().strftime('%H%M%S')}",
+            "name": "Invalid Project",
+            "status": "InvalidStatus",
+            "type": "Billable"
+        }
+        
+        success, response = self.make_request('POST', 'projects', invalid_project, 400)
+        invalid_status = self.log_result("POST /projects invalid status", success, "Should reject invalid status")
+        
+        # Test invalid type
+        invalid_project["status"] = "Draft"
+        invalid_project["type"] = "InvalidType"
+        success, response = self.make_request('POST', 'projects', invalid_project, 400)
+        invalid_type = self.log_result("POST /projects invalid type", success, "Should reject invalid type")
+        
+        return invalid_status and invalid_type
+
+    def test_get_project_detail(self):
+        """Test GET /api/projects/{id} with enriched data"""
+        project_id = self.created_project_id or self.existing_project_id
+        if not project_id:
+            return self.log_result("GET /projects/{id}", False, "No project ID available")
+        
+        success, response = self.make_request('GET', f'projects/{project_id}', expected_status=200)
+        
+        if success:
+            data = response.json()
+            required_fields = ['id', 'code', 'name', 'status', 'type', 'team_count']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                return self.log_result("GET /projects/{id}", True, 
+                    f"Project: {data.get('code')}, Team: {data.get('team_count')}")
+            else:
+                return self.log_result("GET /projects/{id}", False, f"Missing enriched fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /projects/{id}", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_update_project_admin(self):
+        """Test PUT /api/projects/{id} as Admin (should work)"""
+        project_id = self.created_project_id or self.existing_project_id
+        if not project_id:
+            return self.log_result("PUT /projects/{id} (Admin)", False, "No project ID available")
+        
+        update_data = {
+            "name": "Updated Project Name",
+            "status": "Active",
+            "notes": "Updated by test"
+        }
+        
+        success, response = self.make_request('PUT', f'projects/{project_id}', update_data, 200)
+        
+        if success:
+            data = response.json()
+            if data.get('name') == update_data['name'] and data.get('status') == update_data['status']:
+                return self.log_result("PUT /projects/{id} (Admin)", True, "Project updated successfully")
+            else:
+                return self.log_result("PUT /projects/{id} (Admin)", False, "Update not reflected")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("PUT /projects/{id} (Admin)", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_technician_login_and_access(self):
+        """Test login as Technician and check project access (role-based filtering)"""
+        # Save admin token
+        admin_token = self.token
+        
+        # Login as technician
+        success, response = self.make_request('POST', 'auth/login', self.tech_credentials, 200)
+        
+        if not success:
+            self.token = admin_token  # Restore admin token
+            return self.log_result("Technician login", False, "Failed to login as tech1@begwork.com")
+        
+        data = response.json()
+        if 'token' not in data:
+            self.token = admin_token
+            return self.log_result("Technician login", False, "No token received")
+        
+        # Store tech user info for later team tests
+        tech_user = data.get('user', {})
+        self.tech_user_id = tech_user.get('id')
+        
+        self.token = data['token']  # Switch to tech token
+        
+        # Test project access - Technician should only see assigned projects
+        success, response = self.make_request('GET', 'projects', expected_status=200)
+        
+        if success:
+            projects = response.json()
+            # Tech should see fewer projects than admin (role-based filtering)
+            tech_result = self.log_result("GET /projects (Technician)", True, 
+                f"Technician sees {len(projects)} projects (role-filtered)")
+        else:
+            tech_result = self.log_result("GET /projects (Technician)", False, "Failed to get projects as Technician")
+        
+        # Restore admin token
+        self.token = admin_token
+        return tech_result
+
+    def test_project_team_management(self):
+        """Test project team operations: add member, list team, remove member"""
+        project_id = self.created_project_id or self.existing_project_id
+        if not project_id or not self.tech_user_id:
+            return self.log_result("Project team management", False, "Missing project ID or tech user ID")
+        
+        # Test GET /api/projects/{id}/team (initially empty or existing members)
+        success, response = self.make_request('GET', f'projects/{project_id}/team', expected_status=200)
+        if not success:
+            return self.log_result("GET /projects/{id}/team", False, "Failed to get team list")
+        
+        initial_team = response.json()
+        initial_count = len(initial_team)
+        get_team_result = self.log_result("GET /projects/{id}/team", True, f"Found {initial_count} team members")
+        
+        # Test POST /api/projects/{id}/team (add tech user)
+        add_member_data = {
+            "user_id": self.tech_user_id,
+            "role_in_project": "Technician",
+            "from_date": "2024-01-01"
+        }
+        
+        success, response = self.make_request('POST', f'projects/{project_id}/team', add_member_data, 201)
+        
+        if success:
+            member_data = response.json()
+            member_id = member_data.get('id')
+            add_member_result = self.log_result("POST /projects/{id}/team", True, "Team member added successfully")
+            
+            # Verify team count increased
+            success, response = self.make_request('GET', f'projects/{project_id}/team', expected_status=200)
+            if success:
+                new_team = response.json()
+                if len(new_team) == initial_count + 1:
+                    verify_result = self.log_result("Team count verification", True, f"Team size: {initial_count} -> {len(new_team)}")
+                else:
+                    verify_result = self.log_result("Team count verification", False, "Team count didn't increase")
+            else:
+                verify_result = False
+            
+            # Test duplicate add (should fail)
+            success, response = self.make_request('POST', f'projects/{project_id}/team', add_member_data, 400)
+            duplicate_result = self.log_result("POST /projects/{id}/team duplicate", success, "Should reject duplicate member")
+            
+            # Test DELETE /api/projects/{id}/team/{memberId} (soft delete)
+            if member_id:
+                success, response = self.make_request('DELETE', f'projects/{project_id}/team/{member_id}', expected_status=200)
+                if success:
+                    remove_result = self.log_result("DELETE /projects/{id}/team/{memberId}", True, "Team member removed (soft delete)")
+                    
+                    # Verify team count decreased  
+                    success, response = self.make_request('GET', f'projects/{project_id}/team', expected_status=200)
+                    if success:
+                        final_team = response.json()
+                        if len(final_team) == initial_count:
+                            final_verify = self.log_result("Final team count verification", True, f"Back to {len(final_team)} members")
+                        else:
+                            final_verify = self.log_result("Final team count verification", False, "Team count didn't decrease")
+                    else:
+                        final_verify = False
+                else:
+                    remove_result = final_verify = False
+            else:
+                remove_result = final_verify = False
+                
+            return all([get_team_result, add_member_result, verify_result, duplicate_result, remove_result, final_verify])
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /projects/{id}/team", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_project_phases_management(self):
+        """Test project phases CRUD operations"""
+        project_id = self.created_project_id or self.existing_project_id
+        if not project_id:
+            return self.log_result("Project phases management", False, "No project ID available")
+        
+        # Test GET /api/projects/{id}/phases (initially empty)
+        success, response = self.make_request('GET', f'projects/{project_id}/phases', expected_status=200)
+        if not success:
+            return self.log_result("GET /projects/{id}/phases", False, "Failed to get phases list")
+        
+        initial_phases = response.json()
+        initial_count = len(initial_phases)
+        get_phases_result = self.log_result("GET /projects/{id}/phases", True, f"Found {initial_count} phases")
+        
+        # Test POST /api/projects/{id}/phases (create phase)
+        create_phase_data = {
+            "name": "Test Phase 1",
+            "order": 1,
+            "status": "Draft",
+            "planned_start": "2024-01-01",
+            "planned_end": "2024-02-29"
+        }
+        
+        success, response = self.make_request('POST', f'projects/{project_id}/phases', create_phase_data, 201)
+        
+        if success:
+            phase_data = response.json()
+            phase_id = phase_data.get('id')
+            create_phase_result = self.log_result("POST /projects/{id}/phases", True, f"Phase created: {phase_data.get('name')}")
+            
+            # Test PUT /api/projects/{id}/phases/{phaseId} (update phase)
+            if phase_id:
+                update_phase_data = {
+                    "name": "Updated Test Phase 1",
+                    "status": "Active"
+                }
+                
+                success, response = self.make_request('PUT', f'projects/{project_id}/phases/{phase_id}', update_phase_data, 200)
+                if success:
+                    updated_phase = response.json()
+                    if updated_phase.get('name') == update_phase_data['name']:
+                        update_phase_result = self.log_result("PUT /projects/{id}/phases/{phaseId}", True, "Phase updated successfully")
+                    else:
+                        update_phase_result = self.log_result("PUT /projects/{id}/phases/{phaseId}", False, "Update not reflected")
+                else:
+                    update_phase_result = self.log_result("PUT /projects/{id}/phases/{phaseId}", False, "Update failed")
+                
+                # Test DELETE /api/projects/{id}/phases/{phaseId}
+                success, response = self.make_request('DELETE', f'projects/{project_id}/phases/{phase_id}', expected_status=200)
+                if success:
+                    delete_phase_result = self.log_result("DELETE /projects/{id}/phases/{phaseId}", True, "Phase deleted successfully")
+                else:
+                    delete_phase_result = self.log_result("DELETE /projects/{id}/phases/{phaseId}", False, "Delete failed")
+            else:
+                update_phase_result = delete_phase_result = False
+                
+            return all([get_phases_result, create_phase_result, update_phase_result, delete_phase_result])
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /projects/{id}/phases", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_delete_project_admin_only(self):
+        """Test DELETE /api/projects/{id} (Admin only, cascades team/phases)"""
+        if not self.created_project_id:
+            return self.log_result("DELETE /projects/{id} (Admin only)", False, "No test project to delete")
+        
+        success, response = self.make_request('DELETE', f'projects/{self.created_project_id}', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if data.get('ok') is True:
+                # Verify project is actually deleted
+                success, response = self.make_request('GET', f'projects/{self.created_project_id}', expected_status=404)
+                if success:
+                    return self.log_result("DELETE /projects/{id} (Admin only)", True, "Project deleted and cascade worked")
+                else:
+                    return self.log_result("DELETE /projects/{id} (Admin only)", False, "Project still exists after delete")
+            else:
+                return self.log_result("DELETE /projects/{id} (Admin only)", False, "Unexpected response format")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("DELETE /projects/{id} (Admin only)", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_audit_logging_for_projects(self):
+        """Test that project actions are logged in audit trail"""
+        success, response = self.make_request('GET', 'audit-logs?limit=20', expected_status=200)
+        
+        if success:
+            data = response.json()
+            logs = data.get('logs', [])
+            
+            # Look for project-related actions
+            project_actions = [log for log in logs if log.get('entity_type') == 'project' and 
+                             log.get('action') in ['created', 'updated', 'deleted', 'team_added', 'team_removed', 'phase_created']]
+            
+            if len(project_actions) >= 1:
+                actions_found = [f"{log['action']}" for log in project_actions[:3]]
+                return self.log_result("Audit logging for projects", True, f"Found project actions: {actions_found}")
+            else:
+                return self.log_result("Audit logging for projects", False, "No project actions found in audit log")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("Audit logging for projects", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
     def run_all_tests(self):
         """Run all backend API tests"""
-        print("🔬 Starting BEG_Work API Tests")
-        print("=" * 50)
+        print("🔬 Starting BEG_Work API Tests - M0 Core + M1 Projects")
+        print("=" * 60)
         
-        # Authentication tests
+        # M0 Core tests (existing)
+        print("\n🔹 M0 CORE MODULE TESTS")
         self.test_auth_login()
         self.test_auth_me_with_token()
         self.test_auth_me_without_token()
-        
-        # Organization tests
         self.test_get_organization()
         self.test_put_organization()
-        
-        # User management tests
         self.test_get_users()
         self.test_create_user()
         self.test_create_duplicate_user()
         self.test_create_user_invalid_role()
         self.test_update_user()
         self.test_delete_user()
-        
-        # Feature flags tests
         self.test_get_feature_flags()
         self.test_toggle_feature_flag()
         self.test_toggle_core_module()
-        
-        # Audit logs tests
         self.test_get_audit_logs()
-        
-        # Misc tests
         self.test_get_roles()
         self.test_get_subscription()
         
+        # M1 Projects tests (new)
+        print("\n🔹 M1 PROJECTS MODULE TESTS")
+        self.test_get_dashboard_stats()
+        self.test_get_project_enums()
+        self.test_list_projects_admin()
+        self.test_list_projects_with_filters()
+        self.test_create_project_admin()
+        self.test_create_project_duplicate_code()
+        self.test_create_project_invalid_enum()
+        self.test_get_project_detail()
+        self.test_update_project_admin()
+        self.test_technician_login_and_access()
+        self.test_project_team_management()
+        self.test_project_phases_management()
+        self.test_audit_logging_for_projects()
+        self.test_delete_project_admin_only()
+        
         # Final summary
-        print("=" * 50)
+        print("=" * 60)
         print(f"📊 Tests Summary: {self.tests_passed}/{self.tests_run} PASSED")
         
         if self.failed_tests:
