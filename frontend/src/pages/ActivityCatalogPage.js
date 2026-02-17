@@ -43,6 +43,7 @@ import {
 const UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"];
 
 export default function ActivityCatalogPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get("projectId") || "";
@@ -116,7 +117,7 @@ export default function ActivityCatalogPage() {
 
   const handleSave = async () => {
     if (!formProjectId || !formName) {
-      alert("Project and name are required");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -139,23 +140,23 @@ export default function ActivityCatalogPage() {
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (item) => {
-    if (!confirm(`Delete activity "${item.name}"?`)) return;
+    if (!confirm(t("common.confirmDelete"))) return;
     try {
       await API.delete(`/activity-catalog/${item.id}`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete");
+      alert(err.response?.data?.detail || t("toast.deleteFailed"));
     }
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrencyValue = (amount) => {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR" }).format(amount || 0);
   };
 
@@ -163,12 +164,12 @@ export default function ActivityCatalogPage() {
     <div className="p-8 max-w-[1200px]" data-testid="activity-catalog-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Activity Catalog</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage reusable activities for BOQ/offers</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("activities.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("activities.subtitle")}</p>
         </div>
         {canManage && (
           <Button onClick={openCreate} data-testid="create-activity-btn">
-            <Plus className="w-4 h-4 mr-2" /> New Activity
+            <Plus className="w-4 h-4 mr-2" /> {t("activities.newActivity")}
           </Button>
         )}
       </div>
@@ -183,10 +184,10 @@ export default function ActivityCatalogPage() {
         }}>
           <SelectTrigger className="w-[250px] bg-card" data-testid="project-filter">
             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="All Projects" />
+            <SelectValue placeholder={t("common.allProjects")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
+            <SelectItem value="all">{t("common.allProjects")}</SelectItem>
             {projects.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
             ))}
@@ -194,7 +195,7 @@ export default function ActivityCatalogPage() {
         </Select>
         <div className="flex items-center gap-2">
           <Switch checked={showInactive} onCheckedChange={setShowInactive} data-testid="show-inactive-switch" />
-          <Label className="text-sm text-muted-foreground">Show inactive</Label>
+          <Label className="text-sm text-muted-foreground">{t("activities.showInactive")}</Label>
         </div>
       </div>
 
@@ -208,14 +209,14 @@ export default function ActivityCatalogPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Code</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Name</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Project</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Unit</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Material</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Labor</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                {canManage && <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>}
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("activities.code")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.name")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.project")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("offers.unit")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("offers.material")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("offers.labor")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                {canManage && <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -223,10 +224,10 @@ export default function ActivityCatalogPage() {
                 <TableRow>
                   <TableCell colSpan={canManage ? 8 : 7} className="text-center py-12 text-muted-foreground">
                     <Layers className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No activities found</p>
+                    <p>{t("activities.noActivities")}</p>
                     {canManage && projectFilter && (
                       <Button variant="outline" className="mt-4" onClick={openCreate}>
-                        Create your first activity
+                        {t("activities.createFirstActivity")}
                       </Button>
                     )}
                   </TableCell>
@@ -242,11 +243,11 @@ export default function ActivityCatalogPage() {
                         {project ? `${project.code}` : "-"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{item.default_unit}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{formatCurrency(item.default_material_unit_cost)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{formatCurrency(item.default_labor_unit_cost)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{formatCurrencyValue(item.default_material_unit_cost)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{formatCurrencyValue(item.default_labor_unit_cost)}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-xs ${item.active ? "text-emerald-400 border-emerald-500/30" : "text-gray-400 border-gray-500/30"}`}>
-                          {item.active ? "Active" : "Inactive"}
+                          {item.active ? t("common.active") : t("common.inactive")}
                         </Badge>
                       </TableCell>
                       {canManage && (
@@ -274,14 +275,14 @@ export default function ActivityCatalogPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card border-border" data-testid="activity-dialog">
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Edit Activity" : "New Activity"}</DialogTitle>
+            <DialogTitle>{editingItem ? t("activities.editActivity") : t("activities.newActivity")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Project *</Label>
+              <Label>{t("offers.project")} *</Label>
               <Select value={formProjectId} onValueChange={setFormProjectId} disabled={!!editingItem}>
                 <SelectTrigger className="bg-background" data-testid="form-project-select">
-                  <SelectValue placeholder="Select project" />
+                  <SelectValue placeholder={t("offers.selectProject")} />
                 </SelectTrigger>
                 <SelectContent>
                   {projects.map((p) => (
@@ -292,11 +293,11 @@ export default function ActivityCatalogPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Code (optional)</Label>
+                <Label>{t("activities.code")} ({t("common.optional")})</Label>
                 <Input value={formCode} onChange={(e) => setFormCode(e.target.value)} placeholder="e.g., ELEC-001" className="bg-background" data-testid="form-code-input" />
               </div>
               <div className="space-y-2">
-                <Label>Unit</Label>
+                <Label>{t("offers.unit")}</Label>
                 <Select value={formUnit} onValueChange={setFormUnit}>
                   <SelectTrigger className="bg-background" data-testid="form-unit-select">
                     <SelectValue />
@@ -308,33 +309,33 @@ export default function ActivityCatalogPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Name *</Label>
-              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Activity name" className="bg-background" data-testid="form-name-input" />
+              <Label>{t("common.name")} *</Label>
+              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder={t("activities.activityName")} className="bg-background" data-testid="form-name-input" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Material Cost / Unit</Label>
+                <Label>{t("activities.defaultMaterial")}</Label>
                 <Input type="number" value={formMaterial} onChange={(e) => setFormMaterial(e.target.value)} className="bg-background" data-testid="form-material-input" />
               </div>
               <div className="space-y-2">
-                <Label>Labor Cost / Unit</Label>
+                <Label>{t("activities.defaultLabor")}</Label>
                 <Input type="number" value={formLabor} onChange={(e) => setFormLabor(e.target.value)} className="bg-background" data-testid="form-labor-input" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Labor Hours / Unit (optional)</Label>
+              <Label>{t("workReports.hours")} / {t("offers.unit")} ({t("common.optional")})</Label>
               <Input type="number" value={formHours} onChange={(e) => setFormHours(e.target.value)} placeholder="e.g., 0.5" className="bg-background" data-testid="form-hours-input" />
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={formActive} onCheckedChange={setFormActive} data-testid="form-active-switch" />
-              <Label>Active</Label>
+              <Label>{t("common.active")}</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleSave} disabled={saving} data-testid="form-save-btn">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              {editingItem ? "Update" : "Create"}
+              {editingItem ? t("common.update") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
