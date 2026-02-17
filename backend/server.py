@@ -1191,6 +1191,335 @@ async def get_work_report(report_id: str, user: dict = Depends(get_current_user)
     er["project_name"] = p["name"] if p else ""
     return er
 
+# ── Reminder Service Functions ────────────────────────────────────
+
+async def get_org_reminder_policy(org_id: str):
+    org = await db.organizations.find_one({"id": org_id}, {"_id": 0})
+    return {
+        "attendance_deadline": org.get("attendance_end", "10:00"),
+        "work_report_deadline": org.get("work_report_deadline", "18:30"),
+        "max_reminders_per_day": org.get("max_reminders_per_day", 2),
+        "escalation_after_days": org.get("escalation_after_days", 2),
+        "timezone": org.get("org_timezone", "Europe/Sofia"),
+    }
+
+def get_local_now(tz_name: str):
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("Europe/Sofia")
+    return datetime.now(tz)
+
+async def compute_missing_attendance(org_id: str, date: str, scoped_project_ids=None):
+    """Users assigned to active projects with no attendance entry on date."""
+    if scoped_project_ids:
+        pids = scoped_project_ids
+    else:
+        active = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
+        pids = [p["id"] for p in active]
+    if not pids:
+        return []
+
+    members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(1000)
+    seen = set()
+    unique_uids = []
+    for m in members:
+        if m["user_id"] not in seen:
+            seen.add(m["user_id"])
+            unique_uids.append(m["user_id"])
+
+    if not unique_uids:
+        return []
+
+    marked = await db.attendance_entries.find(
+        {"org_id": org_id, "date": date, "user_id": {"$in": unique_uids}}, {"_id": 0, "user_id": 1}
+    ).to_list(1000)
+    marked_set = {e["user_id"] for e in marked}
+
+    missing = []
+    for uid in unique_uids:
+        if uid not in marked_set:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
+            if u and u.get("role") not in ["Admin", "Owner"]:
+                missing.append({"user_id": uid, "user_name": f"{u['first_name']} {u['last_name']}", "user_email": u["email"], "user_role": u.get("role", "")})
+    return missing
+
+async def compute_missing_work_reports(org_id: str, date: str, scoped_project_ids=None):
+    """Users with Present/Late attendance but no Submitted/Approved report."""
+    present = await db.attendance_entries.find(
+        {"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "user_id": 1}
+    ).to_list(1000)
+    present_uids = list({e["user_id"] for e in present})
+    if not present_uids:
+        return []
+
+    if scoped_project_ids:
+        pids = scoped_project_ids
+    else:
+        active = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
+        pids = [p["id"] for p in active]
+
+    members = await db.project_team.find({"project_id": {"$in": pids}, "active": True, "user_id": {"$in": present_uids}}, {"_id": 0}).to_list(1000)
+    user_projects = {}
+    for m in members:
+        user_projects.setdefault(m["user_id"], []).append(m["project_id"])
+
+    submitted = await db.work_reports.find(
+        {"org_id": org_id, "date": date, "status": {"$in": ["Submitted", "Approved"]}}, {"_id": 0, "user_id": 1, "project_id": 1}
+    ).to_list(1000)
+    submitted_keys = {(r["user_id"], r["project_id"]) for r in submitted}
+
+    missing = []
+    for uid, proj_ids in user_projects.items():
+        for pid in proj_ids:
+            if (uid, pid) not in submitted_keys:
+                u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1})
+                p = await db.projects.find_one({"id": pid}, {"_id": 0, "code": 1, "name": 1})
+                if u:
+                    missing.append({
+                        "user_id": uid, "project_id": pid,
+                        "user_name": f"{u['first_name']} {u['last_name']}", "user_email": u["email"],
+                        "project_code": p["code"] if p else "", "project_name": p["name"] if p else "",
+                    })
+    return missing
+
+async def create_notification(org_id, user_id, ntype, title, message, data=None):
+    notif = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "user_id": user_id,
+        "type": ntype,
+        "title": title,
+        "message": message,
+        "data": data or {},
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notifications.insert_one(notif)
+    return {k: v for k, v in notif.items() if k != "_id"}
+
+async def send_reminder_for_user(org_id, rtype, date, user_id, project_id, policy, triggered_by="system"):
+    key = {"org_id": org_id, "type": rtype, "date": date, "user_id": user_id}
+    if project_id:
+        key["project_id"] = project_id
+
+    existing = await db.reminder_logs.find_one(key)
+    now = datetime.now(timezone.utc).isoformat()
+
+    if existing:
+        if existing["status"] in ["Resolved", "Excused"]:
+            return None
+        if existing["reminder_count"] >= policy["max_reminders_per_day"]:
+            return None
+        if existing.get("last_reminded_at"):
+            last = datetime.fromisoformat(existing["last_reminded_at"])
+            if (datetime.now(timezone.utc) - last).total_seconds() < 3600:
+                return None
+        await db.reminder_logs.update_one({"id": existing["id"]}, {"$set": {
+            "status": "Reminded",
+            "reminder_count": existing["reminder_count"] + 1,
+            "last_reminded_at": now,
+            "updated_at": now,
+        }})
+        reminder_id = existing["id"]
+    else:
+        reminder_id = str(uuid.uuid4())
+        log_entry = {
+            "id": reminder_id,
+            "org_id": org_id,
+            "type": rtype,
+            "date": date,
+            "user_id": user_id,
+            "project_id": project_id,
+            "status": "Reminded",
+            "reminder_count": 1,
+            "last_reminded_at": now,
+            "resolved_at": None,
+            "resolved_by_user_id": None,
+            "excused_reason": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.reminder_logs.insert_one(log_entry)
+
+    if rtype == "MissingAttendance":
+        title = "Attendance Reminder"
+        message = f"You haven't marked attendance for {date}. Please mark now."
+    else:
+        title = "Work Report Reminder"
+        message = f"You haven't submitted your work report for {date}. Please fill it now."
+
+    await create_notification(org_id, user_id, rtype, title, message, {"date": date, "project_id": project_id})
+    return reminder_id
+
+async def auto_resolve_reminders(org_id, rtype, date, user_id, resolved_by=None):
+    query = {"org_id": org_id, "type": rtype, "date": date, "user_id": user_id, "status": {"$in": ["Open", "Reminded"]}}
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.reminder_logs.update_many(query, {"$set": {
+        "status": "Resolved", "resolved_at": now, "resolved_by_user_id": resolved_by, "updated_at": now,
+    }})
+    return result.modified_count
+
+async def run_reminder_jobs():
+    orgs = await db.organizations.find({}, {"_id": 0, "id": 1}).to_list(100)
+    for org in orgs:
+        org_id = org["id"]
+        policy = await get_org_reminder_policy(org_id)
+        local_now = get_local_now(policy["timezone"])
+        date = local_now.strftime("%Y-%m-%d")
+        current_time = local_now.strftime("%H:%M")
+
+        if current_time >= policy["attendance_deadline"]:
+            missing_att = await compute_missing_attendance(org_id, date)
+            for m in missing_att:
+                await send_reminder_for_user(org_id, "MissingAttendance", date, m["user_id"], None, policy)
+
+        if current_time >= policy["work_report_deadline"]:
+            missing_rep = await compute_missing_work_reports(org_id, date)
+            for m in missing_rep:
+                await send_reminder_for_user(org_id, "MissingWorkReport", date, m["user_id"], m["project_id"], policy)
+
+        # Auto-resolve
+        open_reminders = await db.reminder_logs.find(
+            {"org_id": org_id, "date": date, "status": {"$in": ["Open", "Reminded"]}}, {"_id": 0}
+        ).to_list(1000)
+        for rl in open_reminders:
+            if rl["type"] == "MissingAttendance":
+                att = await db.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": rl["user_id"]})
+                if att:
+                    await auto_resolve_reminders(org_id, "MissingAttendance", date, rl["user_id"])
+            elif rl["type"] == "MissingWorkReport":
+                rep = await db.work_reports.find_one({
+                    "org_id": org_id, "date": date, "user_id": rl["user_id"],
+                    "project_id": rl.get("project_id"), "status": {"$in": ["Submitted", "Approved"]}
+                })
+                if rep:
+                    await auto_resolve_reminders(org_id, "MissingWorkReport", date, rl["user_id"])
+
+# ── Reminder Routes ──────────────────────────────────────────────
+
+@api_router.get("/reminders/policy")
+async def get_reminder_policy(user: dict = Depends(get_current_user)):
+    return await get_org_reminder_policy(user["org_id"])
+
+@api_router.get("/reminders/missing-attendance")
+async def api_missing_attendance(user: dict = Depends(get_current_user), date: str = ""):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+    if not date:
+        date = today_str()
+    scoped = None
+    if user["role"] == "SiteManager":
+        mgr = await db.project_team.find({"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}).to_list(100)
+        scoped = [m["project_id"] for m in mgr]
+    return await compute_missing_attendance(user["org_id"], date, scoped)
+
+@api_router.get("/reminders/missing-work-reports")
+async def api_missing_work_reports(user: dict = Depends(get_current_user), date: str = ""):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+    if not date:
+        date = today_str()
+    scoped = None
+    if user["role"] == "SiteManager":
+        mgr = await db.project_team.find({"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}).to_list(100)
+        scoped = [m["project_id"] for m in mgr]
+    return await compute_missing_work_reports(user["org_id"], date, scoped)
+
+@api_router.get("/reminders/logs")
+async def get_reminder_logs(user: dict = Depends(get_current_user), date: str = "", rtype: str = ""):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+    if not date:
+        date = today_str()
+    query = {"org_id": user["org_id"], "date": date}
+    if rtype:
+        query["type"] = rtype
+    if user["role"] == "SiteManager":
+        mgr = await db.project_team.find({"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}).to_list(100)
+        pids = [m["project_id"] for m in mgr]
+        members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0, "user_id": 1}).to_list(500)
+        uids = list({m["user_id"] for m in members})
+        query["user_id"] = {"$in": uids}
+
+    logs = await db.reminder_logs.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    for rl in logs:
+        u = await db.users.find_one({"id": rl["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        rl["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
+        rl["user_email"] = u["email"] if u else ""
+        if rl.get("project_id"):
+            p = await db.projects.find_one({"id": rl["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            rl["project_code"] = p["code"] if p else ""
+        else:
+            rl["project_code"] = ""
+    return logs
+
+@api_router.post("/reminders/send")
+async def send_reminders_manual(data: SendReminderRequest, user: dict = Depends(get_current_user)):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+    if data.type not in REMINDER_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid type. Must be: {', '.join(REMINDER_TYPES)}")
+
+    date = data.date or today_str()
+    policy = await get_org_reminder_policy(user["org_id"])
+    sent = 0
+    for uid in data.user_ids:
+        result = await send_reminder_for_user(user["org_id"], data.type, date, uid, data.project_id, policy, user["id"])
+        if result:
+            sent += 1
+    await log_audit(user["org_id"], user["id"], user["email"], "reminder_sent", "reminder", "", {"type": data.type, "count": sent, "date": date})
+    return {"sent": sent, "total": len(data.user_ids)}
+
+@api_router.post("/reminders/excuse")
+async def excuse_reminder(data: ExcuseRequest, user: dict = Depends(get_current_user)):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+
+    query = {"org_id": user["org_id"], "type": data.type, "date": data.date, "user_id": data.user_id}
+    if data.project_id:
+        query["project_id"] = data.project_id
+
+    existing = await db.reminder_logs.find_one(query)
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.reminder_logs.update_one({"id": existing["id"]}, {"$set": {
+            "status": "Excused", "excused_reason": data.reason, "resolved_by_user_id": user["id"], "updated_at": now,
+        }})
+    else:
+        await db.reminder_logs.insert_one({
+            "id": str(uuid.uuid4()), "org_id": user["org_id"], "type": data.type, "date": data.date,
+            "user_id": data.user_id, "project_id": data.project_id, "status": "Excused",
+            "reminder_count": 0, "last_reminded_at": None, "resolved_at": None,
+            "resolved_by_user_id": user["id"], "excused_reason": data.reason,
+            "created_at": now, "updated_at": now,
+        })
+    await log_audit(user["org_id"], user["id"], user["email"], "reminder_excused", "reminder", "", {"type": data.type, "user_id": data.user_id, "reason": data.reason})
+    return {"ok": True}
+
+@api_router.post("/internal/run-reminder-jobs")
+async def trigger_reminder_jobs():
+    await run_reminder_jobs()
+    return {"ok": True, "ran_at": datetime.now(timezone.utc).isoformat()}
+
+# ── Notification Routes ──────────────────────────────────────────
+
+@api_router.get("/notifications/my")
+async def get_my_notifications(user: dict = Depends(get_current_user), limit: int = 30):
+    notifs = await db.notifications.find(
+        {"org_id": user["org_id"], "user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    unread = await db.notifications.count_documents({"org_id": user["org_id"], "user_id": user["id"], "is_read": False})
+    return {"notifications": notifs, "unread_count": unread}
+
+@api_router.post("/notifications/mark-read")
+async def mark_notifications_read(user: dict = Depends(get_current_user)):
+    await db.notifications.update_many(
+        {"org_id": user["org_id"], "user_id": user["id"], "is_read": False},
+        {"$set": {"is_read": True}}
+    )
+    return {"ok": True}
+
 # ── Dashboard Stats ──────────────────────────────────────────────
 
 @api_router.get("/dashboard/stats")
