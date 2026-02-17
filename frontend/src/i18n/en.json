@@ -459,9 +459,10 @@
   "notifications": {
     "title": "Notifications",
     "subtitle": "Your notifications",
-    "markAllRead": "Mark all as read",
+    "markAllRead": "Mark all read",
     "markRead": "Mark as read",
     "noNotifications": "No notifications",
+    "noNotificationsYet": "No notifications yet",
     "new": "New",
     "unread": "Unread",
     "workReportReminder": "Work report reminder",
