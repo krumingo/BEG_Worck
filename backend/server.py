@@ -665,6 +665,255 @@ async def delete_phase(project_id: str, phase_id: str, user: dict = Depends(get_
         raise HTTPException(status_code=404, detail="Phase not found")
     return {"ok": True}
 
+# ── Attendance Helpers ────────────────────────────────────────────
+
+def today_str():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+def now_hour():
+    return datetime.now(timezone.utc).hour
+
+async def get_org_attendance_window(org_id: str):
+    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "attendance_start": 1, "attendance_end": 1})
+    start = org.get("attendance_start", "06:00") if org else "06:00"
+    end = org.get("attendance_end", "10:00") if org else "10:00"
+    return start, end
+
+async def get_user_active_project_ids(user_id: str):
+    members = await db.project_team.find({"user_id": user_id, "active": True}, {"_id": 0, "project_id": 1}).to_list(100)
+    pids = [m["project_id"] for m in members]
+    if not pids:
+        return []
+    active = await db.projects.find({"id": {"$in": pids}, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
+    return [p["id"] for p in active]
+
+async def is_past_deadline(org_id: str):
+    _, end = await get_org_attendance_window(org_id)
+    end_hour = int(end.split(":")[0])
+    return now_hour() >= end_hour
+
+async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source):
+    existing = await db.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": user_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Attendance already marked for this user today")
+
+    if status not in ATTENDANCE_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(ATTENDANCE_STATUSES)}")
+
+    # Auto-late if past deadline and user marks Present
+    if status == "Present" and await is_past_deadline(org_id) and marked_by == user_id:
+        status = "Late"
+
+    entry = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "date": date,
+        "project_id": project_id,
+        "user_id": user_id,
+        "status": status,
+        "note": note,
+        "marked_at": datetime.now(timezone.utc).isoformat(),
+        "marked_by_user_id": marked_by,
+        "source": source,
+    }
+    await db.attendance_entries.insert_one(entry)
+    return {k: v for k, v in entry.items() if k != "_id"}
+
+# ── Attendance Routes ────────────────────────────────────────────
+
+@api_router.post("/attendance/mark", status_code=201)
+async def mark_attendance_self(data: AttendanceMarkSelf, user: dict = Depends(get_current_user)):
+    date = today_str()
+    entry = await create_attendance_entry(
+        user["org_id"], date, data.project_id, user["id"],
+        data.status, data.note, user["id"], data.source
+    )
+    await log_audit(user["org_id"], user["id"], user["email"], "attendance_marked", "attendance", entry["id"],
+                    {"status": entry["status"], "date": date})
+    return entry
+
+@api_router.post("/attendance/mark-for-user", status_code=201)
+async def mark_attendance_for_user(data: AttendanceMarkForUser, user: dict = Depends(get_current_user)):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Only managers/admins can mark for others")
+
+    target = await db.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # SiteManager: verify they manage a project the target user is on
+    if user["role"] == "SiteManager":
+        mgr_projects = await db.project_team.find(
+            {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
+        ).to_list(100)
+        mgr_pids = {m["project_id"] for m in mgr_projects}
+        target_projects = await db.project_team.find(
+            {"user_id": data.user_id, "active": True}, {"_id": 0, "project_id": 1}
+        ).to_list(100)
+        target_pids = {m["project_id"] for m in target_projects}
+        if not mgr_pids & target_pids:
+            raise HTTPException(status_code=403, detail="User not in any of your managed projects")
+
+    date = today_str()
+    entry = await create_attendance_entry(
+        user["org_id"], date, data.project_id, data.user_id,
+        data.status, data.note, user["id"], data.source
+    )
+    await log_audit(user["org_id"], user["id"], user["email"], "attendance_overridden", "attendance", entry["id"],
+                    {"for_user": data.user_id, "status": entry["status"], "date": date})
+    return entry
+
+@api_router.get("/attendance/my-today")
+async def get_my_attendance_today(user: dict = Depends(get_current_user)):
+    date = today_str()
+    entry = await db.attendance_entries.find_one({"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0})
+    past_deadline = await is_past_deadline(user["org_id"])
+    active_pids = await get_user_active_project_ids(user["id"])
+    # Get project names
+    projects = []
+    if active_pids:
+        projs = await db.projects.find({"id": {"$in": active_pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
+        projects = projs
+    _, end = await get_org_attendance_window(user["org_id"])
+    return {
+        "entry": entry,
+        "date": date,
+        "past_deadline": past_deadline,
+        "deadline": end,
+        "active_projects": projects,
+    }
+
+@api_router.get("/attendance/my-range")
+async def get_my_attendance_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):
+    if not from_date:
+        from_date = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%d")
+    if not to_date:
+        to_date = today_str()
+    entries = await db.attendance_entries.find(
+        {"org_id": user["org_id"], "user_id": user["id"], "date": {"$gte": from_date, "$lte": to_date}},
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    return entries
+
+@api_router.get("/attendance/site-today")
+async def get_site_attendance_today(user: dict = Depends(get_current_user), project_id: str = ""):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+
+    date = today_str()
+    org_id = user["org_id"]
+
+    if project_id:
+        # Verify access
+        if user["role"] == "SiteManager":
+            mgr = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
+            if not mgr:
+                raise HTTPException(status_code=403, detail="Not managing this project")
+        members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
+    else:
+        # Admin/Owner: all org team members in active projects
+        if user["role"] == "SiteManager":
+            mgr_projects = await db.project_team.find(
+                {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
+            ).to_list(100)
+            pids = [m["project_id"] for m in mgr_projects]
+            members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+        else:
+            active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
+            pids = [p["id"] for p in active_projs]
+            members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+
+    # Deduplicate by user_id
+    seen = set()
+    unique_user_ids = []
+    for m in members:
+        if m["user_id"] not in seen:
+            seen.add(m["user_id"])
+            unique_user_ids.append(m["user_id"])
+
+    # Get attendance entries for today
+    entries_map = {}
+    if unique_user_ids:
+        entries = await db.attendance_entries.find(
+            {"org_id": org_id, "date": date, "user_id": {"$in": unique_user_ids}}, {"_id": 0}
+        ).to_list(500)
+        entries_map = {e["user_id"]: e for e in entries}
+
+    # Build response
+    result = []
+    for uid in unique_user_ids:
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
+        if not u:
+            continue
+        entry = entries_map.get(uid)
+        result.append({
+            "user_id": uid,
+            "user_name": f"{u['first_name']} {u['last_name']}",
+            "user_email": u["email"],
+            "user_role": u["role"],
+            "attendance": entry,
+            "marked": entry is not None,
+        })
+
+    missing_count = sum(1 for r in result if not r["marked"])
+    return {"users": result, "missing_count": missing_count, "date": date}
+
+@api_router.get("/attendance/missing-today")
+async def get_missing_attendance_today(user: dict = Depends(get_current_user), project_id: str = ""):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+
+    date = today_str()
+    org_id = user["org_id"]
+
+    if project_id:
+        if user["role"] == "SiteManager":
+            mgr = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
+            if not mgr:
+                raise HTTPException(status_code=403, detail="Not managing this project")
+        proj = await db.projects.find_one({"id": project_id, "org_id": org_id, "status": "Active"})
+        if not proj:
+            return {"missing": [], "count": 0}
+        members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
+    else:
+        if user["role"] == "SiteManager":
+            mgr_projects = await db.project_team.find(
+                {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
+            ).to_list(100)
+            pids = [m["project_id"] for m in mgr_projects]
+        else:
+            active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
+            pids = [p["id"] for p in active_projs]
+        members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+
+    seen = set()
+    unique_uids = []
+    for m in members:
+        if m["user_id"] not in seen:
+            seen.add(m["user_id"])
+            unique_uids.append(m["user_id"])
+
+    # Find who has no entry
+    marked_uids = set()
+    if unique_uids:
+        entries = await db.attendance_entries.find(
+            {"org_id": org_id, "date": date, "user_id": {"$in": unique_uids}}, {"_id": 0, "user_id": 1}
+        ).to_list(500)
+        marked_uids = {e["user_id"] for e in entries}
+
+    missing = []
+    for uid in unique_uids:
+        if uid not in marked_uids:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1})
+            if u:
+                missing.append({"user_id": uid, "user_name": f"{u['first_name']} {u['last_name']}", "user_email": u["email"]})
+
+    return {"missing": missing, "count": len(missing), "date": date}
+
+@api_router.get("/attendance/statuses")
+async def get_attendance_statuses():
+    return ATTENDANCE_STATUSES
+
 # ── Dashboard Stats ──────────────────────────────────────────────
 
 @api_router.get("/dashboard/stats")
