@@ -233,8 +233,8 @@
     "noPhases": "No phases added"
   },
   "offers": {
-    "title": "Offers & BOQ",
-    "subtitle": "Manage offers and bill of quantities",
+    "title": "Estimates & Offers",
+    "subtitle": "Manage quotes and bill of quantities",
     "newOffer": "New Offer",
     "editOffer": "Edit Offer",
     "offerNo": "Offer No.",
@@ -245,6 +245,7 @@
     "lines": "Lines",
     "linesCount": "{{count}} lines",
     "details": "Offer Details",
+    "offerDetails": "Offer Details",
     "boqLines": "BOQ Lines",
     "addLine": "Add Line",
     "activity": "Activity",
@@ -253,8 +254,12 @@
     "quantity": "Quantity",
     "materialUnit": "Material/unit",
     "laborUnit": "Labor/unit",
+    "matPerUnit": "Mat/Unit",
+    "labPerUnit": "Lab/Unit",
     "material": "Material",
     "labor": "Labor",
+    "mat": "Mat",
+    "lab": "Lab",
     "lineTotal": "Line Total",
     "subtotal": "Subtotal",
     "vat": "VAT",
@@ -267,6 +272,13 @@
     "newVersion": "New Version",
     "pickActivity": "Pick Activity",
     "importActivities": "Import Activities",
+    "projectTitleRequired": "Project and title are required",
+    "addLineBeforeSend": "Add at least one line before sending",
+    "rejectionReasonPrompt": "Rejection reason (optional):",
+    "selectActivityFromCatalog": "Select Activity from Catalog",
+    "noLinesYet": "No lines added yet",
+    "notesPlaceholder": "Additional notes...",
+    "currency": "Currency",
     "status": {
       "draft": "Draft",
       "sent": "Sent",
@@ -274,13 +286,13 @@
       "rejected": "Rejected",
       "archived": "Archived"
     },
-    "noOffers": "No offers",
+    "noOffers": "No offers found",
     "createFirstOffer": "Create your first offer",
     "noLines": "No lines added",
     "confirmSend": "Are you sure you want to send this offer?",
     "confirmAccept": "Are you sure you want to accept this offer?",
     "confirmReject": "Are you sure you want to reject this offer?",
-    "searchPlaceholder": "Search by number or title..."
+    "searchPlaceholder": "Search offers..."
   },
   "activities": {
     "title": "Activity Catalog",
