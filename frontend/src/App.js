@@ -10,6 +10,9 @@ import ModuleTogglesPage from "@/pages/ModuleTogglesPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import ProjectsListPage from "@/pages/ProjectsListPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
+import MyDayPage from "@/pages/MyDayPage";
+import AttendanceHistoryPage from "@/pages/AttendanceHistoryPage";
+import SiteAttendancePage from "@/pages/SiteAttendancePage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -40,6 +43,9 @@ function App() {
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsListPage /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
+          <Route path="/my-day" element={<ProtectedRoute><MyDayPage /></ProtectedRoute>} />
+          <Route path="/attendance-history" element={<ProtectedRoute><AttendanceHistoryPage /></ProtectedRoute>} />
+          <Route path="/site-attendance" element={<ProtectedRoute><SiteAttendancePage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />

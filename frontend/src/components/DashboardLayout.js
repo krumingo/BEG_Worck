@@ -10,17 +10,28 @@ import {
   ChevronRight,
   HardHat,
   FolderKanban,
+  CalendarCheck,
+  CalendarDays,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
-const NAV_ITEMS = [
+const ADMIN_NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/projects", icon: FolderKanban, label: "Projects" },
+  { to: "/site-attendance", icon: ClipboardList, label: "Site Attendance" },
   { to: "/users", icon: Users, label: "Users & Roles" },
   { to: "/settings", icon: Building2, label: "Company Settings" },
   { to: "/modules", icon: Blocks, label: "Modules" },
   { to: "/audit-log", icon: ScrollText, label: "Audit Log" },
+];
+
+const WORKER_NAV = [
+  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/my-day", icon: CalendarCheck, label: "My Day" },
+  { to: "/attendance-history", icon: CalendarDays, label: "History" },
+  { to: "/projects", icon: FolderKanban, label: "Projects" },
 ];
 
 export default function DashboardLayout({ children }) {
@@ -50,7 +61,7 @@ export default function DashboardLayout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" data-testid="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
+          {(["Admin","Owner","SiteManager"].includes(user?.role) ? ADMIN_NAV : WORKER_NAV).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
