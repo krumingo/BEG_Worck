@@ -43,6 +43,7 @@ const STATUS_COLORS = {
 };
 
 export default function WorkReportReviewPage() {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
