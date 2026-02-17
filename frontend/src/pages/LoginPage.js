@@ -1,0 +1,107 @@
+import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { HardHat, Loader2, AlertCircle } from "lucide-react";
+
+export default function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await login(email, password);
+      navigate("/");
+    } catch (err) {
+      setError(err.response?.data?.detail || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4" data-testid="login-page">
+      {/* Subtle grid bg */}
+      <div className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: "radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)",
+          backgroundSize: "40px 40px",
+        }}
+      />
+
+      <div className="relative w-full max-w-[400px] animate-in" data-testid="login-card">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
+            <HardHat className="w-7 h-7 text-primary-foreground" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">BEG_Work</h1>
+          <p className="text-sm text-muted-foreground mt-1">Construction Management Platform</p>
+        </div>
+
+        {/* Form */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm" data-testid="login-error">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm text-muted-foreground">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@begwork.com"
+                required
+                className="bg-background border-border"
+                data-testid="login-email-input"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm text-muted-foreground">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                required
+                className="bg-background border-border"
+                data-testid="login-password-input"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full h-11 font-semibold"
+              disabled={loading}
+              data-testid="login-submit-button"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Sign In
+            </Button>
+          </form>
+
+          <p className="text-center text-xs text-muted-foreground mt-4">
+            Demo: admin@begwork.com / admin123
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
