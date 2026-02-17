@@ -548,11 +548,11 @@ export default function OfferEditorPage() {
 
           {/* Notes */}
           <div className="rounded-xl border border-border bg-card p-5">
-            <Label className="mb-2 block">Notes</Label>
+            <Label className="mb-2 block">{t("common.notes")}</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Additional notes..."
+              placeholder={t("offers.notesPlaceholder")}
               disabled={!canEdit}
               className="bg-background min-h-[80px]"
               data-testid="notes-textarea"
@@ -563,18 +563,18 @@ export default function OfferEditorPage() {
         {/* Sidebar - Totals */}
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5 sticky top-6" data-testid="totals-card">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Summary</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-4">{t("offers.summary")}</h3>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
+                <span className="text-muted-foreground">{t("offers.subtotal")}</span>
                 <span className="font-mono text-foreground">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">VAT ({vatPercent}%)</span>
+                <span className="text-muted-foreground">{t("offers.vat")} ({vatPercent}%)</span>
                 <span className="font-mono text-foreground">{formatCurrency(vatAmount)}</span>
               </div>
               <div className="border-t border-border pt-3 flex justify-between">
-                <span className="font-semibold text-foreground">Total</span>
+                <span className="font-semibold text-foreground">{t("common.total")}</span>
                 <span className="font-mono text-lg font-bold text-primary">{formatCurrency(total)}</span>
               </div>
             </div>
@@ -586,11 +586,11 @@ export default function OfferEditorPage() {
       <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card border-border" data-testid="activity-picker-dialog">
           <DialogHeader>
-            <DialogTitle>Select Activity from Catalog</DialogTitle>
+            <DialogTitle>{t("offers.selectActivityFromCatalog")}</DialogTitle>
           </DialogHeader>
           <div className="max-h-[300px] overflow-y-auto space-y-2">
             {activities.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No activities in catalog</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t("activities.noActivities")}</p>
             ) : (
               activities.map((act) => (
                 <div
@@ -602,14 +602,14 @@ export default function OfferEditorPage() {
                   <p className="font-medium text-foreground">{act.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {act.code && `${act.code} · `}
-                    {act.default_unit} · Mat: {formatCurrency(act.default_material_unit_cost)} · Lab: {formatCurrency(act.default_labor_unit_cost)}
+                    {act.default_unit} · {t("offers.mat")}: {formatCurrency(act.default_material_unit_cost)} · {t("offers.lab")}: {formatCurrency(act.default_labor_unit_cost)}
                   </p>
                 </div>
               ))
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setActivityDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setActivityDialogOpen(false)}>{t("common.cancel")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
