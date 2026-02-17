@@ -11,6 +11,10 @@ class BEGWorkAPITester:
         self.tests_passed = 0
         self.failed_tests = []
         self.admin_credentials = {"email": "admin@begwork.com", "password": "admin123"}
+        self.tech_credentials = {"email": "tech1@begwork.com", "password": "tech123"}
+        self.created_project_id = None
+        self.existing_project_id = None
+        self.tech_user_id = None
 
     def log_result(self, test_name, success, details=""):
         """Log test result"""
