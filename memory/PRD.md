@@ -1,10 +1,10 @@
 # BEG_Work - Construction Company Management SaaS
 
 ## Architecture
-- **Backend**: FastAPI + MongoDB (motor async) — server.py ~2100 lines
-- **Frontend**: React 19 + Tailwind CSS + Radix UI (shadcn) — 19 pages
+- **Backend**: FastAPI + MongoDB (motor async) — server.py ~2800 lines
+- **Frontend**: React 19 + Tailwind CSS + Radix UI (shadcn) — 24 pages
 - **Auth**: JWT + bcrypt
-- **DB Collections**: organizations, users, feature_flags, subscriptions, audit_logs, projects, project_team, project_phases, attendance_entries, work_reports, reminder_logs, notifications, offers, activity_catalog
+- **DB Collections**: organizations, users, feature_flags, subscriptions, audit_logs, projects, project_team, project_phases, attendance_entries, work_reports, reminder_logs, notifications, offers, activity_catalog, employee_profiles, advances, payroll_runs, payslips, payroll_payments
 
 ## Modules Status
 | Code | Name | Status |
@@ -14,7 +14,7 @@
 | M3 | Attendance & Reports | DONE (Iter 3-4) |
 | M9 | Reminders & Alerts | DONE (Iter 5) |
 | M2 | Estimates / BOQ | DONE (Iter 6) |
-| M4 | HR / Payroll | Backlog |
+| M4 | HR / Payroll | DONE (Iter 7) |
 | M5 | Finance | Backlog |
 | M6 | AI Invoice Capture | Backlog |
 | M7 | Inventory | Backlog |
@@ -37,50 +37,56 @@
 ### Iteration 4 - M3 Daily Work Reports
 - WorkReport model: Draft→Submitted→Approved/Rejected workflow
 - Lines embedded (activity_name + hours + note), total_hours computed
-- Uniqueness per (org, date, user, project), requires Present/Late attendance
 
 ### Iteration 5 - M9 Reminders & Alerts
 - ReminderLog/Notification models, 7 API endpoints, 15-min scheduler
 - NotificationBell, NotificationsPage, RemindersPage, Dashboard widgets
 
-### Iteration 6 - M2 Estimates / BOQ (2026-02-17)
-**Data Models:**
-- Offer: id, orgId, projectId, offerNo (unique/org), title, status (Draft|Sent|Accepted|Rejected|Archived), version, parentOfferId, currency, vatPercent, subtotal, vatAmount, total, notes, timestamps
-- OfferLine (embedded): id, activityCode, activityName, unit, qty, materialUnitCost, laborUnitCost, laborHoursPerUnit, lineMaterialCost, lineLaborCost, lineTotal, note, sortOrder
-- ActivityCatalogItem: id, orgId, projectId, code, name, defaultUnit, defaultMaterialUnitCost, defaultLaborUnitCost, defaultLaborHoursPerUnit, active
+### Iteration 6 - M2 Estimates / BOQ
+- Offer model with versioning, BOQ lines with material+labor costing
+- ActivityCatalogItem per project for reusable activities
+- Workflow: Draft→Sent→Accepted/Rejected, New Version creates clone
 
-**Rules:**
-- OfferNo unique per org (format: OFF-0001)
-- Versioning: "New Version" clones lines, increments version, sets parentOfferId
-- Accepted offers locked (no edits), new version required
+### Iteration 7 - M4 HR / Payroll-lite (2026-02-17)
+**Data Models:**
+- EmployeeProfile: userId, payType (Hourly|Daily|Monthly), hourlyRate, dailyRate, monthlySalary, standardHoursPerDay, paySchedule, active, startDate
+- AdvanceLoan: userId, type (Advance|Loan), amount, remainingAmount, status (Open|Closed), issuedDate, note
+- PayrollRun: periodType, periodStart, periodEnd, status (Draft|Finalized|Paid)
+- Payslip: payrollRunId, userId, baseAmount, deductionsAmount, advancesDeductedAmount, netPay, detailsJson, status
+- PayrollPayment: payslipId, amount, method (Cash|BankTransfer), reference, paidAt
+
+**Pay Calculation Logic:**
+- Hourly: sum(hours from WorkReports in period) × hourlyRate
+- Daily: count(Present/Late attendance in period) × dailyRate
+- Monthly: fixed monthlySalary
+
+**Payroll Workflow:**
+1. Create payroll run (Draft)
+2. Generate payslips (creates for all active employee profiles)
+3. Set deductions per payslip (manual + advance selections)
+4. Finalize (locks payroll, payslips → Finalized)
+5. Mark individual payslips as paid (creates PayrollPayment, deducts from advances)
 
 **API Endpoints:**
-- POST /api/offers - Create draft offer
-- GET /api/offers?projectId=&status= - List with filters
-- GET /api/offers/{id} - Get single offer
-- PUT /api/offers/{id} - Update draft
-- PUT /api/offers/{id}/lines - Update BOQ lines
-- POST /api/offers/{id}/send - Send offer
-- POST /api/offers/{id}/accept - Accept (Admin/Owner)
-- POST /api/offers/{id}/reject - Reject (Admin/Owner)
-- POST /api/offers/{id}/new-version - Clone to new version
-- DELETE /api/offers/{id} - Delete (not accepted)
-- CRUD /api/activity-catalog - Activity catalog management
-- GET /api/offer-enums - Status and unit enums
+- CRUD /api/employees - employee profile management
+- CRUD /api/advances - advances/loans with deduction tracking
+- /api/payroll-runs - create, generate, finalize, delete
+- /api/payslips - list, get, set-deductions, mark-paid
+- /api/payroll-enums - enums for UI
 
 **Frontend:**
-- OffersListPage: Table with filters (search, project, status)
-- OfferEditorPage: BOQ table with live totals, actions (Save, Send, Accept, Reject, New Version)
-- ActivityCatalogPage: CRUD table with dialog form
-- WorkReportFormPage: Optional activity picker from catalog
-- DashboardLayout: Offers and Activities navigation links
+- EmployeesPage: configure pay types and rates
+- AdvancesPage: create advances/loans, track remaining balances
+- PayrollRunsPage: create payroll runs, view status
+- PayrollDetailPage: generate payslips, set deductions, finalize, mark paid
+- MyPayslipsPage: technician view of own payslips
 
-**Testing:** Backend 100% (25/25), Frontend 100%
+**Testing:** Backend 100% (20/20), Frontend 100%
 
 ## Credentials
 - Admin: admin@begwork.com / admin123
-- Tech1: tech1@begwork.com / tech123
-- Tech2: tech2@begwork.com / tech123
+- Tech1: tech1@begwork.com / tech123 (Daily @€120/day)
+- Tech2: tech2@begwork.com / tech123 (Hourly @€18.5/hr)
 
 ## API Endpoints Summary
 - `/api/auth/` - login, me
@@ -89,18 +95,21 @@
 - `/api/feature-flags` - module toggles
 - `/api/audit-logs` - activity logs
 - `/api/projects` - CRUD with team/phases
-- `/api/attendance` - mark, my-today, my-range, site-today, missing-today
-- `/api/work-reports` - draft, edit, submit, approve, reject, list
-- `/api/reminders` - policy, missing-attendance, missing-work-reports, logs, send, excuse
+- `/api/attendance` - mark, my-today, my-range, site-today
+- `/api/work-reports` - draft, edit, submit, approve, reject
+- `/api/reminders` - policy, missing-attendance, missing-work-reports
 - `/api/notifications` - my, mark-read
-- `/api/offers` - CRUD, send, accept, reject, new-version, lines
+- `/api/offers` - CRUD, send, accept, reject, new-version
 - `/api/activity-catalog` - CRUD
-- `/api/dashboard/stats` - dashboard statistics
+- `/api/employees` - employee profiles
+- `/api/advances` - advances/loans
+- `/api/payroll-runs` - create, generate, finalize
+- `/api/payslips` - list, set-deductions, mark-paid
+- `/api/dashboard/stats` - statistics
 
 ## Next Tasks (Priority Order)
-1. **M4 HR/Payroll-lite** - pay types (hourly/daily/monthly), advances/loans, payslips
-2. **M5 Finance** - invoices issued/received, payments
-3. **M9 Overhead Cost System** - cost tracking and calculation
-4. **M6 AI Invoice Capture** - upload, parse, approval queue
-5. **M7 Inventory** - items, stock movements, warehouses
-6. **M8 Assets & QR** - checkout/checkin, maintenance, warranty
+1. **M5 Finance** - invoices issued/received, payments tracking, bank reconciliation
+2. **M9 Overhead Cost System** - cost tracking, allocation, reporting
+3. **M6 AI Invoice Capture** - upload, OCR/AI parsing, approval queue
+4. **M7 Inventory** - items, stock movements, warehouses
+5. **M8 Assets & QR** - checkout/checkin, maintenance, warranty
