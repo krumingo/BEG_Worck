@@ -769,6 +769,303 @@ class BEGWorkAPITester:
             details = response.text if hasattr(response, 'text') else str(response)
             return self.log_result("Audit logging for projects", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
 
+    # ═══ M3 ATTENDANCE MODULE TESTS ═══
+
+    def test_attendance_statuses_endpoint(self):
+        """Test GET /api/attendance/statuses returns enum list"""
+        success, response = self.make_request('GET', 'attendance/statuses', expected_status=200)
+        
+        if success:
+            data = response.json()
+            expected_statuses = ["Present", "Absent", "Late", "SickLeave", "Vacation"]
+            if isinstance(data, list) and set(data) == set(expected_statuses):
+                return self.log_result("GET /attendance/statuses", True, f"Found all attendance statuses: {data}")
+            else:
+                return self.log_result("GET /attendance/statuses", False, f"Expected {expected_statuses}, got {data}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/statuses", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_self_mark_attendance(self):
+        """Test POST /api/attendance/mark - self marking creates entry with uniqueness enforcement"""
+        mark_data = {
+            "status": "Present",
+            "note": "Self-marked via API test",
+            "source": "Test"
+        }
+        
+        success, response = self.make_request('POST', 'attendance/mark', mark_data, 201)
+        
+        if success:
+            data = response.json()
+            required_fields = ['id', 'date', 'user_id', 'status', 'marked_at', 'marked_by_user_id']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                self.attendance_entry_id = data.get('id')
+                return self.log_result("POST /attendance/mark", True, 
+                    f"Self-marked as {data['status']}, entry ID: {data['id'][:8]}...")
+            else:
+                return self.log_result("POST /attendance/mark", False, f"Missing fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /attendance/mark", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_self_mark_duplicate_attendance(self):
+        """Test POST /api/attendance/mark duplicate should return 400 (uniqueness constraint)"""
+        mark_data = {
+            "status": "Present", 
+            "note": "Duplicate test",
+            "source": "Test"
+        }
+        
+        success, response = self.make_request('POST', 'attendance/mark', mark_data, 400)
+        return self.log_result("POST /attendance/mark duplicate", success, "Should reject duplicate attendance for same user/date")
+
+    def test_mark_for_user_as_admin(self):
+        """Test POST /api/attendance/mark-for-user - admin can mark for any org user"""
+        if not self.tech_user_id:
+            return self.log_result("POST /attendance/mark-for-user (Admin)", False, "No tech user ID available")
+        
+        mark_data = {
+            "user_id": self.tech_user_id,
+            "status": "Present", 
+            "note": "Admin marked for tech user",
+            "source": "Test"
+        }
+        
+        success, response = self.make_request('POST', 'attendance/mark-for-user', mark_data, 201)
+        
+        if success:
+            data = response.json()
+            if data.get('user_id') == self.tech_user_id and data.get('status') == 'Present':
+                return self.log_result("POST /attendance/mark-for-user (Admin)", True, 
+                    f"Admin marked tech user as {data['status']}")
+            else:
+                return self.log_result("POST /attendance/mark-for-user (Admin)", False, "Response data incorrect")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("POST /attendance/mark-for-user (Admin)", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_mark_for_user_invalid_user(self):
+        """Test POST /api/attendance/mark-for-user with invalid user_id should return 404"""
+        mark_data = {
+            "user_id": "invalid-user-id",
+            "status": "Present",
+            "source": "Test"
+        }
+        
+        success, response = self.make_request('POST', 'attendance/mark-for-user', mark_data, 404)
+        return self.log_result("POST /attendance/mark-for-user invalid user", success, "Should reject invalid user_id")
+
+    def test_mark_for_user_as_technician(self):
+        """Test POST /api/attendance/mark-for-user as Technician should return 403 (insufficient permissions)"""
+        # Switch to technician token
+        admin_token = self.token
+        
+        # Login as technician
+        success, response = self.make_request('POST', 'auth/login', self.tech_credentials, 200)
+        if not success:
+            return self.log_result("Technician login for attendance test", False, "Failed to login as technician")
+        
+        self.token = response.json()['token']
+        
+        # Try to mark for someone else (should fail)
+        mark_data = {
+            "user_id": "some-other-user-id",
+            "status": "Present",
+            "source": "Test"
+        }
+        
+        success, response = self.make_request('POST', 'attendance/mark-for-user', mark_data, 403)
+        result = self.log_result("POST /attendance/mark-for-user (Technician)", success, 
+            "Technician should not be able to mark for others")
+        
+        # Restore admin token
+        self.token = admin_token
+        return result
+
+    def test_get_my_today_attendance(self):
+        """Test GET /api/attendance/my-today returns entry, deadline info, active projects"""
+        success, response = self.make_request('GET', 'attendance/my-today', expected_status=200)
+        
+        if success:
+            data = response.json()
+            required_fields = ['date', 'past_deadline', 'deadline', 'active_projects']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                has_entry = data.get('entry') is not None
+                return self.log_result("GET /attendance/my-today", True, 
+                    f"Entry: {'Yes' if has_entry else 'No'}, Past deadline: {data['past_deadline']}, Deadline: {data['deadline']}")
+            else:
+                return self.log_result("GET /attendance/my-today", False, f"Missing fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/my-today", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_my_range_attendance(self):
+        """Test GET /api/attendance/my-range returns entries for date range (last 14 days default)"""
+        success, response = self.make_request('GET', 'attendance/my-range', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if isinstance(data, list):
+                return self.log_result("GET /attendance/my-range", True, 
+                    f"Found {len(data)} attendance entries in range")
+            else:
+                return self.log_result("GET /attendance/my-range", False, "Response not a list")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/my-range", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_my_range_attendance_custom_dates(self):
+        """Test GET /api/attendance/my-range with custom date range"""
+        success, response = self.make_request('GET', 'attendance/my-range?from_date=2024-01-01&to_date=2024-01-31', expected_status=200)
+        
+        if success:
+            data = response.json()
+            if isinstance(data, list):
+                return self.log_result("GET /attendance/my-range custom dates", True, 
+                    f"Custom range returned {len(data)} entries")
+            else:
+                return self.log_result("GET /attendance/my-range custom dates", False, "Response not a list")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/my-range custom dates", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_site_today_attendance_admin(self):
+        """Test GET /api/attendance/site-today - returns users with attendance status, missing count"""
+        success, response = self.make_request('GET', 'attendance/site-today', expected_status=200)
+        
+        if success:
+            data = response.json()
+            required_fields = ['users', 'missing_count', 'date']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                users = data.get('users', [])
+                missing_count = data.get('missing_count', 0)
+                return self.log_result("GET /attendance/site-today", True, 
+                    f"Found {len(users)} users, {missing_count} missing attendance")
+            else:
+                return self.log_result("GET /attendance/site-today", False, f"Missing fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/site-today", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_site_today_attendance_with_project_filter(self):
+        """Test GET /api/attendance/site-today?project_id=X - filtered by project"""
+        if not self.existing_project_id:
+            return self.log_result("GET /attendance/site-today with project filter", False, "No project ID available")
+        
+        success, response = self.make_request('GET', f'attendance/site-today?project_id={self.existing_project_id}', expected_status=200)
+        
+        if success:
+            data = response.json()
+            users = data.get('users', [])
+            return self.log_result("GET /attendance/site-today with project filter", True, 
+                f"Project-filtered view returned {len(users)} users")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/site-today with project filter", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_missing_today_attendance(self):
+        """Test GET /api/attendance/missing-today - returns users without entries today"""
+        success, response = self.make_request('GET', 'attendance/missing-today', expected_status=200)
+        
+        if success:
+            data = response.json()
+            required_fields = ['missing', 'count', 'date']
+            missing_fields = [f for f in required_fields if f not in data]
+            if not missing_fields:
+                missing_users = data.get('missing', [])
+                count = data.get('count', 0)
+                return self.log_result("GET /attendance/missing-today", True, 
+                    f"Found {count} users missing attendance")
+            else:
+                return self.log_result("GET /attendance/missing-today", False, f"Missing fields: {missing_fields}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/missing-today", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_get_missing_today_attendance_with_project_filter(self):
+        """Test GET /api/attendance/missing-today?project_id=X"""
+        if not self.existing_project_id:
+            return self.log_result("GET /attendance/missing-today with project filter", False, "No project ID available")
+        
+        success, response = self.make_request('GET', f'attendance/missing-today?project_id={self.existing_project_id}', expected_status=200)
+        
+        if success:
+            data = response.json()
+            missing_users = data.get('missing', [])
+            return self.log_result("GET /attendance/missing-today with project filter", True, 
+                f"Project-filtered missing list: {len(missing_users)} users")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("GET /attendance/missing-today with project filter", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_site_attendance_as_technician(self):
+        """Test site attendance endpoints as Technician should return 403 (manager access required)"""
+        # Switch to technician token
+        admin_token = self.token
+        
+        # Login as technician  
+        success, response = self.make_request('POST', 'auth/login', self.tech_credentials, 200)
+        if not success:
+            return self.log_result("Technician login for site attendance test", False, "Failed to login as technician")
+        
+        self.token = response.json()['token']
+        
+        # Test site-today (should fail)
+        success1, _ = self.make_request('GET', 'attendance/site-today', expected_status=403)
+        
+        # Test missing-today (should fail)
+        success2, _ = self.make_request('GET', 'attendance/missing-today', expected_status=403)
+        
+        result = success1 and success2
+        self.log_result("Site attendance endpoints (Technician)", result, 
+            "Technician should not access site attendance endpoints")
+        
+        # Restore admin token
+        self.token = admin_token
+        return result
+
+    def test_dashboard_stats_attendance_fields(self):
+        """Test GET /api/dashboard/stats includes attendance fields (today_marked, today_present)"""
+        success, response = self.make_request('GET', 'dashboard/stats', expected_status=200)
+        
+        if success:
+            data = response.json()
+            attendance_fields = ['today_marked', 'today_present']
+            missing = [f for f in attendance_fields if f not in data]
+            if not missing:
+                return self.log_result("Dashboard stats attendance fields", True, 
+                    f"Today marked: {data['today_marked']}, Today present: {data['today_present']}")
+            else:
+                return self.log_result("Dashboard stats attendance fields", False, f"Missing attendance fields: {missing}")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("Dashboard stats attendance fields", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
+    def test_audit_logging_for_attendance(self):
+        """Test that attendance actions are logged in audit trail (attendance_marked, attendance_overridden)"""
+        success, response = self.make_request('GET', 'audit-logs?limit=30', expected_status=200)
+        
+        if success:
+            data = response.json()
+            logs = data.get('logs', [])
+            
+            # Look for attendance-related actions
+            attendance_actions = [log for log in logs if log.get('entity_type') == 'attendance' and 
+                                log.get('action') in ['attendance_marked', 'attendance_overridden']]
+            
+            if len(attendance_actions) >= 1:
+                actions_found = [f"{log['action']}" for log in attendance_actions[:3]]
+                return self.log_result("Audit logging for attendance", True, f"Found attendance actions: {actions_found}")
+            else:
+                return self.log_result("Audit logging for attendance", False, "No attendance actions found in audit log")
+        else:
+            details = response.text if hasattr(response, 'text') else str(response)
+            return self.log_result("Audit logging for attendance", False, f"Status: {getattr(response, 'status_code', 'N/A')} - {details}")
+
     def run_all_tests(self):
         """Run all backend API tests"""
         print("🔬 Starting BEG_Work API Tests - M0 Core + M1 Projects")
