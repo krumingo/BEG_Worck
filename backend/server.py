@@ -1186,6 +1186,9 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
     today_marked = await db.attendance_entries.count_documents({"org_id": org_id, "date": date})
     today_present = await db.attendance_entries.count_documents({"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}})
 
+    # Work report stats
+    pending_reports = await db.work_reports.count_documents({"org_id": org_id, "date": date, "status": "Submitted"})
+
     return {
         "active_projects": status_counts.get("Active", 0),
         "paused_projects": status_counts.get("Paused", 0),
@@ -1195,6 +1198,7 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         "users_count": users_count,
         "today_marked": today_marked,
         "today_present": today_present,
+        "pending_reports": pending_reports,
     }
 
 @api_router.get("/project-enums")
@@ -1247,6 +1251,9 @@ async def startup():
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])
+    await db.work_reports.create_index([("org_id", 1), ("date", 1), ("user_id", 1), ("project_id", 1)], unique=True)
+    await db.work_reports.create_index([("org_id", 1), ("date", 1)])
+    await db.work_reports.create_index([("org_id", 1), ("user_id", 1)])
 
 @app.on_event("shutdown")
 async def shutdown():
