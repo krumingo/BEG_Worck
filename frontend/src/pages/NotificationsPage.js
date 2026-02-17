@@ -54,11 +54,11 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Bell className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-bold text-foreground">Notifications</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("notifications.title")}</h1>
         </div>
         {unreadCount > 0 && (
           <Button variant="ghost" size="sm" onClick={handleMarkRead} data-testid="mark-all-read">
-            <CheckCircle2 className="w-4 h-4 mr-1" /> Mark all read
+            <CheckCircle2 className="w-4 h-4 mr-1" /> {t("notifications.markAllRead")}
           </Button>
         )}
       </div>
@@ -66,7 +66,7 @@ export default function NotificationsPage() {
       {notifications.length === 0 ? (
         <div className="text-center py-16">
           <Bell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
-          <p className="text-muted-foreground">No notifications yet</p>
+          <p className="text-muted-foreground">{t("notifications.noNotificationsYet")}</p>
         </div>
       ) : (
         <div className="space-y-2" data-testid="notifications-list">
@@ -90,21 +90,21 @@ export default function NotificationsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <p className="text-sm font-semibold text-foreground">{n.title}</p>
-                    {!n.is_read && <Badge variant="default" className="text-[9px] px-1 py-0">New</Badge>}
+                    {!n.is_read && <Badge variant="default" className="text-[9px] px-1 py-0">{t("notifications.new")}</Badge>}
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">{n.message}</p>
                   <div className="flex items-center gap-2">
                     {isMissAtt ? (
                       <Button size="sm" variant="outline" onClick={() => navigate("/my-day")} data-testid={`cta-attendance-${n.id}`}>
-                        Mark Attendance <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                        {t("attendance.markAttendance")} <ArrowRight className="w-3.5 h-3.5 ml-1" />
                       </Button>
                     ) : (
                       <Button size="sm" variant="outline" onClick={() => navigate(`/work-reports/new${n.data?.project_id ? `?projectId=${n.data.project_id}` : ""}`)} data-testid={`cta-report-${n.id}`}>
-                        Fill Report <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                        {t("workReports.fillReport")} <ArrowRight className="w-3.5 h-3.5 ml-1" />
                       </Button>
                     )}
                     <span className="text-[11px] text-muted-foreground">
-                      {new Date(n.created_at).toLocaleString()}
+                      {formatDateTime(n.created_at, i18n.language)}
                     </span>
                   </div>
                 </div>
