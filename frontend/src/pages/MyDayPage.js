@@ -114,11 +114,11 @@ export default function MyDayPage() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 mb-2">
           <CalendarDays className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-bold text-foreground">My Day</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("attendance.myDay")}</h1>
         </div>
-        <p className="text-lg text-muted-foreground">{new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+        <p className="text-lg text-muted-foreground">{formatDate(new Date(), i18n.language, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         <p className="text-xs text-muted-foreground mt-1">
-          {user?.first_name} {user?.last_name} &middot; {user?.role}
+          {user?.first_name} {user?.last_name} &middot; {user?.role ? t(`users.roles.${user.role.toLowerCase()}`, user.role) : ""}
         </p>
       </div>
 
@@ -127,8 +127,8 @@ export default function MyDayPage() {
         <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 mb-6" data-testid="late-warning">
           <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-amber-400">Past Deadline ({data?.deadline})</p>
-            <p className="text-xs text-muted-foreground">Your attendance will be marked as Late</p>
+            <p className="text-sm font-medium text-amber-400">{t("myDay.pastDeadline")} ({data?.deadline})</p>
+            <p className="text-xs text-muted-foreground">{t("myDay.markedAsLate")}</p>
           </div>
         </div>
       )}
@@ -144,10 +144,10 @@ export default function MyDayPage() {
                 <div className={`w-16 h-16 rounded-full ${cfg.bg} border flex items-center justify-center mx-auto mb-4`}>
                   <Icon className={`w-8 h-8 ${cfg.color}`} />
                 </div>
-                <h2 className="text-lg font-bold text-foreground mb-1">Attendance Recorded</h2>
-                <Badge variant="outline" className={`text-sm mb-2 ${cfg.bg} ${cfg.color}`}>{data.entry.status}</Badge>
+                <h2 className="text-lg font-bold text-foreground mb-1">{t("myDay.attendanceRecorded")}</h2>
+                <Badge variant="outline" className={`text-sm mb-2 ${cfg.bg} ${cfg.color}`}>{t(`attendance.statusLabels.${data.entry.status.toLowerCase()}`, data.entry.status)}</Badge>
                 <p className="text-xs text-muted-foreground">
-                  Marked at {new Date(data.entry.marked_at).toLocaleTimeString()}
+                  {t("myDay.markedAt")} {formatTime(data.entry.marked_at, i18n.language)}
                 </p>
                 {data.entry.note && (
                   <p className="text-sm text-muted-foreground mt-3 italic">"{data.entry.note}"</p>
@@ -161,10 +161,10 @@ export default function MyDayPage() {
           {/* Project Selection */}
           {activeProjects.length > 0 && (
             <div className="mb-6">
-              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Active Project</label>
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">{t("myDay.activeProject")}</label>
               <Select value={selectedProject} onValueChange={setSelectedProject}>
                 <SelectTrigger className="bg-card border-border h-12 text-base" data-testid="project-select">
-                  <SelectValue placeholder="Select project..." />
+                  <SelectValue placeholder={t("workReports.selectProject")} />
                 </SelectTrigger>
                 <SelectContent>
                   {activeProjects.map((p) => (
@@ -183,7 +183,7 @@ export default function MyDayPage() {
             data-testid="mark-present-button"
           >
             {marking ? <Loader2 className="w-6 h-6 animate-spin mr-3" /> : <CheckCircle2 className="w-7 h-7 mr-3" />}
-            {pastDeadline ? "I'm at Work (Late)" : "I'm at Work"}
+            {pastDeadline ? t("myDay.imAtWorkLate") : t("myDay.imAtWork")}
           </Button>
 
           {/* Secondary Actions */}
@@ -200,7 +200,7 @@ export default function MyDayPage() {
                   data-testid={`mark-${s.toLowerCase()}-button`}
                 >
                   <Icon className={`w-6 h-6 ${cfg.color}`} />
-                  <span className="text-xs font-medium text-foreground">{cfg.label}</span>
+                  <span className="text-xs font-medium text-foreground">{t(cfg.labelKey)}</span>
                 </button>
               );
             })}
@@ -209,7 +209,7 @@ export default function MyDayPage() {
           {/* Note */}
           <div className="mb-4">
             <Textarea
-              placeholder="Add a note (optional)..."
+              placeholder={t("myDay.addNote")}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="bg-card border-border min-h-[60px] text-sm"
@@ -223,7 +223,7 @@ export default function MyDayPage() {
       {needsReport && (
         <div className="space-y-3" data-testid="work-report-section">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <FileText className="w-4 h-4 text-primary" /> End-of-Day Reports
+            <FileText className="w-4 h-4 text-primary" /> {t("workReports.endOfDayReports")}
           </h3>
 
           {activeProjects.length === 0 && reports.length === 0 ? (
@@ -233,7 +233,7 @@ export default function MyDayPage() {
                 className="w-full h-14 text-base rounded-xl bg-primary hover:bg-primary/90"
                 data-testid="fill-report-button"
               >
-                <FileText className="w-5 h-5 mr-2" /> Fill End-of-Day Report
+                <FileText className="w-5 h-5 mr-2" /> {t("workReports.fillReport")}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
@@ -247,10 +247,10 @@ export default function MyDayPage() {
                       <p className="text-sm font-medium text-foreground">{proj.code} - {proj.name}</p>
                       {rep ? (
                         <Badge variant="outline" className={`text-xs mt-1 ${REPORT_STATUS_COLORS[rep.status] || ""}`}>
-                          {rep.status} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
+                          {t(`workReports.status.${rep.status.toLowerCase()}`)} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
                         </Badge>
                       ) : (
-                        <p className="text-xs text-muted-foreground mt-1">No report yet</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t("myDay.noReportYet")}</p>
                       )}
                     </div>
                     <Button
@@ -259,7 +259,7 @@ export default function MyDayPage() {
                       onClick={() => rep ? navigate(`/work-reports/${rep.id}`) : navigate(`/work-reports/new?projectId=${proj.id}`)}
                       data-testid={`report-action-${proj.id}`}
                     >
-                      {rep && rep.status === "Draft" ? "Continue" : rep ? "View" : "Fill Report"}
+                      {rep && rep.status === "Draft" ? t("myDay.continue") : rep ? t("common.view") : t("workReports.fillReport")}
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
                   </div>
@@ -269,13 +269,13 @@ export default function MyDayPage() {
               {reports.filter((r) => !activeProjects.find((p) => p.id === r.project_id)).map((rep) => (
                 <div key={rep.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-foreground">{rep.project_code || "Project"}</p>
+                    <p className="text-sm font-medium text-foreground">{rep.project_code || t("offers.project")}</p>
                     <Badge variant="outline" className={`text-xs mt-1 ${REPORT_STATUS_COLORS[rep.status] || ""}`}>
-                      {rep.status} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
+                      {t(`workReports.status.${rep.status.toLowerCase()}`)} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
                     </Badge>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => navigate(`/work-reports/${rep.id}`)}>
-                    View <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    {t("common.view")} <ArrowRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </div>
               ))}
