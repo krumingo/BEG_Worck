@@ -45,6 +45,7 @@ const LOG_STATUS_COLORS = {
 };
 
 export default function RemindersPage() {
+  const { t } = useTranslation();
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [missingAtt, setMissingAtt] = useState([]);
   const [missingRep, setMissingRep] = useState([]);
