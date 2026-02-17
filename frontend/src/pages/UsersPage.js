@@ -40,6 +40,7 @@ const ROLE_COLORS = {
 };
 
 export default function UsersPage() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
