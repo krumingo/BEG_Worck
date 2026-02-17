@@ -349,12 +349,12 @@ export default function InvoiceEditorPage() {
               </div>
               <div className="space-y-2">
                 <Label>Project</Label>
-                <Select value={projectId} onValueChange={setProjectId} disabled={!canEdit}>
+                <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)} disabled={!canEdit}>
                   <SelectTrigger className="bg-background" data-testid="project-select">
                     <SelectValue placeholder="No project" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No project</SelectItem>
+                    <SelectItem value="none">No project</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
                     ))}
