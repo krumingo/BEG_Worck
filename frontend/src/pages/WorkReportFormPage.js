@@ -101,7 +101,7 @@ export default function WorkReportFormPage() {
       setLines(res.data.lines || []);
       navigate(`/work-reports/${res.data.id}`, { replace: true });
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to create draft");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -141,7 +141,7 @@ export default function WorkReportFormPage() {
       setReport(res.data);
       setLines(res.data.lines || []);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -159,7 +159,7 @@ export default function WorkReportFormPage() {
       const res = await API.post(`/work-reports/${report.id}/submit`);
       setReport(res.data);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to submit");
+      alert(err.response?.data?.detail || t("toast.submitFailed"));
     } finally {
       setSubmitting(false);
     }
