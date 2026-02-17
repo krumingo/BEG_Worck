@@ -28,11 +28,11 @@ import {
 } from "lucide-react";
 
 const STATUS_CONFIG = {
-  Present: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20 border-emerald-500/40 hover:bg-emerald-500/30", label: "I'm at Work" },
-  Absent: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/20 border-red-500/40 hover:bg-red-500/30", label: "Absent" },
-  Late: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/20 border-amber-500/40", label: "Late" },
-  SickLeave: { icon: ThermometerSun, color: "text-orange-400", bg: "bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30", label: "Sick Leave" },
-  Vacation: { icon: Palmtree, color: "text-cyan-400", bg: "bg-cyan-500/20 border-cyan-500/40 hover:bg-cyan-500/30", label: "Vacation" },
+  Present: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20 border-emerald-500/40 hover:bg-emerald-500/30", labelKey: "myDay.imAtWork" },
+  Absent: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/20 border-red-500/40 hover:bg-red-500/30", labelKey: "attendance.absent" },
+  Late: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/20 border-amber-500/40", labelKey: "attendance.late" },
+  SickLeave: { icon: ThermometerSun, color: "text-orange-400", bg: "bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30", labelKey: "myDay.sickLeave" },
+  Vacation: { icon: Palmtree, color: "text-cyan-400", bg: "bg-cyan-500/20 border-cyan-500/40 hover:bg-cyan-500/30", labelKey: "myDay.vacation" },
 };
 
 const REPORT_STATUS_COLORS = {
