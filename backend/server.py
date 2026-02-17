@@ -235,7 +235,7 @@ async def update_organization(data: OrgUpdate, user: dict = Depends(require_admi
 async def list_users(user: dict = Depends(get_current_user)):
     return await db.users.find({"org_id": user["org_id"]}, {"_id": 0, "password_hash": 0}).to_list(1000)
 
-@api_router.post("/users")
+@api_router.post("/users", status_code=201)
 async def create_user(data: UserCreate, user: dict = Depends(require_admin)):
     if await db.users.find_one({"email": data.email, "org_id": user["org_id"]}):
         raise HTTPException(status_code=400, detail="Email already exists in this organization")
