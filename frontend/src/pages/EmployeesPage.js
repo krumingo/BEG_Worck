@@ -43,6 +43,7 @@ const PAY_TYPES = ["Hourly", "Daily", "Monthly"];
 const PAY_SCHEDULES = ["Weekly", "Monthly"];
 
 export default function EmployeesPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
