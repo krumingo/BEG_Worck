@@ -248,6 +248,59 @@ class ActivityCatalogUpdate(BaseModel):
     default_labor_hours_per_unit: Optional[float] = None
     active: Optional[bool] = None
 
+# ── M4 HR / Payroll Models ────────────────────────────────────────
+
+PAY_TYPES = ["Hourly", "Daily", "Monthly"]
+PAY_SCHEDULES = ["Weekly", "Monthly"]
+ADVANCE_TYPES = ["Advance", "Loan"]
+ADVANCE_STATUSES = ["Open", "Closed"]
+PAYROLL_STATUSES = ["Draft", "Finalized", "Paid"]
+PAYSLIP_STATUSES = ["Draft", "Finalized", "Paid"]
+PAYMENT_METHODS = ["Cash", "BankTransfer"]
+
+class EmployeeProfileCreate(BaseModel):
+    user_id: str
+    pay_type: str = "Daily"
+    hourly_rate: Optional[float] = None
+    daily_rate: Optional[float] = None
+    monthly_salary: Optional[float] = None
+    standard_hours_per_day: float = 8
+    pay_schedule: str = "Monthly"
+    active: bool = True
+    start_date: Optional[str] = None
+
+class EmployeeProfileUpdate(BaseModel):
+    pay_type: Optional[str] = None
+    hourly_rate: Optional[float] = None
+    daily_rate: Optional[float] = None
+    monthly_salary: Optional[float] = None
+    standard_hours_per_day: Optional[float] = None
+    pay_schedule: Optional[str] = None
+    active: Optional[bool] = None
+    start_date: Optional[str] = None
+
+class AdvanceLoanCreate(BaseModel):
+    user_id: str
+    type: str = "Advance"
+    amount: float
+    currency: str = "EUR"
+    issued_date: Optional[str] = None
+    note: Optional[str] = None
+
+class PayrollRunCreate(BaseModel):
+    period_type: str = "Monthly"
+    period_start: str
+    period_end: str
+
+class SetDeductionsRequest(BaseModel):
+    deductions_amount: float = 0
+    advances_to_deduct: List[dict] = []  # [{advance_id, amount}]
+
+class MarkPaidRequest(BaseModel):
+    method: str = "Cash"
+    reference: Optional[str] = None
+    note: Optional[str] = None
+
 # ── Auth Helpers ─────────────────────────────────────────────────
 
 def hash_password(pw: str) -> str:
