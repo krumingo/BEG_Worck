@@ -2322,8 +2322,8 @@ async def get_payroll_run(run_id: str, user: dict = Depends(get_current_user)):
     payslips = await db.payslips.find({"payroll_run_id": run_id}, {"_id": 0}).to_list(500)
     for ps in payslips:
         u = await db.users.find_one({"id": ps["user_id"]}, {"_id": 0, "name": 1, "email": 1})
-        ps["user_name"] = u["name"] if u else "Unknown"
-        ps["user_email"] = u["email"] if u else ""
+        ps["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
+        ps["user_email"] = u.get("email", "") if u else ""
     
     run["payslips"] = payslips
     return run
