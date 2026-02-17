@@ -830,6 +830,7 @@
   "toast": {
     "saveSuccess": "Saved successfully",
     "saveFailed": "Failed to save",
+    "submitFailed": "Failed to submit",
     "deleteSuccess": "Deleted successfully",
     "deleteFailed": "Failed to delete",
     "createSuccess": "Created successfully",
