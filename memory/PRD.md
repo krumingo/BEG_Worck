@@ -1,17 +1,17 @@
 # BEG_Work - Construction Company Management SaaS
 
 ## Architecture
-- **Backend**: FastAPI + MongoDB (motor async driver)
-- **Frontend**: React 19 + Tailwind CSS + Radix UI (shadcn)
-- **Auth**: JWT (python-jose) + bcrypt
-- **DB Collections**: organizations, users, feature_flags, subscriptions, audit_logs, projects, project_team, project_phases, attendance_entries
+- **Backend**: FastAPI + MongoDB (motor async) — server.py ~1200 lines
+- **Frontend**: React 19 + Tailwind CSS + Radix UI (shadcn) — 14 pages
+- **Auth**: JWT + bcrypt
+- **DB Collections**: organizations, users, feature_flags, subscriptions, audit_logs, projects, project_team, project_phases, attendance_entries, work_reports
 
-## Modules
+## Modules Status
 | Code | Name | Status |
 |------|------|--------|
 | M0 | Core / SaaS | DONE (Iter 1) |
 | M1 | Projects | DONE (Iter 2) |
-| M3 | Attendance & Reports | ATTENDANCE DONE (Iter 3), Reports next |
+| M3 | Attendance & Reports | DONE (Iter 3-4) |
 | M2 | Estimates / BOQ | Backlog |
 | M4 | HR / Payroll | Backlog |
 | M5 | Finance | Backlog |
@@ -22,35 +22,37 @@
 
 ## Implementation Log
 
-### Iteration 1 - M0 Core (2026-02-17)
-- Org/User/FeatureFlag/AuditLog/Subscription models + JWT auth + seed admin
-- 6 admin screens: Login, Dashboard, Users, Settings, Modules, Audit Log
+### Iteration 1 - M0 Core
+- Org/User/FeatureFlag/AuditLog/Subscription + JWT auth + seed admin
+- 6 admin screens
 
-### Iteration 2 - M1 Projects (2026-02-17)
-- Project CRUD with code uniqueness, team management, phases
-- Role-based permissions, project list with filters, project detail page
+### Iteration 2 - M1 Projects
+- Project CRUD, team management, phases, role-based permissions
 
-### Iteration 3 - M3 Attendance (2026-02-17)
-- AttendanceEntry model with org+date+user uniqueness constraint
-- Self-marking (POST /attendance/mark) with auto-Late detection past deadline
-- Manager mark-for-user with project-level permission checks
-- Endpoints: my-today, my-range, site-today, missing-today
-- Mobile-first "My Day" page (big buttons, one-tap marking)
-- Attendance History (14-day view with status badges)
-- Site Attendance (manager view with project filter, user table, mark dialog)
-- Configurable attendance window in Company Settings (start/end time)
-- Role-based nav: Admin sees full sidebar, Technician sees My Day/History/Projects
-- Dashboard updated with "Today Checked In" stat
-- Audit events: attendance_marked, attendance_overridden
-- Testing: Backend 96.5% (55/57), Frontend 95%
+### Iteration 3 - M3 Attendance
+- AttendanceEntry with uniqueness, self/manager marking, auto-Late
+- My Day, History, Site Attendance pages + configurable window
+
+### Iteration 4 - M3 Daily Work Reports (2026-02-17)
+- WorkReport model: Draft→Submitted→Approved/Rejected workflow
+- Lines embedded (activity_name + hours + note), total_hours computed
+- Uniqueness per (org, date, user, project), requires Present/Late attendance
+- Reject→reopen as Draft, Approve finalizes
+- 9 API endpoints: draft, edit, submit, approve, reject, my-today, my-range, project-day, get
+- Work Report Form (mobile-first): activity lines with hours stepper, save/submit
+- Review Reports page (manager): project/date filter, approve/reject actions
+- My Day updated with End-of-Day Reports CTA + report status per project
+- Attendance History updated with report status badges
+- Testing: Backend 91.8% (67/73), Frontend 95%
 
 ## Credentials
 - Admin: admin@begwork.com / admin123
-- Technician: tech1@begwork.com / tech123
+- Tech1: tech1@begwork.com / tech123
+- Tech2: tech2@begwork.com / tech123
 
 ## Next Tasks
-1. M3 Daily Work Reports (end-of-day report submission tied to attendance)
-2. M2 Estimates/BOQ tied to projects
-3. M4 HR/Payroll: employee pay types, advances
-4. M5 Finance: invoices, payments
-5. M9 Overhead cost calculation system
+1. M2 Estimates/BOQ (offers + activities tied to projects)
+2. M4 HR/Payroll-lite (pay types, advances, payslips)
+3. M5 Finance (invoices issued/received, payments)
+4. M9 Overhead cost calculation system
+5. Missing report reminders / escalation
