@@ -15,6 +15,7 @@ class BEGWorkAPITester:
         self.created_project_id = None
         self.existing_project_id = None
         self.tech_user_id = None
+        self.attendance_entry_id = None
 
     def log_result(self, test_name, success, details=""):
         """Log test result"""
