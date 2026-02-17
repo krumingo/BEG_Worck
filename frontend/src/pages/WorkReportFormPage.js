@@ -42,6 +42,7 @@ export default function WorkReportFormPage() {
 
   const [report, setReport] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [selectedProject, setSelectedProject] = useState(projectIdParam || "");
   const [summaryNote, setSummaryNote] = useState("");
   const [lines, setLines] = useState([]);
@@ -57,11 +58,23 @@ export default function WorkReportFormPage() {
         setSummaryNote(res.data.summary_note || "");
         setLines(res.data.lines || []);
         setSelectedProject(res.data.project_id);
+        // Load activities for the project
+        try {
+          const actRes = await API.get(`/activity-catalog?project_id=${res.data.project_id}`);
+          setActivities(actRes.data || []);
+        } catch { setActivities([]); }
       } else {
         // Load projects for selection
         const todayRes = await API.get("/attendance/my-today");
         setProjects(todayRes.data.active_projects || []);
-        if (projectIdParam) setSelectedProject(projectIdParam);
+        if (projectIdParam) {
+          setSelectedProject(projectIdParam);
+          // Load activities for selected project
+          try {
+            const actRes = await API.get(`/activity-catalog?project_id=${projectIdParam}`);
+            setActivities(actRes.data || []);
+          } catch { setActivities([]); }
+        }
         else if (todayRes.data.active_projects?.length === 1) {
           setSelectedProject(todayRes.data.active_projects[0].id);
         }
