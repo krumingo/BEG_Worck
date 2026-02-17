@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +40,6 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
-  ArrowRight,
   Link2,
   Trash2,
 } from "lucide-react";
@@ -46,6 +47,7 @@ import {
 const PAYMENT_METHODS = ["Cash", "BankTransfer", "Card", "Check", "Other"];
 
 export default function PaymentsPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -66,7 +68,6 @@ export default function PaymentsPage() {
 
   const canManage = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
-  // Payment form
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     direction: "Inflow",
@@ -80,7 +81,6 @@ export default function PaymentsPage() {
     note: "",
   });
 
-  // Allocation state
   const [allocDialogOpen, setAllocDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [allocations, setAllocations] = useState([]);
@@ -101,7 +101,6 @@ export default function PaymentsPage() {
       setAccounts(accountsRes.data);
       setInvoices(invoicesRes.data);
 
-      // If coming with invoice_id, open the create dialog for payment
       if (invoiceParam) {
         const inv = invoicesRes.data.find(i => i.id === invoiceParam);
         if (inv) {
@@ -114,7 +113,7 @@ export default function PaymentsPage() {
             account_id: accountsRes.data[0]?.id || "",
             counterparty_name: inv.counterparty_name || "",
             reference: "",
-            note: `Payment for ${inv.invoice_no}`,
+            note: t("finance.paymentFor", { invoiceNo: inv.invoice_no }),
           });
           setDialogOpen(true);
         }
@@ -124,7 +123,7 @@ export default function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [directionFilter, accountFilter, invoiceParam]);
+  }, [directionFilter, accountFilter, invoiceParam, t]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -166,11 +165,11 @@ export default function PaymentsPage() {
 
   const handleSavePayment = async () => {
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      alert("Amount must be greater than 0");
+      alert(t("validation.positiveNumber"));
       return;
     }
     if (!formData.account_id) {
-      alert("Please select an account");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -180,49 +179,47 @@ export default function PaymentsPage() {
         amount: parseFloat(formData.amount),
       });
       setDialogOpen(false);
-      // Clear invoice_id from URL
       const newParams = new URLSearchParams(searchParams);
       newParams.delete("invoice_id");
       setSearchParams(newParams);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to create payment");
+      alert(err.response?.data?.detail || t("toast.createFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeletePayment = async (payment) => {
-    if (!window.confirm("Delete this payment? This cannot be undone.")) return;
+    if (!window.confirm(t("finance.confirmDeletePayment"))) return;
     try {
       await API.delete(`/finance/payments/${payment.id}`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete");
+      alert(err.response?.data?.detail || t("toast.deleteFailed"));
     }
   };
 
   const openAllocDialog = async (payment) => {
     setSelectedPayment(payment);
-    // Get payment details with allocations
     try {
       const res = await API.get(`/finance/payments/${payment.id}`);
       setSelectedPayment(res.data);
       setAllocations([]);
       setAllocDialogOpen(true);
     } catch (err) {
-      alert("Failed to load payment details");
+      alert(t("toast.errorOccurred"));
     }
   };
 
   const handleAllocate = async () => {
     if (allocations.length === 0) {
-      alert("Add at least one allocation");
+      alert(t("validation.required"));
       return;
     }
     const validAllocations = allocations.filter(a => a.amount > 0);
     if (validAllocations.length === 0) {
-      alert("No valid allocations");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -236,7 +233,7 @@ export default function PaymentsPage() {
       setAllocDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to allocate");
+      alert(err.response?.data?.detail || t("toast.allocateFailed"));
     } finally {
       setSaving(false);
     }
@@ -256,7 +253,6 @@ export default function PaymentsPage() {
     setAllocations(allocations.filter((_, i) => i !== idx));
   };
 
-  // Filter invoices for allocation (match direction)
   const allocatableInvoices = selectedPayment 
     ? invoices.filter(inv => {
         const expectedDir = selectedPayment.direction === "Inflow" ? "Issued" : "Received";
@@ -267,13 +263,9 @@ export default function PaymentsPage() {
       })
     : [];
 
-  const formatCurrency = (amount, currency = "EUR") => {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount || 0);
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const getMethodKey = (method) => {
+    const map = { Cash: "cash", BankTransfer: "bankTransfer", Card: "card", Check: "check", Other: "other" };
+    return map[method] || method.toLowerCase();
   };
 
   return (
@@ -282,16 +274,16 @@ export default function PaymentsPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/finance")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Payments</h1>
-            <p className="text-sm text-muted-foreground mt-1">Record and allocate payments</p>
+            <h1 className="text-2xl font-bold text-foreground">{t("finance.payments")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("finance.paymentsSubtitle")}</p>
           </div>
         </div>
         {canManage && (
           <Button onClick={openCreateDialog} data-testid="create-payment-btn">
-            <Plus className="w-4 h-4 mr-2" /> Record Payment
+            <Plus className="w-4 h-4 mr-2" /> {t("finance.recordPayment")}
           </Button>
         )}
       </div>
@@ -301,7 +293,7 @@ export default function PaymentsPage() {
         <div className="relative flex-1 min-w-[200px] max-w-[300px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search payments..."
+            placeholder={t("finance.searchPayments")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-card"
@@ -311,20 +303,20 @@ export default function PaymentsPage() {
         <Select value={directionFilter || "all"} onValueChange={(v) => updateFilter("direction", v)}>
           <SelectTrigger className="w-[150px] bg-card" data-testid="direction-filter">
             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="All" />
+            <SelectValue placeholder={t("common.all")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Directions</SelectItem>
-            <SelectItem value="Inflow">Inflows (In)</SelectItem>
-            <SelectItem value="Outflow">Outflows (Out)</SelectItem>
+            <SelectItem value="all">{t("common.allDirections")}</SelectItem>
+            <SelectItem value="Inflow">{t("finance.inflows")} ({t("finance.inflow")})</SelectItem>
+            <SelectItem value="Outflow">{t("finance.outflows")} ({t("finance.outflow")})</SelectItem>
           </SelectContent>
         </Select>
         <Select value={accountFilter || "all"} onValueChange={(v) => updateFilter("accountId", v)}>
           <SelectTrigger className="w-[180px] bg-card" data-testid="account-filter">
-            <SelectValue placeholder="All Accounts" />
+            <SelectValue placeholder={t("common.allAccounts")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Accounts</SelectItem>
+            <SelectItem value="all">{t("common.allAccounts")}</SelectItem>
             {accounts.map((acc) => (
               <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
             ))}
@@ -342,15 +334,15 @@ export default function PaymentsPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Date</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Direction</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Account</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Counterparty</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Method</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Reference</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Amount</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Allocated</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.date")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.direction")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.accounts")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.counterparty")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("payroll.paymentMethod")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("payroll.reference")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.amount")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.allocated")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -358,10 +350,10 @@ export default function PaymentsPage() {
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     <CreditCard className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No payments found</p>
+                    <p>{t("finance.noPayments")}</p>
                     {canManage && (
                       <Button variant="outline" className="mt-4" onClick={openCreateDialog}>
-                        Record your first payment
+                        {t("finance.createFirstPayment")}
                       </Button>
                     )}
                   </TableCell>
@@ -380,7 +372,7 @@ export default function PaymentsPage() {
                       }>
                         <span className="flex items-center gap-1">
                           {payment.direction === "Inflow" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                          {payment.direction === "Inflow" ? "In" : "Out"}
+                          {payment.direction === "Inflow" ? t("finance.inflow") : t("finance.outflow")}
                         </span>
                       </Badge>
                     </TableCell>
@@ -388,7 +380,7 @@ export default function PaymentsPage() {
                     <TableCell className="text-muted-foreground max-w-[150px] truncate">
                       {payment.counterparty_name || "-"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{payment.method}</TableCell>
+                    <TableCell className="text-muted-foreground">{t(`finance.paymentMethod.${getMethodKey(payment.method)}`)}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {payment.reference || "-"}
                     </TableCell>
@@ -402,7 +394,7 @@ export default function PaymentsPage() {
                         </span>
                         {payment.unallocated_amount > 0 && (
                           <p className="text-muted-foreground">
-                            {formatCurrency(payment.unallocated_amount, payment.currency)} free
+                            {formatCurrency(payment.unallocated_amount, payment.currency)} {t("common.free")}
                           </p>
                         )}
                       </div>
@@ -439,31 +431,31 @@ export default function PaymentsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[450px] bg-card border-border" data-testid="payment-dialog">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>{t("finance.recordPayment")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Direction *</Label>
+                <Label>{t("finance.direction")} *</Label>
                 <Select value={formData.direction} onValueChange={(v) => setFormData({ ...formData, direction: v })}>
                   <SelectTrigger className="bg-background" data-testid="payment-direction-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Inflow">Money In</SelectItem>
-                    <SelectItem value="Outflow">Money Out</SelectItem>
+                    <SelectItem value="Inflow">{t("finance.moneyIn")}</SelectItem>
+                    <SelectItem value="Outflow">{t("finance.moneyOut")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Account *</Label>
+                <Label>{t("finance.accounts")} *</Label>
                 <Select value={formData.account_id} onValueChange={(v) => setFormData({ ...formData, account_id: v })}>
                   <SelectTrigger className="bg-background" data-testid="payment-account-select">
-                    <SelectValue placeholder="Select account" />
+                    <SelectValue placeholder={t("common.select")} />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id}>{acc.name} ({acc.type})</SelectItem>
+                      <SelectItem key={acc.id} value={acc.id}>{acc.name} ({t(`finance.accountType.${acc.type.toLowerCase()}`)})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -471,7 +463,7 @@ export default function PaymentsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Amount *</Label>
+                <Label>{t("common.amount")} *</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -483,7 +475,7 @@ export default function PaymentsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Currency</Label>
+                <Label>{t("common.currency")}</Label>
                 <Select value={formData.currency} onValueChange={(v) => setFormData({ ...formData, currency: v })}>
                   <SelectTrigger className="bg-background">
                     <SelectValue />
@@ -499,7 +491,7 @@ export default function PaymentsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Date *</Label>
+                <Label>{t("common.date")} *</Label>
                 <Input
                   type="date"
                   value={formData.date}
@@ -509,50 +501,50 @@ export default function PaymentsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Method</Label>
+                <Label>{t("payroll.paymentMethod")}</Label>
                 <Select value={formData.method} onValueChange={(v) => setFormData({ ...formData, method: v })}>
                   <SelectTrigger className="bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{t(`finance.paymentMethod.${getMethodKey(m)}`)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Counterparty</Label>
+              <Label>{t("finance.counterparty")}</Label>
               <Input
                 value={formData.counterparty_name}
                 onChange={(e) => setFormData({ ...formData, counterparty_name: e.target.value })}
-                placeholder="Customer or supplier name"
+                placeholder={t("finance.companyName")}
                 className="bg-background"
               />
             </div>
             <div className="space-y-2">
-              <Label>Reference</Label>
+              <Label>{t("payroll.reference")}</Label>
               <Input
                 value={formData.reference}
                 onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
-                placeholder="PMT-001 or bank reference"
+                placeholder="PMT-001"
                 className="bg-background font-mono"
               />
             </div>
             <div className="space-y-2">
-              <Label>Note</Label>
+              <Label>{t("common.note")}</Label>
               <Textarea
                 value={formData.note}
                 onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                placeholder="Optional notes..."
+                placeholder={t("common.notes")}
                 className="bg-background min-h-[60px]"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleSavePayment} disabled={saving} data-testid="save-payment-btn">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Payment
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -562,29 +554,28 @@ export default function PaymentsPage() {
       <Dialog open={allocDialogOpen} onOpenChange={setAllocDialogOpen}>
         <DialogContent className="sm:max-w-[550px] bg-card border-border" data-testid="allocate-dialog">
           <DialogHeader>
-            <DialogTitle>Allocate Payment</DialogTitle>
+            <DialogTitle>{t("finance.allocatePayment")}</DialogTitle>
           </DialogHeader>
           {selectedPayment && (
             <div className="space-y-4 py-4">
               <div className="p-3 rounded-lg bg-muted/30">
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Payment Amount</span>
+                  <span className="text-muted-foreground">{t("common.amount")}</span>
                   <span className="font-mono font-medium">{formatCurrency(selectedPayment.amount, selectedPayment.currency)}</span>
                 </div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Already Allocated</span>
+                  <span className="text-muted-foreground">{t("finance.allocated")}</span>
                   <span className="font-mono">{formatCurrency(selectedPayment.allocated_amount, selectedPayment.currency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Available</span>
+                  <span className="text-muted-foreground">{t("finance.available")}</span>
                   <span className="font-mono text-emerald-400">{formatCurrency(selectedPayment.unallocated_amount, selectedPayment.currency)}</span>
                 </div>
               </div>
 
-              {/* Existing allocations */}
               {selectedPayment.allocations && selectedPayment.allocations.length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Existing Allocations</Label>
+                  <Label className="text-xs text-muted-foreground">{t("finance.existingAllocations")}</Label>
                   {selectedPayment.allocations.map((alloc) => (
                     <div key={alloc.id} className="flex items-center justify-between p-2 rounded bg-muted/20 text-sm">
                       <span className="font-mono">{alloc.invoice_no}</span>
@@ -594,29 +585,28 @@ export default function PaymentsPage() {
                 </div>
               )}
 
-              {/* New allocations */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">New Allocations</Label>
+                  <Label className="text-xs text-muted-foreground">{t("finance.newAllocations")}</Label>
                   <Button size="sm" variant="outline" onClick={addAllocation} disabled={allocatableInvoices.length === 0}>
-                    <Plus className="w-3 h-3 mr-1" /> Add
+                    <Plus className="w-3 h-3 mr-1" /> {t("finance.addAllocation")}
                   </Button>
                 </div>
                 {allocations.length === 0 && allocatableInvoices.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No unpaid invoices available to allocate
+                    {t("finance.noUnpaidInvoices")}
                   </p>
                 )}
                 {allocations.map((alloc, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <Select value={alloc.invoice_id} onValueChange={(v) => updateAllocation(idx, "invoice_id", v)}>
                       <SelectTrigger className="flex-1 bg-background text-sm">
-                        <SelectValue placeholder="Select invoice" />
+                        <SelectValue placeholder={t("finance.selectInvoice")} />
                       </SelectTrigger>
                       <SelectContent>
                         {allocatableInvoices.map((inv) => (
                           <SelectItem key={inv.id} value={inv.id}>
-                            {inv.invoice_no} - {formatCurrency(inv.remaining_amount, inv.currency)} remaining
+                            {inv.invoice_no} - {t("finance.remainingLabel", { amount: formatCurrency(inv.remaining_amount, inv.currency) })}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -626,7 +616,7 @@ export default function PaymentsPage() {
                       step="0.01"
                       value={alloc.amount}
                       onChange={(e) => updateAllocation(idx, "amount", e.target.value)}
-                      placeholder="Amount"
+                      placeholder={t("common.amount")}
                       className="w-[100px] bg-background"
                     />
                     <Button variant="ghost" size="sm" onClick={() => removeAllocation(idx)} className="text-destructive">
@@ -638,10 +628,10 @@ export default function PaymentsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAllocDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAllocDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleAllocate} disabled={saving || allocations.length === 0} data-testid="confirm-allocate-btn">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Allocate
+              {t("finance.allocatePayment")}
             </Button>
           </DialogFooter>
         </DialogContent>
