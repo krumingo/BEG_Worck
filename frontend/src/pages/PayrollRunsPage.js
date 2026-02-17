@@ -47,6 +47,7 @@ const STATUS_COLORS = {
 };
 
 export default function PayrollRunsPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [runs, setRuns] = useState([]);
@@ -88,7 +89,7 @@ export default function PayrollRunsPage() {
 
   const handleCreate = async () => {
     if (!periodStart || !periodEnd) {
-      alert("Period start and end dates are required");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -101,19 +102,19 @@ export default function PayrollRunsPage() {
       setDialogOpen(false);
       navigate(`/payroll/${res.data.id}`);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to create");
+      alert(err.response?.data?.detail || t("toast.createFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (runId) => {
-    if (!confirm("Delete this payroll run?")) return;
+    if (!confirm(t("payroll.confirmDelete"))) return;
     try {
       await API.delete(`/payroll-runs/${runId}`);
       await fetchRuns();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete");
+      alert(err.response?.data?.detail || t("toast.deleteFailed"));
     }
   };
 
@@ -121,11 +122,11 @@ export default function PayrollRunsPage() {
     <div className="p-8 max-w-[1200px]" data-testid="payroll-runs-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Payroll Runs</h1>
-          <p className="text-sm text-muted-foreground mt-1">Generate and manage payroll</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("payroll.payrollRuns")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("payroll.subtitle")}</p>
         </div>
         <Button onClick={openCreate} data-testid="create-payroll-btn">
-          <Plus className="w-4 h-4 mr-2" /> New Payroll
+          <Plus className="w-4 h-4 mr-2" /> {t("payroll.newPayroll")}
         </Button>
       </div>
 
@@ -134,13 +135,13 @@ export default function PayrollRunsPage() {
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[150px] bg-card" data-testid="status-filter">
             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder={t("common.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
-            <SelectItem value="Finalized">Finalized</SelectItem>
-            <SelectItem value="Paid">Paid</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
+            <SelectItem value="Draft">{t("payroll.status.draft")}</SelectItem>
+            <SelectItem value="Finalized">{t("payroll.status.finalized")}</SelectItem>
+            <SelectItem value="Paid">{t("payroll.status.paid")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -154,13 +155,13 @@ export default function PayrollRunsPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Period</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Type</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-center">Payslips</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-center">Paid</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Created</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.period")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-center">{t("payroll.payslips")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-center">{t("payroll.paid")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("users.createdAt")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -168,9 +169,9 @@ export default function PayrollRunsPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No payroll runs found</p>
+                    <p>{t("payroll.noPayrollRuns")}</p>
                     <Button variant="outline" className="mt-4" onClick={openCreate}>
-                      Create your first payroll
+                      {t("payroll.createFirstPayroll")}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -180,11 +181,11 @@ export default function PayrollRunsPage() {
                     <TableCell>
                       <p className="font-medium text-foreground">{run.period_start} - {run.period_end}</p>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{run.period_type}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t(`payroll.periodTypes.${run.period_type.toLowerCase()}`)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-xs ${STATUS_COLORS[run.status] || ""}`}>
                         {run.status === "Finalized" && <Lock className="w-3 h-3 mr-1" />}
-                        {run.status}
+                        {t(`payroll.status.${run.status.toLowerCase()}`)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center text-sm">{run.payslip_count || 0}</TableCell>
@@ -214,37 +215,37 @@ export default function PayrollRunsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="create-payroll-dialog">
           <DialogHeader>
-            <DialogTitle>New Payroll Run</DialogTitle>
+            <DialogTitle>{t("payroll.newPayroll")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Period Type</Label>
+              <Label>{t("payroll.periodType")}</Label>
               <Select value={periodType} onValueChange={setPeriodType}>
                 <SelectTrigger className="bg-background" data-testid="period-type-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Weekly">Weekly</SelectItem>
-                  <SelectItem value="Monthly">Monthly</SelectItem>
+                  <SelectItem value="Weekly">{t("payroll.periodTypes.weekly")}</SelectItem>
+                  <SelectItem value="Monthly">{t("payroll.periodTypes.monthly")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Start Date</Label>
+                <Label>{t("payroll.periodStart")}</Label>
                 <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="bg-background" data-testid="period-start-input" />
               </div>
               <div className="space-y-2">
-                <Label>End Date</Label>
+                <Label>{t("payroll.periodEnd")}</Label>
                 <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="bg-background" data-testid="period-end-input" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleCreate} disabled={saving} data-testid="create-run-btn">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              Create
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>

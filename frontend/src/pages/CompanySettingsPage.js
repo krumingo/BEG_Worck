@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Save, Building2 } from "lucide-react";
 
 export default function CompanySettingsPage() {
+  const { t } = useTranslation();
   const { org, refreshOrg } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", attendance_start: "06:00", attendance_end: "10:00" });
   const [sub, setSub] = useState(null);
@@ -36,7 +37,7 @@ export default function CompanySettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -45,8 +46,8 @@ export default function CompanySettingsPage() {
   return (
     <div className="p-8 max-w-[800px]" data-testid="company-settings-page">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Company Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your organization details</p>
+        <h1 className="text-2xl font-bold text-foreground">{t("settings.title")}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{t("settings.subtitle")}</p>
       </div>
 
       {/* Org Details */}
@@ -56,15 +57,15 @@ export default function CompanySettingsPage() {
             <Building2 className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Organization Details</h2>
-            <p className="text-xs text-muted-foreground">Update your company information</p>
+            <h2 className="text-sm font-semibold text-foreground">{t("settings.companyName")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.subtitle")}</p>
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Company Name</Label>
+              <Label className="text-muted-foreground">{t("settings.companyName")}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -73,7 +74,7 @@ export default function CompanySettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Email</Label>
+              <Label className="text-muted-foreground">{t("common.email")}</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -84,7 +85,7 @@ export default function CompanySettingsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Phone</Label>
+              <Label className="text-muted-foreground">{t("users.phone")}</Label>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -93,7 +94,7 @@ export default function CompanySettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Address</Label>
+              <Label className="text-muted-foreground">{t("projects.location")}</Label>
               <Input
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
@@ -104,7 +105,7 @@ export default function CompanySettingsPage() {
           </div>
           <Button onClick={handleSave} disabled={saving} data-testid="org-save-button">
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            {saved ? "Saved!" : "Save Changes"}
+            {saved ? t("settings.savedSuccessfully") : t("common.saveChanges")}
           </Button>
         </div>
       </div>
@@ -116,13 +117,13 @@ export default function CompanySettingsPage() {
             <Save className="w-5 h-5 text-emerald-400" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Attendance Window</h2>
-            <p className="text-xs text-muted-foreground">Configure daily attendance check-in times</p>
+            <h2 className="text-sm font-semibold text-foreground">{t("settings.attendanceWindow")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.attendanceWindowHint")}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-muted-foreground">Window Opens</Label>
+            <Label className="text-muted-foreground">{t("projects.start")}</Label>
             <Input
               type="time"
               value={form.attendance_start}
@@ -132,7 +133,7 @@ export default function CompanySettingsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-muted-foreground">Late After</Label>
+            <Label className="text-muted-foreground">{t("attendance.late")}</Label>
             <Input
               type="time"
               value={form.attendance_end}
@@ -142,28 +143,28 @@ export default function CompanySettingsPage() {
             />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-3">Marking after the "Late After" time will auto-flag as Late</p>
+        <p className="text-xs text-muted-foreground mt-3">{t("myDay.markedAsLate")}</p>
       </div>
 
       {/* Subscription Info */}
       {sub && (
         <div className="rounded-xl border border-border bg-card p-6" data-testid="subscription-info">
-          <h2 className="text-sm font-semibold text-foreground mb-4">Subscription</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-4">{t("common.status")}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Plan</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("common.type")}</p>
               <Badge className="capitalize">{sub.plan}</Badge>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Status</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("common.status")}</p>
               <Badge variant={sub.status === "active" ? "default" : "destructive"} className="capitalize">{sub.status}</Badge>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Expires</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("finance.dueDate")}</p>
               <p className="text-sm text-foreground">{new Date(sub.expires_at).toLocaleDateString()}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Currency</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("common.currency")}</p>
               <p className="text-sm text-foreground">{sub.currency}</p>
             </div>
           </div>

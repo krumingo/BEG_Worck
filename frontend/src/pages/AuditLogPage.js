@@ -22,6 +22,7 @@ const ACTION_COLORS = {
 };
 
 export default function AuditLogPage() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -48,9 +49,9 @@ export default function AuditLogPage() {
   return (
     <div className="p-8 max-w-[1200px]" data-testid="audit-log-page">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Audit Log</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("auditLog.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {total} total events tracked
+          {total} {t("common.total")}
         </p>
       </div>
 
@@ -63,18 +64,18 @@ export default function AuditLogPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Time</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">User</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Action</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Entity</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Details</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("auditLog.timestamp")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("auditLog.user")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("auditLog.action")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("auditLog.entity")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("auditLog.details")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
-                    No audit events found
+                    {t("auditLog.noLogs")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -89,7 +90,7 @@ export default function AuditLogPage() {
                     <TableCell className="text-sm text-foreground">{log.user_email}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-xs capitalize ${ACTION_COLORS[log.action] || ""}`}>
-                        {log.action}
+                        {t(`auditLog.actions.${log.action}`, log.action)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-foreground capitalize">{log.entity_type}</TableCell>
@@ -110,7 +111,7 @@ export default function AuditLogPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4" data-testid="audit-pagination">
           <p className="text-sm text-muted-foreground">
-            Page {page + 1} of {totalPages}
+            {page + 1} / {totalPages}
           </p>
           <div className="flex gap-2">
             <Button

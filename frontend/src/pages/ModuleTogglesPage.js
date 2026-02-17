@@ -23,6 +23,7 @@ const MODULE_ICONS = {
 };
 
 export default function ModuleTogglesPage() {
+  const { t } = useTranslation();
   const [flags, setFlags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState("");
@@ -46,7 +47,7 @@ export default function ModuleTogglesPage() {
       const res = await API.put("/feature-flags", { module_code: code, enabled: !currentValue });
       setFlags(res.data);
     } catch (err) {
-      alert(err.response?.data?.detail || "Toggle failed");
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setToggling("");
     }
@@ -63,9 +64,9 @@ export default function ModuleTogglesPage() {
   return (
     <div className="p-8 max-w-[1200px]" data-testid="modules-page">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Module Management</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("modules.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Enable or disable platform modules for your organization
+          {t("modules.subtitle")}
         </p>
       </div>
 
@@ -110,7 +111,7 @@ export default function ModuleTogglesPage() {
 
                 <div className="flex items-center justify-between">
                   <span className={`text-xs font-medium ${flag.enabled ? "text-primary" : "text-muted-foreground"}`}>
-                    {flag.enabled ? "Enabled" : "Disabled"}
+                    {flag.enabled ? t("modules.enabled") : t("modules.disabled")}
                   </span>
                   <Switch
                     checked={flag.enabled}

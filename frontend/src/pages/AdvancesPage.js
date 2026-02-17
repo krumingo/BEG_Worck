@@ -84,7 +84,7 @@ export default function AdvancesPage() {
 
   const handleSave = async () => {
     if (!formUserId || !formAmount) {
-      alert("Employee and amount are required");
+      alert(t("validation.required"));
       return;
     }
     setSaving(true);
@@ -99,7 +99,7 @@ export default function AdvancesPage() {
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save");
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -113,11 +113,11 @@ export default function AdvancesPage() {
     <div className="p-8 max-w-[1200px]" data-testid="advances-page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Advances & Loans</h1>
-          <p className="text-sm text-muted-foreground mt-1">Track employee advances and loans</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("advances.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("advances.subtitle")}</p>
         </div>
         <Button onClick={openCreate} data-testid="create-advance-btn">
-          <Plus className="w-4 h-4 mr-2" /> New Advance
+          <Plus className="w-4 h-4 mr-2" /> {t("advances.newAdvance")}
         </Button>
       </div>
 
@@ -126,20 +126,20 @@ export default function AdvancesPage() {
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[150px] bg-card" data-testid="status-filter">
             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder={t("common.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Open">Open</SelectItem>
-            <SelectItem value="Closed">Closed</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
+            <SelectItem value="Open">{t("advances.statusLabels.open")}</SelectItem>
+            <SelectItem value="Closed">{t("advances.statusLabels.closed")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={userFilter} onValueChange={(v) => setUserFilter(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[200px] bg-card" data-testid="user-filter">
-            <SelectValue placeholder="All Employees" />
+            <SelectValue placeholder={t("employees.noEmployees")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Employees</SelectItem>
+            <SelectItem value="all">{t("employees.noEmployees")}</SelectItem>
             {employees.map((e) => (
               <SelectItem key={e.id} value={e.id}>{e.name || e.email}</SelectItem>
             ))}
@@ -156,13 +156,13 @@ export default function AdvancesPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Employee</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Type</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Date</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Amount</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Remaining</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Note</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("employees.employee")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.date")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.amount")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("advances.remaining")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.note")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -170,7 +170,7 @@ export default function AdvancesPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <Wallet className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p>No advances found</p>
+                    <p>{t("advances.noAdvances")}</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -179,7 +179,7 @@ export default function AdvancesPage() {
                     <TableCell className="font-medium text-foreground">{adv.user_name}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-xs ${adv.type === "Loan" ? "text-blue-400 border-blue-500/30" : "text-amber-400 border-amber-500/30"}`}>
-                        {adv.type}
+                        {t(`advances.typeLabels.${adv.type.toLowerCase()}`)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{adv.issued_date}</TableCell>
@@ -187,7 +187,7 @@ export default function AdvancesPage() {
                     <TableCell className="text-right font-mono text-sm font-medium text-foreground">{formatCurrency(adv.remaining_amount)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-xs ${adv.status === "Open" ? "text-emerald-400 border-emerald-500/30" : "text-gray-400 border-gray-500/30"}`}>
-                        {adv.status}
+                        {t(`advances.statusLabels.${adv.status.toLowerCase()}`)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground truncate max-w-[150px]">{adv.note || "-"}</TableCell>
@@ -203,14 +203,14 @@ export default function AdvancesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[450px] bg-card border-border" data-testid="advance-dialog">
           <DialogHeader>
-            <DialogTitle>New Advance / Loan</DialogTitle>
+            <DialogTitle>{t("advances.newAdvance")} / {t("advances.loan")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Employee *</Label>
+              <Label>{t("employees.employee")} *</Label>
               <Select value={formUserId} onValueChange={setFormUserId}>
                 <SelectTrigger className="bg-background" data-testid="form-user-select">
-                  <SelectValue placeholder="Select employee" />
+                  <SelectValue placeholder={t("advances.selectEmployee")} />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((e) => (
@@ -221,35 +221,35 @@ export default function AdvancesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Type</Label>
+                <Label>{t("common.type")}</Label>
                 <Select value={formType} onValueChange={setFormType}>
                   <SelectTrigger className="bg-background" data-testid="form-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADVANCE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {ADVANCE_TYPES.map((type) => <SelectItem key={type} value={type}>{t(`advances.typeLabels.${type.toLowerCase()}`)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Amount (€) *</Label>
+                <Label>{t("common.amount")} (€) *</Label>
                 <Input type="number" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="0.00" className="bg-background" data-testid="form-amount-input" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Issue Date</Label>
+              <Label>{t("advances.issueDate")}</Label>
               <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="bg-background" data-testid="form-date-input" />
             </div>
             <div className="space-y-2">
-              <Label>Note</Label>
-              <Textarea value={formNote} onChange={(e) => setFormNote(e.target.value)} placeholder="Optional note..." className="bg-background" data-testid="form-note-input" />
+              <Label>{t("common.note")}</Label>
+              <Textarea value={formNote} onChange={(e) => setFormNote(e.target.value)} placeholder={t("common.optionalNote")} className="bg-background" data-testid="form-note-input" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleSave} disabled={saving} data-testid="form-save-btn">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              Create
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
