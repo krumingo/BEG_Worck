@@ -11,14 +11,19 @@ import {
   ArrowUpRight,
   Clock,
   CalendarCheck,
+  AlertTriangle,
+  FileX,
 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { org } = useAuth();
+  const { org, user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
+  const [missingAtt, setMissingAtt] = useState([]);
+  const [missingRep, setMissingRep] = useState([]);
   const [loading, setLoading] = useState(true);
+  const isManager = ["Admin", "Owner", "SiteManager"].includes(user?.role);
 
   useEffect(() => {
     const load = async () => {
@@ -34,6 +39,20 @@ export default function DashboardPage() {
         } catch {
           setRecentLogs([]);
         }
+        // Missing attendance/reports for managers
+        if (isManager) {
+          try {
+            const [attRes, repRes] = await Promise.all([
+              API.get("/reminders/missing-attendance"),
+              API.get("/reminders/missing-work-reports"),
+            ]);
+            setMissingAtt(attRes.data || []);
+            setMissingRep(repRes.data || []);
+          } catch {
+            setMissingAtt([]);
+            setMissingRep([]);
+          }
+        }
       } catch (err) {
         console.error("Failed to load dashboard", err);
       } finally {
@@ -41,7 +60,7 @@ export default function DashboardPage() {
       }
     };
     load();
-  }, []);
+  }, [isManager]);
 
   if (loading || !stats) {
     return (
@@ -110,6 +129,73 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Manager Alerts */}
+      {isManager && (missingAtt.length > 0 || missingRep.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" data-testid="manager-alerts">
+          {/* Missing Attendance */}
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5" data-testid="missing-att-widget">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <h2 className="text-sm font-semibold text-amber-400">Missing Attendance ({missingAtt.length})</h2>
+              </div>
+              <button onClick={() => navigate("/reminders")} className="text-xs text-amber-400 hover:underline flex items-center gap-1">
+                View all <ArrowUpRight className="w-3 h-3" />
+              </button>
+            </div>
+            {missingAtt.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Everyone has checked in today</p>
+            ) : (
+              <div className="space-y-2 max-h-[160px] overflow-y-auto">
+                {missingAtt.slice(0, 5).map((m) => (
+                  <div key={m.user_id} className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-[10px] text-amber-400 font-bold">
+                      {m.user_name?.split(" ").map((n) => n[0]).join("")}
+                    </div>
+                    <span className="text-foreground">{m.user_name}</span>
+                    <span className="text-muted-foreground text-xs">({m.user_role})</span>
+                  </div>
+                ))}
+                {missingAtt.length > 5 && (
+                  <p className="text-xs text-amber-400">+{missingAtt.length - 5} more</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Missing Reports */}
+          <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-5" data-testid="missing-rep-widget">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <FileX className="w-4 h-4 text-blue-400" />
+                <h2 className="text-sm font-semibold text-blue-400">Missing Reports ({missingRep.length})</h2>
+              </div>
+              <button onClick={() => navigate("/reminders")} className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                View all <ArrowUpRight className="w-3 h-3" />
+              </button>
+            </div>
+            {missingRep.length === 0 ? (
+              <p className="text-sm text-muted-foreground">All reports submitted</p>
+            ) : (
+              <div className="space-y-2 max-h-[160px] overflow-y-auto">
+                {missingRep.slice(0, 5).map((m, i) => (
+                  <div key={`${m.user_id}-${m.project_id}-${i}`} className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] text-blue-400 font-bold">
+                      {m.user_name?.split(" ").map((n) => n[0]).join("")}
+                    </div>
+                    <span className="text-foreground">{m.user_name}</span>
+                    <span className="text-primary text-xs font-mono">{m.project_code}</span>
+                  </div>
+                ))}
+                {missingRep.length > 5 && (
+                  <p className="text-xs text-blue-400">+{missingRep.length - 5} more</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="rounded-xl border border-border bg-card" data-testid="recent-activity">
