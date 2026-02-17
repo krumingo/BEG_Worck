@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ArrowUpRight,
   Clock,
+  CalendarCheck,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -52,7 +53,7 @@ export default function DashboardPage() {
 
   const statCards = [
     { label: "Active Projects", value: stats.active_projects, icon: PlayCircle, color: "text-emerald-400", onClick: () => navigate("/projects") },
-    { label: "Paused Projects", value: stats.paused_projects, icon: PauseCircle, color: "text-amber-400", onClick: () => navigate("/projects") },
+    { label: "Today Checked In", value: stats.today_present, icon: CalendarCheck, color: "text-primary", onClick: () => navigate("/site-attendance") },
     { label: "Completed", value: stats.completed_projects, icon: CheckCircle2, color: "text-blue-400", onClick: () => navigate("/projects") },
     { label: "Total Users", value: stats.users_count, icon: Users, color: "text-violet-400", onClick: () => navigate("/users") },
   ];
