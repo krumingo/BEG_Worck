@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import {
   Landmark,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 
 export default function FinanceOverviewPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
@@ -43,10 +46,6 @@ export default function FinanceOverviewPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const formatCurrency = (amount, currency = "EUR") => {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount || 0);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -62,17 +61,17 @@ export default function FinanceOverviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
             <Landmark className="w-6 h-6 text-primary" />
-            Finance
+            {t("finance.title")}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage invoices, payments, and accounts</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("finance.subtitle")}</p>
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => navigate("/finance/invoices/new")} data-testid="new-invoice-btn">
-              <Plus className="w-4 h-4 mr-2" /> New Invoice
+              <Plus className="w-4 h-4 mr-2" /> {t("finance.newInvoice")}
             </Button>
             <Button onClick={() => navigate("/finance/payments/new")} data-testid="new-payment-btn">
-              <Plus className="w-4 h-4 mr-2" /> New Payment
+              <Plus className="w-4 h-4 mr-2" /> {t("finance.newPayment")}
             </Button>
           </div>
         )}
@@ -92,13 +91,13 @@ export default function FinanceOverviewPage() {
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground" />
           </div>
-          <p className="text-sm text-muted-foreground">Receivables</p>
+          <p className="text-sm text-muted-foreground">{t("finance.receivables")}</p>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.receivables_total)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{stats?.receivables_count || 0} open invoices</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("finance.openInvoices", { count: stats?.receivables_count || 0 })}</p>
           {stats?.receivables_overdue > 0 && (
             <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
-              {formatCurrency(stats?.receivables_overdue)} overdue
+              {formatCurrency(stats?.receivables_overdue)} {t("finance.overdue").toLowerCase()}
             </p>
           )}
         </div>
@@ -115,13 +114,13 @@ export default function FinanceOverviewPage() {
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground" />
           </div>
-          <p className="text-sm text-muted-foreground">Payables</p>
+          <p className="text-sm text-muted-foreground">{t("finance.payables")}</p>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.payables_total)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{stats?.payables_count || 0} bills to pay</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("finance.billsToPay", { count: stats?.payables_count || 0 })}</p>
           {stats?.payables_overdue > 0 && (
             <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
-              {formatCurrency(stats?.payables_overdue)} overdue
+              {formatCurrency(stats?.payables_overdue)} {t("finance.overdue").toLowerCase()}
             </p>
           )}
         </div>
@@ -138,9 +137,9 @@ export default function FinanceOverviewPage() {
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground" />
           </div>
-          <p className="text-sm text-muted-foreground">Cash Balance</p>
+          <p className="text-sm text-muted-foreground">{t("finance.cashBalance")}</p>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.cash_balance)}</p>
-          <p className="text-xs text-muted-foreground mt-1">All cash accounts</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("finance.allCashAccounts")}</p>
         </div>
 
         {/* Bank Balance */}
@@ -155,9 +154,9 @@ export default function FinanceOverviewPage() {
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground" />
           </div>
-          <p className="text-sm text-muted-foreground">Bank Balance</p>
+          <p className="text-sm text-muted-foreground">{t("finance.bankBalance")}</p>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.bank_balance)}</p>
-          <p className="text-xs text-muted-foreground mt-1">All bank accounts</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("finance.allBankAccounts")}</p>
         </div>
       </div>
 
@@ -168,15 +167,15 @@ export default function FinanceOverviewPage() {
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Wallet className="w-4 h-4 text-primary" />
-              Financial Accounts
+              {t("finance.financialAccounts")}
             </h2>
             <Button variant="ghost" size="sm" onClick={() => navigate("/finance/accounts")}>
-              View All <ArrowRight className="w-4 h-4 ml-1" />
+              {t("common.viewAll")} <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
           <div className="p-4 space-y-3">
             {accounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No accounts created</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t("finance.noAccounts")}</p>
             ) : (
               accounts.slice(0, 4).map((acc) => (
                 <div key={acc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
@@ -192,7 +191,7 @@ export default function FinanceOverviewPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">{acc.name}</p>
-                      <p className="text-xs text-muted-foreground">{acc.type}</p>
+                      <p className="text-xs text-muted-foreground">{t(`finance.accountType.${acc.type.toLowerCase()}`)}</p>
                     </div>
                   </div>
                   <p className="font-mono text-sm font-medium text-foreground">
@@ -203,7 +202,7 @@ export default function FinanceOverviewPage() {
             )}
             {canManage && accounts.length === 0 && (
               <Button variant="outline" className="w-full" onClick={() => navigate("/finance/accounts")}>
-                <Plus className="w-4 h-4 mr-2" /> Add Account
+                <Plus className="w-4 h-4 mr-2" /> {t("finance.newAccount")}
               </Button>
             )}
           </div>
@@ -214,10 +213,10 @@ export default function FinanceOverviewPage() {
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
-              Invoices
+              {t("finance.invoices")}
             </h2>
             <Button variant="ghost" size="sm" onClick={() => navigate("/finance/invoices")}>
-              View All <ArrowRight className="w-4 h-4 ml-1" />
+              {t("common.viewAll")} <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
           <div className="p-4 space-y-3">
@@ -225,19 +224,19 @@ export default function FinanceOverviewPage() {
               className="p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() => navigate("/finance/invoices?direction=Issued")}
             >
-              <p className="text-sm text-muted-foreground">Issued (Sales)</p>
-              <p className="text-lg font-bold text-foreground">{stats?.receivables_count || 0} open</p>
+              <p className="text-sm text-muted-foreground">{t("finance.issuedSales")}</p>
+              <p className="text-lg font-bold text-foreground">{stats?.receivables_count || 0} {t("common.open").toLowerCase()}</p>
             </div>
             <div 
               className="p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() => navigate("/finance/invoices?direction=Received")}
             >
-              <p className="text-sm text-muted-foreground">Received (Bills)</p>
-              <p className="text-lg font-bold text-foreground">{stats?.payables_count || 0} open</p>
+              <p className="text-sm text-muted-foreground">{t("finance.receivedBills")}</p>
+              <p className="text-lg font-bold text-foreground">{stats?.payables_count || 0} {t("common.open").toLowerCase()}</p>
             </div>
             {canManage && (
               <Button variant="outline" className="w-full" onClick={() => navigate("/finance/invoices/new")}>
-                <Plus className="w-4 h-4 mr-2" /> New Invoice
+                <Plus className="w-4 h-4 mr-2" /> {t("finance.newInvoice")}
               </Button>
             )}
           </div>
@@ -248,10 +247,10 @@ export default function FinanceOverviewPage() {
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-primary" />
-              Payments
+              {t("finance.payments")}
             </h2>
             <Button variant="ghost" size="sm" onClick={() => navigate("/finance/payments")}>
-              View All <ArrowRight className="w-4 h-4 ml-1" />
+              {t("common.viewAll")} <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
           <div className="p-4 space-y-3">
@@ -259,19 +258,19 @@ export default function FinanceOverviewPage() {
               className="p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() => navigate("/finance/payments?direction=Inflow")}
             >
-              <p className="text-sm text-muted-foreground">Money In</p>
-              <p className="text-lg font-bold text-emerald-400">Inflows</p>
+              <p className="text-sm text-muted-foreground">{t("finance.moneyIn")}</p>
+              <p className="text-lg font-bold text-emerald-400">{t("finance.inflows")}</p>
             </div>
             <div 
               className="p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() => navigate("/finance/payments?direction=Outflow")}
             >
-              <p className="text-sm text-muted-foreground">Money Out</p>
-              <p className="text-lg font-bold text-red-400">Outflows</p>
+              <p className="text-sm text-muted-foreground">{t("finance.moneyOut")}</p>
+              <p className="text-lg font-bold text-red-400">{t("finance.outflows")}</p>
             </div>
             {canManage && (
               <Button variant="outline" className="w-full" onClick={() => navigate("/finance/payments/new")}>
-                <Plus className="w-4 h-4 mr-2" /> Record Payment
+                <Plus className="w-4 h-4 mr-2" /> {t("finance.recordPayment")}
               </Button>
             )}
           </div>
