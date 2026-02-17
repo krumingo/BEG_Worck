@@ -22,12 +22,17 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [dashRes, logsRes] = await Promise.all([
+        const [dashRes] = await Promise.all([
           API.get("/dashboard/stats"),
-          API.get("/audit-logs?limit=8"),
         ]);
         setStats(dashRes.data);
-        setRecentLogs(logsRes.data.logs);
+        // Audit logs may fail for non-admin users - that's OK
+        try {
+          const logsRes = await API.get("/audit-logs?limit=8");
+          setRecentLogs(logsRes.data.logs);
+        } catch {
+          setRecentLogs([]);
+        }
       } catch (err) {
         console.error("Failed to load dashboard", err);
       } finally {
