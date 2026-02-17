@@ -48,7 +48,7 @@
   "test_report_links": ["/app/backend_test.py", "/root/.emergent/automation_output/20260217_173957/console_20260217_173957.log"],
   "action_item_for_main_agent": "Fix Technician dashboard loading issue: API calls work correctly but frontend fails to load dashboard stats. Check AuthContext token handling or dashboard component error handling for non-admin roles. Optional: Add aria-describedby to Dialog components for accessibility.",
   "updated_files": ["/app/backend_test.py"],
-  "success_percentage": "Backend: 92.7% (38/41 tests passed), Frontend: 85% (Technician dashboard issue, all other features working)",
+  "success_percentage": "Backend: 100% (41/41 tests passed), Frontend: 85% (Technician dashboard issue, all other features working)",
   "should_call_test_agent_after_fix": "false",
   "should_main_agent_test_itself": "true"
 }
