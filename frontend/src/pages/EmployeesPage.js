@@ -213,35 +213,35 @@ export default function EmployeesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card border-border" data-testid="employee-dialog">
           <DialogHeader>
-            <DialogTitle>Configure Pay Rate</DialogTitle>
+            <DialogTitle>{t("employees.configurePayRate")}</DialogTitle>
           </DialogHeader>
           {selectedEmployee && (
             <div className="space-y-4 py-4">
               <div className="p-3 rounded-lg bg-muted/50">
                 <p className="font-medium text-foreground">{selectedEmployee.name || selectedEmployee.email}</p>
-                <p className="text-xs text-muted-foreground">{selectedEmployee.role}</p>
+                <p className="text-xs text-muted-foreground">{t(`users.roles.${selectedEmployee.role.toLowerCase()}`, selectedEmployee.role)}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Pay Type</Label>
+                  <Label>{t("employees.payType")}</Label>
                   <Select value={payType} onValueChange={setPayType}>
                     <SelectTrigger className="bg-background" data-testid="pay-type-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PAY_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      {PAY_TYPES.map((pt) => <SelectItem key={pt} value={pt}>{t(`employees.payTypes.${pt.toLowerCase()}`)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Pay Schedule</Label>
+                  <Label>{t("employees.paySchedule")}</Label>
                   <Select value={paySchedule} onValueChange={setPaySchedule}>
                     <SelectTrigger className="bg-background" data-testid="pay-schedule-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PAY_SCHEDULES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {PAY_SCHEDULES.map((s) => <SelectItem key={s} value={s}>{t(`employees.schedules.${s.toLowerCase()}`)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -249,45 +249,45 @@ export default function EmployeesPage() {
 
               {payType === "Hourly" && (
                 <div className="space-y-2">
-                  <Label>Hourly Rate (€)</Label>
+                  <Label>{t("employees.hourlyRate")}</Label>
                   <Input type="number" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="0.00" className="bg-background" data-testid="hourly-rate-input" />
                 </div>
               )}
               {payType === "Daily" && (
                 <div className="space-y-2">
-                  <Label>Daily Rate (€)</Label>
+                  <Label>{t("employees.dailyRate")}</Label>
                   <Input type="number" value={dailyRate} onChange={(e) => setDailyRate(e.target.value)} placeholder="0.00" className="bg-background" data-testid="daily-rate-input" />
                 </div>
               )}
               {payType === "Monthly" && (
                 <div className="space-y-2">
-                  <Label>Monthly Salary (€)</Label>
+                  <Label>{t("employees.monthlySalary")}</Label>
                   <Input type="number" value={monthlySalary} onChange={(e) => setMonthlySalary(e.target.value)} placeholder="0.00" className="bg-background" data-testid="monthly-salary-input" />
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Standard Hours/Day</Label>
+                  <Label>{t("employees.standardHoursDay")}</Label>
                   <Input type="number" value={standardHours} onChange={(e) => setStandardHours(parseFloat(e.target.value) || 8)} className="bg-background" data-testid="standard-hours-input" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Start Date</Label>
+                  <Label>{t("employees.startDate")}</Label>
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-background" data-testid="start-date-input" />
                 </div>
               </div>
 
               <div className="flex items-center gap-3 pt-2">
                 <Switch checked={active} onCheckedChange={setActive} data-testid="active-switch" />
-                <Label>Active for Payroll</Label>
+                <Label>{t("employees.activeForPayroll")}</Label>
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleSave} disabled={saving} data-testid="save-profile-btn">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              Save
+              {t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
