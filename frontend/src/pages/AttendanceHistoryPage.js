@@ -35,6 +35,7 @@ const REPORT_COLORS = {
 };
 
 export default function AttendanceHistoryPage() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [entries, setEntries] = useState([]);
   const [reports, setReports] = useState([]);
