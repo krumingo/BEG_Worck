@@ -7,14 +7,20 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - Multi-tenant architecture with data isolation by company/organization
 - Role-based access control (Admin, Owner, SiteManager, Technician, etc.)
 - Feature-flagged modules
+- **SaaS billing with self-onboarding (Iteration 10)** ✅
 
 ## User Personas
-- **Admin/Owner**: Full access to all modules, company settings, user management
+- **Admin/Owner**: Full access to all modules, company settings, user management, billing
 - **Site Manager**: Manage attendance, work reports, project teams
 - **Technician**: Mark attendance, submit work reports
 
+## Subscription Plans
+- **Free Trial**: 14 days, M0+M1+M3 (Core, Projects, Attendance)
+- **Pro** (€49/month): All current modules (M0-M5, M9)
+- **Enterprise** (€149/month): All modules + unlimited users
+
 ## Modules
-- M0: Core/SaaS (tenancy, auth, roles, billing skeleton) ✅
+- M0: Core/SaaS (tenancy, auth, roles, billing) ✅
 - M1: Projects ✅
 - M2: Estimates/BOQ ✅
 - M3: Attendance & Daily Reports ✅
@@ -26,56 +32,66 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - M9: Admin Console/BI - Alerts ✅ | Overhead Cost System ✅
 
 ## Technical Stack
-- **Backend**: FastAPI, Motor (async MongoDB), JWT authentication
+- **Backend**: FastAPI, Motor (async MongoDB), JWT authentication, Stripe
 - **Frontend**: React, TailwindCSS, Shadcn/UI, react-i18next
 - **Database**: MongoDB
 
 ## What's Been Implemented
 
+### February 2026 - Iteration 10: M10 SaaS Billing & Self-Onboarding ✅ (CURRENT)
+- ✅ Public signup endpoint with org + user + subscription creation
+- ✅ 14-day free trial with automatic status tracking
+- ✅ 3 billing plans: Free, Pro (€49), Enterprise (€149)
+- ✅ Stripe integration with MOCK MODE for development
+- ✅ Mock checkout directly upgrades subscription without payment
+- ✅ Module gating via `/api/billing/check-module/{code}`
+- ✅ Trial expiration auto-updates status to `past_due`
+- ✅ Frontend pages: SignupPage, PlanSelectionPage, BillingSettingsPage
+- ✅ Success/Cancel pages for checkout flow
+- ✅ Full i18n support (Bulgarian + English)
+- ✅ Backend tests: 15/15 passed (`/app/backend/tests/test_m10_billing.py`)
+- ✅ Required Stripe env vars documented: STRIPE_API_KEY, STRIPE_PRICE_ID_PRO, STRIPE_PRICE_ID_ENTERPRISE, STRIPE_WEBHOOK_SECRET
+
 ### February 2026 - Iteration 9: M9 Overhead Cost System ✅
 - ✅ Data Models: OverheadCategory, OverheadCost, OverheadAsset, OverheadSnapshot, ProjectOverheadAllocation
-- ✅ Calculation Logic: Total overhead from costs + asset amortization, person-days from attendance, hours from work reports
+- ✅ Calculation Logic: Total overhead from costs + asset amortization
 - ✅ Snapshot Computation: €/person-day and €/hour rates
 - ✅ Project Allocation: Distribute overhead based on PersonDays or Hours method
-- ✅ API Endpoints: CRUD for categories, costs, assets; snapshot compute and allocation
-- ✅ Permissions: Admin/Owner/Accountant full access, SiteManager read-only, Technician blocked
-- ✅ Frontend Pages: OverheadPage (Dashboard, Costs, Assets, Snapshots tabs), OverheadSnapshotDetailPage
+- ✅ Frontend Pages: OverheadPage, OverheadSnapshotDetailPage
 - ✅ i18n: Full Bulgarian translations for overhead section
-
-### February 2026 - i18n Patch COMPLETE ✅
-- ✅ Installed and configured react-i18next with Bulgarian (bg) as default language
-- ✅ Created comprehensive translation files: `/app/frontend/src/i18n/en.json` and `bg.json`
-- ✅ Translated core pages: Login, Dashboard, all M5 Finance pages
-- ✅ Translated operational pages: MyDay, AttendanceHistory, WorkReportForm, SiteAttendance, WorkReportReview
-- ✅ Translated management pages: Reminders, Notifications, Projects, ProjectDetail
-- ✅ Translated commercial pages: OffersList, OfferEditor, ActivityCatalog
-- ✅ Translated HR/Payroll pages: Employees, Advances, PayrollRuns, PayrollDetail, MyPayslips
-- ✅ Translated admin pages: Users, CompanySettings, ModuleToggles, AuditLog
-- ✅ Added formatDate, formatTime, formatDateTime utility functions for locale-aware formatting
-- ✅ Translated all navigation menu items in DashboardLayout
-- ✅ Language Switcher (BG/EN toggle) working with localStorage persistence
-- ✅ **BG Mode Sweep PASSED: ZERO English UI strings visible in Bulgarian mode**
 
 ### Previous Sessions
 - M0-M5 modules fully implemented
 - M9 Alerts (Reminders system) implemented
-- Test files created at `/app/backend/tests/test_finance.py`
+- i18n patch completed with 100% Bulgarian translations
 
 ## Prioritized Backlog
 
 ### P0 - Critical
-- NONE - i18n patch completed
+- NONE - Iteration 10 completed
 
-### P1 - Next Iteration
-- M9: Overhead Cost System - Admin Console/BI statistics
-
-### P2 - Future
+### P1 - Future Iterations
 - M6: AI Invoice Capture (upload/parse invoices)
 - M7: Inventory (items + movements)
 - M8: Assets & QR (checkout/checkin, maintenance)
+
+### P2 - Enhancements
 - Backend refactoring: Break down monolithic `server.py` into `/routes`, `/models`
+- M9 Complete: Full Admin Console/BI statistics dashboard
 
 ## Key API Endpoints
+
+### Billing (NEW)
+- `GET /api/billing/plans` - List all plans (public)
+- `GET /api/billing/config` - Stripe configuration status
+- `POST /api/billing/signup` - Create new org with owner (public)
+- `GET /api/billing/subscription` - Current subscription details
+- `POST /api/billing/create-checkout-session` - Stripe checkout (mock mode supported)
+- `POST /api/billing/create-portal-session` - Stripe customer portal
+- `POST /api/billing/webhook` - Stripe webhook handler
+- `GET /api/billing/check-module/{code}` - Check module access
+
+### Existing
 - `/api/auth/*` - Authentication
 - `/api/projects/*` - Projects CRUD
 - `/api/offers/*` - Offers/BOQ CRUD
@@ -84,12 +100,21 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - `/api/finance/*` - Accounts, Invoices, Payments
 - `/api/employees/*` - Employee profiles
 - `/api/payroll/*` - Payroll runs
+- `/api/overhead/*` - Overhead costs system
 - `/api/reminders/*` - Reminders system
 
 ## Credentials
 - Admin: `admin@begwork.com` / `admin123`
 - Manager: `manager@begwork.com` / `manager123`
 - Technician: `tech@begwork.com` / `tech123`
+
+## Environment Variables for Real Stripe
+```
+STRIPE_API_KEY=sk_live_xxx or sk_test_xxx
+STRIPE_PRICE_ID_PRO=price_xxx
+STRIPE_PRICE_ID_ENTERPRISE=price_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+```
 
 ## Known Issues
 - `server.py` is monolithic and should be refactored (non-blocking)
@@ -98,21 +123,28 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 ```
 /app/
 ├── backend/
-│   ├── server.py        # Main FastAPI app
+│   ├── server.py        # Main FastAPI app (4700+ lines)
 │   ├── requirements.txt
 │   └── tests/
-│       └── test_finance.py
+│       ├── test_finance.py
+│       ├── test_m9_overhead.py
+│       └── test_m10_billing.py  # NEW
 └── frontend/
     ├── src/
     │   ├── components/  # Reusable components
     │   ├── contexts/    # AuthContext
     │   ├── i18n/
-    │   │   ├── bg.json  # Bulgarian translations
-    │   │   ├── en.json  # English translations
-    │   │   ├── i18n.js  # i18n configuration
-    │   │   └── i18nUtils.js # Locale-aware formatting utilities
-    │   ├── pages/       # Page components
-    │   └── services/    # API service wrappers
+    │   │   ├── bg.json  # Bulgarian translations (with billing)
+    │   │   ├── en.json  # English translations (with billing)
+    │   │   └── ...
+    │   ├── pages/
+    │   │   ├── SignupPage.js         # NEW
+    │   │   ├── PlanSelectionPage.js  # NEW
+    │   │   ├── BillingSettingsPage.js # NEW
+    │   │   ├── BillingSuccessPage.js  # NEW
+    │   │   ├── BillingCancelPage.js   # NEW
+    │   │   └── ...
+    │   └── services/
     ├── package.json
     └── yarn.lock
 ```
