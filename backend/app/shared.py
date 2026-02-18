@@ -189,23 +189,39 @@ async def get_plan_limits(org_id: str) -> dict:
 
 async def enforce_limit(org_id: str, resource_type: str):
     limits = await get_plan_limits(org_id)
+    
     if resource_type == "users":
         count = await db.users.count_documents({"org_id": org_id})
         limit = limits.get("users", 3)
         if count >= limit:
-            raise HTTPException(status_code=403, detail={"code": "LIMIT_USERS_EXCEEDED", "message": f"User limit ({limit}) reached."})
+            raise HTTPException(status_code=403, detail={
+                "error_code": "LIMIT_USERS_EXCEEDED",
+                "current": count,
+                "limit": limit,
+                "message": f"Plan limit exceeded for users. Current: {count}, Limit: {limit}",
+            })
     elif resource_type == "projects":
         count = await db.projects.count_documents({"org_id": org_id})
         limit = limits.get("projects", 2)
         if count >= limit:
-            raise HTTPException(status_code=403, detail={"code": "LIMIT_PROJECTS_EXCEEDED", "message": f"Project limit ({limit}) reached."})
+            raise HTTPException(status_code=403, detail={
+                "error_code": "LIMIT_PROJECTS_EXCEEDED",
+                "current": count,
+                "limit": limit,
+                "message": f"Plan limit exceeded for projects. Current: {count}, Limit: {limit}",
+            })
     elif resource_type == "invoices":
         now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
         count = await db.invoices.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
         limit = limits.get("monthly_invoices", 5)
         if count >= limit:
-            raise HTTPException(status_code=403, detail={"code": "LIMIT_INVOICES_EXCEEDED", "message": f"Monthly invoice limit ({limit}) reached."})
+            raise HTTPException(status_code=403, detail={
+                "error_code": "LIMIT_INVOICES_EXCEEDED",
+                "current": count,
+                "limit": limit,
+                "message": f"Plan limit exceeded for invoices. Current: {count}, Limit: {limit}",
+            })
 
 # Audit logging
 async def log_audit(org_id: str, user_id: str, user_email: str, action: str, entity_type: str, entity_id: str = None, changes: dict = None):
