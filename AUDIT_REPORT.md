@@ -434,29 +434,126 @@
 - Pydantic модел в MOBILE_FIELDS дефиниции
 - Полета: id, date, origin, destination, status, driver_id, driver_name, vehicle, items, notes, photo_urls
 
-**Definition of Done:**
+---
+
+#### 5.1.1 State Machine
+
+```
+                    ┌─────────────┐
+                    │   Draft     │
+                    └──────┬──────┘
+                           │ assign
+                           ▼
+                    ┌─────────────┐
+          ┌────────│  Assigned   │────────┐
+          │        └──────┬──────┘        │
+          │ cancel        │ start         │ reassign
+          ▼               ▼               │
+   ┌─────────────┐ ┌─────────────┐        │
+   │  Cancelled  │ │  InTransit  │◄───────┘
+   └─────────────┘ └──────┬──────┘
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+   │ PartialDlvd │ │  Delivered  │ │   Failed    │
+   └──────┬──────┘ └─────────────┘ └─────────────┘
+          │ complete
+          ▼
+   ┌─────────────┐
+   │  Delivered  │
+   └─────────────┘
+```
+
+**Статуси:**
+| Статус | Описание |
+|--------|----------|
+| Draft | Създадена, не е присвоена |
+| Assigned | Присвоена на шофьор, чака старт |
+| InTransit | В движение към дестинация |
+| PartialDelivered | Частично доставена (някои items липсват/отказани) |
+| Delivered | Успешно завършена |
+| Failed | Неуспешна (клиент отказа, грешен адрес, etc.) |
+| Cancelled | Отменена преди доставка |
+
+---
+
+#### 5.1.2 State Transitions
+
+| # | From Status | Action | To Status | Allowed Roles | Validation Rules |
+|---|-------------|--------|-----------|---------------|------------------|
+| T1 | Draft | **assign** | Assigned | Admin, SiteManager, Warehousekeeper | driver_id required; driver exists & active; items.length > 0 |
+| T2 | Assigned | **start** | InTransit | Driver (own), Admin | driver == current_user OR Admin; vehicle_id set |
+| T3 | Assigned | **reassign** | Assigned | Admin, SiteManager | new driver_id != old; audit log reason |
+| T4 | Assigned | **cancel** | Cancelled | Admin, SiteManager | reason required; notify driver |
+| T5 | InTransit | **complete** | Delivered | Driver (own), Admin | all items delivered (qty_delivered == qty_requested) |
+| T6 | InTransit | **partial** | PartialDelivered | Driver (own), Admin | at least 1 item delivered; at least 1 item missing/rejected |
+| T7 | InTransit | **fail** | Failed | Driver (own), Admin | reason required (enum: ClientRefused, WrongAddress, Inaccessible, Other) |
+| T8 | PartialDelivered | **complete** | Delivered | Admin, SiteManager | manual resolution; all items accounted for |
+| T9 | Draft | **cancel** | Cancelled | Admin, SiteManager, Creator | soft delete or status change |
+
+**Забележки:**
+- Driver може да извърши T2, T5, T6, T7 само за **собствените си** доставки
+- Всяка транзиция записва audit log с: user_id, timestamp, from_status, to_status, reason (ако има)
+- При T6 (partial): items се маркират индивидуално (delivered_qty, rejected_qty, missing_qty)
+
+---
+
+#### 5.1.3 Edge Cases (минимум 5)
+
+| # | Edge Case | Сценарий | Очаквано поведение |
+|---|-----------|----------|-------------------|
+| E1 | **Partial Delivery** | Шофьор доставя 8 от 10 бройки; клиент отказва 2 | Статус → PartialDelivered; items[0].delivered_qty=8, items[0].rejected_qty=2; requires admin resolution |
+| E2 | **Missing Items** | При товарене липсват артикули (грешка в склада) | Driver маркира items като `missing_at_load`; статус → PartialDelivered или Failed ако всичко липсва |
+| E3 | **Wrong Item Loaded** | Заредено грешен артикул вместо поръчания | Driver reports `wrong_item` с photo proof; admin creates return + new delivery |
+| E4 | **Offline Update Conflict** | Driver offline маркира Delivered; междувременно Admin cancel-ва | При sync: conflict detected; server wins (Cancelled); Driver notification за ръчна резолюция |
+| E5 | **Cancel After Assign** | SiteManager cancel-ва след като Driver е започнал (InTransit) | Забранено: T4 валидно само от Assigned; трябва T7 (fail) с причина |
+| E6 | **Driver Reassign Mid-Transit** | Шофьор се разболява по време на доставка | Admin: T7 (fail, reason=DriverUnavailable) → нова Delivery от текуща локация |
+| E7 | **Duplicate Delivery Attempt** | Същите items към същия destination в същия ден | Warning (not block): "Similar delivery exists: {id}"; allow override |
+
+---
+
+#### 5.1.4 Required Endpoints Mapping
+
+| Transition | HTTP Method | Endpoint | Request Body |
+|------------|-------------|----------|--------------|
+| Create | POST | `/api/deliveries` | DeliveryCreate (project_id, origin, destination, items[], notes) |
+| T1 assign | POST | `/api/deliveries/{id}/assign` | {driver_id, vehicle_id?, scheduled_date?} |
+| T2 start | POST | `/api/deliveries/{id}/start` | {vehicle_id?, start_location?} |
+| T3 reassign | POST | `/api/deliveries/{id}/reassign` | {new_driver_id, reason} |
+| T4/T9 cancel | POST | `/api/deliveries/{id}/cancel` | {reason} |
+| T5 complete | POST | `/api/deliveries/{id}/complete` | {items_confirmation[], signature_url?, photo_urls[]} |
+| T6 partial | POST | `/api/deliveries/{id}/partial` | {items_status[], notes, photo_urls[]} |
+| T7 fail | POST | `/api/deliveries/{id}/fail` | {reason_code, reason_text, photo_urls[]} |
+| T8 resolve | POST | `/api/deliveries/{id}/resolve` | {resolution_type, notes} |
+| List | GET | `/api/deliveries` | ?status=&driver_id=&project_id=&date_from=&date_to= |
+| Get | GET | `/api/deliveries/{id}` | - |
+| Update | PUT | `/api/deliveries/{id}` | DeliveryUpdate (only Draft status) |
+| Delete | DELETE | `/api/deliveries/{id}` | (only Draft status, soft-delete) |
+| My Deliveries | GET | `/api/deliveries/my` | Driver-only: own assigned/in-transit |
+| Driver Actions | POST | `/api/deliveries/{id}/driver-action` | Mobile-friendly: {action, payload} |
+
+**Общо: 14 endpoints**
+
+---
+
+#### 5.1.5 Definition of Done Checklist
+
 | # | Критерий | Статус |
 |---|----------|--------|
-| 1 | MongoDB колекция `deliveries` съществува | ❌ |
-| 2 | CRUD endpoints: GET/POST/PUT/DELETE /api/deliveries | ❌ |
-| 3 | Статус поток: Draft → InTransit → Delivered → Cancelled | ❌ |
-| 4 | Присвояване на driver_id | ❌ |
-| 5 | Списък артикули (items) с количества | ❌ |
-| 6 | Свързване с проект (project_id) | ❌ |
-| 7 | Снимки при доставка (media linkage) | ❌ |
-| 8 | Mobile endpoint: Driver вижда своите доставки | ❌ |
-| 9 | Mobile action: updateStatus от шофьор | ❌ |
-| 10 | Audit log при промяна на статус | ❌ |
-| 11 | Frontend страница DeliveriesPage | ❌ |
-| 12 | i18n за BG + EN | ❌ |
-| 13 | Backend тестове | ❌ |
-
-**Необходими действия за DoD:**
-1. Създаване на `deliveries` колекция и Pydantic модели
-2. Имплементиране на 8+ API endpoints
-3. Frontend CRUD интерфейс
-4. Mobile-specific endpoints за шофьори
-5. Интеграция със съществуващата media система
+| 1 | MongoDB колекция `deliveries` със schema | ❌ |
+| 2 | State machine имплементирана (7 статуса, 9 прехода) | ❌ |
+| 3 | Role-based transition guards | ❌ |
+| 4 | All 14 endpoints working | ❌ |
+| 5 | Items tracking (delivered/rejected/missing qty) | ❌ |
+| 6 | Media linkage (photos at delivery) | ❌ |
+| 7 | Audit log на всяка транзиция | ❌ |
+| 8 | Offline conflict detection | ❌ |
+| 9 | Frontend DeliveriesPage + Driver view | ❌ |
+| 10 | i18n (BG + EN) | ❌ |
+| 11 | Backend tests: all transitions + 7 edge cases | ❌ |
+| 12 | Mobile bootstrap integration | ❌ |
 
 ---
 
