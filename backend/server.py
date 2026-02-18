@@ -561,6 +561,69 @@ async def require_admin(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+# ── Module Access Enforcement ────────────────────────────────────
+# Server-side enforcement: Never trust frontend for subscription status
+
+async def check_module_access_for_org(org_id: str, module_code: str) -> tuple[bool, str]:
+    """
+    Check if an organization has access to a module based on their subscription.
+    Returns (allowed: bool, reason: str or None)
+    """
+    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    if not sub:
+        return False, "No subscription"
+    
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    status = sub.get("status", "")
+    trial_ends_at = sub.get("trial_ends_at")
+    
+    # Check trial expiration
+    if status == "trialing" and trial_ends_at:
+        now = datetime.now(timezone.utc)
+        try:
+            trial_end_dt = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+            if now >= trial_end_dt:
+                await db.subscriptions.update_one(
+                    {"org_id": org_id},
+                    {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
+                )
+                status = "past_due"
+        except (ValueError, TypeError):
+            pass
+    
+    # Check if subscription is active
+    if status in ["canceled", "past_due", "incomplete"]:
+        if module_code == "M0":
+            return True, None  # Always allow core
+        return False, f"Subscription {status}. Please upgrade your plan."
+    
+    allowed = module_code in plan["allowed_modules"]
+    return allowed, None if allowed else "Module not in your current plan"
+
+async def require_module(module_code: str, user: dict) -> dict:
+    """Enforce module access for a user's organization. Raises HTTPException if not allowed."""
+    allowed, reason = await check_module_access_for_org(user["org_id"], module_code)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=reason or f"Module {module_code} not available")
+    return user
+
+# Dependency factories for module enforcement
+def require_m2(user: dict = Depends(get_current_user)):
+    """Require M2 (Estimates/BOQ) module access"""
+    return require_module("M2", user)
+
+def require_m4(user: dict = Depends(get_current_user)):
+    """Require M4 (HR/Payroll) module access"""
+    return require_module("M4", user)
+
+def require_m5(user: dict = Depends(get_current_user)):
+    """Require M5 (Finance) module access"""
+    return require_module("M5", user)
+
+def require_m9(user: dict = Depends(get_current_user)):
+    """Require M9 (Admin Console/BI) module access"""
+    return require_module("M9", user)
+
 # ── Project Permission Helpers ───────────────────────────────────
 
 async def get_user_project_ids(user_id: str) -> List[str]:
