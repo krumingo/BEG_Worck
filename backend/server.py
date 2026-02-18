@@ -4412,6 +4412,15 @@ async def create_portal_session(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only Admin or Owner can manage billing")
     
     sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    
+    # MOCK MODE
+    if STRIPE_MOCK_MODE:
+        return {
+            "mock_mode": True,
+            "portal_url": None,
+            "message": "STRIPE_MOCK_MODE active. Customer portal not available. Manage subscription in app settings.",
+        }
+    
     if not sub or not sub.get("stripe_customer_id"):
         raise HTTPException(status_code=400, detail="No billing information found")
     
@@ -4420,7 +4429,7 @@ async def create_portal_session(user: dict = Depends(get_current_user)):
             customer=sub["stripe_customer_id"],
             return_url=f"{APP_BASE_URL}/settings",
         )
-        return {"portal_url": session.url}
+        return {"portal_url": session.url, "mock_mode": False}
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
@@ -4441,12 +4450,16 @@ async def stripe_webhook(request: Request):
     else:
         # Development mode - parse without verification
         import json
-        event = json.loads(payload)
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
     
     event_type = event.get("type", "")
     data = event.get("data", {}).get("object", {})
     
     now = datetime.now(timezone.utc).isoformat()
+    logger.info(f"Stripe webhook received: {event_type}")
     
     if event_type == "checkout.session.completed":
         org_id = data.get("metadata", {}).get("org_id")
@@ -4474,12 +4487,11 @@ async def stripe_webhook(request: Request):
                     {"org_id": org_id, "module_code": mod_code},
                     {"$set": {"enabled": mod_code in allowed_modules}}
                 )
-            await log_audit({"id": "webhook", "org_id": org_id, "email": "stripe"}, "activated", "billing", org_id, {"plan_id": plan_id})
+            logger.info(f"Subscription activated for org {org_id} with plan {plan_id}")
     
     elif event_type == "customer.subscription.updated":
         subscription_id = data.get("id")
         status = data.get("status")
-        customer_id = data.get("customer")
         period_start = data.get("current_period_start")
         period_end = data.get("current_period_end")
         
@@ -4492,7 +4504,7 @@ async def stripe_webhook(request: Request):
                 update_data["current_period_end"] = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
             
             await db.subscriptions.update_one({"stripe_subscription_id": subscription_id}, {"$set": update_data})
-            await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "updated", "subscription", subscription_id, {"status": status})
+            logger.info(f"Subscription {subscription_id} updated to status {status}")
     
     elif event_type == "customer.subscription.deleted":
         subscription_id = data.get("id")
@@ -4514,7 +4526,7 @@ async def stripe_webhook(request: Request):
                     {"org_id": sub["org_id"], "module_code": mod_code},
                     {"$set": {"enabled": mod_code in free_modules}}
                 )
-            await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "canceled", "billing", subscription_id, {})
+            logger.info(f"Subscription {subscription_id} canceled, downgraded to free")
     
     elif event_type == "invoice.payment_succeeded":
         subscription_id = data.get("subscription")
@@ -4525,7 +4537,7 @@ async def stripe_webhook(request: Request):
                     {"stripe_subscription_id": subscription_id},
                     {"$set": {"status": "active", "updated_at": now}}
                 )
-                await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "payment_succeeded", "billing", subscription_id, {})
+                logger.info(f"Payment succeeded, subscription {subscription_id} reactivated")
     
     elif event_type == "invoice.payment_failed":
         subscription_id = data.get("subscription")
@@ -4536,7 +4548,7 @@ async def stripe_webhook(request: Request):
                     {"stripe_subscription_id": subscription_id},
                     {"$set": {"status": "past_due", "updated_at": now}}
                 )
-                await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "payment_failed", "billing", subscription_id, {})
+                logger.info(f"Payment failed, subscription {subscription_id} marked as past_due")
     
     return {"status": "received"}
 
