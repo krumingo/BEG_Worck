@@ -1,0 +1,222 @@
+"""
+Shared dependencies and globals for routes.
+This module is imported by route files to access db, auth, and config.
+"""
+from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from datetime import datetime, timezone, timedelta
+from typing import List
+import os
+import uuid
+
+# Load env
+from dotenv import load_dotenv
+from pathlib import Path
+ROOT_DIR = Path(__file__).parent.parent.parent
+load_dotenv(ROOT_DIR / '.env')
+
+# Database
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+# JWT Config
+JWT_SECRET = os.environ['JWT_SECRET']
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
+# Constants
+ROLES = ["Admin", "Owner", "SiteManager", "Technician", "Accountant", "Warehousekeeper", "Driver", "Viewer"]
+
+MODULES = {
+    "M0": {"name": "Core / SaaS", "description": "Tenants, auth, roles, settings, audit, billing"},
+    "M1": {"name": "Projects", "description": "Project management and tracking"},
+    "M2": {"name": "Estimates / BOQ", "description": "Offers, activities, bill of quantities"},
+    "M3": {"name": "Attendance & Reports", "description": "Daily attendance, work reports, reminders"},
+    "M4": {"name": "HR / Payroll", "description": "Hourly/daily/monthly pay, advances, payslips"},
+    "M5": {"name": "Finance", "description": "Invoices, payments, cash/bank management"},
+    "M6": {"name": "AI Invoice Capture", "description": "Upload, parse, approval queue"},
+    "M7": {"name": "Inventory", "description": "Items, stock movements, warehouses"},
+    "M8": {"name": "Assets & QR", "description": "Checkout/checkin, maintenance, warranty"},
+    "M9": {"name": "Admin Console / BI", "description": "Statistics, alerts, overhead costs"},
+}
+
+SUBSCRIPTION_PLANS = {
+    "free": {
+        "name": "Free Trial",
+        "price": 0,
+        "stripe_price_id": None,
+        "allowed_modules": ["M0", "M1", "M3"],
+        "limits": {"users": 3, "projects": 2, "monthly_invoices": 5, "storage_mb": 100},
+        "trial_days": 14,
+        "description": "14-day trial with basic features",
+    },
+    "pro": {
+        "name": "Professional",
+        "price": 49.00,
+        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_PRO"),
+        "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M9"],
+        "limits": {"users": 20, "projects": 50, "monthly_invoices": 500, "storage_mb": 2000},
+        "trial_days": 0,
+        "description": "Full access to all features",
+    },
+    "enterprise": {
+        "name": "Enterprise",
+        "price": 149.00,
+        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_ENTERPRISE"),
+        "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"],
+        "limits": {"users": 100, "projects": 500, "monthly_invoices": 5000, "storage_mb": 20000},
+        "trial_days": 0,
+        "description": "Unlimited users and premium support",
+        "support_priority": "priority",
+        "custom_integrations": True,
+    }
+}
+
+LIMIT_WARNING_THRESHOLD = 0.8
+
+# Auth helpers
+def hash_password(pw: str) -> str:
+    return pwd_context.hash(pw)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_token(data: dict) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    return jwt.encode({**data, "exp": expire}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        if not user.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account disabled")
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def require_admin(user: dict = Depends(get_current_user)):
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def get_user_project_ids(user_id: str) -> List[str]:
+    members = await db.project_team.find({"user_id": user_id, "active": True}, {"_id": 0, "project_id": 1}).to_list(1000)
+    return [m["project_id"] for m in members]
+
+async def can_access_project(user: dict, project_id: str) -> bool:
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True})
+    return member is not None
+
+async def can_manage_project(user: dict, project_id: str) -> bool:
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    if user["role"] == "SiteManager":
+        member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
+        return member is not None
+    return False
+
+# Module access checks
+async def check_module_access_for_org(org_id: str, module_code: str) -> tuple:
+    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    if not sub:
+        return False, "No subscription"
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    status = sub.get("status", "")
+    trial_ends_at = sub.get("trial_ends_at")
+    
+    if status == "trialing" and trial_ends_at:
+        now = datetime.now(timezone.utc)
+        try:
+            trial_end_dt = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+            if now >= trial_end_dt:
+                await db.subscriptions.update_one(
+                    {"org_id": org_id},
+                    {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
+                )
+                status = "past_due"
+        except (ValueError, TypeError):
+            pass
+    
+    if status in ["canceled", "past_due", "incomplete"]:
+        if module_code == "M0":
+            return True, None
+        return False, f"Subscription {status}. Please upgrade your plan."
+    
+    allowed = module_code in plan["allowed_modules"]
+    return allowed, None if allowed else "Module not in your current plan"
+
+async def require_module(module_code: str, user: dict) -> dict:
+    allowed, reason = await check_module_access_for_org(user["org_id"], module_code)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=reason or f"Module {module_code} not available")
+    return user
+
+async def require_m2(user: dict = Depends(get_current_user)):
+    return await require_module("M2", user)
+
+async def require_m4(user: dict = Depends(get_current_user)):
+    return await require_module("M4", user)
+
+async def require_m5(user: dict = Depends(get_current_user)):
+    return await require_module("M5", user)
+
+async def require_m9(user: dict = Depends(get_current_user)):
+    return await require_module("M9", user)
+
+async def get_plan_limits(org_id: str) -> dict:
+    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    if not sub:
+        return SUBSCRIPTION_PLANS["free"]["limits"]
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    return plan.get("limits", SUBSCRIPTION_PLANS["free"]["limits"])
+
+async def enforce_limit(org_id: str, resource_type: str):
+    limits = await get_plan_limits(org_id)
+    if resource_type == "users":
+        count = await db.users.count_documents({"org_id": org_id})
+        limit = limits.get("users", 3)
+        if count >= limit:
+            raise HTTPException(status_code=403, detail={"code": "LIMIT_USERS_EXCEEDED", "message": f"User limit ({limit}) reached."})
+    elif resource_type == "projects":
+        count = await db.projects.count_documents({"org_id": org_id})
+        limit = limits.get("projects", 2)
+        if count >= limit:
+            raise HTTPException(status_code=403, detail={"code": "LIMIT_PROJECTS_EXCEEDED", "message": f"Project limit ({limit}) reached."})
+    elif resource_type == "invoices":
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+        count = await db.invoices.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
+        limit = limits.get("monthly_invoices", 5)
+        if count >= limit:
+            raise HTTPException(status_code=403, detail={"code": "LIMIT_INVOICES_EXCEEDED", "message": f"Monthly invoice limit ({limit}) reached."})
+
+# Audit logging
+async def log_audit(org_id: str, user_id: str, user_email: str, action: str, entity_type: str, entity_id: str = None, changes: dict = None):
+    entry = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "user_id": user_id,
+        "user_email": user_email,
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "changes": changes,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.audit_logs.insert_one(entry)
