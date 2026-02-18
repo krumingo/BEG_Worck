@@ -19,6 +19,11 @@ import stripe
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# ── Helper Functions ────────────────────────────────
+def today_str():
+    """Return today's date as YYYY-MM-DD string in UTC."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
