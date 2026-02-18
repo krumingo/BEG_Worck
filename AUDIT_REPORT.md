@@ -224,11 +224,37 @@
 | GET | /api/reminders/missing-work-reports | api_missing_work_reports | ✅ Работи |
 | POST | /api/internal/run-reminder-jobs | trigger_reminder_jobs | ✅ Работи |
 
-### 1.15 Dashboard & Misc - 3 endpoints
+### 1.15 Dashboard & Misc - 2 endpoints
 | Метод | Път | Хендлър | Статус |
 |-------|-----|---------|--------|
 | GET | /api/dashboard/stats | get_dashboard_stats | ✅ Работи |
 | GET | /api/subscription | get_subscription | ✅ Работи |
+
+---
+
+### Endpoint Count Summary (Verification)
+| Секция | Брой |
+|--------|------|
+| 1.1 Auth & Core | 7 |
+| 1.2 User Management | 4 |
+| 1.3 Feature Flags | 2 |
+| 1.4 Audit Logs | 1 |
+| 1.5 Projects | 13 |
+| 1.6 Estimates/BOQ | 15 |
+| 1.7 Attendance & Work Reports | 18 |
+| 1.8 HR/Payroll | 18 |
+| 1.9 Finance | 17 |
+| 1.10 Overhead | 18 |
+| 1.11 Billing/SaaS | 9 |
+| 1.12 Mobile Integration | 6 |
+| 1.13 Media | 5 |
+| 1.14 Notifications & Reminders | 9 |
+| 1.15 Dashboard & Misc | 2 |
+| **ОБЩО** | **144** |
+
+**Източник:** `/app/audit_endpoints.csv` *(извлечено от FastAPI app.routes)*
+
+**Public onboarding endpoint:** `/api/billing/signup` *(няма /api/auth/signup)*
 
 ---
 
