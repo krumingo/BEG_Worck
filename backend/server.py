@@ -773,6 +773,9 @@ async def list_users(user: dict = Depends(get_current_user)):
 
 @api_router.post("/users", status_code=201)
 async def create_user(data: UserCreate, user: dict = Depends(require_admin)):
+    # Enforce user limit
+    await enforce_limit(user["org_id"], "users")
+    
     if await db.users.find_one({"email": data.email, "org_id": user["org_id"]}):
         raise HTTPException(status_code=400, detail="Email already exists in this organization")
     if data.role not in ROLES:
