@@ -4152,6 +4152,12 @@ stripe.api_key = STRIPE_API_KEY
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://construction-pay-3.preview.emergentagent.com")
 
+# Log Stripe configuration status at startup
+logger.info(f"Stripe Mock Mode: {STRIPE_MOCK_MODE}")
+if STRIPE_MOCK_MODE:
+    logger.warning("STRIPE_MOCK_MODE is enabled. Real Stripe payments disabled.")
+    logger.warning("Required env vars for real Stripe: STRIPE_API_KEY, STRIPE_PRICE_ID_PRO, STRIPE_PRICE_ID_ENTERPRISE, STRIPE_WEBHOOK_SECRET")
+
 @api_router.get("/billing/plans")
 async def list_billing_plans():
     """Public endpoint - list available plans"""
@@ -4164,9 +4170,24 @@ async def list_billing_plans():
             "module_names": [MODULES[m]["name"] for m in plan["allowed_modules"] if m in MODULES],
             "limits": plan["limits"],
             "trial_days": plan.get("trial_days", 0),
+            "description": plan.get("description", ""),
         }
         for plan_id, plan in SUBSCRIPTION_PLANS.items()
     ]
+
+@api_router.get("/billing/config")
+async def get_billing_config():
+    """Get billing system configuration - used by frontend to show correct UI"""
+    return {
+        "stripe_mock_mode": STRIPE_MOCK_MODE,
+        "stripe_configured": not STRIPE_MOCK_MODE,
+        "required_env_vars": [
+            {"name": "STRIPE_API_KEY", "configured": bool(os.environ.get("STRIPE_API_KEY")) and os.environ.get("STRIPE_API_KEY") != "sk_test_emergent"},
+            {"name": "STRIPE_PRICE_ID_PRO", "configured": bool(os.environ.get("STRIPE_PRICE_ID_PRO"))},
+            {"name": "STRIPE_PRICE_ID_ENTERPRISE", "configured": bool(os.environ.get("STRIPE_PRICE_ID_ENTERPRISE"))},
+            {"name": "STRIPE_WEBHOOK_SECRET", "configured": bool(os.environ.get("STRIPE_WEBHOOK_SECRET"))},
+        ]
+    }
 
 @api_router.post("/billing/signup")
 async def signup_organization(data: OrgSignupRequest):
@@ -4180,38 +4201,49 @@ async def signup_organization(data: OrgSignupRequest):
     org_id = str(uuid.uuid4())
     user_id = str(uuid.uuid4())
     
+    # Parse owner name into first_name and last_name
+    name_parts = data.owner_name.strip().split(" ", 1)
+    first_name = name_parts[0]
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+    
     # Create organization
     org = {
         "id": org_id,
         "name": data.org_name,
+        "slug": data.org_name.lower().replace(" ", "-").replace("_", "-")[:50],
         "email": data.owner_email.lower(),
         "phone": "",
         "address": "",
+        "logo_url": "",
         "vat_percent": 20.0,
         "attendance_start": "06:00",
         "attendance_end": "10:00",
-        "work_report_deadline_hours": 24,
+        "work_report_deadline": "18:30",
+        "max_reminders_per_day": 2,
+        "escalation_after_days": 2,
+        "org_timezone": "Europe/Sofia",
         "created_at": now,
         "updated_at": now,
     }
     await db.organizations.insert_one(org)
     
-    # Create owner user
-    hashed = hash_password(data.password)
+    # Create owner user - matching existing user schema
     user = {
         "id": user_id,
         "org_id": org_id,
-        "name": data.owner_name,
         "email": data.owner_email.lower(),
-        "password": hashed,
+        "password_hash": hash_password(data.password),
+        "first_name": first_name,
+        "last_name": last_name,
         "role": "Owner",
-        "active": True,
+        "phone": "",
+        "is_active": True,
         "created_at": now,
         "updated_at": now,
     }
     await db.users.insert_one(user)
     
-    # Create subscription with free trial
+    # Create subscription with free trial (14 days)
     trial_ends = datetime.now(timezone.utc) + timedelta(days=SUBSCRIPTION_PLANS["free"]["trial_days"])
     subscription = {
         "id": str(uuid.uuid4()),
@@ -4238,29 +4270,35 @@ async def signup_organization(data: OrgSignupRequest):
             "module_name": MODULES[mod_code]["name"],
             "description": MODULES[mod_code]["description"],
             "enabled": mod_code in free_modules,
-            "created_at": now,
+            "updated_at": now,
+            "updated_by": user_id,
         }
         await db.feature_flags.insert_one(flag)
     
     # Create token for auto-login
-    token = create_token({"user_id": user_id, "org_id": org_id})
+    token = create_token({"user_id": user_id, "org_id": org_id, "role": "Owner"})
     
-    await log_audit({"id": user_id, "org_id": org_id, "email": data.owner_email}, "signup", "organization", org_id, {"name": data.org_name})
+    await log_audit(org_id, user_id, data.owner_email, "signup", "organization", org_id, {"name": data.org_name})
     
     return {
         "token": token,
         "user": {
             "id": user_id,
-            "name": data.owner_name,
+            "first_name": first_name,
+            "last_name": last_name,
             "email": data.owner_email.lower(),
             "role": "Owner",
             "org_id": org_id,
-            "org_name": data.org_name,
+        },
+        "organization": {
+            "id": org_id,
+            "name": data.org_name,
         },
         "subscription": {
             "plan_id": "free",
             "status": "trialing",
             "trial_ends_at": trial_ends.isoformat(),
+            "days_remaining": SUBSCRIPTION_PLANS["free"]["trial_days"],
         }
     }
 
