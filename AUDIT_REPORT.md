@@ -739,19 +739,26 @@
 | | → Backend endpoints | | | |
 | | → Frontend страница | | | |
 | | → Тестове | | | |
-| 2.2 | **Machines CRUD пълна имплементация** | P1 | 2-3 дни | 2.1 |
-| 2.3 | Dashboard BI разширение | P1 | 2 дни | Етап 1 |
-| | → Агрегации по проекти | | | |
-| | → Тrendови графики | | | |
-| 2.4 | Export CSV/PDF | P2 | 1-2 дни | 2.3 |
-| 2.5 | Real Stripe Integration | P0 | 2 дни | Stripe акаунт |
-| 2.6 | Email notifications (SendGrid) | P2 | 1-2 дни | SendGrid API key |
+| 2.2 | **M7 Inventory базова имплементация** | P0 | 4-5 дни | 2.1 |
+| | → Items catalog + InventoryBalance | | | |
+| | → Warehouses + Projects като locations | | | |
+| | → Stock movements CRUD | | | |
+| 2.3 | **M8 Assets базова имплементация** | P1 | 3-4 дни | 2.2 |
+| | → AssetInstance + Guest assignments | | | |
+| | → QR code generation | | | |
+| 2.4 | **Requests + Global Availability Scan** | P0 | 3-4 дни | 2.2, 2.3 |
+| | → Request + RequestLine models | | | |
+| | → buildSourceSuggestionsForRequest | | | |
+| | → UI за предложения | | | |
+| 2.5 | Real Stripe Integration | P1 | 2 дни | Stripe акаунт |
+| 2.6 | Export CSV/PDF | P2 | 1-2 дни | Етап 1 |
 
 **Deliverables:**
 - Пълна Deliveries функционалност
-- Пълна Machines функционалност
+- M7 Inventory (базово)
+- M8 Assets (базово)
+- Global Availability Scan при Request submit
 - Реални плащания
-- Data export
 
 ---
 
