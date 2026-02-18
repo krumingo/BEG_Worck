@@ -63,7 +63,17 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public routes */}
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
+          
+          {/* Billing routes (semi-public - handle auth internally) */}
+          <Route path="/plans" element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>} />
+          <Route path="/billing" element={<ProtectedRoute><BillingSettingsPage /></ProtectedRoute>} />
+          <Route path="/billing/success" element={<ProtectedRoute><BillingSuccessPage /></ProtectedRoute>} />
+          <Route path="/billing/cancel" element={<BillingCancelPage />} />
+          
+          {/* Protected routes */}
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsListPage /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
