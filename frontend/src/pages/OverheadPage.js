@@ -807,12 +807,12 @@ export default function OverheadPage() {
               </div>
               <div className="space-y-2">
                 <Label>{t("overhead.assignedTo")}</Label>
-                <Select value={formAssetAssigned} onValueChange={setFormAssetAssigned}>
+                <Select value={formAssetAssigned || "none"} onValueChange={(v) => setFormAssetAssigned(v === "none" ? "" : v)}>
                   <SelectTrigger className="bg-background" data-testid="asset-assigned-select">
                     <SelectValue placeholder="-" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">-</SelectItem>
+                    <SelectItem value="none">-</SelectItem>
                     {employees.map((e) => (
                       <SelectItem key={e.id} value={e.id}>{e.name || e.email}</SelectItem>
                     ))}
