@@ -211,7 +211,7 @@
 | GET | /api/media/{media_id} | get_media | ✅ Работи |
 | GET | /api/media/file/{filename} | serve_media_file | ✅ Работи |
 
-### 1.14 Notifications & Reminders (M9) - 8 endpoints
+### 1.14 Notifications & Reminders (M9) - 9 endpoints
 | Метод | Път | Хендлър | Статус |
 |-------|-----|---------|--------|
 | GET | /api/notifications/my | get_my_notifications | ✅ Работи |
@@ -220,6 +220,8 @@
 | GET | /api/reminders/logs | get_reminder_logs | ✅ Работи |
 | POST | /api/reminders/send | send_reminders_manual | ✅ Работи |
 | POST | /api/reminders/excuse | excuse_reminder | ✅ Работи |
+| GET | /api/reminders/missing-attendance | api_missing_attendance | ✅ Работи |
+| GET | /api/reminders/missing-work-reports | api_missing_work_reports | ✅ Работи |
 | POST | /api/internal/run-reminder-jobs | trigger_reminder_jobs | ✅ Работи |
 
 ### 1.15 Dashboard & Misc - 3 endpoints
