@@ -4115,6 +4115,15 @@ async def startup():
     await db.payslips.create_index([("org_id", 1), ("payroll_run_id", 1)])
     await db.payslips.create_index([("org_id", 1), ("user_id", 1)])
     await db.payroll_payments.create_index([("org_id", 1), ("payroll_run_id", 1)])
+    # M9 Overhead indexes
+    await db.overhead_categories.create_index([("org_id", 1)])
+    await db.overhead_costs.create_index([("org_id", 1), ("date_incurred", -1)])
+    await db.overhead_costs.create_index([("org_id", 1), ("category_id", 1)])
+    await db.overhead_assets.create_index([("org_id", 1), ("active", 1)])
+    await db.overhead_snapshots.create_index([("org_id", 1), ("computed_at", -1)])
+    await db.overhead_snapshots.create_index([("org_id", 1), ("period_start", 1), ("period_end", 1)])
+    await db.project_overhead_allocations.create_index([("org_id", 1), ("overhead_snapshot_id", 1)])
+    await db.project_overhead_allocations.create_index([("org_id", 1), ("project_id", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
