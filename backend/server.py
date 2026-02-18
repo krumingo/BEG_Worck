@@ -3748,7 +3748,11 @@ async def create_overhead_asset(data: OverheadAssetCreate, user: dict = Depends(
     }
     await db.overhead_assets.insert_one(doc)
     await log_audit(user, "created", "overhead_asset", doc["id"], {"name": data.name, "purchase_cost": data.purchase_cost})
-    return {k: v for k, v in doc.items() if k != "_id"}
+    # Add computed daily amortization
+    result = {k: v for k, v in doc.items() if k != "_id"}
+    life_days = data.useful_life_months * 30.4375
+    result["daily_amortization"] = round(data.purchase_cost / life_days, 4) if life_days > 0 else 0
+    return result
 
 @api_router.put("/overhead/assets/{asset_id}")
 async def update_overhead_asset(asset_id: str, data: OverheadAssetUpdate, user: dict = Depends(get_current_user)):
