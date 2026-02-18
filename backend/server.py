@@ -4481,6 +4481,12 @@ async def list_roles():
 @api_router.get("/subscription")
 async def get_subscription(user: dict = Depends(get_current_user)):
     sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    if sub:
+        plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+        sub["plan_name"] = plan["name"]
+        sub["plan_price"] = plan["price"]
+        sub["allowed_modules"] = plan["allowed_modules"]
+        sub["limits"] = plan["limits"]
     return sub
 
 @api_router.get("/modules")
