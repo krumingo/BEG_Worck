@@ -23,7 +23,7 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - M6: AI Invoice Capture (UPCOMING)
 - M7: Inventory (UPCOMING)
 - M8: Assets & QR (UPCOMING)
-- M9: Admin Console/BI - Alerts ✅ | Overhead Cost System (UPCOMING)
+- M9: Admin Console/BI - Alerts ✅ | Overhead Cost System ✅
 
 ## Technical Stack
 - **Backend**: FastAPI, Motor (async MongoDB), JWT authentication
@@ -31,6 +31,16 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - **Database**: MongoDB
 
 ## What's Been Implemented
+
+### February 2026 - Iteration 9: M9 Overhead Cost System ✅
+- ✅ Data Models: OverheadCategory, OverheadCost, OverheadAsset, OverheadSnapshot, ProjectOverheadAllocation
+- ✅ Calculation Logic: Total overhead from costs + asset amortization, person-days from attendance, hours from work reports
+- ✅ Snapshot Computation: €/person-day and €/hour rates
+- ✅ Project Allocation: Distribute overhead based on PersonDays or Hours method
+- ✅ API Endpoints: CRUD for categories, costs, assets; snapshot compute and allocation
+- ✅ Permissions: Admin/Owner/Accountant full access, SiteManager read-only, Technician blocked
+- ✅ Frontend Pages: OverheadPage (Dashboard, Costs, Assets, Snapshots tabs), OverheadSnapshotDetailPage
+- ✅ i18n: Full Bulgarian translations for overhead section
 
 ### February 2026 - i18n Patch COMPLETE ✅
 - ✅ Installed and configured react-i18next with Bulgarian (bg) as default language
