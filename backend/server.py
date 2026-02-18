@@ -4554,12 +4554,34 @@ async def stripe_webhook(request: Request):
 
 @api_router.get("/billing/subscription")
 async def get_billing_subscription(user: dict = Depends(get_current_user)):
-    """Get current subscription details with plan info"""
+    """Get current subscription details with plan info and trial status"""
     sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     if not sub:
         return None
     
     plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    now = datetime.now(timezone.utc)
+    
+    # Calculate trial status
+    trial_ends_at = sub.get("trial_ends_at")
+    is_trial_active = False
+    trial_days_remaining = 0
+    trial_expired = False
+    
+    if trial_ends_at and sub.get("status") == "trialing":
+        trial_end_dt = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+        if now < trial_end_dt:
+            is_trial_active = True
+            trial_days_remaining = (trial_end_dt - now).days
+        else:
+            trial_expired = True
+            # Auto-update status to past_due if trial expired
+            await db.subscriptions.update_one(
+                {"org_id": user["org_id"]},
+                {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
+            )
+            sub["status"] = "past_due"
+    
     return {
         **sub,
         "plan": {
@@ -4568,22 +4590,47 @@ async def get_billing_subscription(user: dict = Depends(get_current_user)):
             "price": plan["price"],
             "allowed_modules": plan["allowed_modules"],
             "limits": plan["limits"],
-        }
+            "description": plan.get("description", ""),
+        },
+        "trial_active": is_trial_active,
+        "trial_days_remaining": trial_days_remaining,
+        "trial_expired": trial_expired,
+        "stripe_mock_mode": STRIPE_MOCK_MODE,
     }
 
 @api_router.get("/billing/check-module/{module_code}")
 async def check_module_access(module_code: str, user: dict = Depends(get_current_user)):
-    """Check if current subscription allows access to a module"""
+    """Check if current subscription allows access to a module - SERVER-SIDE ENFORCEMENT"""
     sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     if not sub:
         return {"allowed": False, "reason": "No subscription"}
     
     plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
-    allowed = module_code in plan["allowed_modules"]
     
-    # Check if subscription is active
+    # Check trial expiration
     status = sub.get("status", "")
-    if status in ["canceled", "past_due"]:
+    trial_ends_at = sub.get("trial_ends_at")
+    
+    if status == "trialing" and trial_ends_at:
+        now = datetime.now(timezone.utc)
+        trial_end_dt = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+        if now >= trial_end_dt:
+            # Trial expired - update status and restrict to free modules
+            await db.subscriptions.update_one(
+                {"org_id": user["org_id"]},
+                {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
+            )
+            status = "past_due"
+    
+    # Check if subscription is active or trialing
+    if status in ["canceled", "past_due", "incomplete"]:
+        # Allow core read-only access for past_due (keeping minimal functionality)
+        if module_code == "M0":
+            return {"allowed": True, "reason": None, "limited": True}
+        return {"allowed": False, "reason": f"Subscription {status}. Please upgrade your plan."}
+    
+    allowed = module_code in plan["allowed_modules"]
+    return {"allowed": allowed, "reason": None if allowed else "Module not in your current plan. Please upgrade."}
         return {"allowed": False, "reason": f"Subscription {status}"}
     
     return {"allowed": allowed, "reason": None if allowed else "Module not in plan"}
