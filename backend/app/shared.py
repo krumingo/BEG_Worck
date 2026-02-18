@@ -12,16 +12,17 @@ from typing import List
 import os
 import uuid
 
-# Load env
+# Load env first
 from dotenv import load_dotenv
 from pathlib import Path
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent
 load_dotenv(ROOT_DIR / '.env')
 
 # Database
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+db_name = os.environ.get('DB_NAME', 'begwork')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 # JWT Config
 JWT_SECRET = os.environ['JWT_SECRET']
