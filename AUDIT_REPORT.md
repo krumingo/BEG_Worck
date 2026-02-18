@@ -659,6 +659,154 @@
 
 ---
 
+#### 5.3.1 Mobile Governance Hardening Policies
+
+> **Цел:** Осигуряване на security-first подход за мобилния клиент, предотвратяване на data leaks и unauthorized access.
+
+---
+
+**Policy 1: Deny-by-Default**
+
+| Аспект | Правило |
+|--------|---------|
+| **Описание** | Ако няма `mobile_view_config` за дадена роля/модул комбинация → **deny access** или **safe minimum** |
+| **Safe Minimum** | `listFields: []`, `detailFields: ["id"]`, `allowedActions: ["view"]` |
+| **Имплементация** | `get_mobile_config(role, module)` връща `DEFAULT_SAFE_CONFIG` ако няма match |
+| **Audit** | Log warning: "No config for {role}/{module}, using safe minimum" |
+
+```python
+# Псевдокод
+def get_mobile_config(org_id, role, module):
+    config = db.mobile_view_configs.find_one({org_id, role, module})
+    if not config:
+        logger.warning(f"Deny-by-default: {role}/{module}")
+        return SAFE_MINIMUM_CONFIG
+    return config
+```
+
+---
+
+**Policy 2: Config Precedence**
+
+| Priority | Level | Описание |
+|----------|-------|----------|
+| 1 (highest) | **User-specific** | `mobile_view_configs` where `user_id` is set |
+| 2 | **Role-specific** | `mobile_view_configs` where `role` matches user's role |
+| 3 | **Org default** | `org_mobile_settings.defaultConfig` |
+| 4 (lowest) | **System default** | `DEFAULT_MOBILE_CONFIGS[role]` from code |
+
+**Resolution Rule:** First match wins (highest priority)
+
+**Merge Strategy:** НЕ се merge-ват configs; използва се config от най-високия приоритет изцяло
+
+```python
+# Псевдокод
+def resolve_config(org_id, user_id, role, module):
+    # Priority 1: User-specific
+    config = db.mobile_view_configs.find_one({org_id, user_id, module})
+    if config: return config
+    
+    # Priority 2: Role-specific  
+    config = db.mobile_view_configs.find_one({org_id, role, module, user_id: None})
+    if config: return config
+    
+    # Priority 3: Org default
+    org_settings = db.org_mobile_settings.find_one({org_id})
+    if org_settings and module in org_settings.get("defaultConfigs", {}):
+        return org_settings["defaultConfigs"][module]
+    
+    # Priority 4: System default (deny-by-default applies here)
+    return DEFAULT_MOBILE_CONFIGS.get(role, {}).get(module, SAFE_MINIMUM)
+```
+
+---
+
+**Policy 3: Media ACL (Access Control List)**
+
+| Проверка | Описание | Статус |
+|----------|----------|--------|
+| **Org Isolation** | `serve_media_file` MUST verify `media.org_id == user.org_id` | ⚠️ Needs review |
+| **Context Permission** | Ако media е linked към `workReport` → user must have access to that report | ⚠️ Needs impl |
+| **Owner Access** | `media.owner_user_id == user.id` → always allowed | ✅ Implemented |
+| **Admin Override** | Admin/Owner roles bypass context checks (but not org isolation) | ✅ Implemented |
+
+**Current Risk:** `serve_media_file` може да serve файл само по filename без org check
+
+**Required Fix:**
+```python
+@api_router.get("/media/file/{filename}")
+async def serve_media_file(filename: str, user: dict = Depends(get_current_user)):
+    media = await db.media_files.find_one({"filename": filename})
+    if not media:
+        raise HTTPException(404)
+    
+    # CRITICAL: Org isolation
+    if media["org_id"] != user["org_id"]:
+        raise HTTPException(403, "Access denied")
+    
+    # Context permission check
+    if media.get("context_type") and media.get("context_id"):
+        if not await can_access_context(user, media["context_type"], media["context_id"]):
+            raise HTTPException(403, "No access to linked resource")
+    
+    return FileResponse(...)
+```
+
+---
+
+**Policy 4: Config Versioning**
+
+| Field | Описание |
+|-------|----------|
+| `configVersion` | Integer, инкрементира се при всяка промяна на config |
+| `updatedAt` | ISO timestamp на последна промяна |
+| **Bootstrap Response** | Включва `configVersion` и `updatedAt` |
+| **Client Behavior** | Client кешира config; при `bootstrap` сравнява version; refetch ако е по-нов |
+
+**Bootstrap Response Enhancement:**
+```json
+{
+  "user": {...},
+  "organization": {...},
+  "enabledModules": [...],
+  "viewConfigs": {...},
+  "configVersion": 42,
+  "configUpdatedAt": "2026-02-18T15:00:00Z"
+}
+```
+
+**Client Cache Strategy:**
+1. Store `configVersion` locally
+2. On app launch: call `/api/mobile/bootstrap`
+3. If `response.configVersion > local.configVersion`: refresh all cached configs
+4. If equal: use cached data, skip full config parse
+
+---
+
+#### 5.3.2 Recommended Security Tests (6)
+
+| # | Test Name | Сценарий | Expected Result |
+|---|-----------|----------|-----------------|
+| T1 | `test_no_config_returns_safe_minimum` | Role=Viewer, Module=finance (no config exists) | Returns `SAFE_MINIMUM_CONFIG`, not error; logs warning |
+| T2 | `test_multi_config_precedence` | User has user-specific + role-specific config for same module | User-specific config wins (priority 1) |
+| T3 | `test_cross_org_media_access_denied` | User from Org-A tries to access media from Org-B via filename | 403 Forbidden; audit log: "Cross-org media access attempt" |
+| T4 | `test_orphan_media_cleanup_eligibility` | Media file with no context links, older than 30 days | Marked as `cleanup_eligible`; NOT auto-deleted without admin action |
+| T5 | `test_bypass_attempt_via_generic_endpoint` | User calls `/api/work-reports/{id}` directly instead of mobile endpoint | Same field filtering applies; no extra fields leak |
+| T6 | `test_nested_field_filtering` | Config allows `lines` field but not `lines.internal_cost` | Response includes `lines` array but each line has `internal_cost` removed |
+
+---
+
+#### 5.3.3 Mobile Security Risk Assessment
+
+| Risk | Severity | Current Status | Mitigation |
+|------|----------|----------------|------------|
+| Cross-org data leak via media | 🔴 HIGH | ⚠️ Needs verification | Implement Policy 3 (Media ACL) |
+| Config bypass via direct API | 🟡 MEDIUM | ⚠️ Partial | Field filtering on ALL endpoints, not just mobile |
+| Offline data tampering | 🟡 MEDIUM | ❌ Not addressed | Implement request signing + server-side validation |
+| Session hijacking on mobile | 🟡 MEDIUM | ⚠️ JWT only | Add device fingerprinting + refresh tokens |
+
+---
+
 ## 6. ПРЕГЛЕД НА СИГУРНОСТ И ПРАВА
 
 ### 6.1 Authentication
