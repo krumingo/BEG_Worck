@@ -4312,11 +4312,53 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
     if not plan:
         raise HTTPException(status_code=400, detail="Invalid plan")
     
-    if not plan.get("stripe_price_id") or plan["stripe_price_id"].startswith("price_") and "placeholder" in plan["stripe_price_id"]:
-        raise HTTPException(status_code=400, detail="This plan is not available for purchase")
+    if data.plan_id == "free":
+        raise HTTPException(status_code=400, detail="Cannot checkout for free plan")
     
     org_id = user["org_id"]
     sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    
+    # MOCK MODE: Simulate successful checkout without real Stripe
+    if STRIPE_MOCK_MODE:
+        now = datetime.now(timezone.utc)
+        mock_session_id = f"mock_cs_{str(uuid.uuid4())[:8]}"
+        
+        # Update subscription directly in mock mode
+        period_end = now + timedelta(days=30)
+        await db.subscriptions.update_one(
+            {"org_id": org_id},
+            {"$set": {
+                "plan_id": data.plan_id,
+                "status": "active",
+                "stripe_customer_id": f"mock_cus_{org_id[:8]}",
+                "stripe_subscription_id": f"mock_sub_{str(uuid.uuid4())[:8]}",
+                "trial_ends_at": None,
+                "current_period_start": now.isoformat(),
+                "current_period_end": period_end.isoformat(),
+                "updated_at": now.isoformat(),
+            }}
+        )
+        
+        # Update feature flags based on new plan
+        allowed_modules = plan.get("allowed_modules", [])
+        for mod_code in MODULES.keys():
+            await db.feature_flags.update_one(
+                {"org_id": org_id, "module_code": mod_code},
+                {"$set": {"enabled": mod_code in allowed_modules}}
+            )
+        
+        await log_audit(org_id, user["id"], user["email"], "checkout_mock", "billing", mock_session_id, {"plan_id": data.plan_id})
+        
+        return {
+            "mock_mode": True,
+            "checkout_url": f"{data.origin_url}/billing/success?session_id={mock_session_id}&mock=true",
+            "session_id": mock_session_id,
+            "message": "STRIPE_MOCK_MODE active. Subscription upgraded directly without payment.",
+        }
+    
+    # REAL STRIPE MODE
+    if not plan.get("stripe_price_id"):
+        raise HTTPException(status_code=400, detail="This plan is not available for purchase (no Stripe price configured)")
     
     # Get or create Stripe customer
     customer_id = sub.get("stripe_customer_id") if sub else None
@@ -4357,9 +4399,9 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
             }
         )
         
-        await log_audit(user, "checkout_started", "billing", session.id, {"plan_id": data.plan_id})
+        await log_audit(org_id, user["id"], user["email"], "checkout_started", "billing", session.id, {"plan_id": data.plan_id})
         
-        return {"checkout_url": session.url, "session_id": session.id}
+        return {"checkout_url": session.url, "session_id": session.id, "mock_mode": False}
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
