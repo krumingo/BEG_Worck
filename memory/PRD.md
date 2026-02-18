@@ -99,6 +99,7 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - `GET /api/billing/config` - Stripe configuration status
 - `POST /api/billing/signup` - Create new org with owner (public)
 - `GET /api/billing/subscription` - Current subscription details
+- `GET /api/billing/usage` - Current usage vs plan limits with percentages
 - `POST /api/billing/create-checkout-session` - Stripe checkout (mock mode supported)
 - `POST /api/billing/create-portal-session` - Stripe customer portal
 - `POST /api/billing/webhook` - Stripe webhook handler
