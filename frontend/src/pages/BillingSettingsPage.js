@@ -234,7 +234,7 @@ export default function BillingSettingsPage() {
             </div>
             <div className="p-3 bg-muted rounded-lg text-center">
               <p className="text-muted-foreground">{t("billing.limits.storage")}</p>
-              <p className="font-bold text-lg">{plan?.limits?.storage_gb} GB</p>
+              <p className="font-bold text-lg">{plan?.limits?.storage_mb >= 1000 ? `${plan?.limits?.storage_mb / 1000} GB` : `${plan?.limits?.storage_mb} MB`}</p>
             </div>
           </div>
         </CardContent>
