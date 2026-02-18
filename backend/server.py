@@ -4631,9 +4631,6 @@ async def check_module_access(module_code: str, user: dict = Depends(get_current
     
     allowed = module_code in plan["allowed_modules"]
     return {"allowed": allowed, "reason": None if allowed else "Module not in your current plan. Please upgrade."}
-        return {"allowed": False, "reason": f"Subscription {status}"}
-    
-    return {"allowed": allowed, "reason": None if allowed else "Module not in plan"}
 
 # ── Misc Routes ──────────────────────────────────────────────────
 
