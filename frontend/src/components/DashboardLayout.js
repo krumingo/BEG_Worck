@@ -23,6 +23,7 @@ import {
   Landmark,
   Calculator,
   CreditCard,
+  Smartphone,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -45,6 +46,7 @@ const ADMIN_NAV = [
   { to: "/users", icon: Users, labelKey: "nav.users" },
   { to: "/settings", icon: Building2, labelKey: "nav.companySettings" },
   { to: "/billing", icon: CreditCard, labelKey: "nav.billing" },
+  { to: "/mobile-settings", icon: Smartphone, labelKey: "nav.mobileApp" },
   { to: "/modules", icon: Blocks, labelKey: "nav.modules" },
   { to: "/audit-log", icon: ScrollText, labelKey: "nav.auditLog" },
 ];
