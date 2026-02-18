@@ -123,6 +123,21 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - `POST /api/billing/webhook` - Stripe webhook handler
 - `GET /api/billing/check-module/{code}` - Check module access
 
+### Mobile Integration (NEW)
+- `GET /api/mobile/bootstrap` - Single source of truth for mobile configuration
+- `GET /api/mobile/settings` - Get organization mobile settings (admin)
+- `PUT /api/mobile/settings` - Update enabled modules (admin)
+- `GET /api/mobile/view-configs` - List all view configs (admin)
+- `PUT /api/mobile/view-configs` - Update view config for role/module (admin)
+- `DELETE /api/mobile/view-configs/{role}/{module}` - Reset config to defaults (admin)
+
+### Media (NEW)
+- `POST /api/media/upload` - Upload media file with optional context
+- `POST /api/media/link` - Link existing media to context
+- `GET /api/media/{id}` - Get media metadata
+- `GET /api/media/file/{filename}` - Serve media file content
+- `GET /api/media` - List media files (filtered by context)
+
 ### Existing
 - `/api/auth/*` - Authentication
 - `/api/projects/*` - Projects CRUD
