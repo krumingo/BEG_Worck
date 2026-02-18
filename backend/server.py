@@ -44,6 +44,52 @@ MODULES = {
     "M9": {"name": "Admin Console / BI", "description": "Statistics, alerts, overhead costs"},
 }
 
+# ── Subscription Plans Configuration ────────────────────────────────
+SUBSCRIPTION_PLANS = {
+    "free": {
+        "name": "Free Trial",
+        "price": 0,
+        "stripe_price_id": None,  # No Stripe for free tier
+        "allowed_modules": ["M0", "M1", "M3"],  # Core + Projects + Attendance
+        "limits": {
+            "users": 5,
+            "projects": 3,
+            "monthly_invoices": 10,
+            "storage_gb": 1
+        },
+        "trial_days": 14,
+    },
+    "pro": {
+        "name": "Professional",
+        "price": 49.00,
+        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_PRO", "price_pro_placeholder"),
+        "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M9"],
+        "limits": {
+            "users": 25,
+            "projects": 50,
+            "monthly_invoices": 500,
+            "storage_gb": 25
+        },
+        "trial_days": 0,
+    },
+    "enterprise": {
+        "name": "Enterprise",
+        "price": 149.00,
+        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_ENTERPRISE", "price_enterprise_placeholder"),
+        "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"],
+        "limits": {
+            "users": -1,  # Unlimited
+            "projects": -1,
+            "monthly_invoices": -1,
+            "storage_gb": 100
+        },
+        "trial_days": 0,
+    }
+}
+
+SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "incomplete"]
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
+
 app = FastAPI(title="BEG_Work API")
 api_router = APIRouter(prefix="/api")
 
