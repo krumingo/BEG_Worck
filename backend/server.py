@@ -3553,9 +3553,7 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
         "pending_reports": pending_reports,
     }
 
-@api_router.get("/project-enums")
-async def get_project_enums():
-    return {"statuses": PROJECT_STATUSES, "types": PROJECT_TYPES, "team_roles": PROJECT_TEAM_ROLES}
+# project-enums is now in app/routes/projects.py
 
 # ── M9 Overhead Cost System Routes ────────────────────────────────
 
