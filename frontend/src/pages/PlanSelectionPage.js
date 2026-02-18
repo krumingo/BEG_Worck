@@ -164,7 +164,7 @@ export default function PlanSelectionPage() {
                   <div className="pt-4 border-t space-y-1 text-xs text-muted-foreground">
                     <p>{t("billing.limits.users")}: {plan.limits.users === -1 ? t("billing.unlimited") : plan.limits.users}</p>
                     <p>{t("billing.limits.projects")}: {plan.limits.projects === -1 ? t("billing.unlimited") : plan.limits.projects}</p>
-                    <p>{t("billing.limits.storage")}: {plan.limits.storage_gb} GB</p>
+                    <p>{t("billing.limits.storage")}: {plan.limits.storage_mb >= 1000 ? `${plan.limits.storage_mb / 1000} GB` : `${plan.limits.storage_mb} MB`}</p>
                   </div>
                 </CardContent>
 
