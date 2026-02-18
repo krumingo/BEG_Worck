@@ -30,6 +30,8 @@ import FinancialAccountsPage from "@/pages/FinancialAccountsPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceEditorPage from "@/pages/InvoiceEditorPage";
 import PaymentsPage from "@/pages/PaymentsPage";
+import OverheadPage from "@/pages/OverheadPage";
+import OverheadSnapshotDetailPage from "@/pages/OverheadSnapshotDetailPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
