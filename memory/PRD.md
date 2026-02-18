@@ -65,6 +65,24 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
   - Pro: 20 users, 50 projects, 500 invoices/month, 2 GB storage
   - Enterprise: 100 users, 500 projects, 5000 invoices/month, 20 GB storage
 
+### February 2026 - Mobile Integration Phase 1 + 2 ✅
+**Phase 1 - Mobile Settings + Mobile Views:**
+- ✅ Data models: `OrgMobileSettings`, `MobileViewConfig` in MongoDB
+- ✅ Bootstrap endpoint: `GET /api/mobile/bootstrap` - single source of truth for mobile config
+- ✅ Server-side enforcement: field filtering and action blocking helpers
+- ✅ Admin endpoints: `/api/mobile/settings`, `/api/mobile/view-configs`
+- ✅ Default configs per role: Technician, Driver, SiteManager
+- ✅ Available modules: attendance, workReports, deliveries, machines, messages, media, profile
+- ✅ Admin UI: MobileSettingsPage with Enabled Modules + View Configs tabs
+- ✅ i18n support (Bulgarian + English)
+
+**Phase 2 - Unified Media (Photos):**
+- ✅ MediaFile model with context linking
+- ✅ Endpoints: `POST /api/media/upload`, `POST /api/media/link`, `GET /api/media/{id}`, `GET /api/media/file/{filename}`
+- ✅ File validation: allowed types (JPEG, PNG, WebP, HEIC), max 10MB
+- ✅ Permission checking: owner/admin access
+- ✅ Backend tests: 18/18 passed (`/app/backend/tests/test_mobile_integration.py`)
+
 ### February 2026 - Iteration 9: M9 Overhead Cost System ✅
 - ✅ Data Models: OverheadCategory, OverheadCost, OverheadAsset, OverheadSnapshot, ProjectOverheadAllocation
 - ✅ Calculation Logic: Total overhead from costs + asset amortization
