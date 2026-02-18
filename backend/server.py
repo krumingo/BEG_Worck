@@ -961,7 +961,11 @@ api_router.include_router(offers_router)
 from app.routes.hr import router as hr_router
 api_router.include_router(hr_router)
 
-# ── M5 Finance Routes ─────────────────────────────────────────────
+# Import finance router - includes accounts, invoices, payments, finance stats/enums
+from app.routes.finance import router as finance_router
+api_router.include_router(finance_router)
+
+# ── Dashboard Stats ──────────────────────────────────────────────
 
 def finance_permission(user: dict):
     """Check if user has finance access"""
