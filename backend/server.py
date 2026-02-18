@@ -4553,6 +4553,10 @@ async def startup():
     await db.overhead_snapshots.create_index([("org_id", 1), ("period_start", 1), ("period_end", 1)])
     await db.project_overhead_allocations.create_index([("org_id", 1), ("overhead_snapshot_id", 1)])
     await db.project_overhead_allocations.create_index([("org_id", 1), ("project_id", 1)])
+    # Billing indexes
+    await db.subscriptions.create_index([("org_id", 1)], unique=True)
+    await db.subscriptions.create_index([("stripe_subscription_id", 1)])
+    await db.subscriptions.create_index([("stripe_customer_id", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
