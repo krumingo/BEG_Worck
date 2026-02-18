@@ -52,6 +52,19 @@ Build a modular, sellable SaaS application named "BEG_Work" for construction com
 - ✅ Backend tests: 15/15 passed (`/app/backend/tests/test_m10_billing.py`)
 - ✅ Required Stripe env vars documented: STRIPE_API_KEY, STRIPE_PRICE_ID_PRO, STRIPE_PRICE_ID_ENTERPRISE, STRIPE_WEBHOOK_SECRET
 
+### February 2026 - Usage Tracking & Limits Enforcement Patch ✅
+- ✅ Usage tracking: GET `/api/billing/usage` returns users, projects, invoices (monthly), storage counts
+- ✅ Plan limits enforced on create operations (users, projects, invoices)
+- ✅ Limit error codes: `LIMIT_USERS_EXCEEDED`, `LIMIT_PROJECTS_EXCEEDED`, `LIMIT_INVOICES_EXCEEDED`
+- ✅ Warning threshold at 80% usage
+- ✅ Frontend usage section in BillingSettingsPage with progress bars and warnings
+- ✅ i18n support for all usage strings (Bulgarian + English)
+- ✅ Backend tests: 10/10 passed (`/app/backend/tests/test_usage_limits.py`)
+- ✅ Updated plan limits:
+  - Free: 3 users, 2 projects, 5 invoices/month, 100 MB storage
+  - Pro: 20 users, 50 projects, 500 invoices/month, 2 GB storage
+  - Enterprise: 100 users, 500 projects, 5000 invoices/month, 20 GB storage
+
 ### February 2026 - Iteration 9: M9 Overhead Cost System ✅
 - ✅ Data Models: OverheadCategory, OverheadCost, OverheadAsset, OverheadSnapshot, ProjectOverheadAllocation
 - ✅ Calculation Logic: Total overhead from costs + asset amortization
