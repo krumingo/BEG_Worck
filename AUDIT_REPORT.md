@@ -112,7 +112,7 @@
 | GET | /api/reminders/missing-attendance | api_missing_attendance | ✅ Работи |
 | GET | /api/reminders/missing-work-reports | api_missing_work_reports | ✅ Работи |
 
-### 1.8 HR / Payroll (M4) - 16 endpoints
+### 1.8 HR / Payroll (M4) - 18 endpoints
 | Метод | Път | Хендлър | Статус |
 |-------|-----|---------|--------|
 | GET | /api/employees | list_employees | ✅ Работи |
