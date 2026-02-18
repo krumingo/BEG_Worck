@@ -166,6 +166,17 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 ## Known Issues
 - `server.py` is monolithic and should be refactored (non-blocking)
 
+## Audit Report (18 Feb 2026)
+Full audit completed. See `/app/AUDIT_REPORT.md` for details:
+- **144 API endpoints** documented and verified
+- **30 MongoDB collections** identified
+- **48 Pydantic models** cataloged
+- **Top 10 risks** identified with mitigation plan
+- **3-stage patch plan** created:
+  - Stage 1: Stabilization (refactoring, security)
+  - Stage 2: Functionality (Deliveries, Machines, Real Stripe)
+  - Stage 3: Mobile App (React Native/Flutter)
+
 ## Files Structure
 ```
 /app/
