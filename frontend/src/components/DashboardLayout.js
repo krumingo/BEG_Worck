@@ -21,6 +21,7 @@ import {
   Wallet,
   UserCog,
   Landmark,
+  Calculator,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -39,6 +40,7 @@ const ADMIN_NAV = [
   { to: "/advances", icon: Wallet, labelKey: "nav.advances" },
   { to: "/payroll", icon: Receipt, labelKey: "nav.payroll" },
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
+  { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
   { to: "/users", icon: Users, labelKey: "nav.users" },
   { to: "/settings", icon: Building2, labelKey: "nav.companySettings" },
   { to: "/modules", icon: Blocks, labelKey: "nav.modules" },
