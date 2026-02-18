@@ -843,5 +843,25 @@
 
 ---
 
+## APPENDIX: EVIDENCE ARTIFACTS
+
+### A1. Endpoint Inventory
+- **Файл:** `/app/audit_endpoints.csv`
+- **Генериран от:** FastAPI `app.routes` extraction
+- **Формат:** CSV (path, methods, route_name, handler_func)
+- **Общо редове:** 145 (1 header + 144 endpoints)
+
+### A2. MongoDB Collections Inventory
+- **Файл:** `/app/audit_models_collections.txt`
+- **Генериран от:** `server.py` db.* usage pattern extraction
+- **Общо колекции:** 31 (15 core + 16 supporting)
+
+### A3. Pydantic Models Count
+- **Източник:** `server.py` BaseModel class definitions
+- **Общо модели:** 48
+
+---
+
 *Одит изготвен на: 18 февруари 2026*
+*Последна актуализация: 18 февруари 2026 (Етап 0.2 Consistency Fix)*
 *Автор: E1 Agent*
