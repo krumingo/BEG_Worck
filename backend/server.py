@@ -4126,7 +4126,7 @@ async def get_overhead_enums(user: dict = Depends(get_current_user)):
 # Configure Stripe
 stripe.api_key = STRIPE_API_KEY
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://site-management-hub.preview.emergentagent.com")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://construction-pay-3.preview.emergentagent.com")
 
 @api_router.get("/billing/plans")
 async def list_billing_plans():

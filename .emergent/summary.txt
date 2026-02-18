@@ -6,7 +6,7 @@ The user wants to build a modular, sellable SaaS application named BEG_Work for 
 - The application should be multi-tenant, with data isolated by company/organization.
 - It must support a detailed role-based access control system (Admin, Owner, SiteManager, Technician, etc.).
 - The system is composed of several feature-flagged modules:
-  - M0: Core/SaaS (tenancy, auth, roles, billing skeleton)
+  - M0: Core/SaaS
   - M1: Projects
   - M2: Estimates/BOQ
   - M3: Attendance & Daily Reports
@@ -15,70 +15,72 @@ The user wants to build a modular, sellable SaaS application named BEG_Work for 
   - M6: AI Invoice Capture
   - M7: Inventory
   - M8: Assets & QR
-  - M9: Admin Console/BI (statistics, alerts, and a special Overhead Cost System)
-- Design should be a clean, professional dashboard for the web and simple, quick-flow UI for mobile (or responsive web).
+  - M9: Admin Console/BI (statistics, alerts, Overhead Cost System)
+- **Current Goal (Iteration 10):** Implement a full SaaS billing and self-onboarding system using Stripe. This includes public signup, plan selection, Stripe Checkout integration, and webhook handling to manage subscription status and feature access.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application has completed modules M0-M5 and the Alerts part of M9. An extensive PATCH TASK to fully internationalize (i18n) the frontend is currently in progress. The  library is configured with Bulgarian () as the default language. The previous agent updated a large number of pages (~20) and significantly expanded the  and  translation files. However, the task is incomplete, and the user has provided explicit instructions to finish it before moving on.
+The application is a functional modular SaaS with M0-M5 and M9 (Alerts, Overhead Cost System) completed. The entire frontend is fully internationalized (i18n) with Bulgarian () and English () support.
+
+The agent has begun implementing Iteration 10 (SaaS Billing). The backend  has been updated with Pydantic models for billing plans and subscriptions. A new public signup endpoint () has been created and tested. Skeletons for the Stripe integration API endpoints (, , ) have been added, and the  python library is installed.
 
 **Last working item**:
-- **Last item agent was working:** The user interrupted the previous agent, which was about to incorrectly finish the i18n task. The current directive is to CONTINUE i18n PATCH — DO NOT START OVERHEAD YET. This involves finishing translation for all remaining pages, adding a language switcher, and performing a final verification sweep.
+- **Last item agent was working:** The agent was working on the backend implementation for the SaaS Billing & Self-Onboarding system (Iteration 10). It had just added the new Pydantic models and stubbed API routes for billing to  and successfully tested the new public signup endpoint.
 - **Status:** IN PROGRESS
-- **Agent Testing Done:** N (Partial screenshot verification was done, but a full, final sweep is still required).
-- **Which testing method agent to use?** Frontend testing. First, use the  tool to manually complete the user's mandatory BG Mode Sweep checklist, ensuring zero English strings are visible. After all code changes, a final run with the  is recommended to catch any remaining issues.
+- **Agent Testing Done:** Y (Partial)
+- **Which testing method agent to use?** both. The backend requires mocking Stripe APIs and webhooks, making the backend testing agent ideal. The frontend will require the frontend testing agent to validate the new signup and billing pages.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- There are no known application-breaking bugs. The main pending work is the completion of the i18n hardening task.
+- There are no known application-breaking bugs. The main pending work is the completion of the current task.
 
 **In progress Task List**:
-- **Task 1: Complete i18n Hardening Patch (P0)**
-    - **Where to resume:** The user has provided a clear multi-step plan:
-        1.  **Add Language Switcher:** Implement a simple / language toggle in the top bar within . The selection should persist to .
-        2.  **Translate Remaining Pages:** Systematically update all remaining pages listed by the user: , , , , , , . Ensure all UI text (placeholders, dialogs, toasts, errors) is converted to use .
-        3.  **Fix Test Agent Issues:** Review the test report at  and fix ALL outstanding issues. The previous agent only fixed the  issue.
-        4.  **Final Verification:** Perform the BG Mode Sweep to confirm ZERO visible English strings remain in the UI when set to Bulgarian.
-    - **What will be achieved with this?** The frontend will be 100% internationalized, fulfilling the patch requirements.
+- **Task 1: Complete Iteration 10 - SaaS Billing & Self-Onboarding (P0)**
+    - **Where to resume:** The backend API routes and data models for billing are already defined in . The next steps are:
+        1.  Implement the logic for the billing API endpoints: , , and the critical  handler for Stripe events.
+        2.  Flesh out the  and  creation logic in the new  endpoint.
+        3.  Create the required frontend pages: , , and a  within Company Settings.
+        4.  Implement module gating in the UI and on the backend, restricting access to features based on the organization's subscription plan.
+        5.  Create backend tests (e.g., in ) to mock and validate the Stripe integration flow.
+        6.  Perform end-to-end testing of the entire self-onboarding and billing flow.
+    - **What will be achieved with this?** The application will become a commercially viable SaaS product, allowing new organizations to sign up, choose a plan, pay, and get access to features without manual intervention.
     - **Status:** IN PROGRESS
-    - **Should Test frontend/backend/both after fix?** frontend
+    - **Should Test frontend/backend/both after fix?** both
     - **Blocked on something:** None
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks:**
-    - **P1: Iteration 9 (M9 Overhead Cost System):** Implement the overhead cost system as part of the Admin Console/BI module.
 - **Future Tasks (Project Backlog):**
-    - M6: AI Invoice Capture (upload/parse invoices)
-    - M7: Inventory (items + movements)
-    - M8: Assets & QR (checkout/checkin, maintenance)
-    - M9: Complete Admin Console/BI (full statistics dashboard)
-    - **Refactor :** Propose a dedicated task to break down the monolithic backend file into a modular structure.
+    - M6: AI Invoice Capture (upload/parse invoices).
+    - M7: Inventory (items + movements).
+    - M8: Assets & QR (checkout/checkin, maintenance).
+    - M9: Complete Admin Console/BI (full statistics dashboard).
+    - **Refactor :** Break down the monolithic backend file into a modular structure (e.g., , ).
 
 **Completed work in this session**
-- **i18n Refactoring (Partial):**
-  - Updated ~20 React pages/components to use   functions instead of hardcoded strings.
-  - Added dozens of new translation keys to  and .
-  - Fixed an i18n issue in  that was identified by the testing agent.
-  - Verified that the core i18n setup is working correctly, with Bulgarian () loading by default.
+- **i18n Hardening Patch:**
+  - Completed translation for all remaining pages, fixing all known hardcoded strings.
+  - Verified 100% translation in Bulgarian mode using the testing agent.
+- **Overhead Cost System (Iteration 9):**
+  - Implemented backend data models and API endpoints in .
+  - Created a comprehensive frontend interface (, ) with i18n support for managing overhead costs, assets, and snapshots.
+  - Tested the full feature flow with , screenshots, and the testing agent.
+- **SaaS Billing & Self-Onboarding (Iteration 10 - Started):**
+  - Added billing plan configuration, Pydantic models, and database indexes to .
+  - Created a new public signup endpoint () for self-onboarding.
+  - Stubbed out all required Stripe billing API endpoints ().
 
 **Earlier issues found/mentioned but not fixed**
-- **Issue 1: Unresolved Test Agent Findings**
-    - **Debug checklist:** Read the JSON report at . It contains a list of UI pages with remaining hardcoded English text.
-    - **Why to solve this issue and what will be achieved with this?** To complete the mandatory i18n hardening task and ensure 100% translation coverage as requested by the user.
-    - **Should Test frontend/backend/both after fix:** frontend
-    - **Is recurring issue?** N
-- **Issue 2: Hardcoded Strings in SiteAttendancePage**
-    - **Debug checklist:** The previous agent's screenshot test revealed All Active Projects and MARKED AT were still in English. The agent added some keys but did not re-verify. The  file needs to be checked again to ensure these are now correctly translated.
-    - **Why to solve this issue and what will be achieved with this?** To fix a known i18n gap.
-    - **Should Test frontend/backend/both after fix:** frontend
-    - **Is recurring issue?** N
+- **Issue 1: Potential N+1 Query Patterns**
+   - **Debug checklist:** The deployment agent flagged potential N+1 query patterns in the backend code. This can be investigated by analyzing database queries made during API calls that return lists of items (e.g., projects, invoices).
+   - **Why to solve this issue and what will be achieved with this?** This is a performance optimization. Fixing it will prevent slowdowns when dealing with large datasets, but it is not a functional bug and can be deferred.
+   - **Should Test frontend/backend/both after fix:** backend
+   - **Is recurring issue?** N
 
 **Known issue recurrence from previous fork**
 - **Issue recurrence in previous fork:**  in  when a user document was missing the  field.
 - **Recurrence count:** 1
 - **Status:** RESOLVED
-- **Note:** The fix was a defensive  call. The underlying risk remains due to the monolithic structure of .
 
 **Code Architecture**
 
@@ -86,62 +88,72 @@ The application has completed modules M0-M5 and the Alerts part of M9. An extens
 **Key Technical Concepts**
 - **Backend:** FastAPI, Pydantic, Motor (async MongoDB driver), JWT.
 - **Frontend:** React, TailwindCSS, Axios, React Router, .
-- **Architecture:** Multi-tenant SaaS, Modular (by feature), Role-Based Access Control (RBAC).
+- **Architecture:** Multi-tenant SaaS, Modular (by feature), RBAC.
+- **Payments:** Stripe Checkout and Webhooks.
 
 **key DB schema**
-- **Finance (M5):** , , , 
-- **Core:** , , , , , , , 
+- **Overhead (M9):** , , , , 
+- **Billing (M10):**  collection now includes subscription details (, , , , etc.).
 
 **changes in tech stack**
--  and  were added in a previous session. No new stack changes.
+- Added  python library to the backend.
 
 **All files of reference**
-- : The Bulgarian translation file (heavily modified).
-- : The English translation file (heavily modified).
-- : File to modify for the new language switcher.
-- : **Crucial test report with outstanding issues that must be fixed.**
-- : The backend monolith.
+- : Heavily modified with Overhead and Billing logic. The primary file for the next steps.
+- : Contains routing logic; will need new routes for signup/billing.
+- : English translations, updated with new keys.
+- : Bulgarian translations, updated with new keys.
+- : New feature page.
+- : New feature detail page.
+- : Latest test report from the testing agent.
 
 **Areas that need refactoring**:
-- **CRITICAL:**  is a large monolith and is a high-priority candidate for future refactoring into a modular structure (e.g., , ).
+- **CRITICAL:**  is a large monolith. A dedicated task to refactor it into a modular structure (e.g., routes, models, services) is a high-priority future task.
 
 **key api endpoints**
--  (CRUD)
--  (CRUD, send, cancel)
--  (CRUD, allocate)
--  (GET)
+- **Overhead:**
+  - 
+  - 
+  - 
+  - 
+  - 
+- **Billing (In Progress):**
+  -  (New public endpoint)
+  - 
+  - 
+  - 
 
 **Critical Info for New Agent**
-- Your only priority is to complete the PATCH TASK — i18n HARDENING FINISH as defined by the user in their last message. DO NOT start the M9 overhead system.
-- The task is NOT complete. You must implement the language switcher, translate all remaining pages, and fix all outstanding issues from the test report ().
-- The final acceptance criteria is ZERO visible English strings in the UI when the language is set to Bulgarian. This must be verified with a full BG Mode Sweep.
-- The user has provided a mandatory PATCH OUTPUT FORMAT. You must follow it when finishing the task.
+- Your primary goal is to complete Iteration 10: SaaS Billing & Self-Onboarding.
+- The backend has the initial setup (models, empty routes, Stripe library). You must implement the logic within these routes, especially the webhook handler, which is critical for a production-ready system.
+- Use the Stripe test keys already present in the environment. Do not ask the user for them.
+- Defer the  refactoring; focus only on implementing the billing feature as requested.
+- All new UI must be internationalized using the existing  setup.
 
 **documents and test reports created in this job**
 - 
+- 
+- 
 
 **Last 10 User Messages and any pending HUMAN messages**
-- **User (PENDING):** Gave explicit instructions to continue the i18n patch, not start a new task. The user specified the remaining work:
-    1.  Finish translating a list of 7 specific pages.
-    2.  Fix all edge cases where English still appears.
-    3.  Add a visible language switcher to the top bar.
-    4.  Perform a final BG Mode Sweep and confirm zero remaining English strings before finishing.
+- **User (PENDING):** Provided detailed requirements for Iteration 10, focusing on creating a sellable SaaS application with Stripe for self-onboarding and billing. The user specified data models, API endpoints, frontend pages, and acceptance criteria.
+- **User:** Provided detailed requirements for Iteration 9 (Overhead Cost System). (Completed)
+- **User:** Confirmed the agent's plan for the i18n patch and added mandatory deliverables. (Completed)
 
 **Project Health Check:**
-- **Working:** Modules M0, M1, M2, M3, M4, M5, M9 (Alerts).
+- **Working:** Modules M0-M5, M9 (Alerts, Overhead), i18n.
 - **Broken:** None.
-- **In Progress:** i18n Patch (full coverage task).
+- **In Progress:** M10 (SaaS Billing & Self-Onboarding).
 - **Mocked:** None.
 
 **3rd Party Integrations**
-- None.
+- **Stripe:** For payment processing (Checkout and Webhooks). The  Python SDK is installed.
 
 **Testing status**
-- **Testing agent used after significant changes:** YES.
+- **Testing agent used after significant changes:** YES. It was used to validate the i18n patch and the Overhead Cost System feature, where it found and fixed a bug.
 - **Troubleshoot agent used after agent stuck in loop:** NO.
-- **Test files created:** None in this session.
+- **Test files created:** None. The agent should create backend tests for the new billing logic.
 - **Known regressions:** None.
-- **Outstanding Test Report:**  contains unresolved issues that MUST be addressed.
 
 **Credentials to test flow:**
 - **Admin:**  / 
@@ -149,5 +161,5 @@ The application has completed modules M0-M5 and the Alerts part of M9. An extens
 - **Technician:**  / 
 
 **What agent forgot to execute**
-- The previous agent failed to address all the issues reported by the testing agent in . It only fixed one issue () before incorrectly attempting to finish the entire task.
-- The agent did not realize the i18n task was incomplete and missed several pages and a new user requirement (language switcher), forcing the user to intervene and provide explicit corrective instructions.</analysis>
+- The agent successfully created the stubs for the billing API endpoints but has not yet implemented the core logic within them (e.g., creating a Stripe session, handling webhook events). This is the immediate next step for the in-progress task.
+- The agent did not create any backend test files for the new billing functionality, which is a requirement for the task.</analysis>
