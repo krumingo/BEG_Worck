@@ -66,15 +66,13 @@ export default function SignupPage() {
       });
 
       // Auto-login with returned token
-      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("bw_token", res.data.token);
+      localStorage.setItem("bw_user", JSON.stringify(res.data.user));
       api.defaults.headers.common["Authorization"] = `Bearer ${res.data.token}`;
       
-      // Update auth context
-      if (setUser) setUser(res.data.user);
-      if (setOrg) setOrg(res.data.organization);
-
       toast.success(t("billing.signupSuccess"));
-      navigate("/");
+      // Reload to trigger AuthContext to fetch user data
+      window.location.href = "/";
     } catch (err) {
       const msg = err.response?.data?.detail || t("toast.createFailed");
       setError(msg);
