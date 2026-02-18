@@ -4121,6 +4121,357 @@ async def get_overhead_enums(user: dict = Depends(get_current_user)):
         "methods": OVERHEAD_METHODS
     }
 
+# ── Billing & Subscription Routes ─────────────────────────────────────
+
+# Configure Stripe
+stripe.api_key = STRIPE_API_KEY
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://site-management-hub.preview.emergentagent.com")
+
+@api_router.get("/billing/plans")
+async def list_billing_plans():
+    """Public endpoint - list available plans"""
+    return [
+        {
+            "id": plan_id,
+            "name": plan["name"],
+            "price": plan["price"],
+            "allowed_modules": plan["allowed_modules"],
+            "module_names": [MODULES[m]["name"] for m in plan["allowed_modules"] if m in MODULES],
+            "limits": plan["limits"],
+            "trial_days": plan.get("trial_days", 0),
+        }
+        for plan_id, plan in SUBSCRIPTION_PLANS.items()
+    ]
+
+@api_router.post("/billing/signup")
+async def signup_organization(data: OrgSignupRequest):
+    """Public endpoint - create new organization with owner"""
+    # Check if email already exists
+    existing = await db.users.find_one({"email": data.owner_email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    
+    # Create organization
+    org = {
+        "id": org_id,
+        "name": data.org_name,
+        "email": data.owner_email.lower(),
+        "phone": "",
+        "address": "",
+        "vat_percent": 20.0,
+        "attendance_start": "06:00",
+        "attendance_end": "10:00",
+        "work_report_deadline_hours": 24,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.organizations.insert_one(org)
+    
+    # Create owner user
+    hashed = hash_password(data.password)
+    user = {
+        "id": user_id,
+        "org_id": org_id,
+        "name": data.owner_name,
+        "email": data.owner_email.lower(),
+        "password": hashed,
+        "role": "Owner",
+        "active": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.users.insert_one(user)
+    
+    # Create subscription with free trial
+    trial_ends = datetime.now(timezone.utc) + timedelta(days=SUBSCRIPTION_PLANS["free"]["trial_days"])
+    subscription = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "plan_id": "free",
+        "status": "trialing",
+        "stripe_customer_id": None,
+        "stripe_subscription_id": None,
+        "current_period_start": now,
+        "current_period_end": trial_ends.isoformat(),
+        "trial_ends_at": trial_ends.isoformat(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.subscriptions.insert_one(subscription)
+    
+    # Create default feature flags based on free plan
+    free_modules = SUBSCRIPTION_PLANS["free"]["allowed_modules"]
+    for mod_code in MODULES.keys():
+        flag = {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "module_code": mod_code,
+            "module_name": MODULES[mod_code]["name"],
+            "description": MODULES[mod_code]["description"],
+            "enabled": mod_code in free_modules,
+            "created_at": now,
+        }
+        await db.feature_flags.insert_one(flag)
+    
+    # Create token for auto-login
+    token = create_token({"user_id": user_id, "org_id": org_id})
+    
+    await log_audit({"id": user_id, "org_id": org_id, "email": data.owner_email}, "signup", "organization", org_id, {"name": data.org_name})
+    
+    return {
+        "token": token,
+        "user": {
+            "id": user_id,
+            "name": data.owner_name,
+            "email": data.owner_email.lower(),
+            "role": "Owner",
+            "org_id": org_id,
+            "org_name": data.org_name,
+        },
+        "subscription": {
+            "plan_id": "free",
+            "status": "trialing",
+            "trial_ends_at": trial_ends.isoformat(),
+        }
+    }
+
+@api_router.post("/billing/create-checkout-session")
+async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depends(get_current_user)):
+    """Create Stripe checkout session for plan upgrade"""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin or Owner can manage billing")
+    
+    plan = SUBSCRIPTION_PLANS.get(data.plan_id)
+    if not plan:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    
+    if not plan.get("stripe_price_id") or plan["stripe_price_id"].startswith("price_") and "placeholder" in plan["stripe_price_id"]:
+        raise HTTPException(status_code=400, detail="This plan is not available for purchase")
+    
+    org_id = user["org_id"]
+    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    
+    # Get or create Stripe customer
+    customer_id = sub.get("stripe_customer_id") if sub else None
+    if not customer_id:
+        org = await db.organizations.find_one({"id": org_id}, {"_id": 0})
+        try:
+            customer = stripe.Customer.create(
+                email=user["email"],
+                name=org.get("name", ""),
+                metadata={"org_id": org_id}
+            )
+            customer_id = customer.id
+            await db.subscriptions.update_one(
+                {"org_id": org_id},
+                {"$set": {"stripe_customer_id": customer_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+        except stripe.error.StripeError as e:
+            raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+    
+    # Create checkout session
+    success_url = f"{data.origin_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/billing/cancel"
+    
+    try:
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=["card"],
+            line_items=[{
+                "price": plan["stripe_price_id"],
+                "quantity": 1,
+            }],
+            mode="subscription",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "org_id": org_id,
+                "plan_id": data.plan_id,
+            }
+        )
+        
+        await log_audit(user, "checkout_started", "billing", session.id, {"plan_id": data.plan_id})
+        
+        return {"checkout_url": session.url, "session_id": session.id}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+@api_router.post("/billing/create-portal-session")
+async def create_portal_session(user: dict = Depends(get_current_user)):
+    """Create Stripe customer portal session"""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin or Owner can manage billing")
+    
+    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    if not sub or not sub.get("stripe_customer_id"):
+        raise HTTPException(status_code=400, detail="No billing information found")
+    
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=sub["stripe_customer_id"],
+            return_url=f"{APP_BASE_URL}/settings",
+        )
+        return {"portal_url": session.url}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+@api_router.post("/billing/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events"""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    
+    # Verify webhook signature in production
+    if STRIPE_WEBHOOK_SECRET:
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.error.SignatureVerificationError:
+            raise HTTPException(status_code=400, detail="Invalid signature")
+    else:
+        # Development mode - parse without verification
+        import json
+        event = json.loads(payload)
+    
+    event_type = event.get("type", "")
+    data = event.get("data", {}).get("object", {})
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if event_type == "checkout.session.completed":
+        org_id = data.get("metadata", {}).get("org_id")
+        plan_id = data.get("metadata", {}).get("plan_id")
+        customer_id = data.get("customer")
+        subscription_id = data.get("subscription")
+        
+        if org_id and plan_id:
+            plan = SUBSCRIPTION_PLANS.get(plan_id, {})
+            await db.subscriptions.update_one(
+                {"org_id": org_id},
+                {"$set": {
+                    "plan_id": plan_id,
+                    "status": "active",
+                    "stripe_customer_id": customer_id,
+                    "stripe_subscription_id": subscription_id,
+                    "trial_ends_at": None,
+                    "updated_at": now,
+                }}
+            )
+            # Update feature flags based on plan
+            allowed_modules = plan.get("allowed_modules", [])
+            for mod_code in MODULES.keys():
+                await db.feature_flags.update_one(
+                    {"org_id": org_id, "module_code": mod_code},
+                    {"$set": {"enabled": mod_code in allowed_modules}}
+                )
+            await log_audit({"id": "webhook", "org_id": org_id, "email": "stripe"}, "activated", "billing", org_id, {"plan_id": plan_id})
+    
+    elif event_type == "customer.subscription.updated":
+        subscription_id = data.get("id")
+        status = data.get("status")
+        customer_id = data.get("customer")
+        period_start = data.get("current_period_start")
+        period_end = data.get("current_period_end")
+        
+        sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+        if sub:
+            update_data = {"status": status, "updated_at": now}
+            if period_start:
+                update_data["current_period_start"] = datetime.fromtimestamp(period_start, tz=timezone.utc).isoformat()
+            if period_end:
+                update_data["current_period_end"] = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
+            
+            await db.subscriptions.update_one({"stripe_subscription_id": subscription_id}, {"$set": update_data})
+            await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "updated", "subscription", subscription_id, {"status": status})
+    
+    elif event_type == "customer.subscription.deleted":
+        subscription_id = data.get("id")
+        sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+        if sub:
+            # Downgrade to free plan
+            free_modules = SUBSCRIPTION_PLANS["free"]["allowed_modules"]
+            await db.subscriptions.update_one(
+                {"stripe_subscription_id": subscription_id},
+                {"$set": {
+                    "plan_id": "free",
+                    "status": "canceled",
+                    "stripe_subscription_id": None,
+                    "updated_at": now,
+                }}
+            )
+            for mod_code in MODULES.keys():
+                await db.feature_flags.update_one(
+                    {"org_id": sub["org_id"], "module_code": mod_code},
+                    {"$set": {"enabled": mod_code in free_modules}}
+                )
+            await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "canceled", "billing", subscription_id, {})
+    
+    elif event_type == "invoice.payment_succeeded":
+        subscription_id = data.get("subscription")
+        if subscription_id:
+            sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+            if sub and sub.get("status") == "past_due":
+                await db.subscriptions.update_one(
+                    {"stripe_subscription_id": subscription_id},
+                    {"$set": {"status": "active", "updated_at": now}}
+                )
+                await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "payment_succeeded", "billing", subscription_id, {})
+    
+    elif event_type == "invoice.payment_failed":
+        subscription_id = data.get("subscription")
+        if subscription_id:
+            sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+            if sub:
+                await db.subscriptions.update_one(
+                    {"stripe_subscription_id": subscription_id},
+                    {"$set": {"status": "past_due", "updated_at": now}}
+                )
+                await log_audit({"id": "webhook", "org_id": sub["org_id"], "email": "stripe"}, "payment_failed", "billing", subscription_id, {})
+    
+    return {"status": "received"}
+
+@api_router.get("/billing/subscription")
+async def get_billing_subscription(user: dict = Depends(get_current_user)):
+    """Get current subscription details with plan info"""
+    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    if not sub:
+        return None
+    
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    return {
+        **sub,
+        "plan": {
+            "id": sub.get("plan_id", "free"),
+            "name": plan["name"],
+            "price": plan["price"],
+            "allowed_modules": plan["allowed_modules"],
+            "limits": plan["limits"],
+        }
+    }
+
+@api_router.get("/billing/check-module/{module_code}")
+async def check_module_access(module_code: str, user: dict = Depends(get_current_user)):
+    """Check if current subscription allows access to a module"""
+    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    if not sub:
+        return {"allowed": False, "reason": "No subscription"}
+    
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    allowed = module_code in plan["allowed_modules"]
+    
+    # Check if subscription is active
+    status = sub.get("status", "")
+    if status in ["canceled", "past_due"]:
+        return {"allowed": False, "reason": f"Subscription {status}"}
+    
+    return {"allowed": allowed, "reason": None if allowed else "Module not in plan"}
+
 # ── Misc Routes ──────────────────────────────────────────────────
 
 @api_router.get("/roles")
