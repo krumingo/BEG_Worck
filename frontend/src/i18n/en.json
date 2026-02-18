@@ -992,7 +992,8 @@
     "limits": {
       "users": "Users",
       "projects": "Projects",
-      "storage": "Storage"
+      "storage": "Storage",
+      "invoices": "Invoices"
     },
     "billingSettings": "Billing & Subscription",
     "billingSettingsSubtitle": "Manage your subscription and billing",
@@ -1030,6 +1031,25 @@
     "paymentCanceled": "Payment Canceled",
     "paymentCanceledDesc": "Your payment was canceled and your plan was not changed.",
     "nothingCharged": "Don't worry, nothing was charged to your account.",
-    "tryAgain": "Try Again"
+    "tryAgain": "Try Again",
+    "usage": {
+      "title": "Usage",
+      "subtitle": "Your current usage vs plan limits",
+      "users": "Users",
+      "projects": "Projects",
+      "invoices": "Monthly Invoices",
+      "storage": "Storage",
+      "of": "of",
+      "used": "used",
+      "warning": "Approaching limit ({{percent}}%)",
+      "exceeded": "Limit exceeded",
+      "monthlyReset": "Invoices reset monthly"
+    },
+    "errors": {
+      "LIMIT_USERS_EXCEEDED": "User limit reached. Upgrade your plan to add more users.",
+      "LIMIT_PROJECTS_EXCEEDED": "Project limit reached. Upgrade your plan to create more projects.",
+      "LIMIT_INVOICES_EXCEEDED": "Monthly invoice limit reached. Upgrade your plan to create more invoices.",
+      "NO_SUBSCRIPTION": "No active subscription found."
+    }
   }
 }
