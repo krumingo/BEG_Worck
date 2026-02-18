@@ -12,6 +12,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import UsersPage from "@/pages/UsersPage";
 import CompanySettingsPage from "@/pages/CompanySettingsPage";
 import ModuleTogglesPage from "@/pages/ModuleTogglesPage";
+import MobileSettingsPage from "@/pages/MobileSettingsPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import ProjectsListPage from "@/pages/ProjectsListPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
