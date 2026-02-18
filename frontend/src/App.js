@@ -86,6 +86,8 @@ function App() {
           <Route path="/finance/invoices/:invoiceId" element={<ProtectedRoute><InvoiceEditorPage /></ProtectedRoute>} />
           <Route path="/finance/payments" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
           <Route path="/finance/payments/new" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
+          <Route path="/overhead" element={<ProtectedRoute><OverheadPage /></ProtectedRoute>} />
+          <Route path="/overhead/snapshots/:snapshotId" element={<ProtectedRoute><OverheadSnapshotDetailPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
           <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
