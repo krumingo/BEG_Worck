@@ -895,6 +895,10 @@ async def list_projects(
 async def create_project(data: ProjectCreate, user: dict = Depends(get_current_user)):
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions to create projects")
+    
+    # Enforce project limit
+    await enforce_limit(user["org_id"], "projects")
+    
     if data.status not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(PROJECT_STATUSES)}")
     if data.type not in PROJECT_TYPES:
