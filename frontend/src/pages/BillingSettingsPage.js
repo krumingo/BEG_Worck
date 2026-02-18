@@ -7,16 +7,20 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import { 
   CreditCard, 
   Loader2, 
   AlertTriangle, 
   Crown, 
-  Calendar, 
   ExternalLink,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  Users,
+  FolderKanban,
+  FileText,
+  HardDrive
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +32,13 @@ const STATUS_CONFIG = {
   incomplete: { icon: AlertTriangle, color: "text-orange-500", bg: "bg-orange-500/10" },
 };
 
+const USAGE_ICONS = {
+  users: Users,
+  projects: FolderKanban,
+  invoices: FileText,
+  storage: HardDrive,
+};
+
 export default function BillingSettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -35,6 +46,7 @@ export default function BillingSettingsPage() {
   
   const [subscription, setSubscription] = useState(null);
   const [billingConfig, setBillingConfig] = useState(null);
+  const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
 
@@ -58,6 +70,20 @@ export default function BillingSettingsPage() {
 
   const fetchData = async () => {
     try {
+      const [subRes, configRes, usageRes] = await Promise.all([
+        api.get("/billing/subscription"),
+        api.get("/billing/config"),
+        api.get("/billing/usage"),
+      ]);
+      setSubscription(subRes.data);
+      setBillingConfig(configRes.data);
+      setUsage(usageRes.data);
+    } catch (err) {
+      toast.error(t("toast.errorOccurred"));
+    } finally {
+      setLoading(false);
+    }
+  };
       const [subRes, configRes] = await Promise.all([
         api.get("/billing/subscription"),
         api.get("/billing/config"),
