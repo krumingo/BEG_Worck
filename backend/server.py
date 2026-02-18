@@ -5603,6 +5603,11 @@ async def startup():
     await db.subscriptions.create_index([("org_id", 1)], unique=True)
     await db.subscriptions.create_index([("stripe_subscription_id", 1)])
     await db.subscriptions.create_index([("stripe_customer_id", 1)])
+    # Mobile integration indexes
+    await db.org_mobile_settings.create_index([("org_id", 1)], unique=True)
+    await db.mobile_view_configs.create_index([("org_id", 1), ("role", 1), ("module_code", 1)], unique=True)
+    await db.media_files.create_index([("org_id", 1), ("owner_user_id", 1)])
+    await db.media_files.create_index([("org_id", 1), ("context_type", 1), ("context_id", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
