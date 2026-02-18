@@ -425,32 +425,67 @@
 
 ### 5.2 Global Availability Scan (Глобално сканиране за наличност)
 
-**Текущ статус:** ⚠️ ЧАСТИЧНО
+> **Важно:** Това НЕ е compliance/reminders за присъствия. Това е логистичният поток за **наличности**, който се изпълнява при **Submit/Изпрати заявка** и генерира предложения откъде да се осигурят количества + какво трябва да се купи.
 
-**Какво съществува:**
-- `/api/attendance/missing-today` - липсващи присъствия
-- `/api/reminders/missing-attendance` - агрегация
-- `/api/reminders/missing-work-reports` - агрегация
+**Текущ статус:** ❌ НЕ Е ИМПЛЕМЕНТИРАНО (в BEG_Work към момента няма M7 Inventory и няма Requests/RequestLines модул)
+
+#### Цел (какво прави)
+При натискане на **„Изпрати заявка"** системата прави **глобален availability scan** през:
+- всички **Warehouse** локации
+- всички **Project/Site** локации
+- всички **Guests/Assets** (инструменти/активи "при човек")
+
+… и записва към всеки ред на заявката:
+- `suggestedSourcesJson` (списък предложения: локация → налично qty → препоръчано qty)
+- `qtyTotalAvailable` (общо налично)
+- `qtyToBuy` (какво не достига и трябва да се купи)
+- `suggestionsUpdatedAt`
+
+**Ключово изискване:** не зависи от "default warehouse".
 
 **Definition of Done:**
 | # | Критерий | Статус |
 |---|----------|--------|
-| 1 | Endpoint за всички липсващи присъствия по организация | ✅ |
-| 2 | Endpoint за всички липсващи работни доклади | ✅ |
-| 3 | Филтриране по проект, дата, потребител | ✅ |
-| 4 | Агрегация по проекти (кой проект има най-много липси) | ❌ |
-| 5 | Агрегация по потребители (кой служител липсва най-често) | ❌ |
-| 6 | Dashboard widget за бърз преглед | ⚠️ Частично |
-| 7 | Export към CSV/Excel | ❌ |
-| 8 | Scheduled job за автоматично сканиране | ✅ |
-| 9 | Email известия при праг (>X липсващи) | ❌ |
-| 10 | Mobile push notifications | ❌ |
+| 1 | Съществува домейн модел: `Request` + `RequestLine` | ❌ |
+| 2 | `RequestLine` има полета: suggestedSourcesJson, qtyTotalAvailable, qtyToBuy, suggestionsUpdatedAt | ❌ |
+| 3 | Endpoint: `POST /api/requests` (create) + `POST /api/requests/{id}/submit` (submit) | ❌ |
+| 4 | При submit се извиква функция/сървис `buildSourceSuggestionsForRequest(requestId)` | ❌ |
+| 5 | Scan покрива ALL: warehouses + projects + guests/assets | ❌ |
+| 6 | Изчислява `qtyToBuy` коректно (ако totalAvailable < requestedQty) | ❌ |
+| 7 | Записва предложенията към всеки RequestLine (persist) | ❌ |
+| 8 | UI в Request Detail показва: totalAvailable, qtyToBuy, suggested sources | ❌ |
+| 9 | Не зависи от default warehouse (валидирано в тест) | ❌ |
+| 10 | Тестове минимум 5 сценария за scan | ❌ |
+
+#### State Machine (логика на потока)
+| От статус | Действие | Към статус | Валидация |
+|---|---|---|---|
+| Draft | Submit Request | Submitted | има поне 1 ред; qty > 0; itemId валиден |
+| Submitted | Build Suggestions | Submitted (обновен) | запис suggestedSourcesJson/qtyToBuy/updatedAt |
+| Submitted | Approve / Dispatch | Approved/Dispatched | според логистичния процес |
+
+#### Алгоритъм (високо ниво)
+1. Събира всички `itemId` от RequestLines
+2. Зарежда наличности по всички локации (Warehouse/Project) за тези itemId
+3. Зарежда asset instances при guests (ако item type = Asset/Tool)
+4. За всеки ред: пресмята totalAvailable, генерира предложения, изчислява qtyToBuy
+5. Persist към RequestLine
+
+#### Edge Cases (минимум 5 теста)
+1. **Mixed sources:** част в Warehouse + част в Project → комбинирани предложения
+2. **Insufficient stock:** totalAvailable < requestedQty → qtyToBuy > 0
+3. **Guest assets:** инструмент "WithGuest" → да се показва като източник
+4. **ReturnQty / pending returns:** да участват по правилата
+5. **Concurrency:** две заявки едновременно → предложенията са snapshot (не резервация)
 
 **Необходими действия за DoD:**
-1. Разширяване на `/api/dashboard/stats` с агрегации
-2. Нов endpoint за детайлен compliance report
-3. Export функционалност
-4. Email интеграция (SendGrid/Resend)
+1. Добавяне на Requests домейн (Request + RequestLine + статуси)
+2. Добавяне на InventoryBalance/AssetInstance (интеграция към M7/M8)
+3. Имплементация на submit flow + buildSourceSuggestionsForRequest
+4. UI визуализация на предложенията
+5. Тестове: 5 сценария (warehouse-only, project-only, mixed, guest, insufficient)
+
+**Зависимости:** M7 (Inventory) + M8 (Assets) трябва да са имплементирани преди този поток
 
 ---
 
