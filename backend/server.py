@@ -58,10 +58,10 @@ SUBSCRIPTION_PLANS = {
         "stripe_price_id": None,  # No Stripe for free tier
         "allowed_modules": ["M0", "M1", "M3"],  # Core + Projects + Attendance/WorkReports
         "limits": {
-            "users": 5,
-            "projects": 3,
-            "monthly_invoices": 10,
-            "storage_gb": 1
+            "users": 3,
+            "projects": 2,
+            "monthly_invoices": 5,
+            "storage_mb": 100
         },
         "trial_days": 14,
         "description": "14-day trial with basic features",
@@ -72,10 +72,10 @@ SUBSCRIPTION_PLANS = {
         "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_PRO"),
         "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M9"],  # All current modules
         "limits": {
-            "users": 25,
+            "users": 20,
             "projects": 50,
             "monthly_invoices": 500,
-            "storage_gb": 25
+            "storage_mb": 2000
         },
         "trial_days": 0,
         "description": "Full access to all features",
@@ -86,10 +86,10 @@ SUBSCRIPTION_PLANS = {
         "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_ENTERPRISE"),
         "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"],
         "limits": {
-            "users": -1,  # Unlimited
-            "projects": -1,
-            "monthly_invoices": -1,
-            "storage_gb": 100
+            "users": 100,
+            "projects": 500,
+            "monthly_invoices": 5000,
+            "storage_mb": 20000
         },
         "trial_days": 0,
         "description": "Unlimited users and premium support",
@@ -97,6 +97,9 @@ SUBSCRIPTION_PLANS = {
         "custom_integrations": True,
     }
 }
+
+# Limit warning threshold (80%)
+LIMIT_WARNING_THRESHOLD = 0.8
 
 SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "incomplete"]
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
