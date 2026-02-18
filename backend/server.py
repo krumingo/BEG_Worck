@@ -961,9 +961,6 @@ api_router.include_router(offers_router)
 from app.routes.hr import router as hr_router
 api_router.include_router(hr_router)
 
-# ── M5 Finance Routes (hr/payroll section removed) ────────────────
-
-def finance_permission(user: dict):
 # ── M5 Finance Routes ─────────────────────────────────────────────
 
 def finance_permission(user: dict):
