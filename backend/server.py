@@ -3191,6 +3191,9 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(get_current_u
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
+    # Enforce invoice limit (monthly)
+    await enforce_limit(user["org_id"], "invoices")
+    
     # Check invoice_no uniqueness
     existing = await db.invoices.find_one({
         "org_id": user["org_id"],
