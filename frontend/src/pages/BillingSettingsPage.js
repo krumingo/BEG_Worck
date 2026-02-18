@@ -84,18 +84,6 @@ export default function BillingSettingsPage() {
       setLoading(false);
     }
   };
-      const [subRes, configRes] = await Promise.all([
-        api.get("/billing/subscription"),
-        api.get("/billing/config"),
-      ]);
-      setSubscription(subRes.data);
-      setBillingConfig(configRes.data);
-    } catch (err) {
-      toast.error(t("toast.errorOccurred"));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleOpenPortal = async () => {
     setPortalLoading(true);
