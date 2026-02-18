@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +98,15 @@ export default function LoginPage() {
               {t("auth.signIn")}
             </Button>
           </form>
+
+          <div className="mt-4 pt-4 border-t border-border text-center">
+            <p className="text-sm text-muted-foreground">
+              {t("billing.alreadyHaveAccount").replace("Already have an account?", "Don't have an account?")}{" "}
+              <Link to="/signup" className="text-primary hover:underline font-medium" data-testid="signup-link">
+                {t("billing.startTrial")}
+              </Link>
+            </p>
+          </div>
 
           <p className="text-center text-xs text-muted-foreground mt-4">
             {t("auth.demo")}: admin@begwork.com / admin123
