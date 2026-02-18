@@ -957,8 +957,13 @@ api_router.include_router(attendance_router)
 from app.routes.offers import router as offers_router
 api_router.include_router(offers_router)
 
+# Import HR/payroll router - includes employees, advances, payroll-runs, payslips, payroll-enums
+from app.routes.hr import router as hr_router
+api_router.include_router(hr_router)
 
-def payroll_permission(user: dict):
+# ── M5 Finance Routes (hr/payroll section removed) ────────────────
+
+def finance_permission(user: dict):
     """Check if user has payroll access"""
     return user["role"] in ["Admin", "Owner", "Accountant"]
 
