@@ -13,7 +13,6 @@ import { toast } from "sonner";
 export default function SignupPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { setUser, setOrg } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
