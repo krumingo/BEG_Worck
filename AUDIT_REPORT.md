@@ -22,7 +22,7 @@
 
 ## 1. ИНВЕНТАРИЗАЦИЯ НА API ENDPOINTS
 
-**Общо: 144 API маршрута**
+**Общо: 144 endpoints** *(computed from audit_endpoints.csv)*
 
 ### 1.1 Authentication & Core (M0) - 7 endpoints
 | Метод | Път | Хендлър | Статус |
