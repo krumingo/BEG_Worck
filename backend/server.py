@@ -953,9 +953,11 @@ api_router.include_router(projects_router)
 from app.routes.attendance import router as attendance_router
 api_router.include_router(attendance_router)
 
-# ── M2 Estimates / BOQ Routes ────────────────────────────────────
+# Import offers router - includes offers, activity-catalog, offer-enums
+from app.routes.offers import router as offers_router
+api_router.include_router(offers_router)
 
-async def get_next_offer_no(org_id: str) -> str:
+# ── M4 HR / Payroll Routes (offers section removed) ──────────────
     """Generate sequential offer number like OFF-0001"""
     last = await db.offers.find_one(
         {"org_id": org_id},
