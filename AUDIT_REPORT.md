@@ -157,7 +157,7 @@
 | GET | /api/finance/stats | get_finance_stats | ✅ Работи |
 | GET | /api/finance/enums | get_finance_enums | ✅ Работи |
 
-### 1.10 Overhead Costs (M9) - 13 endpoints
+### 1.10 Overhead Costs (M9) - 18 endpoints
 | Метод | Път | Хендлър | Статус |
 |-------|-----|---------|--------|
 | GET | /api/overhead/categories | list_overhead_categories | ✅ Работи |
