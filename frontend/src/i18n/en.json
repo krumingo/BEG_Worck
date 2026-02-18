@@ -1051,5 +1051,88 @@
       "LIMIT_INVOICES_EXCEEDED": "Monthly invoice limit reached. Upgrade your plan to create more invoices.",
       "NO_SUBSCRIPTION": "No active subscription found."
     }
+  },
+  "mobile": {
+    "title": "Mobile App Settings",
+    "subtitle": "Configure mobile app access for your organization",
+    "enabledModules": "Enabled Modules",
+    "enabledModulesDesc": "Select which modules are available in the mobile app",
+    "viewConfigs": "View Configurations",
+    "viewConfigsDesc": "Configure what each role can see and do in each module",
+    "selectRole": "Select Role",
+    "selectModule": "Select Module",
+    "listFields": "List Fields",
+    "listFieldsDesc": "Fields visible in list views",
+    "detailFields": "Detail Fields",
+    "detailFieldsDesc": "Fields visible in detail views",
+    "allowedActions": "Allowed Actions",
+    "allowedActionsDesc": "Actions the user can perform",
+    "defaultFilters": "Default Filters",
+    "defaultFiltersDesc": "Filters applied by default",
+    "resetToDefault": "Reset to Default",
+    "isCustom": "Custom",
+    "isDefault": "Default",
+    "saveChanges": "Save Changes",
+    "modules": {
+      "attendance": "Attendance",
+      "workReports": "Work Reports",
+      "deliveries": "Deliveries",
+      "machines": "Machines",
+      "messages": "Messages",
+      "media": "Media/Photos",
+      "profile": "Profile"
+    },
+    "actions": {
+      "view": "View",
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "clockIn": "Clock In",
+      "clockOut": "Clock Out",
+      "viewHistory": "View History",
+      "submit": "Submit",
+      "addNote": "Add Note",
+      "uploadPhoto": "Upload Photo",
+      "updateStatus": "Update Status",
+      "assignSelf": "Assign to Self",
+      "releaseSelf": "Release",
+      "reportIssue": "Report Issue",
+      "send": "Send Message"
+    },
+    "filters": {
+      "assignedToMe": "Assigned to Me",
+      "projectScoped": "Current Project Only",
+      "activeOnly": "Active Only",
+      "ownOnly": "Own Items Only",
+      "vehiclesOnly": "Vehicles Only"
+    },
+    "quickAction": {
+      "clockIn": "Clock In",
+      "createWorkReport": "Create Work Report",
+      "updateDelivery": "Update Delivery"
+    },
+    "noConfigsYet": "No custom configurations yet. Using defaults.",
+    "configSaved": "Configuration saved successfully",
+    "configReset": "Configuration reset to defaults"
+  },
+  "media": {
+    "title": "Media",
+    "upload": "Upload",
+    "uploadPhoto": "Upload Photo",
+    "selectFile": "Select File",
+    "dragDrop": "Drag and drop or click to upload",
+    "maxSize": "Max file size: {{size}}MB",
+    "allowedTypes": "Allowed types: JPEG, PNG, WebP",
+    "uploading": "Uploading...",
+    "uploadSuccess": "Upload successful",
+    "uploadFailed": "Upload failed",
+    "linkTo": "Link to",
+    "linkedTo": "Linked to",
+    "noMedia": "No media files",
+    "errors": {
+      "INVALID_FILE_TYPE": "Invalid file type",
+      "FILE_TOO_LARGE": "File too large",
+      "INVALID_CONTEXT_TYPE": "Invalid context type"
+    }
   }
 }
