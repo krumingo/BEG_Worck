@@ -260,14 +260,14 @@
 
 ## 2. ИНВЕНТАРИЗАЦИЯ НА DATA MODELS
 
-### 2.1 MongoDB Колекции (15 основни)
+### 2.1 MongoDB Колекции — 31 общо (15 core + 16 supporting)
+
+#### Core Business Collections (15)
 | Колекция | Описание | Модул |
 |----------|----------|-------|
 | organizations | Тенант/компания данни | M0 |
 | users | Потребители с роли | M0 |
 | subscriptions | Абонаментна информация | M0/M10 |
-| feature_flags | Включени модули | M0 |
-| audit_logs | История на действията | M0 |
 | projects | Проекти | M1 |
 | project_team | Членове на екипи | M1 |
 | project_phases | Фази на проекти | M1 |
@@ -275,16 +275,23 @@
 | activity_catalog | Каталог дейности | M2 |
 | attendance_entries | Присъствия | M3 |
 | work_reports | Работни доклади | M3 |
-| reminders | Напомняния | M3 |
-| notifications | Известия | M3 |
 | employee_profiles | HR профили | M4 |
-| advances | Аванси/заеми | M4 |
 | payroll_runs | Периоди на заплащане | M4 |
 | payslips | Фишове за заплати | M4 |
-| financial_accounts | Каси/банки | M5 |
 | invoices | Фактури | M5 |
-| payments | Плащания | M5 |
+| financial_accounts | Каси/банки | M5 |
+
+#### Supporting Collections (16)
+| Колекция | Описание | Модул |
+|----------|----------|-------|
+| feature_flags | Включени модули | M0 |
+| audit_logs | История на действията | M0 |
+| advances | Аванси/заеми | M4 |
+| finance_payments | Плащания | M5 |
 | payment_allocations | Разпределения | M5 |
+| payroll_payments | Payroll плащания | M4 |
+| notifications | Известия | M3/M9 |
+| reminder_logs | Логове напомняния | M9 |
 | overhead_categories | Категории разходи | M9 |
 | overhead_costs | Непреки разходи | M9 |
 | overhead_assets | Амортизируеми активи | M9 |
@@ -293,6 +300,8 @@
 | org_mobile_settings | Мобилни настройки | Mobile |
 | mobile_view_configs | Конфигурации на изгледи | Mobile |
 | media_files | Медийни файлове | Mobile |
+
+**Източник:** `/app/audit_models_collections.txt` *(extract от server.py: db.* usage patterns)*
 
 ### 2.2 Pydantic Models (48 модела)
 Всички заявки са валидирани чрез Pydantic модели:
