@@ -977,13 +977,13 @@ async def serve_media_file(filename: str, user: dict = Depends(get_current_user)
 | **1** | **Монолитен server.py (4700+ реда)** | 🔴 КРИТИЧЕН | 100% | Невъзможност за поддръжка, бавно развитие | Рефакторинг на модулна структура |
 | **2** | **Stripe само в Mock Mode** | 🔴 КРИТИЧЕН | 100% | Невъзможност за реални плащания | Интеграция с реален Stripe акаунт |
 | **3** | **M7 Inventory липсва** | 🔴 КРИТИЧЕН | 100% | Невъзможен Global Availability Scan, Requests flow | Приоритизиране на M7 преди Requests |
-| **4** | **Липса на Rate Limiting** | 🟠 ВИСОК | 60% | DDoS атаки, brute-force | Добавяне на slowapi или nginx rate limit |
-| **5** | **Deliveries модул липсва** | 🟠 ВИСОК | 100% | Driver роля е безполезна | Приоритизиране в Patch Plan |
-| **6** | **Requests/RequestLines липсва** | 🟠 ВИСОК | 100% | Логистичният поток не работи | Зависи от M7/M8 |
-| **7** | **M8 Assets & QR липсва** | 🟡 СРЕДЕН | 100% | Guest assets не могат да се следят | Имплементация след M7 |
-| **8** | **Mobile App липсва** | 🟡 СРЕДЕН | 100% | Мобилната конфигурация е безполезна | Стартиране на Mobile Phase 3 |
-| **9** | **Cascade delete при User** | 🟡 СРЕДЕН | 40% | Осиротели записи в DB | Добавяне на soft-delete или cascade |
-| **10** | **Export функционалност липсва** | 🟢 НИСЪК | 80% | Потребителите не могат да извличат данни | CSV/PDF export endpoints |
+| **4** | **Mobile Media ACL недостатъчен** | 🔴 КРИТИЧЕН | 80% | Cross-org data leak през media endpoint | Имплементиране на Policy 3 (виж 5.3.1) |
+| **5** | **Липса на Rate Limiting** | 🟠 ВИСОК | 60% | DDoS атаки, brute-force | Добавяне на slowapi или nginx rate limit |
+| **6** | **Deliveries модул липсва** | 🟠 ВИСОК | 100% | Driver роля е безполезна | State machine + 14 endpoints (виж 5.1) |
+| **7** | **Requests/RequestLines липсва** | 🟠 ВИСОК | 100% | Логистичният поток не работи | Зависи от M7/M8 |
+| **8** | **M8 Assets & QR липсва** | 🟡 СРЕДЕН | 100% | Guest assets не могат да се следят | Имплементация след M7 |
+| **9** | **Mobile App липсва** | 🟡 СРЕДЕН | 100% | Мобилната конфигурация е безполезна | Стартиране на Mobile Phase 3 |
+| **10** | **Config precedence не е имплементиран** | 🟡 СРЕДЕН | 70% | Inconsistent mobile behavior | Имплементиране на Policy 2 (виж 5.3.1) |
 
 ---
 
