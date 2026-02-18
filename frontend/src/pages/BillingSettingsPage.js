@@ -260,6 +260,76 @@ export default function BillingSettingsPage() {
         </CardFooter>
       </Card>
 
+      {/* Usage Card */}
+      {usage && (
+        <Card className="mb-6" data-testid="usage-card">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <HardDrive className="w-5 h-5" />
+              {t("billing.usage.title")}
+            </CardTitle>
+            <CardDescription>{t("billing.usage.subtitle")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {usage.usage.map((item) => {
+              const Icon = USAGE_ICONS[item.resource] || HardDrive;
+              const getProgressColor = () => {
+                if (item.exceeded) return "bg-red-500";
+                if (item.warning) return "bg-yellow-500";
+                return "bg-primary";
+              };
+              
+              return (
+                <div key={item.resource} className="space-y-2" data-testid={`usage-${item.resource}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">{t(`billing.usage.${item.resource}`)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">
+                        {item.current} {t("billing.usage.of")} {item.limit} {item.unit}
+                      </span>
+                      {item.exceeded && (
+                        <Badge variant="destructive" className="text-xs">
+                          {t("billing.usage.exceeded")}
+                        </Badge>
+                      )}
+                      {item.warning && !item.exceeded && (
+                        <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-600">
+                          {t("billing.usage.warning", { percent: item.percent })}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`absolute h-full rounded-full transition-all ${getProgressColor()}`}
+                      style={{ width: `${Math.min(item.percent, 100)}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right">
+                    {item.percent}% {t("billing.usage.used")}
+                  </div>
+                </div>
+              );
+            })}
+            
+            <p className="text-xs text-muted-foreground mt-4">
+              {t("billing.usage.monthlyReset")}
+            </p>
+          </CardContent>
+          
+          {usage.usage.some(item => item.warning || item.exceeded) && (
+            <CardFooter>
+              <Button onClick={() => navigate("/plans")} variant="outline" className="w-full">
+                {t("billing.upgrade")}
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
+      )}
+
       {/* Payment Method Card (only for paid plans) */}
       {subscription?.stripe_customer_id && (
         <Card data-testid="payment-method-card">
