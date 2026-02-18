@@ -4698,6 +4698,154 @@ async def check_module_access(module_code: str, user: dict = Depends(get_current
     allowed = module_code in plan["allowed_modules"]
     return {"allowed": allowed, "reason": None if allowed else "Module not in your current plan. Please upgrade."}
 
+# ── Usage Tracking & Limits Enforcement ──────────────────────────────
+
+async def compute_org_usage(org_id: str) -> dict:
+    """Compute current usage counts for an organization"""
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Count users
+    users_count = await db.users.count_documents({"org_id": org_id, "is_active": True})
+    
+    # Count projects (active only)
+    projects_count = await db.projects.count_documents({"org_id": org_id, "status": {"$ne": "Archived"}})
+    
+    # Count invoices created this month
+    invoices_count = await db.invoices.count_documents({
+        "org_id": org_id,
+        "created_at": {"$gte": month_start.isoformat()}
+    })
+    
+    # Storage placeholder (would need actual file storage tracking)
+    storage_used_mb = 0
+    
+    return {
+        "users_count": users_count,
+        "projects_count": projects_count,
+        "invoices_count_monthly": invoices_count,
+        "storage_used_mb": storage_used_mb,
+        "computed_at": now.isoformat(),
+        "month_start": month_start.isoformat(),
+    }
+
+async def check_limit(org_id: str, resource: str, increment: int = 1) -> dict:
+    """
+    Check if adding `increment` items would exceed the plan limit.
+    Returns: {"allowed": bool, "error_code": str|None, "current": int, "limit": int, "warning": bool}
+    """
+    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    if not sub:
+        return {"allowed": False, "error_code": "NO_SUBSCRIPTION", "current": 0, "limit": 0, "warning": False}
+    
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    limits = plan.get("limits", {})
+    
+    # Map resource to limit key and count function
+    resource_map = {
+        "users": ("users", lambda: db.users.count_documents({"org_id": org_id, "is_active": True})),
+        "projects": ("projects", lambda: db.projects.count_documents({"org_id": org_id, "status": {"$ne": "Archived"}})),
+        "invoices": ("monthly_invoices", None),  # Special handling for monthly invoices
+    }
+    
+    if resource not in resource_map:
+        return {"allowed": True, "error_code": None, "current": 0, "limit": 0, "warning": False}
+    
+    limit_key, count_fn = resource_map[resource]
+    limit = limits.get(limit_key, -1)
+    
+    # Get current count
+    if resource == "invoices":
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        current = await db.invoices.count_documents({
+            "org_id": org_id,
+            "created_at": {"$gte": month_start.isoformat()}
+        })
+    else:
+        current = await count_fn()
+    
+    # Check limit (-1 means unlimited for backwards compatibility, but we're not using it now)
+    would_exceed = (current + increment) > limit
+    warning = (current / limit) >= LIMIT_WARNING_THRESHOLD if limit > 0 else False
+    
+    error_code = None
+    if would_exceed:
+        error_code = f"LIMIT_{resource.upper()}_EXCEEDED"
+    
+    return {
+        "allowed": not would_exceed,
+        "error_code": error_code,
+        "current": current,
+        "limit": limit,
+        "warning": warning,
+        "percent": round((current / limit) * 100, 1) if limit > 0 else 0,
+    }
+
+async def enforce_limit(org_id: str, resource: str, increment: int = 1):
+    """Enforce limit - raises HTTPException if limit exceeded"""
+    result = await check_limit(org_id, resource, increment)
+    if not result["allowed"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": result["error_code"],
+                "current": result["current"],
+                "limit": result["limit"],
+                "message": f"Plan limit exceeded for {resource}. Current: {result['current']}, Limit: {result['limit']}",
+            }
+        )
+    return result
+
+@api_router.get("/billing/usage")
+async def get_billing_usage(user: dict = Depends(get_current_user)):
+    """Get current usage vs plan limits with percentages and warnings"""
+    org_id = user["org_id"]
+    
+    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    if not sub:
+        raise HTTPException(status_code=404, detail="No subscription found")
+    
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    limits = plan.get("limits", {})
+    
+    # Compute current usage
+    usage = await compute_org_usage(org_id)
+    
+    # Build usage breakdown with limits and warnings
+    usage_items = []
+    
+    for key, limit_key, label in [
+        ("users_count", "users", "users"),
+        ("projects_count", "projects", "projects"),
+        ("invoices_count_monthly", "monthly_invoices", "invoices"),
+        ("storage_used_mb", "storage_mb", "storage"),
+    ]:
+        current = usage.get(key, 0)
+        limit = limits.get(limit_key, 0)
+        percent = round((current / limit) * 100, 1) if limit > 0 else 0
+        warning = percent >= (LIMIT_WARNING_THRESHOLD * 100)
+        exceeded = current >= limit
+        
+        usage_items.append({
+            "resource": label,
+            "current": current,
+            "limit": limit,
+            "percent": percent,
+            "warning": warning,
+            "exceeded": exceeded,
+            "unit": "MB" if label == "storage" else "",
+        })
+    
+    return {
+        "plan_id": sub.get("plan_id", "free"),
+        "plan_name": plan["name"],
+        "usage": usage_items,
+        "computed_at": usage["computed_at"],
+        "month_start": usage["month_start"],
+        "warning_threshold": LIMIT_WARNING_THRESHOLD * 100,
+    }
+
 # ── Misc Routes ──────────────────────────────────────────────────
 
 @api_router.get("/roles")
