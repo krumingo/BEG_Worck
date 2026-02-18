@@ -965,8 +965,11 @@ api_router.include_router(hr_router)
 from app.routes.finance import router as finance_router
 api_router.include_router(finance_router)
 
-# ── Dashboard Stats ──────────────────────────────────────────────
-# ── Dashboard Stats ──────────────────────────────────────────────
+# Import overhead router - includes dashboard/stats, overhead categories/costs/assets/snapshots/allocations
+from app.routes.overhead import router as overhead_router
+api_router.include_router(overhead_router)
+
+# ── Billing & Subscription Routes ─────────────────────────────────────
 
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(user: dict = Depends(get_current_user)):
