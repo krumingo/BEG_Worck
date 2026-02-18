@@ -46,12 +46,17 @@ MODULES = {
 }
 
 # ── Subscription Plans Configuration ────────────────────────────────
+# Plan module mappings based on user requirements:
+# Free: Projects (M1), Attendance (M3), WorkReports (part of M3), Reminders/Notifications (M0 core)
+# Pro: ALL modules
+# Enterprise: Pro + placeholder limits/support
+
 SUBSCRIPTION_PLANS = {
     "free": {
         "name": "Free Trial",
         "price": 0,
         "stripe_price_id": None,  # No Stripe for free tier
-        "allowed_modules": ["M0", "M1", "M3"],  # Core + Projects + Attendance
+        "allowed_modules": ["M0", "M1", "M3"],  # Core + Projects + Attendance/WorkReports
         "limits": {
             "users": 5,
             "projects": 3,
@@ -59,12 +64,13 @@ SUBSCRIPTION_PLANS = {
             "storage_gb": 1
         },
         "trial_days": 14,
+        "description": "14-day trial with basic features",
     },
     "pro": {
         "name": "Professional",
         "price": 49.00,
-        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_PRO", "price_pro_placeholder"),
-        "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M9"],
+        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_PRO"),
+        "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M9"],  # All current modules
         "limits": {
             "users": 25,
             "projects": 50,
@@ -72,11 +78,12 @@ SUBSCRIPTION_PLANS = {
             "storage_gb": 25
         },
         "trial_days": 0,
+        "description": "Full access to all features",
     },
     "enterprise": {
         "name": "Enterprise",
         "price": 149.00,
-        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_ENTERPRISE", "price_enterprise_placeholder"),
+        "stripe_price_id": os.environ.get("STRIPE_PRICE_ID_ENTERPRISE"),
         "allowed_modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"],
         "limits": {
             "users": -1,  # Unlimited
@@ -85,11 +92,28 @@ SUBSCRIPTION_PLANS = {
             "storage_gb": 100
         },
         "trial_days": 0,
+        "description": "Unlimited users and premium support",
+        "support_priority": "priority",
+        "custom_integrations": True,
     }
 }
 
 SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "incomplete"]
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
+
+# STRIPE_MOCK_MODE: When True, Stripe API calls are simulated for development/testing
+# Real Stripe integration requires: STRIPE_API_KEY, STRIPE_PRICE_ID_PRO, STRIPE_PRICE_ID_ENTERPRISE, STRIPE_WEBHOOK_SECRET
+def is_stripe_configured():
+    """Check if Stripe is properly configured for real payments"""
+    api_key = os.environ.get("STRIPE_API_KEY", "")
+    # Check if we have a real API key (not placeholder or test emergent key)
+    if not api_key or api_key == "sk_test_emergent" or api_key.startswith("sk_test_emergent"):
+        return False
+    pro_price = os.environ.get("STRIPE_PRICE_ID_PRO")
+    enterprise_price = os.environ.get("STRIPE_PRICE_ID_ENTERPRISE")
+    return bool(pro_price and enterprise_price)
+
+STRIPE_MOCK_MODE = not is_stripe_configured()
 
 app = FastAPI(title="BEG_Work API")
 api_router = APIRouter(prefix="/api")
