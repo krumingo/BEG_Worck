@@ -311,8 +311,12 @@ async def update_mobile_view_config(data: MobileViewConfigUpdate, user: dict = D
 
 
 @router.delete("/mobile/view-configs/{role}/{module_code}")
-async def reset_mobile_view_config(role: str, module_code: str, user: dict = Depends(require_admin)):
-    """Reset mobile view config to defaults for a specific role and module"""
+async def reset_mobile_view_config(role: str, module_code: str, user: dict = Depends(require_platform_admin)):
+    """
+    Reset mobile view config to defaults for a specific role and module.
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    """
     org_id = user["org_id"]
     
     result = await db.mobile_view_configs.delete_one({
