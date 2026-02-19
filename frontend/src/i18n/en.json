@@ -127,7 +127,21 @@
     "forgotPassword": "Forgot password?",
     "rememberMe": "Remember me",
     "sessionExpired": "Session expired",
-    "pleaseLogin": "Please log in again"
+    "pleaseLogin": "Please log in again",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "passwordChanged": "Password changed successfully",
+    "passwordMismatch": "Passwords do not match",
+    "currentPasswordIncorrect": "Current password is incorrect",
+    "passwordTooShort": "Password must be at least 10 characters",
+    "passwordNeedsUpper": "Password must contain an uppercase letter",
+    "passwordNeedsLower": "Password must contain a lowercase letter",
+    "passwordNeedsDigit": "Password must contain a digit",
+    "passwordNeedsSpecial": "Password must contain a special character",
+    "passwordSameAsCurrent": "New password must be different from current",
+    "passwordRequirements": "Requirements: min 10 chars, uppercase, lowercase, digit, special char"
   },
   "nav": {
     "dashboard": "Dashboard",
