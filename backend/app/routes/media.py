@@ -207,18 +207,56 @@ async def list_media(
     user: dict = Depends(get_current_user)
 ):
     """List media files for the organization, optionally filtered by context"""
-    org_id = user["org_id"]
+    from app.shared import check_media_access
     
+    org_id = user["org_id"]
+    user_id = user["id"]
+    user_role = user["role"]
+    
+    # ── Build base query ───────────────────────────────────────────────
     query = {"org_id": org_id}
+    
+    # Apply context filters if provided
     if context_type:
         query["context_type"] = context_type
     if context_id:
         query["context_id"] = context_id
     
-    # Non-admin users only see their own media unless filtering by context
-    if user["role"] not in ["Admin", "Owner", "SiteManager"] and not (context_type and context_id):
-        query["owner_user_id"] = user["id"]
+    # ── Role-based query optimization ──────────────────────────────────
+    # Admin/Owner: see all media in org (no additional filter)
+    # SiteManager: see own media + media linked to projects they manage
+    # Others: see own media + media linked to contexts they have access to
     
-    media_list = await db.media_files.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    if user_role in ["Admin", "Owner"]:
+        # Full access - no additional restrictions
+        pass
+    elif user_role == "SiteManager":
+        # SiteManager sees: own media OR media linked to their projects
+        # For efficiency, we'll fetch and post-filter
+        pass
+    else:
+        # Technician/Driver/Accountant: fetch candidates and post-filter
+        # If specific context_id is given, we'll verify access
+        # Otherwise, restrict to own media by default
+        if not context_id:
+            query["owner_user_id"] = user_id
     
-    return media_list
+    # ── Fetch candidates ───────────────────────────────────────────────
+    media_list = await db.media_files.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    
+    # ── Post-filter for ACL compliance ─────────────────────────────────
+    # Admin/Owner already have full access, skip filtering
+    if user_role in ["Admin", "Owner"]:
+        return media_list[:100]  # Limit response size
+    
+    # For other roles, verify access to each media item
+    filtered_list = []
+    for media in media_list:
+        allowed, _ = await check_media_access(user, media, action="meta")
+        if allowed:
+            filtered_list.append(media)
+        # Stop at 100 results for performance
+        if len(filtered_list) >= 100:
+            break
+    
+    return filtered_list
