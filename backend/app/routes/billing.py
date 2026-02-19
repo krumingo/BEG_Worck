@@ -25,7 +25,8 @@ router = APIRouter(tags=["Billing"])
 # Configure Stripe
 stripe.api_key = STRIPE_API_KEY
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://access-control-174.preview.emergentagent.com")
+# APP_BASE_URL is required for Stripe redirects - must be set in environment
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 
 
 # ── Public Endpoints ───────────────────────────────────────────────
@@ -255,6 +256,10 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
         except stripe.error.StripeError as e:
             raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
     
+    # Validate origin_url for security
+    if not data.origin_url or not data.origin_url.startswith(("https://", "http://localhost")):
+        raise HTTPException(status_code=400, detail="Invalid or missing origin_url")
+    
     # Create checkout session
     success_url = f"{data.origin_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{data.origin_url}/billing/cancel"
@@ -301,6 +306,10 @@ async def create_portal_session(user: dict = Depends(get_current_user)):
     
     if not sub or not sub.get("stripe_customer_id"):
         raise HTTPException(status_code=400, detail="No billing information found")
+    
+    # Ensure APP_BASE_URL is configured for production
+    if not APP_BASE_URL:
+        raise HTTPException(status_code=500, detail="APP_BASE_URL not configured. Contact administrator.")
     
     try:
         session = stripe.billing_portal.Session.create(
