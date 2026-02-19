@@ -343,7 +343,7 @@ export default function DashboardLayout({ children }) {
                 </SheetClose>
               </div>
               <nav className="p-2 space-y-1 overflow-y-auto max-h-[calc(100vh-120px)]">
-                {(["Admin","Owner","SiteManager","Accountant"].includes(user?.role) ? ADMIN_NAV : WORKER_NAV).map((item) => (
+                {(["Admin","Owner","SiteManager","Accountant"].includes(user?.role) ? getAdminNav() : WORKER_NAV).map((item) => (
                   <SheetClose asChild key={item.to}>
                     <NavLink
                       to={item.to}
