@@ -307,11 +307,11 @@ async def check_media_access(user: dict, media: dict, action: str = "meta") -> t
         return False, "Media has no context; only owner can access"
     
     # Rule 3d: Context-based access check
-    allowed, reason = await _check_context_access(user, context_type, context_id)
+    allowed, reason = await check_context_access(user, context_type, context_id)
     return allowed, reason
 
 
-async def _check_context_access(user: dict, context_type: str, context_id: str) -> tuple:
+async def check_context_access(user: dict, context_type: str, context_id: str) -> tuple:
     """
     Check if user has access to a specific context entity.
     
