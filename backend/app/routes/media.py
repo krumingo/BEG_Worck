@@ -180,9 +180,13 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     # ACL check: enforces org isolation, owner/admin access, and context-based rules
     await enforce_media_access(user, media, action="meta")
     
-    # Enrich with owner name
-    owner = await db.users.find_one({"id": media["owner_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
-    media["owner_user_name"] = f"{owner.get('first_name', '')} {owner.get('last_name', '')}".strip() if owner else ""
+    # Enrich with owner name (handle legacy records with missing owner_user_id)
+    owner_user_id = media.get("owner_user_id")
+    if owner_user_id:
+        owner = await db.users.find_one({"id": owner_user_id}, {"_id": 0, "first_name": 1, "last_name": 1})
+        media["owner_user_name"] = f"{owner.get('first_name', '')} {owner.get('last_name', '')}".strip() if owner else ""
+    else:
+        media["owner_user_name"] = "(unknown)"
     
     return media
 
