@@ -207,6 +207,7 @@ export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
