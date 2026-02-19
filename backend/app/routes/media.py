@@ -141,7 +141,12 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Media file not found")
     
     # Check ownership or admin (user must own the media to link it)
-    if media["owner_user_id"] != user["id"] and user["role"] not in ["Admin", "Owner"]:
+    # Legacy safety: if owner_user_id is missing, only admin can link
+    owner_user_id = media.get("owner_user_id")
+    if not owner_user_id:
+        if user["role"] not in ["Admin", "Owner"]:
+            raise HTTPException(status_code=403, detail="Media has no owner; only admin can link")
+    elif owner_user_id != user["id"] and user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Not authorized to link this media")
     
     # ── TARGET CONTEXT ACCESS CHECK ────────────────────────────────────
