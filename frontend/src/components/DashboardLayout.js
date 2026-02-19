@@ -281,6 +281,16 @@ export default function DashboardLayout({ children }) {
           <Button
             variant="ghost"
             size="sm"
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
+            onClick={() => setChangePasswordOpen(true)}
+            data-testid="change-password-button"
+          >
+            <Lock className="w-4 h-4 mr-2" />
+            {t("auth.changePassword")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             className="w-full justify-start text-muted-foreground hover:text-destructive"
             onClick={handleLogout}
             data-testid="logout-button"
