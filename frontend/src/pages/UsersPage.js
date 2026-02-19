@@ -176,14 +176,34 @@ export default function UsersPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(u)} data-testid={`edit-user-${u.id}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(u)} className="hover:text-destructive" data-testid={`delete-user-${u.id}`}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" data-testid={`user-actions-${u.id}`}>
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => openEdit(u)} data-testid={`edit-user-${u.id}`}>
+                        <Pencil className="w-3.5 h-3.5 mr-2" />
+                        {t("common.edit")}
+                      </DropdownMenuItem>
+                      {isAdmin && u.id !== currentUser?.id && (
+                        <DropdownMenuItem onClick={() => setResetPasswordUser(u)} data-testid={`reset-password-${u.id}`}>
+                          <KeyRound className="w-3.5 h-3.5 mr-2" />
+                          {t("users.resetPassword")}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => handleDelete(u)} 
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`delete-user-${u.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-2" />
+                        {t("common.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))}
