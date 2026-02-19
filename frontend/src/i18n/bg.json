@@ -127,7 +127,21 @@
     "forgotPassword": "Забравена парола?",
     "rememberMe": "Запомни ме",
     "sessionExpired": "Сесията изтече",
-    "pleaseLogin": "Моля, влезте отново"
+    "pleaseLogin": "Моля, влезте отново",
+    "changePassword": "Смени парола",
+    "currentPassword": "Текуща парола",
+    "newPassword": "Нова парола",
+    "confirmPassword": "Потвърди парола",
+    "passwordChanged": "Паролата е сменена успешно",
+    "passwordMismatch": "Паролите не съвпадат",
+    "currentPasswordIncorrect": "Текущата парола е грешна",
+    "passwordTooShort": "Паролата трябва да е поне 10 символа",
+    "passwordNeedsUpper": "Паролата трябва да съдържа главна буква",
+    "passwordNeedsLower": "Паролата трябва да съдържа малка буква",
+    "passwordNeedsDigit": "Паролата трябва да съдържа цифра",
+    "passwordNeedsSpecial": "Паролата трябва да съдържа специален символ",
+    "passwordSameAsCurrent": "Новата парола трябва да е различна от текущата",
+    "passwordRequirements": "Изисквания: мин. 10 символа, главна буква, малка буква, цифра, специален символ"
   },
   "nav": {
     "dashboard": "Табло",
