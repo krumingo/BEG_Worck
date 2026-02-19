@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.shared import (
-    db, ROLES, get_current_user, require_admin, 
+    db, ROLES, get_current_user, require_admin, require_platform_admin,
     verify_password, create_token, hash_password, 
     log_audit, enforce_limit
 )
