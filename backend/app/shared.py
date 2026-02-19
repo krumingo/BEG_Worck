@@ -274,6 +274,41 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str, ent
 
 MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project"]
 
+
+def log_security_event(event_type: str, user: dict = None, payload: dict = None):
+    """
+    Log a structured security event for audit trail.
+    
+    Event types:
+        - MEDIA_ACCESS_DENIED: User denied access to media
+        - CONTEXT_ACCESS_DENIED: User denied access to context (for linking)
+    
+    Payload keys (depending on event):
+        - media_id, stored_filename (NO full paths)
+        - context_type, context_id
+        - action, reason
+    
+    Security: Never logs tokens, passwords, full file paths, or request bodies.
+    """
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": event_type,
+        "user_id": user.get("id") if user else None,
+        "org_id": user.get("org_id") if user else None,
+        "role": user.get("role") if user else None,
+    }
+    
+    if payload:
+        # Sanitize: only allow safe keys
+        safe_keys = ["media_id", "stored_filename", "context_type", "context_id", 
+                     "action", "reason", "target_context_type", "target_context_id"]
+        for key in safe_keys:
+            if key in payload:
+                event[key] = payload[key]
+    
+    # Log as structured JSON-like string
+    security_logger.warning(f"SECURITY_EVENT: {event}")
+
 async def check_media_access(user: dict, media: dict, action: str = "meta") -> tuple:
     """
     Check if user can access a media item.
