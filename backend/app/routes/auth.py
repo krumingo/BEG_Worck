@@ -316,9 +316,16 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin:
     return {"ok": True}
 
 
-# Audit logs routes
+# Audit logs routes (Platform Admin only)
 @router.get("/audit-logs")
-async def list_audit_logs(user: dict = Depends(require_admin), limit: int = 50, skip: int = 0):
+async def list_audit_logs(user: dict = Depends(require_platform_admin), limit: int = 50, skip: int = 0):
+    """
+    List audit logs for the organization.
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    Regular org admins cannot access audit logs as they contain sensitive 
+    system-wide information.
+    """
     logs = await db.audit_logs.find(
         {"org_id": user["org_id"]}, {"_id": 0}
     ).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
