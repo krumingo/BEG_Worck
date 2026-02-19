@@ -225,13 +225,19 @@ async def delete_user(user_id: str, user: dict = Depends(require_admin)):
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "user", user_id)
     return {"ok": True}
 
-# Feature flags routes
+# Feature flags routes (read = any user, write = platform admin)
 @router.get("/feature-flags")
 async def list_feature_flags(user: dict = Depends(get_current_user)):
     return await db.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
 
 @router.put("/feature-flags")
-async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_admin)):
+async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_platform_admin)):
+    """
+    Toggle a feature flag (module) on/off for the organization.
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    Module configuration affects billing and feature access.
+    """
     if data.module_code == "M0":
         raise HTTPException(status_code=400, detail="Core module cannot be disabled")
     result = await db.feature_flags.update_one(
