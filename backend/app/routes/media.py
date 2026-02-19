@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 
-from app.shared import db, get_current_user, enforce_media_access
+from app.shared import db, get_current_user, enforce_media_access, enforce_context_access, MEDIA_CONTEXT_TYPES
 
 router = APIRouter(tags=["Media"])
 
