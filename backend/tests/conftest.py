@@ -129,6 +129,22 @@ async def _ensure_test_seed_data():
         "updated_at": now,
     })
     
+    # Create technician users (needed by various tests)
+    for tech_email in ["tech@begwork.com", "tech1@begwork.com", "tech2@begwork.com"]:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "email": tech_email,
+            "password_hash": hash_password("tech123"),
+            "first_name": "Tech",
+            "last_name": tech_email.split("@")[0].capitalize(),
+            "role": "Technician",
+            "phone": "",
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+        })
+    
     # Create feature flags
     for code, info in MODULES.items():
         await db.feature_flags.insert_one({
