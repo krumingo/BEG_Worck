@@ -165,14 +165,32 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
 @router.get("/media/file/{filename}")
 async def serve_media_file(filename: str, user: dict = Depends(get_current_user)):
     """Serve media file content"""
-    file_path = f"/app/backend/uploads/{filename}"
-    if not os.path.exists(file_path):
+    # ── Path traversal protection ──────────────────────────────────────
+    # Sanitize filename: only allow alphanumeric, dash, underscore, dot
+    # Reject any path separators or suspicious patterns
+    UPLOAD_DIR = Path("/app/backend/uploads")
+    
+    # Check for path traversal attempts
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Resolve path safely and verify it stays within upload directory
+    file_path = (UPLOAD_DIR / filename).resolve()
+    if not str(file_path).startswith(str(UPLOAD_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Check file exists
+    if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     
-    # Get media metadata to check access
+    # ── ACL check ──────────────────────────────────────────────────────
+    # Get media metadata to verify access
     media = await db.media_files.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found or access denied")
+    
+    # Enforce context-based ACL for download action
+    await enforce_media_access(user, media, action="download")
     
     return FileResponse(file_path, media_type=media.get("content_type", "application/octet-stream"))
 
