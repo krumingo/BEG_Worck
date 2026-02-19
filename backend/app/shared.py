@@ -119,6 +119,30 @@ async def require_admin(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+
+async def require_platform_admin(user: dict = Depends(get_current_user)):
+    """
+    Require platform admin access for system management routes.
+    
+    Platform admins can access:
+    - /api/billing/* (except public endpoints)
+    - /api/mobile-settings/*
+    - /api/modules/*
+    - /api/audit-logs
+    
+    Regular org Admin/Owner users do NOT have platform admin access by default.
+    The is_platform_admin flag must be explicitly set to True.
+    """
+    if not user.get("is_platform_admin", False):
+        raise HTTPException(
+            status_code=403, 
+            detail={
+                "error_code": "PLATFORM_ADMIN_REQUIRED",
+                "message": "Platform administrator access required"
+            }
+        )
+    return user
+
 async def get_user_project_ids(user_id: str) -> List[str]:
     members = await db.project_team.find({"user_id": user_id, "active": True}, {"_id": 0, "project_id": 1}).to_list(1000)
     return [m["project_id"] for m in members]
