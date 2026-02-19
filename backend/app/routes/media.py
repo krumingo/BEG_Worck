@@ -120,9 +120,14 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
     if not media:
         raise HTTPException(status_code=404, detail="Media file not found")
     
-    # Check ownership or admin
+    # Check ownership or admin (user must own the media to link it)
     if media["owner_user_id"] != user["id"] and user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Not authorized to link this media")
+    
+    # ── TARGET CONTEXT ACCESS CHECK ────────────────────────────────────
+    # Verify user has access to the target context before allowing link
+    # This prevents linking media to contexts the user doesn't have access to
+    await enforce_context_access(user, data.context_type, data.context_id)
     
     # Update media with context
     now = datetime.now(timezone.utc).isoformat()
