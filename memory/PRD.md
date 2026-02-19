@@ -52,6 +52,21 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - **Remaining**: billing (9), mobile (6), media (5)
 
 ## Recent Changes (Feb 2025)
+- **Platform Admin Access Control (P0)**: System management routes are now restricted to platform admins only
+  - Added `is_platform_admin` user field (default: false)
+  - Added `require_platform_admin` dependency guard
+  - Protected endpoints:
+    - `GET/POST /api/billing/config` (Stripe config)
+    - `POST /api/billing/create-checkout-session`
+    - `POST /api/billing/create-portal-session`
+    - `GET/PUT/DELETE /api/mobile-settings/*`
+    - `PUT /api/feature-flags` (GET still allowed for all)
+    - `GET /api/audit-logs`
+  - Frontend: System tabs hidden for non-platform admins
+  - Frontend: NotAuthorizedPage shown for direct URL access
+  - Script: `/app/backend/scripts/promote_platform_admin.py`
+  - Tests: 10 new tests in `test_platform_admin.py`
+  
 - **Admin Set Password Feature**: Admin/Owner can reset passwords for any user via Users page dropdown menu
   - Backend: `POST /api/admin/set-password/{user_id}`
   - Frontend: `AdminResetPasswordModal.js` component
