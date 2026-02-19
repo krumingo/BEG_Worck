@@ -237,3 +237,189 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str, ent
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     await db.audit_logs.insert_one(entry)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MEDIA ACL - Central access control for media files
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Access Rules:
+# 1. MUST be same org_id (cross-org access never allowed)
+# 2. Admin/Owner roles can access ALL media in their org
+# 3. Non-admin users:
+#    - No context (context_type=None): only owner can access
+#    - With context: must have access to the linked entity
+#
+# Context-based rules:
+#   workReport  -> user is author OR has project access (via project_team)
+#   delivery    -> user is assigned driver OR has project access
+#   attendance  -> user owns the entry OR is SiteManager of the project
+#   project     -> user is in project team
+#   profile     -> user owns the profile (same user_id)
+#   machine     -> user has project access (machines are project-scoped)
+#   message     -> user is sender or recipient (future: check message record)
+#   [unknown]   -> DENY (safe default)
+#
+# Actions:
+#   "meta"     -> view metadata only
+#   "download" -> serve file bytes
+#   "link"     -> link media to a context
+#   "delete"   -> remove media (owner or admin only)
+# ══════════════════════════════════════════════════════════════════════════════
+
+MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project"]
+
+async def check_media_access(user: dict, media: dict, action: str = "meta") -> tuple:
+    """
+    Check if user can access a media item.
+    
+    Args:
+        user: Current user dict (from get_current_user)
+        media: Media record dict (from db.media_files)
+        action: One of "meta", "download", "link", "delete"
+    
+    Returns:
+        (allowed: bool, reason: str or None)
+    """
+    # Rule 1: Must be same org
+    if media.get("org_id") != user.get("org_id"):
+        return False, "Media belongs to different organization"
+    
+    # Rule 2: Admin/Owner can access everything in their org
+    if user.get("role") in ["Admin", "Owner"]:
+        return True, None
+    
+    user_id = user.get("id")
+    owner_user_id = media.get("owner_user_id")
+    context_type = media.get("context_type")
+    context_id = media.get("context_id")
+    
+    # Rule 3a: Owner always has access to their own media
+    if owner_user_id == user_id:
+        return True, None
+    
+    # Rule 3b: Delete action requires ownership or admin
+    if action == "delete":
+        return False, "Only owner or admin can delete media"
+    
+    # Rule 3c: No context = only owner can access (already checked above)
+    if not context_type or not context_id:
+        return False, "Media has no context; only owner can access"
+    
+    # Rule 3d: Context-based access check
+    allowed, reason = await _check_context_access(user, context_type, context_id)
+    return allowed, reason
+
+
+async def _check_context_access(user: dict, context_type: str, context_id: str) -> tuple:
+    """
+    Check if user has access to a specific context entity.
+    
+    Returns:
+        (allowed: bool, reason: str or None)
+    """
+    user_id = user.get("id")
+    user_role = user.get("role")
+    org_id = user.get("org_id")
+    
+    if context_type == "workReport":
+        # User is author OR has project access
+        report = await db.work_reports.find_one(
+            {"id": context_id, "org_id": org_id},
+            {"_id": 0, "user_id": 1, "project_id": 1}
+        )
+        if not report:
+            return False, "Work report not found"
+        if report.get("user_id") == user_id:
+            return True, None
+        # Check project access
+        project_id = report.get("project_id")
+        if project_id and await can_access_project(user, project_id):
+            return True, None
+        return False, "No access to this work report"
+    
+    elif context_type == "delivery":
+        # User is assigned driver OR has project access
+        delivery = await db.deliveries.find_one(
+            {"id": context_id, "org_id": org_id},
+            {"_id": 0, "driver_user_id": 1, "project_id": 1}
+        )
+        if not delivery:
+            return False, "Delivery not found"
+        if delivery.get("driver_user_id") == user_id:
+            return True, None
+        project_id = delivery.get("project_id")
+        if project_id and await can_access_project(user, project_id):
+            return True, None
+        return False, "No access to this delivery"
+    
+    elif context_type == "attendance":
+        # User owns entry OR is SiteManager of the project
+        entry = await db.attendance_entries.find_one(
+            {"id": context_id, "org_id": org_id},
+            {"_id": 0, "user_id": 1, "project_id": 1}
+        )
+        if not entry:
+            return False, "Attendance entry not found"
+        if entry.get("user_id") == user_id:
+            return True, None
+        # SiteManager can view attendance of their projects
+        project_id = entry.get("project_id")
+        if project_id and user_role == "SiteManager":
+            if await can_manage_project(user, project_id):
+                return True, None
+        return False, "No access to this attendance entry"
+    
+    elif context_type == "project":
+        # User is in project team
+        if await can_access_project(user, context_id):
+            return True, None
+        return False, "No access to this project"
+    
+    elif context_type == "profile":
+        # User owns the profile (profile context_id = user_id)
+        if context_id == user_id:
+            return True, None
+        return False, "Cannot access another user's profile media"
+    
+    elif context_type == "machine":
+        # Machines are project-scoped; check project access
+        machine = await db.machines.find_one(
+            {"id": context_id, "org_id": org_id},
+            {"_id": 0, "project_id": 1}
+        )
+        if not machine:
+            return False, "Machine not found"
+        project_id = machine.get("project_id")
+        if project_id and await can_access_project(user, project_id):
+            return True, None
+        return False, "No access to this machine"
+    
+    elif context_type == "message":
+        # Future: check if user is sender or recipient
+        # For now, allow if user is in the same org (messages are org-scoped)
+        # This is a placeholder - implement proper message ACL when messages module exists
+        return True, None
+    
+    else:
+        # Unknown context type - deny by default (safe)
+        return False, f"Unknown context type: {context_type}"
+
+
+async def enforce_media_access(user: dict, media: dict, action: str = "meta"):
+    """
+    Enforce media access - raises HTTPException if denied.
+    
+    Usage:
+        await enforce_media_access(user, media, "download")
+    """
+    allowed, reason = await check_media_access(user, media, action)
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "MEDIA_ACCESS_DENIED",
+                "reason": reason or "Access denied",
+                "action": action,
+            }
+        )
