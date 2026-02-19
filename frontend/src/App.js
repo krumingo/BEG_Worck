@@ -69,10 +69,10 @@ function App() {
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
           
-          {/* Billing routes (semi-public - handle auth internally) */}
-          <Route path="/plans" element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>} />
-          <Route path="/billing" element={<ProtectedRoute><BillingSettingsPage /></ProtectedRoute>} />
-          <Route path="/billing/success" element={<ProtectedRoute><BillingSuccessPage /></ProtectedRoute>} />
+          {/* Platform Admin routes - protected by PlatformAdminGuard */}
+          <Route path="/plans" element={<ProtectedRoute><PlatformAdminGuard><PlanSelectionPage /></PlatformAdminGuard></ProtectedRoute>} />
+          <Route path="/billing" element={<ProtectedRoute><PlatformAdminGuard><BillingSettingsPage /></PlatformAdminGuard></ProtectedRoute>} />
+          <Route path="/billing/success" element={<ProtectedRoute><PlatformAdminGuard><BillingSuccessPage /></PlatformAdminGuard></ProtectedRoute>} />
           <Route path="/billing/cancel" element={<BillingCancelPage />} />
           
           {/* Protected routes */}
