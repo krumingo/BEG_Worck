@@ -13,7 +13,7 @@ from server import (
     MOBILE_MODULES, MOBILE_ACTIONS, MOBILE_FIELDS, DEFAULT_MOBILE_CONFIGS, ROLES
 )
 
-from app.shared import db, get_current_user, require_admin, log_audit
+from app.shared import db, get_current_user, require_platform_admin, log_audit
 from app.models.mobile import MobileSettingsUpdate, MobileViewConfigUpdate
 
 router = APIRouter(tags=["Mobile"])
