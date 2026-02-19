@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
-import os
+from pathlib import Path
 
 from app.shared import db, get_current_user, enforce_media_access
 
