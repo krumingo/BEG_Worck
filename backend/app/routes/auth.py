@@ -240,6 +240,79 @@ async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_a
     await log_audit(user["org_id"], user["id"], user["email"], "toggled", "feature_flag", data.module_code, {"enabled": data.enabled})
     return await db.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Admin Set Password (for forgotten passwords)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AdminSetPasswordRequest(BaseModel):
+    new_password: str
+
+
+@router.post("/admin/set-password/{user_id}")
+async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin: dict = Depends(require_admin)):
+    """
+    Admin/Owner can set a new password for any user in their organization.
+    
+    Used when users forget their passwords and need a reset.
+    
+    Security:
+    - Only Admin/Owner roles can use this endpoint
+    - Cannot reset own password (use /auth/change-password instead)
+    - Full audit logging with admin details
+    - Same password strength requirements apply
+    
+    Returns: { ok: true }
+    """
+    # Prevent admin from using this to reset their own password
+    if user_id == admin["id"]:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot use admin reset for your own password. Use the change-password feature instead."
+        )
+    
+    # Find target user in same organization
+    target_user = await db.users.find_one(
+        {"id": user_id, "org_id": admin["org_id"]},
+        {"_id": 0}
+    )
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found in your organization")
+    
+    # Validate new password strength
+    is_valid, error_msg = validate_password_strength(data.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Update password
+    new_hash = hash_password(data.new_password)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "password_hash": new_hash,
+            "updated_at": now,
+            "password_reset_at": now,
+            "password_reset_by": admin["id"]
+        }}
+    )
+    
+    # Audit log with detailed info (security event)
+    await log_audit(
+        admin["org_id"], 
+        admin["id"], 
+        admin["email"], 
+        "admin_password_reset", 
+        "user", 
+        user_id, 
+        {
+            "target_email": target_user["email"],
+            "reset_by_role": admin["role"]
+        }
+    )
+    
+    return {"ok": True}
+
+
 # Audit logs routes
 @router.get("/audit-logs")
 async def list_audit_logs(user: dict = Depends(require_admin), limit: int = 50, skip: int = 0):
