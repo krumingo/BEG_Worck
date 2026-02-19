@@ -293,6 +293,14 @@ export default function UsersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Admin Reset Password Modal */}
+      <AdminResetPasswordModal
+        open={!!resetPasswordUser}
+        onOpenChange={(open) => !open && setResetPasswordUser(null)}
+        user={resetPasswordUser}
+        onSuccess={() => setResetPasswordUser(null)}
+      />
     </div>
   );
 }
