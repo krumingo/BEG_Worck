@@ -26,7 +26,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Loader2, UserCircle } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Pencil, Trash2, Loader2, UserCircle, MoreHorizontal, KeyRound } from "lucide-react";
+import AdminResetPasswordModal from "@/components/AdminResetPasswordModal";
 
 const ROLE_COLORS = {
   Admin: "bg-primary/20 text-primary border-primary/30",
