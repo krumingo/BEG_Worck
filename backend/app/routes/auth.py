@@ -122,7 +122,7 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     if not verify_password(data.current_password, db_user["password_hash"]):
         # Log failed attempt (security event)
         await log_audit(user["org_id"], user["id"], user["email"], "password_change_failed", "auth", 
-                       details="Invalid current password")
+                       changes={"reason": "Invalid current password"})
         raise HTTPException(status_code=403, detail="Current password is incorrect")
     
     # Validate new password strength
