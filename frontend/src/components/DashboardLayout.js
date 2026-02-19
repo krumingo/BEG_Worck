@@ -403,6 +403,12 @@ export default function DashboardLayout({ children }) {
           );
         })}
       </nav>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal 
+        open={changePasswordOpen} 
+        onOpenChange={setChangePasswordOpen} 
+      />
     </div>
   );
 }
