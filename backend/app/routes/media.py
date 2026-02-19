@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import uuid
 import os
 
-from app.shared import db, get_current_user
+from app.shared import db, get_current_user, enforce_media_access
 
 router = APIRouter(tags=["Media"])
 
