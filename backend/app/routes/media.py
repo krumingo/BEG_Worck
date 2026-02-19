@@ -152,15 +152,8 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     if not media:
         raise HTTPException(status_code=404, detail="Media file not found")
     
-    # Check access: owner, admin, or context-based access
-    is_owner = media["owner_user_id"] == user["id"]
-    is_admin = user["role"] in ["Admin", "Owner"]
-    
-    # TODO: Add context-based access check (e.g., if user has access to the work report)
-    has_context_access = True  # Placeholder
-    
-    if not (is_owner or is_admin or has_context_access):
-        raise HTTPException(status_code=403, detail="Not authorized to view this media")
+    # ACL check: enforces org isolation, owner/admin access, and context-based rules
+    await enforce_media_access(user, media, action="meta")
     
     # Enrich with owner name
     owner = await db.users.find_one({"id": media["owner_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
