@@ -108,6 +108,7 @@ const ADMIN_TABS = [
 // Profile sub-menu items (shown in Profile page or sheet)
 const PROFILE_MENU = [
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
+  { action: "changePassword", icon: Lock, labelKey: "auth.changePassword" },
   { to: "/my-payslips", icon: Receipt, labelKey: "nav.myPayslips" },
   { to: "/notifications", icon: Bell, labelKey: "nav.notifications" },
   { action: "help", icon: HelpCircle, labelKey: "nav.help" },
