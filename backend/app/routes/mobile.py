@@ -255,8 +255,12 @@ async def list_mobile_view_configs(user: dict = Depends(require_platform_admin))
 
 
 @router.put("/mobile/view-configs")
-async def update_mobile_view_config(data: MobileViewConfigUpdate, user: dict = Depends(require_admin)):
-    """Update mobile view config for a specific role and module (admin only)"""
+async def update_mobile_view_config(data: MobileViewConfigUpdate, user: dict = Depends(require_platform_admin)):
+    """
+    Update mobile view config for a specific role and module (platform admin only).
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    """
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
     
