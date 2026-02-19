@@ -66,6 +66,91 @@ async def login(req: LoginRequest):
 async def get_me(user: dict = Depends(get_current_user)):
     return {k: v for k, v in user.items() if k != "password_hash"}
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Change Password
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    Validate password meets security requirements:
+    - Minimum 10 characters
+    - At least 1 uppercase letter
+    - At least 1 lowercase letter  
+    - At least 1 digit
+    - At least 1 special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+    
+    Returns (is_valid, error_message)
+    """
+    if len(password) < 10:
+        return False, "Password must be at least 10 characters"
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+    if not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter"
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one digit"
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    if not any(c in special_chars for c in password):
+        return False, "Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)"
+    return True, ""
+
+
+@router.post("/auth/change-password")
+async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    """
+    Change password for the currently authenticated user.
+    
+    Requires:
+    - Valid JWT token
+    - Correct current_password
+    - new_password meeting security policy
+    
+    Returns: { ok: true }
+    """
+    # Fetch fresh user data with password hash
+    db_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not verify_password(data.current_password, db_user["password_hash"]):
+        # Log failed attempt (security event)
+        await log_audit(user["org_id"], user["id"], user["email"], "password_change_failed", "auth", 
+                       details="Invalid current password")
+        raise HTTPException(status_code=403, detail="Current password is incorrect")
+    
+    # Validate new password strength
+    is_valid, error_msg = validate_password_strength(data.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Check new password is different from current
+    if verify_password(data.new_password, db_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+    
+    # Update password
+    new_hash = hash_password(data.new_password)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "password_hash": new_hash,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "password_changed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Log success (security event)
+    await log_audit(user["org_id"], user["id"], user["email"], "password_changed", "auth")
+    
+    return {"ok": True}
+
+
 # Organization routes
 @router.get("/organization")
 async def get_organization(user: dict = Depends(get_current_user)):
