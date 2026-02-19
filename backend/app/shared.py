@@ -280,7 +280,19 @@ async def check_media_access(user: dict, media: dict, action: str = "meta") -> t
     
     Returns:
         (allowed: bool, reason: str or None)
+    
+    Legacy Safety:
+        - Missing org_id: deny (unless admin can somehow verify)
+        - Missing owner_user_id: deny for non-admin (safe default)
+        - Missing context: only owner can access
     """
+    # Rule 0: Legacy safety - missing org_id
+    if not media.get("org_id"):
+        if user.get("role") in ["Admin", "Owner"]:
+            # Admin can access orphaned media for cleanup purposes
+            return True, None
+        return False, "Media record is corrupted (missing org_id)"
+    
     # Rule 1: Must be same org
     if media.get("org_id") != user.get("org_id"):
         return False, "Media belongs to different organization"
@@ -294,19 +306,24 @@ async def check_media_access(user: dict, media: dict, action: str = "meta") -> t
     context_type = media.get("context_type")
     context_id = media.get("context_id")
     
-    # Rule 3a: Owner always has access to their own media
+    # Rule 3: Legacy safety - missing owner_user_id
+    # Non-admin cannot access media with unknown owner (safe default)
+    if not owner_user_id:
+        return False, "Media record is corrupted (missing owner)"
+    
+    # Rule 4a: Owner always has access to their own media
     if owner_user_id == user_id:
         return True, None
     
-    # Rule 3b: Delete action requires ownership or admin
+    # Rule 4b: Delete action requires ownership or admin
     if action == "delete":
         return False, "Only owner or admin can delete media"
     
-    # Rule 3c: No context = only owner can access (already checked above)
+    # Rule 4c: No context = only owner can access (already checked above)
     if not context_type or not context_id:
         return False, "Media has no context; only owner can access"
     
-    # Rule 3d: Context-based access check
+    # Rule 4d: Context-based access check
     allowed, reason = await check_context_access(user, context_type, context_id)
     return allowed, reason
 
