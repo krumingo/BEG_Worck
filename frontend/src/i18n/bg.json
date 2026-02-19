@@ -151,7 +151,18 @@
     "myDay": "Моят ден",
     "history": "История",
     "myPayslips": "Моите фишове",
-    "notifications": "Известия"
+    "notifications": "Известия",
+    "requests": "Заявки",
+    "reports": "Отчети",
+    "inventory": "Инвентар",
+    "returns": "Връщания",
+    "profile": "Профил",
+    "trips": "Курсове",
+    "settings": "Настройки",
+    "help": "Помощ",
+    "about": "Относно",
+    "menu": "Меню",
+    "helpComingSoon": "Помощта скоро ще бъде налична"
   },
   "dashboard": {
     "title": "Табло",
