@@ -873,10 +873,35 @@ async def log_audit(org_id, user_id, user_email, action, entity_type, entity_id=
 # ── Seed ─────────────────────────────────────────────────────────
 
 async def seed_data():
-    existing = await db.users.find_one({"email": "admin@begwork.com"})
-    if existing:
-        logger.info("Seed data already exists, skipping")
+    """
+    Production-safe seed function.
+    
+    Only creates initial admin user if BOTH environment variables are set:
+    - SEED_ADMIN_EMAIL
+    - SEED_ADMIN_PASSWORD
+    
+    This prevents predictable default credentials (admin123) in production.
+    For dev/test, set these env vars or use pytest fixtures.
+    """
+    # Check for explicit seed configuration
+    seed_email = os.environ.get("SEED_ADMIN_EMAIL", "").strip()
+    seed_password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
+    
+    # Production safety: require explicit credentials
+    if not seed_email or not seed_password:
+        logger.warning(
+            "Seed skipped: missing SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD. "
+            "Set both env vars to create initial admin user."
+        )
         return
+    
+    # Idempotent check: skip if admin already exists
+    existing = await db.users.find_one({"email": seed_email})
+    if existing:
+        logger.info(f"Seed data already exists for {seed_email}, skipping")
+        return
+    
+    logger.info(f"Creating seed data with admin: {seed_email}")
 
     org_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -884,11 +909,11 @@ async def seed_data():
 
     await db.organizations.insert_one({
         "id": org_id,
-        "name": "BEG_Work Demo",
-        "slug": "begwork-demo",
+        "name": "BEG_Work Production",
+        "slug": "begwork-prod",
         "address": "",
         "phone": "",
-        "email": "admin@begwork.com",
+        "email": seed_email,
         "logo_url": "",
         "subscription_plan": "enterprise",
         "subscription_status": "active",
@@ -901,8 +926,8 @@ async def seed_data():
     await db.users.insert_one({
         "id": user_id,
         "org_id": org_id,
-        "email": "admin@begwork.com",
-        "password_hash": hash_password("admin123"),
+        "email": seed_email,
+        "password_hash": hash_password(seed_password),
         "first_name": "System",
         "last_name": "Admin",
         "role": "Admin",
@@ -928,6 +953,7 @@ async def seed_data():
         "id": str(uuid.uuid4()),
         "org_id": org_id,
         "plan": "enterprise",
+        "plan_id": "enterprise",
         "status": "active",
         "started_at": now,
         "expires_at": expires,
@@ -937,7 +963,7 @@ async def seed_data():
         "created_at": now,
     })
 
-    logger.info("Seed data created: admin@begwork.com / admin123")
+    logger.info(f"Seed data created successfully for: {seed_email}")
 
 # ── Auth Routes ──────────────────────────────────────────────────
 
