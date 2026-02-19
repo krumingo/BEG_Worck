@@ -41,7 +41,25 @@ async def upload_media(
     """Upload a media file (photo)"""
     org_id = user["org_id"]
     
-    # Validate file type
+    # ── Validate context access BEFORE processing file ─────────────────
+    # If context is provided, verify user has access to link to it
+    if context_type and context_id:
+        # Validate context_type
+        if context_type not in MEDIA_CONTEXT_TYPES:
+            raise HTTPException(status_code=400, detail={
+                "error_code": "INVALID_CONTEXT_TYPE",
+                "message": f"Invalid context type. Allowed: {MEDIA_CONTEXT_TYPES}",
+            })
+        # Verify user can access target context
+        await enforce_context_access(user, context_type, context_id)
+    elif context_type or context_id:
+        # Partial context data - reject
+        raise HTTPException(status_code=400, detail={
+            "error_code": "INCOMPLETE_CONTEXT",
+            "message": "Both context_type and context_id must be provided together",
+        })
+    
+    # ── Validate file type ─────────────────────────────────────────────
     if file.content_type not in ALLOWED_MEDIA_TYPES:
         raise HTTPException(status_code=400, detail={
             "error_code": "INVALID_FILE_TYPE",
@@ -69,6 +87,8 @@ async def upload_media(
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = upload_dir / filename
     
+    # Write file to disk
+    # Note: File is written AFTER all validations pass (context access, file type, size)
     with open(file_path, "wb") as f:
         f.write(content)
     
