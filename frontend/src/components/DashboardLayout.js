@@ -221,6 +221,15 @@ export default function DashboardLayout({ children }) {
 
   const mobileTabs = getTabsForRole(user?.role);
   const isProfileRoute = location.pathname === "/profile";
+  const isPlatformAdmin = user?.is_platform_admin === true;
+  
+  // Build navigation based on role and platform admin status
+  const getAdminNav = () => {
+    if (isPlatformAdmin) {
+      return [...ADMIN_NAV_CORE, ...PLATFORM_ADMIN_NAV];
+    }
+    return ADMIN_NAV_CORE;
+  };
 
   // Check if current path matches a tab (for active state)
   const isTabActive = (tabPath) => {
