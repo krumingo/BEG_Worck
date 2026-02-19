@@ -217,8 +217,12 @@ async def update_mobile_settings(data: MobileSettingsUpdate, user: dict = Depend
 
 
 @router.get("/mobile/view-configs")
-async def list_mobile_view_configs(user: dict = Depends(require_admin)):
-    """List all mobile view configs for the organization (admin only)"""
+async def list_mobile_view_configs(user: dict = Depends(require_platform_admin)):
+    """
+    List all mobile view configs for the organization (platform admin only).
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    """
     org_id = user["org_id"]
     configs = await db.mobile_view_configs.find({"org_id": org_id}, {"_id": 0}).to_list(1000)
     
