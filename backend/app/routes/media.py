@@ -65,9 +65,9 @@ async def upload_media(
     filename = f"{media_id}.{ext}"
     
     # Store file (for now, using local storage - in production, use S3/GCS)
-    upload_dir = "/app/backend/uploads"
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = f"{upload_dir}/{filename}"
+    upload_dir = Path("/app/backend/uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / filename
     
     with open(file_path, "wb") as f:
         f.write(content)
