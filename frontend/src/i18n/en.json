@@ -151,7 +151,18 @@
     "myDay": "My Day",
     "history": "History",
     "myPayslips": "My Payslips",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "requests": "Requests",
+    "reports": "Reports",
+    "inventory": "Inventory",
+    "returns": "Returns",
+    "profile": "Profile",
+    "trips": "Trips",
+    "settings": "Settings",
+    "help": "Help",
+    "about": "About",
+    "menu": "Menu",
+    "helpComingSoon": "Help coming soon"
   },
   "dashboard": {
     "title": "Dashboard",
