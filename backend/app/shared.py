@@ -466,12 +466,26 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
 async def enforce_media_access(user: dict, media: dict, action: str = "meta"):
     """
     Enforce media access - raises HTTPException if denied.
+    Logs security event before denying.
     
     Usage:
         await enforce_media_access(user, media, "download")
     """
     allowed, reason = await check_media_access(user, media, action)
     if not allowed:
+        # Log security event before denying
+        log_security_event(
+            "MEDIA_ACCESS_DENIED",
+            user=user,
+            payload={
+                "media_id": media.get("id"),
+                "stored_filename": media.get("stored_filename"),
+                "context_type": media.get("context_type"),
+                "context_id": media.get("context_id"),
+                "action": action,
+                "reason": reason,
+            }
+        )
         raise HTTPException(
             status_code=403,
             detail={
@@ -486,6 +500,7 @@ async def enforce_context_access(user: dict, context_type: str, context_id: str)
     """
     Enforce context access - raises HTTPException if denied.
     Used to verify user can access a target context before linking media to it.
+    Logs security event before denying.
     
     Usage:
         await enforce_context_access(user, "workReport", report_id)
@@ -496,6 +511,16 @@ async def enforce_context_access(user: dict, context_type: str, context_id: str)
     
     allowed, reason = await check_context_access(user, context_type, context_id)
     if not allowed:
+        # Log security event before denying
+        log_security_event(
+            "CONTEXT_ACCESS_DENIED",
+            user=user,
+            payload={
+                "target_context_type": context_type,
+                "target_context_id": context_id,
+                "reason": reason,
+            }
+        )
         raise HTTPException(
             status_code=403,
             detail={
