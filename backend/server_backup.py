@@ -4429,7 +4429,7 @@ async def get_overhead_enums(user: dict = Depends(get_current_user)):
 # Configure Stripe
 stripe.api_key = STRIPE_API_KEY
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://access-control-174.preview.emergentagent.com")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://feature-visibility.preview.emergentagent.com")
 
 # Log Stripe configuration status at startup
 logger.info(f"Stripe Mock Mode: {STRIPE_MOCK_MODE}")
