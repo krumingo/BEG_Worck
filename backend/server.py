@@ -941,6 +941,10 @@ async def seed_data():
 
 # ── Auth Routes ──────────────────────────────────────────────────
 
+# Import health router - includes health, debug routes
+from app.routes.health import router as health_router
+api_router.include_router(health_router)
+
 # Import auth router - includes auth, org, users, feature-flags, audit-logs
 from app.routes.auth import router as auth_router
 api_router.include_router(auth_router)
