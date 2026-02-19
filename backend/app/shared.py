@@ -11,6 +11,11 @@ from datetime import datetime, timezone, timedelta
 from typing import List
 import os
 import uuid
+import logging
+
+# Configure security logger
+security_logger = logging.getLogger("security")
+security_logger.setLevel(logging.INFO)
 
 # Load env first
 from dotenv import load_dotenv
