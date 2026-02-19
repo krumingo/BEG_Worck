@@ -56,12 +56,19 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", first_name: "", last_name: "", role: "Viewer", phone: "" });
+  const [resetPasswordUser, setResetPasswordUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     try {
-      const [usersRes, rolesRes] = await Promise.all([API.get("/users"), API.get("/roles")]);
+      const [usersRes, rolesRes, meRes] = await Promise.all([
+        API.get("/users"), 
+        API.get("/roles"),
+        API.get("/auth/me")
+      ]);
       setUsers(usersRes.data);
       setRoles(rolesRes.data);
+      setCurrentUser(meRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -70,6 +77,8 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const isAdmin = currentUser?.role === "Admin" || currentUser?.role === "Owner";
 
   const openCreate = () => {
     setEditing(null);
