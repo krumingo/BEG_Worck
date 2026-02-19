@@ -138,13 +138,16 @@ function getTabsForRole(role) {
 // MOBILE PROFILE PAGE COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 
-function MobileProfileMenu({ user, onLogout, onClose }) {
+function MobileProfileMenu({ user, onLogout, onClose, onChangePassword }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   const handleAction = (item) => {
     if (item.action === "logout") {
       onLogout();
+    } else if (item.action === "changePassword") {
+      onChangePassword?.();
+      onClose?.();
     } else if (item.action === "help") {
       // TODO: Open help dialog
       alert(t("nav.helpComingSoon"));
