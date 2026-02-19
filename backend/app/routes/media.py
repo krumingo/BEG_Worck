@@ -16,7 +16,7 @@ router = APIRouter(tags=["Media"])
 
 ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
 MAX_MEDIA_SIZE_MB = 10
-MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message"]
+# MEDIA_CONTEXT_TYPES imported from shared.py
 
 
 # ── Pydantic Models ────────────────────────────────────────────────
