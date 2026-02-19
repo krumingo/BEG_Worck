@@ -50,8 +50,13 @@ async def list_billing_plans():
 
 
 @router.get("/billing/config")
-async def get_billing_config():
-    """Get billing system configuration - used by frontend to show correct UI"""
+async def get_billing_config(user: dict = Depends(require_platform_admin)):
+    """
+    Get billing system configuration - used by frontend to show correct UI.
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    Contains sensitive Stripe configuration status.
+    """
     return {
         "stripe_mock_mode": STRIPE_MOCK_MODE,
         "stripe_configured": not STRIPE_MOCK_MODE,
