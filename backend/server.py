@@ -973,8 +973,15 @@ api_router.include_router(overhead_router)
 from app.routes.billing import router as billing_router
 api_router.include_router(billing_router)
 
-# ── Mobile Integration Routes ────────────────────────────────────
-# ── Mobile Integration Routes ────────────────────────────────────
+# Import mobile router - includes bootstrap, settings, view-configs
+from app.routes.mobile import router as mobile_router
+api_router.include_router(mobile_router)
+
+# Import media router - includes upload, link, file serving
+from app.routes.media import router as media_router
+api_router.include_router(media_router)
+
+# ── App Setup ────────────────────────────────────────────────────
 
 async def get_org_mobile_settings(org_id: str) -> dict:
     """Get mobile settings for organization, with defaults if not set"""
