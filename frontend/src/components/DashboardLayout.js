@@ -44,10 +44,11 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DESKTOP SIDEBAR NAVIGATION (unchanged)
+// DESKTOP SIDEBAR NAVIGATION
 // ══════════════════════════════════════════════════════════════════════════════
 
-const ADMIN_NAV = [
+// Core navigation items (visible to all admin-level users)
+const ADMIN_NAV_CORE = [
   { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
   { to: "/offers", icon: FileText, labelKey: "nav.offers" },
@@ -62,6 +63,10 @@ const ADMIN_NAV = [
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
   { to: "/users", icon: Users, labelKey: "nav.users" },
   { to: "/settings", icon: Building2, labelKey: "nav.companySettings" },
+];
+
+// System management items (visible ONLY to platform admins)
+const PLATFORM_ADMIN_NAV = [
   { to: "/billing", icon: CreditCard, labelKey: "nav.billing" },
   { to: "/mobile-settings", icon: Smartphone, labelKey: "nav.mobileApp" },
   { to: "/modules", icon: Blocks, labelKey: "nav.modules" },
