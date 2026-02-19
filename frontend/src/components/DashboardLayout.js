@@ -34,9 +34,11 @@ import {
   Info,
   Menu,
   X,
+  Lock,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
