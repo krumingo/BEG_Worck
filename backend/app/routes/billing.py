@@ -17,7 +17,7 @@ from server import (
     LIMIT_WARNING_THRESHOLD, hash_password, create_token
 )
 
-from app.shared import db, get_current_user, log_audit
+from app.shared import db, get_current_user, require_platform_admin, log_audit
 from app.models.billing import OrgSignupRequest, CreateCheckoutRequest
 
 router = APIRouter(tags=["Billing"])
