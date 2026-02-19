@@ -453,9 +453,20 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         return False, "No access to this machine"
     
     elif context_type == "message":
-        # Future: check if user is sender or recipient
-        # For now, allow if user is in the same org (messages are org-scoped)
-        # This is a placeholder - implement proper message ACL when messages module exists
+        # ══════════════════════════════════════════════════════════════════
+        # TODO: SECURITY PLACEHOLDER - Implement proper message ACL
+        # ══════════════════════════════════════════════════════════════════
+        # Current behavior: Allow any user in the same org to access.
+        # This is TEMPORARY until the messages module (M?) is implemented.
+        #
+        # SAFE FUTURE RULE (to implement):
+        #   - User must be sender OR recipient of the message
+        #   - Query: db.messages.find_one({"id": context_id, "org_id": org_id,
+        #            "$or": [{"sender_id": user_id}, {"recipient_id": user_id}]})
+        #
+        # Risk: Low (messages module not yet built; context_type="message"
+        #       is unlikely to be used until then).
+        # ══════════════════════════════════════════════════════════════════
         return True, None
     
     else:
