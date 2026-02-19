@@ -296,10 +296,12 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
 
 
 @router.post("/billing/create-portal-session")
-async def create_portal_session(user: dict = Depends(get_current_user)):
-    """Create Stripe customer portal session"""
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin or Owner can manage billing")
+async def create_portal_session(user: dict = Depends(require_platform_admin)):
+    """
+    Create Stripe customer portal session.
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    """
     
     sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     
