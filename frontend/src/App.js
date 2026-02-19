@@ -107,9 +107,12 @@ function App() {
           <Route path="/overhead/snapshots/:snapshotId" element={<ProtectedRoute><OverheadSnapshotDetailPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
-          <Route path="/mobile-settings" element={<ProtectedRoute><MobileSettingsPage /></ProtectedRoute>} />
-          <Route path="/modules" element={<ProtectedRoute><ModuleTogglesPage /></ProtectedRoute>} />
-          <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
+          
+          {/* Platform Admin Only routes */}
+          <Route path="/mobile-settings" element={<ProtectedRoute><PlatformAdminGuard><MobileSettingsPage /></PlatformAdminGuard></ProtectedRoute>} />
+          <Route path="/modules" element={<ProtectedRoute><PlatformAdminGuard><ModuleTogglesPage /></PlatformAdminGuard></ProtectedRoute>} />
+          <Route path="/audit-log" element={<ProtectedRoute><PlatformAdminGuard><AuditLogPage /></PlatformAdminGuard></ProtectedRoute>} />
+          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
