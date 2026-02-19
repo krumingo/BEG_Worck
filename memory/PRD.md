@@ -17,14 +17,14 @@ Build a comprehensive construction management SaaS platform with modules for pro
 │   │   ├── core.py, projects.py, offers.py, hr.py
 │   │   ├── finance.py, overhead.py, billing.py, mobile.py
 │   ├── routes/                 # FastAPI routers (8 files migrated)
-│   │   ├── health.py (4), auth.py (11), projects.py (13)
+│   │   ├── health.py (4), auth.py (12), projects.py (13)
 │   │   ├── attendance.py (25), offers.py (15), hr.py (18)
 │   │   ├── finance.py (19), overhead.py (19)
 │   ├── services/audit.py
 │   ├── shared.py              # Temporary shared module
 │   └── main.py                # Entry point
 ├── server.py                  # Legacy (2151 lines, 20 routes remaining)
-└── tests/                     # Pytest suite (161 tests)
+└── tests/                     # Pytest suite (168+ tests)
 ```
 
 ## What's Implemented (as of Feb 2025)
@@ -34,6 +34,8 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - [x] Role-based access control (Admin, Owner, SiteManager, Accountant, Technician, Driver)
 - [x] JWT authentication
 - [x] Subscription billing with Stripe (MOCKED)
+- [x] User self-service password change (POST /api/auth/change-password)
+- [x] **Admin password reset for users** (POST /api/admin/set-password/{user_id}) - NEW Feb 2025
 
 ### Modules
 - [x] M0: Core (Auth, Org, Users)
@@ -49,13 +51,20 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - **Completed**: 86% (124/144 routes migrated)
 - **Remaining**: billing (9), mobile (6), media (5)
 
+## Recent Changes (Feb 2025)
+- **Admin Set Password Feature**: Admin/Owner can reset passwords for any user via Users page dropdown menu
+  - Backend: `POST /api/admin/set-password/{user_id}`
+  - Frontend: `AdminResetPasswordModal.js` component
+  - Audit logging: `admin_password_reset` action with target_email
+  - Password validation: min 10 chars, uppercase, lowercase, digit, special char
+
 ## Test Credentials
 - Admin: admin@begwork.com / admin123
 - Manager: manager@begwork.com / manager123
-- Technician: tech@begwork.com / tech123
+- Technician: tech@begwork.com / TechPass123!Secure
 
 ## API Contract
-- Total endpoints: 148 (unchanged during refactoring)
+- Total endpoints: 149 (added admin/set-password)
 - Baseline: /app/baseline_audit_endpoints.csv
 
 ## Backlog (P1)
@@ -68,6 +77,7 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - M7: Inventory module
 - M8: Assets & QR codes
 - Performance: N+1 query optimization
+- Phone + OTP authentication for low-privilege roles
 
 ## Tech Stack
 - Frontend: React 18, TailwindCSS, Shadcn/UI
