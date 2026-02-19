@@ -423,3 +423,27 @@ async def enforce_media_access(user: dict, media: dict, action: str = "meta"):
                 "action": action,
             }
         )
+
+
+async def enforce_context_access(user: dict, context_type: str, context_id: str):
+    """
+    Enforce context access - raises HTTPException if denied.
+    Used to verify user can access a target context before linking media to it.
+    
+    Usage:
+        await enforce_context_access(user, "workReport", report_id)
+    """
+    # Admin/Owner can access any context in their org
+    if user.get("role") in ["Admin", "Owner"]:
+        return
+    
+    allowed, reason = await check_context_access(user, context_type, context_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "CONTEXT_ACCESS_DENIED",
+                "reason": reason or "Access denied to target context",
+                "context_type": context_type,
+            }
+        )
