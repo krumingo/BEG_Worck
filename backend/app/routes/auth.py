@@ -64,7 +64,10 @@ async def login(req: LoginRequest):
 
 @router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
-    return {k: v for k, v in user.items() if k != "password_hash"}
+    # Include is_platform_admin for frontend tab visibility
+    response = {k: v for k, v in user.items() if k != "password_hash"}
+    response["is_platform_admin"] = user.get("is_platform_admin", False)
+    return response
 
 
 # ══════════════════════════════════════════════════════════════════════════════
