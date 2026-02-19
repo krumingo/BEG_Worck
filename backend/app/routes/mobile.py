@@ -170,8 +170,12 @@ async def mobile_bootstrap(user: dict = Depends(get_current_user)):
 
 
 @router.get("/mobile/settings")
-async def get_mobile_settings(user: dict = Depends(require_admin)):
-    """Get organization mobile settings (admin only)"""
+async def get_mobile_settings(user: dict = Depends(require_platform_admin)):
+    """
+    Get organization mobile settings (platform admin only).
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    """
     settings = await get_org_mobile_settings(user["org_id"])
     return {
         **settings,
@@ -183,8 +187,12 @@ async def get_mobile_settings(user: dict = Depends(require_admin)):
 
 
 @router.put("/mobile/settings")
-async def update_mobile_settings(data: MobileSettingsUpdate, user: dict = Depends(require_admin)):
-    """Update organization mobile settings (admin only)"""
+async def update_mobile_settings(data: MobileSettingsUpdate, user: dict = Depends(require_platform_admin)):
+    """
+    Update organization mobile settings (platform admin only).
+    
+    SECURITY: This endpoint is restricted to platform administrators only.
+    """
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
     
