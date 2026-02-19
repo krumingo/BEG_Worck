@@ -380,7 +380,8 @@ export default function DashboardLayout({ children }) {
                   <MobileProfileMenu 
                     user={user} 
                     onLogout={handleLogout} 
-                    onClose={() => setProfileSheetOpen(false)} 
+                    onClose={() => setProfileSheetOpen(false)}
+                    onChangePassword={() => setChangePasswordOpen(true)}
                   />
                 </SheetContent>
               </Sheet>
