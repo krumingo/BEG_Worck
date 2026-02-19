@@ -969,8 +969,11 @@ api_router.include_router(finance_router)
 from app.routes.overhead import router as overhead_router
 api_router.include_router(overhead_router)
 
-# ── Billing & Subscription Routes ─────────────────────────────────────
-# ── Billing & Subscription Routes ─────────────────────────────────────
+# Import billing router - includes plans, config, signup, checkout, webhook, subscription, usage
+from app.routes.billing import router as billing_router
+api_router.include_router(billing_router)
+
+# ── Mobile Integration Routes ────────────────────────────────────
 
 # Configure Stripe
 stripe.api_key = STRIPE_API_KEY
