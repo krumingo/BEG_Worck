@@ -257,7 +257,7 @@ export default function DashboardLayout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" data-testid="sidebar-nav">
-          {(["Admin","Owner","SiteManager","Accountant"].includes(user?.role) ? ADMIN_NAV : WORKER_NAV).map((item) => (
+          {(["Admin","Owner","SiteManager","Accountant"].includes(user?.role) ? getAdminNav() : WORKER_NAV).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
