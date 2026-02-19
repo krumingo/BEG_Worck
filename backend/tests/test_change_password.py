@@ -3,10 +3,11 @@ Tests for POST /api/auth/change-password endpoint
 """
 import pytest
 import requests
+import uuid
 
-# Test credentials - using password that meets requirements
+# Test credentials
 ADMIN_EMAIL = "admin@begwork.com"
-ADMIN_PASSWORD = "admin123"  # Initial test password (may not meet requirements)
+INITIAL_PASSWORD = "admin123"
 STRONG_PASSWORD_1 = "NewSecure123!Pass"
 STRONG_PASSWORD_2 = "AnotherStrong456@Pwd"
 
@@ -16,30 +17,44 @@ class TestChangePassword:
 
     @pytest.fixture(autouse=True)
     def setup(self, base_url):
-        """Setup test fixtures"""
+        """Setup test fixtures - reset admin password before each test"""
         self.base_url = base_url
-        # Login to get token
+        self.current_password = INITIAL_PASSWORD
+        
+        # Try to login with initial password
         login_resp = requests.post(
             f"{self.base_url}/api/auth/login",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+            json={"email": ADMIN_EMAIL, "password": INITIAL_PASSWORD}
         )
+        
         if login_resp.status_code == 200:
             self.token = login_resp.json().get("token")
         else:
-            # If admin is disabled, skip tests
-            pytest.skip("Admin user not available for testing")
+            # Try with strong passwords (in case previous test changed it)
+            for pwd in [STRONG_PASSWORD_1, STRONG_PASSWORD_2]:
+                login_resp = requests.post(
+                    f"{self.base_url}/api/auth/login",
+                    json={"email": ADMIN_EMAIL, "password": pwd}
+                )
+                if login_resp.status_code == 200:
+                    self.token = login_resp.json().get("token")
+                    self.current_password = pwd
+                    break
+            else:
+                pytest.skip("Admin user not available for testing")
 
     def get_headers(self):
         return {"Authorization": f"Bearer {self.token}"}
 
     def test_change_password_success(self):
         """Test successful password change with valid current and strong new password"""
-        # Change to new password
+        new_pwd = STRONG_PASSWORD_1 if self.current_password != STRONG_PASSWORD_1 else STRONG_PASSWORD_2
+        
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
-                "new_password": STRONG_PASSWORD_1
+                "current_password": self.current_password,
+                "new_password": new_pwd
             },
             headers=self.get_headers()
         )
@@ -50,28 +65,16 @@ class TestChangePassword:
         # Verify new password works
         login_resp = requests.post(
             f"{self.base_url}/api/auth/login",
-            json={"email": ADMIN_EMAIL, "password": STRONG_PASSWORD_1}
+            json={"email": ADMIN_EMAIL, "password": new_pwd}
         )
         assert login_resp.status_code == 200
-
-        # Change to another strong password (can't revert to admin123 as it's weak)
-        new_token = login_resp.json().get("token")
-        revert_resp = requests.post(
-            f"{self.base_url}/api/auth/change-password",
-            json={
-                "current_password": STRONG_PASSWORD_1,
-                "new_password": STRONG_PASSWORD_2
-            },
-            headers={"Authorization": f"Bearer {new_token}"}
-        )
-        assert revert_resp.status_code == 200
 
     def test_change_password_wrong_current(self):
         """Test failure when current password is incorrect -> 403"""
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": "wrongPassword123!",
+                "current_password": "totallyWrongPassword123!",
                 "new_password": STRONG_PASSWORD_1
             },
             headers=self.get_headers()
@@ -84,7 +87,7 @@ class TestChangePassword:
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
+                "current_password": self.current_password,
                 "new_password": "Short1!"
             },
             headers=self.get_headers()
@@ -97,7 +100,7 @@ class TestChangePassword:
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
+                "current_password": self.current_password,
                 "new_password": "alllowercase123!"
             },
             headers=self.get_headers()
@@ -110,7 +113,7 @@ class TestChangePassword:
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
+                "current_password": self.current_password,
                 "new_password": "ALLUPPERCASE123!"
             },
             headers=self.get_headers()
@@ -123,7 +126,7 @@ class TestChangePassword:
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
+                "current_password": self.current_password,
                 "new_password": "NoDigitsHere!@#"
             },
             headers=self.get_headers()
@@ -136,7 +139,7 @@ class TestChangePassword:
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
+                "current_password": self.current_password,
                 "new_password": "NoSpecialChar123"
             },
             headers=self.get_headers()
@@ -149,7 +152,7 @@ class TestChangePassword:
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
-                "current_password": ADMIN_PASSWORD,
+                "current_password": self.current_password,
                 "new_password": STRONG_PASSWORD_1
             }
         )
