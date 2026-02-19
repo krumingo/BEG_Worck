@@ -49,6 +49,7 @@ async def _ensure_test_seed_data():
     Seeds:
     - Demo organization (BEG_Work Demo)
     - Admin user (admin@begwork.com / admin123)
+    - Tech users (tech@begwork.com / tech123)
     - Enterprise subscription
     - Feature flags for all modules
     """
@@ -64,19 +65,49 @@ async def _ensure_test_seed_data():
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
     
-    # Check if seed data already exists
-    existing = await db.users.find_one({"email": "admin@begwork.com"})
-    if existing:
-        print(f"\n[conftest] Seed data already exists in {db_name}, skipping")
-        client.close()
-        return
-    
-    print(f"\n[conftest] Seeding test data into {db_name}...")
-    
     # Import hash_password from the app
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
     from app.shared import hash_password
+    
+    # Check if seed data already exists
+    existing_admin = await db.users.find_one({"email": "admin@begwork.com"})
+    
+    if existing_admin:
+        org_id = existing_admin.get("org_id")
+        print(f"\n[conftest] Seed data exists, ensuring tech users are in same org...")
+        
+        # Ensure tech users exist in the same org
+        for tech_email in ["tech@begwork.com", "tech1@begwork.com", "tech2@begwork.com"]:
+            existing_tech = await db.users.find_one({"email": tech_email})
+            if not existing_tech:
+                now = datetime.now(timezone.utc).isoformat()
+                await db.users.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "email": tech_email,
+                    "password_hash": hash_password("tech123"),
+                    "first_name": "Tech",
+                    "last_name": tech_email.split("@")[0].capitalize(),
+                    "role": "Technician",
+                    "phone": "",
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                })
+                print(f"[conftest] Created {tech_email}")
+            elif existing_tech.get("org_id") != org_id:
+                # Update to same org
+                await db.users.update_one(
+                    {"email": tech_email},
+                    {"$set": {"org_id": org_id, "password_hash": hash_password("tech123"), "is_active": True}}
+                )
+                print(f"[conftest] Updated {tech_email} to admin's org")
+        
+        client.close()
+        return
+    
+    print(f"\n[conftest] Seeding test data into {db_name}...")
     
     # Module definitions (subset needed for tests)
     MODULES = {
