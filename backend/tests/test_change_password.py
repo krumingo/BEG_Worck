@@ -68,6 +68,18 @@ class TestChangePassword:
             json={"email": ADMIN_EMAIL, "password": new_pwd}
         )
         assert login_resp.status_code == 200
+        
+        # CLEANUP: Reset password back to initial for other tests
+        new_token = login_resp.json().get("token")
+        reset_resp = requests.post(
+            f"{self.base_url}/api/auth/change-password",
+            json={
+                "current_password": new_pwd,
+                "new_password": INITIAL_PASSWORD
+            },
+            headers={"Authorization": f"Bearer {new_token}"}
+        )
+        assert reset_resp.status_code == 200, "Failed to reset password back to initial"
 
     def test_change_password_wrong_current(self):
         """Test failure when current password is incorrect -> 403"""
