@@ -6,9 +6,10 @@ from typing import Optional
 from datetime import datetime, timezone, date as date_type
 import uuid
 
-from ..shared import (
-    db, get_current_user, require_m9, log_audit
-)
+from app.db import db
+from app.deps.auth import get_current_user
+from app.deps.modules import require_m9
+from app.utils.audit import log_audit
 from ..models.overhead import (
     OVERHEAD_FREQUENCIES, OVERHEAD_ALLOCATION_TYPES, OVERHEAD_METHODS,
     OverheadCategoryCreate, OverheadCategoryUpdate,
