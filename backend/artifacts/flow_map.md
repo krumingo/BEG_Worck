@@ -122,6 +122,67 @@ Integration Points:
   - Media attachments (delivery notes, photos)
 ```
 
+## Global Availability Scan
+
+**STATUS: NOT IMPLEMENTED**
+
+Evidence (grep results):
+```bash
+$ rg -n "suggestedSourcesJson|qtyTotalAvailable|qtyToBuy|suggestionsUpdatedAt|buildSourceSuggestions|availability scan" /app/backend
+# No matches found
+
+$ rg -n "RequestLine" /app/backend/app /app/backend/server.py
+# No matches found
+
+$ grep -i "inventory\|stock\|warehouse\|request" /app/backend/artifacts/models_inventory.csv
+# No inventory models found
+```
+
+### What is missing:
+
+1) **Trigger**: NOT IMPLEMENTED
+   - No `/api/requests/{id}/submit` endpoint exists
+   - No request/requisition CRUD endpoints found in endpoints_inventory.csv
+
+2) **Endpoints**: NOT IMPLEMENTED
+   - No request creation endpoint
+   - No request submission endpoint
+   - No availability scan service/background job
+
+3) **Sources scanned**: NOT IMPLEMENTED
+   - No `warehouses` collection
+   - No `inventory_balances` or `stock` collection
+   - No `assets` inventory tracking (only `machines` for equipment)
+   - No `returns` with qty tracking
+
+4) **Output fields on RequestLine**: NOT IMPLEMENTED
+   - `suggestedSourcesJson` - does not exist
+   - `qtyTotalAvailable` - does not exist
+   - `qtyToBuy` - does not exist
+   - `suggestionsUpdatedAt` - does not exist
+
+5) **Allocation rules**: NOT IMPLEMENTED
+   - No source priority logic
+   - No partial availability handling
+
+6) **UI expectations**: NOT IMPLEMENTED
+   - No RequestDetail page
+   - No availability suggestions display
+
+7) **Edge cases**: N/A (feature not implemented)
+
+### Module Definition (exists but not implemented):
+```
+M7: Inventory - "Items, stock movements, warehouses"
+```
+Located in: server.py line 48 (module definition only, no routes)
+
+### Required for implementation:
+- [ ] Collections: `requests`, `request_lines`, `warehouses`, `inventory_balances`
+- [ ] Endpoints: CRUD for requests, submit endpoint, availability scan
+- [ ] Service: `buildSourceSuggestions()` function
+- [ ] Fields: suggestedSourcesJson, qtyTotalAvailable, qtyToBuy on request_lines
+
 ## Returns Flow
 ```
 Return Process:
