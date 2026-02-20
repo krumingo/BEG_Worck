@@ -6,14 +6,16 @@ import pytest
 import httpx
 import os
 
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_STRONG_PASSWORD
+
 BASE_URL = os.environ.get("API_URL", "http://localhost:8001")
 API_URL = f"{BASE_URL}/api"
 
-# Test data
+# Test data - use valid password
 TEST_ORG_NAME = "Test Billing Corp"
 TEST_OWNER_NAME = "Test Owner"
 TEST_EMAIL = f"billing_test_{os.urandom(4).hex()}@example.com"
-TEST_PASSWORD = "testpassword123"
+TEST_PASSWORD = VALID_STRONG_PASSWORD
 
 @pytest.fixture(scope="module")
 def test_user_token():
@@ -40,7 +42,7 @@ def admin_token():
     with httpx.Client() as client:
         response = client.post(
             f"{API_URL}/auth/login",
-            json={"email": "admin@begwork.com", "password": "admin123"}
+            json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
         )
         assert response.status_code == 200
         return response.json()["token"]
