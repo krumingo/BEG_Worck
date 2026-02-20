@@ -62,7 +62,7 @@ def platform_admin_token():
         # Fall back to admin@begwork.com if it's a platform admin
         response = client.post(
             f"{API_URL}/auth/login",
-            json={"email": "admin@begwork.com", "password": "admin123"}
+            json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
         )
         if response.status_code == 200:
             return response.json()["token"]
