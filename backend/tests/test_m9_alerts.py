@@ -8,6 +8,8 @@ import requests
 import os
 from datetime import datetime
 
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
+
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 class TestAuth:
@@ -18,7 +20,7 @@ class TestAuth:
         """Login as admin and get token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Admin login failed: {response.text}"
         data = response.json()
@@ -30,7 +32,7 @@ class TestAuth:
         """Login as technician and get token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "tech2@begwork.com",
-            "password": "tech123"
+            "password": VALID_TECH_PASSWORD
         })
         if response.status_code != 200:
             pytest.skip("tech2@begwork.com user not found - skipping tech tests")
@@ -41,7 +43,7 @@ class TestAuth:
         """Test admin login"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert response.status_code == 200
         data = response.json()
@@ -54,7 +56,7 @@ class TestAuth:
         """Test technician login"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "tech2@begwork.com", 
-            "password": "tech123"
+            "password": VALID_TECH_PASSWORD
         })
         # May not exist - that's OK
         if response.status_code == 401:
