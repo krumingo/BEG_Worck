@@ -65,3 +65,27 @@ async def can_manage_project(user: dict, project_id: str) -> bool:
         member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
         return member is not None
     return False
+
+
+async def require_platform_admin(user: dict = Depends(get_current_user)):
+    """
+    Require platform admin access for system management routes.
+    
+    Platform admins can access:
+    - /api/billing/* (except public endpoints)
+    - /api/mobile-settings/*
+    - /api/modules/*
+    - /api/audit-logs
+    
+    Regular org Admin/Owner users do NOT have platform admin access by default.
+    The is_platform_admin flag must be explicitly set to True.
+    """
+    if not user.get("is_platform_admin", False):
+        raise HTTPException(
+            status_code=403, 
+            detail={
+                "error_code": "PLATFORM_ADMIN_REQUIRED",
+                "message": "Platform administrator access required"
+            }
+        )
+    return user
