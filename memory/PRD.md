@@ -51,10 +51,18 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - [x] M10: Billing/Usage limits
 
 ### Backend Refactoring Status
-- **Completed**: 86% (124/144 routes migrated)
-- **Remaining**: billing (9), mobile (6), media (5)
+- **Stage 1.2 COMPLETE**: 100% (148/148 routes migrated to modular files)
+- **server.py**: Now a thin entry point with only wiring code
+- **Next**: Stage 1.3 (Media ACL security), Stage 1.4 (Dismantle shared.py)
 
-## Recent Changes (Feb 2025)
+## Recent Changes (Dec 2025)
+
+### Stage 1.2 Backend Refactor - COMPLETED
+- Migrated ALL routes from server.py to modular files in app/routes/
+- Route files: billing.py (9), mobile.py (6), media.py (5), platform.py (2)
+- server.py reduced from 2151 to 1098 lines (0 direct routes)
+- All billing endpoints now properly secured (Admin/Owner for checkout, Platform Admin for config)
+- Tests: 42 passed in billing/platform suite
 
 ### Platform Admin Portal (P0) - NEW
 - **Separate SuperAdmin login**: `/platform/login` - isolated from client `/login`
