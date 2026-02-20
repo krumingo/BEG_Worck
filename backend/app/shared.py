@@ -10,7 +10,7 @@ Migration guide:
 """
 
 # Re-export database
-from app.db import db, client, mongo_url, db_name
+from app.db import db, client, mongo_url
 
 # Re-export auth dependencies
 from app.deps.auth import (
