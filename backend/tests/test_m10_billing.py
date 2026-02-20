@@ -88,10 +88,20 @@ class TestBillingPlans:
 class TestBillingConfig:
     """Test billing config endpoint"""
     
-    def test_get_config_public(self):
-        """GET /api/billing/config should return stripe configuration status"""
+    def test_get_config_requires_platform_admin(self):
+        """GET /api/billing/config requires platform admin - 403 for regular users"""
         with httpx.Client() as client:
+            # Without auth should return 403
             response = client.get(f"{API_URL}/billing/config")
+            assert response.status_code == 403
+    
+    def test_get_config_with_platform_admin(self, platform_admin_token):
+        """GET /api/billing/config should return stripe config for platform admins"""
+        with httpx.Client() as client:
+            response = client.get(
+                f"{API_URL}/billing/config",
+                headers={"Authorization": f"Bearer {platform_admin_token}"}
+            )
             assert response.status_code == 200
             config = response.json()
             assert "stripe_mock_mode" in config
