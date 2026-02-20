@@ -50,7 +50,7 @@ class TestOverheadAuth:
             # Login as technician and try to access overhead
             tech_resp = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": tech_user["email"],
-                "password": "tech123"  # Try default password
+                "password": VALID_TECH_PASSWORD
             })
             if tech_resp.status_code == 200:
                 tech_token = tech_resp.json()["token"]
@@ -71,7 +71,7 @@ class TestOverheadCategories:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
