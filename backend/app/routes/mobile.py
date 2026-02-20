@@ -10,10 +10,13 @@ from datetime import datetime, timezone
 
 # Temporary imports from server.py - move to core/mobile_constants.py after refactor
 from server import (
-    MOBILE_MODULES, MOBILE_ACTIONS, MOBILE_FIELDS, DEFAULT_MOBILE_CONFIGS, ROLES
+    MOBILE_MODULES, MOBILE_ACTIONS, MOBILE_FIELDS, DEFAULT_MOBILE_CONFIGS
 )
 
-from app.shared import db, get_current_user, require_platform_admin, log_audit
+from app.db import db
+from app.deps.auth import get_current_user, require_platform_admin
+from app.utils.audit import log_audit
+from app.constants import ROLES
 from app.models.mobile import MobileSettingsUpdate, MobileViewConfigUpdate
 
 router = APIRouter(tags=["Mobile"])
