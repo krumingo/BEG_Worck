@@ -6,10 +6,10 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
-from ..shared import (
-    db, get_current_user, require_m5,
-    get_user_project_ids, log_audit, enforce_limit
-)
+from app.db import db
+from app.deps.auth import get_current_user, get_user_project_ids
+from app.deps.modules import require_m5, enforce_limit
+from app.utils.audit import log_audit
 from ..models.finance import (
     ACCOUNT_TYPES, INVOICE_DIRECTIONS, INVOICE_STATUSES,
     PAYMENT_DIRECTIONS, COST_CATEGORIES,
