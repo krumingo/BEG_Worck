@@ -7,6 +7,8 @@ import requests
 import os
 from datetime import datetime
 
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
+
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 class TestOverheadAuth:
@@ -17,7 +19,7 @@ class TestOverheadAuth:
         """Login as admin user"""
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200, f"Admin login failed: {resp.text}"
         data = resp.json()
