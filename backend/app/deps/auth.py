@@ -8,10 +8,16 @@ from passlib.context import CryptContext
 from datetime import datetime, timezone, timedelta
 from typing import List
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment
+_root = Path(__file__).parent.parent
+load_dotenv(_root / '.env')
 
 from app.db import db
 
-JWT_SECRET = os.environ['JWT_SECRET']
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-key')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
