@@ -6,6 +6,8 @@ import pytest
 import httpx
 import os
 
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_STRONG_PASSWORD
+
 BASE_URL = os.environ.get("API_URL", "http://localhost:8001")
 API_URL = f"{BASE_URL}/api"
 
