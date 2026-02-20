@@ -157,7 +157,7 @@ class TestOverheadCosts:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
@@ -311,7 +311,7 @@ class TestOverheadAssets:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
@@ -403,7 +403,7 @@ class TestOverheadSnapshots:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
@@ -491,7 +491,7 @@ class TestOverheadAllocation:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
@@ -541,7 +541,7 @@ class TestOverheadEnums:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
@@ -573,7 +573,7 @@ class TestCleanup:
     def admin_headers(self):
         resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         assert resp.status_code == 200
         return {"Authorization": f"Bearer {resp.json()['token']}", "Content-Type": "application/json"}
