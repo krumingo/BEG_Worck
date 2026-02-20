@@ -1,5 +1,4 @@
 """
-from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 M2 Offers/BOQ API Tests
 Tests offer CRUD, BOQ lines, versioning, status transitions, totals computation, and activity catalog
 

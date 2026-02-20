@@ -1,5 +1,4 @@
 """
-from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 Tests for Usage Tracking & Limits Enforcement (Plan Limits Patch)
 Tests limit checking, enforcement on create operations, and usage endpoint
 """

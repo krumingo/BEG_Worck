@@ -1,5 +1,4 @@
 """
-from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 Tests for Mobile Integration - Phase 1 + Phase 2
 Tests bootstrap endpoint, field filtering, action blocking, and media upload
 """

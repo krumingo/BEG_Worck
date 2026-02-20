@@ -1,5 +1,4 @@
 """
-from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 M4 HR/Payroll Module Tests
 Tests for: Employee profiles, Advances/Loans, Payroll Runs, Payslips
 """
