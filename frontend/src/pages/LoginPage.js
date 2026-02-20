@@ -41,6 +41,13 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-[400px] animate-in" data-testid="login-card">
+        {/* Debug label */}
+        <div className="absolute -top-8 left-0 right-0 text-center">
+          <span className="text-xs font-mono px-2 py-1 rounded bg-primary/20 text-primary border border-primary/30">
+            COMPANY LOGIN
+          </span>
+        </div>
+
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
