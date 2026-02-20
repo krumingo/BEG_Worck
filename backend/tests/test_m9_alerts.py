@@ -74,7 +74,7 @@ class TestReminderPolicy:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -99,7 +99,7 @@ class TestMissingAttendance:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -131,7 +131,7 @@ class TestMissingWorkReports:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -157,7 +157,7 @@ class TestReminderLogs:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -183,7 +183,7 @@ class TestSendReminders:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -234,7 +234,7 @@ class TestExcuseReminder:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -275,7 +275,7 @@ class TestNotifications:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
@@ -313,7 +313,7 @@ class TestDashboardStats:
     def admin_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@begwork.com",
-            "password": "admin123"
+            "password": VALID_ADMIN_PASSWORD
         })
         token = response.json()["token"]
         return {"Authorization": f"Bearer {token}"}
