@@ -296,11 +296,11 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
 
 
 @router.post("/billing/create-portal-session")
-async def create_portal_session(user: dict = Depends(require_admin)):
+async def create_portal_session(user: dict = Depends(get_current_user)):
     """
     Create Stripe customer portal session.
     
-    SECURITY: Requires Admin/Owner role to manage billing.
+    Requires authenticated user to manage their organization's billing.
     """
     
     sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
