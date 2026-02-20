@@ -23,28 +23,22 @@ export default function PlatformLoginPage() {
     try {
       // Step 1: Login
       const loginRes = await API.post("/auth/login", { email, password });
-      const { token } = loginRes.data;
+      const { token, user } = loginRes.data;
       
-      // Store token temporarily
-      localStorage.setItem("token", token);
-      
-      // Step 2: Check if platform admin
-      const meRes = await API.get("/auth/me");
-      const user = meRes.data;
-      
+      // Check if platform admin from login response
       if (!user.is_platform_admin) {
-        // Not a platform admin - clear token and show error
-        localStorage.removeItem("token");
         setError(t("platform.notPlatformAdmin", "Нямате SuperAdmin достъп"));
         return;
       }
       
-      // Store user data and redirect to platform dashboard
-      localStorage.setItem("user", JSON.stringify(user));
+      // Store token and user data
+      localStorage.setItem("bw_token", token);
+      localStorage.setItem("bw_user", JSON.stringify(user));
+      
+      // Redirect to platform dashboard
       navigate("/platform");
       
     } catch (err) {
-      localStorage.removeItem("token");
       setError(err.response?.data?.detail || t("auth.loginFailed"));
     } finally {
       setLoading(false);
