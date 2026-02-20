@@ -186,11 +186,11 @@ async def signup_organization(data: OrgSignupRequest):
 # ── Checkout & Portal ──────────────────────────────────────────────
 
 @router.post("/billing/create-checkout-session")
-async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depends(require_platform_admin)):
+async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depends(require_admin)):
     """
     Create Stripe checkout session for plan upgrade.
     
-    SECURITY: This endpoint is restricted to platform administrators only.
+    SECURITY: Requires Admin/Owner role to manage billing.
     """
     
     plan = SUBSCRIPTION_PLANS.get(data.plan_id)
