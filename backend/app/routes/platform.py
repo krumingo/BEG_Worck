@@ -27,7 +27,7 @@ from fastapi import APIRouter, HTTPException, Header, Request
 from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
 
-from app.shared import db
+from app.db import db
 
 router = APIRouter(prefix="/api/platform", tags=["Platform Bootstrap"])
 
