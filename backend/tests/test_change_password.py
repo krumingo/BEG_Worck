@@ -3,52 +3,43 @@ Tests for POST /api/auth/change-password endpoint
 """
 import pytest
 import requests
-import uuid
 
-# Test credentials
+from tests.test_utils import (
+    VALID_ADMIN_PASSWORD,
+    VALID_STRONG_PASSWORD,
+    generate_valid_password
+)
+
+# Test credentials using valid passwords
 ADMIN_EMAIL = "admin@begwork.com"
-INITIAL_PASSWORD = "admin123"
-STRONG_PASSWORD_1 = "NewSecure123!Pass"
-STRONG_PASSWORD_2 = "AnotherStrong456@Pwd"
 
 
 class TestChangePassword:
     """Test suite for change-password endpoint"""
 
     @pytest.fixture(autouse=True)
-    def setup(self, base_url):
-        """Setup test fixtures - reset admin password before each test"""
+    def setup(self, base_url, ensure_seed_data):
+        """Setup test fixtures."""
         self.base_url = base_url
-        self.current_password = INITIAL_PASSWORD
+        self.current_password = VALID_ADMIN_PASSWORD
         
-        # Try to login with initial password
+        # Login with valid password
         login_resp = requests.post(
             f"{self.base_url}/api/auth/login",
-            json={"email": ADMIN_EMAIL, "password": INITIAL_PASSWORD}
+            json={"email": ADMIN_EMAIL, "password": VALID_ADMIN_PASSWORD}
         )
         
-        if login_resp.status_code == 200:
-            self.token = login_resp.json().get("token")
-        else:
-            # Try with strong passwords (in case previous test changed it)
-            for pwd in [STRONG_PASSWORD_1, STRONG_PASSWORD_2]:
-                login_resp = requests.post(
-                    f"{self.base_url}/api/auth/login",
-                    json={"email": ADMIN_EMAIL, "password": pwd}
-                )
-                if login_resp.status_code == 200:
-                    self.token = login_resp.json().get("token")
-                    self.current_password = pwd
-                    break
-            else:
-                pytest.skip("Admin user not available for testing")
+        if login_resp.status_code != 200:
+            pytest.skip(f"Admin login failed: {login_resp.text}")
+        
+        self.token = login_resp.json().get("token")
 
     def get_headers(self):
         return {"Authorization": f"Bearer {self.token}"}
 
     def test_change_password_success(self):
         """Test successful password change with valid current and strong new password"""
-        new_pwd = STRONG_PASSWORD_1 if self.current_password != STRONG_PASSWORD_1 else STRONG_PASSWORD_2
+        new_pwd = generate_valid_password()
         
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
@@ -58,7 +49,7 @@ class TestChangePassword:
             },
             headers=self.get_headers()
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 200, f"Change password failed: {resp.text}"
         data = resp.json()
         assert data.get("ok") == True
 
@@ -68,18 +59,18 @@ class TestChangePassword:
             json={"email": ADMIN_EMAIL, "password": new_pwd}
         )
         assert login_resp.status_code == 200
-        
-        # CLEANUP: Reset password back to initial for other tests
+
+        # CLEANUP: Reset password back to original for other tests
         new_token = login_resp.json().get("token")
         reset_resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
                 "current_password": new_pwd,
-                "new_password": INITIAL_PASSWORD
+                "new_password": VALID_ADMIN_PASSWORD
             },
             headers={"Authorization": f"Bearer {new_token}"}
         )
-        assert reset_resp.status_code == 200, "Failed to reset password back to initial"
+        assert reset_resp.status_code == 200, f"Password reset failed: {reset_resp.text}"
 
     def test_change_password_wrong_current(self):
         """Test failure when current password is incorrect -> 403"""
@@ -87,7 +78,7 @@ class TestChangePassword:
             f"{self.base_url}/api/auth/change-password",
             json={
                 "current_password": "totallyWrongPassword123!",
-                "new_password": STRONG_PASSWORD_1
+                "new_password": VALID_STRONG_PASSWORD
             },
             headers=self.get_headers()
         )
@@ -160,12 +151,12 @@ class TestChangePassword:
         assert "special" in resp.json().get("detail", "").lower()
 
     def test_change_password_no_auth(self):
-        """Test failure when no auth token provided -> 403"""
+        """Test failure when not authenticated -> 403"""
         resp = requests.post(
             f"{self.base_url}/api/auth/change-password",
             json={
                 "current_password": self.current_password,
-                "new_password": STRONG_PASSWORD_1
+                "new_password": VALID_STRONG_PASSWORD
             }
         )
         assert resp.status_code == 403
