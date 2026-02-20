@@ -7,11 +7,13 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 
-from app.shared import (
-    db, get_current_user, require_admin,
+from app.db import db
+from app.deps.auth import (
+    get_current_user, require_admin,
     can_access_project, can_manage_project, get_user_project_ids,
-    log_audit, enforce_limit
 )
+from app.deps.modules import enforce_limit
+from app.utils.audit import log_audit
 
 router = APIRouter(tags=["projects"])
 
