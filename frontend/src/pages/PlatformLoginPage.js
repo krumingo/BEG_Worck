@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import API from "@/lib/api";
+import { usePlatformAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Shield, Loader2, AlertCircle } from "lucide-react";
 export default function PlatformLoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { platformLogin } = usePlatformAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,25 +22,14 @@ export default function PlatformLoginPage() {
     setLoading(true);
 
     try {
-      // Step 1: Login
-      const loginRes = await API.post("/auth/login", { email, password });
-      const { token, user } = loginRes.data;
-      
-      // Check if platform admin from login response
-      if (!user.is_platform_admin) {
-        setError(t("platform.notPlatformAdmin", "Нямате SuperAdmin достъп"));
-        return;
-      }
-      
-      // Store token and user data
-      localStorage.setItem("bw_token", token);
-      localStorage.setItem("bw_user", JSON.stringify(user));
-      
-      // Redirect to platform dashboard
+      await platformLogin(email, password);
       navigate("/platform");
-      
     } catch (err) {
-      setError(err.response?.data?.detail || t("auth.loginFailed"));
+      if (err.message === "NOT_PLATFORM_ADMIN") {
+        setError(t("platform.notPlatformAdmin", "You do not have Platform Admin access"));
+      } else {
+        setError(err.response?.data?.detail || t("auth.loginFailed", "Login failed"));
+      }
     } finally {
       setLoading(false);
     }
@@ -56,6 +46,13 @@ export default function PlatformLoginPage() {
       />
 
       <div className="relative w-full max-w-[400px] animate-in">
+        {/* Debug label */}
+        <div className="absolute -top-8 left-0 right-0 text-center">
+          <span className="text-xs font-mono px-2 py-1 rounded bg-violet-600/20 text-violet-400 border border-violet-500/30">
+            PLATFORM LOGIN
+          </span>
+        </div>
+
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center mb-4 shadow-lg shadow-violet-500/30">
