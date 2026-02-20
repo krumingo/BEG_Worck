@@ -104,10 +104,22 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - Total endpoints: 149 (added admin/set-password)
 - Baseline: /app/baseline_audit_endpoints.csv
 
-## Backlog (P1)
-1. Complete billing/mobile/media migration
-2. Dismantle shared.py, implement proper DI
-3. Mobile Phase 3-5 (Technician, Driver, Machine)
+## Backlog
+
+### P0 - COMPLETED
+- [x] Stage 1.2 Backend Refactor - ALL routes migrated
+
+### P1 - Next
+1. Stage 1.3: Media ACL security fix
+2. Stage 1.4: Dismantle shared.py, implement proper DI
+3. Fix pre-existing pytest failures in m9_overhead, m9_alerts
+
+### P2 - Future
+1. Mobile Phase 3-5 (Technician, Driver, Machine flows)
+2. M6: AI Invoice Capture
+3. M7: Inventory module
+4. M8: Assets & QR code management
+5. N+1 Query fix in Media List endpoint
 
 ## Backlog (P2)
 - M6: AI Invoice Capture
