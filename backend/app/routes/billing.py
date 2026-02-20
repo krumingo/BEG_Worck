@@ -12,12 +12,13 @@ import os
 import stripe
 
 # Temporary imports from server.py - move to core/billing_constants.py after refactor
-from server import (
-    SUBSCRIPTION_PLANS, MODULES, STRIPE_API_KEY, STRIPE_MOCK_MODE,
-    LIMIT_WARNING_THRESHOLD, hash_password, create_token
-)
+from server import STRIPE_API_KEY, STRIPE_MOCK_MODE
 
-from app.shared import db, get_current_user, require_platform_admin, log_audit
+from app.db import db
+from app.deps.auth import get_current_user, require_platform_admin, hash_password, create_token
+from app.deps.modules import SUBSCRIPTION_PLANS, LIMIT_WARNING_THRESHOLD
+from app.utils.audit import log_audit
+from app.constants import MODULES
 from app.models.billing import OrgSignupRequest, CreateCheckoutRequest
 
 router = APIRouter(tags=["Billing"])
