@@ -62,8 +62,8 @@ export default function PlatformLayout() {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    localStorage.removeItem("bw_token");
+    localStorage.removeItem("bw_user");
     navigate("/platform/login");
   };
 
