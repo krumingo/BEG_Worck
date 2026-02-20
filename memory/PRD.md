@@ -52,26 +52,37 @@ Build a comprehensive construction management SaaS platform with modules for pro
 - **Remaining**: billing (9), mobile (6), media (5)
 
 ## Recent Changes (Feb 2025)
-- **Platform Admin Access Control (P0)**: System management routes are now restricted to platform admins only
-  - Added `is_platform_admin` user field (default: false)
-  - Added `require_platform_admin` dependency guard
-  - Protected endpoints:
-    - `GET/POST /api/billing/config` (Stripe config)
-    - `POST /api/billing/create-checkout-session`
-    - `POST /api/billing/create-portal-session`
-    - `GET/PUT/DELETE /api/mobile-settings/*`
-    - `PUT /api/feature-flags` (GET still allowed for all)
-    - `GET /api/audit-logs`
-  - Frontend: System tabs hidden for non-platform admins
-  - Frontend: NotAuthorizedPage shown for direct URL access
-  - Script: `/app/backend/scripts/promote_platform_admin.py`
-  - Tests: 10 new tests in `test_platform_admin.py`
-  
-- **Admin Set Password Feature**: Admin/Owner can reset passwords for any user via Users page dropdown menu
-  - Backend: `POST /api/admin/set-password/{user_id}`
-  - Frontend: `AdminResetPasswordModal.js` component
-  - Audit logging: `admin_password_reset` action with target_email
-  - Password validation: min 10 chars, uppercase, lowercase, digit, special char
+
+### Platform Admin Portal (P0) - NEW
+- **Separate SuperAdmin login**: `/platform/login` - isolated from client `/login`
+- **Platform Dashboard**: `/platform` with dedicated layout and navigation
+- **Platform-only pages**:
+  - `/platform/billing` - Stripe configuration
+  - `/platform/modules` - Feature module toggles
+  - `/platform/audit-log` - System audit trail
+  - `/platform/mobile-settings` - Mobile app configuration
+- **Bootstrap endpoint** (ONE-TIME USE):
+  - `POST /api/platform/bootstrap-create-platform-admin`
+  - Creates new user OR promotes existing to platform admin
+  - Protected by `PLATFORM_BOOTSTRAP_TOKEN` env var
+  - **REMOVE TOKEN AFTER USE**
+
+### Platform Admin Access Control (P0)
+- Added `is_platform_admin` user field (default: false)
+- Added `require_platform_admin` dependency guard
+- Protected endpoints:
+  - `GET/POST /api/billing/config`, checkout, portal
+  - `GET/PUT/DELETE /api/mobile/settings/*`
+  - `PUT /api/feature-flags` (GET allowed for all)
+  - `GET /api/audit-logs`
+- Frontend: System tabs hidden for non-platform admins
+- Frontend: NotAuthorizedPage for direct URL access
+- Tests: 11 tests in `test_platform_bootstrap.py`, 10 in `test_platform_admin.py`
+
+### Admin Set Password Feature
+- Backend: `POST /api/admin/set-password/{user_id}`
+- Frontend: `AdminResetPasswordModal.js` component
+- Audit logging: `admin_password_reset` action
 
 ## Test Credentials
 - Admin: admin@begwork.com / admin123
