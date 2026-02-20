@@ -45,6 +45,28 @@ def admin_token():
         assert response.status_code == 200
         return response.json()["token"]
 
+@pytest.fixture(scope="module")
+def platform_admin_token():
+    """Get platform admin user token (or create one for tests)"""
+    with httpx.Client() as client:
+        # Try to login as existing platform admin
+        response = client.post(
+            f"{API_URL}/auth/login",
+            json={"email": "Krumingo@gmail.com", "password": "BegWork2026!SecureProd#Admin"}
+        )
+        if response.status_code == 200:
+            return response.json()["token"]
+        
+        # Fall back to admin@begwork.com if it's a platform admin
+        response = client.post(
+            f"{API_URL}/auth/login",
+            json={"email": "admin@begwork.com", "password": "admin123"}
+        )
+        if response.status_code == 200:
+            return response.json()["token"]
+        
+        pytest.skip("No platform admin available for testing")
+
 class TestBillingPlans:
     """Test billing plans endpoints"""
     
