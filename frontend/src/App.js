@@ -1,6 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth, PlatformAuthProvider, usePlatformAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import PlatformAdminGuard from "@/components/PlatformAdminGuard";
 import PlatformLayout from "@/components/PlatformLayout";
@@ -48,7 +48,11 @@ import PlatformModulesPage from "@/pages/PlatformModulesPage";
 import PlatformAuditLogPage from "@/pages/PlatformAuditLogPage";
 import PlatformMobileSettingsPage from "@/pages/PlatformMobileSettingsPage";
 
-function ProtectedRoute({ children }) {
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPANY Routes - Protected by bw_token
+// ═══════════════════════════════════════════════════════════════════════════
+
+function CompanyProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
@@ -61,79 +65,135 @@ function ProtectedRoute({ children }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
-function PublicRoute({ children }) {
+function CompanyPublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
+  // If logged in as company user, redirect to company dashboard
   if (user) return <Navigate to="/" replace />;
   return children;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLATFORM Routes - Protected by bw_platform_token (SEPARATE)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function PlatformProtectedRoute({ children }) {
+  const { platformUser, loading } = usePlatformAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!platformUser) return <Navigate to="/platform/login" replace />;
+  return children;
+}
+
+function PlatformPublicRoute({ children }) {
+  const { platformUser, loading } = usePlatformAuth();
+  if (loading) return null;
+  // If logged in as platform user, redirect to platform dashboard
+  if (platformUser) return <Navigate to="/platform" replace />;
+  return children;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Main App with DUAL Auth Providers
+// ═══════════════════════════════════════════════════════════════════════════
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* COMPANY Routes - use bw_token */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      
+      {/* Public company routes */}
+      <Route path="/login" element={<CompanyPublicRoute><LoginPage /></CompanyPublicRoute>} />
+      <Route path="/signup" element={<CompanyPublicRoute><SignupPage /></CompanyPublicRoute>} />
+      <Route path="/billing/cancel" element={<BillingCancelPage />} />
+      
+      {/* Protected company routes */}
+      <Route path="/" element={<CompanyProtectedRoute><DashboardPage /></CompanyProtectedRoute>} />
+      <Route path="/projects" element={<CompanyProtectedRoute><ProjectsListPage /></CompanyProtectedRoute>} />
+      <Route path="/projects/:projectId" element={<CompanyProtectedRoute><ProjectDetailPage /></CompanyProtectedRoute>} />
+      <Route path="/my-day" element={<CompanyProtectedRoute><MyDayPage /></CompanyProtectedRoute>} />
+      <Route path="/attendance-history" element={<CompanyProtectedRoute><AttendanceHistoryPage /></CompanyProtectedRoute>} />
+      <Route path="/site-attendance" element={<CompanyProtectedRoute><SiteAttendancePage /></CompanyProtectedRoute>} />
+      <Route path="/work-reports/new" element={<CompanyProtectedRoute><WorkReportFormPage /></CompanyProtectedRoute>} />
+      <Route path="/work-reports/:reportId" element={<CompanyProtectedRoute><WorkReportFormPage /></CompanyProtectedRoute>} />
+      <Route path="/review-reports" element={<CompanyProtectedRoute><WorkReportReviewPage /></CompanyProtectedRoute>} />
+      <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
+      <Route path="/reminders" element={<CompanyProtectedRoute><RemindersPage /></CompanyProtectedRoute>} />
+      <Route path="/offers" element={<CompanyProtectedRoute><OffersListPage /></CompanyProtectedRoute>} />
+      <Route path="/offers/new" element={<CompanyProtectedRoute><OfferEditorPage /></CompanyProtectedRoute>} />
+      <Route path="/offers/:offerId" element={<CompanyProtectedRoute><OfferEditorPage /></CompanyProtectedRoute>} />
+      <Route path="/activity-catalog" element={<CompanyProtectedRoute><ActivityCatalogPage /></CompanyProtectedRoute>} />
+      <Route path="/employees" element={<CompanyProtectedRoute><EmployeesPage /></CompanyProtectedRoute>} />
+      <Route path="/advances" element={<CompanyProtectedRoute><AdvancesPage /></CompanyProtectedRoute>} />
+      <Route path="/payroll" element={<CompanyProtectedRoute><PayrollRunsPage /></CompanyProtectedRoute>} />
+      <Route path="/payroll/:runId" element={<CompanyProtectedRoute><PayrollDetailPage /></CompanyProtectedRoute>} />
+      <Route path="/my-payslips" element={<CompanyProtectedRoute><MyPayslipsPage /></CompanyProtectedRoute>} />
+      <Route path="/finance" element={<CompanyProtectedRoute><FinanceOverviewPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/accounts" element={<CompanyProtectedRoute><FinancialAccountsPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/invoices" element={<CompanyProtectedRoute><InvoicesPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/invoices/new" element={<CompanyProtectedRoute><InvoiceEditorPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/invoices/:invoiceId" element={<CompanyProtectedRoute><InvoiceEditorPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/payments" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/payments/new" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
+      <Route path="/overhead" element={<CompanyProtectedRoute><OverheadPage /></CompanyProtectedRoute>} />
+      <Route path="/overhead/snapshots/:snapshotId" element={<CompanyProtectedRoute><OverheadSnapshotDetailPage /></CompanyProtectedRoute>} />
+      <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
+      <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
+      
+      {/* Company routes that also require platform admin (hybrid) */}
+      <Route path="/plans" element={<CompanyProtectedRoute><PlatformAdminGuard><PlanSelectionPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
+      <Route path="/billing" element={<CompanyProtectedRoute><PlatformAdminGuard><BillingSettingsPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
+      <Route path="/billing/success" element={<CompanyProtectedRoute><PlatformAdminGuard><BillingSuccessPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
+      <Route path="/mobile-settings" element={<CompanyProtectedRoute><PlatformAdminGuard><MobileSettingsPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
+      <Route path="/modules" element={<CompanyProtectedRoute><PlatformAdminGuard><ModuleTogglesPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
+      <Route path="/audit-log" element={<CompanyProtectedRoute><PlatformAdminGuard><AuditLogPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
+      
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* PLATFORM Routes - use bw_platform_token (SEPARATE) */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      
+      {/* Platform login - public */}
+      <Route path="/platform/login" element={<PlatformPublicRoute><PlatformLoginPage /></PlatformPublicRoute>} />
+      
+      {/* Platform dashboard - protected by platform token */}
+      <Route path="/platform" element={<PlatformProtectedRoute><PlatformLayout /></PlatformProtectedRoute>}>
+        <Route index element={<PlatformDashboardPage />} />
+        <Route path="billing" element={<PlatformBillingPage />} />
+        <Route path="modules" element={<PlatformModulesPage />} />
+        <Route path="audit-log" element={<PlatformAuditLogPage />} />
+        <Route path="mobile-settings" element={<PlatformMobileSettingsPage />} />
+      </Route>
+      
+      {/* Platform logout */}
+      <Route path="/platform/logout" element={<PlatformLogoutRoute />} />
+      
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function PlatformLogoutRoute() {
+  const { platformLogout } = usePlatformAuth();
+  platformLogout();
+  return <Navigate to="/platform/login" replace />;
 }
 
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-          <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
-          
-          {/* Platform Admin routes - protected by PlatformAdminGuard */}
-          <Route path="/plans" element={<ProtectedRoute><PlatformAdminGuard><PlanSelectionPage /></PlatformAdminGuard></ProtectedRoute>} />
-          <Route path="/billing" element={<ProtectedRoute><PlatformAdminGuard><BillingSettingsPage /></PlatformAdminGuard></ProtectedRoute>} />
-          <Route path="/billing/success" element={<ProtectedRoute><PlatformAdminGuard><BillingSuccessPage /></PlatformAdminGuard></ProtectedRoute>} />
-          <Route path="/billing/cancel" element={<BillingCancelPage />} />
-          
-          {/* Protected routes */}
-          <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/projects" element={<ProtectedRoute><ProjectsListPage /></ProtectedRoute>} />
-          <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
-          <Route path="/my-day" element={<ProtectedRoute><MyDayPage /></ProtectedRoute>} />
-          <Route path="/attendance-history" element={<ProtectedRoute><AttendanceHistoryPage /></ProtectedRoute>} />
-          <Route path="/site-attendance" element={<ProtectedRoute><SiteAttendancePage /></ProtectedRoute>} />
-          <Route path="/work-reports/new" element={<ProtectedRoute><WorkReportFormPage /></ProtectedRoute>} />
-          <Route path="/work-reports/:reportId" element={<ProtectedRoute><WorkReportFormPage /></ProtectedRoute>} />
-          <Route path="/review-reports" element={<ProtectedRoute><WorkReportReviewPage /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-          <Route path="/reminders" element={<ProtectedRoute><RemindersPage /></ProtectedRoute>} />
-          <Route path="/offers" element={<ProtectedRoute><OffersListPage /></ProtectedRoute>} />
-          <Route path="/offers/new" element={<ProtectedRoute><OfferEditorPage /></ProtectedRoute>} />
-          <Route path="/offers/:offerId" element={<ProtectedRoute><OfferEditorPage /></ProtectedRoute>} />
-          <Route path="/activity-catalog" element={<ProtectedRoute><ActivityCatalogPage /></ProtectedRoute>} />
-          <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
-          <Route path="/advances" element={<ProtectedRoute><AdvancesPage /></ProtectedRoute>} />
-          <Route path="/payroll" element={<ProtectedRoute><PayrollRunsPage /></ProtectedRoute>} />
-          <Route path="/payroll/:runId" element={<ProtectedRoute><PayrollDetailPage /></ProtectedRoute>} />
-          <Route path="/my-payslips" element={<ProtectedRoute><MyPayslipsPage /></ProtectedRoute>} />
-          <Route path="/finance" element={<ProtectedRoute><FinanceOverviewPage /></ProtectedRoute>} />
-          <Route path="/finance/accounts" element={<ProtectedRoute><FinancialAccountsPage /></ProtectedRoute>} />
-          <Route path="/finance/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
-          <Route path="/finance/invoices/new" element={<ProtectedRoute><InvoiceEditorPage /></ProtectedRoute>} />
-          <Route path="/finance/invoices/:invoiceId" element={<ProtectedRoute><InvoiceEditorPage /></ProtectedRoute>} />
-          <Route path="/finance/payments" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
-          <Route path="/finance/payments/new" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
-          <Route path="/overhead" element={<ProtectedRoute><OverheadPage /></ProtectedRoute>} />
-          <Route path="/overhead/snapshots/:snapshotId" element={<ProtectedRoute><OverheadSnapshotDetailPage /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
-          
-          {/* Platform Admin Only routes */}
-          <Route path="/mobile-settings" element={<ProtectedRoute><PlatformAdminGuard><MobileSettingsPage /></PlatformAdminGuard></ProtectedRoute>} />
-          <Route path="/modules" element={<ProtectedRoute><PlatformAdminGuard><ModuleTogglesPage /></PlatformAdminGuard></ProtectedRoute>} />
-          <Route path="/audit-log" element={<ProtectedRoute><PlatformAdminGuard><AuditLogPage /></PlatformAdminGuard></ProtectedRoute>} />
-          
-          {/* Platform Admin Portal - Separate login and layout */}
-          <Route path="/platform/login" element={<PlatformLoginPage />} />
-          <Route path="/platform" element={<PlatformLayout />}>
-            <Route index element={<PlatformDashboardPage />} />
-            <Route path="billing" element={<PlatformBillingPage />} />
-            <Route path="modules" element={<PlatformModulesPage />} />
-            <Route path="audit-log" element={<PlatformAuditLogPage />} />
-            <Route path="mobile-settings" element={<PlatformMobileSettingsPage />} />
-          </Route>
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <PlatformAuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </PlatformAuthProvider>
     </AuthProvider>
   );
 }
