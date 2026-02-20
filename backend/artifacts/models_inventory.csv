@@ -1,222 +1,35 @@
 model_name,collection_name,file_path,required_fields,orgId_field,createdAt_field,updatedAt_field,createdBy_field,indexes,notes
-ActivityCatalog,activity_catalog,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Advances,advances,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-AttendanceEntries,attendance_entries,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-AuditLogs,audit_logs,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Deliveries,deliveries,app/shared.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-EmployeeProfiles,employee_profiles,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-FeatureFlags,feature_flags,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-FinancePayments,finance_payments,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-FinancialAccounts,financial_accounts,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Invoices,invoices,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Machines,machines,app/shared.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-MediaFiles,media_files,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Messages,messages,app/shared.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-MobileViewConfigs,mobile_view_configs,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Notifications,notifications,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Offers,offers,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-OrgMobileSettings,org_mobile_settings,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Organization,organizations,"server.py, app/routes/billing.py","id, name, slug, subscription_plan, subscription_status",N/A (is org),YES,YES,NO,slug (unique),Core organization collection
-OverheadAssets,overhead_assets,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-OverheadCategories,overhead_categories,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-OverheadCosts,overhead_costs,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-OverheadSnapshots,overhead_snapshots,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-PaymentAllocations,payment_allocations,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-PayrollPayments,payroll_payments,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-PayrollRuns,payroll_runs,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Payslips,payslips,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-ProjectOverheadAllocations,project_overhead_allocations,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-ProjectPhases,project_phases,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-ProjectTeam,project_team,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Projects,projects,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-ReminderLogs,reminder_logs,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-Subscriptions,subscriptions,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-User,users,"app/routes/auth.py, server.py","id, email, password_hash, role, org_id, is_active, is_platform_admin",YES,YES,YES,NO,email (unique),Core user collection
-WorkReports,work_reports,server_backup.py,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,MongoDB collection reference
-ActivityCatalogCreate,,server_backup.py,"project_id, code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, default_labor_hours_per_unit, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ActivityCatalogCreate,,server.py,"project_id, code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, default_labor_hours_per_unit, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ActivityCatalogCreate,,app/models/offers.py,"project_id, code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, default_labor_hours_per_unit, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ActivityCatalogUpdate,,server_backup.py,"code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, default_labor_hours_per_unit, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ActivityCatalogUpdate,,server.py,"code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, default_labor_hours_per_unit, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ActivityCatalogUpdate,,app/models/offers.py,"code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, default_labor_hours_per_unit, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AdminSetPasswordRequest,,app/routes/auth.py,new_password,NO,NO,NO,NO,UNKNOWN,Pydantic model
-AdvanceLoanCreate,,server_backup.py,"user_id, type, amount, currency, issued_date, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AdvanceLoanCreate,,server.py,"user_id, type, amount, currency, issued_date, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AdvanceLoanCreate,,app/models/hr.py,"user_id, type, amount, currency, issued_date, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AllocatePaymentRequest,,server_backup.py,allocations,NO,NO,NO,NO,UNKNOWN,Pydantic model
-AllocatePaymentRequest,,server.py,allocations,NO,NO,NO,NO,UNKNOWN,Pydantic model
-AllocatePaymentRequest,,app/models/finance.py,allocations,NO,NO,NO,NO,UNKNOWN,Pydantic model
-AllocationInput,,server_backup.py,"invoice_id, amount",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AllocationInput,,server.py,"invoice_id, amount",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AllocationInput,,app/models/finance.py,"invoice_id, amount",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkForUser,,server_backup.py,"user_id, project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkForUser,,server.py,"user_id, project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkForUser,,app/models/attendance.py,"user_id, project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkForUser,,app/routes/attendance.py,"user_id, project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkSelf,,server_backup.py,"project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkSelf,,server.py,"project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkSelf,,app/models/attendance.py,"project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-AttendanceMarkSelf,,app/routes/attendance.py,"project_id, status, note, source",NO,NO,NO,NO,UNKNOWN,Pydantic model
-BootstrapCreateAdminRequest,,app/routes/platform.py,"email, password",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ChangePasswordRequest,,app/routes/auth.py,"current_password, new_password",NO,NO,NO,NO,UNKNOWN,Pydantic model
-CreateCheckoutRequest,,server_backup.py,"plan_id, origin_url",NO,NO,NO,NO,UNKNOWN,Pydantic model
-CreateCheckoutRequest,,server.py,"plan_id, origin_url",NO,NO,NO,NO,UNKNOWN,Pydantic model
-CreateCheckoutRequest,,app/models/billing.py,"plan_id, origin_url",NO,NO,NO,NO,UNKNOWN,Pydantic model
-EmployeeProfileCreate,,server_backup.py,"user_id, pay_type, hourly_rate, daily_rate, monthly_salary, standard_hours_per_day, pay_schedule, active, start_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-EmployeeProfileCreate,,server.py,"user_id, pay_type, hourly_rate, daily_rate, monthly_salary, standard_hours_per_day, pay_schedule, active, start_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-EmployeeProfileCreate,,app/models/hr.py,"user_id, pay_type, hourly_rate, daily_rate, monthly_salary, standard_hours_per_day, pay_schedule, active, start_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-EmployeeProfileUpdate,,server_backup.py,"pay_type, hourly_rate, daily_rate, monthly_salary, standard_hours_per_day, pay_schedule, active, start_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-EmployeeProfileUpdate,,server.py,"pay_type, hourly_rate, daily_rate, monthly_salary, standard_hours_per_day, pay_schedule, active, start_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-EmployeeProfileUpdate,,app/models/hr.py,"pay_type, hourly_rate, daily_rate, monthly_salary, standard_hours_per_day, pay_schedule, active, start_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ExcuseRequest,,server_backup.py,"type, date, user_id, project_id, reason",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ExcuseRequest,,server.py,"type, date, user_id, project_id, reason",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ExcuseRequest,,app/models/attendance.py,"type, date, user_id, project_id, reason",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ExcuseRequest,,app/routes/attendance.py,"type, date, user_id, project_id, reason",NO,NO,NO,NO,UNKNOWN,Pydantic model
-FinancialAccountCreate,,server_backup.py,"name, type, currency, opening_balance, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-FinancialAccountCreate,,server.py,"name, type, currency, opening_balance, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-FinancialAccountCreate,,app/models/finance.py,"name, type, currency, opening_balance, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-FinancialAccountUpdate,,server_backup.py,"name, type, opening_balance, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-FinancialAccountUpdate,,server.py,"name, type, opening_balance, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-FinancialAccountUpdate,,app/models/finance.py,"name, type, opening_balance, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceCreate,,server_backup.py,"direction, invoice_no, project_id, counterparty_name, issue_date, due_date, currency, vat_percent, notes, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceCreate,,server.py,"direction, invoice_no, project_id, counterparty_name, issue_date, due_date, currency, vat_percent, notes, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceCreate,,app/models/finance.py,"direction, invoice_no, project_id, counterparty_name, issue_date, due_date, currency, vat_percent, notes, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceLineInput,,server_backup.py,"description, unit, qty, unit_price, project_id, cost_category",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceLineInput,,server.py,"description, unit, qty, unit_price, project_id, cost_category",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceLineInput,,app/models/finance.py,"description, unit, qty, unit_price, project_id, cost_category",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceLinesUpdate,,server_backup.py,lines,NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceLinesUpdate,,server.py,lines,NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceLinesUpdate,,app/models/finance.py,lines,NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceUpdate,,server_backup.py,"invoice_no, counterparty_name, project_id, issue_date, due_date, vat_percent, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceUpdate,,server.py,"invoice_no, counterparty_name, project_id, issue_date, due_date, vat_percent, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-InvoiceUpdate,,app/models/finance.py,"invoice_no, counterparty_name, project_id, issue_date, due_date, vat_percent, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-LoginRequest,,server_backup.py,"email, password",NO,NO,NO,NO,UNKNOWN,Pydantic model
-LoginRequest,,server.py,"email, password",NO,NO,NO,NO,UNKNOWN,Pydantic model
-LoginRequest,,app/models/core.py,"email, password",NO,NO,NO,NO,UNKNOWN,Pydantic model
-LoginRequest,,app/routes/auth.py,"email, password",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MarkPaidRequest,,server_backup.py,"method, reference, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MarkPaidRequest,,server.py,"method, reference, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MarkPaidRequest,,app/models/hr.py,"method, reference, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaLinkRequest,,server_backup.py,"context_type, context_id, media_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaLinkRequest,,server.py,"context_type, context_id, media_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaLinkRequest,,app/models/mobile.py,"context_type, context_id, media_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaLinkRequest,,app/routes/media.py,"media_id, context_type, context_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaUploadContext,,server_backup.py,"context_type, context_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaUploadContext,,server.py,"context_type, context_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MediaUploadContext,,app/models/mobile.py,"context_type, context_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MobileSettingsUpdate,,server_backup.py,enabled_modules,NO,NO,NO,NO,UNKNOWN,Pydantic model
-MobileSettingsUpdate,,server.py,enabled_modules,NO,NO,NO,NO,UNKNOWN,Pydantic model
-MobileSettingsUpdate,,app/models/mobile.py,enabled_modules,NO,NO,NO,NO,UNKNOWN,Pydantic model
-MobileViewConfigUpdate,,server_backup.py,"role, module_code, list_fields, detail_fields, allowed_actions, default_filters",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MobileViewConfigUpdate,,server.py,"role, module_code, list_fields, detail_fields, allowed_actions, default_filters",NO,NO,NO,NO,UNKNOWN,Pydantic model
-MobileViewConfigUpdate,,app/models/mobile.py,"role, module_code, list_fields, detail_fields, allowed_actions, default_filters",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ModuleToggle,,server_backup.py,"module_code, enabled",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ModuleToggle,,server.py,"module_code, enabled",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ModuleToggle,,app/models/core.py,"module_code, enabled",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ModuleToggle,,app/routes/auth.py,"module_code, enabled",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferCreate,,server_backup.py,"project_id, title, currency, vat_percent, notes, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferCreate,,server.py,"project_id, title, currency, vat_percent, notes, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferCreate,,app/models/offers.py,"project_id, title, currency, vat_percent, notes, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferLineInput,,server_backup.py,"activity_code, activity_name, unit, qty, material_unit_cost, labor_unit_cost, labor_hours_per_unit, note, sort_order",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferLineInput,,server.py,"activity_code, activity_name, unit, qty, material_unit_cost, labor_unit_cost, labor_hours_per_unit, note, sort_order",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferLineInput,,app/models/offers.py,"activity_code, activity_name, unit, qty, material_unit_cost, labor_unit_cost, labor_hours_per_unit, note, sort_order",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferLinesUpdate,,server_backup.py,lines,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferLinesUpdate,,server.py,lines,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferLinesUpdate,,app/models/offers.py,lines,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferReject,,server_backup.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferReject,,server.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferReject,,app/models/offers.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferUpdate,,server_backup.py,"title, currency, vat_percent, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferUpdate,,server.py,"title, currency, vat_percent, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OfferUpdate,,app/models/offers.py,"title, currency, vat_percent, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OrgSignupRequest,,server_backup.py,"org_name, owner_name, owner_email, password",YES,NO,NO,YES,UNKNOWN,Pydantic model
-OrgSignupRequest,,server.py,"org_name, owner_name, owner_email, password",YES,NO,NO,YES,UNKNOWN,Pydantic model
-OrgSignupRequest,,app/models/billing.py,"org_name, owner_name, owner_email, password",YES,NO,NO,YES,UNKNOWN,Pydantic model
-OrgUpdate,,server_backup.py,"name, address, phone, email, attendance_start, attendance_end, work_report_deadline, max_reminders_per_day, escalation_after_days, org_timezone",YES,NO,NO,NO,UNKNOWN,Pydantic model
-OrgUpdate,,server.py,"name, address, phone, email, attendance_start, attendance_end, work_report_deadline, max_reminders_per_day, escalation_after_days, org_timezone",YES,NO,NO,NO,UNKNOWN,Pydantic model
-OrgUpdate,,app/models/core.py,"name, address, phone, email, attendance_start, attendance_end, work_report_deadline, max_reminders_per_day, escalation_after_days, org_timezone",YES,NO,NO,NO,UNKNOWN,Pydantic model
-OrgUpdate,,app/routes/auth.py,"name, address, phone, email, attendance_start, attendance_end, work_report_deadline, max_reminders_per_day, escalation_after_days, org_timezone",YES,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAllocateRequest,,server_backup.py,method,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAllocateRequest,,server.py,method,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAllocateRequest,,app/models/overhead.py,method,NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAssetCreate,,server_backup.py,"name, purchase_cost, currency, purchase_date, useful_life_months, assigned_to_user_id, active, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAssetCreate,,server.py,"name, purchase_cost, currency, purchase_date, useful_life_months, assigned_to_user_id, active, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAssetCreate,,app/models/overhead.py,"name, purchase_cost, currency, purchase_date, useful_life_months, assigned_to_user_id, active, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAssetUpdate,,server_backup.py,"name, purchase_cost, currency, purchase_date, useful_life_months, assigned_to_user_id, active, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAssetUpdate,,server.py,"name, purchase_cost, currency, purchase_date, useful_life_months, assigned_to_user_id, active, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadAssetUpdate,,app/models/overhead.py,"name, purchase_cost, currency, purchase_date, useful_life_months, assigned_to_user_id, active, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCategoryCreate,,server_backup.py,"name, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCategoryCreate,,server.py,"name, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCategoryCreate,,app/models/overhead.py,"name, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCategoryUpdate,,server_backup.py,"name, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCategoryUpdate,,server.py,"name, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCategoryUpdate,,app/models/overhead.py,"name, active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCostCreate,,server_backup.py,"category_id, name, amount, currency, vat_percent, date_incurred, frequency, allocation_type, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCostCreate,,server.py,"category_id, name, amount, currency, vat_percent, date_incurred, frequency, allocation_type, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCostCreate,,app/models/overhead.py,"category_id, name, amount, currency, vat_percent, date_incurred, frequency, allocation_type, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCostUpdate,,server_backup.py,"category_id, name, amount, currency, vat_percent, date_incurred, frequency, allocation_type, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCostUpdate,,server.py,"category_id, name, amount, currency, vat_percent, date_incurred, frequency, allocation_type, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadCostUpdate,,app/models/overhead.py,"category_id, name, amount, currency, vat_percent, date_incurred, frequency, allocation_type, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadSnapshotCompute,,server_backup.py,"period_start, period_end, method, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadSnapshotCompute,,server.py,"period_start, period_end, method, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-OverheadSnapshotCompute,,app/models/overhead.py,"period_start, period_end, method, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PaymentCreate,,server_backup.py,"direction, amount, currency, date, method, account_id, counterparty_name, reference, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PaymentCreate,,server.py,"direction, amount, currency, date, method, account_id, counterparty_name, reference, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PaymentCreate,,app/models/finance.py,"direction, amount, currency, date, method, account_id, counterparty_name, reference, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PayrollRunCreate,,server_backup.py,"period_type, period_start, period_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PayrollRunCreate,,server.py,"period_type, period_start, period_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PayrollRunCreate,,app/models/hr.py,"period_type, period_start, period_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseCreate,,server_backup.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseCreate,,server.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseCreate,,app/models/projects.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseCreate,,app/routes/projects.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseUpdate,,server_backup.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseUpdate,,server.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseUpdate,,app/models/projects.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-PhaseUpdate,,app/routes/projects.py,"name, order, status, planned_start, planned_end",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectCreate,,server_backup.py,"code, name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags...",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectCreate,,server.py,"code, name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags...",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectCreate,,app/models/projects.py,"code, name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags...",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectCreate,,app/routes/projects.py,"code, name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags...",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectUpdate,,server_backup.py,"name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectUpdate,,server.py,"name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectUpdate,,app/models/projects.py,"name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-ProjectUpdate,,app/routes/projects.py,"name, status, type, start_date, end_date, planned_days, budget_planned, default_site_manager_id, tags, notes",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SendReminderRequest,,server_backup.py,"type, date, user_ids, project_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SendReminderRequest,,server.py,"type, date, user_ids, project_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SendReminderRequest,,app/models/attendance.py,"type, date, user_ids, project_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SendReminderRequest,,app/routes/attendance.py,"type, date, user_ids, project_id",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SetDeductionsRequest,,server_backup.py,"deductions_amount, advances_to_deduct",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SetDeductionsRequest,,server.py,"deductions_amount, advances_to_deduct",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SetDeductionsRequest,,app/models/hr.py,"deductions_amount, advances_to_deduct",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SubscriptionUpdate,,server_backup.py,"plan_id, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end, trial_ends_at",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SubscriptionUpdate,,server.py,"plan_id, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end, trial_ends_at",NO,NO,NO,NO,UNKNOWN,Pydantic model
-SubscriptionUpdate,,app/models/billing.py,"plan_id, status, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end, trial_ends_at",NO,NO,NO,NO,UNKNOWN,Pydantic model
-TeamMemberAdd,,server_backup.py,"user_id, role_in_project, from_date, to_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-TeamMemberAdd,,server.py,"user_id, role_in_project, from_date, to_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-TeamMemberAdd,,app/models/projects.py,"user_id, role_in_project, from_date, to_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-TeamMemberAdd,,app/routes/projects.py,"user_id, role_in_project, from_date, to_date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserCreate,,server_backup.py,"email, password, first_name, last_name, role, phone",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserCreate,,server.py,"email, password, first_name, last_name, role, phone",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserCreate,,app/models/core.py,"email, password, first_name, last_name, role, phone",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserCreate,,app/routes/auth.py,"email, password, first_name, last_name, role, phone",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserUpdate,,server_backup.py,"first_name, last_name, role, phone, is_active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserUpdate,,server.py,"first_name, last_name, role, phone, is_active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserUpdate,,app/models/core.py,"first_name, last_name, role, phone, is_active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-UserUpdate,,app/routes/auth.py,"first_name, last_name, role, phone, is_active",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportDraftCreate,,server_backup.py,"project_id, date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportDraftCreate,,server.py,"project_id, date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportDraftCreate,,app/models/attendance.py,"project_id, date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportDraftCreate,,app/routes/attendance.py,"project_id, date",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportLineInput,,server_backup.py,"activity_name, hours, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportLineInput,,server.py,"activity_name, hours, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportLineInput,,app/models/attendance.py,"activity_name, hours, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportLineInput,,app/routes/attendance.py,"activity_name, hours, note",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportReject,,server_backup.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportReject,,server.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportReject,,app/models/attendance.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportReject,,app/routes/attendance.py,reason,NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportUpdate,,server_backup.py,"summary_note, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportUpdate,,server.py,"summary_note, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportUpdate,,app/models/attendance.py,"summary_note, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
-WorkReportUpdate,,app/routes/attendance.py,"summary_note, lines",NO,NO,NO,NO,UNKNOWN,Pydantic model
+User,users,"app/routes/auth.py, server.py","id, org_id, email, password_hash, first_name, last_name, role, phone, is_active, is_platform_admin",YES,YES,YES,NO,"email (unique), org_id",Core user collection
+Organization,organizations,"server.py, app/routes/billing.py","id, name, slug, address, phone, email, logo_url, subscription_plan, subscription_status, subscription_expires_at",N/A,YES,YES,NO,"slug (unique), id",Core organization collection
+AuditLog,audit_logs,app/services/audit.py,"id, org_id, user_id, user_email, action, entity_type, entity_id, details, timestamp",YES,YES (timestamp),NO,YES (user_id),"org_id, timestamp",Audit trail collection
+Subscription,subscriptions,app/routes/billing.py,"id, org_id, plan, plan_id, status, started_at, expires_at, payment_method, amount, currency",YES,YES,NO,NO,"org_id, status",Billing subscription
+FeatureFlag,feature_flags,server.py,"id, org_id, module_code, module_name, description, enabled, updated_by",YES,NO,YES,YES (updated_by),org_id,Module toggle flags
+Project,projects,server.py,"id, org_id, code, name, client, address, status, start_date, end_date, budget, manager_user_id",YES,YES,YES,YES (manager_user_id),"org_id, status, code",Project management
+ProjectTeam,project_team,server.py,"id, project_id, user_id, role, assigned_at",YES (via project),YES (assigned_at),NO,NO,project_id,Project team assignments
+ProjectPhase,project_phases,server.py,"id, project_id, name, order, status, start_date, end_date",YES (via project),YES,YES,NO,project_id,Project phases
+Offer,offers,server.py,"id, org_id, project_id, title, version, status, items, total_material, total_labor, total, notes",YES,YES,YES,NO,"org_id, project_id, status",Offers/BOQ
+ActivityCatalog,activity_catalog,app/routes/offers.py,"id, org_id, project_id, code, name, default_unit, default_material_unit_cost, default_labor_unit_cost, active",YES,YES,YES,NO,"org_id, project_id",Activity templates
+AttendanceEntry,attendance_entries,app/routes/attendance.py,"id, org_id, user_id, project_id, date, check_in, check_out, hours, status, notes, gps_coords, photo_url",YES,YES,YES,NO,"org_id, user_id, date",Daily attendance
+WorkReport,work_reports,server.py,"id, org_id, project_id, user_id, date, status, activities, notes, submitted_at, approved_by",YES,YES,YES,YES (user_id),"org_id, project_id, date",Daily work reports
+EmployeeProfile,employee_profiles,app/routes/hr.py,"id, user_id, org_id, first_name, last_name, position, hire_date, salary_type, base_salary, bank_account",YES,YES,YES,NO,"org_id, user_id",HR employee data
+Advance,advances,app/routes/hr.py,"id, org_id, user_id, amount, date, reason, status, approved_by, deducted_amount",YES,YES,YES,YES (approved_by),"org_id, user_id",Salary advances
+PayrollRun,payroll_runs,app/routes/hr.py,"id, org_id, period_start, period_end, status, total_gross, total_deductions, total_net",YES,YES,YES,NO,"org_id, period_start",Payroll periods
+Payslip,payslips,app/routes/hr.py,"id, payroll_run_id, user_id, org_id, base_salary, overtime, bonuses, deductions, net_salary",YES,YES,NO,NO,"org_id, payroll_run_id",Individual payslips
+FinancialAccount,financial_accounts,app/routes/finance.py,"id, org_id, name, type, currency, balance, is_active",YES,YES,YES,NO,"org_id, type",Bank/cash accounts
+Invoice,invoices,app/routes/finance.py,"id, org_id, project_id, invoice_number, client, status, issue_date, due_date, items, total, vat_percent",YES,YES,YES,NO,"org_id, status, invoice_number",Client invoices
+FinancePayment,finance_payments,app/routes/finance.py,"id, org_id, invoice_id, account_id, amount, date, method, reference",YES,YES,NO,NO,"org_id, invoice_id",Payment records
+PaymentAllocation,payment_allocations,server.py,"id, payment_id, invoice_id, amount",NO,YES,NO,NO,payment_id,Payment to invoice mapping
+OverheadCategory,overhead_categories,app/routes/overhead.py,"id, org_id, name, description, type, is_active",YES,YES,YES,NO,org_id,Cost categories
+OverheadCost,overhead_costs,app/routes/overhead.py,"id, org_id, category_id, description, amount, date, period, recurring",YES,YES,YES,NO,"org_id, category_id, period",Overhead costs
+OverheadAsset,overhead_assets,app/routes/overhead.py,"id, org_id, name, purchase_date, purchase_value, useful_life_months, residual_value, depreciation_method",YES,YES,YES,NO,org_id,Depreciable assets
+OverheadSnapshot,overhead_snapshots,app/routes/overhead.py,"id, org_id, period, status, total_overhead, total_labor_hours, overhead_rate, allocations",YES,YES,YES,NO,"org_id, period",Monthly overhead snapshot
+ProjectOverheadAllocation,project_overhead_allocations,app/routes/overhead.py,"id, snapshot_id, project_id, labor_hours, allocated_amount",NO,YES,NO,NO,snapshot_id,Project cost allocation
+MediaFile,media_files,app/routes/media.py,"id, org_id, owner_user_id, filename, original_name, content_type, size, context_type, context_id, uploaded_at",YES,YES (uploaded_at),NO,YES (owner_user_id),"org_id, context_type, context_id",Uploaded files
+Notification,notifications,server.py,"id, org_id, user_id, type, title, message, read, link",YES,YES,NO,NO,"org_id, user_id, read",User notifications
+Reminder,reminders,server.py,"id, org_id, type, entity_type, entity_id, scheduled_for, sent, sent_at",YES,YES,NO,NO,"org_id, scheduled_for",Scheduled reminders
+ReminderLog,reminder_logs,server.py,"id, reminder_id, sent_at, status, error",NO,YES (sent_at),NO,NO,reminder_id,Reminder delivery log
+OrgMobileSetting,org_mobile_settings,app/routes/mobile.py,"id, org_id, enabledModules, defaultRole, gpsRequired, photoRequired",YES,YES,YES,NO,org_id (unique),Mobile app settings
+MobileViewConfig,mobile_view_configs,app/routes/mobile.py,"id, org_id, role, module_code, visibleFields, allowedActions",YES,YES,YES,NO,"org_id, role, module_code",Role-based mobile views
+Machine,machines,server.py,"id, org_id, name, type, registration_number, status, current_project_id",YES,YES,YES,NO,"org_id, status",Equipment/machinery
+Delivery,deliveries,server.py,"id, org_id, project_id, supplier, delivery_date, status, items, notes",YES,YES,YES,NO,"org_id, project_id",Material deliveries
+Message,messages,server.py,"id, org_id, from_user_id, to_user_id, subject, body, read, sent_at",YES,YES (sent_at),NO,YES (from_user_id),"org_id, to_user_id",Internal messages
