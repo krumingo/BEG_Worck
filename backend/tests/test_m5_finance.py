@@ -8,6 +8,8 @@ import os
 import uuid
 from datetime import datetime, timedelta
 
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
+
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 def unique_id():
