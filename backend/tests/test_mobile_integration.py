@@ -7,6 +7,8 @@ import httpx
 import os
 import io
 
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
+
 BASE_URL = os.environ.get("API_URL", "http://localhost:8001")
 API_URL = f"{BASE_URL}/api"
 
