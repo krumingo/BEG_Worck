@@ -9,7 +9,9 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import uuid
 
-from app.shared import db, get_current_user, log_audit
+from app.db import db
+from app.deps.auth import get_current_user
+from app.utils.audit import log_audit
 
 router = APIRouter(tags=["attendance"])
 
