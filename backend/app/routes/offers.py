@@ -6,10 +6,10 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
-from ..shared import (
-    db, get_current_user, require_m2,
-    can_access_project, can_manage_project, get_user_project_ids, log_audit
-)
+from app.db import db
+from app.deps.auth import get_current_user, can_access_project, can_manage_project, get_user_project_ids
+from app.deps.modules import require_m2
+from app.utils.audit import log_audit
 from ..models.offers import (
     OFFER_STATUSES, OFFER_UNITS,
     OfferCreate, OfferUpdate, OfferLinesUpdate, OfferReject,
