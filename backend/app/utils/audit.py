@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import uuid
 import logging
 
+from app.db import db
+
 # Configure security logger
 security_logger = logging.getLogger("security")
 security_logger.setLevel(logging.INFO)
@@ -45,13 +47,12 @@ def log_security_event(event_type: str, user: dict = None, payload: dict = None)
     security_logger.warning(f"SECURITY_EVENT: {event}")
 
 
-async def log_audit(db, org_id: str, user_id: str, user_email: str, action: str, 
+async def log_audit(org_id: str, user_id: str, user_email: str, action: str, 
                     entity_type: str, entity_id: str = None, changes: dict = None):
     """
     Log an audit entry to the database.
     
     Args:
-        db: Database instance
         org_id: Organization ID
         user_id: User ID performing the action
         user_email: User email
