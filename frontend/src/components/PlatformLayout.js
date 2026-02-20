@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import API from "@/lib/api";
+import { usePlatformAuth } from "@/contexts/AuthContext";
 import { 
   Shield, 
   CreditCard, 
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 const PLATFORM_NAV = [
   { to: "/platform", icon: Shield, label: "Dashboard", exact: true },
@@ -28,56 +28,16 @@ export default function PlatformLayout() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { platformUser, platformLogout } = usePlatformAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    const checkAccess = async () => {
-      try {
-        const token = localStorage.getItem("bw_token");
-        if (!token) {
-          navigate("/platform/login");
-          return;
-        }
-
-        const res = await API.get("/auth/me");
-        const userData = res.data;
-
-        if (!userData.is_platform_admin) {
-          navigate("/platform/login");
-          return;
-        }
-
-        setUser(userData);
-      } catch (err) {
-        console.error("Platform access check failed:", err);
-        navigate("/platform/login");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAccess();
-  }, [navigate]);
-
   const handleLogout = () => {
-    localStorage.removeItem("bw_token");
-    localStorage.removeItem("bw_user");
+    platformLogout();
     navigate("/platform/login");
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
+  // User is guaranteed by PlatformProtectedRoute
+  const user = platformUser;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white" data-testid="platform-layout">
@@ -147,14 +107,14 @@ export default function PlatformLayout() {
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 rounded-full bg-violet-600/20 flex items-center justify-center">
                 <span className="text-sm font-medium text-violet-400">
-                  {user.first_name?.[0]}{user.last_name?.[0]}
+                  {user?.first_name?.[0]}{user?.last_name?.[0]}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {user.first_name} {user.last_name}
+                  {user?.first_name} {user?.last_name}
                 </p>
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                <p className="text-xs text-slate-500 truncate">{user?.email}</p>
               </div>
             </div>
             <Button
