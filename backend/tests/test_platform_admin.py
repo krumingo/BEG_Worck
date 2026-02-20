@@ -1,5 +1,4 @@
 """
-from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 Tests for Platform Admin Access Control
 
 Tests verify that:
@@ -10,6 +9,8 @@ Tests verify that:
 import pytest
 import requests
 import uuid
+
+from tests.test_utils import VALID_ADMIN_PASSWORD
 
 
 class TestPlatformAdminAccessControl:
