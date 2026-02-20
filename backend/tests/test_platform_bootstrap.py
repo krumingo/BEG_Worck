@@ -17,6 +17,8 @@ import requests
 import os
 import uuid
 
+from tests.test_utils import reset_bootstrap_rate_limiter
+
 
 # Test token (must match .env for local testing)
 TEST_TOKEN = os.environ.get(
@@ -32,6 +34,8 @@ class TestBootstrapCreatePlatformAdmin:
     def setup(self, base_url):
         self.base_url = base_url
         self.endpoint = f"{base_url}/api/platform/bootstrap-create-platform-admin"
+        # Reset rate limiter before each test to ensure determinism
+        reset_bootstrap_rate_limiter()
 
     # ═══════════════════════════════════════════════════════════════════
     # TEST 1: Missing env var => 403
