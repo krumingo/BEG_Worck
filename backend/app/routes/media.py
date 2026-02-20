@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 
-from app.shared import db, get_current_user, enforce_media_access, enforce_context_access, MEDIA_CONTEXT_TYPES
+from app.db import db
+from app.deps.auth import get_current_user
+from app.deps.media_acl import enforce_media_access, enforce_context_access, MEDIA_CONTEXT_TYPES, check_media_access
 
 router = APIRouter(tags=["Media"])
 
@@ -16,7 +18,6 @@ router = APIRouter(tags=["Media"])
 
 ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
 MAX_MEDIA_SIZE_MB = 10
-# MEDIA_CONTEXT_TYPES imported from shared.py
 
 
 # ── Pydantic Models ────────────────────────────────────────────────
