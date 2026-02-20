@@ -6,9 +6,10 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
-from ..shared import (
-    db, get_current_user, require_m4, log_audit
-)
+from app.db import db
+from app.deps.auth import get_current_user
+from app.deps.modules import require_m4
+from app.utils.audit import log_audit
 from ..models.hr import (
     PAY_TYPES, PAY_SCHEDULES, ADVANCE_TYPES, ADVANCE_STATUSES,
     PAYROLL_STATUSES, PAYSLIP_STATUSES, PAYMENT_METHODS,
