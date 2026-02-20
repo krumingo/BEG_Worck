@@ -289,3 +289,38 @@ async def list_media(
             break
     
     return filtered_list
+
+
+@router.delete("/media/{media_id}")
+async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
+    """
+    Delete a media file.
+    
+    ACL Rules:
+    - Must be in same org
+    - Only owner or Admin/Owner can delete
+    """
+    org_id = user["org_id"]
+    
+    # Find media with org_id check (prevents cross-org access)
+    media = await db.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
+    if not media:
+        raise HTTPException(status_code=404, detail="Media file not found")
+    
+    # ACL check for delete action
+    await enforce_media_access(user, media, action="delete")
+    
+    # Delete the actual file
+    stored_filename = media.get("stored_filename")
+    if stored_filename:
+        file_path = Path("/app/backend/uploads") / stored_filename
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except OSError:
+                pass  # File may have been deleted externally
+    
+    # Delete from database
+    await db.media_files.delete_one({"id": media_id})
+    
+    return {"ok": True, "deleted": media_id}
