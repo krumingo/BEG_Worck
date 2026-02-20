@@ -2,7 +2,11 @@
 Health and misc routes - /api/health, /api/roles, /api/modules, /api/subscription
 """
 from fastapi import APIRouter, Depends
-from app.shared import db, ROLES, MODULES, SUBSCRIPTION_PLANS, get_current_user
+
+from app.db import db
+from app.deps.auth import get_current_user
+from app.deps.modules import SUBSCRIPTION_PLANS
+from app.constants import ROLES, MODULES
 
 router = APIRouter(tags=["misc"])
 
