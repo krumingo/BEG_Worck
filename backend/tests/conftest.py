@@ -3,6 +3,8 @@ Pytest configuration and shared fixtures for BEG_Work backend tests.
 
 This module ensures tests are DB_NAME independent by seeding minimal
 required data before any tests run.
+
+IMPORTANT: Uses valid passwords that pass the password policy.
 """
 import os
 import pytest
@@ -10,8 +12,14 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 import uuid
 
+# Import test utilities for valid passwords
+from tests.test_utils import (
+    VALID_ADMIN_PASSWORD, 
+    VALID_TECH_PASSWORD,
+    reset_bootstrap_rate_limiter
+)
+
 # Set BASE_URL environment variable for all tests
-# This reads from frontend/.env and makes it available to test modules
 def pytest_configure(config):
     """Set up environment variables before tests run."""
     # Try to read from frontend/.env if not already set
@@ -29,6 +37,9 @@ def pytest_configure(config):
     # Fallback to localhost if still not set
     if not os.environ.get('REACT_APP_BACKEND_URL'):
         os.environ['REACT_APP_BACKEND_URL'] = 'http://localhost:8001'
+    
+    # Reset rate limiter at start of test session
+    reset_bootstrap_rate_limiter()
 
 
 @pytest.fixture(scope="session")
@@ -46,17 +57,12 @@ async def _ensure_test_seed_data():
     Ensure minimal seed data exists for tests to run.
     This is idempotent - safe to call multiple times.
     
-    Seeds:
-    - Demo organization (BEG_Work Demo)
-    - Admin user (admin@begwork.com / admin123)
-    - Tech users (tech@begwork.com / tech123)
-    - Enterprise subscription
-    - Feature flags for all modules
+    IMPORTANT: Uses VALID_ADMIN_PASSWORD and VALID_TECH_PASSWORD which pass policy.
     """
     from motor.motor_asyncio import AsyncIOMotorClient
+    from passlib.context import CryptContext
     from dotenv import load_dotenv
     
-    # Load environment
     load_dotenv()
     
     mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
@@ -64,52 +70,9 @@ async def _ensure_test_seed_data():
     
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     
-    # Import hash_password from the app
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-    from app.shared import hash_password
-    
-    # Check if seed data already exists
-    existing_admin = await db.users.find_one({"email": "admin@begwork.com"})
-    
-    if existing_admin:
-        org_id = existing_admin.get("org_id")
-        print(f"\n[conftest] Seed data exists, ensuring tech users are in same org...")
-        
-        # Ensure tech users exist in the same org
-        for tech_email in ["tech@begwork.com", "tech1@begwork.com", "tech2@begwork.com"]:
-            existing_tech = await db.users.find_one({"email": tech_email})
-            if not existing_tech:
-                now = datetime.now(timezone.utc).isoformat()
-                await db.users.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "org_id": org_id,
-                    "email": tech_email,
-                    "password_hash": hash_password("tech123"),
-                    "first_name": "Tech",
-                    "last_name": tech_email.split("@")[0].capitalize(),
-                    "role": "Technician",
-                    "phone": "",
-                    "is_active": True,
-                    "created_at": now,
-                    "updated_at": now,
-                })
-                print(f"[conftest] Created {tech_email}")
-            elif existing_tech.get("org_id") != org_id:
-                # Update to same org
-                await db.users.update_one(
-                    {"email": tech_email},
-                    {"$set": {"org_id": org_id, "password_hash": hash_password("tech123"), "is_active": True}}
-                )
-                print(f"[conftest] Updated {tech_email} to admin's org")
-        
-        client.close()
-        return
-    
-    print(f"\n[conftest] Seeding test data into {db_name}...")
-    
-    # Module definitions (subset needed for tests)
+    # Module definitions
     MODULES = {
         "M0": {"name": "Base", "description": "Core features"},
         "M1": {"name": "Projects", "description": "Project management"},
@@ -124,9 +87,61 @@ async def _ensure_test_seed_data():
         "M10": {"name": "Billing", "description": "Billing management"},
     }
     
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check if seed data already exists
+    existing_admin = await db.users.find_one({"email": "admin@begwork.com"})
+    
+    if existing_admin:
+        org_id = existing_admin.get("org_id")
+        print(f"\n[conftest] Seed data exists, resetting passwords to valid values...")
+        
+        # ALWAYS reset admin password to valid value
+        await db.users.update_one(
+            {"email": "admin@begwork.com"},
+            {"$set": {
+                "password_hash": pwd_context.hash(VALID_ADMIN_PASSWORD),
+                "is_platform_admin": True,
+                "is_active": True
+            }}
+        )
+        
+        # Ensure tech users exist with valid passwords
+        for tech_email in ["tech@begwork.com", "tech1@begwork.com", "tech2@begwork.com"]:
+            existing_tech = await db.users.find_one({"email": tech_email})
+            if not existing_tech:
+                await db.users.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "email": tech_email,
+                    "password_hash": pwd_context.hash(VALID_TECH_PASSWORD),
+                    "first_name": "Tech",
+                    "last_name": tech_email.split("@")[0].capitalize(),
+                    "role": "Technician",
+                    "phone": "",
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                })
+                print(f"[conftest] Created {tech_email}")
+            else:
+                # Update to valid password
+                await db.users.update_one(
+                    {"email": tech_email},
+                    {"$set": {
+                        "org_id": org_id,
+                        "password_hash": pwd_context.hash(VALID_TECH_PASSWORD),
+                        "is_active": True
+                    }}
+                )
+        
+        client.close()
+        return
+    
+    print(f"\n[conftest] Seeding test data into {db_name}...")
+    
     org_id = str(uuid.uuid4())
     user_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
     expires = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
     
     # Create organization
@@ -145,28 +160,29 @@ async def _ensure_test_seed_data():
         "updated_at": now,
     })
     
-    # Create admin user
+    # Create admin user with VALID password
     await db.users.insert_one({
         "id": user_id,
         "org_id": org_id,
         "email": "admin@begwork.com",
-        "password_hash": hash_password("admin123"),
+        "password_hash": pwd_context.hash(VALID_ADMIN_PASSWORD),
         "first_name": "System",
         "last_name": "Admin",
         "role": "Admin",
         "phone": "",
         "is_active": True,
+        "is_platform_admin": True,
         "created_at": now,
         "updated_at": now,
     })
     
-    # Create technician users (needed by various tests)
+    # Create technician users with VALID passwords
     for tech_email in ["tech@begwork.com", "tech1@begwork.com", "tech2@begwork.com"]:
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "org_id": org_id,
             "email": tech_email,
-            "password_hash": hash_password("tech123"),
+            "password_hash": pwd_context.hash(VALID_TECH_PASSWORD),
             "first_name": "Tech",
             "last_name": tech_email.split("@")[0].capitalize(),
             "role": "Technician",
@@ -184,7 +200,7 @@ async def _ensure_test_seed_data():
             "module_code": code,
             "module_name": info["name"],
             "description": info["description"],
-            "enabled": True,  # Enable all for tests
+            "enabled": True,
             "updated_at": now,
             "updated_by": user_id,
         })
@@ -204,7 +220,7 @@ async def _ensure_test_seed_data():
         "created_at": now,
     })
     
-    print(f"[conftest] Seed data created: admin@begwork.com / admin123 in {db_name}")
+    print(f"[conftest] Seed data created with valid passwords in {db_name}")
     client.close()
 
 
@@ -215,3 +231,5 @@ def ensure_seed_data():
     This runs automatically (autouse=True) at the start of the test session.
     """
     asyncio.get_event_loop().run_until_complete(_ensure_test_seed_data())
+    # Reset rate limiter after seed
+    reset_bootstrap_rate_limiter()
