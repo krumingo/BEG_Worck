@@ -237,8 +237,6 @@ async def list_media(
     user: dict = Depends(get_current_user)
 ):
     """List media files for the organization, optionally filtered by context"""
-    from app.shared import check_media_access
-    
     org_id = user["org_id"]
     user_id = user["id"]
     user_role = user["role"]
