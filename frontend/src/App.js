@@ -121,6 +121,16 @@ function App() {
           <Route path="/modules" element={<ProtectedRoute><PlatformAdminGuard><ModuleTogglesPage /></PlatformAdminGuard></ProtectedRoute>} />
           <Route path="/audit-log" element={<ProtectedRoute><PlatformAdminGuard><AuditLogPage /></PlatformAdminGuard></ProtectedRoute>} />
           
+          {/* Platform Admin Portal - Separate login and layout */}
+          <Route path="/platform/login" element={<PlatformLoginPage />} />
+          <Route path="/platform" element={<PlatformLayout />}>
+            <Route index element={<PlatformDashboardPage />} />
+            <Route path="billing" element={<PlatformBillingPage />} />
+            <Route path="modules" element={<PlatformModulesPage />} />
+            <Route path="audit-log" element={<PlatformAuditLogPage />} />
+            <Route path="mobile-settings" element={<PlatformMobileSettingsPage />} />
+          </Route>
+          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
