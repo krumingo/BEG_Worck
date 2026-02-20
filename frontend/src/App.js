@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import PlatformAdminGuard from "@/components/PlatformAdminGuard";
+import PlatformLayout from "@/components/PlatformLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import PlanSelectionPage from "@/pages/PlanSelectionPage";
@@ -39,6 +40,13 @@ import InvoiceEditorPage from "@/pages/InvoiceEditorPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import OverheadPage from "@/pages/OverheadPage";
 import OverheadSnapshotDetailPage from "@/pages/OverheadSnapshotDetailPage";
+// Platform Admin Pages
+import PlatformLoginPage from "@/pages/PlatformLoginPage";
+import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
+import PlatformBillingPage from "@/pages/PlatformBillingPage";
+import PlatformModulesPage from "@/pages/PlatformModulesPage";
+import PlatformAuditLogPage from "@/pages/PlatformAuditLogPage";
+import PlatformMobileSettingsPage from "@/pages/PlatformMobileSettingsPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
