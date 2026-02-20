@@ -3,10 +3,17 @@ Database connection and collection access.
 """
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-mongo_url = os.environ['MONGO_URL']
+# Load environment from backend/.env
+_root = Path(__file__).parent.parent
+load_dotenv(_root / '.env')
+
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+db_name = os.environ.get('DB_NAME', 'begwork')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 # Collection accessors for type hints and easy refactoring
 users = db.users
