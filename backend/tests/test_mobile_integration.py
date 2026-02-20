@@ -1,4 +1,5 @@
 """
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 Tests for Mobile Integration - Phase 1 + Phase 2
 Tests bootstrap endpoint, field filtering, action blocking, and media upload
 """
@@ -12,9 +13,9 @@ API_URL = f"{BASE_URL}/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@begwork.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = VALID_ADMIN_PASSWORD
 TECH_EMAIL = "tech@begwork.com"
-TECH_PASSWORD = "tech123"
+TECH_PASSWORD = VALID_TECH_PASSWORD
 
 
 @pytest.fixture(scope="module")

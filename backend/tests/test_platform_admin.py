@@ -1,4 +1,5 @@
 """
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 Tests for Platform Admin Access Control
 
 Tests verify that:
@@ -44,7 +45,7 @@ class TestPlatformAdminAccessControl:
         # Login as platform admin (admin@begwork.com should be set as platform admin)
         platform_login = requests.post(
             f"{self.base_url}/api/auth/login",
-            json={"email": "admin@begwork.com", "password": "admin123"}
+            json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
         )
         if platform_login.status_code == 200:
             platform_data = platform_login.json()

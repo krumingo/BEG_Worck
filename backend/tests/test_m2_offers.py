@@ -1,4 +1,5 @@
 """
+from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 M2 Offers/BOQ API Tests
 Tests offer CRUD, BOQ lines, versioning, status transitions, totals computation, and activity catalog
 
@@ -28,9 +29,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 ADMIN_EMAIL = "admin@begwork.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = VALID_ADMIN_PASSWORD
 TECH_EMAIL = "tech2@begwork.com"
-TECH_PASSWORD = "tech123"
+TECH_PASSWORD = VALID_TECH_PASSWORD
 
 @pytest.fixture(scope="module")
 def admin_token():
