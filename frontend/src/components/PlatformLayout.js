@@ -35,7 +35,7 @@ export default function PlatformLayout() {
   useEffect(() => {
     const checkAccess = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("bw_token");
         if (!token) {
           navigate("/platform/login");
           return;
