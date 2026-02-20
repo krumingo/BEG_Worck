@@ -11,7 +11,7 @@ import uuid
 ADMIN_EMAIL = "admin@begwork.com"
 ADMIN_PASSWORD = "admin123"
 TECH_EMAIL = "tech@begwork.com"
-TECH_PASSWORD = "NewStrongPass123!"
+TECH_PASSWORD = "tech123"
 STRONG_PASSWORD = "AdminReset123!New"
 
 
