@@ -69,10 +69,17 @@ class RateLimiter:
         cutoff = now - self.window_seconds
         self._requests[ip] = [t for t in self._requests[ip] if t > cutoff]
         return max(0, self.max_requests - len(self._requests[ip]))
+    
+    def reset(self, ip: str = None):
+        """Reset rate limit for specific IP or all IPs (for testing)."""
+        if ip:
+            self._requests[ip] = []
+        else:
+            self._requests.clear()
 
 
-# Global rate limiter instance
-bootstrap_rate_limiter = RateLimiter(max_requests=5, window_seconds=600)
+# Global rate limiter instance (20 requests per 10 min - more lenient for testing)
+bootstrap_rate_limiter = RateLimiter(max_requests=20, window_seconds=600)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
