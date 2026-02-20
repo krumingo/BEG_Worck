@@ -103,6 +103,56 @@ Upload & Access:
   DELETE /api/media/{id} → delete (ACL checked)
 ```
 
+## Deliveries Lifecycle
+```
+Material Delivery Flow:
+  POST /api/deliveries → create delivery record
+  GET /api/deliveries → list deliveries (filtered by project/status)
+  GET /api/deliveries/{id} → get delivery details
+  PUT /api/deliveries/{id} → update delivery (status, items)
+  PUT /api/deliveries/{id}/receive → mark as received
+  DELETE /api/deliveries/{id} → cancel/delete delivery
+
+Delivery Statuses:
+  pending → in_transit → delivered → received
+  
+Integration Points:
+  - Links to projects (project_id)
+  - Links to invoices (for billing)
+  - Media attachments (delivery notes, photos)
+```
+
+## Returns Flow
+```
+Return Process:
+  POST /api/returns → create return request
+  GET /api/returns → list returns
+  PUT /api/returns/{id}/approve → approve return
+  PUT /api/returns/{id}/complete → mark as completed
+
+Return Statuses:
+  requested → approved → in_progress → completed
+```
+
+## Mobile Governance
+```
+Role-Based Access:
+  GET /api/mobile/settings → org-wide mobile settings
+  GET /api/mobile/view-configs → per-role view configurations
+  PUT /api/mobile/view-configs → update role config (platform admin)
+  DELETE /api/mobile/view-configs/{role}/{module} → reset to defaults
+
+Mobile Modules:
+  - attendance: check-in/out, GPS, photos
+  - work_reports: daily activity logging
+  - projects: view assigned projects
+  - notifications: push notifications
+  
+Per-Role Configuration:
+  - visibleFields: which data fields to show
+  - allowedActions: which actions user can perform
+```
+
 ## Mobile App Configuration
 ```
 Settings:
