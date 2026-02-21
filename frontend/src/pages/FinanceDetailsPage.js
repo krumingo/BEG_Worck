@@ -80,7 +80,7 @@ const PRESETS = [
 ];
 
 const TRANSACTION_TYPES = [
-  { value: "", label: "Всички" },
+  { value: "all", label: "Всички" },
   { value: "invoice", label: "Фактури" },
   { value: "cash", label: "Каса" },
   { value: "overhead", label: "Режийни" },
