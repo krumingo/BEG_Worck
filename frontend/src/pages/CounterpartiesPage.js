@@ -33,13 +33,15 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Users, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Building2, BarChart3 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 const COUNTERPARTY_TYPES = ["supplier", "client", "both"];
 
 export default function CounterpartiesPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -118,6 +120,12 @@ export default function CounterpartiesPage() {
     setDeleteOpen(true);
   };
 
+  const handleViewTurnover = (row) => {
+    // Navigate to turnover page with counterparty filter
+    const type = row.type === "client" ? "sales" : "purchases";
+    navigate(`/data/turnover?type=${type}&counterparty_id=${row.id}`);
+  };
+
   const confirmDelete = async () => {
     try {
       await API.delete(`/counterparties/${editingItem.id}`);
@@ -174,6 +182,15 @@ export default function CounterpartiesPage() {
         exportFilename="counterparties.csv"
         actions={(row) => (
           <div className="flex items-center gap-1">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => handleViewTurnover(row)}
+              title={t("data.turnover")}
+              data-testid={`turnover-btn-${row.id}`}
+            >
+              <BarChart3 className="w-4 h-4 text-primary" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => handleEdit(row)}>
               <Pencil className="w-4 h-4" />
             </Button>
