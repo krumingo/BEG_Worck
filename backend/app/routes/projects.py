@@ -125,6 +125,9 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(PROJECT_STATUSES)}")
     if data.type not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid type. Must be: {', '.join(PROJECT_TYPES)}")
+    # Validate owner type if provided
+    if data.owner_type and data.owner_type not in OWNER_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid owner type. Must be: {', '.join(OWNER_TYPES)}")
     existing = await db.projects.find_one({"org_id": user["org_id"], "code": data.code})
     if existing:
         raise HTTPException(status_code=400, detail="Project code already exists in this organization")
@@ -143,6 +146,10 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
         "default_site_manager_id": data.default_site_manager_id,
         "tags": data.tags,
         "notes": data.notes,
+        # Owner fields
+        "address_text": data.address_text,
+        "owner_type": data.owner_type,
+        "owner_id": data.owner_id,
         "created_at": now,
         "updated_at": now,
     }
