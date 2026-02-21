@@ -566,6 +566,15 @@ export default function ProjectDetailPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Client Selector Modal */}
+        <ClientSelector
+          projectId={projectId}
+          currentClient={client}
+          open={showClientSelector}
+          onOpenChange={setShowClientSelector}
+          onClientUpdated={fetchDashboard}
+        />
       </div>
     </DashboardLayout>
   );
