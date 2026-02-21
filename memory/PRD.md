@@ -29,72 +29,29 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Multi-allocation to projects/warehouses
 - Backward compatibility with old format
 
-### Phase: Data Module Backend P0 (DONE) - Feb 21, 2026
-**Backend APIs for "Данни" (Data) module with ERP-style features:**
+### Phase: Data Module (DONE) - Feb 21, 2026
+**Full implementation of "Данни" (Data) ERP module:**
 
-1. **Warehouses API** (`/api/warehouses`)
-   - Full CRUD with server-side pagination
-   - Filters: type, project_id, active_only, search
-   - Response format: `{items, total, page, page_size, total_pages}`
+#### Backend (P0 - DONE)
+1. **Warehouses API** (`/api/warehouses`) - Full CRUD with server-side pagination
+2. **Counterparties API** (`/api/counterparties`) - Full CRUD, EIK uniqueness check (application-level)
+3. **Items/Materials API** (`/api/items`) - NEW, Full CRUD with SKU uniqueness
+4. **Prices API** (`/api/prices`) - NEW, Aggregation from invoice_lines
+5. **Turnover Report API** (`/api/reports/turnover-by-counterparty`) - NEW, Aggregated purchases/sales
 
-2. **Counterparties API** (`/api/counterparties`)  
-   - Full CRUD with server-side pagination
-   - Filters: type (supplier/client/both), search, active_only
-   - Invoice count enrichment
-   - Response format: `{items, total, page, page_size}`
+**Filter Operators:** contains, equals, in, bool, min/max, from/to
+**Response Format:** `{items, total, page, page_size, total_pages}`
 
-3. **Items/Materials API** (`/api/items`) - NEW
-   - Full CRUD for inventory items
-   - Fields: sku (unique), name, unit, category, brand, description, default_price, min_stock
-   - Categories: Materials, Tools, Equipment, Consumables, Services, Other
-   - Filters: category, search, is_active
-   - Response format: `{items, total, page, page_size, total_pages}`
+#### Frontend (P0 - DONE)
+1. **Sidebar "Данни" Section** - Collapsible navigation with 5 sub-pages
+2. **Reusable DataTable Component** - Server-side pagination, sorting, filtering, URL state persistence, CSV export
+3. **WarehousesPage** - DataTable + CRUD modals
+4. **CounterpartiesPage** - DataTable + CRUD modals (EIK optional)
+5. **ItemsPage** - DataTable + CRUD modals (SKU unique per org)
+6. **PricesPage** - Read-only DataTable with price history from invoices
+7. **TurnoverPage** - Report with grand totals cards + DataTable + drilldown drawer
 
-4. **Prices API** (`/api/prices`) - NEW
-   - Purchase price history from invoice_lines
-   - Aggregation with invoice data (date, supplier)
-   - Filters: item_id, supplier_id, project_id, warehouse_id, date_from/to
-   - Enriched with supplier_name, purchaser_name, allocation_summary
-
-5. **Turnover Report API** (`/api/reports/turnover-by-counterparty`) - NEW
-   - Aggregated purchases/sales by counterparty
-   - Fields: count_invoices, sum_subtotal, sum_vat, sum_total, sum_paid, sum_remaining
-   - Grand totals for all counterparties
-   - Drilldown endpoint: `/api/reports/turnover-by-counterparty/{id}/invoices`
-
-**Filter Operators Supported:**
-- `contains` - case-insensitive regex match
-- `equals` - exact match
-- `in` - multiple values (pipe-separated)
-- `bool` - boolean filter
-- `min/max` - numeric range
-- `from/to` - date range
-
-**Database Indexes Added:**
-- items: (org_id, sku) unique, (org_id, name), (org_id, category), (org_id, is_active)
-
-**Tests Created:**
-- `/app/backend/tests/test_data_module.py` - 18 tests all passing
-
----
-
-## In Progress
-
-### Phase: Data Module Frontend P0 (NOT STARTED)
-**To implement:**
-1. Add "Данни" section to sidebar with sub-pages
-2. Create reusable `DataTable` component with:
-   - Server-side pagination/sorting/filtering
-   - URL state persistence for filters
-   - CSV export functionality
-   - Column configuration
-3. Build pages:
-   - Warehouses page
-   - Counterparties page
-   - Items/Materials page
-   - Prices page
-   - Turnover Report page
-4. CRUD modals for each entity
+**Tests:** 18 pytest tests in `/app/backend/tests/test_data_module.py`
 
 ---
 
@@ -148,6 +105,18 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ## Test Credentials
 - **Admin:** admin@begwork.com / AdminTest123!Secure
+
+---
+
+## Key URLs (Data Module)
+
+| URL | Page | Features |
+|-----|------|----------|
+| /data/warehouses | Складове | CRUD, filtering, CSV export |
+| /data/counterparties | Контрагенти | CRUD, filtering, CSV export |
+| /data/items | Артикули | CRUD, filtering, CSV export |
+| /data/prices | Цени | Read-only, price history |
+| /data/turnover | Оборот | Grand totals, drilldown |
 
 ---
 
