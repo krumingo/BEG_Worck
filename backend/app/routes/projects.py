@@ -329,3 +329,370 @@ async def delete_phase(project_id: str, phase_id: str, user: dict = Depends(get_
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Phase not found")
     return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# OWNER HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def normalize_phone(phone: str) -> str:
+    """Normalize phone number - keep only digits and +"""
+    return re.sub(r'[^\d+]', '', phone.strip())
+
+
+def normalize_eik(eik: str) -> str:
+    """Normalize EIK - keep only digits"""
+    return re.sub(r'\D', '', eik.strip())
+
+
+async def get_owner_info(owner_type: str, owner_id: str, org_id: str) -> dict:
+    """Get owner display info for a project"""
+    if owner_type == "person":
+        person = await db.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+        if person:
+            return {
+                "owner_name": f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
+                "owner_identifier": person.get("phone", ""),
+            }
+    elif owner_type == "company":
+        company = await db.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+        if company:
+            return {
+                "owner_name": company.get("name", ""),
+                "owner_identifier": company.get("eik", ""),
+            }
+    return {"owner_name": "", "owner_identifier": ""}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PERSONS (ЧАСТНИ ЛИЦА) - Owners for Projects
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PersonCreate(BaseModel):
+    phone: str
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    notes: Optional[str] = ""
+
+
+class PersonUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/persons")
+async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] = None):
+    """List all persons in organization"""
+    query = {"org_id": user["org_id"]}
+    persons = await db.persons.find(query, {"_id": 0}).sort("last_name", 1).to_list(500)
+    if q:
+        q_lower = q.lower()
+        persons = [p for p in persons if q_lower in p.get("first_name", "").lower()
+                   or q_lower in p.get("last_name", "").lower()
+                   or q_lower in p.get("phone", "").lower()]
+    return persons
+
+
+@router.post("/persons", status_code=201)
+async def create_person(data: PersonCreate, user: dict = Depends(get_current_user)):
+    """Create a new person"""
+    org_id = user["org_id"]
+    phone = normalize_phone(data.phone)
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number is required")
+    existing = await db.persons.find_one({"org_id": org_id, "phone": phone})
+    if existing:
+        raise HTTPException(status_code=400, detail="Person with this phone already exists")
+    now = datetime.now(timezone.utc).isoformat()
+    person = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "phone": phone,
+        "first_name": data.first_name.strip(),
+        "last_name": data.last_name.strip(),
+        "email": data.email.strip() if data.email else None,
+        "notes": data.notes or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.persons.insert_one(person)
+    await log_audit(org_id, user["id"], user["email"], "created", "person", person["id"], 
+                    {"phone": phone, "name": f"{data.first_name} {data.last_name}"})
+    return {k: v for k, v in person.items() if k != "_id"}
+
+
+@router.get("/persons/find-by-phone")
+async def find_person_by_phone(phone: str, user: dict = Depends(get_current_user)):
+    """Find person by phone number"""
+    normalized = normalize_phone(phone)
+    person = await db.persons.find_one({"org_id": user["org_id"], "phone": normalized}, {"_id": 0})
+    if not person:
+        return {"found": False, "person": None}
+    return {"found": True, "person": person}
+
+
+@router.get("/persons/{person_id}")
+async def get_person(person_id: str, user: dict = Depends(get_current_user)):
+    """Get person by ID"""
+    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    return person
+
+
+@router.put("/persons/{person_id}")
+async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user)):
+    """Update person"""
+    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    update = {k: v.strip() if isinstance(v, str) else v for k, v in data.model_dump().items() if v is not None}
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.persons.update_one({"id": person_id}, {"$set": update})
+    return await db.persons.find_one({"id": person_id}, {"_id": 0})
+
+
+@router.delete("/persons/{person_id}")
+async def delete_person(person_id: str, user: dict = Depends(require_admin)):
+    """Delete person (admin only)"""
+    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    project_count = await db.projects.count_documents({"owner_type": "person", "owner_id": person_id})
+    if project_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete: person is owner of {project_count} project(s)")
+    await db.persons.delete_one({"id": person_id})
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPANIES (ФИРМИ) - Owners for Projects
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CompanyCreate(BaseModel):
+    eik: str
+    name: str
+    mol: Optional[str] = None
+    address: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    notes: Optional[str] = ""
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    mol: Optional[str] = None
+    address: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/companies")
+async def list_companies(user: dict = Depends(get_current_user), q: Optional[str] = None):
+    """List all companies in organization"""
+    query = {"org_id": user["org_id"]}
+    companies = await db.companies.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    if q:
+        q_lower = q.lower()
+        companies = [c for c in companies if q_lower in c.get("name", "").lower() or q_lower in c.get("eik", "").lower()]
+    return companies
+
+
+@router.post("/companies", status_code=201)
+async def create_company(data: CompanyCreate, user: dict = Depends(get_current_user)):
+    """Create a new company"""
+    org_id = user["org_id"]
+    eik = normalize_eik(data.eik)
+    if not eik:
+        raise HTTPException(status_code=400, detail="EIK is required")
+    existing = await db.companies.find_one({"org_id": org_id, "eik": eik})
+    if existing:
+        raise HTTPException(status_code=400, detail="Company with this EIK already exists")
+    now = datetime.now(timezone.utc).isoformat()
+    company = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "eik": eik,
+        "name": data.name.strip(),
+        "mol": data.mol.strip() if data.mol else None,
+        "address": data.address.strip() if data.address else None,
+        "email": data.email.strip() if data.email else None,
+        "phone": normalize_phone(data.phone) if data.phone else None,
+        "notes": data.notes or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.companies.insert_one(company)
+    await log_audit(org_id, user["id"], user["email"], "created", "company", company["id"], 
+                    {"eik": eik, "name": data.name})
+    return {k: v for k, v in company.items() if k != "_id"}
+
+
+@router.get("/companies/find-by-eik")
+async def find_company_by_eik(eik: str, user: dict = Depends(get_current_user)):
+    """Find company by EIK"""
+    normalized = normalize_eik(eik)
+    company = await db.companies.find_one({"org_id": user["org_id"], "eik": normalized}, {"_id": 0})
+    if not company:
+        return {"found": False, "company": None}
+    return {"found": True, "company": company}
+
+
+@router.get("/companies/{company_id}")
+async def get_company(company_id: str, user: dict = Depends(get_current_user)):
+    """Get company by ID"""
+    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return company
+
+
+@router.put("/companies/{company_id}")
+async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user)):
+    """Update company"""
+    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    update = {}
+    for k, v in data.model_dump().items():
+        if v is not None:
+            if k == "phone" and v:
+                update[k] = normalize_phone(v)
+            elif isinstance(v, str):
+                update[k] = v.strip()
+            else:
+                update[k] = v
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.companies.update_one({"id": company_id}, {"$set": update})
+    return await db.companies.find_one({"id": company_id}, {"_id": 0})
+
+
+@router.delete("/companies/{company_id}")
+async def delete_company(company_id: str, user: dict = Depends(require_admin)):
+    """Delete company (admin only)"""
+    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    project_count = await db.projects.count_documents({"owner_type": "company", "owner_id": company_id})
+    if project_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete: company is owner of {project_count} project(s)")
+    await db.companies.delete_one({"id": company_id})
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PROJECT PHOTOS
+# ══════════════════════════════════════════════════════════════════════════════
+
+ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
+MAX_PHOTO_SIZE_MB = 10
+
+
+@router.get("/projects/{project_id}/photos")
+async def list_project_photos(project_id: str, user: dict = Depends(get_current_user)):
+    """List all photos for a project"""
+    org_id = user["org_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    photos = await db.project_photos.find({"project_id": project_id, "org_id": org_id}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
+    user_ids = list(set(p.get("uploaded_by") for p in photos if p.get("uploaded_by")))
+    users_map = {}
+    if user_ids:
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
+        users_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
+    for photo in photos:
+        photo["uploader_name"] = users_map.get(photo.get("uploaded_by"), "")
+    return photos
+
+
+@router.post("/projects/{project_id}/photos", status_code=201)
+async def upload_project_photo(
+    project_id: str,
+    file: UploadFile = File(...),
+    note: str = Form(""),
+    user: dict = Depends(get_current_user)
+):
+    """Upload a photo to a project"""
+    org_id = user["org_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if file.content_type not in ALLOWED_PHOTO_TYPES:
+        raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": f"Allowed: {ALLOWED_PHOTO_TYPES}"})
+    content = await file.read()
+    file_size = len(content)
+    if file_size > MAX_PHOTO_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail={"error_code": "FILE_TOO_LARGE", "message": f"Max {MAX_PHOTO_SIZE_MB}MB"})
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    photo_id = str(uuid.uuid4())
+    filename = f"project_{photo_id}.{ext}"
+    upload_dir = Path("/app/backend/uploads/projects")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / filename
+    with open(file_path, "wb") as f:
+        f.write(content)
+    file_url = f"/api/projects/photos/file/{filename}"
+    now = datetime.now(timezone.utc).isoformat()
+    photo = {
+        "id": photo_id,
+        "org_id": org_id,
+        "project_id": project_id,
+        "url": file_url,
+        "filename": file.filename,
+        "stored_filename": filename,
+        "content_type": file.content_type,
+        "file_size": file_size,
+        "note": note.strip() if note else "",
+        "uploaded_by": user["id"],
+        "uploaded_at": now,
+    }
+    await db.project_photos.insert_one(photo)
+    await log_audit(org_id, user["id"], user["email"], "photo_uploaded", "project", project_id, {"photo_id": photo_id})
+    result = {k: v for k, v in photo.items() if k != "_id"}
+    result["uploader_name"] = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+    return result
+
+
+@router.get("/projects/photos/file/{filename}")
+async def serve_project_photo(filename: str, user: dict = Depends(get_current_user)):
+    """Serve project photo file"""
+    from fastapi.responses import FileResponse
+    UPLOAD_DIR = Path("/app/backend/uploads/projects")
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    file_path = (UPLOAD_DIR / filename).resolve()
+    if not str(file_path).startswith(str(UPLOAD_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    photo = await db.project_photos.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0, "content_type": 1})
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found or access denied")
+    return FileResponse(file_path, media_type=photo.get("content_type", "image/jpeg"))
+
+
+@router.delete("/projects/photos/{photo_id}")
+async def delete_project_photo(photo_id: str, user: dict = Depends(get_current_user)):
+    """Delete a project photo (owner or admin only)"""
+    org_id = user["org_id"]
+    photo = await db.project_photos.find_one({"id": photo_id, "org_id": org_id}, {"_id": 0})
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    if photo.get("uploaded_by") != user["id"] and user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only the uploader or admin can delete this photo")
+    stored_filename = photo.get("stored_filename")
+    if stored_filename:
+        file_path = Path("/app/backend/uploads/projects") / stored_filename
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except OSError:
+                pass
+    await db.project_photos.delete_one({"id": photo_id})
+    await log_audit(org_id, user["id"], user["email"], "photo_deleted", "project", photo.get("project_id"), {"photo_id": photo_id})
+    return {"ok": True, "deleted": photo_id}
