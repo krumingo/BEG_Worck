@@ -178,7 +178,13 @@
     "help": "Помощ",
     "about": "Относно",
     "menu": "Меню",
-    "helpComingSoon": "Помощта скоро ще бъде налична"
+    "helpComingSoon": "Помощта скоро ще бъде налична",
+    "data": "Данни",
+    "warehouses": "Складове",
+    "counterparties": "Контрагенти",
+    "items": "Артикули",
+    "prices": "Цени",
+    "turnover": "Оборот"
   },
   "dashboard": {
     "title": "Табло",
