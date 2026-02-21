@@ -351,8 +351,28 @@ export default function FinanceDetailsPage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-4">
+            {/* Period Selector (1/3/6/12 months) */}
             <div className="space-y-1">
-              <Label className="text-xs">{t("financeDetails.period") || "Период"}</Label>
+              <Label className="text-xs flex items-center gap-1">
+                <CalendarDays className="w-3 h-3" />
+                Период (месеци)
+              </Label>
+              <Select value={period} onValueChange={setPeriod}>
+                <SelectTrigger className="w-[140px]" data-testid="period-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERIOD_OPTIONS.map(p => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="border-l border-border h-8 mx-2" />
+            
+            <div className="space-y-1">
+              <Label className="text-xs">{t("financeDetails.period") || "Филтър период"}</Label>
               <Select value={preset} onValueChange={setPreset}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue />
