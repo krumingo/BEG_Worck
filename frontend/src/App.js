@@ -155,6 +155,12 @@ function AppRoutes() {
       <Route path="/finance/payments/new" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
       <Route path="/overhead" element={<CompanyProtectedRoute><OverheadPage /></CompanyProtectedRoute>} />
       <Route path="/overhead/snapshots/:snapshotId" element={<CompanyProtectedRoute><OverheadSnapshotDetailPage /></CompanyProtectedRoute>} />
+      {/* Data Module Routes */}
+      <Route path="/data/warehouses" element={<CompanyProtectedRoute><WarehousesPage /></CompanyProtectedRoute>} />
+      <Route path="/data/counterparties" element={<CompanyProtectedRoute><CounterpartiesPage /></CompanyProtectedRoute>} />
+      <Route path="/data/items" element={<CompanyProtectedRoute><ItemsPage /></CompanyProtectedRoute>} />
+      <Route path="/data/prices" element={<CompanyProtectedRoute><PricesPage /></CompanyProtectedRoute>} />
+      <Route path="/data/turnover" element={<CompanyProtectedRoute><TurnoverPage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
