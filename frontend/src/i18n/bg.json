@@ -1315,5 +1315,18 @@
     "exportPDF": "Експорт PDF",
     "exportExcel": "Експорт Excel",
     "export": "Експорт"
+  },
+  "financeDetails": {
+    "title": "Финансови детайли",
+    "period": "Период",
+    "avgWeeklyExpense": "Среден разход/седм.",
+    "overview": "Обобщение",
+    "breakdown": "Разбивка",
+    "byCounterparty": "По контрагент",
+    "byProject": "По проект",
+    "transactions": "Транзакции",
+    "topCounterparties": "Топ 10 контрагенти",
+    "shareByType": "Дял по тип",
+    "share": "Дял"
   }
 }
