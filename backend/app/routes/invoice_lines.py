@@ -210,6 +210,46 @@ async def list_invoice_lines(
     return result
 
 
+# ── Static routes (must come before /{line_id}) ─────────────────────
+
+@router.get("/invoice-lines/unallocated")
+async def get_unallocated_lines(user: dict = Depends(require_m5)):
+    """Get all invoice lines that are not fully allocated"""
+    lines = await db.invoice_lines.find(
+        {"org_id": user["org_id"], "is_fully_allocated": {"$ne": True}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    result = []
+    for line in lines:
+        line = normalize_allocations(line)
+        line = compute_allocation_stats(line)
+        
+        # Only include if really not fully allocated
+        if not line.get("is_fully_allocated", False):
+            invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1})
+            if invoice:
+                line["invoice_no"] = invoice["invoice_no"]
+                line["invoice_date"] = invoice["issue_date"]
+            result.append(line)
+    
+    return {
+        "count": len(result),
+        "lines": result
+    }
+
+
+@router.get("/invoice-lines/enums")
+async def get_invoice_line_enums():
+    """Get available enum values"""
+    return {
+        "allocation_types": ALLOCATION_TYPES,
+        "cost_categories": ["Materials", "Labor", "Subcontract", "Other"],
+    }
+
+
+# ── CRUD routes ────────────────────────────────────────────────────
+
 @router.post("/invoice-lines", status_code=201)
 async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(require_m5)):
     """Create a single invoice line"""
