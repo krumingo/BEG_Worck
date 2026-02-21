@@ -174,3 +174,8 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 | /api/prices | GET | Price history from invoice lines |
 | /api/reports/turnover-by-counterparty | GET | Turnover by counterparty |
 | /api/reports/turnover-by-counterparty/{id}/invoices | GET | Drilldown invoices |
+| /api/reports/turnover-by-client | GET | Turnover by client (persons) |
+| /api/reports/company-finance-summary | GET | Company finance summary |
+| /api/finance/cash-transactions | GET/POST | Cash transactions CRUD |
+| /api/finance/overhead-transactions | GET/POST | Overhead transactions CRUD |
+| /api/finance/bonus-payments | GET/POST | Bonus payments CRUD |
