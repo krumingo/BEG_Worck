@@ -2,8 +2,8 @@
 Pydantic models - Invoice Lines (separate collection for detailed tracking).
 Supports multi-allocation: split quantities across multiple projects/warehouses/clients.
 """
-from pydantic import BaseModel, field_validator
-from typing import Optional, List, Literal
+from pydantic import BaseModel, field_validator, model_validator
+from typing import Optional, List, Literal, Any
 
 ALLOCATION_TYPES = ["project", "warehouse", "client"]
 
@@ -17,9 +17,22 @@ class ScanLineRefInput(BaseModel):
 class AllocationItem(BaseModel):
     """Single allocation of quantity to a project/warehouse/client"""
     type: Literal["project", "warehouse", "client"]
-    ref_id: str
+    ref_id: str  # Standard key - snake_case
     qty: float
     note: Optional[str] = None
+    
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_ref_id(cls, data: Any) -> Any:
+        """Accept both refId (camelCase) and ref_id (snake_case), normalize to ref_id"""
+        if isinstance(data, dict):
+            # If refId exists but ref_id doesn't, copy it
+            if 'refId' in data and 'ref_id' not in data:
+                data['ref_id'] = data['refId']
+            # Remove refId to ensure only ref_id is used
+            if 'refId' in data:
+                del data['refId']
+        return data
     
     @field_validator('qty')
     @classmethod
