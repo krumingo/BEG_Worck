@@ -1011,6 +1011,10 @@ api_router.include_router(mobile_router)
 from app.routes.media import router as media_router
 api_router.include_router(media_router)
 
+# Import sites router - sites, persons, companies
+from app.routes.sites import router as sites_router
+api_router.include_router(sites_router)
+
 # Import platform bootstrap router - ONE-TIME USE for production setup
 from app.routes.platform import router as platform_router
 app.include_router(platform_router)  # Direct to app (not under /api prefix)
