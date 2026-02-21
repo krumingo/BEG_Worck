@@ -61,6 +61,7 @@ class ProjectUpdate(BaseModel):
     address_text: Optional[str] = None
     owner_type: Optional[str] = None
     owner_id: Optional[str] = None
+    warranty_months: Optional[int] = None  # 3, 6, 12, 24
 
 class TeamMemberAdd(BaseModel):
     user_id: str
