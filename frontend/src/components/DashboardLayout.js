@@ -10,6 +10,7 @@ import {
   ScrollText,
   LogOut,
   ChevronRight,
+  ChevronDown,
   HardHat,
   FolderKanban,
   CalendarCheck,
@@ -35,6 +36,10 @@ import {
   Menu,
   X,
   Lock,
+  Database,
+  Warehouse,
+  TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
