@@ -76,6 +76,8 @@ class InvoiceCreate(BaseModel):
 class InvoiceUpdate(BaseModel):
     invoice_no: Optional[str] = None
     counterparty_name: Optional[str] = None
+    supplier_counterparty_id: Optional[str] = None
+    scan_doc_id: Optional[str] = None
     project_id: Optional[str] = None
     issue_date: Optional[str] = None
     due_date: Optional[str] = None
