@@ -1011,6 +1011,22 @@ api_router.include_router(mobile_router)
 from app.routes.media import router as media_router
 api_router.include_router(media_router)
 
+# Import warehouse router
+from app.routes.warehouses import router as warehouses_router
+api_router.include_router(warehouses_router)
+
+# Import scan docs router
+from app.routes.scan_docs import router as scan_docs_router
+api_router.include_router(scan_docs_router)
+
+# Import invoice lines router (separate collection)
+from app.routes.invoice_lines import router as invoice_lines_router
+api_router.include_router(invoice_lines_router)
+
+# Import counterparties router (suppliers/clients)
+from app.routes.counterparties import router as counterparties_router
+api_router.include_router(counterparties_router)
+
 # Import platform bootstrap router - ONE-TIME USE for production setup
 from app.routes.platform import router as platform_router
 app.include_router(platform_router)  # Direct to app (not under /api prefix)
