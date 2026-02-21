@@ -113,10 +113,15 @@ async def list_warehouses(
             person = await db.persons.find_one({"id": wh["person_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             wh["person_name"] = f"{person['first_name']} {person['last_name']}" if person else ""
         if wh.get("vehicle_id"):
-            # TODO: Add vehicle lookup when vehicle collection exists
             wh["vehicle_name"] = wh.get("vehicle_id", "")
     
-    return warehouses
+    return {
+        "items": warehouses,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.post("/warehouses", status_code=201)
