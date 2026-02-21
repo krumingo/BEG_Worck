@@ -41,6 +41,12 @@ import InvoiceLinesPage from "@/pages/InvoiceLinesPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import OverheadPage from "@/pages/OverheadPage";
 import OverheadSnapshotDetailPage from "@/pages/OverheadSnapshotDetailPage";
+// Data Module Pages
+import WarehousesPage from "@/pages/WarehousesPage";
+import CounterpartiesPage from "@/pages/CounterpartiesPage";
+import ItemsPage from "@/pages/ItemsPage";
+import PricesPage from "@/pages/PricesPage";
+import TurnoverPage from "@/pages/TurnoverPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
