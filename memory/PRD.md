@@ -1,135 +1,106 @@
-# BEG_Work - Product Requirements Document
-
-## Overview
-Modular SaaS application for construction company management built with React + FastAPI + MongoDB.
+# BEG_Work - Construction Management SaaS
 
 ## Original Problem Statement
-Build a comprehensive construction management SaaS platform with modules for projects, HR/payroll, finance, offers/BOQ, attendance tracking, overhead cost allocation, billing/subscriptions, and mobile workforce management.
+BEG_Work is a comprehensive construction management SaaS platform designed to streamline operations for construction companies. The platform provides project management, resource tracking, billing, and administrative capabilities.
 
-## Architecture
+## User Personas
+1. **Company Admin** - Manages company projects, users, billing
+2. **Platform Admin** - Super admin with cross-organization access
+3. **Technician** - Field worker tracking work and materials
+4. **Driver** - Handles deliveries and logistics
+
+## Core Requirements
+- Multi-tenant architecture with organization isolation
+- Role-based access control (RBAC)
+- Project and resource management
+- Media file management with security ACLs
+- Billing and invoicing
+- Mobile-friendly interfaces for field workers
+
+---
+
+## What's Been Implemented
+
+### Session: 2026-02-21
+
+#### Backend Refactoring (Stages 1.2, 1.4, 1.5) ✅
+- Migrated all routes from monolithic `server.py` to modular `app/routes/` structure
+- Dismantled `app/shared.py` into clean dependency structure:
+  - `app/deps/` - FastAPI dependencies for auth, modules, ACLs
+  - `app/utils/` - Pure helper functions (audit, crypto)
+  - `app/db/` - Database connection handling
+  - `app/constants.py` - App-wide constants
+
+#### Pytest Suite Stabilization ✅
+- Fixed dozens of pre-existing test failures
+- Achieved **212/212 tests passing** (100% pass rate)
+- Created `/app/backend/tests/test_utils.py` for centralized test helpers
+
+#### Media ACL Security (Stage 1.3) ✅
+- Audited all media endpoints
+- Added secure `DELETE /media/{id}` endpoint
+- Created `/app/backend/tests/test_media_acl.py` with 13 security tests
+- Blocked all cross-organization access (IDOR protection)
+
+#### Login Flow Isolation ✅
+- Created separate `PlatformAuthProvider` and `usePlatformAuth` for super-admin
+- Isolated local storage: `bw_token` (company) vs `bw_platform_token` (platform)
+- Implemented separate route guards for `/` and `/platform` sections
+
+#### Calendar UI Bug Fix ✅ (Verified 2026-02-21)
+- Created new `DatePicker.js` component using shadcn/ui Calendar + Popover
+- Fixed invisible calendar in dark mode
+- Fixed `.toLowerCase()` crash in `ProjectsListPage.js`
+
+---
+
+## Prioritized Backlog
+
+### P1 - High Priority
+- [ ] Optimize N+1 query in `GET /media` endpoint
+- [ ] Update `flow_map.md` documentation for `DELETE /api/media/{id}`
+
+### P2 - Medium Priority
+- [ ] Phase 3: Mobile Technician flows
+- [ ] Phase 4: Mobile Driver deliveries
+- [ ] Phase 5: Machine movements
+
+### P3 - Future Modules
+- [ ] M6: AI Invoice Capture
+- [ ] M7: Inventory module
+- [ ] M8: Assets & QR code management
+- [ ] M9: Complete Admin Console/BI dashboard
+
+---
+
+## Technical Architecture
+
 ```
-/app/backend/
-├── app/
-│   ├── core/config.py          # Configuration settings
-│   ├── db/__init__.py          # Database connection
-│   ├── deps/                   # Dependencies (auth, modules)
-│   ├── models/                 # Pydantic models (8 files)
-│   │   ├── core.py, projects.py, offers.py, hr.py
-│   │   ├── finance.py, overhead.py, billing.py, mobile.py
-│   ├── routes/                 # FastAPI routers (13 files - ALL MIGRATED)
-│   │   ├── health.py (4), auth.py (13), projects.py (13)
-│   │   ├── attendance.py (25), offers.py (15), hr.py (18)
-│   │   ├── finance.py (19), overhead.py (19)
-│   │   ├── billing.py (9), mobile.py (6), media.py (5)
-│   │   ├── platform.py (2)
-│   ├── services/audit.py
-│   ├── shared.py              # Shared dependencies (db, auth guards)
-│   └── main.py                # Entry point
-├── server.py                  # THIN ENTRY POINT (1098 lines, 0 direct routes)
-│                              # Contains: Pydantic models, helpers, router includes
-└── tests/                     # Pytest suite (198+ tests)
+/app/
+├── backend/
+│   ├── app/
+│   │   ├── constants.py       # App-wide constants (ROLES, etc.)
+│   │   ├── db/                # DB connection handling
+│   │   ├── deps/              # FastAPI dependencies
+│   │   │   ├── auth.py
+│   │   │   ├── media_acl.py
+│   │   │   └── modules.py
+│   │   ├── models/
+│   │   ├── routes/            # All API routes
+│   │   └── utils/             # Helper functions
+│   ├── server.py              # Thin entry point
+│   └── tests/                 # 212 tests, 100% passing
+└── frontend/
+    └── src/
+        ├── App.js             # Dual Auth Providers
+        ├── components/ui/     # Shadcn components + DatePicker
+        ├── contexts/          # Company + Platform auth
+        └── pages/
 ```
-
-## What's Implemented (as of Feb 2025)
-
-### Core Platform
-- [x] Multi-tenant organization system
-- [x] Role-based access control (Admin, Owner, SiteManager, Accountant, Technician, Driver)
-- [x] JWT authentication
-- [x] Subscription billing with Stripe (MOCKED)
-- [x] User self-service password change (POST /api/auth/change-password)
-- [x] **Admin password reset for users** (POST /api/admin/set-password/{user_id}) - NEW Feb 2025
-
-### Modules
-- [x] M0: Core (Auth, Org, Users)
-- [x] M1: Projects CRUD with assignments
-- [x] M2: Offers/BOQ with versioning
-- [x] M3: Attendance + Work Reports
-- [x] M4: HR/Payroll (profiles, advances, payslips)
-- [x] M5: Finance (accounts, invoices, payments)
-- [x] M9: Overhead cost allocation
-- [x] M10: Billing/Usage limits
-
-### Backend Refactoring Status
-- **Stage 1.2 COMPLETE**: 100% (148/148 routes migrated to modular files)
-- **server.py**: Now a thin entry point with only wiring code
-- **Next**: Stage 1.3 (Media ACL security), Stage 1.4 (Dismantle shared.py)
-
-## Recent Changes (Dec 2025)
-
-### Stage 1.2 Backend Refactor - COMPLETED
-- Migrated ALL routes from server.py to modular files in app/routes/
-- Route files: billing.py (9), mobile.py (6), media.py (5), platform.py (2)
-- server.py reduced from 2151 to 1098 lines (0 direct routes)
-- All billing endpoints now properly secured (Admin/Owner for checkout, Platform Admin for config)
-- Tests: 42 passed in billing/platform suite
-
-### Platform Admin Portal (P0) - NEW
-- **Separate SuperAdmin login**: `/platform/login` - isolated from client `/login`
-- **Platform Dashboard**: `/platform` with dedicated layout and navigation
-- **Platform-only pages**:
-  - `/platform/billing` - Stripe configuration
-  - `/platform/modules` - Feature module toggles
-  - `/platform/audit-log` - System audit trail
-  - `/platform/mobile-settings` - Mobile app configuration
-- **Bootstrap endpoint** (ONE-TIME USE):
-  - `POST /api/platform/bootstrap-create-platform-admin`
-  - Creates new user OR promotes existing to platform admin
-  - Protected by `PLATFORM_BOOTSTRAP_TOKEN` env var
-  - **REMOVE TOKEN AFTER USE**
-
-### Platform Admin Access Control (P0)
-- Added `is_platform_admin` user field (default: false)
-- Added `require_platform_admin` dependency guard
-- Protected endpoints:
-  - `GET/POST /api/billing/config`, checkout, portal
-  - `GET/PUT/DELETE /api/mobile/settings/*`
-  - `PUT /api/feature-flags` (GET allowed for all)
-  - `GET /api/audit-logs`
-- Frontend: System tabs hidden for non-platform admins
-- Frontend: NotAuthorizedPage for direct URL access
-- Tests: 11 tests in `test_platform_bootstrap.py`, 10 in `test_platform_admin.py`
-
-### Admin Set Password Feature
-- Backend: `POST /api/admin/set-password/{user_id}`
-- Frontend: `AdminResetPasswordModal.js` component
-- Audit logging: `admin_password_reset` action
 
 ## Test Credentials
-- Admin: admin@begwork.com / admin123
-- Manager: manager@begwork.com / manager123
-- Technician: tech@begwork.com / TechPass123!Secure
+- **Company Admin:** admin@begwork.com / AdminTest123!Secure
+- **Technician:** tech@begwork.com / TechTest123!Secure
 
-## API Contract
-- Total endpoints: 149 (added admin/set-password)
-- Baseline: /app/baseline_audit_endpoints.csv
-
-## Backlog
-
-### P0 - COMPLETED
-- [x] Stage 1.2 Backend Refactor - ALL routes migrated
-
-### P1 - Next
-1. Stage 1.3: Media ACL security fix
-2. Stage 1.4: Dismantle shared.py, implement proper DI
-3. Fix pre-existing pytest failures in m9_overhead, m9_alerts
-
-### P2 - Future
-1. Mobile Phase 3-5 (Technician, Driver, Machine flows)
-2. M6: AI Invoice Capture
-3. M7: Inventory module
-4. M8: Assets & QR code management
-5. N+1 Query fix in Media List endpoint
-
-## Backlog (P2)
-- M6: AI Invoice Capture
-- M7: Inventory module
-- M8: Assets & QR codes
-- Performance: N+1 query optimization
-- Phone + OTP authentication for low-privilege roles
-
-## Tech Stack
-- Frontend: React 18, TailwindCSS, Shadcn/UI
-- Backend: FastAPI, Motor (async MongoDB)
-- Database: MongoDB
-- Payments: Stripe (mock mode)
+## 3rd Party Integrations
+- **Stripe:** Payment processing (test mode)
