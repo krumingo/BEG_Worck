@@ -212,7 +212,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Delivery tracking
 - Status updates
 
-### P2 - Phase 5: Machine Movements
+### P3 - Phase 5: Machine Movements
 - Machine assignment tracking
 - Usage logging
 
