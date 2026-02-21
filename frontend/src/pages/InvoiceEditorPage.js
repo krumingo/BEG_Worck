@@ -27,6 +27,7 @@ import {
   Calculator,
   X,
   CreditCard,
+  SplitSquareVertical,
 } from "lucide-react";
 
 const STATUS_COLORS = {
