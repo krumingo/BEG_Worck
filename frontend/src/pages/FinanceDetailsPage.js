@@ -96,8 +96,8 @@ export default function FinanceDetailsPage() {
   const [preset, setPreset] = useState(searchParams.get("preset") || "last_3_months");
   const [dateFrom, setDateFrom] = useState(searchParams.get("date_from") || "");
   const [dateTo, setDateTo] = useState(searchParams.get("date_to") || "");
-  const [transactionType, setTransactionType] = useState("");
-  const [direction, setDirection] = useState("");
+  const [transactionType, setTransactionType] = useState("all");
+  const [direction, setDirection] = useState("all");
   
   // Data state
   const [summary, setSummary] = useState(null);
