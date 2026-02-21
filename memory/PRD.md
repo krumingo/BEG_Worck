@@ -216,7 +216,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Machine assignment tracking
 - Usage logging
 
-### P2 - M6: AI Invoice Capture
+### P3 - M6: AI Invoice Capture
 - OCR scanning of invoices
 - Auto-population of invoice fields
 
