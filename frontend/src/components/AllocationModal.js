@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Check,
 } from "lucide-react";
+import CreateWarehouseModal from "./CreateWarehouseModal";
 
 export default function AllocationModal({
   open,
@@ -44,6 +45,10 @@ export default function AllocationModal({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Create Warehouse Modal
+  const [createWarehouseOpen, setCreateWarehouseOpen] = useState(false);
+  const [pendingWarehouseAllocation, setPendingWarehouseAllocation] = useState(false);
 
   const qtyPurchased = line?.qty || 0;
   const qtyAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.qty) || 0), 0);
