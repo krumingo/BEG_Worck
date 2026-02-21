@@ -570,6 +570,5 @@ export default function ProjectDetailPage() {
           onClientUpdated={fetchDashboard}
         />
       </div>
-    </DashboardLayout>
   );
 }
