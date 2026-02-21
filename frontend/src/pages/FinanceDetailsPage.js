@@ -188,8 +188,8 @@ export default function FinanceDetailsPage() {
       try {
         const params = new URLSearchParams(buildParams());
         params.append("page", txnPage);
-        if (transactionType) params.append("transaction_type", transactionType);
-        if (direction) params.append("direction", direction);
+        if (transactionType && transactionType !== "all") params.append("transaction_type", transactionType);
+        if (direction && direction !== "all") params.append("direction", direction);
         
         const res = await API.get(`/reports/finance-details/transactions?${params.toString()}`);
         setTransactions(res.data);
