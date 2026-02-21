@@ -146,6 +146,7 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     
     # Normalize EIK - treat empty string as None
     eik_value = data.eik.strip() if data.eik else None
+    print(f"DEBUG: data.eik={repr(data.eik)}, eik_value={repr(eik_value)}")
     
     # Check EIK uniqueness if provided and not empty
     if eik_value:
