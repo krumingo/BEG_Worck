@@ -136,8 +136,8 @@ export default function ProjectsListPage() {
     }
   };
 
-  const getStatusKey = (status) => status.toLowerCase();
-  const getTypeKey = (type) => type.toLowerCase();
+  const getStatusKey = (status) => status?.toLowerCase() || 'draft';
+  const getTypeKey = (type) => type?.toLowerCase() || 'billable';
 
   if (loading) {
     return (
