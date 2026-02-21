@@ -10,6 +10,34 @@ INVOICE_STATUSES = ["Draft", "Sent", "PartiallyPaid", "Paid", "Overdue", "Cancel
 PAYMENT_DIRECTIONS = ["Inflow", "Outflow"]
 COST_CATEGORIES = ["Materials", "Labor", "Subcontract", "Other"]
 
+
+# ── Counterparty (Supplier/Client) ─────────────────────────────────
+class CounterpartyCreate(BaseModel):
+    name: str
+    type: str = "supplier"  # supplier, client, both
+    eik: Optional[str] = None  # Bulgarian company ID
+    vat_number: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    contact_person: Optional[str] = None
+    payment_terms_days: int = 30
+    notes: Optional[str] = None
+    active: bool = True
+
+class CounterpartyUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    eik: Optional[str] = None
+    vat_number: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    contact_person: Optional[str] = None
+    payment_terms_days: Optional[int] = None
+    notes: Optional[str] = None
+    active: Optional[bool] = None
+
 class FinancialAccountCreate(BaseModel):
     name: str
     type: str = "Cash"
