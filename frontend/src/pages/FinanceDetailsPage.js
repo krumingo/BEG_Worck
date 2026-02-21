@@ -143,6 +143,57 @@ export default function FinanceDetailsPage() {
     return params.toString();
   }, [preset, dateFrom, dateTo]);
 
+  // Fetch monthly series data
+  useEffect(() => {
+    const fetchMonthlySeries = async () => {
+      try {
+        const res = await API.get(`/reports/company-finance-series?months=${period}`);
+        setMonthlySeries(res.data);
+      } catch (err) {
+        console.error("Failed to fetch monthly series:", err);
+      }
+    };
+    fetchMonthlySeries();
+  }, [period]);
+
+  // Compute totals for monthly series
+  const monthlyTotals = useMemo(() => {
+    if (!monthlySeries?.months) return null;
+    
+    const totals = {
+      income: 0,
+      expenses: 0,
+      net: 0,
+      breakdown: {
+        income_invoices: 0,
+        income_cash: 0,
+        expenses_invoices: 0,
+        expenses_cash: 0,
+        expenses_overhead: 0,
+        expenses_payroll: 0,
+        expenses_bonus: 0,
+      }
+    };
+    
+    monthlySeries.months.forEach(m => {
+      totals.income += m.income_total || 0;
+      totals.expenses += m.expenses_total || 0;
+      totals.net += m.net || 0;
+      if (m.breakdown) {
+        Object.keys(totals.breakdown).forEach(key => {
+          totals.breakdown[key] += m.breakdown[key] || 0;
+        });
+      }
+    });
+    
+    return totals;
+  }, [monthlySeries]);
+
+  // Format month name
+  const formatMonthName = useCallback((year, month) => {
+    return `${MONTH_NAMES_BG[month - 1]} ${year}`;
+  }, []);
+
   // Fetch summary data
   useEffect(() => {
     const fetchSummary = async () => {
