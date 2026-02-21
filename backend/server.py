@@ -1148,6 +1148,11 @@ async def startup():
     
     # Bonus payments indexes
     await db.bonus_payments.create_index([("org_id", 1), ("date", -1)])
+    
+    # Clients indexes
+    await db.clients.create_index([("org_id", 1), ("phone_normalized", 1)], unique=True)
+    await db.clients.create_index([("org_id", 1), ("last_name", 1)])
+    await db.clients.create_index([("org_id", 1), ("is_active", 1)])
     await db.bonus_payments.create_index([("org_id", 1), ("user_id", 1)])
     
     # Payroll payments indexes (if not already exists)
