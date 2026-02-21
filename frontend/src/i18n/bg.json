@@ -223,7 +223,16 @@
       "overhead": "Режийни",
       "payroll": "Заплати",
       "bonus": "Бонуси"
-    }
+    },
+    "viewMonth": "Месец",
+    "view3Months": "3 месеца",
+    "last3Months": "Последни 3",
+    "months": "мес.",
+    "month": "Месец",
+    "incomeVsExpensesByMonth": "Приходи vs Разходи по месеци",
+    "netBalanceTrend": "Тренд на нетния баланс",
+    "monthlyDetails": "Детайли по месеци",
+    "topExpenseType": "Топ разход"
   },
   "projects": {
     "title": "Проекти",
