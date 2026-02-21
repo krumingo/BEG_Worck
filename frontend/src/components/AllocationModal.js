@@ -460,6 +460,13 @@ export default function AllocationModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Create Warehouse Modal */}
+      <CreateWarehouseModal
+        open={createWarehouseOpen}
+        onOpenChange={setCreateWarehouseOpen}
+        onCreated={handleWarehouseCreated}
+      />
     </Dialog>
   );
 }
