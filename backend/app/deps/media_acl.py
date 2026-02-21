@@ -33,7 +33,7 @@ from app.db import db
 from app.deps.auth import can_access_project, can_manage_project
 
 # Media context types
-MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project"]
+MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project", "site"]
 
 # Security logger
 security_logger = logging.getLogger("security")
