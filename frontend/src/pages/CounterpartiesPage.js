@@ -210,6 +210,17 @@ export default function CounterpartiesPage() {
         exportFilename="counterparties.csv"
         actions={(row) => (
           <div className="flex items-center gap-1">
+            {(row.type === "person" || row.type === "client") && !row.client_id && row.phone && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => handleAutoLinkClient(row)}
+                title={t("clients.autoCreateClient")}
+                data-testid={`link-client-btn-${row.id}`}
+              >
+                <UserPlus className="w-4 h-4 text-green-500" />
+              </Button>
+            )}
             <Button 
               variant="ghost" 
               size="icon" 
