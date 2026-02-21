@@ -144,11 +144,14 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    # Check EIK uniqueness if provided
-    if data.eik:
+    # Normalize EIK - treat empty string as None
+    eik_value = data.eik.strip() if data.eik else None
+    
+    # Check EIK uniqueness if provided and not empty
+    if eik_value:
         existing = await db.counterparties.find_one({
             "org_id": user["org_id"],
-            "eik": data.eik
+            "eik": eik_value
         })
         if existing:
             raise HTTPException(status_code=400, detail="Counterparty with this EIK already exists")
