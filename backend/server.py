@@ -1027,6 +1027,14 @@ api_router.include_router(invoice_lines_router)
 from app.routes.counterparties import router as counterparties_router
 api_router.include_router(counterparties_router)
 
+# Import items router (materials/inventory items)
+from app.routes.items import router as items_router
+api_router.include_router(items_router)
+
+# Import reports router (prices, turnover)
+from app.routes.reports import router as reports_router
+api_router.include_router(reports_router)
+
 # Import platform bootstrap router - ONE-TIME USE for production setup
 from app.routes.platform import router as platform_router
 app.include_router(platform_router)  # Direct to app (not under /api prefix)
@@ -1120,6 +1128,12 @@ async def startup():
     await db.counterparties.create_index([("org_id", 1), ("eik", 1)], unique=True, sparse=True)
     await db.counterparties.create_index([("org_id", 1), ("type", 1)])
     await db.counterparties.create_index([("org_id", 1), ("active", 1)])
+    
+    # Items indexes
+    await db.items.create_index([("org_id", 1), ("sku", 1)], unique=True)
+    await db.items.create_index([("org_id", 1), ("name", 1)])
+    await db.items.create_index([("org_id", 1), ("category", 1)])
+    await db.items.create_index([("org_id", 1), ("is_active", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():

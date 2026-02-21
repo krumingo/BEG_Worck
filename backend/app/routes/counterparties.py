@@ -97,7 +97,13 @@ async def list_counterparties(
         })
         cp["invoice_count"] = invoice_count
     
-    return counterparties
+    return {
+        "items": counterparties,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.post("/counterparties", status_code=201)
