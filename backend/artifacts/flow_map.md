@@ -100,7 +100,26 @@ Upload & Access:
   POST /api/media/link → link to entity
   GET /api/media/{id} → get metadata
   GET /api/media/file/{filename} → download file
-  DELETE /api/media/{id} → delete (ACL checked)
+  GET /api/media → list media (optimized batch query)
+
+Delete Media:
+  DELETE /api/media/{id} → delete media file and record
+  
+  Access Control:
+    - Owner of the media file: CAN DELETE
+    - Admin/Owner role in org: CAN DELETE
+    - Other users: CANNOT DELETE (403 Forbidden)
+  
+  On Success:
+    - Physical file removed from storage
+    - Database record deleted
+    - Response: {"ok": true, "deleted": "<media_id>"}
+  
+  On Error:
+    - 404 Not Found: Media doesn't exist or belongs to different org
+      {"detail": "Media file not found"}
+    - 403 Forbidden: User lacks permission to delete
+      {"detail": {"error_code": "MEDIA_ACCESS_DENIED", "reason": "Only owner or admin can delete media", "action": "delete"}}
 ```
 
 ## Deliveries Lifecycle

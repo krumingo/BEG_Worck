@@ -277,13 +277,139 @@ async def list_media(
     if user_role in ["Admin", "Owner"]:
         return media_list[:100]  # Limit response size
     
-    # For other roles, verify access to each media item
+    # ══════════════════════════════════════════════════════════════════
+    # OPTIMIZED: Batch prefetch context data to avoid N+1 queries
+    # ══════════════════════════════════════════════════════════════════
+    
+    # Step 1: Collect unique context IDs by type
+    context_ids_by_type = {}
+    for media in media_list:
+        ctx_type = media.get("context_type")
+        ctx_id = media.get("context_id")
+        if ctx_type and ctx_id:
+            if ctx_type not in context_ids_by_type:
+                context_ids_by_type[ctx_type] = set()
+            context_ids_by_type[ctx_type].add(ctx_id)
+    
+    # Step 2: Batch fetch all needed context data
+    prefetched = {}
+    
+    # Prefetch projects the user can access (via project_team)
+    user_project_ids = set()
+    team_memberships = await db.project_team.find(
+        {"user_id": user_id, "org_id": org_id},
+        {"_id": 0, "project_id": 1}
+    ).to_list(500)
+    for tm in team_memberships:
+        user_project_ids.add(tm.get("project_id"))
+    prefetched["user_project_ids"] = user_project_ids
+    
+    # Prefetch work reports (author + project_id)
+    if "workReport" in context_ids_by_type:
+        reports = await db.work_reports.find(
+            {"id": {"$in": list(context_ids_by_type["workReport"])}, "org_id": org_id},
+            {"_id": 0, "id": 1, "user_id": 1, "project_id": 1}
+        ).to_list(500)
+        prefetched["workReport"] = {r["id"]: r for r in reports}
+    
+    # Prefetch deliveries (driver + project_id)
+    if "delivery" in context_ids_by_type:
+        deliveries = await db.deliveries.find(
+            {"id": {"$in": list(context_ids_by_type["delivery"])}, "org_id": org_id},
+            {"_id": 0, "id": 1, "driver_user_id": 1, "project_id": 1}
+        ).to_list(500)
+        prefetched["delivery"] = {d["id"]: d for d in deliveries}
+    
+    # Prefetch attendance (user + project_id)
+    if "attendance" in context_ids_by_type:
+        entries = await db.attendance_entries.find(
+            {"id": {"$in": list(context_ids_by_type["attendance"])}, "org_id": org_id},
+            {"_id": 0, "id": 1, "user_id": 1, "project_id": 1}
+        ).to_list(500)
+        prefetched["attendance"] = {e["id"]: e for e in entries}
+    
+    # Prefetch machines (project_id)
+    if "machine" in context_ids_by_type:
+        machines = await db.machines.find(
+            {"id": {"$in": list(context_ids_by_type["machine"])}, "org_id": org_id},
+            {"_id": 0, "id": 1, "project_id": 1}
+        ).to_list(500)
+        prefetched["machine"] = {m["id"]: m for m in machines}
+    
+    # Step 3: Filter using prefetched data (no additional DB calls)
+    def check_access_fast(media: dict) -> bool:
+        """Fast ACL check using prefetched data."""
+        owner_user_id = media.get("owner_user_id")
+        ctx_type = media.get("context_type")
+        ctx_id = media.get("context_id")
+        
+        # Owner always has access
+        if owner_user_id == user_id:
+            return True
+        
+        # No owner or corrupted record
+        if not owner_user_id:
+            return False
+        
+        # No context = only owner can access (already checked above)
+        if not ctx_type or not ctx_id:
+            return False
+        
+        # Context-based checks using prefetched data
+        if ctx_type == "workReport":
+            report = prefetched.get("workReport", {}).get(ctx_id)
+            if not report:
+                return False
+            if report.get("user_id") == user_id:
+                return True
+            if report.get("project_id") in user_project_ids:
+                return True
+            return False
+        
+        elif ctx_type == "delivery":
+            delivery = prefetched.get("delivery", {}).get(ctx_id)
+            if not delivery:
+                return False
+            if delivery.get("driver_user_id") == user_id:
+                return True
+            if delivery.get("project_id") in user_project_ids:
+                return True
+            return False
+        
+        elif ctx_type == "attendance":
+            entry = prefetched.get("attendance", {}).get(ctx_id)
+            if not entry:
+                return False
+            if entry.get("user_id") == user_id:
+                return True
+            # SiteManager can see attendance for their projects
+            if user_role == "SiteManager" and entry.get("project_id") in user_project_ids:
+                return True
+            return False
+        
+        elif ctx_type == "project":
+            return ctx_id in user_project_ids
+        
+        elif ctx_type == "profile":
+            return ctx_id == user_id
+        
+        elif ctx_type == "machine":
+            machine = prefetched.get("machine", {}).get(ctx_id)
+            if not machine:
+                return False
+            return machine.get("project_id") in user_project_ids
+        
+        elif ctx_type == "message":
+            # Allow same org (simplified for now)
+            return True
+        
+        return False
+    
+    # Apply fast filter
     filtered_list = []
     for media in media_list:
-        allowed, _ = await check_media_access(user, media, action="meta")
-        if allowed:
+        if check_access_fast(media):
             filtered_list.append(media)
-        # Stop at 100 results for performance
         if len(filtered_list) >= 100:
             break
     
