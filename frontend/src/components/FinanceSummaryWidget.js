@@ -184,6 +184,28 @@ export default function FinanceSummaryWidget() {
               ))}
             </SelectContent>
           </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={exporting} data-testid="export-finance-btn">
+                {exporting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                {t("clients.export")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('pdf')} data-testid="export-pdf-btn">
+                <FileText className="w-4 h-4 mr-2 text-red-500" />
+                {t("clients.exportPDF")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('xlsx')} data-testid="export-excel-btn">
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-500" />
+                {t("clients.exportExcel")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
