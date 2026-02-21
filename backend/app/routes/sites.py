@@ -623,3 +623,188 @@ async def delete_site(site_id: str, user: dict = Depends(require_admin)):
                     {"name": site.get("name")})
     
     return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SITE PHOTOS ROUTES
+# ══════════════════════════════════════════════════════════════════════════════
+
+from fastapi import UploadFile, File, Form
+from pathlib import Path
+
+ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
+MAX_PHOTO_SIZE_MB = 10
+
+
+class SitePhotoCreate(BaseModel):
+    note: Optional[str] = ""
+
+
+@router.get("/sites/{site_id}/photos")
+async def list_site_photos(site_id: str, user: dict = Depends(get_current_user)):
+    """List all photos for a site"""
+    org_id = user["org_id"]
+    
+    # Verify site exists and user has access
+    site = await db.sites.find_one({"id": site_id, "org_id": org_id}, {"_id": 0, "id": 1})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Get photos
+    photos = await db.site_photos.find(
+        {"site_id": site_id, "org_id": org_id},
+        {"_id": 0}
+    ).sort("uploaded_at", -1).to_list(100)
+    
+    # Enrich with uploader names (batch)
+    user_ids = list(set(p.get("uploaded_by") for p in photos if p.get("uploaded_by")))
+    users_map = {}
+    if user_ids:
+        users = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}
+        ).to_list(100)
+        users_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
+    
+    for photo in photos:
+        photo["uploader_name"] = users_map.get(photo.get("uploaded_by"), "")
+    
+    return photos
+
+
+@router.post("/sites/{site_id}/photos", status_code=201)
+async def upload_site_photo(
+    site_id: str,
+    file: UploadFile = File(...),
+    note: str = Form(""),
+    user: dict = Depends(get_current_user)
+):
+    """Upload a photo to a site"""
+    org_id = user["org_id"]
+    
+    # Verify site exists and user has access
+    site = await db.sites.find_one({"id": site_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Validate file type
+    if file.content_type not in ALLOWED_PHOTO_TYPES:
+        raise HTTPException(status_code=400, detail={
+            "error_code": "INVALID_FILE_TYPE",
+            "message": f"File type not allowed. Allowed: {ALLOWED_PHOTO_TYPES}",
+        })
+    
+    # Read file content
+    content = await file.read()
+    file_size = len(content)
+    
+    # Validate file size
+    if file_size > MAX_PHOTO_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail={
+            "error_code": "FILE_TOO_LARGE",
+            "message": f"File size exceeds {MAX_PHOTO_SIZE_MB}MB limit",
+        })
+    
+    # Generate unique filename
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    photo_id = str(uuid.uuid4())
+    filename = f"site_{photo_id}.{ext}"
+    
+    # Store file
+    upload_dir = Path("/app/backend/uploads/sites")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / filename
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Generate URL
+    file_url = f"/api/sites/photos/file/{filename}"
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    photo = {
+        "id": photo_id,
+        "org_id": org_id,
+        "site_id": site_id,
+        "url": file_url,
+        "filename": file.filename,
+        "stored_filename": filename,
+        "content_type": file.content_type,
+        "file_size": file_size,
+        "note": note.strip() if note else "",
+        "uploaded_by": user["id"],
+        "uploaded_at": now,
+    }
+    
+    await db.site_photos.insert_one(photo)
+    await log_audit(org_id, user["id"], user["email"], "photo_uploaded", "site", site_id, 
+                    {"photo_id": photo_id, "site_name": site.get("name")})
+    
+    # Add uploader name to response
+    result = {k: v for k, v in photo.items() if k != "_id"}
+    result["uploader_name"] = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+    
+    return result
+
+
+@router.get("/sites/photos/file/{filename}")
+async def serve_site_photo(filename: str, user: dict = Depends(get_current_user)):
+    """Serve site photo file"""
+    from fastapi.responses import FileResponse
+    
+    UPLOAD_DIR = Path("/app/backend/uploads/sites")
+    
+    # Check for path traversal attempts
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Resolve path safely
+    file_path = (UPLOAD_DIR / filename).resolve()
+    if not str(file_path).startswith(str(UPLOAD_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Check file exists
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Verify photo belongs to user's org
+    photo = await db.site_photos.find_one(
+        {"stored_filename": filename, "org_id": user["org_id"]},
+        {"_id": 0, "content_type": 1}
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found or access denied")
+    
+    return FileResponse(file_path, media_type=photo.get("content_type", "image/jpeg"))
+
+
+@router.delete("/sites/photos/{photo_id}")
+async def delete_site_photo(photo_id: str, user: dict = Depends(get_current_user)):
+    """Delete a site photo (owner or admin only)"""
+    org_id = user["org_id"]
+    
+    photo = await db.site_photos.find_one({"id": photo_id, "org_id": org_id}, {"_id": 0})
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    # Only uploader or admin can delete
+    if photo.get("uploaded_by") != user["id"] and user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only the uploader or admin can delete this photo")
+    
+    # Delete file from disk
+    stored_filename = photo.get("stored_filename")
+    if stored_filename:
+        file_path = Path("/app/backend/uploads/sites") / stored_filename
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except OSError:
+                pass
+    
+    # Delete from database
+    await db.site_photos.delete_one({"id": photo_id})
+    await log_audit(org_id, user["id"], user["email"], "photo_deleted", "site", photo.get("site_id"), 
+                    {"photo_id": photo_id})
+    
+    return {"ok": True, "deleted": photo_id}
