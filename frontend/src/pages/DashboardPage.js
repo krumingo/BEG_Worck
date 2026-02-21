@@ -73,6 +73,35 @@ export default function DashboardPage() {
     load();
   }, [isManager]);
 
+  // Load more activity
+  const loadMoreActivity = async () => {
+    setLoadingMore(true);
+    try {
+      const res = await API.get(`/dashboard/activity?limit=20&page=${activityPage}`);
+      if (activityPage === 1) {
+        setAllLogs(res.data.items || []);
+      } else {
+        setAllLogs(prev => [...prev, ...(res.data.items || [])]);
+      }
+      setActivityPage(p => p + 1);
+    } catch (err) {
+      console.error("Failed to load more activity:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const toggleActivityExpand = () => {
+    if (!activityExpanded) {
+      setActivityPage(1);
+      setAllLogs([]);
+      loadMoreActivity();
+    }
+    setActivityExpanded(!activityExpanded);
+  };
+
+  const displayedLogs = activityExpanded ? allLogs : recentLogs;
+
   if (loading || !stats) {
     return (
       <div className="flex items-center justify-center h-full">
