@@ -106,6 +106,9 @@ export default function ProjectsListPage() {
       default_site_manager_id: p.default_site_manager_id || "",
       tags: (p.tags || []).join(", "),
       notes: p.notes || "",
+      address_text: p.address_text || "",
+      owner_type: p.owner_type || "",
+      owner_id: p.owner_id || "",
     });
     setDialogOpen(true);
   };
@@ -121,6 +124,9 @@ export default function ProjectsListPage() {
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         default_site_manager_id: form.default_site_manager_id === "none" ? null : form.default_site_manager_id || null,
+        address_text: form.address_text || null,
+        owner_type: form.owner_type || null,
+        owner_id: form.owner_id || null,
       };
       if (editing) {
         const { code, ...updatePayload } = payload;
