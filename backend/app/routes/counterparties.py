@@ -179,6 +179,8 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     if eik_value:
         counterparty["eik"] = eik_value
     
+    print(f"DEBUG: Inserting counterparty: {counterparty}")
+    
     try:
         await db.counterparties.insert_one(counterparty)
     except Exception as e:
