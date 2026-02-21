@@ -57,8 +57,8 @@ BEG_Work is a comprehensive construction management SaaS platform designed to st
 ## Prioritized Backlog
 
 ### P1 - High Priority
-- [ ] Optimize N+1 query in `GET /media` endpoint
-- [ ] Update `flow_map.md` documentation for `DELETE /api/media/{id}`
+- [x] Optimize N+1 query in `GET /media` endpoint (2026-02-21) - Batch prefetch for context data
+- [x] Update `flow_map.md` documentation for `DELETE /api/media/{id}` (2026-02-21)
 
 ### P2 - Medium Priority
 - [ ] Phase 3: Mobile Technician flows
