@@ -48,6 +48,7 @@ import {
   Receipt,
   Boxes,
   Scale,
+  UserPlus,
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 
