@@ -1,9 +1,10 @@
 """
-Routes - Reports (Prices, Turnover, etc.)
+Routes - Reports (Prices, Turnover, Company Finance, etc.)
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from calendar import monthrange
 import re
 
 from app.db import db
