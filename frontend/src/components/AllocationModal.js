@@ -137,12 +137,30 @@ export default function AllocationModal({
     
     // If we were pending allocation, add the remaining to new warehouse
     if (pendingWarehouseAllocation && remaining > 0) {
-      setAllocations(prev => [...prev, {
-        type: "warehouse",
-        ref_id: newWarehouse.id,
-        qty: remaining,
-        note: "Остатък",
-      }]);
+      // Idempotent: check if allocation for this warehouse already exists
+      const existingIdx = allocations.findIndex(
+        a => a.type === "warehouse" && a.ref_id === newWarehouse.id
+      );
+      
+      if (existingIdx >= 0) {
+        // Update existing allocation's qty
+        setAllocations(prev => {
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            qty: parseFloat(updated[existingIdx].qty) + remaining,
+          };
+          return updated;
+        });
+      } else {
+        // Add new allocation
+        setAllocations(prev => [...prev, {
+          type: "warehouse",
+          ref_id: newWarehouse.id,
+          qty: remaining,
+          note: "Остатък",
+        }]);
+      }
     }
     
     setPendingWarehouseAllocation(false);
