@@ -232,7 +232,10 @@
     "incomeVsExpensesByMonth": "Приходи vs Разходи по месеци",
     "netBalanceTrend": "Тренд на нетния баланс",
     "monthlyDetails": "Детайли по месеци",
-    "topExpenseType": "Топ разход"
+    "topExpenseType": "Топ разход",
+    "rollingPeriod": "Период",
+    "weeklyView": "По седмици",
+    "details": "Подробно"
   },
   "projects": {
     "title": "Проекти",
