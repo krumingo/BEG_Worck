@@ -163,6 +163,109 @@ class TestCompanyFinanceSummary:
         print(f"✓ Invalid month (13) correctly rejected")
 
 
+class TestFinanceCompare:
+    """Test Finance Compare (3 Months) endpoints"""
+
+    def test_compare_with_months_param(self):
+        """Test compare endpoint with year and months parameters"""
+        token = get_admin_token()
+        response = requests.get(
+            f"{BASE_URL}/api/reports/company-finance-compare?year=2026&months=01,02,03",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Check required fields
+        assert "months" in data
+        assert "bar_chart_data" in data
+        assert "line_chart_data" in data
+        assert "overall_totals" in data
+        
+        # Should have 3 months
+        assert len(data["months"]) == 3
+        
+        # Check month structure
+        for m in data["months"]:
+            assert "year" in m
+            assert "month" in m
+            assert "month_name" in m
+            assert "totals" in m
+            assert "income_total" in m["totals"]
+            assert "expenses_total" in m["totals"]
+            assert "net" in m["totals"]
+            assert "expense_breakdown" in m
+            assert "top_expense_type" in m
+        
+        print(f"✓ Compare with months param: {len(data['months'])} months returned")
+
+    def test_compare_last3_mode(self):
+        """Test compare endpoint with mode=last3"""
+        token = get_admin_token()
+        response = requests.get(
+            f"{BASE_URL}/api/reports/company-finance-compare?mode=last3",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should have 3 months
+        assert len(data["months"]) == 3
+        
+        # Months should be in chronological order
+        months = data["months"]
+        for i in range(len(months) - 1):
+            curr_date = months[i]["year"] * 12 + months[i]["month"]
+            next_date = months[i+1]["year"] * 12 + months[i+1]["month"]
+            assert curr_date < next_date, "Months should be in chronological order"
+        
+        # Check overall totals structure
+        totals = data["overall_totals"]
+        assert "income" in totals
+        assert "expenses" in totals
+        assert "net" in totals
+        
+        print(f"✓ Compare last3 mode: returned {[m['month_name'] for m in data['months']]}")
+
+    def test_compare_invalid_params(self):
+        """Test compare endpoint with missing parameters"""
+        token = get_admin_token()
+        response = requests.get(
+            f"{BASE_URL}/api/reports/company-finance-compare",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 422
+        print(f"✓ Missing params correctly rejected")
+
+    def test_compare_chart_data_format(self):
+        """Test that chart data is properly formatted"""
+        token = get_admin_token()
+        response = requests.get(
+            f"{BASE_URL}/api/reports/company-finance-compare?year=2026&months=01,02,03",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Bar chart data
+        bar_data = data["bar_chart_data"]
+        assert len(bar_data) == 3
+        for item in bar_data:
+            assert "month" in item
+            assert "month_full" in item
+            assert "income" in item
+            assert "expenses" in item
+        
+        # Line chart data
+        line_data = data["line_chart_data"]
+        assert len(line_data) == 3
+        for item in line_data:
+            assert "month" in item
+            assert "net" in item
+        
+        print(f"✓ Chart data format verified")
+
+
 class TestCashTransactions:
     """Test Cash Transactions CRUD"""
 
