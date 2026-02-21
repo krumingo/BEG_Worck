@@ -152,6 +152,10 @@ export default function TurnoverPage() {
       if (dateFrom) queryParams.set("date_from", dateFrom);
       const dateTo = searchParams.get("date_to");
       if (dateTo) queryParams.set("date_to", dateTo);
+      
+      // Filter by specific counterparty if provided
+      const counterpartyId = searchParams.get("counterparty_id");
+      if (counterpartyId) queryParams.set("counterparty_id", counterpartyId);
 
       const response = await API.get(
         `/reports/turnover-by-counterparty?${queryParams.toString()}`
