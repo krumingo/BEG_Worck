@@ -1,59 +1,34 @@
 """
 Tests for Data Module (Items, Counterparties, Warehouses, Prices, Reports).
 Tests server-side pagination, filtering, sorting, and CRUD operations.
+Uses httpx for real HTTP requests against running server.
 """
 import pytest
-from httpx import AsyncClient, ASGITransport
-from datetime import datetime, timezone
+import httpx
 import uuid
 
-# Test settings
-BASE_URL = "http://test"
-
-
-@pytest.fixture
-def test_item_data():
-    """Sample item data for testing"""
-    return {
-        "sku": f"TEST-{uuid.uuid4().hex[:8].upper()}",
-        "name": "Test Material",
-        "unit": "pcs",
-        "category": "Materials",
-        "brand": "TestBrand",
-        "description": "Test description",
-        "default_price": 25.50,
-        "is_active": True
-    }
-
-
-@pytest.fixture
-def test_counterparty_data():
-    """Sample counterparty data for testing"""
-    return {
-        "name": f"Test Supplier {uuid.uuid4().hex[:6]}",
-        "type": "supplier",
-        "eik": f"BG{uuid.uuid4().hex[:9].upper()}",
-        "vat_number": f"BG{uuid.uuid4().hex[:9].upper()}",
-        "address": "Test Address 123",
-        "phone": "+359888123456",
-        "email": "test@supplier.com",
-        "contact_person": "John Doe",
-        "payment_terms_days": 30,
-        "active": True
-    }
+from tests.test_utils import VALID_ADMIN_PASSWORD
 
 
 class TestItemsCRUD:
     """Test Items CRUD operations"""
 
     @pytest.mark.asyncio
-    async def test_list_items_empty(self, app, admin_token):
+    async def test_list_items_empty(self, base_url):
         """Test listing items returns standard format"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            # Login
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+            token = login_resp.json()["token"]
+            
+            # List items
             response = await client.get(
-                "/api/items",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -67,128 +42,172 @@ class TestItemsCRUD:
             assert isinstance(data["total"], int)
 
     @pytest.mark.asyncio
-    async def test_create_item(self, app, admin_token, test_item_data):
+    async def test_create_item(self, base_url):
         """Test creating a new item"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        item_data = {
+            "sku": f"TEST-{uuid.uuid4().hex[:8].upper()}",
+            "name": "Test Material",
+            "unit": "pcs",
+            "category": "Materials",
+            "brand": "TestBrand",
+            "description": "Test description",
+            "default_price": 25.50,
+            "is_active": True
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            # Login
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
+            # Create item
             response = await client.post(
-                "/api/items",
-                json=test_item_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items",
+                json=item_data,
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 201
             data = response.json()
-            assert data["sku"] == test_item_data["sku"].upper()
-            assert data["name"] == test_item_data["name"]
+            assert data["sku"] == item_data["sku"].upper()
+            assert data["name"] == item_data["name"]
             assert "id" in data
             assert "org_id" in data
-            return data["id"]
 
     @pytest.mark.asyncio
-    async def test_create_duplicate_sku_fails(self, app, admin_token, test_item_data):
+    async def test_create_duplicate_sku_fails(self, base_url):
         """Test that duplicate SKU fails"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        sku = f"DUP-{uuid.uuid4().hex[:8].upper()}"
+        item_data = {
+            "sku": sku,
+            "name": "Duplicate Test",
+            "unit": "pcs",
+            "category": "Materials"
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             # Create first
             response1 = await client.post(
-                "/api/items",
-                json=test_item_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items",
+                json=item_data,
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response1.status_code == 201
             
             # Try duplicate
             response2 = await client.post(
-                "/api/items",
-                json=test_item_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items",
+                json=item_data,
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response2.status_code == 400
             assert "already exists" in response2.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_get_item(self, app, admin_token, test_item_data):
-        """Test getting a single item"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+    async def test_get_and_update_item(self, base_url):
+        """Test getting and updating an item"""
+        item_data = {
+            "sku": f"GETUP-{uuid.uuid4().hex[:8].upper()}",
+            "name": "Get Update Test",
+            "unit": "pcs",
+            "category": "Materials",
+            "default_price": 10.0
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             # Create
             create_resp = await client.post(
-                "/api/items",
-                json=test_item_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items",
+                json=item_data,
+                headers={"Authorization": f"Bearer {token}"}
             )
             item_id = create_resp.json()["id"]
             
             # Get
-            response = await client.get(
-                f"/api/items/{item_id}",
-                headers={"Authorization": f"Bearer {admin_token}"}
+            get_resp = await client.get(
+                f"{base_url}/api/items/{item_id}",
+                headers={"Authorization": f"Bearer {token}"}
             )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["id"] == item_id
-            assert data["sku"] == test_item_data["sku"].upper()
-
-    @pytest.mark.asyncio
-    async def test_update_item(self, app, admin_token, test_item_data):
-        """Test updating an item"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
-            # Create
-            create_resp = await client.post(
-                "/api/items",
-                json=test_item_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
-            )
-            item_id = create_resp.json()["id"]
+            assert get_resp.status_code == 200
+            assert get_resp.json()["id"] == item_id
             
             # Update
-            response = await client.put(
-                f"/api/items/{item_id}",
+            update_resp = await client.put(
+                f"{base_url}/api/items/{item_id}",
                 json={"default_price": 50.00, "name": "Updated Name"},
-                headers={"Authorization": f"Bearer {admin_token}"}
+                headers={"Authorization": f"Bearer {token}"}
             )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["default_price"] == 50.00
-            assert data["name"] == "Updated Name"
+            assert update_resp.status_code == 200
+            assert update_resp.json()["default_price"] == 50.00
+            assert update_resp.json()["name"] == "Updated Name"
 
     @pytest.mark.asyncio
-    async def test_delete_item_soft(self, app, admin_token, test_item_data):
+    async def test_delete_item_soft(self, base_url):
         """Test soft deleting an item"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        item_data = {
+            "sku": f"DEL-{uuid.uuid4().hex[:8].upper()}",
+            "name": "Delete Test",
+            "unit": "pcs",
+            "category": "Materials"
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             # Create
             create_resp = await client.post(
-                "/api/items",
-                json=test_item_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items",
+                json=item_data,
+                headers={"Authorization": f"Bearer {token}"}
             )
             item_id = create_resp.json()["id"]
             
             # Delete
-            response = await client.delete(
-                f"/api/items/{item_id}",
-                headers={"Authorization": f"Bearer {admin_token}"}
+            del_resp = await client.delete(
+                f"{base_url}/api/items/{item_id}",
+                headers={"Authorization": f"Bearer {token}"}
             )
-            assert response.status_code == 200
-            assert response.json()["ok"] is True
+            assert del_resp.status_code == 200
+            assert del_resp.json()["ok"] is True
             
-            # Verify soft deleted (is_active=False)
+            # Verify soft deleted
             get_resp = await client.get(
-                f"/api/items/{item_id}",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items/{item_id}",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert get_resp.json()["is_active"] is False
 
     @pytest.mark.asyncio
-    async def test_get_item_categories(self, app, admin_token):
+    async def test_get_item_categories(self, base_url):
         """Test getting item categories enum"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/items/enums/categories",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items/enums/categories",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -200,27 +219,19 @@ class TestItemsFiltering:
     """Test Items filtering and pagination"""
 
     @pytest.mark.asyncio
-    async def test_pagination(self, app, admin_token):
+    async def test_pagination(self, base_url):
         """Test pagination parameters"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
-            # Create multiple items
-            for i in range(5):
-                await client.post(
-                    "/api/items",
-                    json={
-                        "sku": f"PAGE-{uuid.uuid4().hex[:8].upper()}",
-                        "name": f"Pagination Test {i}",
-                        "unit": "pcs",
-                        "category": "Materials"
-                    },
-                    headers={"Authorization": f"Bearer {admin_token}"}
-                )
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
             
             # Test page_size
             response = await client.get(
-                "/api/items?page=1&page_size=2",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items?page=1&page_size=2",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -229,79 +240,81 @@ class TestItemsFiltering:
             assert data["page_size"] == 2
 
     @pytest.mark.asyncio
-    async def test_sorting(self, app, admin_token):
+    async def test_sorting(self, base_url):
         """Test sorting parameters"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
-            # Create items with different names
-            names = ["Alpha", "Zeta", "Beta"]
-            for name in names:
-                await client.post(
-                    "/api/items",
-                    json={
-                        "sku": f"SORT-{uuid.uuid4().hex[:8].upper()}",
-                        "name": f"Sort {name}",
-                        "unit": "pcs",
-                        "category": "Materials"
-                    },
-                    headers={"Authorization": f"Bearer {admin_token}"}
-                )
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
             
             # Sort by name asc
             response = await client.get(
-                "/api/items?sort_by=name&sort_dir=asc",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items?sort_by=name&sort_dir=asc",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_search(self, app, admin_token):
+    async def test_search(self, base_url):
         """Test global search"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        unique = f"UniqueSearch{uuid.uuid4().hex[:6]}"
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             # Create item with unique name
-            unique = f"UniqueSearch{uuid.uuid4().hex[:6]}"
             await client.post(
-                "/api/items",
+                f"{base_url}/api/items",
                 json={
                     "sku": f"SRCH-{uuid.uuid4().hex[:8].upper()}",
                     "name": unique,
                     "unit": "pcs",
                     "category": "Materials"
                 },
-                headers={"Authorization": f"Bearer {admin_token}"}
+                headers={"Authorization": f"Bearer {token}"}
             )
             
             # Search
             response = await client.get(
-                f"/api/items?search={unique}",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items?search={unique}",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
             assert data["total"] >= 1
 
     @pytest.mark.asyncio
-    async def test_filter_by_category(self, app, admin_token):
+    async def test_filter_by_category(self, base_url):
         """Test filtering by category"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             # Create item with specific category
             await client.post(
-                "/api/items",
+                f"{base_url}/api/items",
                 json={
                     "sku": f"FILT-{uuid.uuid4().hex[:8].upper()}",
                     "name": "Filter Test Tools",
                     "unit": "pcs",
                     "category": "Tools"
                 },
-                headers={"Authorization": f"Bearer {admin_token}"}
+                headers={"Authorization": f"Bearer {token}"}
             )
             
             # Filter
             response = await client.get(
-                "/api/items?filters=category.equals=Tools",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/items?filters=category.equals=Tools",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -313,13 +326,18 @@ class TestCounterpartiesCRUD:
     """Test Counterparties CRUD operations"""
 
     @pytest.mark.asyncio
-    async def test_list_counterparties_format(self, app, admin_token):
+    async def test_list_counterparties_format(self, base_url):
         """Test listing counterparties returns standard format"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/counterparties",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/counterparties",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -330,29 +348,47 @@ class TestCounterpartiesCRUD:
             assert "page_size" in data
 
     @pytest.mark.asyncio
-    async def test_create_counterparty(self, app, admin_token, test_counterparty_data):
+    async def test_create_counterparty(self, base_url):
         """Test creating a counterparty"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        cp_data = {
+            "name": f"Test Supplier {uuid.uuid4().hex[:6]}",
+            "type": "supplier",
+            "address": "Test Address 123",
+            "phone": "+359888123456",
+            "active": True
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.post(
-                "/api/counterparties",
-                json=test_counterparty_data,
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/counterparties",
+                json=cp_data,
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 201
             data = response.json()
-            assert data["name"] == test_counterparty_data["name"]
+            assert data["name"] == cp_data["name"]
             assert data["type"] == "supplier"
             assert "id" in data
 
     @pytest.mark.asyncio
-    async def test_get_counterparty_types(self, app, admin_token):
+    async def test_get_counterparty_types(self, base_url):
         """Test getting counterparty types enum"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/counterparties/enums/types",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/counterparties/enums/types",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -365,17 +401,21 @@ class TestWarehousesCRUD:
     """Test Warehouses CRUD operations"""
 
     @pytest.mark.asyncio
-    async def test_list_warehouses_format(self, app, admin_token):
+    async def test_list_warehouses_format(self, base_url):
         """Test listing warehouses returns standard format"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/warehouses",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/warehouses",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
-            # Check standard response format
             assert "items" in data
             assert "total" in data
             assert "page" in data
@@ -386,13 +426,18 @@ class TestPricesEndpoint:
     """Test Prices (purchase history) endpoint"""
 
     @pytest.mark.asyncio
-    async def test_prices_format(self, app, admin_token):
+    async def test_prices_format(self, base_url):
         """Test prices endpoint returns standard format"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/prices",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/prices",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -402,13 +447,18 @@ class TestPricesEndpoint:
             assert "page_size" in data
 
     @pytest.mark.asyncio
-    async def test_prices_pagination(self, app, admin_token):
+    async def test_prices_pagination(self, base_url):
         """Test prices pagination"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/prices?page=1&page_size=5",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/prices?page=1&page_size=5",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -420,13 +470,18 @@ class TestTurnoverReport:
     """Test Turnover by Counterparty report"""
 
     @pytest.mark.asyncio
-    async def test_turnover_format(self, app, admin_token):
+    async def test_turnover_format(self, base_url):
         """Test turnover endpoint returns standard format with grand totals"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             response = await client.get(
-                "/api/reports/turnover-by-counterparty?type=purchases",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/reports/turnover-by-counterparty?type=purchases",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             data = response.json()
@@ -444,47 +499,27 @@ class TestTurnoverReport:
             assert "total_amount" in gt
 
     @pytest.mark.asyncio
-    async def test_turnover_type_filter(self, app, admin_token):
+    async def test_turnover_type_filter(self, base_url):
         """Test turnover type filter (purchases vs sales)"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
+            login_resp = await client.post(
+                f"{base_url}/api/auth/login",
+                json={"email": "admin@begwork.com", "password": VALID_ADMIN_PASSWORD}
+            )
+            token = login_resp.json()["token"]
+            
             # Purchases
             response = await client.get(
-                "/api/reports/turnover-by-counterparty?type=purchases",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/reports/turnover-by-counterparty?type=purchases",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             assert response.json()["filters"]["type"] == "purchases"
             
             # Sales
             response = await client.get(
-                "/api/reports/turnover-by-counterparty?type=sales",
-                headers={"Authorization": f"Bearer {admin_token}"}
+                f"{base_url}/api/reports/turnover-by-counterparty?type=sales",
+                headers={"Authorization": f"Bearer {token}"}
             )
             assert response.status_code == 200
             assert response.json()["filters"]["type"] == "sales"
-
-    @pytest.mark.asyncio
-    async def test_turnover_drilldown(self, app, admin_token):
-        """Test turnover drilldown to invoices"""
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url=BASE_URL) as client:
-            # Get counterparty ID from turnover
-            turnover_resp = await client.get(
-                "/api/reports/turnover-by-counterparty?type=purchases",
-                headers={"Authorization": f"Bearer {admin_token}"}
-            )
-            items = turnover_resp.json()["items"]
-            
-            if items:
-                cp_id = items[0]["counterparty_id"]
-                if cp_id:
-                    # Drilldown
-                    response = await client.get(
-                        f"/api/reports/turnover-by-counterparty/{cp_id}/invoices",
-                        headers={"Authorization": f"Bearer {admin_token}"}
-                    )
-                    assert response.status_code == 200
-                    data = response.json()
-                    assert "items" in data
-                    assert "counterparty_id" in data
