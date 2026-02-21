@@ -207,3 +207,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 | /api/finance/cash-transactions | GET/POST | Cash transactions CRUD |
 | /api/finance/overhead-transactions | GET/POST | Overhead transactions CRUD |
 | /api/finance/bonus-payments | GET/POST | Bonus payments CRUD |
+| /api/clients | GET/POST | Clients (persons) CRUD |
+| /api/clients/{id} | GET/PUT/DELETE | Single client operations |
+| /api/clients/find-or-create | POST | Find or create client by phone |
+| /api/clients/by-phone/{phone} | GET | Get client by phone number |
+| /api/counterparties/{id}/link-client | POST | Link counterparty to client |
+| /api/counterparties/{id}/auto-link-client | POST | Auto-find/create and link client |
+| /api/reports/company-finance-export | GET | Export PDF/XLSX finance report |
