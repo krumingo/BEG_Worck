@@ -112,21 +112,17 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+      </div>
     );
   }
 
   if (!dashboard) {
     return (
-      <DashboardLayout>
-        <div className="p-6 text-center text-gray-400">
-          Проектът не е намерен
-        </div>
-      </DashboardLayout>
+      <div className="p-6 text-center text-gray-400">
+        Проектът не е намерен
+      </div>
     );
   }
 
