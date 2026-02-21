@@ -140,6 +140,65 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 **Tests:** 4 pytest tests for compare endpoint in `/app/backend/tests/test_finance_reports.py`
 
+### Phase: Dashboard Improvements P2 (DONE) - Feb 21, 2026
+**Enhanced Dashboard with Activity Log and Comprehensive Finance Details Page:**
+
+#### Backend (P2 - DONE)
+1. **Dashboard Activity API** (`/api/dashboard/activity`)
+   - Server-side pagination (page, limit params)
+   - Aggregates recent actions from audit_logs
+   - Returns clickable links to entities (invoices, projects, counterparties)
+
+2. **Finance Series API** (`/api/reports/company-finance-series?months=N`)
+   - Rolling period support (1, 3, 6, 12 months)
+   - Returns monthly totals with income/expense breakdown
+   - Period totals aggregation
+
+3. **Finance Details APIs** (`/api/reports/finance-details/*`)
+   - `/summary` - Period totals, breakdown, KPIs (avg weekly, shares)
+   - `/by-counterparty` - Grouped by counterparty with pagination
+   - `/by-project` - Grouped by project allocation with pagination
+   - `/transactions` - Full transaction list with type/direction filters
+   - `/top-counterparties` - Top 10 by spend or income
+
+**Response Format (Finance Details Summary):**
+```json
+{
+  "period": { "date_from": "...", "date_to": "..." },
+  "totals": { "income": 0, "expenses": 0, "net": 0 },
+  "breakdown": { "income_invoices": 0, "expenses_invoices": 0, ... },
+  "counts": { "income_invoice_count": 0, ... },
+  "kpis": { "avg_weekly_income": 0, "invoice_share": 0, ... }
+}
+```
+
+#### Frontend (P2 - DONE)
+1. **Last Activity Widget** on Dashboard
+   - Shows 3 rows by default
+   - "Покажи всички" button expands to 20 rows
+   - "Зареди още" (Load More) with server-side pagination
+   - Clickable links to entity details
+
+2. **FinanceSummaryWidget Enhanced**
+   - Rolling period selector (1 / 3 / 6 / 12 months)
+   - "Период" / "По седмици" toggle for view mode
+   - Charts update based on selected period
+   - "Подробно" button links to Finance Details page
+
+3. **FinanceDetailsPage** (`/reports/finance-details`)
+   - Period filter with presets (Този месец, Последни 3/6/12 месеца, Тази година)
+   - Custom date range support
+   - 4 KPI summary cards
+   - 5 tabs:
+     - **Обобщение**: KPIs + Top 10 counterparties
+     - **Разбивка**: Pie chart + breakdown table by expense type
+     - **По контрагент**: Server-side paginated table
+     - **По проект**: Server-side paginated table
+     - **Транзакции**: Filterable transaction list with pagination
+   - CSV Export for filtered data
+
+**Tests:** 11 backend tests + full UI verification in `/app/test_reports/iteration_15.json`
+
 ---
 
 ## Backlog (P2/P3)
