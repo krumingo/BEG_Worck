@@ -1039,6 +1039,10 @@ api_router.include_router(reports_router)
 from app.routes.clients import router as clients_router
 api_router.include_router(clients_router)
 
+# Dashboard routes (activity, finance details)
+from app.routes.dashboard import router as dashboard_extra_router
+api_router.include_router(dashboard_extra_router)
+
 # Import platform bootstrap router - ONE-TIME USE for production setup
 from app.routes.platform import router as platform_router
 app.include_router(platform_router)  # Direct to app (not under /api prefix)
