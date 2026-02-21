@@ -250,15 +250,32 @@ export default function DashboardPage() {
       <div className="rounded-xl border border-border bg-card" data-testid="recent-activity">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <h2 className="text-sm font-semibold text-foreground">{t("dashboard.recentActivity")}</h2>
-          <a href="/audit-log" className="text-xs text-primary hover:underline flex items-center gap-1">
-            {t("common.viewAll")} <ArrowUpRight className="w-3 h-3" />
-          </a>
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={toggleActivityExpand}
+              data-testid="expand-activity-btn"
+            >
+              {activityExpanded ? (
+                <>
+                  <ChevronUp className="w-4 h-4 mr-1" />
+                  {t("common.collapse") || "Скрий"}
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4 mr-1" />
+                  {t("common.showAll") || "Покажи всички"} ({activityTotal})
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-        <div className="divide-y divide-border">
-          {recentLogs.length === 0 ? (
+        <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
+          {displayedLogs.length === 0 ? (
             <p className="p-5 text-sm text-muted-foreground">{t("dashboard.noActivity")}</p>
           ) : (
-            recentLogs.map((log) => (
+            displayedLogs.map((log) => (
               <div key={log.id} className="flex items-center gap-4 px-5 py-3 table-row-hover" data-testid={`activity-${log.id}`}>
                 <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
                   <Clock className="w-3.5 h-3.5 text-muted-foreground" />
@@ -267,7 +284,12 @@ export default function DashboardPage() {
                   <p className="text-sm text-foreground">
                     <span className="font-medium">{log.user_email}</span>{" "}
                     <span className="text-muted-foreground">{t(`auditLog.actions.${log.action?.toLowerCase()}`) || log.action}</span>{" "}
-                    <span className="text-foreground">{log.entity_type}</span>
+                    {log.entity_type && <span className="text-foreground">{log.entity_type}</span>}
+                    {log.link && (
+                      <a href={log.link} className="ml-1 text-primary text-xs hover:underline">
+                        <ArrowUpRight className="w-3 h-3 inline" />
+                      </a>
+                    )}
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -277,6 +299,22 @@ export default function DashboardPage() {
             ))
           )}
         </div>
+        {activityExpanded && allLogs.length < activityTotal && (
+          <div className="p-4 border-t border-border flex justify-center">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={loadMoreActivity}
+              disabled={loadingMore}
+              data-testid="load-more-activity-btn"
+            >
+              {loadingMore ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              {t("common.loadMore") || "Зареди още"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
