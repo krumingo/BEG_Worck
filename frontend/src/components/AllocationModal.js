@@ -126,6 +126,28 @@ export default function AllocationModal({
     }]);
   };
 
+  const handleCreateWarehouse = () => {
+    setPendingWarehouseAllocation(true);
+    setCreateWarehouseOpen(true);
+  };
+
+  const handleWarehouseCreated = (newWarehouse) => {
+    // Add to local warehouses list
+    setWarehouses(prev => [...prev, newWarehouse]);
+    
+    // If we were pending allocation, add the remaining to new warehouse
+    if (pendingWarehouseAllocation && remaining > 0) {
+      setAllocations(prev => [...prev, {
+        type: "warehouse",
+        ref_id: newWarehouse.id,
+        qty: remaining,
+        note: "Остатък",
+      }]);
+    }
+    
+    setPendingWarehouseAllocation(false);
+  };
+
   const handleSave = async () => {
     // Validate
     const totalAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.qty) || 0), 0);
