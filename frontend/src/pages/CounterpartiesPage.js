@@ -33,11 +33,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Users, Building2, BarChart3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Building2, BarChart3, Link, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-const COUNTERPARTY_TYPES = ["supplier", "client", "both"];
+const COUNTERPARTY_TYPES = ["supplier", "client", "both", "person"];
 
 export default function CounterpartiesPage() {
   const { t } = useTranslation();
