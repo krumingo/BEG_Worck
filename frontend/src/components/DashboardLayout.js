@@ -296,23 +296,41 @@ export default function DashboardLayout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" data-testid="sidebar-nav">
-          {(["Admin","Owner","SiteManager","Accountant"].includes(user?.role) ? getAdminNav() : WORKER_NAV).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                `sidebar-link ${isActive ? "active" : "text-muted-foreground"}`
-              }
-              data-testid={`nav-${item.labelKey.split(".")[1]}`}
-            >
-              <item.icon className="w-[18px] h-[18px]" />
-              <span className="flex-1">{t(item.labelKey)}</span>
-              {location.pathname === item.to && (
-                <ChevronRight className="w-4 h-4 opacity-50" />
+          {/* Core nav items */}
+          {(isAdmin ? getAdminNav() : WORKER_NAV).map(renderNavItem)}
+          
+          {/* Data Section (collapsible, only for admin roles) */}
+          {isAdmin && (
+            <>
+              <Separator className="my-3" />
+              <button
+                onClick={() => setDataExpanded(!dataExpanded)}
+                className="sidebar-link w-full text-muted-foreground hover:text-foreground"
+                data-testid="nav-data-toggle"
+              >
+                <Database className="w-[18px] h-[18px]" />
+                <span className="flex-1 text-left">{t("nav.data")}</span>
+                {dataExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+              {dataExpanded && (
+                <div className="ml-4 space-y-1 border-l pl-3 border-border">
+                  {DATA_NAV.map(renderNavItem)}
+                </div>
               )}
-            </NavLink>
-          ))}
+            </>
+          )}
+          
+          {/* Settings Section */}
+          {isAdmin && (
+            <>
+              <Separator className="my-3" />
+              {SETTINGS_NAV.map(renderNavItem)}
+            </>
+          )}
         </nav>
 
         <Separator />
