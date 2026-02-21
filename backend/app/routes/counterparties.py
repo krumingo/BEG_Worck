@@ -267,4 +267,119 @@ async def delete_counterparty(counterparty_id: str, user: dict = Depends(require
 @router.get("/counterparties/enums/types")
 async def get_counterparty_types():
     """Get available counterparty types"""
-    return {"types": ["supplier", "client", "both"]}
+    return {"types": ["supplier", "client", "both", "person"]}
+
+
+# ── Counterparty-Client Linking ────────────────────────────────────────────────
+
+@router.post("/counterparties/{counterparty_id}/link-client")
+async def link_counterparty_to_client(counterparty_id: str, data: dict, user: dict = Depends(require_m5)):
+    """Link a counterparty (type=person) to a client record"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
+    if not counterparty:
+        raise HTTPException(status_code=404, detail="Counterparty not found")
+    
+    client_id = data.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id is required")
+    
+    # Verify client exists
+    client = await db.clients.find_one({"id": client_id, "org_id": user["org_id"]})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    # Update counterparty
+    await db.counterparties.update_one(
+        {"id": counterparty_id},
+        {"$set": {"client_id": client_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    await log_audit(user["org_id"], user["id"], user["email"], "counterparty_linked", "counterparty", counterparty_id,
+                    {"client_id": client_id})
+    
+    return {"ok": True, "client_id": client_id}
+
+
+@router.delete("/counterparties/{counterparty_id}/unlink-client")
+async def unlink_counterparty_from_client(counterparty_id: str, user: dict = Depends(require_m5)):
+    """Unlink a counterparty from its client record"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
+    if not counterparty:
+        raise HTTPException(status_code=404, detail="Counterparty not found")
+    
+    await db.counterparties.update_one(
+        {"id": counterparty_id},
+        {"$unset": {"client_id": ""}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"ok": True}
+
+
+@router.post("/counterparties/{counterparty_id}/auto-link-client")
+async def auto_link_counterparty_to_client(counterparty_id: str, user: dict = Depends(require_m5)):
+    """Auto-find or create client from counterparty phone and link them"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
+    if not counterparty:
+        raise HTTPException(status_code=404, detail="Counterparty not found")
+    
+    phone = counterparty.get("phone")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Counterparty has no phone number")
+    
+    # Normalize phone
+    phone_normalized = re.sub(r"[^0-9+]", "", phone)
+    if phone.startswith("+"):
+        phone_normalized = "+" + re.sub(r"[^0-9]", "", phone[1:])
+    else:
+        phone_normalized = re.sub(r"[^0-9]", "", phone)
+    
+    # Find existing client
+    existing_client = await db.clients.find_one({
+        "org_id": user["org_id"],
+        "phone_normalized": phone_normalized
+    })
+    
+    if existing_client:
+        client_id = existing_client["id"]
+        created = False
+    else:
+        # Create new client from counterparty data
+        name_parts = counterparty.get("name", "").split(" ", 1)
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        
+        now = datetime.now(timezone.utc).isoformat()
+        new_client = {
+            "id": str(uuid.uuid4()),
+            "org_id": user["org_id"],
+            "first_name": first_name,
+            "last_name": last_name,
+            "phone": phone,
+            "phone_normalized": phone_normalized,
+            "email": counterparty.get("email"),
+            "address": counterparty.get("address"),
+            "notes": f"Създаден от контрагент: {counterparty.get('name')}",
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.clients.insert_one(new_client)
+        client_id = new_client["id"]
+        created = True
+    
+    # Link counterparty to client
+    await db.counterparties.update_one(
+        {"id": counterparty_id},
+        {"$set": {"client_id": client_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"ok": True, "client_id": client_id, "created": created}
