@@ -64,6 +64,7 @@ BEG_Work is a comprehensive construction management SaaS platform designed to st
 - [x] **Sites Module Phase 1** (2026-02-21) - MERGED into Projects
 - [x] **Sites Photos** (2026-02-21) - Now Project Photos in projects.py
 - [x] **Sites → Projects Merge** (2026-02-21) - Unified model, no separate Sites entity
+- [x] **Project Dashboard** (2026-02-21) - 8 cards layout with /dashboard endpoint
 - [ ] Phase 3: Mobile Technician flows
 - [ ] Phase 4: Mobile Driver deliveries
 - [ ] Phase 5: Machine movements
