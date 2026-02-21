@@ -105,7 +105,10 @@ export default function FinanceDetailsPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Filter state
+  // Period state (1, 3, 6, 12 months)
+  const [period, setPeriod] = useState(searchParams.get("months") || "3");
+  
+  // Filter state (for presets - legacy)
   const [preset, setPreset] = useState(searchParams.get("preset") || "last_3_months");
   const [dateFrom, setDateFrom] = useState(searchParams.get("date_from") || "");
   const [dateTo, setDateTo] = useState(searchParams.get("date_to") || "");
@@ -118,9 +121,10 @@ export default function FinanceDetailsPage() {
   const [byProject, setByProject] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [topCounterparties, setTopCounterparties] = useState(null);
+  const [monthlySeries, setMonthlySeries] = useState(null);
   
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("monthly");
   
   // Pagination for transactions
   const [txnPage, setTxnPage] = useState(1);
