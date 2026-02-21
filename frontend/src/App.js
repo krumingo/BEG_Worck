@@ -164,6 +164,7 @@ function AppRoutes() {
       <Route path="/data/prices" element={<CompanyProtectedRoute><PricesPage /></CompanyProtectedRoute>} />
       <Route path="/data/turnover" element={<CompanyProtectedRoute><TurnoverPage /></CompanyProtectedRoute>} />
       <Route path="/data/clients" element={<CompanyProtectedRoute><ClientsPage /></CompanyProtectedRoute>} />
+      <Route path="/reports/finance-details" element={<CompanyProtectedRoute><FinanceDetailsPage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
