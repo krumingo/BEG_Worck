@@ -213,16 +213,27 @@ export default function ProjectDetailPage() {
                 )}
                 <h3 className="font-semibold text-white">Клиент</h3>
               </div>
-              {client.owner_data && (
+              <div className="flex items-center gap-1">
+                {client.owner_data && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowClientModal(true)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowClientModal(true)}
-                  className="text-gray-400 hover:text-white"
+                  onClick={() => setShowClientSelector(true)}
+                  className="text-yellow-400 hover:text-yellow-300"
+                  title="Избери клиент"
                 >
-                  <Eye className="w-4 h-4" />
+                  <UserPlus className="w-4 h-4" />
                 </Button>
-              )}
+              </div>
             </div>
             
             {client.owner_data ? (
@@ -261,7 +272,17 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">Няма избран клиент</p>
+              <div className="text-center py-4">
+                <p className="text-gray-500 text-sm mb-3">Няма избран клиент</p>
+                <Button
+                  size="sm"
+                  onClick={() => setShowClientSelector(true)}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-black"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Избери клиент
+                </Button>
+              </div>
             )}
           </div>
 
