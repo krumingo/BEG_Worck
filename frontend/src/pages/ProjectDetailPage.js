@@ -50,7 +50,6 @@ import {
   Scale,
   UserPlus,
 } from "lucide-react";
-import DashboardLayout from "@/components/DashboardLayout";
 import ClientSelector from "@/components/ClientSelector";
 
 const STATUS_COLORS = {
