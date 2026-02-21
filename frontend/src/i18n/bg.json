@@ -205,7 +205,24 @@
     "everyoneCheckedIn": "Всички са се отбелязали днес",
     "allReportsSubmitted": "Всички отчети са подадени",
     "recentActivity": "Последна активност",
-    "noActivity": "Все още няма активност"
+    "noActivity": "Все още няма активност",
+    "financeSection": "Финанси",
+    "totalIncome": "Общо приходи",
+    "totalExpenses": "Общо разходи",
+    "netBalance": "Нетен баланс",
+    "incomeVsExpenses": "Приходи vs Разходи по седмици",
+    "expenseBreakdown": "Разбивка на разходите",
+    "cumulativeBalance": "Кумулативен баланс",
+    "income": "Приходи",
+    "expenses": "Разходи",
+    "balance": "Баланс",
+    "expenseTypes": {
+      "invoices": "Фактури",
+      "cash": "Каса",
+      "overhead": "Режийни",
+      "payroll": "Заплати",
+      "bonus": "Бонуси"
+    }
   },
   "projects": {
     "title": "Проекти",
