@@ -66,6 +66,19 @@ const ADMIN_NAV_CORE = [
   { to: "/payroll", icon: Receipt, labelKey: "nav.payroll" },
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
+];
+
+// Data module navigation (collapsible section)
+const DATA_NAV = [
+  { to: "/data/warehouses", icon: Warehouse, labelKey: "nav.warehouses" },
+  { to: "/data/counterparties", icon: Building2, labelKey: "nav.counterparties" },
+  { to: "/data/items", icon: Package, labelKey: "nav.items" },
+  { to: "/data/prices", icon: TrendingUp, labelKey: "nav.prices" },
+  { to: "/data/turnover", icon: BarChart3, labelKey: "nav.turnover" },
+];
+
+// Settings navigation
+const SETTINGS_NAV = [
   { to: "/users", icon: Users, labelKey: "nav.users" },
   { to: "/settings", icon: Settings, labelKey: "nav.companySettings" },
 ];
