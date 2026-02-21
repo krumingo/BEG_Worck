@@ -1097,6 +1097,29 @@ async def startup():
     await db.mobile_view_configs.create_index([("org_id", 1), ("role", 1), ("module_code", 1)], unique=True)
     await db.media_files.create_index([("org_id", 1), ("owner_user_id", 1)])
     await db.media_files.create_index([("org_id", 1), ("context_type", 1), ("context_id", 1)])
+    
+    # Warehouses indexes
+    await db.warehouses.create_index([("org_id", 1), ("code", 1)], unique=True)
+    await db.warehouses.create_index([("org_id", 1), ("type", 1)])
+    await db.warehouses.create_index([("org_id", 1), ("project_id", 1)])
+    await db.warehouses.create_index([("org_id", 1), ("active", 1)])
+    
+    # Scan docs indexes
+    await db.scan_docs.create_index([("org_id", 1), ("linked_invoice_id", 1)])
+    await db.scan_docs.create_index([("org_id", 1), ("uploaded_by_user_id", 1)])
+    await db.scan_docs.create_index([("org_id", 1), ("created_at", -1)])
+    
+    # Invoice lines indexes (separate collection)
+    await db.invoice_lines.create_index([("org_id", 1), ("invoice_id", 1)])
+    await db.invoice_lines.create_index([("org_id", 1), ("allocation_type", 1), ("allocation_ref_id", 1)])
+    await db.invoice_lines.create_index([("org_id", 1), ("purchased_by_user_id", 1)])
+    await db.invoice_lines.create_index([("invoice_id", 1), ("line_no", 1)], unique=True)
+    
+    # Counterparties indexes
+    await db.counterparties.create_index([("org_id", 1), ("name", 1)])
+    await db.counterparties.create_index([("org_id", 1), ("eik", 1)], unique=True, sparse=True)
+    await db.counterparties.create_index([("org_id", 1), ("type", 1)])
+    await db.counterparties.create_index([("org_id", 1), ("active", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
