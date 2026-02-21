@@ -231,6 +231,7 @@ export default function DashboardLayout({ children }) {
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [dataExpanded, setDataExpanded] = useState(location.pathname.startsWith("/data"));
 
   const handleLogout = () => {
     logout();
@@ -240,6 +241,7 @@ export default function DashboardLayout({ children }) {
   const mobileTabs = getTabsForRole(user?.role);
   const isProfileRoute = location.pathname === "/profile";
   const isPlatformAdmin = user?.is_platform_admin === true;
+  const isAdmin = ["Admin","Owner","SiteManager","Accountant"].includes(user?.role);
   
   // Build navigation based on role and platform admin status
   const getAdminNav = () => {
@@ -254,6 +256,25 @@ export default function DashboardLayout({ children }) {
     if (tabPath === "/") return location.pathname === "/";
     return location.pathname.startsWith(tabPath);
   };
+
+  // Render nav item
+  const renderNavItem = (item) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      end={item.to === "/"}
+      className={({ isActive }) =>
+        `sidebar-link ${isActive ? "active" : "text-muted-foreground"}`
+      }
+      data-testid={`nav-${item.labelKey.split(".")[1]}`}
+    >
+      <item.icon className="w-[18px] h-[18px]" />
+      <span className="flex-1">{t(item.labelKey)}</span>
+      {location.pathname === item.to && (
+        <ChevronRight className="w-4 h-4 opacity-50" />
+      )}
+    </NavLink>
+  );
 
   return (
     <div className="flex h-screen overflow-hidden" data-testid="dashboard-layout">
