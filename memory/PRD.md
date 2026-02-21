@@ -220,7 +220,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - OCR scanning of invoices
 - Auto-population of invoice fields
 
-### P2 - M7: Inventory Module
+### P3 - M7: Inventory Module
 - Stock movements
 - Inventory counts
 - Stock alerts
