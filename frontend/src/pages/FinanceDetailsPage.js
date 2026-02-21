@@ -706,7 +706,7 @@ export default function FinanceDetailsPage() {
                       <SelectValue placeholder="Всички" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Всички</SelectItem>
+                      <SelectItem value="all">Всички</SelectItem>
                       <SelectItem value="income">Приходи</SelectItem>
                       <SelectItem value="expense">Разходи</SelectItem>
                     </SelectContent>
