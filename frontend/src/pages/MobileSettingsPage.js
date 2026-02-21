@@ -151,8 +151,7 @@ export default function MobileSettingsPage() {
   const roles = ["Admin", "Owner", "SiteManager", "Technician", "Driver", "Accountant", "Worker"];
 
   return (
-    <DashboardLayout>
-      <div className="p-6" data-testid="mobile-settings-page">
+    <div className="p-6" data-testid="mobile-settings-page">
         <div className="mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Smartphone className="w-6 h-6" />
