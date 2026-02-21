@@ -159,12 +159,12 @@ function ColumnFilter({ column, value, onChange }) {
 
   if (filterType === "bool") {
     return (
-      <Select value={value || ""} onValueChange={(v) => onChange(v || null)}>
+      <Select value={value || "all"} onValueChange={(v) => onChange(v === "all" ? null : v)}>
         <SelectTrigger className="h-8 text-xs">
           <SelectValue placeholder={t("common.all")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">{t("common.all")}</SelectItem>
+          <SelectItem value="all">{t("common.all")}</SelectItem>
           <SelectItem value="true">{t("common.yes")}</SelectItem>
           <SelectItem value="false">{t("common.no")}</SelectItem>
         </SelectContent>
