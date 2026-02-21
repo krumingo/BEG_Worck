@@ -1,10 +1,11 @@
 """
-Routes - Counterparties (Suppliers and Clients).
+Routes - Counterparties (Suppliers and Clients) with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import re
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -20,30 +21,72 @@ def finance_permission(user: dict) -> bool:
     return user["role"] in ["Admin", "Owner", "Accountant"]
 
 
+def parse_filters(filters: Optional[str]) -> dict:
+    """Parse filter string"""
+    if not filters:
+        return {}
+    result = {}
+    for part in filters.split(","):
+        if "=" in part:
+            key, value = part.split("=", 1)
+            result[key] = value
+    return result
+
+
 # ── Counterparties CRUD ────────────────────────────────────────────
 
 @router.get("/counterparties")
 async def list_counterparties(
     user: dict = Depends(require_m5),
-    type: Optional[str] = None,  # supplier, client, both
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sort_by: str = Query("name"),
+    sort_dir: str = Query("asc"),
     search: Optional[str] = None,
+    filters: Optional[str] = None,
+    type: Optional[str] = None,
     active_only: bool = True,
 ):
-    """List all counterparties (suppliers/clients)"""
+    """List counterparties with pagination, sorting, and filters"""
     query = {"org_id": user["org_id"]}
     
     if type:
         query["type"] = type
     if active_only:
         query["active"] = True
+    
+    # Parse additional filters
+    parsed_filters = parse_filters(filters)
+    for key, value in parsed_filters.items():
+        if "." in key:
+            field, op = key.rsplit(".", 1)
+        else:
+            field, op = key, "equals"
+        
+        if op == "contains":
+            query[field] = {"$regex": re.escape(value), "$options": "i"}
+        elif op == "equals":
+            query[field] = value
+    
+    # Global search
     if search:
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"eik": {"$regex": search, "$options": "i"}},
-            {"vat_number": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"eik": {"$regex": re.escape(search), "$options": "i"}},
+            {"vat_number": {"$regex": re.escape(search), "$options": "i"}},
+            {"email": {"$regex": re.escape(search), "$options": "i"}},
+            {"phone": {"$regex": re.escape(search), "$options": "i"}},
         ]
     
-    counterparties = await db.counterparties.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    # Count total
+    total = await db.counterparties.count_documents(query)
+    
+    # Sort
+    sort_direction = 1 if sort_dir == "asc" else -1
+    
+    # Paginate
+    skip = (page - 1) * page_size
+    counterparties = await db.counterparties.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Add invoice counts
     for cp in counterparties:
