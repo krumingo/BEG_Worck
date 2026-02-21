@@ -24,7 +24,15 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 const MONTHS = [
   "Януари", "Февруари", "Март", "Април", "Май", "Юни",
