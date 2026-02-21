@@ -317,6 +317,16 @@ export default function InvoiceEditorPage() {
               <CreditCard className="w-4 h-4 mr-1" /> {t("finance.recordPayment")}
             </Button>
           )}
+          {invoice && invoice.direction === "Received" && (
+            <Button 
+              variant="outline" 
+              onClick={() => navigate(`/finance/invoices/${invoiceId}/lines`)} 
+              data-testid="allocate-lines-btn"
+              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+            >
+              <SplitSquareVertical className="w-4 h-4 mr-1" /> Разпределение
+            </Button>
+          )}
         </div>
       </div>
 
