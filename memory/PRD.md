@@ -1,110 +1,172 @@
-# BEG_Work - Construction Management SaaS
+# BEG_Work PRD (Product Requirements Document)
 
-## Original Problem Statement
-BEG_Work is a comprehensive construction management SaaS platform designed to streamline operations for construction companies. The platform provides project management, resource tracking, billing, and administrative capabilities.
-
-## User Personas
-1. **Company Admin** - Manages company projects, users, billing
-2. **Platform Admin** - Super admin with cross-organization access
-3. **Technician** - Field worker tracking work and materials
-4. **Driver** - Handles deliveries and logistics
-
-## Core Requirements
-- Multi-tenant architecture with organization isolation
-- Role-based access control (RBAC)
-- Project and resource management
-- Media file management with security ACLs
-- Billing and invoicing
-- Mobile-friendly interfaces for field workers
+## Overview
+BEG_Work is an ERP system for construction/field service businesses with comprehensive project management, HR, finance, and inventory modules.
 
 ---
 
 ## What's Been Implemented
 
-### Session: 2026-02-21
+### Phase: Core Infrastructure (DONE)
+- Multi-tenant architecture with organizations
+- JWT authentication with role-based access (Admin, Owner, SiteManager, Technician, etc.)
+- Subscription billing with Stripe integration
+- Feature flags per module (M0-M9)
 
-#### Backend Refactoring (Stages 1.2, 1.4, 1.5) ✅
-- Migrated all routes from monolithic `server.py` to modular `app/routes/` structure
-- Dismantled `app/shared.py` into clean dependency structure:
-  - `app/deps/` - FastAPI dependencies for auth, modules, ACLs
-  - `app/utils/` - Pure helper functions (audit, crypto)
-  - `app/db/` - Database connection handling
-  - `app/constants.py` - App-wide constants
+### Phase: Projects & Attendance (DONE)
+- Project CRUD with phases and team management
+- Attendance tracking with clock in/out
+- Work reports with activities and hours
 
-#### Pytest Suite Stabilization ✅
-- Fixed dozens of pre-existing test failures
-- Achieved **212/212 tests passing** (100% pass rate)
-- Created `/app/backend/tests/test_utils.py` for centralized test helpers
+### Phase: Finance M5 (DONE)
+- Financial accounts (Cash, Bank)
+- Invoice management (Issued/Received)
+- Payment tracking with allocation to invoices
+- Counterparties (suppliers/clients)
 
-#### Media ACL Security (Stage 1.3) ✅
-- Audited all media endpoints
-- Added secure `DELETE /media/{id}` endpoint
-- Created `/app/backend/tests/test_media_acl.py` with 13 security tests
-- Blocked all cross-organization access (IDOR protection)
+### Phase: Invoice Lines Multi-Allocation (DONE) - Feb 21, 2026
+- Invoice lines stored in separate collection
+- Multi-allocation to projects/warehouses
+- Backward compatibility with old format
 
-#### Login Flow Isolation ✅
-- Created separate `PlatformAuthProvider` and `usePlatformAuth` for super-admin
-- Isolated local storage: `bw_token` (company) vs `bw_platform_token` (platform)
-- Implemented separate route guards for `/` and `/platform` sections
+### Phase: Data Module Backend P0 (DONE) - Feb 21, 2026
+**Backend APIs for "Данни" (Data) module with ERP-style features:**
 
-#### Calendar UI Bug Fix ✅ (Verified 2026-02-21)
-- Created new `DatePicker.js` component using shadcn/ui Calendar + Popover
-- Fixed invisible calendar in dark mode
-- Fixed `.toLowerCase()` crash in `ProjectsListPage.js`
+1. **Warehouses API** (`/api/warehouses`)
+   - Full CRUD with server-side pagination
+   - Filters: type, project_id, active_only, search
+   - Response format: `{items, total, page, page_size, total_pages}`
+
+2. **Counterparties API** (`/api/counterparties`)  
+   - Full CRUD with server-side pagination
+   - Filters: type (supplier/client/both), search, active_only
+   - Invoice count enrichment
+   - Response format: `{items, total, page, page_size}`
+
+3. **Items/Materials API** (`/api/items`) - NEW
+   - Full CRUD for inventory items
+   - Fields: sku (unique), name, unit, category, brand, description, default_price, min_stock
+   - Categories: Materials, Tools, Equipment, Consumables, Services, Other
+   - Filters: category, search, is_active
+   - Response format: `{items, total, page, page_size, total_pages}`
+
+4. **Prices API** (`/api/prices`) - NEW
+   - Purchase price history from invoice_lines
+   - Aggregation with invoice data (date, supplier)
+   - Filters: item_id, supplier_id, project_id, warehouse_id, date_from/to
+   - Enriched with supplier_name, purchaser_name, allocation_summary
+
+5. **Turnover Report API** (`/api/reports/turnover-by-counterparty`) - NEW
+   - Aggregated purchases/sales by counterparty
+   - Fields: count_invoices, sum_subtotal, sum_vat, sum_total, sum_paid, sum_remaining
+   - Grand totals for all counterparties
+   - Drilldown endpoint: `/api/reports/turnover-by-counterparty/{id}/invoices`
+
+**Filter Operators Supported:**
+- `contains` - case-insensitive regex match
+- `equals` - exact match
+- `in` - multiple values (pipe-separated)
+- `bool` - boolean filter
+- `min/max` - numeric range
+- `from/to` - date range
+
+**Database Indexes Added:**
+- items: (org_id, sku) unique, (org_id, name), (org_id, category), (org_id, is_active)
+
+**Tests Created:**
+- `/app/backend/tests/test_data_module.py` - 18 tests all passing
 
 ---
 
-## Prioritized Backlog
+## In Progress
 
-### P1 - High Priority
-- [x] Optimize N+1 query in `GET /media` endpoint (2026-02-21) - Batch prefetch for context data
-- [x] Update `flow_map.md` documentation for `DELETE /api/media/{id}` (2026-02-21)
-
-### P2 - Medium Priority
-- [x] **Sites Module Phase 1** (2026-02-21) - MERGED into Projects
-- [x] **Sites Photos** (2026-02-21) - Now Project Photos in projects.py
-- [x] **Sites → Projects Merge** (2026-02-21) - Unified model, no separate Sites entity
-- [x] **Project Dashboard** (2026-02-21) - 8 cards layout with /dashboard endpoint
-- [ ] Phase 3: Mobile Technician flows
-- [ ] Phase 4: Mobile Driver deliveries
-- [ ] Phase 5: Machine movements
-
-### P3 - Future Modules
-- [ ] M6: AI Invoice Capture
-- [ ] M7: Inventory module
-- [ ] M8: Assets & QR code management
-- [ ] M9: Complete Admin Console/BI dashboard
+### Phase: Data Module Frontend P0 (NOT STARTED)
+**To implement:**
+1. Add "Данни" section to sidebar with sub-pages
+2. Create reusable `DataTable` component with:
+   - Server-side pagination/sorting/filtering
+   - URL state persistence for filters
+   - CSV export functionality
+   - Column configuration
+3. Build pages:
+   - Warehouses page
+   - Counterparties page
+   - Items/Materials page
+   - Prices page
+   - Turnover Report page
+4. CRUD modals for each entity
 
 ---
 
-## Technical Architecture
+## Backlog (P1/P2)
 
-```
-/app/
-├── backend/
-│   ├── app/
-│   │   ├── constants.py       # App-wide constants (ROLES, etc.)
-│   │   ├── db/                # DB connection handling
-│   │   ├── deps/              # FastAPI dependencies
-│   │   │   ├── auth.py
-│   │   │   ├── media_acl.py
-│   │   │   └── modules.py
-│   │   ├── models/
-│   │   ├── routes/            # All API routes
-│   │   └── utils/             # Helper functions
-│   ├── server.py              # Thin entry point
-│   └── tests/                 # 212 tests, 100% passing
-└── frontend/
-    └── src/
-        ├── App.js             # Dual Auth Providers
-        ├── components/ui/     # Shadcn components + DatePicker
-        ├── contexts/          # Company + Platform auth
-        └── pages/
-```
+### P1 - Clients Page Clarification
+- Determine if Clients should be filtered view of counterparties (type=person/client) or separate model
+
+### P2 - Phase 3: Mobile Technician Flows
+- Clock in/out from mobile
+- Work report submission
+- Photo uploads
+
+### P2 - Phase 4: Mobile Driver Deliveries
+- Delivery tracking
+- Status updates
+
+### P2 - Phase 5: Machine Movements
+- Machine assignment tracking
+- Usage logging
+
+### P2 - M6: AI Invoice Capture
+- OCR scanning of invoices
+- Auto-population of invoice fields
+
+### P2 - M7: Inventory Module
+- Stock movements
+- Inventory counts
+- Stock alerts
+
+### P2 - M8: Assets & QR Management
+- Asset checkout/checkin
+- QR code generation
+- Maintenance tracking
+
+### P2 - M9: Admin Console/BI
+- Dashboard statistics
+- Custom reports
+- Overhead cost allocation
+
+---
+
+## Technical Stack
+- **Backend:** FastAPI, Motor (MongoDB async), Pydantic
+- **Frontend:** React, Shadcn/UI, TailwindCSS
+- **Database:** MongoDB
+- **Auth:** JWT with role-based access
+- **Payments:** Stripe (test mode)
+
+---
 
 ## Test Credentials
-- **Company Admin:** admin@begwork.com / AdminTest123!Secure
-- **Technician:** tech@begwork.com / TechTest123!Secure
+- **Admin:** admin@begwork.com / AdminTest123!Secure
 
-## 3rd Party Integrations
-- **Stripe:** Payment processing (test mode)
+---
+
+## API Endpoints Summary (Data Module)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| /api/items | GET | List items with pagination/filters |
+| /api/items | POST | Create new item |
+| /api/items/{id} | GET | Get item by ID |
+| /api/items/{id} | PUT | Update item |
+| /api/items/{id} | DELETE | Soft delete item |
+| /api/items/enums/categories | GET | Get categories enum |
+| /api/warehouses | GET | List warehouses |
+| /api/warehouses | POST | Create warehouse |
+| /api/warehouses/{id} | GET/PUT/DELETE | Warehouse CRUD |
+| /api/counterparties | GET | List counterparties |
+| /api/counterparties | POST | Create counterparty |
+| /api/counterparties/{id} | GET/PUT/DELETE | Counterparty CRUD |
+| /api/prices | GET | Price history from invoice lines |
+| /api/reports/turnover-by-counterparty | GET | Turnover by counterparty |
+| /api/reports/turnover-by-counterparty/{id}/invoices | GET | Drilldown invoices |
