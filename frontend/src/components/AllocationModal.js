@@ -118,12 +118,29 @@ export default function AllocationModal({
 
   const addRemainingToWarehouse = (warehouseId) => {
     if (remaining <= 0) return;
-    setAllocations([...allocations, {
-      type: "warehouse",
-      ref_id: warehouseId,
-      qty: remaining,
-      note: "Остатък",
-    }]);
+    
+    // Idempotent: check if allocation for this warehouse already exists
+    const existingIdx = allocations.findIndex(
+      a => a.type === "warehouse" && a.ref_id === warehouseId
+    );
+    
+    if (existingIdx >= 0) {
+      // Update existing allocation's qty
+      const updated = [...allocations];
+      updated[existingIdx] = {
+        ...updated[existingIdx],
+        qty: parseFloat(updated[existingIdx].qty) + remaining,
+      };
+      setAllocations(updated);
+    } else {
+      // Add new allocation
+      setAllocations([...allocations, {
+        type: "warehouse",
+        ref_id: warehouseId,
+        qty: remaining,
+        note: "Остатък",
+      }]);
+    }
   };
 
   const handleCreateWarehouse = () => {
