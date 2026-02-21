@@ -46,6 +46,21 @@ export default function CounterpartiesPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [linkingItem, setLinkingItem] = useState(null);
+
+  const handleAutoLinkClient = async (row) => {
+    try {
+      const response = await API.post(`/counterparties/${row.id}/auto-link-client`);
+      if (response.data.created) {
+        toast.success(t("clients.autoCreateClient") + " - " + t("common.success"));
+      } else {
+        toast.success(t("clients.linkClient") + " - " + t("common.success"));
+      }
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || t("common.error"));
+    }
+  };
 
   const columns = [
     { key: "name", label: t("data.name"), sortable: true, filterable: true, filterType: "contains" },
