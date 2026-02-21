@@ -225,7 +225,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Inventory counts
 - Stock alerts
 
-### P2 - M8: Assets & QR Management
+### P3 - M8: Assets & QR Management
 - Asset checkout/checkin
 - QR code generation
 - Maintenance tracking
