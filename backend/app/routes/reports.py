@@ -389,7 +389,7 @@ async def get_turnover_by_client(
     count_pipeline = pipeline.copy()
     count_pipeline.append({"$count": "total"})
     count_result = await db.invoices.aggregate(count_pipeline).to_list(1)
-    total = count_result[0]["total"] if count_result else 0
+    total_count = count_result[0]["total"] if count_result else 0
     
     # Sort
     sort_direction = 1 if sort_dir == "asc" else -1
@@ -484,7 +484,6 @@ def get_week_number_in_month(date_str: str) -> int:
 def get_week_ranges(year: int, month: int) -> list:
     """Get week ranges for a month"""
     _, days_in_month = monthrange(year, month)
-    first_day = datetime(year, month, 1)
     
     weeks = []
     current_week_start = 1
