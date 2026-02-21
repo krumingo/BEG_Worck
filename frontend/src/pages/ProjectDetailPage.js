@@ -129,8 +129,7 @@ export default function ProjectDetailPage() {
   const { project, client, progress, team, invoices, offers, materials, balance } = dashboard;
 
   return (
-    <DashboardLayout>
-      <div className="p-4 md:p-6 space-y-6" data-testid="project-detail-page">
+    <div className="p-4 md:p-6 space-y-6" data-testid="project-detail-page">
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button
