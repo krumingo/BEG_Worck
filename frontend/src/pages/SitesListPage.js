@@ -398,8 +398,9 @@ export default function SitesListPage() {
             {sites.map((site) => (
               <div
                 key={site.id}
-                className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:border-yellow-500/30 transition-colors"
+                className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:border-yellow-500/30 transition-colors cursor-pointer"
                 data-testid={`site-card-${site.id}`}
+                onClick={() => navigate(`/sites/${site.id}`)}
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
