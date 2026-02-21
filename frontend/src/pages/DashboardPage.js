@@ -27,9 +27,14 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
+  const [allLogs, setAllLogs] = useState([]);
   const [missingAtt, setMissingAtt] = useState([]);
   const [missingRep, setMissingRep] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityTotal, setActivityTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const isManager = ["Admin", "Owner", "SiteManager"].includes(user?.role);
 
   useEffect(() => {
