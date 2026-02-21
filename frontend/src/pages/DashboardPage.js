@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   FileX,
 } from "lucide-react";
+import FinanceSummaryWidget from "@/components/FinanceSummaryWidget";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -196,6 +197,13 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Finance Summary Section */}
+      {isManager && (
+        <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="finance-summary-section">
+          <FinanceSummaryWidget />
         </div>
       )}
 
