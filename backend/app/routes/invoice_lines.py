@@ -67,8 +67,31 @@ def normalize_allocations(line: dict) -> dict:
     return line
 
 
+def normalize_allocation_keys(alloc: dict) -> dict:
+    """
+    Normalize allocation keys: accept both refId (camelCase) and ref_id (snake_case).
+    Always return ref_id only.
+    """
+    if isinstance(alloc, dict):
+        # If refId exists but ref_id doesn't, copy it
+        if 'refId' in alloc and 'ref_id' not in alloc:
+            alloc['ref_id'] = alloc['refId']
+        # Remove refId to ensure clean response
+        alloc.pop('refId', None)
+    return alloc
+
+
+def normalize_allocations_list(allocations: list) -> list:
+    """Normalize all allocations in a list"""
+    return [normalize_allocation_keys(a) for a in allocations] if allocations else []
+
+
 def compute_allocation_stats(line: dict) -> dict:
     """Compute allocation statistics for a line"""
+    # First normalize allocations
+    if line.get("allocations"):
+        line["allocations"] = normalize_allocations_list(line["allocations"])
+    
     allocations = line.get("allocations", [])
     qty_purchased = line.get("qty", 0)
     qty_allocated = sum(a.get("qty", 0) for a in allocations)
