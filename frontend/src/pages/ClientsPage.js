@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import API from "@/api";
+import API from "@/lib/api";
 import { toast } from "sonner";
 
 export default function ClientsPage() {
