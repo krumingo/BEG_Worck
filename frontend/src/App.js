@@ -118,8 +118,9 @@ function AppRoutes() {
       <Route path="/" element={<CompanyProtectedRoute><DashboardPage /></CompanyProtectedRoute>} />
       <Route path="/projects" element={<CompanyProtectedRoute><ProjectsListPage /></CompanyProtectedRoute>} />
       <Route path="/projects/:projectId" element={<CompanyProtectedRoute><ProjectDetailPage /></CompanyProtectedRoute>} />
-      <Route path="/sites" element={<CompanyProtectedRoute><SitesListPage /></CompanyProtectedRoute>} />
-      <Route path="/sites/:siteId" element={<CompanyProtectedRoute><SiteDetailPage /></CompanyProtectedRoute>} />
+      {/* Redirect old /sites routes to /projects */}
+      <Route path="/sites" element={<Navigate to="/projects" replace />} />
+      <Route path="/sites/:siteId" element={<Navigate to="/projects" replace />} />
       <Route path="/my-day" element={<CompanyProtectedRoute><MyDayPage /></CompanyProtectedRoute>} />
       <Route path="/attendance-history" element={<CompanyProtectedRoute><AttendanceHistoryPage /></CompanyProtectedRoute>} />
       <Route path="/site-attendance" element={<CompanyProtectedRoute><SiteAttendancePage /></CompanyProtectedRoute>} />
