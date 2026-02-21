@@ -144,6 +144,7 @@ function AppRoutes() {
       <Route path="/finance/invoices" element={<CompanyProtectedRoute><InvoicesPage /></CompanyProtectedRoute>} />
       <Route path="/finance/invoices/new" element={<CompanyProtectedRoute><InvoiceEditorPage /></CompanyProtectedRoute>} />
       <Route path="/finance/invoices/:invoiceId" element={<CompanyProtectedRoute><InvoiceEditorPage /></CompanyProtectedRoute>} />
+      <Route path="/finance/invoices/:invoiceId/lines" element={<CompanyProtectedRoute><InvoiceLinesPage /></CompanyProtectedRoute>} />
       <Route path="/finance/payments" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
       <Route path="/finance/payments/new" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
       <Route path="/overhead" element={<CompanyProtectedRoute><OverheadPage /></CompanyProtectedRoute>} />
