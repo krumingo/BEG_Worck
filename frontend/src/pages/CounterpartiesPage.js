@@ -92,6 +92,19 @@ export default function CounterpartiesPage() {
       ),
     },
     {
+      key: "client_id",
+      label: t("clients.linkedClient"),
+      width: "120px",
+      render: (value, row) => {
+        if (row.type !== "person" && row.type !== "client") return null;
+        return value ? (
+          <Badge variant="default" className="bg-green-600">{t("clients.linkedClient")}</Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">{t("clients.noLinkedClient")}</Badge>
+        );
+      },
+    },
+    {
       key: "active",
       label: t("common.active"),
       sortable: true,
