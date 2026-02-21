@@ -295,3 +295,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 | /api/counterparties/{id}/auto-link-client | POST | Auto-find/create and link client |
 | /api/reports/company-finance-export | GET | Export PDF/XLSX finance report |
 | /api/reports/company-finance-compare | GET | Compare 3 months finance data |
+| /api/dashboard/activity | GET | Dashboard activity log with pagination |
+| /api/reports/company-finance-series | GET | Rolling N months finance series |
+| /api/reports/finance-details/summary | GET | Finance summary with KPIs |
+| /api/reports/finance-details/by-counterparty | GET | Finance by counterparty |
+| /api/reports/finance-details/by-project | GET | Finance by project |
+| /api/reports/finance-details/transactions | GET | All transactions with filters |
+| /api/reports/finance-details/top-counterparties | GET | Top 10 counterparties |
