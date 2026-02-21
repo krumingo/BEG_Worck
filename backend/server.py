@@ -1125,7 +1125,7 @@ async def startup():
     
     # Counterparties indexes
     await db.counterparties.create_index([("org_id", 1), ("name", 1)])
-    await db.counterparties.create_index([("org_id", 1), ("eik", 1)], unique=True, sparse=True)
+    await db.counterparties.create_index([("org_id", 1), ("eik", 1)], sparse=True)  # Non-unique - check manually in code
     await db.counterparties.create_index([("org_id", 1), ("type", 1)])
     await db.counterparties.create_index([("org_id", 1), ("active", 1)])
     
