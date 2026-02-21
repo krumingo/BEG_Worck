@@ -377,6 +377,5 @@ export default function MobileSettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
   );
 }
