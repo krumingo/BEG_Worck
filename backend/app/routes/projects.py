@@ -18,9 +18,10 @@ from app.utils.audit import log_audit
 router = APIRouter(tags=["projects"])
 
 # Constants
-PROJECT_STATUSES = ["Draft", "Active", "Paused", "Completed", "Cancelled"]
+PROJECT_STATUSES = ["Draft", "Active", "Paused", "Completed", "Cancelled", "Finished", "Archived"]
 PROJECT_TYPES = ["Billable", "Overhead", "Warranty"]
 PROJECT_TEAM_ROLES = ["SiteManager", "Technician", "Viewer"]
+OWNER_TYPES = ["person", "company"]
 
 # Models
 class ProjectCreate(BaseModel):
@@ -35,6 +36,10 @@ class ProjectCreate(BaseModel):
     default_site_manager_id: Optional[str] = None
     tags: List[str] = []
     notes: str = ""
+    # Owner fields (from Sites merge)
+    address_text: Optional[str] = None
+    owner_type: Optional[str] = None  # "person" or "company"
+    owner_id: Optional[str] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -47,6 +52,10 @@ class ProjectUpdate(BaseModel):
     default_site_manager_id: Optional[str] = None
     tags: Optional[List[str]] = None
     notes: Optional[str] = None
+    # Owner fields (from Sites merge)
+    address_text: Optional[str] = None
+    owner_type: Optional[str] = None
+    owner_id: Optional[str] = None
 
 class TeamMemberAdd(BaseModel):
     user_id: str
