@@ -127,7 +127,7 @@ async def enforce_limit(org_id: str, resource_type: str):
         if count >= limit:
             raise HTTPException(
                 status_code=403,
-                detail={"code": "LIMIT_USERS_EXCEEDED", "message": f"User limit ({limit}) reached. Please upgrade your plan."}
+                detail={"code": "LIMIT_USERS_EXCEEDED", "message": f"User limit ({limit}) reached. Please upgrade your plan.", "current": count, "limit": limit}
             )
     elif resource_type == "projects":
         count = await db.projects.count_documents({"org_id": org_id})
@@ -135,7 +135,7 @@ async def enforce_limit(org_id: str, resource_type: str):
         if count >= limit:
             raise HTTPException(
                 status_code=403,
-                detail={"code": "LIMIT_PROJECTS_EXCEEDED", "message": f"Project limit ({limit}) reached. Please upgrade your plan."}
+                detail={"code": "LIMIT_PROJECTS_EXCEEDED", "message": f"Project limit ({limit}) reached. Please upgrade your plan.", "current": count, "limit": limit}
             )
     elif resource_type == "invoices":
         now = datetime.now(timezone.utc)
@@ -145,5 +145,5 @@ async def enforce_limit(org_id: str, resource_type: str):
         if count >= limit:
             raise HTTPException(
                 status_code=403,
-                detail={"code": "LIMIT_INVOICES_EXCEEDED", "message": f"Monthly invoice limit ({limit}) reached. Please upgrade your plan."}
+                detail={"code": "LIMIT_INVOICES_EXCEEDED", "message": f"Monthly invoice limit ({limit}) reached. Please upgrade your plan.", "current": count, "limit": limit}
             )
