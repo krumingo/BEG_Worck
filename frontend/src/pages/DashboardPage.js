@@ -14,7 +14,11 @@ import {
   CalendarCheck,
   AlertTriangle,
   FileX,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import FinanceSummaryWidget from "@/components/FinanceSummaryWidget";
 
 export default function DashboardPage() {
