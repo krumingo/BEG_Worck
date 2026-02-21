@@ -1035,6 +1035,10 @@ api_router.include_router(items_router)
 from app.routes.reports import router as reports_router
 api_router.include_router(reports_router)
 
+# Clients router
+from app.routes.clients import router as clients_router
+api_router.include_router(clients_router)
+
 # Import platform bootstrap router - ONE-TIME USE for production setup
 from app.routes.platform import router as platform_router
 app.include_router(platform_router)  # Direct to app (not under /api prefix)
