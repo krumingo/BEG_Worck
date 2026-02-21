@@ -694,6 +694,213 @@ async def get_company_finance_summary(
     }
 
 
+# ── Company Finance Compare (3 Months) ─────────────────────────────
+
+MONTH_NAMES_BG = [
+    "Януари", "Февруари", "Март", "Април", "Май", "Юни",
+    "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"
+]
+
+async def get_month_finance_totals(org_id: str, year: int, month: int) -> dict:
+    """
+    Get finance totals for a single month.
+    Returns income/expense breakdown without weekly details.
+    """
+    _, days_in_month = monthrange(year, month)
+    date_from = f"{year}-{month:02d}-01"
+    date_to = f"{year}-{month:02d}-{days_in_month:02d}"
+    
+    # Initialize totals
+    income_invoices = 0
+    income_cash = 0
+    expenses_invoices = 0
+    expenses_cash = 0
+    expenses_overhead = 0
+    expenses_payroll = 0
+    expenses_bonus = 0
+    
+    # 1. Issued Invoices (Income)
+    issued_invoices = await db.invoices.find({
+        "org_id": org_id,
+        "direction": "Issued",
+        "issue_date": {"$gte": date_from, "$lte": date_to}
+    }, {"_id": 0, "total": 1}).to_list(1000)
+    income_invoices = sum(inv.get("total", 0) for inv in issued_invoices)
+    
+    # 2. Received Invoices (Expenses)
+    received_invoices = await db.invoices.find({
+        "org_id": org_id,
+        "direction": "Received",
+        "issue_date": {"$gte": date_from, "$lte": date_to}
+    }, {"_id": 0, "total": 1}).to_list(1000)
+    expenses_invoices = sum(inv.get("total", 0) for inv in received_invoices)
+    
+    # 3. Cash Transactions
+    cash_txns = await db.cash_transactions.find({
+        "org_id": org_id,
+        "date": {"$gte": date_from, "$lte": date_to}
+    }, {"_id": 0, "type": 1, "amount": 1}).to_list(1000)
+    
+    for txn in cash_txns:
+        if txn["type"] == "income":
+            income_cash += txn.get("amount", 0)
+        else:
+            expenses_cash += txn.get("amount", 0)
+    
+    # 4. Overhead Transactions
+    overhead_txns = await db.overhead_transactions.find({
+        "org_id": org_id,
+        "date": {"$gte": date_from, "$lte": date_to}
+    }, {"_id": 0, "amount": 1}).to_list(1000)
+    expenses_overhead = sum(txn.get("amount", 0) for txn in overhead_txns)
+    
+    # 5. Payroll Payments
+    payroll_payments = await db.payroll_payments.find({
+        "org_id": org_id,
+        "payment_date": {"$gte": date_from, "$lte": date_to}
+    }, {"_id": 0, "net_salary": 1}).to_list(1000)
+    expenses_payroll = sum(pay.get("net_salary", 0) for pay in payroll_payments)
+    
+    # 6. Bonus Payments
+    bonus_payments_list = await db.bonus_payments.find({
+        "org_id": org_id,
+        "date": {"$gte": date_from, "$lte": date_to}
+    }, {"_id": 0, "amount": 1}).to_list(1000)
+    expenses_bonus = sum(bonus.get("amount", 0) for bonus in bonus_payments_list)
+    
+    # Calculate totals
+    income_total = income_invoices + income_cash
+    expenses_total = expenses_invoices + expenses_cash + expenses_overhead + expenses_payroll + expenses_bonus
+    net = income_total - expenses_total
+    
+    # Find top expense type
+    breakdown = {
+        "invoices": round(expenses_invoices, 2),
+        "cash": round(expenses_cash, 2),
+        "overhead": round(expenses_overhead, 2),
+        "payroll": round(expenses_payroll, 2),
+        "bonus": round(expenses_bonus, 2),
+    }
+    top_expense_type = max(breakdown.items(), key=lambda x: x[1])[0] if expenses_total > 0 else None
+    
+    return {
+        "year": year,
+        "month": month,
+        "month_name": MONTH_NAMES_BG[month - 1],
+        "totals": {
+            "income_total": round(income_total, 2),
+            "expenses_total": round(expenses_total, 2),
+            "net": round(net, 2),
+        },
+        "income_breakdown": {
+            "invoices": round(income_invoices, 2),
+            "cash": round(income_cash, 2),
+        },
+        "expense_breakdown": breakdown,
+        "top_expense_type": top_expense_type,
+    }
+
+
+@router.get("/reports/company-finance-compare")
+async def compare_company_finance(
+    user: dict = Depends(require_m5),
+    year: Optional[int] = None,
+    months: Optional[str] = None,  # comma-separated: "01,02,03"
+    mode: Optional[str] = None,    # "last3" for automatic last 3 months
+):
+    """
+    Compare company finance across multiple months.
+    
+    Usage:
+    - /api/reports/company-finance-compare?year=2026&months=01,02,03
+    - /api/reports/company-finance-compare?mode=last3
+    
+    Returns aggregated data for each month for comparison charts.
+    """
+    org_id = user["org_id"]
+    
+    # Determine which months to fetch
+    months_to_fetch = []
+    
+    if mode == "last3":
+        # Get last 3 completed months from current date
+        today = datetime.now(timezone.utc)
+        current_year = today.year
+        current_month = today.month
+        
+        for i in range(3):
+            # Go back i+1 months (skip current month as it's incomplete)
+            m = current_month - i - 1
+            y = current_year
+            while m <= 0:
+                m += 12
+                y -= 1
+            months_to_fetch.append((y, m))
+        
+        # Reverse to get chronological order
+        months_to_fetch.reverse()
+    
+    elif year and months:
+        # Parse comma-separated months
+        try:
+            month_nums = [int(m.strip()) for m in months.split(",")]
+            # Validate months
+            for m in month_nums:
+                if m < 1 or m > 12:
+                    raise HTTPException(status_code=422, detail=f"Invalid month: {m}")
+            months_to_fetch = [(year, m) for m in month_nums]
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid months format. Use comma-separated numbers: 01,02,03")
+    
+    else:
+        raise HTTPException(
+            status_code=422, 
+            detail="Provide either 'mode=last3' or 'year' + 'months' parameters"
+        )
+    
+    # Fetch data for each month
+    results = []
+    for y, m in months_to_fetch:
+        month_data = await get_month_finance_totals(org_id, y, m)
+        results.append(month_data)
+    
+    # Prepare chart data
+    bar_chart_data = [
+        {
+            "month": r["month_name"][:3],  # Short name
+            "month_full": r["month_name"],
+            "income": r["totals"]["income_total"],
+            "expenses": r["totals"]["expenses_total"],
+        }
+        for r in results
+    ]
+    
+    line_chart_data = [
+        {
+            "month": r["month_name"][:3],
+            "month_full": r["month_name"],
+            "net": r["totals"]["net"],
+        }
+        for r in results
+    ]
+    
+    # Calculate overall totals
+    overall_income = sum(r["totals"]["income_total"] for r in results)
+    overall_expenses = sum(r["totals"]["expenses_total"] for r in results)
+    overall_net = overall_income - overall_expenses
+    
+    return {
+        "months": results,
+        "bar_chart_data": bar_chart_data,
+        "line_chart_data": line_chart_data,
+        "overall_totals": {
+            "income": round(overall_income, 2),
+            "expenses": round(overall_expenses, 2),
+            "net": round(overall_net, 2),
+        },
+    }
+
+
 # ── Cash Transactions CRUD ─────────────────────────────────
 
 @router.get("/finance/cash-transactions")
