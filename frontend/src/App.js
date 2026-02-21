@@ -37,6 +37,7 @@ import FinanceOverviewPage from "@/pages/FinanceOverviewPage";
 import FinancialAccountsPage from "@/pages/FinancialAccountsPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceEditorPage from "@/pages/InvoiceEditorPage";
+import InvoiceLinesPage from "@/pages/InvoiceLinesPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import OverheadPage from "@/pages/OverheadPage";
 import OverheadSnapshotDetailPage from "@/pages/OverheadSnapshotDetailPage";
