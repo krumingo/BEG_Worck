@@ -119,6 +119,27 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 **Tests:** 12 pytest tests in `/app/backend/tests/test_clients_module.py`
 
+### Phase: Finance Compare 3 Months (DONE) - Feb 21, 2026
+**Added 3-month comparison feature to FinanceSummaryWidget:**
+
+#### Backend (P1.1 - DONE)
+1. **Compare API** (`/api/reports/company-finance-compare`)
+   - `?year=YYYY&months=01,02,03` - specific months
+   - `?mode=last3` - automatic last 3 completed months
+   - Returns: monthly totals, breakdown, bar/line chart data, overall totals
+
+#### Frontend (P1.1 - DONE)
+1. **View Toggle** - "Месец | 3 месеца" tabs
+2. **Preset Selector** - "Последни 3", Q1-Q4 quarters
+3. **Compare Summary Cards** - 3 cards with totals for period
+4. **Bar Chart** - Income vs Expenses by month (3 groups)
+5. **Line Chart** - Net balance trend (3 points)
+6. **Details Table** - Month | Income | Expenses | Net | Top expense type
+
+**Performance:** useMemo/useCallback for chart data, no re-renders on toggle
+
+**Tests:** 4 pytest tests for compare endpoint in `/app/backend/tests/test_finance_reports.py`
+
 ---
 
 ## Backlog (P2/P3)
