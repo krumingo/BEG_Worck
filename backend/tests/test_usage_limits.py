@@ -141,7 +141,7 @@ class TestLimitEnforcement:
                     data = response.json()
                     assert "detail" in data
                     detail = data["detail"]
-                    assert detail.get("error_code") == "LIMIT_USERS_EXCEEDED"
+                    assert detail.get("code") == "LIMIT_USERS_EXCEEDED"
                     break
             
             # Verify we hit the limit
@@ -186,7 +186,7 @@ class TestLimitEnforcement:
                 elif response.status_code == 403:
                     data = response.json()
                     detail = data["detail"]
-                    assert detail.get("error_code") == "LIMIT_PROJECTS_EXCEEDED"
+                    assert detail.get("code") == "LIMIT_PROJECTS_EXCEEDED"
                     break
             
             # Verify we hit the limit
