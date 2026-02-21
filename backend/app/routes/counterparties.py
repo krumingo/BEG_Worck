@@ -146,7 +146,6 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     
     # Normalize EIK - treat empty string as None
     eik_value = data.eik.strip() if data.eik else None
-    print(f"DEBUG: data.eik={repr(data.eik)}, eik_value={repr(eik_value)}")
     
     # Check EIK uniqueness if provided and not empty
     if eik_value:
@@ -179,14 +178,11 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     if eik_value:
         counterparty["eik"] = eik_value
     
-    print(f"DEBUG: Inserting counterparty: {counterparty}")
-    
     try:
         await db.counterparties.insert_one(counterparty)
     except Exception as e:
-        print(f"DEBUG: MongoDB error: {e}")
-        if "duplicate key" in str(e).lower() and "eik" in str(e).lower():
-            raise HTTPException(status_code=400, detail="Counterparty with this EIK already exists")
+        if "duplicate key" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Duplicate key error")
         raise
     
     await log_audit(user["org_id"], user["id"], user["email"], "counterparty_created", "counterparty", counterparty["id"],
