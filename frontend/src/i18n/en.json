@@ -146,6 +146,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "projects": "Projects",
+    "sites": "Sites",
     "offers": "Offers",
     "activities": "Activities",
     "siteAttendance": "Site Attendance",
