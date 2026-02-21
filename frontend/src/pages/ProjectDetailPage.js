@@ -78,6 +78,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [showClientSelector, setShowClientSelector] = useState(false);
   const [savingWarranty, setSavingWarranty] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
