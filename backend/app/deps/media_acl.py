@@ -144,6 +144,16 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         # For now, allow any user in the same org
         return True, None
     
+    elif context_type == "site":
+        # Site photos: any user in the org can view
+        site = await db.sites.find_one(
+            {"id": context_id, "org_id": org_id},
+            {"_id": 0, "id": 1}
+        )
+        if not site:
+            return False, "Site not found"
+        return True, None
+    
     else:
         return False, f"Unknown context type: {context_type}"
 
