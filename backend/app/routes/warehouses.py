@@ -176,3 +176,35 @@ async def delete_warehouse(warehouse_id: str, user: dict = Depends(get_current_u
 async def get_warehouse_types():
     """Get available warehouse types"""
     return {"types": WAREHOUSE_TYPES}
+
+
+# ── DEV-ONLY Endpoints ─────────────────────────────────────────────
+
+@router.post("/dev/reset-warehouses")
+async def dev_reset_warehouses(user: dict = Depends(get_current_user)):
+    """
+    DEV ONLY: Delete all warehouses for the current organization.
+    Used for testing the "first warehouse" flow.
+    Blocked in production.
+    """
+    import os
+    
+    # Block in production
+    env = os.environ.get("ENVIRONMENT", "development")
+    if env == "production":
+        raise HTTPException(status_code=403, detail="This endpoint is not available in production")
+    
+    if not warehouse_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    # Delete all warehouses for this org
+    result = await db.warehouses.delete_many({"org_id": user["org_id"]})
+    
+    # Also clear any invoice line allocations pointing to warehouses
+    # (optional: keep allocations but they will reference non-existent warehouses)
+    
+    return {
+        "ok": True,
+        "deleted_count": result.deleted_count,
+        "message": f"Deleted {result.deleted_count} warehouses for org {user['org_id']}"
+    }
