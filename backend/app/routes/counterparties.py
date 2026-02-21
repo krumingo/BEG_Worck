@@ -22,7 +22,10 @@ def finance_permission(user: dict) -> bool:
 
 
 def parse_filters(filters: Optional[str]) -> dict:
-    """Parse filter string"""
+    """
+    Parse filter string like 'name.contains=test,type.in=supplier|client,active.bool=true'
+    Supports operators: contains, equals, in, bool, min, max, from, to
+    """
     if not filters:
         return {}
     result = {}
@@ -31,6 +34,44 @@ def parse_filters(filters: Optional[str]) -> dict:
             key, value = part.split("=", 1)
             result[key] = value
     return result
+
+
+def build_mongo_query(org_id: str, filters: dict, base_query: dict = None) -> dict:
+    """Build MongoDB query from parsed filters with full operator support"""
+    query = base_query or {"org_id": org_id}
+    
+    for key, value in filters.items():
+        if "." in key:
+            field, op = key.rsplit(".", 1)
+        else:
+            field, op = key, "equals"
+        
+        if op == "contains":
+            query[field] = {"$regex": re.escape(value), "$options": "i"}
+        elif op == "equals":
+            query[field] = value
+        elif op == "in":
+            query[field] = {"$in": value.split("|")}
+        elif op == "bool":
+            query[field] = value.lower() == "true"
+        elif op == "min":
+            if field not in query:
+                query[field] = {}
+            query[field]["$gte"] = float(value)
+        elif op == "max":
+            if field not in query:
+                query[field] = {}
+            query[field]["$lte"] = float(value)
+        elif op == "from":
+            if field not in query:
+                query[field] = {}
+            query[field]["$gte"] = value
+        elif op == "to":
+            if field not in query:
+                query[field] = {}
+            query[field]["$lte"] = value
+    
+    return query
 
 
 # ── Counterparties CRUD ────────────────────────────────────────────
@@ -48,25 +89,16 @@ async def list_counterparties(
     active_only: bool = True,
 ):
     """List counterparties with pagination, sorting, and filters"""
-    query = {"org_id": user["org_id"]}
+    base_query = {"org_id": user["org_id"]}
     
     if type:
-        query["type"] = type
+        base_query["type"] = type
     if active_only:
-        query["active"] = True
+        base_query["active"] = True
     
     # Parse additional filters
     parsed_filters = parse_filters(filters)
-    for key, value in parsed_filters.items():
-        if "." in key:
-            field, op = key.rsplit(".", 1)
-        else:
-            field, op = key, "equals"
-        
-        if op == "contains":
-            query[field] = {"$regex": re.escape(value), "$options": "i"}
-        elif op == "equals":
-            query[field] = value
+    query = build_mongo_query(user["org_id"], parsed_filters, base_query)
     
     # Global search
     if search:
