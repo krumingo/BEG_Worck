@@ -175,8 +175,8 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     }
     
     # Only include EIK if it's not empty (for sparse unique index)
-    if data.eik:
-        counterparty["eik"] = data.eik
+    if eik_value:
+        counterparty["eik"] = eik_value
     
     try:
         await db.counterparties.insert_one(counterparty)
