@@ -320,11 +320,21 @@ export default function ProjectsListPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-muted-foreground">{t("projects.startDate")}</Label>
-                <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="bg-background" data-testid="project-start-date" />
+                <DatePicker 
+                  value={form.start_date} 
+                  onChange={(date) => setForm({ ...form, start_date: date })} 
+                  placeholder={t("projects.selectDate")}
+                  data-testid="project-start-date" 
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">{t("projects.endDate")}</Label>
-                <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} className="bg-background" data-testid="project-end-date" />
+                <DatePicker 
+                  value={form.end_date} 
+                  onChange={(date) => setForm({ ...form, end_date: date })} 
+                  placeholder={t("projects.selectDate")}
+                  data-testid="project-end-date" 
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
