@@ -48,6 +48,7 @@ import ItemsPage from "@/pages/ItemsPage";
 import PricesPage from "@/pages/PricesPage";
 import TurnoverPage from "@/pages/TurnoverPage";
 import ClientsPage from "@/pages/ClientsPage";
+import FinanceDetailsPage from "@/pages/FinanceDetailsPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
