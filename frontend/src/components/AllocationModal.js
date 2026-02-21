@@ -374,25 +374,47 @@ export default function AllocationModal({
             </div>
 
             {/* Quick Actions */}
-            {remaining > 0 && warehouses.length > 0 && (
+            {remaining > 0 && (
               <div className="border border-dashed border-gray-700 rounded-lg p-3">
                 <div className="text-sm text-gray-400 mb-2">
                   Бързо действие: Добави остатъка ({remaining.toFixed(2)}) към склад:
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {warehouses.slice(0, 5).map(wh => (
+                {warehouses.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {warehouses.slice(0, 4).map(wh => (
+                      <Button
+                        key={wh.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addRemainingToWarehouse(wh.id)}
+                        className="border-gray-700 hover:bg-gray-800"
+                      >
+                        <Package className="w-3 h-3 mr-1" /> {wh.code}
+                      </Button>
+                    ))}
                     <Button
-                      key={wh.id}
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => addRemainingToWarehouse(wh.id)}
-                      className="border-gray-700 hover:bg-gray-800"
+                      onClick={handleCreateWarehouse}
+                      className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
                     >
-                      <Package className="w-3 h-3 mr-1" /> {wh.code}
+                      <Plus className="w-3 h-3 mr-1" /> Създай нов склад
                     </Button>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 py-2">
+                    <p className="text-sm text-gray-500">Няма налични складове</p>
+                    <Button
+                      type="button"
+                      onClick={handleCreateWarehouse}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Създай първия си склад
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
