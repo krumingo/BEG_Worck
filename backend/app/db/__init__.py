@@ -58,3 +58,4 @@ warehouses = db.warehouses
 counterparties = db.counterparties
 items = db.items
 invoice_lines = db.invoice_lines
+clients = db.clients
