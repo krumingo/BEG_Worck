@@ -1,10 +1,11 @@
 """
-Routes - Warehouses (Inventory locations).
+Routes - Warehouses (Inventory locations) with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import re
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -22,26 +23,85 @@ def warehouse_permission(user: dict) -> bool:
     return user["role"] in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]
 
 
+def parse_filters(filters: Optional[str]) -> dict:
+    """Parse filter string"""
+    if not filters:
+        return {}
+    result = {}
+    for part in filters.split(","):
+        if "=" in part:
+            key, value = part.split("=", 1)
+            result[key] = value
+    return result
+
+
+def build_mongo_query(org_id: str, filters: dict, base_query: dict = None) -> dict:
+    """Build MongoDB query from parsed filters"""
+    query = base_query or {"org_id": org_id}
+    
+    for key, value in filters.items():
+        if "." in key:
+            field, op = key.rsplit(".", 1)
+        else:
+            field, op = key, "equals"
+        
+        if op == "contains":
+            query[field] = {"$regex": re.escape(value), "$options": "i"}
+        elif op == "equals":
+            query[field] = value
+        elif op == "in":
+            query[field] = {"$in": value.split("|")}
+        elif op == "bool":
+            query[field] = value.lower() == "true"
+    
+    return query
+
+
 # ── Warehouses CRUD ────────────────────────────────────────────────
 
 @router.get("/warehouses")
 async def list_warehouses(
     user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sort_by: str = Query("code"),
+    sort_dir: str = Query("asc"),
+    search: Optional[str] = None,
+    filters: Optional[str] = None,
     type: Optional[str] = None,
     project_id: Optional[str] = None,
     active_only: bool = True,
 ):
-    """List all warehouses for the organization"""
-    query = {"org_id": user["org_id"]}
+    """List warehouses with pagination, sorting, and filters"""
+    base_query = {"org_id": user["org_id"]}
     
     if type:
-        query["type"] = type
+        base_query["type"] = type
     if project_id:
-        query["project_id"] = project_id
+        base_query["project_id"] = project_id
     if active_only:
-        query["active"] = True
+        base_query["active"] = True
     
-    warehouses = await db.warehouses.find(query, {"_id": 0}).sort("code", 1).to_list(500)
+    parsed_filters = parse_filters(filters)
+    query = build_mongo_query(user["org_id"], parsed_filters, base_query)
+    
+    # Global search
+    if search:
+        query["$or"] = [
+            {"code": {"$regex": re.escape(search), "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"address": {"$regex": re.escape(search), "$options": "i"}},
+        ]
+    
+    # Count total
+    total = await db.warehouses.count_documents(query)
+    
+    # Sort
+    sort_direction = 1 if sort_dir == "asc" else -1
+    
+    # Paginate
+    skip = (page - 1) * page_size
+    warehouses = await db.warehouses.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with reference names
     for wh in warehouses:
