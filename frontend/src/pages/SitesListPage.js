@@ -49,6 +49,7 @@ const STATUS_CONFIG = {
 
 export default function SitesListPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
