@@ -260,6 +260,8 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 | /data/items | Артикули | CRUD, filtering, CSV export |
 | /data/prices | Цени | Read-only, price history |
 | /data/turnover | Оборот | Grand totals, drilldown |
+| /data/clients | Клиенти | CRUD, filtering |
+| /reports/finance-details | Финансови детайли | 5 tabs, filters, export |
 
 ---
 
