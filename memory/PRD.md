@@ -53,6 +53,41 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 **Tests:** 18 pytest tests in `/app/backend/tests/test_data_module.py`
 
+### Phase: Finance Dashboard & Reports (DONE) - Feb 21, 2026
+**Full implementation of Financial Reporting & Dashboard:**
+
+#### Backend (P0 - DONE)
+1. **Turnover by Client API** (`/api/reports/turnover-by-client`) - Aggregated sales by client (persons)
+2. **Company Finance Summary API** (`/api/reports/company-finance-summary`) - Weekly income/expense breakdown
+3. **Cash Transactions CRUD** (`/api/finance/cash-transactions`) - Income/expense cash flow
+4. **Overhead Transactions CRUD** (`/api/finance/overhead-transactions`) - Monthly overhead costs  
+5. **Bonus Payments CRUD** (`/api/finance/bonus-payments`) - Employee bonus tracking
+
+**Response Format (Finance Summary):**
+```json
+{
+  "year": 2026, "month": 1,
+  "weeks": [{ "week": 1, "income": 0, "expenses": 0, ... }],
+  "totals": { "income": 0, "expenses": 0, "net_balance": 0 },
+  "income_breakdown": { "invoices": 0, "cash": 0 },
+  "expense_breakdown": { "invoices": 0, "cash": 0, "overhead": 0, "payroll": 0, "bonus": 0 },
+  "cumulative_balance": [{ "week": 1, "balance": 0 }]
+}
+```
+
+#### Frontend (P0 - DONE)
+1. **FinanceSummaryWidget** - Dashboard component with:
+   - Year/Month selectors
+   - Summary cards (Income, Expenses, Net Balance)
+   - Bar chart: Income vs Expenses by week
+   - Pie chart: Expense breakdown by type
+   - Line chart: Cumulative balance
+2. **Dashboard Integration** - Widget visible to managers
+3. **CounterpartiesPage "Оборот" Button** - Drilldown to turnover with counterparty filter
+
+**Tests:** 12 pytest tests in `/app/backend/tests/test_finance_reports.py`
+**Seed Script:** `/app/backend/scripts/seed_finance_data.py` - Creates test data for 2024-2026
+
 ---
 
 ## Backlog (P1/P2)
