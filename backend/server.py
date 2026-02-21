@@ -1134,6 +1134,20 @@ async def startup():
     await db.items.create_index([("org_id", 1), ("name", 1)])
     await db.items.create_index([("org_id", 1), ("category", 1)])
     await db.items.create_index([("org_id", 1), ("is_active", 1)])
+    
+    # Cash transactions indexes
+    await db.cash_transactions.create_index([("org_id", 1), ("date", -1)])
+    await db.cash_transactions.create_index([("org_id", 1), ("type", 1)])
+    
+    # Overhead transactions indexes
+    await db.overhead_transactions.create_index([("org_id", 1), ("date", -1)])
+    
+    # Bonus payments indexes
+    await db.bonus_payments.create_index([("org_id", 1), ("date", -1)])
+    await db.bonus_payments.create_index([("org_id", 1), ("user_id", 1)])
+    
+    # Payroll payments indexes (if not already exists)
+    await db.payroll_payments.create_index([("org_id", 1), ("payment_date", -1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
