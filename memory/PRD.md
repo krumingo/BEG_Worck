@@ -61,8 +61,9 @@ BEG_Work is a comprehensive construction management SaaS platform designed to st
 - [x] Update `flow_map.md` documentation for `DELETE /api/media/{id}` (2026-02-21)
 
 ### P2 - Medium Priority
-- [x] **Sites Module Phase 1** (2026-02-21) - Owner registry (persons/companies), address field, status filters
-- [x] **Sites Photos** (2026-02-21) - Upload from mobile, gallery in web detail, lightbox, delete ACL
+- [x] **Sites Module Phase 1** (2026-02-21) - MERGED into Projects
+- [x] **Sites Photos** (2026-02-21) - Now Project Photos in projects.py
+- [x] **Sites → Projects Merge** (2026-02-21) - Unified model, no separate Sites entity
 - [ ] Phase 3: Mobile Technician flows
 - [ ] Phase 4: Mobile Driver deliveries
 - [ ] Phase 5: Machine movements
