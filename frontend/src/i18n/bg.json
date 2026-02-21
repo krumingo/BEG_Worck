@@ -187,7 +187,8 @@
     "counterparties": "Контрагенти",
     "items": "Артикули",
     "prices": "Цени",
-    "turnover": "Оборот"
+    "turnover": "Оборот",
+    "clients": "Клиенти"
   },
   "dashboard": {
     "title": "Табло",
