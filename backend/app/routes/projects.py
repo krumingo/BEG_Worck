@@ -1,11 +1,14 @@
 """
-Project routes - /api/projects/*, /api/project-enums
+Project routes - /api/projects/*, /api/project-enums, /api/persons/*, /api/companies/*
+Includes owner (person/company) management merged from Sites module.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
+from pathlib import Path
 import uuid
+import re
 
 from app.db import db
 from app.deps.auth import (
