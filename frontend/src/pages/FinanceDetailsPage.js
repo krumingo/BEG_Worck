@@ -79,6 +79,18 @@ const PRESETS = [
   { value: "custom", label: "Персонализиран" },
 ];
 
+const PERIOD_OPTIONS = [
+  { value: "1", label: "1 месец" },
+  { value: "3", label: "3 месеца" },
+  { value: "6", label: "6 месеца" },
+  { value: "12", label: "12 месеца" },
+];
+
+const MONTH_NAMES_BG = [
+  "Януари", "Февруари", "Март", "Април", "Май", "Юни",
+  "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"
+];
+
 const TRANSACTION_TYPES = [
   { value: "all", label: "Всички" },
   { value: "invoice", label: "Фактури" },
