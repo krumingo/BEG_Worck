@@ -208,7 +208,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Work report submission
 - Photo uploads
 
-### P2 - Phase 4: Mobile Driver Deliveries
+### P3 - Phase 4: Mobile Driver Deliveries
 - Delivery tracking
 - Status updates
 
