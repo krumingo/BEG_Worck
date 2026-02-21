@@ -159,7 +159,6 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
         "org_id": user["org_id"],
         "name": data.name,
         "type": data.type,
-        "eik": data.eik,
         "vat_number": data.vat_number,
         "address": data.address,
         "phone": data.phone,
@@ -172,7 +171,17 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
         "updated_at": now,
     }
     
-    await db.counterparties.insert_one(counterparty)
+    # Only include EIK if it's not empty (for sparse unique index)
+    if data.eik:
+        counterparty["eik"] = data.eik
+    
+    try:
+        await db.counterparties.insert_one(counterparty)
+    except Exception as e:
+        if "duplicate key" in str(e).lower() and "eik" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Counterparty with this EIK already exists")
+        raise
+    
     await log_audit(user["org_id"], user["id"], user["email"], "counterparty_created", "counterparty", counterparty["id"],
                     {"name": data.name, "type": data.type})
     
