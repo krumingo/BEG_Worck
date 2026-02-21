@@ -156,6 +156,7 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
         "address_text": data.address_text,
         "owner_type": data.owner_type,
         "owner_id": data.owner_id,
+        "warranty_months": data.warranty_months,
         "created_at": now,
         "updated_at": now,
     }
