@@ -47,3 +47,14 @@ project_overhead_allocations = db.project_overhead_allocations
 org_mobile_settings = db.org_mobile_settings
 mobile_view_configs = db.mobile_view_configs
 media_files = db.media_files
+
+# Finance/Reports collections
+cash_transactions = db.cash_transactions
+overhead_transactions = db.overhead_transactions
+bonus_payments = db.bonus_payments
+
+# Data module
+warehouses = db.warehouses
+counterparties = db.counterparties
+items = db.items
+invoice_lines = db.invoice_lines
