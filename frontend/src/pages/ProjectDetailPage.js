@@ -51,6 +51,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import ClientSelector from "@/components/ClientSelector";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
