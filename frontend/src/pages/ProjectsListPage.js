@@ -356,7 +356,7 @@ export default function ProjectsListPage() {
                 <SelectContent>
                   <SelectItem value="none">{t("common.none")}</SelectItem>
                   {managers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name} ({t(`users.roles.${m.role.toLowerCase()}`)})</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name} ({t(`users.roles.${m.role?.toLowerCase() || 'user'}`)})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
