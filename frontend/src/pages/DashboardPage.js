@@ -45,8 +45,9 @@ export default function DashboardPage() {
         ]);
         setStats(dashRes.data);
         try {
-          const logsRes = await API.get("/audit-logs?limit=8");
-          setRecentLogs(logsRes.data.logs);
+          const logsRes = await API.get("/dashboard/activity?limit=3&page=1");
+          setRecentLogs(logsRes.data.items || []);
+          setActivityTotal(logsRes.data.total || 0);
         } catch {
           setRecentLogs([]);
         }
