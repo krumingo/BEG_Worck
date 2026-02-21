@@ -465,7 +465,11 @@ export default function FinanceDetailsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="monthly" data-testid="tab-monthly">
+            <CalendarDays className="w-4 h-4 mr-1" />
+            По месеци
+          </TabsTrigger>
           <TabsTrigger value="overview" data-testid="tab-overview">
             {t("financeDetails.overview") || "Обобщение"}
           </TabsTrigger>
@@ -482,6 +486,140 @@ export default function FinanceDetailsPage() {
             {t("financeDetails.transactions") || "Транзакции"}
           </TabsTrigger>
         </TabsList>
+
+        {/* Monthly Series Tab */}
+        <TabsContent value="monthly" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <CalendarDays className="w-4 h-4" />
+                Месечна разбивка ({period} {parseInt(period) === 1 ? "месец" : "месеца"})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {monthlySeries?.months?.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border">
+                        <TableHead className="font-medium">Месец</TableHead>
+                        <TableHead className="text-right font-medium text-green-500">Приходи</TableHead>
+                        <TableHead className="text-right font-medium text-red-500">Разходи</TableHead>
+                        <TableHead className="text-right font-medium text-blue-500">Нетно</TableHead>
+                        <TableHead className="text-right font-medium text-muted-foreground">Фактури (П)</TableHead>
+                        <TableHead className="text-right font-medium text-muted-foreground">Каса (П)</TableHead>
+                        <TableHead className="text-right font-medium text-muted-foreground">Фактури (Р)</TableHead>
+                        <TableHead className="text-right font-medium text-muted-foreground">Режийни</TableHead>
+                        <TableHead className="text-right font-medium text-muted-foreground">Заплати</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {monthlySeries.months.map((m, idx) => (
+                        <TableRow key={`${m.year}-${m.month}`} className="border-border hover:bg-muted/30">
+                          <TableCell className="font-medium">
+                            {formatMonthName(m.year, m.month)}
+                          </TableCell>
+                          <TableCell className="text-right text-green-500">
+                            {(m.income_total || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                          </TableCell>
+                          <TableCell className="text-right text-red-500">
+                            {(m.expenses_total || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                          </TableCell>
+                          <TableCell className={`text-right font-medium ${(m.net || 0) >= 0 ? "text-blue-500" : "text-amber-500"}`}>
+                            {(m.net || 0) >= 0 ? "+" : ""}{(m.net || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {(m.breakdown?.income_invoices || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {(m.breakdown?.income_cash || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {(m.breakdown?.expenses_invoices || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {(m.breakdown?.expenses_overhead || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">
+                            {(m.breakdown?.expenses_payroll || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      
+                      {/* TOTALS Row */}
+                      {monthlyTotals && (
+                        <TableRow className="border-t-2 border-border bg-muted/50 sticky bottom-0">
+                          <TableCell className="font-bold text-foreground">
+                            ОБЩО
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-green-400">
+                            {monthlyTotals.income.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-red-400">
+                            {monthlyTotals.expenses.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${monthlyTotals.net >= 0 ? "text-blue-400" : "text-amber-400"}`}>
+                            {monthlyTotals.net >= 0 ? "+" : ""}{monthlyTotals.net.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-muted-foreground text-sm">
+                            {monthlyTotals.breakdown.income_invoices.toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-muted-foreground text-sm">
+                            {monthlyTotals.breakdown.income_cash.toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-muted-foreground text-sm">
+                            {monthlyTotals.breakdown.expenses_invoices.toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-muted-foreground text-sm">
+                            {monthlyTotals.breakdown.expenses_overhead.toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-muted-foreground text-sm">
+                            {monthlyTotals.breakdown.expenses_payroll.toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">{t("common.noData") || "Няма данни"}</p>
+              )}
+            </CardContent>
+          </Card>
+          
+          {/* Monthly Chart */}
+          {monthlySeries?.months?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Приходи vs Разходи по месеци</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlySeries.months.map(m => ({
+                    name: MONTH_NAMES_BG[m.month - 1]?.substring(0, 3) || m.month,
+                    income: m.income_total || 0,
+                    expenses: m.expenses_total || 0,
+                  }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: "hsl(var(--popover))", 
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px"
+                      }}
+                      formatter={(value) => [`${value.toLocaleString("bg-BG", { minimumFractionDigits: 2 })} лв.`]}
+                    />
+                    <Legend />
+                    <Bar dataKey="income" name="Приходи" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="expenses" name="Разходи" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6 mt-6">
