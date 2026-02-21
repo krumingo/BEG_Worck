@@ -25,6 +25,7 @@ PROJECT_STATUSES = ["Draft", "Active", "Paused", "Completed", "Cancelled", "Fini
 PROJECT_TYPES = ["Billable", "Overhead", "Warranty"]
 PROJECT_TEAM_ROLES = ["SiteManager", "Technician", "Viewer"]
 OWNER_TYPES = ["person", "company"]
+WARRANTY_OPTIONS = [3, 6, 12, 24]  # months
 
 # Models
 class ProjectCreate(BaseModel):
@@ -43,6 +44,7 @@ class ProjectCreate(BaseModel):
     address_text: Optional[str] = None
     owner_type: Optional[str] = None  # "person" or "company"
     owner_id: Optional[str] = None
+    warranty_months: Optional[int] = None  # 3, 6, 12, 24
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
