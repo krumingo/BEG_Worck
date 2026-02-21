@@ -279,6 +279,9 @@ function CounterpartyModal({ open, onOpenChange, item, onSave }) {
           <DialogTitle>
             {item ? t("data.editCounterparty") : t("data.createCounterparty")}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {item ? t("data.editCounterparty") : t("data.createCounterparty")}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

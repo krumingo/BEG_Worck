@@ -279,6 +279,9 @@ function ItemModal({ open, onOpenChange, item, onSave, categories }) {
           <DialogTitle>
             {item ? t("data.editItem") : t("data.createItem")}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {item ? t("data.editItem") : t("data.createItem")}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

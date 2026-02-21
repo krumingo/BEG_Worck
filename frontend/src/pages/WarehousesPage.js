@@ -242,6 +242,9 @@ function WarehouseModal({ open, onOpenChange, item, onSave }) {
           <DialogTitle>
             {item ? t("data.editWarehouse") : t("data.createWarehouse")}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {item ? t("data.editWarehouse") : t("data.createWarehouse")}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
