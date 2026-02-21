@@ -50,6 +50,7 @@ const EMPTY_FORM = {
   code: "", name: "", status: "Draft", type: "Billable",
   start_date: "", end_date: "", planned_days: "",
   budget_planned: "", default_site_manager_id: "", tags: "", notes: "",
+  address_text: "", owner_type: "", owner_id: "",
 };
 
 export default function ProjectsListPage() {
