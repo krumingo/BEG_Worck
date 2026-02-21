@@ -4,10 +4,8 @@ import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -33,15 +31,25 @@ import {
   ArrowLeft,
   Users,
   CalendarDays,
-  DollarSign,
+  Building2,
+  User,
+  Phone,
+  Mail,
   Hash,
-  Layers,
-  Plus,
-  Trash2,
-  Loader2,
-  Tag,
   FileText,
+  Package,
+  Wallet,
+  Plus,
+  Loader2,
+  Eye,
+  Shield,
+  Clock,
+  TrendingUp,
+  Receipt,
+  Boxes,
+  Scale,
 } from "lucide-react";
+import DashboardLayout from "@/components/DashboardLayout";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -49,419 +57,492 @@ const STATUS_COLORS = {
   Paused: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   Completed: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   Cancelled: "bg-red-500/20 text-red-400 border-red-500/30",
+  Finished: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  Archived: "bg-gray-500/20 text-gray-400 border-gray-500/30",
 };
 
-const TEAM_ROLE_COLORS = {
-  SiteManager: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  Technician: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  Viewer: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-};
+const WARRANTY_OPTIONS = [
+  { value: 3, label: "3 месеца" },
+  { value: 6, label: "6 месеца" },
+  { value: 12, label: "12 месеца" },
+  { value: 24, label: "24 месеца" },
+];
 
 export default function ProjectDetailPage() {
-  const { t } = useTranslation();
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const [project, setProject] = useState(null);
-  const [team, setTeam] = useState([]);
-  const [phases, setPhases] = useState([]);
-  const [orgUsers, setOrgUsers] = useState([]);
+  const { t } = useTranslation();
+  
   const [loading, setLoading] = useState(true);
+  const [dashboard, setDashboard] = useState(null);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [savingWarranty, setSavingWarranty] = useState(false);
 
-  // Team dialog
-  const [teamDialogOpen, setTeamDialogOpen] = useState(false);
-  const [teamForm, setTeamForm] = useState({ user_id: "", role_in_project: "Technician" });
-  const [addingMember, setAddingMember] = useState(false);
-
-  // Phase dialog
-  const [phaseDialogOpen, setPhaseDialogOpen] = useState(false);
-  const [phaseForm, setPhaseForm] = useState({ name: "", order: 0, status: "Draft", planned_start: "", planned_end: "" });
-  const [editingPhase, setEditingPhase] = useState(null);
-  const [savingPhase, setSavingPhase] = useState(false);
-
-  const fetchAll = useCallback(async () => {
+  const fetchDashboard = useCallback(async () => {
     try {
-      const [projRes, teamRes, phasesRes, usersRes] = await Promise.all([
-        API.get(`/projects/${projectId}`),
-        API.get(`/projects/${projectId}/team`),
-        API.get(`/projects/${projectId}/phases`),
-        API.get("/users"),
-      ]);
-      setProject(projRes.data);
-      setTeam(teamRes.data);
-      setPhases(phasesRes.data);
-      setOrgUsers(usersRes.data);
+      const res = await API.get(`/projects/${projectId}/dashboard`);
+      setDashboard(res.data);
     } catch (err) {
       console.error(err);
-      if (err.response?.status === 404 || err.response?.status === 403) navigate("/projects");
     } finally {
       setLoading(false);
     }
-  }, [projectId, navigate]);
+  }, [projectId]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
 
-  const handleAddMember = async () => {
-    if (!teamForm.user_id) return;
-    setAddingMember(true);
+  const handleWarrantyChange = async (value) => {
+    setSavingWarranty(true);
     try {
-      await API.post(`/projects/${projectId}/team`, teamForm);
-      setTeamDialogOpen(false);
-      setTeamForm({ user_id: "", role_in_project: "Technician" });
-      const teamRes = await API.get(`/projects/${projectId}/team`);
-      setTeam(teamRes.data);
+      await API.put(`/projects/${projectId}`, { warranty_months: parseInt(value) });
+      setDashboard(prev => ({
+        ...prev,
+        project: { ...prev.project, warranty_months: parseInt(value) }
+      }));
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      console.error(err);
     } finally {
-      setAddingMember(false);
+      setSavingWarranty(false);
     }
   };
-
-  const handleRemoveMember = async (memberId) => {
-    if (!window.confirm(t("projects.removeTeamMemberConfirm"))) return;
-    try {
-      await API.delete(`/projects/${projectId}/team/${memberId}`);
-      const teamRes = await API.get(`/projects/${projectId}/team`);
-      setTeam(teamRes.data);
-    } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
-    }
-  };
-
-  const openCreatePhase = () => {
-    setEditingPhase(null);
-    setPhaseForm({ name: "", order: phases.length, status: "Draft", planned_start: "", planned_end: "" });
-    setPhaseDialogOpen(true);
-  };
-
-  const openEditPhase = (ph) => {
-    setEditingPhase(ph);
-    setPhaseForm({
-      name: ph.name, order: ph.order, status: ph.status,
-      planned_start: ph.planned_start || "", planned_end: ph.planned_end || "",
-    });
-    setPhaseDialogOpen(true);
-  };
-
-  const handleSavePhase = async () => {
-    setSavingPhase(true);
-    try {
-      const payload = {
-        ...phaseForm,
-        order: parseInt(phaseForm.order) || 0,
-        planned_start: phaseForm.planned_start || null,
-        planned_end: phaseForm.planned_end || null,
-      };
-      if (editingPhase) {
-        await API.put(`/projects/${projectId}/phases/${editingPhase.id}`, payload);
-      } else {
-        await API.post(`/projects/${projectId}/phases`, payload);
-      }
-      setPhaseDialogOpen(false);
-      const phasesRes = await API.get(`/projects/${projectId}/phases`);
-      setPhases(phasesRes.data);
-    } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
-    } finally {
-      setSavingPhase(false);
-    }
-  };
-
-  const handleDeletePhase = async (phaseId) => {
-    if (!window.confirm(t("projects.deletePhaseConfirm"))) return;
-    try {
-      await API.delete(`/projects/${projectId}/phases/${phaseId}`);
-      const phasesRes = await API.get(`/projects/${projectId}/phases`);
-      setPhases(phasesRes.data);
-    } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
-    }
-  };
-
-  // Users not already on the team
-  const availableUsers = orgUsers.filter((u) => !team.some((m) => m.user_id === u.id));
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+        </div>
+      </DashboardLayout>
     );
   }
 
-  if (!project) return null;
+  if (!dashboard) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 text-center text-gray-400">
+          Проектът не е намерен
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const { project, client, progress, team, invoices, offers, materials, balance } = dashboard;
 
   return (
-    <div className="p-8 max-w-[1200px]" data-testid="project-detail-page">
-      {/* Back button + header */}
-      <Button variant="ghost" size="sm" className="mb-4 text-muted-foreground" onClick={() => navigate("/projects")} data-testid="back-to-projects">
-        <ArrowLeft className="w-4 h-4 mr-2" /> {t("projects.backToProjects")}
-      </Button>
+    <DashboardLayout>
+      <div className="p-4 md:p-6 space-y-6" data-testid="project-detail-page">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/projects")}
+            className="text-gray-400 hover:text-white"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Проекти
+          </Button>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-white">{project.name}</h1>
+            <p className="text-gray-400 text-sm">{project.code}</p>
+          </div>
+          <Badge className={STATUS_COLORS[project.status] || ""}>
+            {project.status}
+          </Badge>
+        </div>
 
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <span className="font-mono text-sm text-primary font-bold">{project.code}</span>
-            <Badge variant="outline" className={`text-xs ${STATUS_COLORS[project.status] || ""}`}>{t(`projects.status.${project.status.toLowerCase()}`)}</Badge>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground" data-testid="project-title">{project.name}</h1>
-        </div>
-      </div>
-
-      {/* Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6" data-testid="project-overview">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Layers className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">{t("common.type")}</span>
-          </div>
-          <p className="text-sm font-semibold text-foreground">{t(`projects.type.${project.type.toLowerCase()}`)}</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">{t("projects.period")}</span>
-          </div>
-          <p className="text-sm font-semibold text-foreground">
-            {project.start_date || "?"} &mdash; {project.end_date || "?"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Hash className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">{t("projects.plannedDays")}</span>
-          </div>
-          <p className="text-sm font-semibold text-foreground">{project.planned_days ?? "-"}</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <DollarSign className="w-3.5 h-3.5" />
-            <span className="text-xs uppercase tracking-wider">{t("projects.budget")}</span>
-          </div>
-          <p className="text-sm font-semibold text-foreground">
-            {project.budget_planned != null ? formatCurrency(project.budget_planned) : "-"}
-          </p>
-        </div>
-      </div>
-
-      {/* Tags + Notes */}
-      {(project.tags?.length > 0 || project.notes) && (
-        <div className="rounded-lg border border-border bg-card p-4 mb-6">
-          {project.tags?.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-              {project.tags.map((tg) => (
-                <Badge key={tg} variant="secondary" className="text-xs">{tg}</Badge>
-              ))}
+        {/* Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          
+          {/* CARD 1: Обект */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-project">
+            <div className="flex items-center gap-2 mb-4">
+              <Building2 className="w-5 h-5 text-yellow-500" />
+              <h3 className="font-semibold text-white">Обект</h3>
             </div>
-          )}
-          {project.notes && (
-            <div className="flex items-start gap-2 text-sm text-muted-foreground">
-              <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              <p>{project.notes}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <Tabs defaultValue="team" className="w-full" data-testid="project-tabs">
-        <TabsList className="bg-card border border-border">
-          <TabsTrigger value="team" data-testid="tab-team">
-            <Users className="w-4 h-4 mr-2" /> {t("projects.team")} ({team.length})
-          </TabsTrigger>
-          <TabsTrigger value="phases" data-testid="tab-phases">
-            <Layers className="w-4 h-4 mr-2" /> {t("projects.phases")} ({phases.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Team Tab */}
-        <TabsContent value="team" className="mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">{t("projects.teamMembers")}</h3>
-            <Button size="sm" onClick={() => setTeamDialogOpen(true)} data-testid="add-team-member-button">
-              <Plus className="w-4 h-4 mr-1" /> {t("projects.addMember")}
-            </Button>
-          </div>
-          <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="team-table">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.name")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("users.email")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.orgRole")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.projectRole")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {team.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("projects.noTeamMembers")}</TableCell>
-                  </TableRow>
-                ) : (
-                  team.map((m) => (
-                    <TableRow key={m.id} className="table-row-hover" data-testid={`team-member-${m.id}`}>
-                      <TableCell className="font-medium text-foreground">{m.user_name}</TableCell>
-                      <TableCell className="text-muted-foreground">{m.user_email}</TableCell>
-                      <TableCell className="text-muted-foreground">{t(`users.roles.${m.user_role.toLowerCase()}`, m.user_role)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-xs ${TEAM_ROLE_COLORS[m.role_in_project] || ""}`}>
-                          {t(`projects.projectRoles.${m.role_in_project.toLowerCase()}`, m.role_in_project)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveMember(m.id)} className="hover:text-destructive" data-testid={`remove-member-${m.id}`}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-
-        {/* Phases Tab */}
-        <TabsContent value="phases" className="mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">{t("projects.projectPhases")}</h3>
-            <Button size="sm" onClick={openCreatePhase} data-testid="add-phase-button">
-              <Plus className="w-4 h-4 mr-1" /> {t("projects.addPhase")}
-            </Button>
-          </div>
-          <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="phases-table">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-16">#</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.name")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.start")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("projects.end")}</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {phases.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("projects.noPhases")}</TableCell>
-                  </TableRow>
-                ) : (
-                  phases.map((ph) => (
-                    <TableRow key={ph.id} className="table-row-hover" data-testid={`phase-row-${ph.id}`}>
-                      <TableCell className="font-mono text-muted-foreground">{ph.order}</TableCell>
-                      <TableCell className="font-medium text-foreground">{ph.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-xs ${STATUS_COLORS[ph.status] || ""}`}>{t(`projects.status.${ph.status.toLowerCase()}`)}</Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{ph.planned_start || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{ph.planned_end || "-"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEditPhase(ph)}>{t("common.edit")}</Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeletePhase(ph.id)} className="hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* Add Team Member Dialog */}
-      <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
-        <DialogContent className="sm:max-w-[420px] bg-card border-border" data-testid="team-dialog">
-          <DialogHeader>
-            <DialogTitle>{t("projects.addTeamMember")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t("common.user")}</Label>
-              <Select value={teamForm.user_id} onValueChange={(v) => setTeamForm({ ...teamForm, user_id: v })}>
-                <SelectTrigger className="bg-background" data-testid="team-user-select">
-                  <SelectValue placeholder={t("projects.selectUser")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.first_name} {u.last_name} ({t(`users.roles.${u.role.toLowerCase()}`)})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t("projects.roleInProject")}</Label>
-              <Select value={teamForm.role_in_project} onValueChange={(v) => setTeamForm({ ...teamForm, role_in_project: v })}>
-                <SelectTrigger className="bg-background" data-testid="team-role-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["SiteManager", "Technician", "Viewer"].map((r) => (
-                    <SelectItem key={r} value={r}>{t(`projects.projectRoles.${r.toLowerCase()}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleAddMember} disabled={addingMember || !teamForm.user_id} className="w-full" data-testid="team-add-button">
-              {addingMember && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {t("projects.addToTeam")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Phase Dialog */}
-      <Dialog open={phaseDialogOpen} onOpenChange={setPhaseDialogOpen}>
-        <DialogContent className="sm:max-w-[420px] bg-card border-border" data-testid="phase-dialog">
-          <DialogHeader>
-            <DialogTitle>{editingPhase ? t("projects.editPhase") : t("projects.addPhase")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t("common.name")} *</Label>
-              <Input value={phaseForm.name} onChange={(e) => setPhaseForm({ ...phaseForm, name: e.target.value })} className="bg-background" data-testid="phase-name-input" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">{t("projects.order")}</Label>
-                <Input type="number" value={phaseForm.order} onChange={(e) => setPhaseForm({ ...phaseForm, order: e.target.value })} className="bg-background" data-testid="phase-order-input" />
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Номер:</span>
+                <span className="text-white font-mono">{project.code}</span>
               </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">{t("common.status")}</Label>
-                <Select value={phaseForm.status} onValueChange={(v) => setPhaseForm({ ...phaseForm, status: v })}>
-                  <SelectTrigger className="bg-background" data-testid="phase-status-select">
-                    <SelectValue />
+              <div className="flex justify-between">
+                <span className="text-gray-400">Име:</span>
+                <span className="text-white">{project.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Гаранция:</span>
+                <Select
+                  value={project.warranty_months?.toString() || ""}
+                  onValueChange={handleWarrantyChange}
+                  disabled={savingWarranty}
+                >
+                  <SelectTrigger className="w-32 h-8 bg-gray-700 border-gray-600 text-sm">
+                    <SelectValue placeholder="Избери" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {["Draft", "Active", "Paused", "Completed", "Cancelled"].map((s) => (
-                      <SelectItem key={s} value={s}>{t(`projects.status.${s.toLowerCase()}`)}</SelectItem>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    {WARRANTY_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value.toString()}>
+                        {opt.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              {project.address_text && (
+                <div className="pt-2 border-t border-gray-700">
+                  <span className="text-gray-400 text-xs">Адрес:</span>
+                  <p className="text-white text-sm mt-1">{project.address_text}</p>
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">{t("projects.start")}</Label>
-                <Input type="date" value={phaseForm.planned_start} onChange={(e) => setPhaseForm({ ...phaseForm, planned_start: e.target.value })} className="bg-background" data-testid="phase-start-input" />
+          </div>
+
+          {/* CARD 2: Клиент/Контакт */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-client">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                {client.owner_type === "company" ? (
+                  <Building2 className="w-5 h-5 text-blue-500" />
+                ) : (
+                  <User className="w-5 h-5 text-green-500" />
+                )}
+                <h3 className="font-semibold text-white">Клиент</h3>
               </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">{t("projects.end")}</Label>
-                <Input type="date" value={phaseForm.planned_end} onChange={(e) => setPhaseForm({ ...phaseForm, planned_end: e.target.value })} className="bg-background" data-testid="phase-end-input" />
+              {client.owner_data && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowClientModal(true)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+            
+            {client.owner_data ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {client.owner_type === "company" ? "Фирма" : "Частно лице"}
+                  </Badge>
+                </div>
+                {client.owner_data.type === "company" ? (
+                  <>
+                    <p className="text-white font-medium">{client.owner_data.name}</p>
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Hash className="w-3 h-3" />
+                      <span>ЕИК: {client.owner_data.eik}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white font-medium">
+                      {client.owner_data.first_name} {client.owner_data.last_name}
+                    </p>
+                  </>
+                )}
+                {client.owner_data.phone && (
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Phone className="w-3 h-3" />
+                    <span>{client.owner_data.phone}</span>
+                  </div>
+                )}
+                {client.owner_data.email && (
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Mail className="w-3 h-3" />
+                    <span>{client.owner_data.email}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">Няма избран клиент</p>
+            )}
+          </div>
+
+          {/* CARD 3: Прогрес/Срокове */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-progress">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-purple-500" />
+              <h3 className="font-semibold text-white">Прогрес</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Начало:</span>
+                <span className="text-white">{progress.start_date ? formatDate(progress.start_date) : "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Край (план):</span>
+                <span className="text-white">{progress.end_date ? formatDate(progress.end_date) : "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Прогнозни дни:</span>
+                <span className="text-white">{progress.planned_days || "—"}</span>
+              </div>
+              
+              {progress.days_total > 0 && (
+                <div className="pt-3 border-t border-gray-700 space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Изминало: {progress.days_elapsed} дни</span>
+                    <span className="text-gray-400">Оставащи: {progress.days_remaining} дни</span>
+                  </div>
+                  <Progress value={progress.progress_percent} className="h-2" />
+                  <div className="text-center text-yellow-500 font-medium">
+                    {progress.progress_percent}% време изминало
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CARD 4: Персонал */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 md:col-span-2" data-testid="card-team">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-cyan-500" />
+                <h3 className="font-semibold text-white">Персонал ({team.count})</h3>
+              </div>
+              <div className="text-sm">
+                <span className="text-gray-400">Платени заплати: </span>
+                <span className="text-green-400 font-medium">{formatCurrency(team.total_salaries_paid, "BGN")}</span>
               </div>
             </div>
-            <Button onClick={handleSavePhase} disabled={savingPhase || !phaseForm.name} className="w-full" data-testid="phase-save-button">
-              {savingPhase && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {editingPhase ? t("projects.updatePhase") : t("projects.addPhase")}
+            
+            {team.members.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-gray-700">
+                    <TableHead className="text-gray-400">Име</TableHead>
+                    <TableHead className="text-gray-400">Длъжност</TableHead>
+                    <TableHead className="text-gray-400">Роля</TableHead>
+                    <TableHead className="text-gray-400 text-right">Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {team.members.map((member, idx) => (
+                    <TableRow key={idx} className="border-gray-700">
+                      <TableCell className="text-white">{member.name || "—"}</TableCell>
+                      <TableCell className="text-gray-400">{member.system_role || "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {member.role_in_project}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white text-xs">
+                          Отчет
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-gray-500 text-sm">Няма добавен персонал</p>
+            )}
+          </div>
+
+          {/* CARD 6: Оферти */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-offers">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="w-5 h-5 text-orange-500" />
+              <h3 className="font-semibold text-white">Оферти</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Одобрени:</span>
+                <span className="text-white font-medium">{offers.approved_count}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Без ДДС:</span>
+                <span className="text-white">{formatCurrency(offers.total_ex_vat, "BGN")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">ДДС:</span>
+                <span className="text-white">{formatCurrency(offers.total_vat, "BGN")}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-gray-700">
+                <span className="text-gray-400">С ДДС:</span>
+                <span className="text-yellow-500 font-medium">{formatCurrency(offers.total_inc_vat, "BGN")}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* CARD 7: Материали */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-materials">
+            <div className="flex items-center gap-2 mb-4">
+              <Boxes className="w-5 h-5 text-amber-500" />
+              <h3 className="font-semibold text-white">Материали</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Без ДДС:</span>
+                <span className="text-white">{formatCurrency(materials.total_ex_vat, "BGN")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">ДДС:</span>
+                <span className="text-white">{formatCurrency(materials.total_vat, "BGN")}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-gray-700">
+                <span className="text-gray-400">С ДДС:</span>
+                <span className="text-yellow-500 font-medium">{formatCurrency(materials.total_inc_vat, "BGN")}</span>
+              </div>
+            </div>
+            {materials.total_ex_vat === 0 && (
+              <p className="text-gray-500 text-xs mt-2">Няма регистрирани материали</p>
+            )}
+          </div>
+
+          {/* CARD 8: Баланс */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-balance">
+            <div className="flex items-center gap-2 mb-4">
+              <Scale className="w-5 h-5 text-emerald-500" />
+              <h3 className="font-semibold text-white">Баланс</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Приходи:</span>
+                <span className="text-green-400 font-medium">{formatCurrency(balance.income, "BGN")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Разходи:</span>
+                <span className="text-red-400 font-medium">{formatCurrency(balance.expenses, "BGN")}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-gray-700">
+                <span className="text-gray-400">Баланс:</span>
+                <span className={`font-bold ${balance.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {formatCurrency(balance.balance, "BGN")}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CARD 5: Фактури (Full Width) */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-invoices">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-pink-500" />
+              <h3 className="font-semibold text-white">Фактури ({invoices.count})</h3>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => navigate(`/finance/invoices/new?project_id=${projectId}`)}
+              className="bg-yellow-500 hover:bg-yellow-600 text-black"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Нова фактура
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          
+          {invoices.invoices.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-gray-700">
+                      <TableHead className="text-gray-400">№</TableHead>
+                      <TableHead className="text-gray-400">Редове</TableHead>
+                      <TableHead className="text-gray-400">Клиент</TableHead>
+                      <TableHead className="text-gray-400">Дата</TableHead>
+                      <TableHead className="text-gray-400">Падеж</TableHead>
+                      <TableHead className="text-gray-400">Валута</TableHead>
+                      <TableHead className="text-gray-400 text-right">Платено (без ДДС)</TableHead>
+                      <TableHead className="text-gray-400 text-right">Неплатено (без ДДС)</TableHead>
+                      <TableHead className="text-gray-400 text-right">Платено (с ДДС)</TableHead>
+                      <TableHead className="text-gray-400 text-right">Неплатено (с ДДС)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoices.invoices.map((inv) => (
+                      <TableRow key={inv.id} className="border-gray-700 hover:bg-gray-700/30 cursor-pointer"
+                        onClick={() => navigate(`/finance/invoices/${inv.id}`)}>
+                        <TableCell className="text-white font-mono">{inv.invoice_no}</TableCell>
+                        <TableCell className="text-gray-400">{inv.lines_count}</TableCell>
+                        <TableCell className="text-white">{inv.client_name || "—"}</TableCell>
+                        <TableCell className="text-gray-400">{inv.issue_date ? formatDate(inv.issue_date) : "—"}</TableCell>
+                        <TableCell className="text-gray-400">{inv.due_date ? formatDate(inv.due_date) : "—"}</TableCell>
+                        <TableCell className="text-gray-400">{inv.currency}</TableCell>
+                        <TableCell className="text-right text-green-400">{formatCurrency(inv.paid_ex_vat, inv.currency)}</TableCell>
+                        <TableCell className="text-right text-red-400">{formatCurrency(inv.unpaid_ex_vat, inv.currency)}</TableCell>
+                        <TableCell className="text-right text-green-400">{formatCurrency(inv.paid_inc_vat, inv.currency)}</TableCell>
+                        <TableCell className="text-right text-red-400">{formatCurrency(inv.unpaid_inc_vat, inv.currency)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {/* Totals */}
+              <div className="mt-4 pt-4 border-t border-gray-700 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="text-center">
+                  <p className="text-gray-400">Платено (без ДДС)</p>
+                  <p className="text-green-400 font-bold">{formatCurrency(invoices.totals.paid_ex_vat, "BGN")}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-400">Неплатено (без ДДС)</p>
+                  <p className="text-red-400 font-bold">{formatCurrency(invoices.totals.unpaid_ex_vat, "BGN")}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-400">Платено (с ДДС)</p>
+                  <p className="text-green-400 font-bold">{formatCurrency(invoices.totals.paid_inc_vat, "BGN")}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-gray-400">Неплатено (с ДДС)</p>
+                  <p className="text-red-400 font-bold">{formatCurrency(invoices.totals.unpaid_inc_vat, "BGN")}</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-gray-500 text-sm">Няма издадени фактури</p>
+          )}
+        </div>
+
+        {/* Client Details Modal */}
+        <Dialog open={showClientModal} onOpenChange={setShowClientModal}>
+          <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+            <DialogHeader>
+              <DialogTitle>Данни за клиента</DialogTitle>
+            </DialogHeader>
+            {client.owner_data && (
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-700">
+                  {client.owner_data.type === "company" ? (
+                    <Building2 className="w-5 h-5 text-blue-500" />
+                  ) : (
+                    <User className="w-5 h-5 text-green-500" />
+                  )}
+                  <Badge>{client.owner_data.type === "company" ? "Фирма" : "Частно лице"}</Badge>
+                </div>
+                
+                {client.owner_data.type === "company" ? (
+                  <>
+                    <div><span className="text-gray-400">Име:</span> <span className="text-white">{client.owner_data.name}</span></div>
+                    <div><span className="text-gray-400">ЕИК:</span> <span className="text-white font-mono">{client.owner_data.eik}</span></div>
+                    {client.owner_data.mol && <div><span className="text-gray-400">МОЛ:</span> <span className="text-white">{client.owner_data.mol}</span></div>}
+                    {client.owner_data.address && <div><span className="text-gray-400">Адрес:</span> <span className="text-white">{client.owner_data.address}</span></div>}
+                  </>
+                ) : (
+                  <>
+                    <div><span className="text-gray-400">Име:</span> <span className="text-white">{client.owner_data.first_name} {client.owner_data.last_name}</span></div>
+                  </>
+                )}
+                
+                {client.owner_data.phone && <div><span className="text-gray-400">Телефон:</span> <span className="text-white">{client.owner_data.phone}</span></div>}
+                {client.owner_data.email && <div><span className="text-gray-400">Имейл:</span> <span className="text-white">{client.owner_data.email}</span></div>}
+                {client.owner_data.notes && (
+                  <div className="pt-2 border-t border-gray-700">
+                    <span className="text-gray-400">Бележки:</span>
+                    <p className="text-white mt-1">{client.owner_data.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
   );
 }
