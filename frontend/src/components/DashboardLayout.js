@@ -51,6 +51,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/s
 const ADMIN_NAV_CORE = [
   { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
+  { to: "/sites", icon: Building2, labelKey: "nav.sites" },
   { to: "/offers", icon: FileText, labelKey: "nav.offers" },
   { to: "/activity-catalog", icon: Layers, labelKey: "nav.activities" },
   { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
@@ -62,7 +63,7 @@ const ADMIN_NAV_CORE = [
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
   { to: "/users", icon: Users, labelKey: "nav.users" },
-  { to: "/settings", icon: Building2, labelKey: "nav.companySettings" },
+  { to: "/settings", icon: Settings, labelKey: "nav.companySettings" },
 ];
 
 // System management items (visible ONLY to platform admins)
