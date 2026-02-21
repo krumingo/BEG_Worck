@@ -1275,5 +1275,33 @@
     "createSuccess": "Успешно създадено",
     "updateSuccess": "Успешно обновено",
     "deleteSuccess": "Успешно изтрито"
+  },
+  "clients": {
+    "title": "Клиенти - Лица",
+    "subtitle": "Управление на частни клиенти (физически лица)",
+    "firstName": "Име",
+    "lastName": "Фамилия",
+    "phone": "Телефон",
+    "email": "Имейл",
+    "address": "Адрес",
+    "linkedCounterparties": "Свързани контрагенти",
+    "searchPlaceholder": "Търси по име, телефон или имейл...",
+    "create": "Нов клиент",
+    "edit": "Редактирай клиент",
+    "createDescription": "Добавете нов частен клиент",
+    "editDescription": "Редактирайте данните на клиента",
+    "createSuccess": "Клиентът е създаден успешно",
+    "updateSuccess": "Клиентът е обновен успешно",
+    "deleteSuccess": "Клиентът е изтрит успешно",
+    "deleteConfirmTitle": "Изтриване на клиент",
+    "deleteConfirmDescription": "Сигурни ли сте, че искате да изтриете клиент \"{{name}}\"?",
+    "linkClient": "Свържи с клиент",
+    "unlinkClient": "Премахни връзка",
+    "autoCreateClient": "Автоматично създай клиент",
+    "noLinkedClient": "Няма свързан клиент",
+    "linkedClient": "Свързан клиент",
+    "exportPDF": "Експорт PDF",
+    "exportExcel": "Експорт Excel",
+    "export": "Експорт"
   }
 }
