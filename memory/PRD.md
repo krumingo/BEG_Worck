@@ -88,6 +88,37 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 **Tests:** 12 pytest tests in `/app/backend/tests/test_finance_reports.py`
 **Seed Script:** `/app/backend/scripts/seed_finance_data.py` - Creates test data for 2024-2026
 
+### Phase: Clients Module + Monthly Export (DONE) - Feb 21, 2026
+**Full implementation of Clients (Private Persons) and Finance Export:**
+
+#### Backend (P1 - DONE)
+1. **Clients API** (`/api/clients`) - Full CRUD with phone uniqueness per org
+   - `phone_normalized` field for unique index
+   - Find-or-create endpoint
+   - Get by phone endpoint
+2. **Counterparty-Client Linking** (`/api/counterparties/{id}/link-client`) - Link counterparty to client
+   - Auto-link endpoint creates/finds client from counterparty phone
+3. **Finance Export API** (`/api/reports/company-finance-export`)
+   - PDF export with totals, weekly table, expense breakdown
+   - XLSX export with 3 sheets (Summary, Weekly, Breakdown)
+
+**New DB Collections:**
+- `clients`: `{org_id, first_name, last_name, phone, phone_normalized, email, address, notes, is_active}`
+
+#### Frontend (P1 - DONE)
+1. **ClientsPage** (`/data/clients`) - DataTable with CRUD modals
+   - Columns: Name, Surname, Phone, Email, Linked counterparties, Invoice count, Active
+   - Turnover drilldown button
+2. **Sidebar Update** - Added "Клиенти" to Данни section
+3. **CounterpartiesPage Update**
+   - "Свързан клиент" column for person-type counterparties
+   - Auto-link button (UserPlus icon) for unlinking counterparties with phone
+4. **FinanceSummaryWidget Export Button**
+   - Dropdown menu with PDF/Excel options
+   - Downloads finance report for selected year/month
+
+**Tests:** 12 pytest tests in `/app/backend/tests/test_clients_module.py`
+
 ---
 
 ## Backlog (P1/P2)
