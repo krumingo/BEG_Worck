@@ -700,3 +700,281 @@ async def delete_project_photo(photo_id: str, user: dict = Depends(get_current_u
     await db.project_photos.delete_one({"id": photo_id})
     await log_audit(org_id, user["id"], user["email"], "photo_deleted", "project", photo.get("project_id"), {"photo_id": photo_id})
     return {"ok": True, "deleted": photo_id}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PROJECT DASHBOARD - Single endpoint for all card data
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/projects/{project_id}/dashboard")
+async def get_project_dashboard(project_id: str, user: dict = Depends(get_current_user)):
+    """
+    Get all dashboard data for a project in one call.
+    Returns structured data for all 8 cards.
+    """
+    org_id = user["org_id"]
+    
+    # ── Fetch project ───────────────────────────────────────────────────────
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # ── Card 1: Project Info ────────────────────────────────────────────────
+    card_project = {
+        "id": project["id"],
+        "code": project.get("code", ""),
+        "name": project.get("name", ""),
+        "status": project.get("status", ""),
+        "type": project.get("type", ""),
+        "warranty_months": project.get("warranty_months"),
+        "address_text": project.get("address_text", ""),
+        "notes": project.get("notes", ""),
+    }
+    
+    # ── Card 2: Owner/Client Info ───────────────────────────────────────────
+    card_client = {
+        "owner_type": project.get("owner_type"),
+        "owner_id": project.get("owner_id"),
+        "owner_data": None,
+    }
+    
+    if project.get("owner_type") == "person" and project.get("owner_id"):
+        person = await db.persons.find_one({"id": project["owner_id"], "org_id": org_id}, {"_id": 0})
+        if person:
+            card_client["owner_data"] = {
+                "type": "person",
+                "first_name": person.get("first_name", ""),
+                "last_name": person.get("last_name", ""),
+                "phone": person.get("phone", ""),
+                "email": person.get("email", ""),
+                "notes": person.get("notes", ""),
+            }
+    elif project.get("owner_type") == "company" and project.get("owner_id"):
+        company = await db.companies.find_one({"id": project["owner_id"], "org_id": org_id}, {"_id": 0})
+        if company:
+            card_client["owner_data"] = {
+                "type": "company",
+                "name": company.get("name", ""),
+                "eik": company.get("eik", ""),
+                "mol": company.get("mol", ""),
+                "phone": company.get("phone", ""),
+                "email": company.get("email", ""),
+                "address": company.get("address", ""),
+                "notes": company.get("notes", ""),
+            }
+    
+    # ── Card 3: Progress/Timeline ───────────────────────────────────────────
+    start_date = project.get("start_date")
+    end_date = project.get("end_date")
+    planned_days = project.get("planned_days") or 0
+    
+    days_total = 0
+    days_elapsed = 0
+    days_remaining = 0
+    progress_percent = 0
+    
+    if start_date and end_date:
+        try:
+            from datetime import date
+            start = date.fromisoformat(start_date[:10])
+            end = date.fromisoformat(end_date[:10])
+            today = date.today()
+            
+            days_total = (end - start).days
+            if days_total > 0:
+                days_elapsed = min(max((today - start).days, 0), days_total)
+                days_remaining = max(days_total - days_elapsed, 0)
+                progress_percent = round((days_elapsed / days_total) * 100, 1)
+        except:
+            pass
+    
+    card_progress = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "planned_days": planned_days,
+        "days_total": days_total,
+        "days_elapsed": days_elapsed,
+        "days_remaining": days_remaining,
+        "progress_percent": progress_percent,
+    }
+    
+    # ── Card 4: Team/Personnel ──────────────────────────────────────────────
+    team_members = await db.project_team.find(
+        {"project_id": project_id, "active": True},
+        {"_id": 0}
+    ).to_list(100)
+    
+    user_ids = [m["user_id"] for m in team_members]
+    users_map = {}
+    if user_ids:
+        users = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "role": 1}
+        ).to_list(100)
+        users_map = {u["id"]: u for u in users}
+    
+    team_list = []
+    for m in team_members:
+        u = users_map.get(m["user_id"], {})
+        team_list.append({
+            "user_id": m["user_id"],
+            "name": f"{u.get('first_name', '')} {u.get('last_name', '')}".strip(),
+            "role_in_project": m.get("role_in_project", ""),
+            "system_role": u.get("role", ""),
+        })
+    
+    # Calculate total paid salaries for this project (from payroll if exists)
+    total_salaries_paid = 0
+    try:
+        payroll_entries = await db.payroll_entries.find(
+            {"project_id": project_id, "org_id": org_id, "status": "Paid"},
+            {"_id": 0, "net_pay": 1}
+        ).to_list(1000)
+        total_salaries_paid = sum(e.get("net_pay", 0) for e in payroll_entries)
+    except:
+        pass
+    
+    card_team = {
+        "members": team_list,
+        "count": len(team_list),
+        "total_salaries_paid": total_salaries_paid,
+    }
+    
+    # ── Card 5: Invoices ────────────────────────────────────────────────────
+    invoices = await db.invoices.find(
+        {"project_id": project_id, "org_id": org_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    
+    invoice_list = []
+    totals_paid_ex_vat = 0
+    totals_unpaid_ex_vat = 0
+    totals_paid_inc_vat = 0
+    totals_unpaid_inc_vat = 0
+    
+    for inv in invoices:
+        total_ex_vat = inv.get("total_ex_vat", 0) or 0
+        total_vat = inv.get("total_vat", 0) or 0
+        total_inc_vat = inv.get("total_inc_vat", 0) or total_ex_vat + total_vat
+        is_paid = inv.get("status") == "Paid"
+        
+        if is_paid:
+            totals_paid_ex_vat += total_ex_vat
+            totals_paid_inc_vat += total_inc_vat
+        else:
+            totals_unpaid_ex_vat += total_ex_vat
+            totals_unpaid_inc_vat += total_inc_vat
+        
+        # Get client name
+        client_name = ""
+        if inv.get("client_id"):
+            client = await db.companies.find_one({"id": inv["client_id"]}, {"_id": 0, "name": 1})
+            if client:
+                client_name = client.get("name", "")
+        
+        invoice_list.append({
+            "id": inv.get("id"),
+            "invoice_no": inv.get("invoice_no", ""),
+            "lines_count": len(inv.get("lines", [])),
+            "client_name": client_name,
+            "project_code": project.get("code", ""),
+            "issue_date": inv.get("issue_date"),
+            "due_date": inv.get("due_date"),
+            "currency": inv.get("currency", "BGN"),
+            "vat_percent": inv.get("vat_percent", 20),
+            "total_ex_vat": total_ex_vat,
+            "total_vat": total_vat,
+            "total_inc_vat": total_inc_vat,
+            "status": inv.get("status", "Draft"),
+            "paid_ex_vat": total_ex_vat if is_paid else 0,
+            "unpaid_ex_vat": 0 if is_paid else total_ex_vat,
+            "paid_inc_vat": total_inc_vat if is_paid else 0,
+            "unpaid_inc_vat": 0 if is_paid else total_inc_vat,
+        })
+    
+    card_invoices = {
+        "invoices": invoice_list,
+        "count": len(invoice_list),
+        "totals": {
+            "paid_ex_vat": totals_paid_ex_vat,
+            "unpaid_ex_vat": totals_unpaid_ex_vat,
+            "paid_inc_vat": totals_paid_inc_vat,
+            "unpaid_inc_vat": totals_unpaid_inc_vat,
+        },
+    }
+    
+    # ── Card 6: Offers ──────────────────────────────────────────────────────
+    offers = await db.offers.find(
+        {"project_id": project_id, "org_id": org_id, "status": "Approved"},
+        {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
+    ).to_list(500)
+    
+    offers_ex_vat = sum(o.get("total_ex_vat", 0) or 0 for o in offers)
+    offers_vat = sum(o.get("total_vat", 0) or 0 for o in offers)
+    offers_inc_vat = sum(o.get("total_inc_vat", 0) or 0 for o in offers)
+    
+    card_offers = {
+        "approved_count": len(offers),
+        "total_ex_vat": offers_ex_vat,
+        "total_vat": offers_vat,
+        "total_inc_vat": offers_inc_vat,
+    }
+    
+    # ── Card 7: Materials (Warehouse) ───────────────────────────────────────
+    # Check if warehouse_transactions collection exists
+    materials_ex_vat = 0
+    materials_vat = 0
+    materials_inc_vat = 0
+    
+    try:
+        warehouse_txns = await db.warehouse_transactions.find(
+            {"project_id": project_id, "org_id": org_id},
+            {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
+        ).to_list(1000)
+        materials_ex_vat = sum(t.get("total_ex_vat", 0) or 0 for t in warehouse_txns)
+        materials_vat = sum(t.get("total_vat", 0) or 0 for t in warehouse_txns)
+        materials_inc_vat = sum(t.get("total_inc_vat", 0) or 0 for t in warehouse_txns)
+    except:
+        pass
+    
+    card_materials = {
+        "total_ex_vat": materials_ex_vat,
+        "total_vat": materials_vat,
+        "total_inc_vat": materials_inc_vat,
+    }
+    
+    # ── Card 8: Balance ─────────────────────────────────────────────────────
+    # Income = paid invoices
+    income = totals_paid_inc_vat
+    
+    # Check for project payments (additional income)
+    try:
+        payments = await db.project_payments.find(
+            {"project_id": project_id, "org_id": org_id, "type": "incoming"},
+            {"_id": 0, "amount": 1}
+        ).to_list(1000)
+        income += sum(p.get("amount", 0) or 0 for p in payments)
+    except:
+        pass
+    
+    # Expenses = salaries + materials
+    expenses = total_salaries_paid + materials_inc_vat
+    
+    card_balance = {
+        "income": income,
+        "expenses": expenses,
+        "balance": income - expenses,
+    }
+    
+    # ── Return all cards ────────────────────────────────────────────────────
+    return {
+        "project": card_project,
+        "client": card_client,
+        "progress": card_progress,
+        "team": card_team,
+        "invoices": card_invoices,
+        "offers": card_offers,
+        "materials": card_materials,
+        "balance": card_balance,
+    }
+
