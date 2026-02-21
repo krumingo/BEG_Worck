@@ -47,6 +47,7 @@ import CounterpartiesPage from "@/pages/CounterpartiesPage";
 import ItemsPage from "@/pages/ItemsPage";
 import PricesPage from "@/pages/PricesPage";
 import TurnoverPage from "@/pages/TurnoverPage";
+import ClientsPage from "@/pages/ClientsPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -161,6 +162,7 @@ function AppRoutes() {
       <Route path="/data/items" element={<CompanyProtectedRoute><ItemsPage /></CompanyProtectedRoute>} />
       <Route path="/data/prices" element={<CompanyProtectedRoute><PricesPage /></CompanyProtectedRoute>} />
       <Route path="/data/turnover" element={<CompanyProtectedRoute><TurnoverPage /></CompanyProtectedRoute>} />
+      <Route path="/data/clients" element={<CompanyProtectedRoute><ClientsPage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
