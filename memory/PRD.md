@@ -199,6 +199,18 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 **Tests:** 11 backend tests + full UI verification in `/app/test_reports/iteration_15.json`
 
+### Update: Monthly Breakdown Table (Feb 21, 2026)
+**Added monthly rows table to Finance Details page:**
+
+- **Period Selector (1/3/6/12 месеца)** - Rolling period selection
+- **Monthly Table** with exactly N rows based on selected period
+- **ОБЩО (Totals) row** at the bottom - sticky, always visible
+- **Columns:** Месец, Приходи, Разходи, Нетно, Фактури (П), Каса (П), Фактури (Р), Режийни, Заплати
+- **Chart:** Bar chart showing Income vs Expenses by month
+- **Month Format:** "Януари 2026", "Февруари 2026", etc.
+
+**Backend:** Uses `/api/reports/company-finance-series?months=N` endpoint which returns exactly N consecutive months with breakdown data.
+
 ---
 
 ## Backlog (P3/P4)
