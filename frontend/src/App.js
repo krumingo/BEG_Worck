@@ -18,8 +18,6 @@ import MobileSettingsPage from "@/pages/MobileSettingsPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import ProjectsListPage from "@/pages/ProjectsListPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
-import SitesListPage from "@/pages/SitesListPage";
-import SiteDetailPage from "@/pages/SiteDetailPage";
 import MyDayPage from "@/pages/MyDayPage";
 import AttendanceHistoryPage from "@/pages/AttendanceHistoryPage";
 import SiteAttendancePage from "@/pages/SiteAttendancePage";
