@@ -60,6 +60,37 @@ export default function FinanceSummaryWidget() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format) => {
+    setExporting(true);
+    try {
+      const response = await API.get(
+        `/reports/company-finance-export?year=${year}&month=${month}&format=${format}`,
+        { responseType: 'blob' }
+      );
+      
+      const blob = new Blob([response.data], {
+        type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `finance_report_${year}_${String(month).padStart(2, '0')}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(t("clients.export") + " " + format.toUpperCase() + " - " + t("common.success"));
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast.error(t("common.error"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
