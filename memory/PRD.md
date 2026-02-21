@@ -230,7 +230,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - QR code generation
 - Maintenance tracking
 
-### P2 - M9: Admin Console/BI
+### P3 - M9: Admin Console/BI
 - Dashboard statistics
 - Custom reports
 - Overhead cost allocation
