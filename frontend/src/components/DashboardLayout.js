@@ -72,6 +72,7 @@ const ADMIN_NAV_CORE = [
 const DATA_NAV = [
   { to: "/data/warehouses", icon: Warehouse, labelKey: "nav.warehouses" },
   { to: "/data/counterparties", icon: Building2, labelKey: "nav.counterparties" },
+  { to: "/data/clients", icon: Users, labelKey: "nav.clients" },
   { to: "/data/items", icon: Package, labelKey: "nav.items" },
   { to: "/data/prices", icon: TrendingUp, labelKey: "nav.prices" },
   { to: "/data/turnover", icon: BarChart3, labelKey: "nav.turnover" },
