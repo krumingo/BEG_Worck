@@ -121,10 +121,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
-## Backlog (P1/P2)
-
-### P1 - Clients Page Clarification
-- Determine if Clients should be filtered view of counterparties (type=person/client) or separate model
+## Backlog (P2/P3)
 
 ### P2 - Phase 3: Mobile Technician Flows
 - Clock in/out from mobile
