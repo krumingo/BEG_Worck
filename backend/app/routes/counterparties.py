@@ -182,6 +182,7 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     try:
         await db.counterparties.insert_one(counterparty)
     except Exception as e:
+        print(f"DEBUG: MongoDB error: {e}")
         if "duplicate key" in str(e).lower() and "eik" in str(e).lower():
             raise HTTPException(status_code=400, detail="Counterparty with this EIK already exists")
         raise
