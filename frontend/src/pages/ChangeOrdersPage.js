@@ -368,12 +368,12 @@ export default function ChangeOrdersPage() {
               {/* Work Type (optional) */}
               <div className="space-y-2">
                 <Label>Вид работа (optional)</Label>
-                <Select value={selectedWorkType} onValueChange={setSelectedWorkType}>
+                <Select value={selectedWorkType || "none"} onValueChange={(v) => setSelectedWorkType(v === "none" ? "" : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Изберете..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Без</SelectItem>
+                    <SelectItem value="none">Без</SelectItem>
                     {workTypes.map(wt => (
                       <SelectItem key={wt.id} value={wt.id}>
                         {wt.name}
