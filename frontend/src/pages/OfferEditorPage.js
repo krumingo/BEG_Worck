@@ -36,7 +36,11 @@ import {
   FileText,
   Calculator,
   Printer,
+  Tags,
+  PiggyBank,
 } from "lucide-react";
+import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
+import ActivityBudgetsPanel from "@/components/ActivityBudgetsPanel";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
