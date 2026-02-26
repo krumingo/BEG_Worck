@@ -238,7 +238,19 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Visual warnings for negative remaining (red) and >100% used
 - Inline editing of budgets via modal
 
-**D) Tests:**
+**D) Grouping Feature (Feb 26, 2026):**
+- Toggle "Групирай по Тип/Подтип" in Offer Editor header
+- Groups lines by (activity_type, activity_subtype)
+- Group headers show:
+  - Type/Subtype title + line count badge
+  - Subtotals (Material, Labor, Total)
+  - Budget vs Spent vs Remaining from summary endpoint
+  - Visual warnings for over-budget
+- Collapsible groups with "Разгъни/Сгъни" actions
+- User preference persisted in localStorage
+- Changing line's type/subtype immediately re-groups
+
+**Tests:**
 - 7 backend tests in `/app/backend/tests/test_activity_budgets.py`
 
 ---
