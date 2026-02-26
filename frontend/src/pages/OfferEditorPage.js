@@ -577,6 +577,11 @@ export default function OfferEditorPage() {
               data-testid="notes-textarea"
             />
           </div>
+          
+          {/* Activity Budgets Panel */}
+          {projectId && (
+            <ActivityBudgetsPanel projectId={projectId} />
+          )}
         </div>
 
         {/* Sidebar - Totals */}
