@@ -1051,6 +1051,10 @@ app.include_router(platform_router)  # Direct to app (not under /api prefix)
 from app.routes.work_logs import router as work_logs_router
 api_router.include_router(work_logs_router)
 
+# Import activity budgets router
+from app.routes.activity_budgets import router as activity_budgets_router
+api_router.include_router(activity_budgets_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
