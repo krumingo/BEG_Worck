@@ -449,6 +449,7 @@ export default function OfferEditorPage() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">{t("offers.activity")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">Тип</th>
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.unit")}</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.qty")}</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.matPerUnit")}</th>
