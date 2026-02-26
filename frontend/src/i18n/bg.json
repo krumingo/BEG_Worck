@@ -194,7 +194,10 @@
     "items": "Артикули",
     "prices": "Цени",
     "turnover": "Оборот",
-    "clients": "Клиенти"
+    "clients": "Клиенти",
+    "workLogs": "Дневник СМР",
+    "dailyLogs": "Дневен отчет",
+    "changeOrders": "Промени"
   },
   "dashboard": {
     "title": "Табло",
