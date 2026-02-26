@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
 import ActivityBudgetsPanel from "@/components/ActivityBudgetsPanel";
+import OfferVersionsPanel from "@/components/OfferVersionsPanel";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
