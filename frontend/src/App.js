@@ -49,6 +49,9 @@ import PricesPage from "@/pages/PricesPage";
 import TurnoverPage from "@/pages/TurnoverPage";
 import ClientsPage from "@/pages/ClientsPage";
 import FinanceDetailsPage from "@/pages/FinanceDetailsPage";
+// Work Logs Module (Дневник + Промени СМР)
+import DailyLogsPage from "@/pages/DailyLogsPage";
+import ChangeOrdersPage from "@/pages/ChangeOrdersPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
