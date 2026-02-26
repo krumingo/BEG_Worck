@@ -528,15 +528,44 @@ export default function OfferEditorPage() {
 
           {/* Lines Table */}
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center justify-between">
+            <div className="p-4 border-b border-border flex items-center justify-between flex-wrap gap-3">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-primary" /> {t("offers.boqLines")} ({lines.length})
               </h2>
-              {canEdit && (
-                <Button size="sm" onClick={addLine} data-testid="add-line-btn">
-                  <Plus className="w-4 h-4 mr-1" /> {t("offers.addLine")}
-                </Button>
-              )}
+              <div className="flex items-center gap-4">
+                {/* Grouping Toggle */}
+                <div className="flex items-center gap-2 text-sm">
+                  <Switch
+                    id="grouping-toggle"
+                    checked={groupingEnabled}
+                    onCheckedChange={setGroupingEnabled}
+                    data-testid="grouping-toggle"
+                  />
+                  <Label htmlFor="grouping-toggle" className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1">
+                    <Layers className="w-3 h-3" />
+                    Групирай по Тип/Подтип
+                  </Label>
+                </div>
+                
+                {/* Expand/Collapse All */}
+                {groupingEnabled && groupedLines && groupedLines.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={expandAllGroups} className="h-7 px-2 text-xs">
+                      Разгъни
+                    </Button>
+                    <span className="text-muted-foreground">/</span>
+                    <Button variant="ghost" size="sm" onClick={collapseAllGroups} className="h-7 px-2 text-xs">
+                      Сгъни
+                    </Button>
+                  </div>
+                )}
+                
+                {canEdit && (
+                  <Button size="sm" onClick={addLine} data-testid="add-line-btn">
+                    <Plus className="w-4 h-4 mr-1" /> {t("offers.addLine")}
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm" data-testid="lines-table">
