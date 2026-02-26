@@ -487,12 +487,12 @@ export default function ChangeOrdersPage() {
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
                   <Label className="text-xs mb-1 block">Обект</Label>
-                  <Select value={siteFilter} onValueChange={(v) => { setSiteFilter(v); setPage(1); }}>
+                  <Select value={siteFilter || "all"} onValueChange={(v) => { setSiteFilter(v === "all" ? "" : v); setPage(1); }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Всички обекти" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Всички обекти</SelectItem>
+                      <SelectItem value="all">Всички обекти</SelectItem>
                       {sites.map(site => (
                         <SelectItem key={site.id} value={site.id}>
                           {site.code} - {site.name}
@@ -503,16 +503,18 @@ export default function ChangeOrdersPage() {
                 </div>
                 <div className="flex-1">
                   <Label className="text-xs mb-1 block">Статус</Label>
-                  <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+                  <Select value={statusFilter || "all"} onValueChange={(v) => { setStatusFilter(v === "all" ? "" : v); setPage(1); }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Всички статуси" />
                     </SelectTrigger>
                     <SelectContent>
-                      {STATUS_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="all">Всички</SelectItem>
+                      <SelectItem value="draft">Чернова</SelectItem>
+                      <SelectItem value="pending_approval">Чака одобрение</SelectItem>
+                      <SelectItem value="approved">Одобрена</SelectItem>
+                      <SelectItem value="rejected">Отхвърлена</SelectItem>
+                      <SelectItem value="invoiced">Фактурирана</SelectItem>
+                      <SelectItem value="paid">Платена</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
