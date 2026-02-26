@@ -590,7 +590,162 @@ export default function OfferEditorPage() {
                         {t("offers.noLinesYet")}
                       </td>
                     </tr>
+                  ) : groupingEnabled && groupedLines ? (
+                    /* Grouped View */
+                    groupedLines.map((group) => {
+                      const isCollapsed = collapsedGroups[group.key];
+                      const hasNegativeRemaining = group.budget && (group.budget.labor_remaining < 0 || group.budget.materials_remaining < 0);
+                      const hasOverBudget = group.budget && (group.budget.percent_labor_used > 100 || group.budget.percent_materials_used > 100);
+                      
+                      return (
+                        <React.Fragment key={group.key}>
+                          {/* Group Header */}
+                          <tr 
+                            className={`bg-muted/70 cursor-pointer hover:bg-muted ${hasNegativeRemaining ? "border-l-2 border-l-red-500" : ""}`}
+                            onClick={() => toggleGroupCollapse(group.key)}
+                            data-testid={`group-header-${group.key}`}
+                          >
+                            <td colSpan={3} className="p-3">
+                              <div className="flex items-center gap-2">
+                                {isCollapsed ? (
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                )}
+                                <Tags className="w-4 h-4 text-primary" />
+                                <span className="font-semibold text-foreground">
+                                  {group.type}
+                                  {group.subtype && <span className="text-muted-foreground font-normal"> / {group.subtype}</span>}
+                                </span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {group.lines.length} {group.lines.length === 1 ? "ред" : "реда"}
+                                </Badge>
+                                {hasOverBudget && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    Над бюджет
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-right text-xs text-muted-foreground" colSpan={2}>
+                              {group.budget && (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span>Бюджет: {formatCurrency(group.budget.labor_budget + group.budget.materials_budget)}</span>
+                                  <span className={group.budget.labor_remaining + group.budget.materials_remaining < 0 ? "text-red-500" : "text-green-500"}>
+                                    Остатък: {formatCurrency(group.budget.labor_remaining + group.budget.materials_remaining)}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-3 text-right font-mono text-muted-foreground">
+                              {formatCurrency(group.totals.material)}
+                            </td>
+                            <td className="p-3 text-right font-mono text-muted-foreground">
+                              {formatCurrency(group.totals.labor)}
+                            </td>
+                            <td className="p-3 text-right font-mono font-semibold text-primary">
+                              {formatCurrency(group.totals.total)}
+                            </td>
+                            {canEdit && <td></td>}
+                          </tr>
+                          
+                          {/* Group Lines (collapsible) */}
+                          {!isCollapsed && group.lines.map((line) => (
+                            <tr key={line.id || line.originalIndex} className="hover:bg-muted/30 bg-card" data-testid={`line-row-${line.originalIndex}`}>
+                              <td className="p-2 pl-8">
+                                <div className="flex items-center gap-2">
+                                  {canEdit && activities.length > 0 && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() => openActivityPicker(line.originalIndex)}
+                                    >
+                                      Pick
+                                    </Button>
+                                  )}
+                                  <Input
+                                    value={line.activity_name}
+                                    onChange={(e) => updateLine(line.originalIndex, "activity_name", e.target.value)}
+                                    placeholder="Activity name"
+                                    disabled={!canEdit}
+                                    className="bg-background h-8 text-sm"
+                                  />
+                                </div>
+                              </td>
+                              <td className="p-2">
+                                <ActivityTypeSelect
+                                  value={line.activity_type || "Общо"}
+                                  subtype={line.activity_subtype || ""}
+                                  onChange={(type, subtype) => {
+                                    const updated = [...lines];
+                                    updated[line.originalIndex] = { ...updated[line.originalIndex], activity_type: type, activity_subtype: subtype };
+                                    setLines(updated);
+                                  }}
+                                  compact
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Select value={line.unit} onValueChange={(v) => updateLine(line.originalIndex, "unit", v)} disabled={!canEdit}>
+                                  <SelectTrigger className="bg-background h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={line.qty}
+                                  onChange={(e) => updateLine(line.originalIndex, "qty", e.target.value)}
+                                  disabled={!canEdit}
+                                  className="bg-background h-8 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={line.material_unit_cost}
+                                  onChange={(e) => updateLine(line.originalIndex, "material_unit_cost", e.target.value)}
+                                  disabled={!canEdit}
+                                  className="bg-background h-8 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={line.labor_unit_cost}
+                                  onChange={(e) => updateLine(line.originalIndex, "labor_unit_cost", e.target.value)}
+                                  disabled={!canEdit}
+                                  className="bg-background h-8 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2 text-right font-mono text-muted-foreground">
+                                {formatCurrency(line.line_material_cost)}
+                              </td>
+                              <td className="p-2 text-right font-mono text-muted-foreground">
+                                {formatCurrency(line.line_labor_cost)}
+                              </td>
+                              <td className="p-2 text-right font-mono font-medium text-foreground">
+                                {formatCurrency(line.line_total)}
+                              </td>
+                              {canEdit && (
+                                <td className="p-2">
+                                  <Button variant="ghost" size="sm" onClick={() => removeLine(line.originalIndex)} className="text-destructive hover:text-destructive">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })
                   ) : (
+                    /* Flat View (default) */
                     computedLines.map((line, idx) => (
                       <tr key={line.id || idx} className="hover:bg-muted/30" data-testid={`line-row-${idx}`}>
                         <td className="p-2">
