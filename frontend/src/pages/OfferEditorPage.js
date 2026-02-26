@@ -89,6 +89,14 @@ export default function OfferEditorPage() {
   // Dialogs
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [selectedLineIndex, setSelectedLineIndex] = useState(null);
+  
+  // Grouping state
+  const [groupingEnabled, setGroupingEnabled] = useState(() => {
+    const saved = localStorage.getItem("offer_grouping_enabled");
+    return saved === "true";
+  });
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [budgetSummary, setBudgetSummary] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
