@@ -406,12 +406,12 @@ export default function DailyLogsPage() {
             <CardContent className="p-4">
               <div className="flex items-center gap-4">
                 <Label className="whitespace-nowrap">Филтър по обект:</Label>
-                <Select value={selectedSite} onValueChange={(v) => { setSelectedSite(v); setPage(1); }}>
+                <Select value={selectedSite || "all"} onValueChange={(v) => { setSelectedSite(v === "all" ? "" : v); setPage(1); }}>
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="Всички обекти" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Всички обекти</SelectItem>
+                    <SelectItem value="all">Всички обекти</SelectItem>
                     {sites.map(site => (
                       <SelectItem key={site.id} value={site.id}>
                         {site.code} - {site.name}
