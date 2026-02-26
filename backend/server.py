@@ -1165,6 +1165,14 @@ async def startup():
     
     # Payroll payments indexes (if not already exists)
     await db.payroll_payments.create_index([("org_id", 1), ("payment_date", -1)])
+    
+    # Work Logs & Change Orders indexes (Дневник + Промени СМР)
+    await db.work_types.create_index([("org_id", 1), ("name", 1)], unique=True)
+    await db.daily_work_logs.create_index([("org_id", 1), ("site_id", 1), ("date", -1)])
+    await db.daily_work_logs.create_index([("org_id", 1), ("date", -1)])
+    await db.change_orders.create_index([("org_id", 1), ("site_id", 1), ("status", 1)])
+    await db.change_orders.create_index([("org_id", 1), ("status", 1), ("requested_at", -1)])
+    await db.change_orders.create_index([("org_id", 1), ("site_id", 1), ("work_type_id", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
