@@ -80,6 +80,12 @@ const DATA_NAV = [
   { to: "/data/turnover", icon: BarChart3, labelKey: "nav.turnover" },
 ];
 
+// Work Logs module navigation (Дневник + Промени СМР)
+const WORK_LOGS_NAV = [
+  { to: "/daily-logs", icon: ClipboardPen, labelKey: "nav.dailyLogs" },
+  { to: "/change-orders", icon: FilePlus2, labelKey: "nav.changeOrders" },
+];
+
 // Settings navigation
 const SETTINGS_NAV = [
   { to: "/users", icon: Users, labelKey: "nav.users" },
