@@ -215,6 +215,39 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ## Backlog (P3/P4)
 
+### COMPLETED: Work Logs Module (Дневник + Промени СМР) - Feb 26, 2026
+
+**A) Data Models:**
+- `work_types`: { id, org_id, name, default_hourly_rate, is_active }
+- `daily_work_logs`: { id, org_id, site_id, date, work_type_id, entries[], notes, attachments, total_hours, created_by }
+- `change_orders`: { id, org_id, site_id, created_by, requested_at, kind (new/modify/cancel), labor_delta, material_delta, total_delta, description, status, audit_trail[] }
+
+**B) API Endpoints:**
+- `GET/POST/PATCH /api/work-types` - Work types CRUD (admin only)
+- `GET/POST/PATCH/DELETE /api/daily-logs` - Daily work logs CRUD
+- `GET/POST/PATCH /api/change-orders` - Change orders CRUD
+- `POST /api/change-orders/{id}/submit` - Submit draft for approval
+- `POST /api/change-orders/{id}/approve` - Approve (admin/site manager)
+- `POST /api/change-orders/{id}/reject` - Reject (admin/site manager)
+- `GET /api/my-sites` - Get user's accessible sites
+- `GET /api/my-team/{site_id}` - Get team members for site
+
+**C) Access Rules:**
+- Technician/Requester: CRUD only for sites with membership
+- Admin: Full access + approve/reject
+- SiteManager: Can approve/reject for their sites
+
+**D) Mobile-First UI:**
+- `/daily-logs` - Daily work log management (list + new form)
+- `/change-orders` - Change orders management (list + new form + detail dialog)
+- Workflow: Draft → Submit → Pending Approval → Approved/Rejected
+
+**DB Indexes:**
+- daily_work_logs: (org_id, site_id, date), (org_id, date)
+- change_orders: (org_id, site_id, status), (org_id, status, requested_at)
+
+---
+
 ### P3 - Phase 3: Mobile Technician Flows
 - Clock in/out from mobile
 - Work report submission
