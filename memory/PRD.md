@@ -215,6 +215,34 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ## Backlog (P3/P4)
 
+### COMPLETED: Activity Types + Budgets - Feb 26, 2026
+
+**A) Data Model Changes:**
+- Offer lines now have `activity_type` (default "Общо") and `activity_subtype` (optional)
+- New collection `activity_budgets` with unique constraint on (org_id, project_id, type, subtype)
+
+**B) API Endpoints:**
+- `GET /api/activity-types` - Returns list of standard activity types
+- `GET /api/projects/{id}/activity-budgets` - List all budgets for project
+- `POST /api/projects/{id}/activity-budgets` - Upsert budget (create or update by type+subtype)
+- `DELETE /api/projects/{id}/activity-budgets/{budgetId}` - Delete budget
+- `GET /api/projects/{id}/activity-budget-summary` - Returns grouped summary with:
+  - labor_budget, materials_budget
+  - labor_spent, materials_spent (from offer lines + daily logs)
+  - labor_remaining, materials_remaining
+  - percent_labor_used, percent_materials_used
+
+**C) Frontend UI:**
+- Offer lines now have Type/Subtype popover selector
+- ActivityBudgetsPanel component shows budget vs spent per type
+- Visual warnings for negative remaining (red) and >100% used
+- Inline editing of budgets via modal
+
+**D) Tests:**
+- 7 backend tests in `/app/backend/tests/test_activity_budgets.py`
+
+---
+
 ### COMPLETED: Work Logs Module (Дневник + Промени СМР) - Feb 26, 2026
 
 **A) Data Models:**
