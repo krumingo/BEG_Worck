@@ -40,6 +40,8 @@ import {
   Warehouse,
   TrendingUp,
   BarChart3,
+  FilePlus2,
+  ClipboardPen,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
