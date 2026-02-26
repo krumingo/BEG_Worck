@@ -1055,6 +1055,10 @@ api_router.include_router(work_logs_router)
 from app.routes.activity_budgets import router as activity_budgets_router
 api_router.include_router(activity_budgets_router)
 
+# Import offer versions router
+from app.routes.offer_versions import router as offer_versions_router
+api_router.include_router(offer_versions_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
