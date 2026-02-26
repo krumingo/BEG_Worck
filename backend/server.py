@@ -1047,6 +1047,10 @@ api_router.include_router(dashboard_extra_router)
 from app.routes.platform import router as platform_router
 app.include_router(platform_router)  # Direct to app (not under /api prefix)
 
+# Import work logs router (Дневник + Промени СМР)
+from app.routes.work_logs import router as work_logs_router
+api_router.include_router(work_logs_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
