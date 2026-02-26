@@ -241,6 +241,7 @@ export default function DashboardLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [dataExpanded, setDataExpanded] = useState(location.pathname.startsWith("/data"));
+  const [workLogsExpanded, setWorkLogsExpanded] = useState(location.pathname.startsWith("/daily-logs") || location.pathname.startsWith("/change-orders"));
 
   const handleLogout = () => {
     logout();
