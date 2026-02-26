@@ -168,6 +168,9 @@ function AppRoutes() {
       <Route path="/data/turnover" element={<CompanyProtectedRoute><TurnoverPage /></CompanyProtectedRoute>} />
       <Route path="/data/clients" element={<CompanyProtectedRoute><ClientsPage /></CompanyProtectedRoute>} />
       <Route path="/reports/finance-details" element={<CompanyProtectedRoute><FinanceDetailsPage /></CompanyProtectedRoute>} />
+      {/* Work Logs Module (Дневник + Промени СМР) */}
+      <Route path="/daily-logs" element={<CompanyProtectedRoute><DailyLogsPage /></CompanyProtectedRoute>} />
+      <Route path="/change-orders" element={<CompanyProtectedRoute><ChangeOrdersPage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
