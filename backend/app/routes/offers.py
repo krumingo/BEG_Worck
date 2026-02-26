@@ -230,6 +230,8 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
             "labor_hours_per_unit": line.labor_hours_per_unit,
             "note": line.note,
             "sort_order": line.sort_order or i,
+            "activity_type": line.activity_type or "Общо",
+            "activity_subtype": line.activity_subtype or "",
         }
         lines.append(compute_offer_line(l))
     
