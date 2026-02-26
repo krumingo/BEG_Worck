@@ -17,6 +17,9 @@ class OfferLineInput(BaseModel):
     labor_hours_per_unit: Optional[float] = None
     note: Optional[str] = None
     sort_order: int = 0
+    # Activity type/subtype for budget tracking
+    activity_type: str = "Общо"
+    activity_subtype: str = ""
 
 class OfferCreate(BaseModel):
     project_id: str
