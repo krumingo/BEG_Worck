@@ -463,7 +463,7 @@ export default function OfferEditorPage() {
                 <tbody className="divide-y divide-border">
                   {computedLines.length === 0 ? (
                     <tr>
-                      <td colSpan={canEdit ? 9 : 8} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={canEdit ? 10 : 9} className="text-center py-8 text-muted-foreground">
                         {t("offers.noLinesYet")}
                       </td>
                     </tr>
