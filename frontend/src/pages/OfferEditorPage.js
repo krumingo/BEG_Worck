@@ -493,6 +493,18 @@ export default function OfferEditorPage() {
                           </div>
                         </td>
                         <td className="p-2">
+                          <ActivityTypeSelect
+                            value={line.activity_type || "Общо"}
+                            subtype={line.activity_subtype || ""}
+                            onChange={(type, subtype) => {
+                              const updated = [...lines];
+                              updated[idx] = { ...updated[idx], activity_type: type, activity_subtype: subtype };
+                              setLines(updated);
+                            }}
+                            compact
+                          />
+                        </td>
+                        <td className="p-2">
                           <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={!canEdit}>
                             <SelectTrigger className="bg-background h-8 text-xs">
                               <SelectValue />
