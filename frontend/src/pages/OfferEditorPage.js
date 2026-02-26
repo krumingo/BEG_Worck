@@ -138,6 +138,83 @@ export default function OfferEditorPage() {
         .catch(() => setActivities([]));
     }
   }, [projectId, isNew]);
+  
+  // Load budget summary when project changes
+  useEffect(() => {
+    if (projectId) {
+      API.get(`/projects/${projectId}/activity-budget-summary`)
+        .then(res => setBudgetSummary(res.data))
+        .catch(() => setBudgetSummary(null));
+    }
+  }, [projectId]);
+  
+  // Persist grouping preference
+  useEffect(() => {
+    localStorage.setItem("offer_grouping_enabled", groupingEnabled.toString());
+  }, [groupingEnabled]);
+  
+  // Group lines by type/subtype
+  const groupedLines = useMemo(() => {
+    if (!groupingEnabled) return null;
+    
+    const groups = {};
+    computedLines.forEach((line, originalIndex) => {
+      const type = line.activity_type || "Общо";
+      const subtype = line.activity_subtype || "";
+      const key = `${type}||${subtype}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          type,
+          subtype,
+          lines: [],
+          totals: { material: 0, labor: 0, total: 0 },
+        };
+      }
+      
+      groups[key].lines.push({ ...line, originalIndex });
+      groups[key].totals.material += line.line_material_cost || 0;
+      groups[key].totals.labor += line.line_labor_cost || 0;
+      groups[key].totals.total += line.line_total || 0;
+    });
+    
+    // Add budget info to each group
+    if (budgetSummary?.items) {
+      Object.values(groups).forEach(group => {
+        const budgetItem = budgetSummary.items.find(
+          b => b.type === group.type && (b.subtype || "") === group.subtype
+        );
+        if (budgetItem) {
+          group.budget = budgetItem;
+        }
+      });
+    }
+    
+    // Sort groups by type then subtype
+    return Object.values(groups).sort((a, b) => {
+      if (a.type !== b.type) return a.type.localeCompare(b.type, "bg");
+      return (a.subtype || "").localeCompare(b.subtype || "", "bg");
+    });
+  }, [computedLines, groupingEnabled, budgetSummary]);
+  
+  // Toggle group collapse
+  const toggleGroupCollapse = (key) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+  
+  // Expand/collapse all
+  const expandAllGroups = () => setCollapsedGroups({});
+  const collapseAllGroups = () => {
+    if (groupedLines) {
+      const collapsed = {};
+      groupedLines.forEach(g => { collapsed[g.key] = true; });
+      setCollapsedGroups(collapsed);
+    }
+  };
 
   const computeLineTotals = (line) => {
     const qty = parseFloat(line.qty) || 0;
