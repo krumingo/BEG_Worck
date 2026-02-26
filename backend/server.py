@@ -1185,6 +1185,10 @@ async def startup():
     # Activity budgets indexes
     await db.activity_budgets.create_index([("org_id", 1), ("project_id", 1), ("type", 1), ("subtype", 1)], unique=True)
     await db.activity_budgets.create_index([("org_id", 1), ("project_id", 1)])
+    
+    # Offer versions indexes
+    await db.offer_versions.create_index([("org_id", 1), ("offer_id", 1), ("version_number", 1)], unique=True)
+    await db.offer_versions.create_index([("org_id", 1), ("project_id", 1), ("offer_id", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
