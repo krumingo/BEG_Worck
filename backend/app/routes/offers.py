@@ -97,6 +97,8 @@ async def create_offer(data: OfferCreate, user: dict = Depends(require_m2)):
             "labor_hours_per_unit": line.labor_hours_per_unit,
             "note": line.note,
             "sort_order": line.sort_order or i,
+            "activity_type": line.activity_type or "Общо",
+            "activity_subtype": line.activity_subtype or "",
         }
         lines.append(compute_offer_line(l))
     
