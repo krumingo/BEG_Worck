@@ -38,9 +38,18 @@ import {
   Printer,
   Tags,
   PiggyBank,
+  Layers,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  ToggleLeft,
+  ToggleRight,
+  ChevronsUpDown,
 } from "lucide-react";
 import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
 import ActivityBudgetsPanel from "@/components/ActivityBudgetsPanel";
+import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
