@@ -309,6 +309,27 @@ export default function DashboardLayout({ children }) {
           {/* Core nav items */}
           {(isAdmin ? getAdminNav() : WORKER_NAV).map(renderNavItem)}
           
+          {/* Work Logs Section (Дневник + Промени СМР) - visible to all */}
+          <Separator className="my-3" />
+          <button
+            onClick={() => setWorkLogsExpanded(!workLogsExpanded)}
+            className="sidebar-link w-full text-muted-foreground hover:text-foreground"
+            data-testid="nav-worklogs-toggle"
+          >
+            <ClipboardPen className="w-[18px] h-[18px]" />
+            <span className="flex-1 text-left">{t("nav.workLogs") || "Дневник СМР"}</span>
+            {workLogsExpanded ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+          {workLogsExpanded && (
+            <div className="ml-4 space-y-1 border-l pl-3 border-border">
+              {WORK_LOGS_NAV.map(renderNavItem)}
+            </div>
+          )}
+          
           {/* Data Section (collapsible, only for admin roles) */}
           {isAdmin && (
             <>
