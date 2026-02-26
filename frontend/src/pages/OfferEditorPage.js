@@ -153,6 +153,8 @@ export default function OfferEditorPage() {
       labor_hours_per_unit: null,
       note: "",
       sort_order: lines.length,
+      activity_type: "Общо",
+      activity_subtype: "",
     }]);
   };
 
