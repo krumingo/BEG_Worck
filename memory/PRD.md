@@ -75,6 +75,46 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 **6. UX Header Buttons:**
 - Ordered: Запази, Към обекта, PDF, Добави плащане, Анулирай фактура, Изтрий
 
+
+### Phase: AI Offers + Extra Works Draft Flow MVP (DONE) - Mar 8, 2026
+**Data Model:**
+- New `extra_work_drafts` collection with full schema (location, AI pricing, materials, status lifecycle)
+- Status lifecycle: draft → converted → archived
+
+**Fast Entry Flow:**
+- "Допълнително СМР" button on Project Detail page
+- Modal with: title, unit, qty, location (floor/room/zone), notes, AI button
+- 20-40 second fast entry target achieved
+
+**AI Proposal Service (Rule-Based MVP):**
+- ACTIVITY_KNOWLEDGE dict with 7 construction categories (мазилка, боядисване, шпакловка, плочки, гипсокартон, електро, ВиК)
+- Returns: recognition (type/subtype), pricing (material+labor per unit), small qty adjustment, related SMR, materials checklist
+- Materials grouped: primary, secondary, consumables
+- Clean AI-ready architecture for future LLM integration
+
+**Draft Bucket:**
+- ExtraWorksDraftPanel shows all drafts per project with select/delete/create-offer actions
+- Shows: title, qty, AI price, date, location, status badges
+
+**Create Extra Offer:**
+- Select multiple draft rows → "Създай оферта" → new offer with lines from drafts
+- Offer type=extra, auto-generated title, location info in line notes
+- Draft status transitions to "converted" with link to created offer
+
+**Offer Editor AI Assist:**
+- "AI помощ" button in normal Offer Editor
+- Dialog: description + unit + qty → AI proposal → "Добави като ред"
+- Line added with AI-suggested material/labor prices
+
+**API Endpoints:**
+- POST /api/extra-works (create draft)
+- GET /api/extra-works (list with project_id/status filters)
+- PUT /api/extra-works/{id} (update)
+- DELETE /api/extra-works/{id} (delete)
+- POST /api/extra-works/ai-proposal (get AI pricing/materials)
+- POST /api/extra-works/{id}/apply-ai (apply AI to draft)
+- POST /api/extra-works/create-offer (create offer from selected drafts)
+
 ### Phase: Invoice Lines Multi-Allocation (DONE) - Feb 21, 2026
 - Invoice lines stored in separate collection
 - Multi-allocation to projects/warehouses

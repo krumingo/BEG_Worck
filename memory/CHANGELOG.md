@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 8, 2026 (Session 3)
+### P0/P1 MVP: AI Offers + Extra Works Draft Flow
+- **New backend**: /app/backend/app/routes/extra_works.py with 7 API endpoints
+- **AI Proposal**: Rule-based construction knowledge base (7 categories, materials checklist, related SMR, small qty pricing)
+- **Fast Entry**: ExtraWorkModal with location fields (floor/room/zone) + AI proposal panel
+- **Draft Bucket**: ExtraWorksDraftPanel with select/create-offer workflow
+- **Create Extra Offer**: Groups selected drafts into new offer, transitions status to "converted"
+- **Offer Editor AI**: "AI помощ" button adds lines with AI-suggested prices
+- **MOCKED**: AI is rule-based (no external LLM calls) - ready for future integration
+- Test report: /app/test_reports/iteration_18.json (100% backend 18/18, 100% frontend)
+
 ## Mar 8, 2026 (Session 2)
 ### P0: Complete Invoice Workflow Fix
 - **Invoice → Project Link**: "Към обекта" button in header navigates to linked project

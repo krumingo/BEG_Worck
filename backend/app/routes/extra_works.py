@@ -243,7 +243,7 @@ def find_matching_knowledge(title: str) -> dict:
     """Match input text to knowledge base using keyword matching"""
     title_lower = title.lower()
     for keyword, data in ACTIVITY_KNOWLEDGE.items():
-        if keyword in title_lower:
+        if keyword.lower() in title_lower:
             return data
     # Check for common synonyms
     synonyms = {
