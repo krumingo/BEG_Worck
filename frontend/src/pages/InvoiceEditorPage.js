@@ -28,7 +28,11 @@ import {
   X,
   CreditCard,
   SplitSquareVertical,
+  Info,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -49,6 +53,7 @@ export default function InvoiceEditorPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const directionParam = searchParams.get("direction") || "Issued";
+  const projectIdParam = searchParams.get("project_id") || "";
 
   const isNew = !invoiceId || invoiceId === "new";
   const canManage = ["Admin", "Owner", "Accountant"].includes(user?.role);
@@ -60,7 +65,7 @@ export default function InvoiceEditorPage() {
 
   const [direction, setDirection] = useState(directionParam);
   const [invoiceNo, setInvoiceNo] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(projectIdParam);
   const [counterpartyName, setCounterpartyName] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
@@ -68,6 +73,11 @@ export default function InvoiceEditorPage() {
   const [vatPercent, setVatPercent] = useState(20);
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState([]);
+  
+  // Auto-fill state
+  const [clientAutoFilled, setClientAutoFilled] = useState(false);
+  const [noClientWarning, setNoClientWarning] = useState(false);
+  const [autoFilledClientData, setAutoFilledClientData] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -93,13 +103,48 @@ export default function InvoiceEditorPage() {
         const defaultDue = new Date();
         defaultDue.setDate(defaultDue.getDate() + 30);
         setDueDate(defaultDue.toISOString().split("T")[0]);
+        
+        // Auto-fill client data from project if project_id is provided
+        if (projectIdParam) {
+          try {
+            const dashboardRes = await API.get(`/projects/${projectIdParam}/dashboard`);
+            const { client } = dashboardRes.data;
+            
+            if (client?.owner_data) {
+              const ownerData = client.owner_data;
+              let clientName = "";
+              
+              if (ownerData.type === "company") {
+                // Company: use company name
+                clientName = ownerData.name || "";
+              } else {
+                // Person: use first_name + last_name
+                clientName = `${ownerData.first_name || ""} ${ownerData.last_name || ""}`.trim();
+              }
+              
+              if (clientName) {
+                setCounterpartyName(clientName);
+                setClientAutoFilled(true);
+                setAutoFilledClientData(ownerData);
+              } else {
+                setNoClientWarning(true);
+              }
+            } else {
+              // No client associated with project
+              setNoClientWarning(true);
+            }
+          } catch (err) {
+            console.error("Failed to fetch project client data:", err);
+            // Don't show warning if API call fails - just continue normally
+          }
+        }
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [invoiceId, isNew]);
+  }, [invoiceId, isNew, projectIdParam]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -333,6 +378,36 @@ export default function InvoiceEditorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-3 space-y-6">
+          
+          {/* Auto-fill info banners */}
+          {isNew && clientAutoFilled && autoFilledClientData && (
+            <Alert className="bg-emerald-500/10 border-emerald-500/30" data-testid="client-autofilled-alert">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <AlertDescription className="text-emerald-400">
+                Клиентските данни са попълнени автоматично от проекта
+                {autoFilledClientData.type === "company" && autoFilledClientData.eik && (
+                  <span className="ml-2 text-emerald-300/70">
+                    (ЕИК: {autoFilledClientData.eik})
+                  </span>
+                )}
+                {autoFilledClientData.type === "person" && autoFilledClientData.phone && (
+                  <span className="ml-2 text-emerald-300/70">
+                    (Тел: {autoFilledClientData.phone})
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {isNew && noClientWarning && (
+            <Alert className="bg-amber-500/10 border-amber-500/30" data-testid="no-client-warning-alert">
+              <AlertCircle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-amber-400">
+                Към проекта няма избран клиент. Попълнете клиента ръчно или изберете клиент в проекта.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {/* Basic Info */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">

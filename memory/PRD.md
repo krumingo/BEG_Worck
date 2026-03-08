@@ -335,6 +335,34 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
+### COMPLETED: Invoice Auto-Fill from Project Client - Mar 8, 2026
+
+**Feature: When creating a new invoice from a project, automatically fill client data.**
+
+**A) Flow:**
+- Project Detail Page → "Нова фактура" button → Invoice Editor with `?project_id=...`
+- Invoice Editor reads `project_id` from URL query params
+- Fetches project dashboard data including client info
+- Auto-fills `counterpartyName` field with client name
+
+**B) Frontend Changes (`InvoiceEditorPage.js`):**
+- New state variables: `clientAutoFilled`, `noClientWarning`, `autoFilledClientData`
+- On load with `project_id`: calls `/api/projects/{id}/dashboard`
+- If client exists (person or company): fills name, shows green success banner
+- If no client: shows amber warning banner with instructions
+- Fields remain editable after auto-fill
+
+**C) UI Banners:**
+- Success (green): "Клиентските данни са попълнени автоматично от проекта (Тел: ...)" or "(ЕИК: ...)"
+- Warning (amber): "Към проекта няма избран клиент. Попълнете клиента ръчно или изберете клиент в проекта."
+
+**D) Backward Compatibility:**
+- Direct access to `/finance/invoices/new` works as before (no banner, no auto-fill)
+- No backend changes required (uses existing `/projects/{id}/dashboard` endpoint)
+- No breaking changes to existing invoice creation flow
+
+---
+
 ### P3 - Phase 3: Mobile Technician Flows
 - Clock in/out from mobile
 - Work report submission
