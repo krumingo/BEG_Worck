@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Mar 8, 2026 (Session 2)
+### P0: Complete Invoice Workflow Fix
+- **Invoice → Project Link**: "Към обекта" button in header navigates to linked project
+- **PDF Export**: GET /api/finance/invoices/{id}/pdf - reportlab with DejaVu Cyrillic font, clean A4 layout
+- **Full Editing**: Sent/PartiallyPaid/Overdue editable. Paid/Cancelled blocked. Line edits recalculate remaining with existing payments
+- **ROOT FIX - Payment→Project Sync**: Project dashboard used non-existent fields (total_ex_vat, client_id). Fixed to use paid_amount, remaining_amount, counterparty_name. Balance.income now aggregates from actual payments, not just Paid status
+- **Project Invoice Table**: New columns (Статус badge, Общо, Платено, Остатък). Old broken columns (paid_ex_vat etc.) removed
+- **UX Header**: Ordered buttons: Запази, Към обекта, PDF, Добави плащане, Анулирай, Изтрий
+- Test report: /app/test_reports/iteration_17.json (100% backend, 100% frontend, 16 tests)
+
 ## Mar 8, 2026
 ### P0: Invoice Numbering Verification
 - Verified auto-numbering system with 7 test scenarios

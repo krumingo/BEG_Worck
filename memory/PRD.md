@@ -45,6 +45,36 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Frontend: Quick-pay buttons (full amount, 50%)
 - Frontend: Bulgarian status labels in badges
 
+### Phase: Complete Invoice Workflow (DONE) - Mar 8, 2026
+**1. Invoice → Project Link:**
+- "Към обекта" button in invoice header navigates to linked project
+- Hidden when no project_id
+
+**2. Invoice PDF Export:**
+- GET /api/finance/invoices/{id}/pdf - generates clean A4 PDF using reportlab
+- DejaVu font for Cyrillic support
+- Contains: invoice number, dates, counterparty, lines, totals, payment summary, notes
+- Respects person vs company fields
+
+**3. Full Invoice Editing:**
+- Draft, Sent, PartiallyPaid, Overdue → fully editable
+- Paid → blocked (must remove payments first)
+- Cancelled → blocked (read-only)
+- Line edits recalculate remaining_amount correctly with existing payments
+
+**4. Payment → Project Financial Sync (ROOT FIX):**
+- ROOT CAUSE: Project dashboard used non-existent fields (total_ex_vat, client_id)
+- FIX: Now uses invoice.paid_amount, invoice.remaining_amount, invoice.counterparty_name
+- Balance.income = sum of paid_amounts from project invoices (not just Paid status)
+- Partial payments reflect immediately in project financials
+
+**5. Project Invoice Table Fix:**
+- Columns: №, Клиент, Дата, Падеж, Статус (with badge), Общо, Платено, Остатък
+- Totals: Общо фактури, Платено, Неплатено
+
+**6. UX Header Buttons:**
+- Ordered: Запази, Към обекта, PDF, Добави плащане, Анулирай фактура, Изтрий
+
 ### Phase: Invoice Lines Multi-Allocation (DONE) - Feb 21, 2026
 - Invoice lines stored in separate collection
 - Multi-allocation to projects/warehouses
