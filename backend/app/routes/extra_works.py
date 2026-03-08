@@ -1,5 +1,6 @@
 """
 Routes - Extra Works Draft + AI Proposal (M2 extension).
+Uses hybrid AI service (LLM + rule-based fallback).
 """
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
@@ -11,6 +12,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.services.ai_proposal import get_ai_proposal as hybrid_ai_proposal
 
 router = APIRouter(tags=["Extra Works / AI Offers"])
 
@@ -62,251 +64,7 @@ class AIProposalRequest(BaseModel):
     title: str
     unit: str = "m2"
     qty: float = 1
-
-
-# ── AI Proposal Service (Rule-Based MVP) ───────────────────────────
-
-# Construction knowledge base for Bulgarian SMR pricing
-ACTIVITY_KNOWLEDGE = {
-    "мазилка": {
-        "type": "Мокри процеси", "subtype": "Мазилка",
-        "unit": "m2",
-        "material_price": 8.50, "labor_price": 12.00,
-        "small_qty_threshold": 5, "small_qty_multiplier": 1.35,
-        "related": ["Грундиране преди мазилка", "Шпакловка", "Шлайфане", "Боядисване", "Ъглови профили"],
-        "materials": {
-            "primary": [
-                {"name": "Гипсова мазилка", "unit": "кг", "qty_per_unit": 1.2, "category": "primary"},
-                {"name": "Грунд", "unit": "л", "qty_per_unit": 0.15, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Ъглови профили PVC", "unit": "бр", "qty_per_unit": 0.3, "category": "secondary"},
-                {"name": "Мрежа за мазилка", "unit": "м", "qty_per_unit": 0.5, "category": "secondary"},
-                {"name": "Щифтове / дюбели", "unit": "бр", "qty_per_unit": 2, "category": "secondary"},
-            ],
-            "consumables": [
-                {"name": "Шкурка P120", "unit": "бр", "qty_per_unit": 0.1, "category": "consumable"},
-                {"name": "Тиксо хартиено", "unit": "бр", "qty_per_unit": 0.05, "category": "consumable"},
-                {"name": "Найлон покривен", "unit": "м", "qty_per_unit": 0.3, "category": "consumable"},
-            ],
-        },
-    },
-    "боядисване": {
-        "type": "Довършителни", "subtype": "Боядисване",
-        "unit": "m2",
-        "material_price": 4.50, "labor_price": 6.00,
-        "small_qty_threshold": 10, "small_qty_multiplier": 1.30,
-        "related": ["Шпакловка", "Шлайфане", "Грундиране", "Мазилка", "Тапети"],
-        "materials": {
-            "primary": [
-                {"name": "Латекс интериорен", "unit": "л", "qty_per_unit": 0.25, "category": "primary"},
-                {"name": "Грунд дълбокопроникващ", "unit": "л", "qty_per_unit": 0.12, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Шпакловка финишна", "unit": "кг", "qty_per_unit": 0.3, "category": "secondary"},
-            ],
-            "consumables": [
-                {"name": "Четка плоска", "unit": "бр", "qty_per_unit": 0.02, "category": "consumable"},
-                {"name": "Валяк / мече", "unit": "бр", "qty_per_unit": 0.03, "category": "consumable"},
-                {"name": "Тиксо хартиено", "unit": "бр", "qty_per_unit": 0.05, "category": "consumable"},
-                {"name": "Найлон покривен", "unit": "м", "qty_per_unit": 0.4, "category": "consumable"},
-                {"name": "Вана за боя", "unit": "бр", "qty_per_unit": 0.02, "category": "consumable"},
-                {"name": "Шкурка P180", "unit": "бр", "qty_per_unit": 0.08, "category": "consumable"},
-            ],
-        },
-    },
-    "шпакловка": {
-        "type": "Довършителни", "subtype": "Шпакловка",
-        "unit": "m2",
-        "material_price": 5.00, "labor_price": 8.00,
-        "small_qty_threshold": 5, "small_qty_multiplier": 1.35,
-        "related": ["Грундиране", "Боядисване", "Мазилка", "Шлайфане", "Тапети"],
-        "materials": {
-            "primary": [
-                {"name": "Шпакловка финишна", "unit": "кг", "qty_per_unit": 1.0, "category": "primary"},
-                {"name": "Грунд", "unit": "л", "qty_per_unit": 0.12, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Бандажна лента", "unit": "м", "qty_per_unit": 0.3, "category": "secondary"},
-            ],
-            "consumables": [
-                {"name": "Шкурка P120/P180", "unit": "бр", "qty_per_unit": 0.15, "category": "consumable"},
-                {"name": "Шпакла 30см", "unit": "бр", "qty_per_unit": 0.01, "category": "consumable"},
-                {"name": "Найлон покривен", "unit": "м", "qty_per_unit": 0.3, "category": "consumable"},
-            ],
-        },
-    },
-    "плочки": {
-        "type": "Довършителни", "subtype": "Облицовка",
-        "unit": "m2",
-        "material_price": 25.00, "labor_price": 22.00,
-        "small_qty_threshold": 3, "small_qty_multiplier": 1.40,
-        "related": ["Хидроизолация", "Фугиране", "Нивелация на основа", "Силиконова фуга", "Ъглови лайсни"],
-        "materials": {
-            "primary": [
-                {"name": "Плочки", "unit": "м2", "qty_per_unit": 1.1, "category": "primary"},
-                {"name": "Лепило за плочки", "unit": "кг", "qty_per_unit": 4.0, "category": "primary"},
-                {"name": "Фугираща смес", "unit": "кг", "qty_per_unit": 0.5, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Хидроизолация", "unit": "кг", "qty_per_unit": 0.8, "category": "secondary"},
-                {"name": "Грунд", "unit": "л", "qty_per_unit": 0.15, "category": "secondary"},
-                {"name": "Кръстчета за фуги", "unit": "бр", "qty_per_unit": 15, "category": "secondary"},
-            ],
-            "consumables": [
-                {"name": "Силикон санитарен", "unit": "бр", "qty_per_unit": 0.05, "category": "consumable"},
-                {"name": "Ъглови лайсни PVC", "unit": "м", "qty_per_unit": 0.3, "category": "consumable"},
-            ],
-        },
-    },
-    "гипсокартон": {
-        "type": "Сухо строителство", "subtype": "Гипсокартон",
-        "unit": "m2",
-        "material_price": 15.00, "labor_price": 16.00,
-        "small_qty_threshold": 5, "small_qty_multiplier": 1.30,
-        "related": ["Шпакловка на ГК", "Бандажиране", "Боядисване", "Звукоизолация", "Термоизолация"],
-        "materials": {
-            "primary": [
-                {"name": "Гипсокартон 12.5мм", "unit": "м2", "qty_per_unit": 1.1, "category": "primary"},
-                {"name": "Профили CD/UD", "unit": "м", "qty_per_unit": 2.5, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Каменна вата 5см", "unit": "м2", "qty_per_unit": 1.0, "category": "secondary"},
-                {"name": "Винтове за ГК", "unit": "бр", "qty_per_unit": 20, "category": "secondary"},
-                {"name": "Дюбели", "unit": "бр", "qty_per_unit": 5, "category": "secondary"},
-            ],
-            "consumables": [
-                {"name": "Бандажна лента", "unit": "м", "qty_per_unit": 1.5, "category": "consumable"},
-                {"name": "Шпакловка за ГК", "unit": "кг", "qty_per_unit": 0.5, "category": "consumable"},
-            ],
-        },
-    },
-    "електро": {
-        "type": "Инсталации", "subtype": "Електро",
-        "unit": "pcs",
-        "material_price": 35.00, "labor_price": 25.00,
-        "small_qty_threshold": 3, "small_qty_multiplier": 1.25,
-        "related": ["Окабеляване", "Пробиване на канали", "Мазилка след канали", "Монтаж табло", "Заземяване"],
-        "materials": {
-            "primary": [
-                {"name": "Кабел NYM 3x2.5", "unit": "м", "qty_per_unit": 5.0, "category": "primary"},
-                {"name": "Кутия конзола", "unit": "бр", "qty_per_unit": 1.0, "category": "primary"},
-                {"name": "Ключ/контакт", "unit": "бр", "qty_per_unit": 1.0, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Гофрирана тръба", "unit": "м", "qty_per_unit": 5.0, "category": "secondary"},
-                {"name": "Клеми", "unit": "бр", "qty_per_unit": 3, "category": "secondary"},
-            ],
-            "consumables": [
-                {"name": "Тиксо изолирбанд", "unit": "бр", "qty_per_unit": 0.1, "category": "consumable"},
-            ],
-        },
-    },
-    "ВиК": {
-        "type": "Инсталации", "subtype": "ВиК",
-        "unit": "pcs",
-        "material_price": 45.00, "labor_price": 30.00,
-        "small_qty_threshold": 2, "small_qty_multiplier": 1.30,
-        "related": ["Пробиване на канали", "Хидроизолация", "Мазилка", "Плочки", "Монтаж санитария"],
-        "materials": {
-            "primary": [
-                {"name": "PPR тръба 20мм", "unit": "м", "qty_per_unit": 3.0, "category": "primary"},
-                {"name": "Фитинги PPR", "unit": "бр", "qty_per_unit": 4, "category": "primary"},
-            ],
-            "secondary": [
-                {"name": "Скоби", "unit": "бр", "qty_per_unit": 3, "category": "secondary"},
-                {"name": "Тефлонова лента", "unit": "бр", "qty_per_unit": 0.2, "category": "secondary"},
-            ],
-            "consumables": [],
-        },
-    },
-}
-
-# Default fallback
-DEFAULT_KNOWLEDGE = {
-    "type": "Общо", "subtype": "СМР",
-    "unit": "pcs",
-    "material_price": 10.00, "labor_price": 15.00,
-    "small_qty_threshold": 5, "small_qty_multiplier": 1.25,
-    "related": ["Подготовка на основа", "Почистване", "Измерване"],
-    "materials": {
-        "primary": [],
-        "secondary": [],
-        "consumables": [
-            {"name": "Общи консумативи", "unit": "к-т", "qty_per_unit": 0.1, "category": "consumable"},
-        ],
-    },
-}
-
-
-def find_matching_knowledge(title: str) -> dict:
-    """Match input text to knowledge base using keyword matching"""
-    title_lower = title.lower()
-    for keyword, data in ACTIVITY_KNOWLEDGE.items():
-        if keyword.lower() in title_lower:
-            return data
-    # Check for common synonyms
-    synonyms = {
-        "мазилк": "мазилка", "оштукатурване": "мазилка", "щукатур": "мазилка",
-        "боя": "боядисване", "латекс": "боядисване", "пребоядисва": "боядисване",
-        "шпакл": "шпакловка",
-        "плоч": "плочки", "фаянс": "плочки", "теракот": "плочки", "облицов": "плочки",
-        "гипсокарт": "гипсокартон", "ГК": "гипсокартон", "сух монтаж": "гипсокартон",
-        "ел.": "електро", "електрич": "електро", "окабеля": "електро", "контакт": "електро", "ключ": "електро",
-        "водопров": "ВиК", "канализ": "ВиК", "тръб": "ВиК", "сифон": "ВиК",
-    }
-    for syn, key in synonyms.items():
-        if syn in title_lower:
-            return ACTIVITY_KNOWLEDGE.get(key, DEFAULT_KNOWLEDGE)
-    return DEFAULT_KNOWLEDGE
-
-
-def generate_ai_proposal(title: str, unit: str, qty: float) -> dict:
-    """Generate AI proposal based on rule-based knowledge"""
-    knowledge = find_matching_knowledge(title)
-    
-    material_price = knowledge["material_price"]
-    labor_price = knowledge["labor_price"]
-    total_price = material_price + labor_price
-    
-    # Small quantity adjustment
-    small_qty_adj = 0
-    if qty <= knowledge["small_qty_threshold"]:
-        multiplier = knowledge["small_qty_multiplier"]
-        small_qty_adj = round((multiplier - 1) * 100, 0)
-        material_price = round(material_price * multiplier, 2)
-        labor_price = round(labor_price * multiplier, 2)
-        total_price = material_price + labor_price
-    
-    # Build material lists with qty estimates
-    materials = []
-    for cat_key in ["primary", "secondary", "consumables"]:
-        for mat in knowledge["materials"].get(cat_key, []):
-            est_qty = round(mat.get("qty_per_unit", 0) * qty, 2) if mat.get("qty_per_unit") else None
-            materials.append({
-                "name": mat["name"],
-                "unit": mat.get("unit", ""),
-                "estimated_qty": est_qty,
-                "category": mat.get("category", cat_key),
-            })
-    
-    return {
-        "recognized": {
-            "activity_type": knowledge["type"],
-            "activity_subtype": knowledge["subtype"],
-            "suggested_unit": knowledge["unit"],
-        },
-        "pricing": {
-            "material_price_per_unit": material_price,
-            "labor_price_per_unit": labor_price,
-            "total_price_per_unit": total_price,
-            "small_qty_adjustment_percent": small_qty_adj,
-            "total_estimated": round(total_price * qty, 2),
-        },
-        "related_smr": knowledge["related"][:5],
-        "materials": materials,
-        "confidence": 0.85 if knowledge != DEFAULT_KNOWLEDGE else 0.3,
-    }
+    city: Optional[str] = None
 
 
 # ── Extra Work Draft CRUD ──────────────────────────────────────────
@@ -336,11 +94,15 @@ async def create_extra_work(data: ExtraWorkCreate, user: dict = Depends(require_
         "normalized_activity_subtype": None,
         "unit": data.unit,
         "qty": data.qty,
+        "ai_provider_used": None,
         "ai_material_price_per_unit": None,
         "ai_labor_price_per_unit": None,
         "ai_total_price_per_unit": None,
         "ai_small_qty_adjustment": None,
         "ai_confidence": None,
+        "ai_raw_response_summary": None,
+        "ai_price_before_manual_edit": None,
+        "final_user_accepted_price": None,
         "location_floor": data.location_floor,
         "location_room": data.location_room,
         "location_zone": data.location_zone,
@@ -405,32 +167,35 @@ async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
     return {"ok": True}
 
 
-# ── AI Proposal Endpoint ───────────────────────────────────────────
+# ── AI Proposal Endpoint (Hybrid) ──────────────────────────────────
 
 @router.post("/extra-works/ai-proposal")
-async def get_ai_proposal(data: AIProposalRequest, user: dict = Depends(require_m2)):
-    """Generate AI proposal for a work description"""
-    proposal = generate_ai_proposal(data.title, data.unit, data.qty)
+async def get_ai_proposal_endpoint(data: AIProposalRequest, user: dict = Depends(require_m2)):
+    """Generate AI proposal using hybrid provider (LLM → rule-based fallback)"""
+    proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city)
     return proposal
 
 
 @router.post("/extra-works/{draft_id}/apply-ai")
-async def apply_ai_to_draft(draft_id: str, user: dict = Depends(require_m2)):
+async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dict = Depends(require_m2)):
     """Generate and apply AI proposal to an existing draft"""
     draft = await db.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     
-    proposal = generate_ai_proposal(draft["title"], draft["unit"], draft["qty"])
+    proposal = await hybrid_ai_proposal(draft["title"], draft["unit"], draft["qty"], city)
     
     update = {
         "normalized_activity_type": proposal["recognized"]["activity_type"],
         "normalized_activity_subtype": proposal["recognized"]["activity_subtype"],
+        "ai_provider_used": proposal.get("provider", "unknown"),
         "ai_material_price_per_unit": proposal["pricing"]["material_price_per_unit"],
         "ai_labor_price_per_unit": proposal["pricing"]["labor_price_per_unit"],
         "ai_total_price_per_unit": proposal["pricing"]["total_price_per_unit"],
         "ai_small_qty_adjustment": proposal["pricing"]["small_qty_adjustment_percent"],
         "ai_confidence": proposal["confidence"],
+        "ai_raw_response_summary": proposal.get("explanation", ""),
+        "ai_price_before_manual_edit": proposal["pricing"]["total_price_per_unit"],
         "suggested_related_smr": proposal["related_smr"],
         "suggested_materials": proposal["materials"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -452,7 +217,6 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
     if not data.draft_ids:
         raise HTTPException(status_code=400, detail="No draft rows selected")
     
-    # Fetch all selected drafts
     drafts = await db.extra_work_drafts.find(
         {"id": {"$in": data.draft_ids}, "org_id": user["org_id"], "status": "draft"},
         {"_id": 0}
@@ -461,7 +225,6 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
     if not drafts:
         raise HTTPException(status_code=404, detail="No valid draft rows found")
     
-    # All drafts must belong to same project
     project_ids = set(d["project_id"] for d in drafts)
     if len(project_ids) > 1:
         raise HTTPException(status_code=400, detail="All draft rows must belong to the same project")
@@ -471,7 +234,6 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Generate offer number
     last = await db.offers.find_one({"org_id": user["org_id"]}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)])
     if last and last.get("offer_no"):
         try:
@@ -485,7 +247,6 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
     now = datetime.now(timezone.utc).isoformat()
     batch_id = str(uuid.uuid4())
     
-    # Convert drafts to offer lines
     lines = []
     for i, draft in enumerate(drafts):
         material = draft.get("ai_material_price_per_unit") or 0
@@ -561,7 +322,6 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
     
     await db.offers.insert_one(offer)
     
-    # Update draft rows status
     await db.extra_work_drafts.update_many(
         {"id": {"$in": data.draft_ids}},
         {"$set": {

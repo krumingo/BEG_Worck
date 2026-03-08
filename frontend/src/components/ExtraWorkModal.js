@@ -28,6 +28,7 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
   const [aiLoading, setAiLoading] = useState(false);
   const [proposal, setProposal] = useState(null);
   const [showMaterials, setShowMaterials] = useState(false);
+  const [city, setCity] = useState("София");
 
   const resetForm = () => {
     setForm({ title: "", unit: "m2", qty: 1, location_floor: "", location_room: "", location_zone: "", location_notes: "", notes: "", work_date: new Date().toISOString().split("T")[0] });
@@ -40,7 +41,7 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
     setAiLoading(true);
     try {
       const res = await API.post("/extra-works/ai-proposal", {
-        title: form.title, unit: form.unit, qty: parseFloat(form.qty) || 1,
+        title: form.title, unit: form.unit, qty: parseFloat(form.qty) || 1, city: city || null,
       });
       setProposal(res.data);
     } catch (err) {
@@ -55,7 +56,7 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
       const res = await API.post("/extra-works", { project_id: projectId, ...form, qty: parseFloat(form.qty) || 1 });
       const draftId = res.data.id;
       if (applyAi && proposal) {
-        await API.post(`/extra-works/${draftId}/apply-ai`);
+        await API.post(`/extra-works/${draftId}/apply-ai?city=${encodeURIComponent(city || "")}`);
       }
       resetForm();
       onOpenChange(false);
@@ -120,6 +121,11 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
               <Textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Допълнителни бележки" className="bg-background min-h-[40px] text-sm" />
             </div>
 
+            <div className="space-y-1">
+              <Label>Град (за ценови ориентир)</Label>
+              <Input value={city} onChange={e => setCity(e.target.value)} placeholder="София" className="bg-background text-sm" data-testid="ew-city" />
+            </div>
+
             <Button onClick={handleAI} disabled={aiLoading || !form.title.trim()} className="w-full bg-violet-600 hover:bg-violet-700" data-testid="ew-ai-btn">
               {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
               AI предложение
@@ -143,9 +149,14 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                     <Sparkles className="w-4 h-4 text-violet-400" />
                     <span className="text-xs font-medium text-violet-300">Разпознаване</span>
                     <Badge variant="outline" className="text-[10px] ml-auto">{Math.round(proposal.confidence * 100)}%</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${proposal.provider === "llm" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-gray-500/10 text-gray-400 border-gray-500/30"}`}>
+                      {proposal.provider === "llm" ? "AI (LLM)" : "Rule-based"}
+                    </Badge>
                   </div>
                   <p className="text-sm text-foreground">{proposal.recognized.activity_type} / {proposal.recognized.activity_subtype}</p>
                   <p className="text-xs text-muted-foreground">Препоръчана мярка: {UNIT_LABELS[proposal.recognized.suggested_unit] || proposal.recognized.suggested_unit}</p>
+                  {proposal.explanation && <p className="text-[10px] text-muted-foreground/70 mt-1 italic">{proposal.explanation}</p>}
+                  {proposal.fallback_reason && <p className="text-[10px] text-amber-400 mt-1">{proposal.fallback_reason}</p>}
                 </div>
 
                 {/* Pricing */}
@@ -156,9 +167,14 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                     <div className="flex justify-between"><span className="text-muted-foreground">Труд/ед:</span><span className="font-mono">{proposal.pricing.labor_price_per_unit.toFixed(2)} лв</span></div>
                     <div className="flex justify-between border-t border-border pt-1"><span className="text-muted-foreground font-medium">Общо/ед:</span><span className="font-mono font-medium text-emerald-400">{proposal.pricing.total_price_per_unit.toFixed(2)} лв</span></div>
                     {proposal.pricing.small_qty_adjustment_percent > 0 && (
-                      <div className="flex items-center gap-1 text-amber-400 text-xs mt-1">
-                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 border-amber-500/30">+{proposal.pricing.small_qty_adjustment_percent}%</Badge>
-                        <span>корекция за малко количество</span>
+                      <div className="text-xs mt-1">
+                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 border-amber-500/30 text-amber-400">+{proposal.pricing.small_qty_adjustment_percent}%</Badge>
+                        <span className="text-amber-400 ml-1">{proposal.pricing.small_qty_explanation || "корекция за малко количество"}</span>
+                      </div>
+                    )}
+                    {proposal.pricing.city && proposal.pricing.city_factor && (
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Град: {proposal.pricing.city} (коеф. {proposal.pricing.city_factor.toFixed(2)})
                       </div>
                     )}
                     <div className="flex justify-between pt-1"><span className="text-muted-foreground">Прогноза общо:</span><span className="font-mono font-bold text-primary">{proposal.pricing.total_estimated.toFixed(2)} лв</span></div>
