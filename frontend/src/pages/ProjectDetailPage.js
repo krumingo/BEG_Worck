@@ -52,6 +52,8 @@ import {
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
+import ExtraWorkModal from "@/components/ExtraWorkModal";
+import ExtraWorksDraftPanel from "@/components/ExtraWorksDraftPanel";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -80,6 +82,8 @@ export default function ProjectDetailPage() {
   const [showClientModal, setShowClientModal] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [savingWarranty, setSavingWarranty] = useState(false);
+  const [showExtraWork, setShowExtraWork] = useState(false);
+  const [extraWorkRefresh, setExtraWorkRefresh] = useState(0);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -149,6 +153,9 @@ export default function ProjectDetailPage() {
           <Badge className={STATUS_COLORS[project.status] || ""}>
             {project.status}
           </Badge>
+          <Button size="sm" onClick={() => setShowExtraWork(true)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
+            <Plus className="w-4 h-4 mr-1" /> Допълнително СМР
+          </Button>
         </div>
 
         {/* Cards Grid */}
@@ -545,6 +552,9 @@ export default function ProjectDetailPage() {
           )}
         </div>
 
+        {/* Extra Works Draft Panel */}
+        <ExtraWorksDraftPanel projectId={projectId} refreshKey={extraWorkRefresh} />
+
         {/* Client Details Modal */}
         <Dialog open={showClientModal} onOpenChange={setShowClientModal}>
           <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
@@ -596,6 +606,14 @@ export default function ProjectDetailPage() {
           open={showClientPicker}
           onOpenChange={setShowClientPicker}
           onClientSelected={fetchDashboard}
+        />
+
+        {/* Extra Work Modal */}
+        <ExtraWorkModal
+          projectId={projectId}
+          open={showExtraWork}
+          onOpenChange={setShowExtraWork}
+          onCreated={() => setExtraWorkRefresh(prev => prev + 1)}
         />
       </div>
   );

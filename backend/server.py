@@ -1059,6 +1059,10 @@ api_router.include_router(activity_budgets_router)
 from app.routes.offer_versions import router as offer_versions_router
 api_router.include_router(offer_versions_router)
 
+# Import extra works router - includes extra work drafts, AI proposals, create offer from drafts
+from app.routes.extra_works import router as extra_works_router
+api_router.include_router(extra_works_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
