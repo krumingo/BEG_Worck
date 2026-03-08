@@ -335,6 +335,51 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
+### BUGFIX: Invoice Lines Standard Structure - Mar 8, 2026
+
+**Root Cause:**
+Invoice lines were using offer/КСС-like structure with `cost_category` field and "Материали" column dropdown, which is inappropriate for standard sales invoices.
+
+**Issues Fixed:**
+
+1. **Removed offer-specific fields:**
+   - Removed `COST_CATEGORIES` constant
+   - Removed `cost_category` from addLine()
+   - Removed `project_id` from line structure
+   - Removed `getCostCategoryKey` helper function
+
+2. **Simplified line structure:**
+   ```javascript
+   {
+     id: string,
+     description: string,
+     unit: string,        // "pcs", "m", "m2", etc.
+     qty: number,
+     unit_price: number,
+     line_total: number   // computed: qty * unit_price
+   }
+   ```
+
+3. **Updated table UI:**
+   - Columns: ОПИСАНИЕ | МЯРКА | К-ВО | ЕД. ЦЕНА | ОБЩО | (delete)
+   - Removed "Материали" column completely
+   - Better input styling with font-mono for numbers
+
+4. **Clean save payload:**
+   - Lines sent without `cost_category` and `project_id`
+   - Only standard invoice line fields
+
+**Calculations:**
+- lineTotal = qty × unitPrice
+- subtotal = sum(lineTotals)
+- vatAmount = subtotal × (vatPercent / 100)
+- total = subtotal + vatAmount
+
+**Files Changed:**
+- `/app/frontend/src/pages/InvoiceEditorPage.js`
+
+---
+
 ### BUGFIX: Invoice Editor Form Improvements - Mar 8, 2026
 
 **Issues Fixed:**

@@ -45,7 +45,6 @@ const STATUS_COLORS = {
 };
 
 const UNITS = ["pcs", "m", "m2", "m3", "hours", "lot", "kg", "l"];
-const COST_CATEGORIES = ["Materials", "Labor", "Subcontract", "Other"];
 
 export default function InvoiceEditorPage() {
   const { t } = useTranslation();
@@ -258,9 +257,6 @@ export default function InvoiceEditorPage() {
       unit: "pcs",
       qty: 1,
       unit_price: 0,
-      project_id: projectId || null,
-      cost_category: null,
-      sort_order: lines.length,
     }]);
   };
 
@@ -307,12 +303,10 @@ export default function InvoiceEditorPage() {
         vat_percent: vatPercent,
         notes: notes || null,
         lines: lines.map((l) => ({
-          description: l.description,
-          unit: l.unit,
+          description: l.description || "",
+          unit: l.unit || "pcs",
           qty: parseFloat(l.qty) || 0,
           unit_price: parseFloat(l.unit_price) || 0,
-          project_id: l.project_id || null,
-          cost_category: l.cost_category || null,
         })),
       };
 
@@ -337,12 +331,10 @@ export default function InvoiceEditorPage() {
         });
         await API.put(`/finance/invoices/${invoiceId}/lines`, {
           lines: lines.map((l) => ({
-            description: l.description,
-            unit: l.unit,
+            description: l.description || "",
+            unit: l.unit || "pcs",
             qty: parseFloat(l.qty) || 0,
             unit_price: parseFloat(l.unit_price) || 0,
-            project_id: l.project_id || null,
-            cost_category: l.cost_category || null,
           })),
         });
         await fetchData();
@@ -396,11 +388,6 @@ export default function InvoiceEditorPage() {
   const getStatusKey = (status) => {
     const map = { Draft: "draft", Sent: "sent", PartiallyPaid: "partiallyPaid", Paid: "paid", Overdue: "overdue", Cancelled: "cancelled" };
     return map[status] || status.toLowerCase();
-  };
-
-  const getCostCategoryKey = (cat) => {
-    if (!cat) return "none";
-    return cat.toLowerCase();
   };
 
   const isDraft = !invoice || invoice.status === "Draft";
@@ -711,18 +698,17 @@ export default function InvoiceEditorPage() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">{t("common.description")}</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.unit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.qty")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("finance.unitPrice")}</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">{t("finance.costCategory.materials").split(' ')[0]}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[110px]">{t("common.total")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.unit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.qty")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">{t("finance.unitPrice")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">{t("common.total")}</th>
                     {canEdit && <th className="w-[50px]"></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {computedLines.length === 0 ? (
                     <tr>
-                      <td colSpan={canEdit ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={canEdit ? 6 : 5} className="text-center py-8 text-muted-foreground">
                         {t("finance.noLines")}
                       </td>
                     </tr>
@@ -735,12 +721,12 @@ export default function InvoiceEditorPage() {
                             onChange={(e) => updateLine(idx, "description", e.target.value)}
                             placeholder={t("finance.itemDescription")}
                             disabled={!canEdit}
-                            className="bg-background h-8 text-sm"
+                            className="bg-background h-9 text-sm"
                           />
                         </td>
                         <td className="p-2">
                           <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={!canEdit}>
-                            <SelectTrigger className="bg-background h-8 text-xs">
+                            <SelectTrigger className="bg-background h-9 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -751,32 +737,24 @@ export default function InvoiceEditorPage() {
                         <td className="p-2">
                           <Input
                             type="number"
+                            min="0"
+                            step="0.01"
                             value={line.qty}
                             onChange={(e) => updateLine(idx, "qty", e.target.value)}
                             disabled={!canEdit}
-                            className="bg-background h-8 text-sm text-right"
+                            className="bg-background h-9 text-sm text-right font-mono"
                           />
                         </td>
                         <td className="p-2">
                           <Input
                             type="number"
+                            min="0"
                             step="0.01"
                             value={line.unit_price}
                             onChange={(e) => updateLine(idx, "unit_price", e.target.value)}
                             disabled={!canEdit}
-                            className="bg-background h-8 text-sm text-right"
+                            className="bg-background h-9 text-sm text-right font-mono"
                           />
-                        </td>
-                        <td className="p-2">
-                          <Select value={line.cost_category || "none"} onValueChange={(v) => updateLine(idx, "cost_category", v === "none" ? null : v)} disabled={!canEdit}>
-                            <SelectTrigger className="bg-background h-8 text-xs">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">{t("finance.costCategory.none")}</SelectItem>
-                              {COST_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{t(`finance.costCategory.${getCostCategoryKey(c)}`)}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
                         </td>
                         <td className="p-2 text-right font-mono font-medium text-foreground">
                           {formatCurrency(line.line_total, currency)}
