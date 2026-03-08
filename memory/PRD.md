@@ -288,6 +288,53 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
+### COMPLETED: Offer Versions (History + Restore) - Mar 8, 2026
+
+**Feature: Full version control for offers with history, preview and restore capabilities.**
+
+**A) Data Model:**
+- `offer_versions`: { id, org_id, project_id, offer_id, version_number, snapshot_json, created_at, created_by, note, is_auto_backup }
+- Unique constraint on (org_id, offer_id, version_number)
+- `snapshot_json` stores complete offer state: header fields, all lines with totals, metadata
+
+**B) API Endpoints:**
+- `POST /api/offers/{offerId}/versions` - Create new version (snapshot of current state)
+- `GET /api/offers/{offerId}/versions` - List all versions (latest first, excludes snapshot_json for performance)
+- `GET /api/offers/{offerId}/versions/{versionNumber}` - Get single version with full snapshot_json
+- `POST /api/offers/{offerId}/versions/{versionNumber}/restore` - Restore version with **automatic backup**
+- `DELETE /api/offers/{offerId}/versions/{versionNumber}` - Delete version (admin only)
+
+**C) Critical Restore Safety:**
+- Before overwriting current offer, creates automatic backup version
+- Backup note: "Автоматичен backup преди възстановяване на vN"
+- `is_auto_backup: true` flag distinguishes auto-backups from manual saves
+- Totals recomputed after restore to ensure accuracy
+
+**D) Frontend UI (`OfferVersionsPanel`):**
+- Displays in offer editor sidebar (only for existing offers)
+- List shows: version number, timestamp, creator name, note, auto-backup badge
+- "Запази версия" button opens dialog with optional note input
+- "Преглед" button opens modal with:
+  - Version metadata (timestamp, creator, note)
+  - Offer header info (title, status, VAT)
+  - Full lines table with computed totals
+  - Totals summary
+- "Възстанови" button opens AlertDialog confirmation:
+  - Warning message about replacing current offer
+  - Green checkmark confirming automatic backup creation
+- After restore, UI state updates to reflect restored offer data
+
+**E) Permissions:**
+- Create/Restore versions: Admin, Owner, SiteManager
+- Delete versions: Admin, Owner only
+- View versions: Anyone with project access
+
+**DB Indexes:**
+- offer_versions: (org_id, offer_id, version_number) unique
+- offer_versions: (org_id, project_id, offer_id)
+
+---
+
 ### P3 - Phase 3: Mobile Technician Flows
 - Clock in/out from mobile
 - Work report submission

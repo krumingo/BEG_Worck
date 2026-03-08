@@ -34,7 +34,7 @@ def compute_offer_line(line: dict) -> dict:
 def compute_offer_totals(offer: dict) -> dict:
     """Compute offer subtotal, vat, total"""
     lines = offer.get("lines", [])
-    subtotal = sum(l.get("line_total", 0) for l in lines)
+    subtotal = sum(line.get("line_total", 0) for line in lines)
     vat_percent = offer.get("vat_percent", 0)
     vat_amount = round(subtotal * vat_percent / 100, 2)
     total = round(subtotal + vat_amount, 2)
@@ -245,9 +245,9 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     
     # If lines exist, recompute to ensure accuracy
     if update_data["lines"]:
-        lines = [compute_offer_line(l) for l in update_data["lines"]]
-        update_data["lines"] = lines
-        subtotal = sum(l.get("line_total", 0) for l in lines)
+        computed_lines = [compute_offer_line(line) for line in update_data["lines"]]
+        update_data["lines"] = computed_lines
+        subtotal = sum(line.get("line_total", 0) for line in computed_lines)
         vat_amount = round(subtotal * update_data.get("vat_percent", 0) / 100, 2)
         update_data["subtotal"] = round(subtotal, 2)
         update_data["vat_amount"] = vat_amount

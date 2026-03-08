@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class BEGWorkAPITester:
-    def __init__(self, base_url="https://dashboard-activity.preview.emergentagent.com"):
+    def __init__(self, base_url="https://restore-offers.preview.emergentagent.com"):
         self.base_url = f"{base_url}/api"
         self.token = None
         self.tests_run = 0

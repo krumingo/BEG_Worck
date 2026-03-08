@@ -863,7 +863,7 @@ export default function OfferEditorPage() {
           )}
         </div>
 
-        {/* Sidebar - Totals */}
+        {/* Sidebar - Totals + Versions */}
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5 sticky top-6" data-testid="totals-card">
             <h3 className="text-sm font-semibold text-foreground mb-4">{t("offers.summary")}</h3>
@@ -882,6 +882,24 @@ export default function OfferEditorPage() {
               </div>
             </div>
           </div>
+          
+          {/* Offer Versions Panel */}
+          {!isNew && offerId && (
+            <OfferVersionsPanel 
+              offerId={offerId} 
+              onRestore={(restoredOffer) => {
+                // Update local state with restored offer data
+                if (restoredOffer) {
+                  setTitle(restoredOffer.title || "");
+                  setCurrency(restoredOffer.currency || "EUR");
+                  setVatPercent(restoredOffer.vat_percent || 0);
+                  setNotes(restoredOffer.notes || "");
+                  setLines(restoredOffer.lines || []);
+                  setOffer(restoredOffer);
+                }
+              }}
+            />
+          )}
         </div>
       </div>
 
