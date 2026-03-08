@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Mar 8, 2026 (Session 4)
+### Real LLM Integration for AI Offers (Hybrid Mode)
+- **Hybrid Provider**: LLM (GPT-4.1-mini via emergentintegrations) primary → rule-based fallback on error
+- **City-aware pricing**: CITY_PRICE_FACTORS (София=1.15, Пловдив=1.00, Варна=1.05, etc.)
+- **Data capture**: ai_provider_used, ai_raw_response_summary, ai_confidence stored in drafts
+- **Frontend**: Provider badge (LLM/Rule-based), explanation text, city factor display, fallback reason
+- **NOT MOCKED**: Real LLM calls via EMERGENT_LLM_KEY
+- Test report: /app/test_reports/iteration_19.json (100% backend 14/14, 100% frontend)
+
 ## Mar 8, 2026 (Session 3)
 ### P0/P1 MVP: AI Offers + Extra Works Draft Flow
 - **New backend**: /app/backend/app/routes/extra_works.py with 7 API endpoints

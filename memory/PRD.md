@@ -115,6 +115,35 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - POST /api/extra-works/{id}/apply-ai (apply AI to draft)
 - POST /api/extra-works/create-offer (create offer from selected drafts)
 
+
+### Phase: Real LLM Integration (Hybrid Mode) (DONE) - Mar 8, 2026
+**Provider Architecture:**
+- Hybrid: LLM (GPT-4.1-mini via emergentintegrations) → Rule-based fallback
+- AIProvider in /app/backend/app/services/ai_proposal.py
+- Automatic fallback on LLM error/timeout
+
+**LLM Capabilities:**
+- Free-text parsing of construction works (even uncommon types like PVC дограма, окачен таван Армстронг)
+- Pricing suggestions (material + labor per unit)
+- Material checklist with reasons for each item
+- Related works suggestions (3-7 items)
+- Explanation text for each proposal
+
+**City-Aware Pricing:**
+- CITY_PRICE_FACTORS: София=1.15, Пловдив=1.00, Варна=1.05, Бургас=1.02, etc.
+- City field in ExtraWorkModal, passed to AI service
+- Displayed in UI as "Град: София (коеф. 1.15)"
+
+**Data Capture for Future Learning:**
+- ai_provider_used, ai_raw_response_summary, ai_confidence
+- ai_price_before_manual_edit, final_user_accepted_price (prepared)
+
+**Frontend Enhancements:**
+- Provider badge: "AI (LLM)" green / "Rule-based" gray
+- Explanation text in italics
+- City factor display
+- Fallback reason display when LLM fails
+
 ### Phase: Invoice Lines Multi-Allocation (DONE) - Feb 21, 2026
 - Invoice lines stored in separate collection
 - Multi-allocation to projects/warehouses
