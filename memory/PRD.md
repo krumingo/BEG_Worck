@@ -24,6 +24,27 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Payment tracking with allocation to invoices
 - Counterparties (suppliers/clients)
 
+### Phase: Invoice Numbering & Payments (DONE) - Mar 8, 2026
+**Automatic Sequential Invoice Numbering:**
+- Settings API: GET/PUT /api/finance/invoice-settings (prefix, auto/manual, next number)
+- Preview API: GET /api/finance/next-invoice-number
+- Atomic increment with find_one_and_update to prevent race conditions
+- Safe starting number validation (no conflicts with existing numbers)
+- UI: CompanySettingsPage with toggle for auto/manual, prefix, next number
+
+**Invoice Direct Payments & Automatic Status Logic (P0):**
+- Direct payment API: POST /api/finance/invoices/{id}/payments (creates payment + allocation in one step)
+- Payment history API: GET /api/finance/invoices/{id}/payments
+- Payment removal API: DELETE /api/finance/invoices/{id}/payments/{alloc_id}
+- Automatic status transitions: Draft → Sent → PartiallyPaid → Paid / Overdue → Cancelled
+- Status recalculation on payment add/remove (including reverting from Paid → PartiallyPaid → Sent/Overdue)
+- Over-payment prevention
+- Frontend: Inline payment dialog from invoice page (no navigation away)
+- Frontend: Payment history panel with date, amount, method, reference, account
+- Frontend: Progress bar showing % paid
+- Frontend: Quick-pay buttons (full amount, 50%)
+- Frontend: Bulgarian status labels in badges
+
 ### Phase: Invoice Lines Multi-Allocation (DONE) - Feb 21, 2026
 - Invoice lines stored in separate collection
 - Multi-allocation to projects/warehouses
@@ -573,3 +594,7 @@ Invoice lines were using offer/КСС-like structure with `cost_category` field 
 | /api/reports/finance-details/by-project | GET | Finance by project |
 | /api/reports/finance-details/transactions | GET | All transactions with filters |
 | /api/reports/finance-details/top-counterparties | GET | Top 10 counterparties |
+| /api/finance/invoice-settings | GET/PUT | Invoice numbering settings |
+| /api/finance/next-invoice-number | GET | Preview next invoice number |
+| /api/finance/invoices/{id}/payments | GET/POST | List/add direct payments to invoice |
+| /api/finance/invoices/{id}/payments/{alloc_id} | DELETE | Remove payment from invoice |
