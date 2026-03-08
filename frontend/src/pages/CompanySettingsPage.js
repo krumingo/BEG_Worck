@@ -6,15 +6,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Building2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, Building2, Hash, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
 
 export default function CompanySettingsPage() {
   const { t } = useTranslation();
-  const { org, refreshOrg } = useAuth();
+  const { org, refreshOrg, user } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", attendance_start: "06:00", attendance_end: "10:00" });
   const [sub, setSub] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  
+  // Invoice numbering state
+  const [invoiceSettings, setInvoiceSettings] = useState(null);
+  const [invForm, setInvForm] = useState({
+    issued_auto_numbering: true,
+    issued_prefix: "INV",
+    issued_next_number: 1,
+    received_auto_numbering: false,
+    received_prefix: "BILL",
+    received_next_number: 1,
+  });
+  const [invSaving, setInvSaving] = useState(false);
+  const [invSaved, setInvSaved] = useState(false);
 
   useEffect(() => {
     if (org) {
@@ -26,6 +40,19 @@ export default function CompanySettingsPage() {
       });
     }
     API.get("/subscription").then((r) => setSub(r.data)).catch(() => {});
+    
+    // Load invoice settings
+    API.get("/finance/invoice-settings").then((r) => {
+      setInvoiceSettings(r.data);
+      setInvForm({
+        issued_auto_numbering: r.data.issued_auto_numbering ?? true,
+        issued_prefix: r.data.issued_prefix || "INV",
+        issued_next_number: r.data.issued_next_number || 1,
+        received_auto_numbering: r.data.received_auto_numbering ?? false,
+        received_prefix: r.data.received_prefix || "BILL",
+        received_next_number: r.data.received_next_number || 1,
+      });
+    }).catch(() => {});
   }, [org]);
 
   const handleSave = async () => {
@@ -42,6 +69,31 @@ export default function CompanySettingsPage() {
       setSaving(false);
     }
   };
+
+  const handleSaveInvoiceSettings = async () => {
+    setInvSaving(true);
+    setInvSaved(false);
+    try {
+      const res = await API.put("/finance/invoice-settings", invForm);
+      setInvoiceSettings(res.data);
+      setInvForm({
+        issued_auto_numbering: res.data.issued_auto_numbering ?? true,
+        issued_prefix: res.data.issued_prefix || "INV",
+        issued_next_number: res.data.issued_next_number || 1,
+        received_auto_numbering: res.data.received_auto_numbering ?? false,
+        received_prefix: res.data.received_prefix || "BILL",
+        received_next_number: res.data.received_next_number || 1,
+      });
+      setInvSaved(true);
+      setTimeout(() => setInvSaved(false), 2000);
+    } catch (err) {
+      alert(err.response?.data?.detail || "Грешка при запазване");
+    } finally {
+      setInvSaving(false);
+    }
+  };
+
+  const isAdmin = user?.role === "Admin" || user?.role === "Owner";
 
   return (
     <div className="p-8 max-w-[800px]" data-testid="company-settings-page">
@@ -145,6 +197,135 @@ export default function CompanySettingsPage() {
         </div>
         <p className="text-xs text-muted-foreground mt-3">{t("myDay.markedAsLate")}</p>
       </div>
+
+      {/* Invoice Numbering Settings */}
+      {isAdmin && (
+        <div className="rounded-xl border border-border bg-card p-6 mb-6" data-testid="invoice-numbering-settings">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <Hash className="w-5 h-5 text-emerald-500" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Номерация на фактури</h2>
+              <p className="text-xs text-muted-foreground">Настройки за автоматично генериране на номера</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Sales Invoices */}
+            <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-sm">Продажби (Изходящи фактури)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Автоматична номерация</span>
+                  <Switch
+                    checked={invForm.issued_auto_numbering}
+                    onCheckedChange={(v) => setInvForm({ ...invForm, issued_auto_numbering: v })}
+                    data-testid="issued-auto-switch"
+                  />
+                </div>
+              </div>
+              
+              {invForm.issued_auto_numbering && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Префикс</Label>
+                    <Input
+                      value={invForm.issued_prefix}
+                      onChange={(e) => setInvForm({ ...invForm, issued_prefix: e.target.value.toUpperCase() })}
+                      placeholder="INV"
+                      className="bg-background font-mono"
+                      data-testid="issued-prefix-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Следващ номер</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={invForm.issued_next_number}
+                      onChange={(e) => setInvForm({ ...invForm, issued_next_number: parseInt(e.target.value) || 1 })}
+                      className="bg-background font-mono"
+                      data-testid="issued-next-number-input"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {invoiceSettings?.issued_last_used && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  Последен използван номер: <span className="font-mono">{invoiceSettings.issued_last_used}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Purchase Invoices */}
+            <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-500" />
+                  <span className="font-medium text-sm">Покупки (Входящи фактури)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Автоматична номерация</span>
+                  <Switch
+                    checked={invForm.received_auto_numbering}
+                    onCheckedChange={(v) => setInvForm({ ...invForm, received_auto_numbering: v })}
+                    data-testid="received-auto-switch"
+                  />
+                </div>
+              </div>
+              
+              {invForm.received_auto_numbering && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Префикс</Label>
+                    <Input
+                      value={invForm.received_prefix}
+                      onChange={(e) => setInvForm({ ...invForm, received_prefix: e.target.value.toUpperCase() })}
+                      placeholder="BILL"
+                      className="bg-background font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Следващ номер</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={invForm.received_next_number}
+                      onChange={(e) => setInvForm({ ...invForm, received_next_number: parseInt(e.target.value) || 1 })}
+                      className="bg-background font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {!invForm.received_auto_numbering && (
+                <p className="text-xs text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Входящите фактури се въвеждат ръчно по номер от доставчика
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                onClick={handleSaveInvoiceSettings}
+                disabled={invSaving}
+                className="bg-primary hover:bg-primary/90"
+                data-testid="save-invoice-settings-btn"
+              >
+                {invSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                {invSaved ? "Запазено!" : "Запази настройките"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Subscription Info */}
       {sub && (

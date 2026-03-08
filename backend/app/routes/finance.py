@@ -64,7 +64,8 @@ async def update_invoice_status(invoice_id: str, org_id: str):
         new_status = "Paid"
     elif paid_amount > 0:
         new_status = "PartiallyPaid"
-    elif invoice["status"] == "Sent" and invoice.get("due_date"):
+    elif invoice["status"] in ["Sent", "PartiallyPaid", "Overdue"] and invoice.get("due_date"):
+        # When all payments removed, go back to Sent or Overdue based on due date
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if invoice["due_date"] < today:
             new_status = "Overdue"
@@ -81,23 +82,201 @@ async def update_invoice_status(invoice_id: str, org_id: str):
     }})
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# INVOICE NUMBERING SYSTEM
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def get_invoice_settings(org_id: str) -> dict:
+    """Get or create invoice numbering settings for organization"""
+    settings = await db.invoice_settings.find_one({"org_id": org_id})
+    if not settings:
+        # Create default settings
+        settings = {
+            "org_id": org_id,
+            "issued_auto_numbering": True,
+            "issued_prefix": "INV",
+            "issued_next_number": 1,
+            "issued_starting_number": 1,
+            "received_auto_numbering": False,  # Usually manually entered
+            "received_prefix": "BILL",
+            "received_next_number": 1,
+            "received_starting_number": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.invoice_settings.insert_one(settings)
+    # Remove _id before returning
+    if "_id" in settings:
+        del settings["_id"]
+    return settings
+
+
 async def get_next_invoice_no(org_id: str, direction: str) -> str:
-    """Generate sequential invoice number"""
+    """Generate sequential invoice number with atomic increment"""
+    settings = await get_invoice_settings(org_id)
+    
+    if direction == "Issued":
+        if not settings.get("issued_auto_numbering", True):
+            return ""  # Manual numbering
+        prefix = settings.get("issued_prefix", "INV")
+        number_field = "issued_next_number"
+    else:
+        if not settings.get("received_auto_numbering", False):
+            return ""  # Manual numbering for bills
+        prefix = settings.get("received_prefix", "BILL")
+        number_field = "received_next_number"
+    
+    # Atomic increment to prevent race conditions
+    result = await db.invoice_settings.find_one_and_update(
+        {"org_id": org_id},
+        {"$inc": {number_field: 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+        return_document=False  # Return the document BEFORE update
+    )
+    
+    current_number = result.get(number_field, 1)
+    return f"{prefix}-{current_number:04d}"
+
+
+async def validate_invoice_no_unique(org_id: str, invoice_no: str, exclude_id: str = None) -> bool:
+    """Check if invoice number is unique within organization"""
+    query = {"org_id": org_id, "invoice_no": invoice_no}
+    if exclude_id:
+        query["id"] = {"$ne": exclude_id}
+    existing = await db.invoices.find_one(query)
+    return existing is None
+
+
+async def get_safe_starting_number(org_id: str, direction: str, requested_start: int) -> int:
+    """Get safe starting number that won't conflict with existing invoices"""
     prefix = "INV" if direction == "Issued" else "BILL"
-    last = await db.invoices.find_one(
-        {"org_id": org_id, "direction": direction},
+    
+    # Find the highest existing number
+    highest = await db.invoices.find_one(
+        {"org_id": org_id, "direction": direction, "invoice_no": {"$regex": f"^{prefix}-"}},
+        {"_id": 0, "invoice_no": 1},
+        sort=[("invoice_no", -1)]
+    )
+    
+    max_existing = 0
+    if highest and highest.get("invoice_no"):
+        try:
+            parts = highest["invoice_no"].split("-")
+            max_existing = int(parts[-1])
+        except:
+            pass
+    
+    return max(requested_start, max_existing + 1)
+
+
+# ── Invoice Settings Endpoints ─────────────────────────────────────────────────
+
+@router.get("/finance/invoice-settings")
+async def get_settings(user: dict = Depends(require_m5)):
+    """Get invoice numbering settings"""
+    if user["role"] not in ["Admin", "Owner", "Accountant"]:
+        raise HTTPException(status_code=403, detail="Нямате права за достъп до настройките")
+    
+    settings = await get_invoice_settings(user["org_id"])
+    
+    # Also return current highest invoice numbers for reference
+    issued_highest = await db.invoices.find_one(
+        {"org_id": user["org_id"], "direction": "Issued"},
         {"_id": 0, "invoice_no": 1},
         sort=[("created_at", -1)]
     )
-    if last and last.get("invoice_no"):
-        try:
-            parts = last["invoice_no"].split("-")
-            num = int(parts[-1]) + 1
-        except:
-            num = 1
+    received_highest = await db.invoices.find_one(
+        {"org_id": user["org_id"], "direction": "Received"},
+        {"_id": 0, "invoice_no": 1},
+        sort=[("created_at", -1)]
+    )
+    
+    return {
+        **settings,
+        "issued_last_used": issued_highest.get("invoice_no") if issued_highest else None,
+        "received_last_used": received_highest.get("invoice_no") if received_highest else None,
+    }
+
+
+@router.put("/finance/invoice-settings")
+async def update_settings(data: dict, user: dict = Depends(require_m5)):
+    """Update invoice numbering settings (Admin only)"""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Само администратори могат да променят настройките")
+    
+    org_id = user["org_id"]
+    
+    # Validate and get safe numbers if changing starting/next numbers
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if "issued_auto_numbering" in data:
+        update["issued_auto_numbering"] = bool(data["issued_auto_numbering"])
+    
+    if "issued_prefix" in data:
+        prefix = str(data["issued_prefix"]).strip().upper()
+        if prefix:
+            update["issued_prefix"] = prefix
+    
+    if "issued_next_number" in data:
+        requested = int(data["issued_next_number"])
+        safe_number = await get_safe_starting_number(org_id, "Issued", requested)
+        update["issued_next_number"] = safe_number
+        if safe_number != requested:
+            # Return warning in response
+            pass
+    
+    if "issued_starting_number" in data:
+        update["issued_starting_number"] = int(data["issued_starting_number"])
+    
+    if "received_auto_numbering" in data:
+        update["received_auto_numbering"] = bool(data["received_auto_numbering"])
+    
+    if "received_prefix" in data:
+        prefix = str(data["received_prefix"]).strip().upper()
+        if prefix:
+            update["received_prefix"] = prefix
+    
+    if "received_next_number" in data:
+        requested = int(data["received_next_number"])
+        safe_number = await get_safe_starting_number(org_id, "Received", requested)
+        update["received_next_number"] = safe_number
+    
+    await db.invoice_settings.update_one(
+        {"org_id": org_id},
+        {"$set": update},
+        upsert=True
+    )
+    
+    return await get_settings(user)
+
+
+@router.get("/finance/next-invoice-number")
+async def get_next_number(
+    direction: str = "Issued",
+    user: dict = Depends(require_m5)
+):
+    """Preview next invoice number without reserving it"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    settings = await get_invoice_settings(user["org_id"])
+    
+    if direction == "Issued":
+        if not settings.get("issued_auto_numbering", True):
+            return {"auto_numbering": False, "next_number": None}
+        prefix = settings.get("issued_prefix", "INV")
+        next_num = settings.get("issued_next_number", 1)
     else:
-        num = 1
-    return f"{prefix}-{num:04d}"
+        if not settings.get("received_auto_numbering", False):
+            return {"auto_numbering": False, "next_number": None}
+        prefix = settings.get("received_prefix", "BILL")
+        next_num = settings.get("received_next_number", 1)
+    
+    return {
+        "auto_numbering": True,
+        "next_number": f"{prefix}-{next_num:04d}",
+        "prefix": prefix,
+        "number": next_num,
+    }
 
 
 # ── Financial Accounts ─────────────────────────────────────────────
@@ -244,14 +423,19 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     # Enforce invoice limit (monthly)
     await enforce_limit(user["org_id"], "invoices")
     
-    # Check invoice_no uniqueness
-    existing = await db.invoices.find_one({
-        "org_id": user["org_id"],
-        "direction": data.direction,
-        "invoice_no": data.invoice_no,
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Invoice number already exists")
+    org_id = user["org_id"]
+    
+    # Generate or validate invoice number
+    invoice_no = data.invoice_no
+    if not invoice_no or invoice_no.strip() == "":
+        # Auto-generate number
+        invoice_no = await get_next_invoice_no(org_id, data.direction)
+        if not invoice_no:
+            raise HTTPException(status_code=400, detail="Номерът на фактурата е задължителен")
+    else:
+        # Check uniqueness for provided number
+        if not await validate_invoice_no_unique(org_id, invoice_no):
+            raise HTTPException(status_code=400, detail=f"Фактура с номер {invoice_no} вече съществува")
     
     now = datetime.now(timezone.utc).isoformat()
     
@@ -264,8 +448,6 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
             "unit": line.unit,
             "qty": line.qty,
             "unit_price": line.unit_price,
-            "project_id": line.project_id,
-            "cost_category": line.cost_category,
             "sort_order": i,
         }
         lines.append(compute_invoice_line(l))
@@ -274,7 +456,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         "id": str(uuid.uuid4()),
         "org_id": user["org_id"],
         "direction": data.direction,
-        "invoice_no": data.invoice_no,
+        "invoice_no": invoice_no,  # Use the generated/validated number
         "status": "Draft",
         "project_id": data.project_id,
         "counterparty_name": data.counterparty_name,
@@ -495,6 +677,169 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Can only delete Draft invoices")
     
     await db.invoices.delete_one({"id": invoice_id})
+    return {"ok": True}
+
+
+# ── Invoice Direct Payments ────────────────────────────────────────
+
+@router.get("/finance/invoices/{invoice_id}/payments")
+async def list_invoice_payments(invoice_id: str, user: dict = Depends(require_m5)):
+    """List all payments allocated to this invoice"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    allocations = await db.payment_allocations.find(
+        {"invoice_id": invoice_id},
+        {"_id": 0}
+    ).sort("allocated_at", -1).to_list(100)
+    
+    result = []
+    for alloc in allocations:
+        payment = await db.finance_payments.find_one(
+            {"id": alloc["payment_id"]},
+            {"_id": 0}
+        )
+        if payment:
+            acc = await db.financial_accounts.find_one(
+                {"id": payment.get("account_id")},
+                {"_id": 0, "name": 1, "type": 1}
+            )
+            result.append({
+                "id": alloc["id"],
+                "payment_id": payment["id"],
+                "amount": alloc["amount_allocated"],
+                "date": payment.get("date"),
+                "method": payment.get("method"),
+                "reference": payment.get("reference"),
+                "note": payment.get("note"),
+                "account_name": acc["name"] if acc else "",
+                "account_type": acc["type"] if acc else "",
+                "allocated_at": alloc.get("allocated_at"),
+            })
+    
+    return result
+
+
+@router.post("/finance/invoices/{invoice_id}/payments", status_code=201)
+async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(require_m5)):
+    """Quick-pay: create a payment and allocate it to this invoice in one step"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    org_id = user["org_id"]
+    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": org_id})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    if invoice["status"] in ["Draft", "Cancelled"]:
+        raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
+    
+    amount = float(data.get("amount", 0))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    
+    remaining = invoice.get("remaining_amount", invoice["total"])
+    if amount > remaining + 0.01:  # small tolerance for rounding
+        raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
+    
+    account_id = data.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="Сметката е задължителна")
+    
+    account = await db.financial_accounts.find_one({"id": account_id, "org_id": org_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Сметката не е намерена")
+    
+    payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
+    payment_date = data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    method = data.get("method", "BankTransfer")
+    reference = data.get("reference", "")
+    note = data.get("note", "")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Create payment
+    payment = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "direction": payment_direction,
+        "amount": amount,
+        "currency": invoice.get("currency", "EUR"),
+        "date": payment_date,
+        "method": method,
+        "account_id": account_id,
+        "counterparty_name": invoice.get("counterparty_name", ""),
+        "reference": reference,
+        "note": note or f"Плащане по ф-ра {invoice.get('invoice_no', '')}",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.finance_payments.insert_one(payment)
+    
+    # Create allocation
+    allocation = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "payment_id": payment["id"],
+        "invoice_id": invoice_id,
+        "amount_allocated": amount,
+        "allocated_at": now,
+    }
+    await db.payment_allocations.insert_one(allocation)
+    
+    # Update invoice status
+    await update_invoice_status(invoice_id, org_id)
+    
+    await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
+                    {"amount": amount, "payment_id": payment["id"]})
+    
+    # Return updated invoice
+    updated_invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return {
+        "ok": True,
+        "payment_id": payment["id"],
+        "allocation_id": allocation["id"],
+        "amount": amount,
+        "invoice": updated_invoice,
+    }
+
+
+@router.delete("/finance/invoices/{invoice_id}/payments/{allocation_id}")
+async def remove_invoice_payment(invoice_id: str, allocation_id: str, user: dict = Depends(require_m5)):
+    """Remove a payment allocation from an invoice"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    org_id = user["org_id"]
+    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": org_id})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    if invoice["status"] == "Cancelled":
+        raise HTTPException(status_code=400, detail="Не може да се премахне плащане от анулирана фактура")
+    
+    alloc = await db.payment_allocations.find_one({"id": allocation_id, "invoice_id": invoice_id})
+    if not alloc:
+        raise HTTPException(status_code=404, detail="Разпределението не е намерено")
+    
+    # Delete the allocation
+    await db.payment_allocations.delete_one({"id": allocation_id})
+    
+    # Check if the payment has any remaining allocations, if not delete it too
+    remaining_allocs = await db.payment_allocations.count_documents({"payment_id": alloc["payment_id"]})
+    if remaining_allocs == 0:
+        await db.finance_payments.delete_one({"id": alloc["payment_id"]})
+    
+    # Update invoice status
+    await update_invoice_status(invoice_id, org_id)
+    
+    await log_audit(org_id, user["id"], user["email"], "invoice_payment_removed", "invoice", invoice_id,
+                    {"allocation_id": allocation_id})
+    
     return {"ok": True}
 
 
