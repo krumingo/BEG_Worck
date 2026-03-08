@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,6 +76,7 @@ export default function InvoiceEditorPage() {
   const [counterpartyPhone, setCounterpartyPhone] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
+  const [dueDateManuallyEdited, setDueDateManuallyEdited] = useState(false);
   const [currency, setCurrency] = useState("EUR");
   const [vatPercent, setVatPercent] = useState(20);
   const [notes, setNotes] = useState("");
@@ -84,6 +86,34 @@ export default function InvoiceEditorPage() {
   const [clientAutoFilled, setClientAutoFilled] = useState(false);
   const [noClientWarning, setNoClientWarning] = useState(false);
   const [autoFilledFields, setAutoFilledFields] = useState([]);
+  const [clientType, setClientType] = useState(null); // "company" or "person"
+  
+  // Date validation
+  const dateError = dueDate && issueDate && dueDate < issueDate 
+    ? "Падежът не може да бъде преди датата на издаване" 
+    : null;
+
+  // Helper: Calculate default due date (30 days from issue date)
+  const calculateDefaultDueDate = (fromDate) => {
+    const date = new Date(fromDate);
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().split("T")[0];
+  };
+
+  // Handle issue date change with auto-update of due date
+  const handleIssueDateChange = (newIssueDate) => {
+    setIssueDate(newIssueDate);
+    // Only auto-update due date if it wasn't manually edited
+    if (!dueDateManuallyEdited) {
+      setDueDate(calculateDefaultDueDate(newIssueDate));
+    }
+  };
+
+  // Handle due date change (mark as manually edited)
+  const handleDueDateChange = (newDueDate) => {
+    setDueDate(newDueDate);
+    setDueDateManuallyEdited(true);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -107,6 +137,7 @@ export default function InvoiceEditorPage() {
         setCounterpartyPhone(inv.counterparty_phone || "");
         setIssueDate(inv.issue_date);
         setDueDate(inv.due_date);
+        setDueDateManuallyEdited(true); // Existing invoice - treat as manually set
         setCurrency(inv.currency);
         setVatPercent(inv.vat_percent);
         setNotes(inv.notes || "");
@@ -126,51 +157,62 @@ export default function InvoiceEditorPage() {
               const ownerData = client.owner_data;
               const filledFields = [];
               
+              // Set client type for conditional field rendering
+              setClientType(ownerData.type);
+              
               if (ownerData.type === "company") {
-                // Company: full set of fields
-                if (ownerData.name) {
+                // Company: full set of fields - only fill if data exists
+                if (ownerData.name && ownerData.name.trim()) {
                   setCounterpartyName(ownerData.name);
                   filledFields.push("Име на фирма");
                 }
-                if (ownerData.eik) {
+                if (ownerData.eik && ownerData.eik.trim()) {
                   setCounterpartyEik(ownerData.eik);
                   filledFields.push("ЕИК");
                 }
-                if (ownerData.vat_number) {
+                if (ownerData.vat_number && ownerData.vat_number.trim()) {
                   setCounterpartyVatNo(ownerData.vat_number);
                   filledFields.push("ДДС номер");
                 }
-                if (ownerData.address) {
+                if (ownerData.address && ownerData.address.trim()) {
                   setCounterpartyAddress(ownerData.address);
                   filledFields.push("Адрес");
                 }
-                if (ownerData.mol) {
+                if (ownerData.mol && ownerData.mol.trim()) {
                   setCounterpartyMol(ownerData.mol);
                   filledFields.push("МОЛ");
                 }
-                if (ownerData.email) {
+                if (ownerData.email && ownerData.email.trim()) {
                   setCounterpartyEmail(ownerData.email);
                   filledFields.push("Имейл");
                 }
-                if (ownerData.phone) {
+                if (ownerData.phone && ownerData.phone.trim()) {
                   setCounterpartyPhone(ownerData.phone);
                   filledFields.push("Телефон");
                 }
               } else {
-                // Person: name + contact info
+                // Person: only name + contact info (NO company fields!)
                 const personName = `${ownerData.first_name || ""} ${ownerData.last_name || ""}`.trim();
                 if (personName) {
                   setCounterpartyName(personName);
                   filledFields.push("Име");
                 }
-                if (ownerData.email) {
+                if (ownerData.address && ownerData.address.trim()) {
+                  setCounterpartyAddress(ownerData.address);
+                  filledFields.push("Адрес");
+                }
+                if (ownerData.email && ownerData.email.trim()) {
                   setCounterpartyEmail(ownerData.email);
                   filledFields.push("Имейл");
                 }
-                if (ownerData.phone) {
+                if (ownerData.phone && ownerData.phone.trim()) {
                   setCounterpartyPhone(ownerData.phone);
                   filledFields.push("Телефон");
                 }
+                // Explicitly clear company-specific fields for person clients
+                setCounterpartyEik("");
+                setCounterpartyVatNo("");
+                setCounterpartyMol("");
               }
               
               if (filledFields.length > 0) {
@@ -239,6 +281,11 @@ export default function InvoiceEditorPage() {
     }
     if (!issueDate || !dueDate) {
       alert(t("validation.required"));
+      return;
+    }
+    // Date validation - dueDate must be >= issueDate
+    if (dueDate < issueDate) {
+      alert("Падежът не може да бъде преди датата на издаване");
       return;
     }
     setSaving(true);
@@ -511,53 +558,59 @@ export default function InvoiceEditorPage() {
                 <Input
                   value={counterpartyName}
                   onChange={(e) => setCounterpartyName(e.target.value)}
-                  placeholder={t("finance.companyName")}
+                  placeholder={clientType === "person" ? "Име и фамилия" : t("finance.companyName")}
                   disabled={!canEdit}
                   className="bg-background"
                   data-testid="counterparty-input"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>ЕИК</Label>
-                <Input
-                  value={counterpartyEik}
-                  onChange={(e) => setCounterpartyEik(e.target.value)}
-                  placeholder="123456789"
-                  disabled={!canEdit}
-                  className="bg-background font-mono"
-                  data-testid="counterparty-eik-input"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>ДДС номер</Label>
-                <Input
-                  value={counterpartyVatNo}
-                  onChange={(e) => setCounterpartyVatNo(e.target.value)}
-                  placeholder="BG123456789"
-                  disabled={!canEdit}
-                  className="bg-background font-mono"
-                  data-testid="counterparty-vat-input"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>МОЛ</Label>
-                <Input
-                  value={counterpartyMol}
-                  onChange={(e) => setCounterpartyMol(e.target.value)}
-                  placeholder="Име на представител"
-                  disabled={!canEdit}
-                  className="bg-background"
-                  data-testid="counterparty-mol-input"
-                />
-              </div>
+              
+              {/* Company-specific fields - hidden for person clients */}
+              {clientType !== "person" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>ЕИК</Label>
+                    <Input
+                      value={counterpartyEik}
+                      onChange={(e) => setCounterpartyEik(e.target.value)}
+                      placeholder="ЕИК на фирмата"
+                      disabled={!canEdit}
+                      className="bg-background font-mono placeholder:text-muted-foreground/50"
+                      data-testid="counterparty-eik-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>ДДС номер</Label>
+                    <Input
+                      value={counterpartyVatNo}
+                      onChange={(e) => setCounterpartyVatNo(e.target.value)}
+                      placeholder="ДДС номер"
+                      disabled={!canEdit}
+                      className="bg-background font-mono placeholder:text-muted-foreground/50"
+                      data-testid="counterparty-vat-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>МОЛ</Label>
+                    <Input
+                      value={counterpartyMol}
+                      onChange={(e) => setCounterpartyMol(e.target.value)}
+                      placeholder="Материално отговорно лице"
+                      disabled={!canEdit}
+                      className="bg-background placeholder:text-muted-foreground/50"
+                      data-testid="counterparty-mol-input"
+                    />
+                  </div>
+                </>
+              )}
               <div className="space-y-2">
                 <Label>Адрес</Label>
                 <Input
                   value={counterpartyAddress}
                   onChange={(e) => setCounterpartyAddress(e.target.value)}
-                  placeholder="Адрес на клиента"
+                  placeholder="Адрес"
                   disabled={!canEdit}
-                  className="bg-background"
+                  className="bg-background placeholder:text-muted-foreground/50"
                   data-testid="counterparty-address-input"
                 />
               </div>
@@ -567,9 +620,9 @@ export default function InvoiceEditorPage() {
                   type="email"
                   value={counterpartyEmail}
                   onChange={(e) => setCounterpartyEmail(e.target.value)}
-                  placeholder="email@example.com"
+                  placeholder="Имейл адрес"
                   disabled={!canEdit}
-                  className="bg-background"
+                  className="bg-background placeholder:text-muted-foreground/50"
                   data-testid="counterparty-email-input"
                 />
               </div>
@@ -578,9 +631,9 @@ export default function InvoiceEditorPage() {
                 <Input
                   value={counterpartyPhone}
                   onChange={(e) => setCounterpartyPhone(e.target.value)}
-                  placeholder="+359..."
+                  placeholder="Телефон"
                   disabled={!canEdit}
-                  className="bg-background"
+                  className="bg-background placeholder:text-muted-foreground/50"
                   data-testid="counterparty-phone-input"
                 />
               </div>
@@ -589,7 +642,7 @@ export default function InvoiceEditorPage() {
                 <Input
                   type="date"
                   value={issueDate}
-                  onChange={(e) => setIssueDate(e.target.value)}
+                  onChange={(e) => handleIssueDateChange(e.target.value)}
                   disabled={!canEdit}
                   className="bg-background"
                   data-testid="issue-date-input"
@@ -600,11 +653,18 @@ export default function InvoiceEditorPage() {
                 <Input
                   type="date"
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(e) => handleDueDateChange(e.target.value)}
                   disabled={!canEdit}
-                  className="bg-background"
+                  min={issueDate}
+                  className={cn("bg-background", dateError && "border-red-500")}
                   data-testid="due-date-input"
                 />
+                {dateError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {dateError}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>{t("common.currency")}</Label>

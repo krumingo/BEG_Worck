@@ -335,7 +335,44 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
-### COMPLETED: Client Registry + Project Client Picker Flow - Mar 8, 2026
+### BUGFIX: Invoice Editor Form Improvements - Mar 8, 2026
+
+**Issues Fixed:**
+
+**1. Date Logic (dueDate >= issueDate):**
+- Added real-time validation: red border + error message when dueDate < issueDate
+- Added `min={issueDate}` HTML attribute on dueDate input
+- Save blocked with clear alert if validation fails
+- Auto-update dueDate when issueDate changes (if not manually edited)
+- New state: `dueDateManuallyEdited` to track user edits
+
+**2. Client Type Logic (company vs person):**
+- Added `clientType` state variable set during auto-fill
+- Company fields (ЕИК, ДДС номер, МОЛ) conditionally rendered
+- For person clients: company fields hidden completely
+- For company clients: all fields shown and auto-filled
+- For direct access (no project): all fields shown (default behavior)
+
+**3. Placeholder/Demo Value Pollution:**
+- Removed misleading placeholder text (123456789, BG123456789, email@example.com)
+- New placeholders: "ЕИК на фирмата", "ДДС номер", "Материално отговорно лице", etc.
+- Added `placeholder:text-muted-foreground/50` class for visual distinction
+- Auto-fill only fills fields with actual non-empty data from client
+- Empty strings explicitly cleared for person clients (no company fields)
+
+**4. Auto-Fill Banner Accuracy:**
+- Banner only lists fields that were actually filled with real data
+- Added `.trim()` checks before counting field as filled
+- Separate handling for company vs person field lists
+- No banner shown when accessing form directly without project
+
+**Root Causes:**
+1. **Date issue:** Missing validation logic, no min attribute on input
+2. **Company fields for person:** No conditional rendering, same form for all client types
+3. **Demo values:** Placeholder text looked like real values due to same styling
+
+**Files Changed:**
+- `/app/frontend/src/pages/InvoiceEditorPage.js`
 
 **Feature: Complete client management system with unified search and project linking.**
 
