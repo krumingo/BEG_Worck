@@ -335,45 +335,58 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
-### COMPLETED: Invoice Auto-Fill from Project Client (FULL) - Mar 8, 2026
+### COMPLETED: Client Registry + Project Client Picker Flow - Mar 8, 2026
 
-**Feature: When creating a new invoice from a project, automatically fill ALL available client data.**
+**Feature: Complete client management system with unified search and project linking.**
 
-**A) Auto-filled Fields:**
-| Field | Company | Person |
-|-------|---------|--------|
-| Име на фирма / Клиент | ✅ name | ✅ first_name + last_name |
-| ЕИК | ✅ eik | - |
-| ДДС номер | ✅ vat_number | - |
-| МОЛ | ✅ mol | - |
-| Адрес | ✅ address | - |
-| Имейл | ✅ email | ✅ email |
-| Телефон | ✅ phone | ✅ phone |
+**A) Data Model:**
+| Collection | Fields |
+|------------|--------|
+| **companies** | id, org_id, name, eik, vat_number, mol, address, email, phone, notes, is_active, created_at, updated_at |
+| **persons** | id, org_id, first_name, last_name, egn, phone, phone_normalized, email, address, notes, is_active, created_at, updated_at |
+| **projects** | owner_type ("company"/"person"), owner_id (references companies.id or persons.id) |
 
-**B) Backend Changes:**
-- `InvoiceCreate/InvoiceUpdate` models extended with: `counterparty_eik`, `counterparty_vat_no`, `counterparty_address`, `counterparty_mol`, `counterparty_email`, `counterparty_phone`
-- `CompanyCreate/CompanyUpdate` models extended with: `vat_number`
-- `/projects/{id}/dashboard` endpoint now returns `vat_number` in `owner_data`
+**B) New API Endpoints:**
+- `GET /api/clients/search/unified?query=&type=&limit=` - Unified search across companies and persons
+- `POST /api/clients/company` - Create company client (with EIK duplicate detection)
+- `POST /api/clients/person` - Create person client (with EGN/phone duplicate detection)
+- `GET /api/projects/{projectId}/client-info` - Get linked client details
+- `PATCH /api/projects/{projectId}/client-link` - Link/unlink client to project
 
-**C) Frontend Changes (`InvoiceEditorPage.js`):**
-- New state variables for all 7 client fields
-- `fetchData()` auto-fills all available fields from project client
-- `handleSave()` sends all fields to backend
-- Form UI includes all new fields with proper labels/placeholders
-- Success banner lists all auto-filled fields
-- Warning banner shown when project has no client
+**C) Search Logic:**
+- **Company:** name, eik, vat_number, mol, phone
+- **Person:** full_name, egn (masked in results), phone
+- Query works universally - searches all relevant fields
+- Results include type, display_name, identifier (masked EGN), phone, email
 
-**D) UI Behavior:**
-- Success (green): "Автоматично попълнени полета от проекта: Име на фирма, ЕИК, ДДС номер, Адрес, МОЛ, Имейл, Телефон"
-- Warning (amber): "Към проекта няма избран клиент. Попълнете клиента ръчно или изберете клиент в проекта."
-- All fields remain editable after auto-fill
-- Partial data is filled without blocking the form
+**D) Validation & Duplicate Protection:**
+- EIK: 9 or 13 digits required
+- EGN: 10 digits required (displayed masked as XX****XX)
+- Phone normalization for consistent comparison
+- 409 Conflict returned if duplicate EIK or EGN found
 
-**E) Test Scenarios Verified:**
-1. ✅ Company with full data → all 7 fields auto-filled
-2. ✅ Person with partial data → name + phone auto-filled
-3. ✅ Project without client → warning banner, no auto-fill
-4. ✅ Direct access without project_id → standard flow, no banners
+**E) Frontend Components:**
+
+1. **ClientPickerModal** (`/app/frontend/src/components/ClientPickerModal.js`):
+   - Step 1: Type selection (Фирма / Частно лице)
+   - Step 2: Search with results list + "Избери" buttons
+   - Step 3: Create new client form (if no results)
+   - Auto-prefill search query as name in create form
+   - Success: Creates client + links to project + closes modal
+
+2. **ProjectDetailPage Client Card:**
+   - Shows full client details (name, EIK/masked EGN, VAT, MOL, phone, email)
+   - "Избери клиент" button when no client
+   - "Преглед" (eye) and "Смени клиент" buttons when client exists
+   - Client details modal with all fields
+
+**F) Test Scenarios Verified:**
+1. ✅ Search company by EIK → select → link to project
+2. ✅ Search person by phone → select → link to project
+3. ✅ Search with no results → create new company → auto-link
+4. ✅ Search with no results → create new person → auto-link
+5. ✅ Change existing client on project
+6. ✅ Invoice auto-fill continues to work with client data
 
 ---
 

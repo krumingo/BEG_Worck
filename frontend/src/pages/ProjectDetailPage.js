@@ -51,6 +51,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
+import ClientPickerModal from "@/components/ClientPickerModal";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -77,7 +78,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
-  const [showClientSelector, setShowClientSelector] = useState(false);
+  const [showClientPicker, setShowClientPicker] = useState(false);
   const [savingWarranty, setSavingWarranty] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
@@ -214,6 +215,7 @@ export default function ProjectDetailPage() {
                     size="sm"
                     onClick={() => setShowClientModal(true)}
                     className="text-gray-400 hover:text-white"
+                    title="Преглед"
                   >
                     <Eye className="w-4 h-4" />
                   </Button>
@@ -221,9 +223,9 @@ export default function ProjectDetailPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowClientSelector(true)}
+                  onClick={() => setShowClientPicker(true)}
                   className="text-yellow-400 hover:text-yellow-300"
-                  title="Избери клиент"
+                  title={client.owner_data ? "Смени клиент" : "Избери клиент"}
                 >
                   <UserPlus className="w-4 h-4" />
                 </Button>
@@ -244,12 +246,30 @@ export default function ProjectDetailPage() {
                       <Hash className="w-3 h-3" />
                       <span>ЕИК: {client.owner_data.eik}</span>
                     </div>
+                    {client.owner_data.vat_number && (
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <FileText className="w-3 h-3" />
+                        <span>ДДС: {client.owner_data.vat_number}</span>
+                      </div>
+                    )}
+                    {client.owner_data.mol && (
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <User className="w-3 h-3" />
+                        <span>МОЛ: {client.owner_data.mol}</span>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
                     <p className="text-white font-medium">
                       {client.owner_data.first_name} {client.owner_data.last_name}
                     </p>
+                    {client.owner_data.egn && (
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <Hash className="w-3 h-3" />
+                        <span>ЕГН: {client.owner_data.egn?.slice(0,2)}****{client.owner_data.egn?.slice(-2)}</span>
+                      </div>
+                    )}
                   </>
                 )}
                 {client.owner_data.phone && (
@@ -270,8 +290,9 @@ export default function ProjectDetailPage() {
                 <p className="text-gray-500 text-sm mb-3">Няма избран клиент</p>
                 <Button
                   size="sm"
-                  onClick={() => setShowClientSelector(true)}
+                  onClick={() => setShowClientPicker(true)}
                   className="bg-yellow-500 hover:bg-yellow-600 text-black"
+                  data-testid="select-client-btn"
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
                   Избери клиент
@@ -539,12 +560,14 @@ export default function ProjectDetailPage() {
                   <>
                     <div><span className="text-gray-400">Име:</span> <span className="text-white">{client.owner_data.name}</span></div>
                     <div><span className="text-gray-400">ЕИК:</span> <span className="text-white font-mono">{client.owner_data.eik}</span></div>
+                    {client.owner_data.vat_number && <div><span className="text-gray-400">ДДС номер:</span> <span className="text-white font-mono">{client.owner_data.vat_number}</span></div>}
                     {client.owner_data.mol && <div><span className="text-gray-400">МОЛ:</span> <span className="text-white">{client.owner_data.mol}</span></div>}
                     {client.owner_data.address && <div><span className="text-gray-400">Адрес:</span> <span className="text-white">{client.owner_data.address}</span></div>}
                   </>
                 ) : (
                   <>
                     <div><span className="text-gray-400">Име:</span> <span className="text-white">{client.owner_data.first_name} {client.owner_data.last_name}</span></div>
+                    {client.owner_data.egn && <div><span className="text-gray-400">ЕГН:</span> <span className="text-white font-mono">{client.owner_data.egn?.slice(0,2)}****{client.owner_data.egn?.slice(-2)}</span></div>}
                   </>
                 )}
                 
@@ -561,13 +584,12 @@ export default function ProjectDetailPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Client Selector Modal */}
-        <ClientSelector
+        {/* Client Picker Modal */}
+        <ClientPickerModal
           projectId={projectId}
-          currentClient={client}
-          open={showClientSelector}
-          onOpenChange={setShowClientSelector}
-          onClientUpdated={fetchDashboard}
+          open={showClientPicker}
+          onOpenChange={setShowClientPicker}
+          onClientSelected={fetchDashboard}
         />
       </div>
   );
