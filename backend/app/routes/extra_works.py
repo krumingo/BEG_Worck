@@ -172,7 +172,7 @@ async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
 @router.post("/extra-works/ai-proposal")
 async def get_ai_proposal_endpoint(data: AIProposalRequest, user: dict = Depends(require_m2)):
     """Generate AI proposal using hybrid provider (LLM → rule-based fallback)"""
-    proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city)
+    proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city, user["org_id"])
     return proposal
 
 
@@ -183,7 +183,7 @@ async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dic
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     
-    proposal = await hybrid_ai_proposal(draft["title"], draft["unit"], draft["qty"], city)
+    proposal = await hybrid_ai_proposal(draft["title"], draft["unit"], draft["qty"], city, user["org_id"])
     
     update = {
         "normalized_activity_type": proposal["recognized"]["activity_type"],

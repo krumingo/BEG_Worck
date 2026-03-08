@@ -1063,6 +1063,10 @@ api_router.include_router(offer_versions_router)
 from app.routes.extra_works import router as extra_works_router
 api_router.include_router(extra_works_router)
 
+# Import AI calibration router - includes analytics, calibration approval
+from app.routes.ai_calibration import router as ai_calibration_router
+api_router.include_router(ai_calibration_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

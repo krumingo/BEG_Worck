@@ -328,20 +328,53 @@ async def llm_proposal(title: str, unit: str, qty: float, city: str = None) -> d
 
 # ── Hybrid Provider ────────────────────────────────────────────────
 
-async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None) -> dict:
+async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, org_id: str = None) -> dict:
     """
     Hybrid AI proposal: tries LLM first, falls back to rule-based.
-    Returns standardized proposal dict.
+    Applies approved calibration factors if available.
     """
     # Try LLM first
     try:
         result = await llm_proposal(title, unit, qty, city)
         logger.info(f"LLM proposal succeeded for: {title[:50]}")
-        return result
     except Exception as e:
         logger.warning(f"LLM proposal failed ({type(e).__name__}: {e}), falling back to rule-based")
+        result = rule_based_proposal(title, unit, qty, city)
+        result["fallback_reason"] = "LLM недостъпен, използван rule-based engine"
 
-    # Fallback to rule-based
-    result = rule_based_proposal(title, unit, qty, city)
-    result["fallback_reason"] = "LLM недостъпен, използван rule-based engine"
+    # Apply calibration if org_id provided
+    if org_id:
+        try:
+            from app.routes.ai_calibration import get_calibration_factor
+            activity_type = result["recognized"]["activity_type"]
+            activity_subtype = result["recognized"]["activity_subtype"]
+            small_qty = qty <= 5
+            cal = await get_calibration_factor(org_id, activity_type, activity_subtype, city, small_qty)
+            
+            if cal["source"] and cal["factor"] != 1.0:
+                base_mat = result["pricing"]["material_price_per_unit"]
+                base_lab = result["pricing"]["labor_price_per_unit"]
+                cal_mat = round(base_mat * cal["factor"], 2)
+                cal_lab = round(base_lab * cal["factor"], 2)
+                cal_total = round(cal_mat + cal_lab, 2)
+                
+                result["calibration"] = {
+                    "applied": True,
+                    "factor": cal["factor"],
+                    "source": cal["source"],
+                    "sample_count": cal["sample_count"],
+                    "base_material_price": base_mat,
+                    "base_labor_price": base_lab,
+                    "base_total_price": round(base_mat + base_lab, 2),
+                    "calibrated_material_price": cal_mat,
+                    "calibrated_labor_price": cal_lab,
+                    "calibrated_total_price": cal_total,
+                }
+                result["pricing"]["material_price_per_unit"] = cal_mat
+                result["pricing"]["labor_price_per_unit"] = cal_lab
+                result["pricing"]["total_price_per_unit"] = cal_total
+                result["pricing"]["total_estimated"] = round(cal_total * qty, 2)
+        except Exception as e:
+            logger.warning(f"Calibration lookup failed: {e}")
+    
     return result

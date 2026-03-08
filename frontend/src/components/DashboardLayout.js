@@ -42,6 +42,7 @@ import {
   BarChart3,
   FilePlus2,
   ClipboardPen,
+  Sparkles,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -60,6 +61,7 @@ const ADMIN_NAV_CORE = [
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
   { to: "/offers", icon: FileText, labelKey: "nav.offers" },
   { to: "/activity-catalog", icon: Layers, labelKey: "nav.activities" },
+  { to: "/ai-calibration", icon: Sparkles, labelKey: "nav.aiCalibration" },
   { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
   { to: "/review-reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
   { to: "/reminders", icon: Bell, labelKey: "nav.reminders" },

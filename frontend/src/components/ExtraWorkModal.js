@@ -57,6 +57,29 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
       const draftId = res.data.id;
       if (applyAi && proposal) {
         await API.post(`/extra-works/${draftId}/apply-ai?city=${encodeURIComponent(city || "")}`);
+        // Record calibration event
+        try {
+          await API.post("/ai-calibration/record-edit", {
+            ai_provider_used: proposal.provider,
+            ai_confidence: proposal.confidence,
+            ai_material_price_per_unit: proposal.pricing.material_price_per_unit,
+            ai_labor_price_per_unit: proposal.pricing.labor_price_per_unit,
+            ai_total_price_per_unit: proposal.pricing.total_price_per_unit,
+            ai_small_qty_adjustment: proposal.pricing.small_qty_adjustment_percent,
+            final_material_price_per_unit: proposal.pricing.material_price_per_unit,
+            final_labor_price_per_unit: proposal.pricing.labor_price_per_unit,
+            final_total_price_per_unit: proposal.pricing.total_price_per_unit,
+            city: city || null,
+            project_id: projectId,
+            draft_id: draftId,
+            source_type: "extra_work",
+            normalized_activity_type: proposal.recognized.activity_type,
+            normalized_activity_subtype: proposal.recognized.activity_subtype,
+            unit: form.unit,
+            qty: parseFloat(form.qty) || 1,
+            small_qty_flag: (parseFloat(form.qty) || 1) <= 5,
+          });
+        } catch (e) { /* silent - analytics only */ }
       }
       resetForm();
       onOpenChange(false);
@@ -175,6 +198,12 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                     {proposal.pricing.city && proposal.pricing.city_factor && (
                       <div className="text-[10px] text-muted-foreground mt-1">
                         Град: {proposal.pricing.city} (коеф. {proposal.pricing.city_factor.toFixed(2)})
+                      </div>
+                    )}
+                    {proposal.calibration?.applied && (
+                      <div className="text-[10px] text-blue-400 mt-1 p-1.5 rounded bg-blue-500/10 border border-blue-500/20">
+                        Калибрация: {proposal.calibration.factor.toFixed(3)}x (от {proposal.calibration.sample_count} случая)
+                        <br/>Базова: {proposal.calibration.base_total_price.toFixed(2)} лв → Калибрирана: {proposal.calibration.calibrated_total_price.toFixed(2)} лв
                       </div>
                     )}
                     <div className="flex justify-between pt-1"><span className="text-muted-foreground">Прогноза общо:</span><span className="font-mono font-bold text-primary">{proposal.pricing.total_estimated.toFixed(2)} лв</span></div>

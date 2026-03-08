@@ -1,0 +1,141 @@
+{
+  "summary": "Completed testing of AI Calibration Learning Loop + Price Calibration Analytics feature. All 16 backend tests passed (100%). Frontend testing verified overview cards, categories table with all columns, status badges, approve buttons, and sidebar navigation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_calibration.py",
+    "/app/test_reports/pytest/test_ai_calibration_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AI Calibration routes well-structured with proper auth (require_m2), admin-only access for analytics",
+    "Outlier protection correctly implemented (>200% delta skipped)",
+    "Min samples safety correctly enforced: observation<5, suggested 5-9, ready>=10",
+    "Calibration factor lookup has fallback without city match",
+    "Upsert pattern used for approve to prevent duplicates"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_calibration.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Pre-seeded with 38 calibration events. Боядисване/София has approved calibration factor 1.15x",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "AI Calibration feature fully tested. Route: /ai-calibration. Backend endpoints: POST /api/ai-calibration/record-edit, GET /api/ai-calibration/overview, GET /api/ai-calibration/categories, POST /api/ai-calibration/approve, GET /api/ai-calibration/approved. Calibration auto-applies to AI proposals via get_calibration_factor() in ai_proposal.py. Frontend page at AICalibrationPage.js shows overview cards, categories table with status badges (observation/suggested/ready/approved), and approve buttons for suggested/ready categories. ExtraWorkModal calls record-edit when user clicks 'Приеми и добави'.",
+  "features_tested": {
+    "backend_record_edit_basic": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "POST /api/ai-calibration/record-edit records event with correct delta_percent calculation"
+    },
+    "backend_record_edit_unchanged": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Records event with was_edited=False and delta_percent=0 when prices unchanged"
+    },
+    "backend_outlier_protection": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Edits >200% delta are skipped (skipped=true, reason=outlier)"
+    },
+    "backend_overview_endpoint": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns total_proposals, accepted_unchanged, manually_edited, acceptance_rate, avg_edit_delta_percent, top_corrected_categories"
+    },
+    "backend_categories_endpoint": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns category breakdown with calibration_status (observation/suggested/ready/approved)"
+    },
+    "backend_min_samples_status": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Status correctly set: observation <5, suggested 5-9, ready >=10"
+    },
+    "backend_categories_city_filter": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "City parameter filters categories correctly"
+    },
+    "backend_approve_calibration": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "POST /api/ai-calibration/approve creates/updates calibration with status=approved"
+    },
+    "backend_approve_upsert": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Approving same category updates existing rather than duplicating"
+    },
+    "backend_list_approved": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "GET /api/ai-calibration/approved returns approved calibrations"
+    },
+    "backend_calibration_in_proposal": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "AI proposal applies approved calibration factor when matching calibration exists"
+    },
+    "frontend_ai_calibration_page_load": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Page loads with data-testid='ai-calibration-page'"
+    },
+    "frontend_overview_cards": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "5 overview cards displayed: AI proposals (38), accepted (5), edited (33), accuracy (13.2%), avg delta (+11.6%)"
+    },
+    "frontend_categories_table_columns": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "All 11 columns present: Категория, Град, Малко к-во, Случаи, Редакции, Ср. AI цена, Ср. крайна цена, Медиана Δ, Коефициент, Статус, Действия"
+    },
+    "frontend_approve_button_visibility": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Одобри' button visible for suggested/ready categories (2 found), not for observation"
+    },
+    "frontend_active_badge": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Активно' badge displays for approved calibrations (1 found - Боядисване/София)"
+    },
+    "frontend_sidebar_nav_link": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'AI Калибрация' link in sidebar between 'Дейности' (idx=3) and 'Присъствие' (idx=5)"
+    },
+    "frontend_search_filter": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Search filter works - filtered to 2 rows when searching 'Боядисване'"
+    },
+    "frontend_city_filter": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "City dropdown filter works"
+    }
+  },
+  "mocked_apis": {
+    "note": "NO MOCKED APIS - Real LLM + real calibration data",
+    "provider": "llm + rule-based hybrid",
+    "calibration": "real MongoDB collections (ai_calibration_events, ai_calibrations)"
+  }
+}
