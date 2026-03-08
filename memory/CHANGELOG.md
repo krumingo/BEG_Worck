@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Mar 8, 2026 (Session 5)
+### Learning Loop + Price Calibration Analytics
+- **Data capture**: ai_calibration_events records AI vs user price deltas for every proposal
+- **Analytics dashboard**: /ai-calibration with overview cards, category breakdown, filters
+- **Controlled calibration**: observation→suggested→ready→approved with admin approval
+- **Safety**: min 5/10 samples, outlier >200% skipped, trimmed median
+- **Auto-apply**: Approved calibrations adjust AI prices transparently (base×factor=calibrated)
+- Test report: /app/test_reports/iteration_20.json (100% backend 16/16, 100% frontend)
+
 ## Mar 8, 2026 (Session 4)
 ### Real LLM Integration for AI Offers (Hybrid Mode)
 - **Hybrid Provider**: LLM (GPT-4.1-mini via emergentintegrations) primary → rule-based fallback on error

@@ -116,6 +116,43 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - POST /api/extra-works/create-offer (create offer from selected drafts)
 
 
+### Phase: Learning Loop + Price Calibration Analytics (DONE) - Mar 8, 2026
+**Data Capture:**
+- ai_calibration_events collection: records AI vs user price for every accepted/edited proposal
+- Fields: ai_provider_used, ai_confidence, ai/final prices (material+labor+total), delta_percent, city, activity_type/subtype, small_qty_flag
+
+**Analytics Dashboard (/ai-calibration):**
+- Overview cards: total proposals, accepted/edited counts, accuracy rate, avg delta
+- Category breakdown table: type/subtype, city, small_qty, samples, edits, avg prices, median delta, suggested factor, status
+- Filters: search, city
+- Top corrected categories badges
+
+**Controlled Calibration (3 modes):**
+- Observation: <5 samples (no action)
+- Suggested: 5-9 samples (admin can review)
+- Ready: >=10 samples (admin can approve)
+- Approved: admin approved, auto-applies to AI proposals
+
+**Safety Rules:**
+- MIN_SAMPLES_FOR_SUGGESTION=5, MIN_SAMPLES_FOR_CALIBRATION=10
+- OUTLIER_THRESHOLD_PERCENT=200 (edits >200% delta skipped)
+- Trimmed median (remove top/bottom 10%) for factor calculation
+- Admin-only approval required
+
+**Calibration in AI Flow:**
+- Approved calibrations auto-apply: base AI price × factor = calibrated price
+- UI shows: base price → calibration adjustment → final recommended price
+- Human still approves via "Приеми" / "Редактирай"
+
+**API Endpoints:**
+- POST /api/ai-calibration/record-edit
+- GET /api/ai-calibration/overview
+- GET /api/ai-calibration/categories
+- POST /api/ai-calibration/approve
+- DELETE /api/ai-calibration/{id}
+- GET /api/ai-calibration/approved
+
+
 ### Phase: Real LLM Integration (Hybrid Mode) (DONE) - Mar 8, 2026
 **Provider Architecture:**
 - Hybrid: LLM (GPT-4.1-mini via emergentintegrations) → Rule-based fallback
