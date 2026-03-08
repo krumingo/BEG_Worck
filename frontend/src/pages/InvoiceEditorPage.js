@@ -67,6 +67,12 @@ export default function InvoiceEditorPage() {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [projectId, setProjectId] = useState(projectIdParam);
   const [counterpartyName, setCounterpartyName] = useState("");
+  const [counterpartyEik, setCounterpartyEik] = useState("");
+  const [counterpartyVatNo, setCounterpartyVatNo] = useState("");
+  const [counterpartyAddress, setCounterpartyAddress] = useState("");
+  const [counterpartyMol, setCounterpartyMol] = useState("");
+  const [counterpartyEmail, setCounterpartyEmail] = useState("");
+  const [counterpartyPhone, setCounterpartyPhone] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
   const [currency, setCurrency] = useState("EUR");
@@ -77,7 +83,7 @@ export default function InvoiceEditorPage() {
   // Auto-fill state
   const [clientAutoFilled, setClientAutoFilled] = useState(false);
   const [noClientWarning, setNoClientWarning] = useState(false);
-  const [autoFilledClientData, setAutoFilledClientData] = useState(null);
+  const [autoFilledFields, setAutoFilledFields] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -93,6 +99,12 @@ export default function InvoiceEditorPage() {
         setInvoiceNo(inv.invoice_no);
         setProjectId(inv.project_id || "");
         setCounterpartyName(inv.counterparty_name || "");
+        setCounterpartyEik(inv.counterparty_eik || "");
+        setCounterpartyVatNo(inv.counterparty_vat_no || "");
+        setCounterpartyAddress(inv.counterparty_address || "");
+        setCounterpartyMol(inv.counterparty_mol || "");
+        setCounterpartyEmail(inv.counterparty_email || "");
+        setCounterpartyPhone(inv.counterparty_phone || "");
         setIssueDate(inv.issue_date);
         setDueDate(inv.due_date);
         setCurrency(inv.currency);
@@ -112,20 +124,58 @@ export default function InvoiceEditorPage() {
             
             if (client?.owner_data) {
               const ownerData = client.owner_data;
-              let clientName = "";
+              const filledFields = [];
               
               if (ownerData.type === "company") {
-                // Company: use company name
-                clientName = ownerData.name || "";
+                // Company: full set of fields
+                if (ownerData.name) {
+                  setCounterpartyName(ownerData.name);
+                  filledFields.push("Име на фирма");
+                }
+                if (ownerData.eik) {
+                  setCounterpartyEik(ownerData.eik);
+                  filledFields.push("ЕИК");
+                }
+                if (ownerData.vat_number) {
+                  setCounterpartyVatNo(ownerData.vat_number);
+                  filledFields.push("ДДС номер");
+                }
+                if (ownerData.address) {
+                  setCounterpartyAddress(ownerData.address);
+                  filledFields.push("Адрес");
+                }
+                if (ownerData.mol) {
+                  setCounterpartyMol(ownerData.mol);
+                  filledFields.push("МОЛ");
+                }
+                if (ownerData.email) {
+                  setCounterpartyEmail(ownerData.email);
+                  filledFields.push("Имейл");
+                }
+                if (ownerData.phone) {
+                  setCounterpartyPhone(ownerData.phone);
+                  filledFields.push("Телефон");
+                }
               } else {
-                // Person: use first_name + last_name
-                clientName = `${ownerData.first_name || ""} ${ownerData.last_name || ""}`.trim();
+                // Person: name + contact info
+                const personName = `${ownerData.first_name || ""} ${ownerData.last_name || ""}`.trim();
+                if (personName) {
+                  setCounterpartyName(personName);
+                  filledFields.push("Име");
+                }
+                if (ownerData.email) {
+                  setCounterpartyEmail(ownerData.email);
+                  filledFields.push("Имейл");
+                }
+                if (ownerData.phone) {
+                  setCounterpartyPhone(ownerData.phone);
+                  filledFields.push("Телефон");
+                }
               }
               
-              if (clientName) {
-                setCounterpartyName(clientName);
+              if (filledFields.length > 0) {
                 setClientAutoFilled(true);
-                setAutoFilledClientData(ownerData);
+                setAutoFilledFields(filledFields);
               } else {
                 setNoClientWarning(true);
               }
@@ -198,6 +248,12 @@ export default function InvoiceEditorPage() {
         invoice_no: invoiceNo,
         project_id: projectId || null,
         counterparty_name: counterpartyName || null,
+        counterparty_eik: counterpartyEik || null,
+        counterparty_vat_no: counterpartyVatNo || null,
+        counterparty_address: counterpartyAddress || null,
+        counterparty_mol: counterpartyMol || null,
+        counterparty_email: counterpartyEmail || null,
+        counterparty_phone: counterpartyPhone || null,
         issue_date: issueDate,
         due_date: dueDate,
         currency,
@@ -220,6 +276,12 @@ export default function InvoiceEditorPage() {
         await API.put(`/finance/invoices/${invoiceId}`, {
           invoice_no: invoiceNo,
           counterparty_name: counterpartyName || null,
+          counterparty_eik: counterpartyEik || null,
+          counterparty_vat_no: counterpartyVatNo || null,
+          counterparty_address: counterpartyAddress || null,
+          counterparty_mol: counterpartyMol || null,
+          counterparty_email: counterpartyEmail || null,
+          counterparty_phone: counterpartyPhone || null,
           project_id: projectId || null,
           issue_date: issueDate,
           due_date: dueDate,
@@ -380,21 +442,14 @@ export default function InvoiceEditorPage() {
         <div className="lg:col-span-3 space-y-6">
           
           {/* Auto-fill info banners */}
-          {isNew && clientAutoFilled && autoFilledClientData && (
+          {isNew && clientAutoFilled && autoFilledFields.length > 0 && (
             <Alert className="bg-emerald-500/10 border-emerald-500/30" data-testid="client-autofilled-alert">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               <AlertDescription className="text-emerald-400">
-                Клиентските данни са попълнени автоматично от проекта
-                {autoFilledClientData.type === "company" && autoFilledClientData.eik && (
-                  <span className="ml-2 text-emerald-300/70">
-                    (ЕИК: {autoFilledClientData.eik})
-                  </span>
-                )}
-                {autoFilledClientData.type === "person" && autoFilledClientData.phone && (
-                  <span className="ml-2 text-emerald-300/70">
-                    (Тел: {autoFilledClientData.phone})
-                  </span>
-                )}
+                <span className="font-medium">Автоматично попълнени полета от проекта:</span>
+                <span className="ml-2 text-emerald-300/80">
+                  {autoFilledFields.join(", ")}
+                </span>
               </AlertDescription>
             </Alert>
           )}
@@ -460,6 +515,73 @@ export default function InvoiceEditorPage() {
                   disabled={!canEdit}
                   className="bg-background"
                   data-testid="counterparty-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>ЕИК</Label>
+                <Input
+                  value={counterpartyEik}
+                  onChange={(e) => setCounterpartyEik(e.target.value)}
+                  placeholder="123456789"
+                  disabled={!canEdit}
+                  className="bg-background font-mono"
+                  data-testid="counterparty-eik-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>ДДС номер</Label>
+                <Input
+                  value={counterpartyVatNo}
+                  onChange={(e) => setCounterpartyVatNo(e.target.value)}
+                  placeholder="BG123456789"
+                  disabled={!canEdit}
+                  className="bg-background font-mono"
+                  data-testid="counterparty-vat-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>МОЛ</Label>
+                <Input
+                  value={counterpartyMol}
+                  onChange={(e) => setCounterpartyMol(e.target.value)}
+                  placeholder="Име на представител"
+                  disabled={!canEdit}
+                  className="bg-background"
+                  data-testid="counterparty-mol-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Адрес</Label>
+                <Input
+                  value={counterpartyAddress}
+                  onChange={(e) => setCounterpartyAddress(e.target.value)}
+                  placeholder="Адрес на клиента"
+                  disabled={!canEdit}
+                  className="bg-background"
+                  data-testid="counterparty-address-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Имейл</Label>
+                <Input
+                  type="email"
+                  value={counterpartyEmail}
+                  onChange={(e) => setCounterpartyEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  disabled={!canEdit}
+                  className="bg-background"
+                  data-testid="counterparty-email-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Телефон</Label>
+                <Input
+                  value={counterpartyPhone}
+                  onChange={(e) => setCounterpartyPhone(e.target.value)}
+                  placeholder="+359..."
+                  disabled={!canEdit}
+                  className="bg-background"
+                  data-testid="counterparty-phone-input"
                 />
               </div>
               <div className="space-y-2">

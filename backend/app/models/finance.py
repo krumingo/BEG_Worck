@@ -64,6 +64,12 @@ class InvoiceCreate(BaseModel):
     invoice_no: str
     project_id: Optional[str] = None
     counterparty_name: Optional[str] = None
+    counterparty_eik: Optional[str] = None  # Bulgarian company ID (ЕИК)
+    counterparty_vat_no: Optional[str] = None  # VAT number (ДДС номер)
+    counterparty_address: Optional[str] = None  # Address
+    counterparty_mol: Optional[str] = None  # Contact person (МОЛ)
+    counterparty_email: Optional[str] = None  # Email
+    counterparty_phone: Optional[str] = None  # Phone
     supplier_counterparty_id: Optional[str] = None  # Reference to counterparties collection
     scan_doc_id: Optional[str] = None  # Reference to scanned document
     issue_date: str
@@ -76,6 +82,12 @@ class InvoiceCreate(BaseModel):
 class InvoiceUpdate(BaseModel):
     invoice_no: Optional[str] = None
     counterparty_name: Optional[str] = None
+    counterparty_eik: Optional[str] = None
+    counterparty_vat_no: Optional[str] = None
+    counterparty_address: Optional[str] = None
+    counterparty_mol: Optional[str] = None
+    counterparty_email: Optional[str] = None
+    counterparty_phone: Optional[str] = None
     supplier_counterparty_id: Optional[str] = None
     scan_doc_id: Optional[str] = None
     project_id: Optional[str] = None

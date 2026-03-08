@@ -479,6 +479,7 @@ async def delete_person(person_id: str, user: dict = Depends(require_admin)):
 class CompanyCreate(BaseModel):
     eik: str
     name: str
+    vat_number: Optional[str] = None
     mol: Optional[str] = None
     address: Optional[str] = None
     email: Optional[str] = None
@@ -488,6 +489,7 @@ class CompanyCreate(BaseModel):
 
 class CompanyUpdate(BaseModel):
     name: Optional[str] = None
+    vat_number: Optional[str] = None
     mol: Optional[str] = None
     address: Optional[str] = None
     email: Optional[str] = None
@@ -522,6 +524,7 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
         "org_id": org_id,
         "eik": eik,
         "name": data.name.strip(),
+        "vat_number": data.vat_number.strip() if data.vat_number else None,
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip() if data.email else None,
@@ -756,6 +759,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 "type": "company",
                 "name": company.get("name", ""),
                 "eik": company.get("eik", ""),
+                "vat_number": company.get("vat_number", ""),
                 "mol": company.get("mol", ""),
                 "phone": company.get("phone", ""),
                 "email": company.get("email", ""),

@@ -335,31 +335,45 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
-### COMPLETED: Invoice Auto-Fill from Project Client - Mar 8, 2026
+### COMPLETED: Invoice Auto-Fill from Project Client (FULL) - Mar 8, 2026
 
-**Feature: When creating a new invoice from a project, automatically fill client data.**
+**Feature: When creating a new invoice from a project, automatically fill ALL available client data.**
 
-**A) Flow:**
-- Project Detail Page → "Нова фактура" button → Invoice Editor with `?project_id=...`
-- Invoice Editor reads `project_id` from URL query params
-- Fetches project dashboard data including client info
-- Auto-fills `counterpartyName` field with client name
+**A) Auto-filled Fields:**
+| Field | Company | Person |
+|-------|---------|--------|
+| Име на фирма / Клиент | ✅ name | ✅ first_name + last_name |
+| ЕИК | ✅ eik | - |
+| ДДС номер | ✅ vat_number | - |
+| МОЛ | ✅ mol | - |
+| Адрес | ✅ address | - |
+| Имейл | ✅ email | ✅ email |
+| Телефон | ✅ phone | ✅ phone |
 
-**B) Frontend Changes (`InvoiceEditorPage.js`):**
-- New state variables: `clientAutoFilled`, `noClientWarning`, `autoFilledClientData`
-- On load with `project_id`: calls `/api/projects/{id}/dashboard`
-- If client exists (person or company): fills name, shows green success banner
-- If no client: shows amber warning banner with instructions
-- Fields remain editable after auto-fill
+**B) Backend Changes:**
+- `InvoiceCreate/InvoiceUpdate` models extended with: `counterparty_eik`, `counterparty_vat_no`, `counterparty_address`, `counterparty_mol`, `counterparty_email`, `counterparty_phone`
+- `CompanyCreate/CompanyUpdate` models extended with: `vat_number`
+- `/projects/{id}/dashboard` endpoint now returns `vat_number` in `owner_data`
 
-**C) UI Banners:**
-- Success (green): "Клиентските данни са попълнени автоматично от проекта (Тел: ...)" or "(ЕИК: ...)"
+**C) Frontend Changes (`InvoiceEditorPage.js`):**
+- New state variables for all 7 client fields
+- `fetchData()` auto-fills all available fields from project client
+- `handleSave()` sends all fields to backend
+- Form UI includes all new fields with proper labels/placeholders
+- Success banner lists all auto-filled fields
+- Warning banner shown when project has no client
+
+**D) UI Behavior:**
+- Success (green): "Автоматично попълнени полета от проекта: Име на фирма, ЕИК, ДДС номер, Адрес, МОЛ, Имейл, Телефон"
 - Warning (amber): "Към проекта няма избран клиент. Попълнете клиента ръчно или изберете клиент в проекта."
+- All fields remain editable after auto-fill
+- Partial data is filled without blocking the form
 
-**D) Backward Compatibility:**
-- Direct access to `/finance/invoices/new` works as before (no banner, no auto-fill)
-- No backend changes required (uses existing `/projects/{id}/dashboard` endpoint)
-- No breaking changes to existing invoice creation flow
+**E) Test Scenarios Verified:**
+1. ✅ Company with full data → all 7 fields auto-filled
+2. ✅ Person with partial data → name + phone auto-filled
+3. ✅ Project without client → warning banner, no auto-fill
+4. ✅ Direct access without project_id → standard flow, no banners
 
 ---
 
