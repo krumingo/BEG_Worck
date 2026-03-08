@@ -483,31 +483,41 @@ export default function ProjectDetailPage() {
                   <TableHeader>
                     <TableRow className="border-gray-700">
                       <TableHead className="text-gray-400">№</TableHead>
-                      <TableHead className="text-gray-400">Редове</TableHead>
                       <TableHead className="text-gray-400">Клиент</TableHead>
                       <TableHead className="text-gray-400">Дата</TableHead>
                       <TableHead className="text-gray-400">Падеж</TableHead>
-                      <TableHead className="text-gray-400">Валута</TableHead>
-                      <TableHead className="text-gray-400 text-right">Платено (без ДДС)</TableHead>
-                      <TableHead className="text-gray-400 text-right">Неплатено (без ДДС)</TableHead>
-                      <TableHead className="text-gray-400 text-right">Платено (с ДДС)</TableHead>
-                      <TableHead className="text-gray-400 text-right">Неплатено (с ДДС)</TableHead>
+                      <TableHead className="text-gray-400">Статус</TableHead>
+                      <TableHead className="text-gray-400 text-right">Общо</TableHead>
+                      <TableHead className="text-gray-400 text-right">Платено</TableHead>
+                      <TableHead className="text-gray-400 text-right">Остатък</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {invoices.invoices.map((inv) => (
                       <TableRow key={inv.id} className="border-gray-700 hover:bg-gray-700/30 cursor-pointer"
-                        onClick={() => navigate(`/finance/invoices/${inv.id}`)}>
+                        onClick={() => navigate(`/finance/invoices/${inv.id}`)}
+                        data-testid={`invoice-row-${inv.id}`}>
                         <TableCell className="text-white font-mono">{inv.invoice_no}</TableCell>
-                        <TableCell className="text-gray-400">{inv.lines_count}</TableCell>
                         <TableCell className="text-white">{inv.client_name || "—"}</TableCell>
                         <TableCell className="text-gray-400">{inv.issue_date ? formatDate(inv.issue_date) : "—"}</TableCell>
                         <TableCell className="text-gray-400">{inv.due_date ? formatDate(inv.due_date) : "—"}</TableCell>
-                        <TableCell className="text-gray-400">{inv.currency}</TableCell>
-                        <TableCell className="text-right text-green-400">{formatCurrency(inv.paid_ex_vat, inv.currency)}</TableCell>
-                        <TableCell className="text-right text-red-400">{formatCurrency(inv.unpaid_ex_vat, inv.currency)}</TableCell>
-                        <TableCell className="text-right text-green-400">{formatCurrency(inv.paid_inc_vat, inv.currency)}</TableCell>
-                        <TableCell className="text-right text-red-400">{formatCurrency(inv.unpaid_inc_vat, inv.currency)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-xs ${
+                            inv.status === "Paid" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
+                            inv.status === "PartiallyPaid" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
+                            inv.status === "Sent" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" :
+                            inv.status === "Overdue" ? "bg-red-500/20 text-red-400 border-red-500/30" :
+                            inv.status === "Cancelled" ? "bg-gray-500/20 text-gray-400 border-gray-500/30" :
+                            "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                          }`}>
+                            {inv.status === "Draft" ? "Чернова" : inv.status === "Sent" ? "Издадена" :
+                             inv.status === "PartiallyPaid" ? "Частично" : inv.status === "Paid" ? "Платена" :
+                             inv.status === "Overdue" ? "Просрочена" : inv.status === "Cancelled" ? "Анулирана" : inv.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-white font-mono">{formatCurrency(inv.total, inv.currency)}</TableCell>
+                        <TableCell className="text-right text-green-400 font-mono">{formatCurrency(inv.paid_amount, inv.currency)}</TableCell>
+                        <TableCell className="text-right text-red-400 font-mono">{formatCurrency(inv.remaining_amount, inv.currency)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -515,22 +525,18 @@ export default function ProjectDetailPage() {
               </div>
               
               {/* Totals */}
-              <div className="mt-4 pt-4 border-t border-gray-700 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="mt-4 pt-4 border-t border-gray-700 grid grid-cols-3 gap-4 text-sm">
                 <div className="text-center">
-                  <p className="text-gray-400">Платено (без ДДС)</p>
-                  <p className="text-green-400 font-bold">{formatCurrency(invoices.totals.paid_ex_vat, "BGN")}</p>
+                  <p className="text-gray-400">Общо фактури</p>
+                  <p className="text-white font-bold">{formatCurrency(invoices.totals.total, "BGN")}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-gray-400">Неплатено (без ДДС)</p>
-                  <p className="text-red-400 font-bold">{formatCurrency(invoices.totals.unpaid_ex_vat, "BGN")}</p>
+                  <p className="text-gray-400">Платено</p>
+                  <p className="text-green-400 font-bold">{formatCurrency(invoices.totals.paid, "BGN")}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-gray-400">Платено (с ДДС)</p>
-                  <p className="text-green-400 font-bold">{formatCurrency(invoices.totals.paid_inc_vat, "BGN")}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-gray-400">Неплатено (с ДДС)</p>
-                  <p className="text-red-400 font-bold">{formatCurrency(invoices.totals.unpaid_inc_vat, "BGN")}</p>
+                  <p className="text-gray-400">Неплатено</p>
+                  <p className="text-red-400 font-bold">{formatCurrency(invoices.totals.unpaid, "BGN")}</p>
                 </div>
               </div>
             </>

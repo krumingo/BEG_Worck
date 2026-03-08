@@ -1,10 +1,12 @@
 """
 Routes - Finance (M5) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import io
 
 from app.db import db
 from app.deps.auth import get_current_user, get_user_project_ids
@@ -532,8 +534,13 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if invoice["status"] not in ["Draft"]:
-        raise HTTPException(status_code=400, detail="Can only edit Draft invoices")
+    
+    # Editing rules by status
+    if invoice["status"] == "Cancelled":
+        raise HTTPException(status_code=400, detail="Анулирани фактури не могат да се редактират")
+    if invoice["status"] == "Paid":
+        raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират. Премахнете плащанията първо.")
+    # Draft, Sent, PartiallyPaid, Overdue → allowed
     
     # Check invoice_no uniqueness if changed
     if data.invoice_no and data.invoice_no != invoice["invoice_no"]:
@@ -555,12 +562,15 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     if "vat_percent" in update:
         updated = await db.invoices.find_one({"id": invoice_id})
         updated = compute_invoice_totals({k: v for k, v in updated.items() if k != "_id"})
+        paid = updated.get("paid_amount", 0) or 0
         await db.invoices.update_one({"id": invoice_id}, {"$set": {
             "subtotal": updated["subtotal"],
             "vat_amount": updated["vat_amount"],
             "total": updated["total"],
-            "remaining_amount": updated["total"],
+            "remaining_amount": max(0, updated["total"] - paid),
         }})
+        # Recalculate status
+        await update_invoice_status(invoice_id, user["org_id"])
     
     return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
 
@@ -573,8 +583,13 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if invoice["status"] not in ["Draft"]:
-        raise HTTPException(status_code=400, detail="Can only edit Draft invoice lines")
+    
+    # Editing rules by status
+    if invoice["status"] in ["Cancelled"]:
+        raise HTTPException(status_code=400, detail="Анулирани фактури не могат да се редактират")
+    if invoice["status"] == "Paid":
+        raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират")
+    # Draft, Sent, PartiallyPaid, Overdue → allowed
     
     lines = []
     for i, line in enumerate(data.lines):
@@ -593,15 +608,20 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     now = datetime.now(timezone.utc).isoformat()
     invoice["lines"] = lines
     invoice = compute_invoice_totals(invoice)
+    paid = invoice.get("paid_amount", 0) or 0
+    new_remaining = max(0, invoice["total"] - paid)
     
     await db.invoices.update_one({"id": invoice_id}, {"$set": {
         "lines": lines,
         "subtotal": invoice["subtotal"],
         "vat_amount": invoice["vat_amount"],
         "total": invoice["total"],
-        "remaining_amount": invoice["total"] - invoice.get("paid_amount", 0),
+        "remaining_amount": new_remaining,
         "updated_at": now,
     }})
+    
+    # Recalculate status after total changes
+    await update_invoice_status(invoice_id, user["org_id"])
     
     return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
 
@@ -1095,6 +1115,189 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
         "cash_balance": round(cash_balance, 2),
         "bank_balance": round(bank_balance, 2),
     }
+
+
+@router.get("/finance/invoices/{invoice_id}/pdf")
+async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
+    """Generate PDF for invoice"""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    # Get org info
+    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    org_name = org.get("name", "") if org else ""
+    org_address = org.get("address", "") if org else ""
+    org_email = org.get("email", "") if org else ""
+    org_phone = org.get("phone", "") if org else ""
+    
+    # Get project info if linked
+    project_name = ""
+    project_code = ""
+    if invoice.get("project_id"):
+        project = await db.projects.find_one({"id": invoice["project_id"]}, {"_id": 0, "name": 1, "code": 1})
+        if project:
+            project_name = project.get("name", "")
+            project_code = project.get("code", "")
+    
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table as RLTable, TableStyle
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError:
+        raise HTTPException(status_code=500, detail="reportlab not installed")
+    
+    # Try to register a font that supports Cyrillic
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DejaVuBold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        font_name = 'DejaVu'
+        font_bold = 'DejaVuBold'
+    except Exception:
+        font_name = 'Helvetica'
+        font_bold = 'Helvetica-Bold'
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=15*mm, rightMargin=15*mm)
+    
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle('InvTitle', parent=styles['Title'], fontName=font_bold, fontSize=18, textColor=colors.HexColor('#333333'))
+    style_h2 = ParagraphStyle('InvH2', parent=styles['Heading2'], fontName=font_bold, fontSize=12, textColor=colors.HexColor('#555555'))
+    style_normal = ParagraphStyle('InvNormal', parent=styles['Normal'], fontName=font_name, fontSize=10, leading=14)
+    style_small = ParagraphStyle('InvSmall', parent=styles['Normal'], fontName=font_name, fontSize=8, textColor=colors.HexColor('#888888'))
+    style_bold = ParagraphStyle('InvBold', parent=styles['Normal'], fontName=font_bold, fontSize=10, leading=14)
+    
+    direction_label = "Фактура (Продажба)" if invoice.get("direction") == "Issued" else "Фактура (Покупка)"
+    
+    STATUS_LABELS = {"Draft": "Чернова", "Sent": "Издадена", "PartiallyPaid": "Частично платена", "Paid": "Платена", "Overdue": "Просрочена", "Cancelled": "Анулирана"}
+    
+    elements = []
+    
+    # Header: Company + Invoice number
+    header_data = [
+        [Paragraph(f"<b>{org_name}</b>", style_bold), Paragraph(f"<b>{direction_label}</b>", ParagraphStyle('Right', parent=style_title, alignment=2, fontSize=14))],
+    ]
+    if org_address:
+        header_data.append([Paragraph(org_address, style_small), Paragraph(f"<b>№ {invoice.get('invoice_no', '')}</b>", ParagraphStyle('Right', parent=style_bold, alignment=2, fontSize=14))])
+    else:
+        header_data.append(["", Paragraph(f"<b>№ {invoice.get('invoice_no', '')}</b>", ParagraphStyle('Right', parent=style_bold, alignment=2, fontSize=14))])
+    
+    header_table = RLTable(header_data, colWidths=[300, 230])
+    header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('TOPPADDING', (0,0), (-1,-1), 2), ('BOTTOMPADDING', (0,0), (-1,-1), 2)]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 6*mm))
+    
+    # Meta row: dates, status, project
+    meta_items = []
+    meta_items.append(f"Дата: {invoice.get('issue_date', '')}")
+    meta_items.append(f"Падеж: {invoice.get('due_date', '')}")
+    meta_items.append(f"Статус: {STATUS_LABELS.get(invoice.get('status', ''), invoice.get('status', ''))}")
+    meta_items.append(f"Валута: {invoice.get('currency', 'BGN')}")
+    if project_code:
+        meta_items.append(f"Обект: {project_code} - {project_name}")
+    elements.append(Paragraph(" | ".join(meta_items), style_small))
+    elements.append(Spacer(1, 6*mm))
+    
+    # Client info
+    elements.append(Paragraph("Контрагент:", style_h2))
+    client_lines = []
+    cp_name = invoice.get("counterparty_name", "")
+    if cp_name:
+        client_lines.append(f"<b>{cp_name}</b>")
+    if invoice.get("counterparty_eik"):
+        client_lines.append(f"ЕИК: {invoice['counterparty_eik']}")
+    if invoice.get("counterparty_vat_no"):
+        client_lines.append(f"ДДС номер: {invoice['counterparty_vat_no']}")
+    if invoice.get("counterparty_mol"):
+        client_lines.append(f"МОЛ: {invoice['counterparty_mol']}")
+    if invoice.get("counterparty_address"):
+        client_lines.append(f"Адрес: {invoice['counterparty_address']}")
+    if invoice.get("counterparty_email"):
+        client_lines.append(f"Имейл: {invoice['counterparty_email']}")
+    if invoice.get("counterparty_phone"):
+        client_lines.append(f"Тел: {invoice['counterparty_phone']}")
+    elements.append(Paragraph("<br/>".join(client_lines) if client_lines else "Не е посочен", style_normal))
+    elements.append(Spacer(1, 6*mm))
+    
+    # Lines table
+    elements.append(Paragraph("Редове:", style_h2))
+    line_data = [["№", "Описание", "Мярка", "К-во", "Ед. цена", "Общо"]]
+    lines = invoice.get("lines", [])
+    for i, line in enumerate(lines):
+        qty = line.get("qty", 0)
+        up = line.get("unit_price", 0)
+        lt = line.get("line_total", qty * up)
+        line_data.append([str(i+1), line.get("description", ""), line.get("unit", ""), f"{qty:.2f}", f"{up:.2f}", f"{lt:.2f}"])
+    
+    col_widths = [25, 220, 50, 55, 65, 65]
+    lines_table = RLTable(line_data, colWidths=col_widths, repeatRows=1)
+    lines_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+        ('FONTNAME', (0, 0), (-1, 0), font_bold),
+        ('FONTNAME', (0, 1), (-1, -1), font_name),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (1, -1), 'LEFT'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(lines_table)
+    elements.append(Spacer(1, 6*mm))
+    
+    # Totals
+    subtotal = invoice.get("subtotal", 0)
+    vat_pct = invoice.get("vat_percent", 0)
+    vat_amt = invoice.get("vat_amount", 0)
+    total = invoice.get("total", 0)
+    paid = invoice.get("paid_amount", 0)
+    remaining = invoice.get("remaining_amount", total)
+    curr = invoice.get("currency", "BGN")
+    
+    totals_data = [
+        ["", "", "", "", "Междинна сума:", f"{subtotal:.2f} {curr}"],
+        ["", "", "", "", f"ДДС ({vat_pct}%):", f"{vat_amt:.2f} {curr}"],
+        ["", "", "", "", "ОБЩО:", f"{total:.2f} {curr}"],
+    ]
+    if invoice.get("status") not in ["Draft"]:
+        totals_data.append(["", "", "", "", "Платено:", f"{paid:.2f} {curr}"])
+        totals_data.append(["", "", "", "", "Остатък:", f"{remaining:.2f} {curr}"])
+    
+    totals_table = RLTable(totals_data, colWidths=col_widths)
+    totals_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), font_name),
+        ('FONTNAME', (4, 2), (4, 2), font_bold),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTSIZE', (4, 2), (5, 2), 12),
+        ('ALIGN', (4, 0), (-1, -1), 'RIGHT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LINEABOVE', (4, 2), (-1, 2), 1, colors.black),
+    ]))
+    elements.append(totals_table)
+    
+    # Notes
+    if invoice.get("notes"):
+        elements.append(Spacer(1, 8*mm))
+        elements.append(Paragraph("Бележки:", style_h2))
+        elements.append(Paragraph(invoice["notes"], style_normal))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    
+    filename = f"invoice_{invoice.get('invoice_no', invoice_id)}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 @router.get("/finance/enums")

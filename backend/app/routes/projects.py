@@ -845,65 +845,55 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     # ── Card 5: Invoices ────────────────────────────────────────────────────
+    # Source of truth: invoice.paid_amount, invoice.remaining_amount, invoice.total
     invoices = await db.invoices.find(
         {"project_id": project_id, "org_id": org_id},
         {"_id": 0}
     ).sort("created_at", -1).to_list(500)
     
     invoice_list = []
-    totals_paid_ex_vat = 0
-    totals_unpaid_ex_vat = 0
-    totals_paid_inc_vat = 0
-    totals_unpaid_inc_vat = 0
+    totals_paid = 0
+    totals_unpaid = 0
     
     for inv in invoices:
-        total_ex_vat = inv.get("total_ex_vat", 0) or 0
-        total_vat = inv.get("total_vat", 0) or 0
-        total_inc_vat = inv.get("total_inc_vat", 0) or total_ex_vat + total_vat
-        is_paid = inv.get("status") == "Paid"
+        # Use actual invoice fields (subtotal, vat_amount, total, paid_amount, remaining_amount)
+        subtotal = inv.get("subtotal", 0) or 0
+        vat_amount = inv.get("vat_amount", 0) or 0
+        total = inv.get("total", 0) or 0
+        paid_amount = inv.get("paid_amount", 0) or 0
+        remaining_amount = inv.get("remaining_amount", total) if inv.get("remaining_amount") is not None else total
         
-        if is_paid:
-            totals_paid_ex_vat += total_ex_vat
-            totals_paid_inc_vat += total_inc_vat
-        else:
-            totals_unpaid_ex_vat += total_ex_vat
-            totals_unpaid_inc_vat += total_inc_vat
-        
-        # Get client name
-        client_name = ""
-        if inv.get("client_id"):
-            client = await db.companies.find_one({"id": inv["client_id"]}, {"_id": 0, "name": 1})
-            if client:
-                client_name = client.get("name", "")
+        # Skip cancelled invoices from financial totals
+        if inv.get("status") != "Cancelled":
+            totals_paid += paid_amount
+            totals_unpaid += remaining_amount
         
         invoice_list.append({
             "id": inv.get("id"),
             "invoice_no": inv.get("invoice_no", ""),
+            "direction": inv.get("direction", "Issued"),
             "lines_count": len(inv.get("lines", [])),
-            "client_name": client_name,
+            "client_name": inv.get("counterparty_name", ""),
             "project_code": project.get("code", ""),
             "issue_date": inv.get("issue_date"),
             "due_date": inv.get("due_date"),
             "currency": inv.get("currency", "BGN"),
             "vat_percent": inv.get("vat_percent", 20),
-            "total_ex_vat": total_ex_vat,
-            "total_vat": total_vat,
-            "total_inc_vat": total_inc_vat,
+            "subtotal": subtotal,
+            "vat_amount": vat_amount,
+            "total": total,
+            "paid_amount": paid_amount,
+            "remaining_amount": remaining_amount,
             "status": inv.get("status", "Draft"),
-            "paid_ex_vat": total_ex_vat if is_paid else 0,
-            "unpaid_ex_vat": 0 if is_paid else total_ex_vat,
-            "paid_inc_vat": total_inc_vat if is_paid else 0,
-            "unpaid_inc_vat": 0 if is_paid else total_inc_vat,
         })
     
     card_invoices = {
         "invoices": invoice_list,
         "count": len(invoice_list),
         "totals": {
-            "paid_ex_vat": totals_paid_ex_vat,
-            "unpaid_ex_vat": totals_unpaid_ex_vat,
-            "paid_inc_vat": totals_paid_inc_vat,
-            "unpaid_inc_vat": totals_unpaid_inc_vat,
+            "paid": round(totals_paid, 2),
+            "unpaid": round(totals_unpaid, 2),
+            "total": round(totals_paid + totals_unpaid, 2),
         },
     }
     
@@ -948,8 +938,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     # ── Card 8: Balance ─────────────────────────────────────────────────────
-    # Income = paid invoices
-    income = totals_paid_inc_vat
+    # Income = actual paid amounts from invoices (source of truth: paid_amount)
+    income = totals_paid
     
     # Check for project payments (additional income)
     try:

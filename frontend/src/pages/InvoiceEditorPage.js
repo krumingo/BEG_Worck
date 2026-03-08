@@ -41,6 +41,8 @@ import {
   Banknote,
   Clock,
   CircleDollarSign,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -390,9 +392,29 @@ export default function InvoiceEditorPage() {
   };
 
   const isDraft = !invoice || invoice.status === "Draft";
-  const canEdit = isDraft && canManage;
+  // Allow editing: Draft, Sent, PartiallyPaid, Overdue. Not: Paid, Cancelled
+  const canEdit = canManage && (!invoice || !["Paid", "Cancelled"].includes(invoice.status));
+  const canSend = isDraft && !isNew && canManage;
+  const canDeleteDraft = isDraft && !isNew && canManage;
   const canCancel = invoice && ["Sent", "PartiallyPaid", "Overdue"].includes(invoice.status) && canManage;
   const canPay = invoice && !["Draft", "Cancelled", "Paid"].includes(invoice.status) && canManage && (invoice.remaining_amount > 0);
+  const hasProject = invoice && invoice.project_id;
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await API.get(`/finance/invoices/${invoiceId}/pdf`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice_${invoice.invoice_no || invoiceId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.response?.data?.detail || "Грешка при генериране на PDF");
+    }
+  };
 
   if (loading) {
     return (
@@ -431,22 +453,25 @@ export default function InvoiceEditorPage() {
         </div>
         <div className="flex items-center gap-2">
           {canEdit && (
-            <>
-              <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-                {t("common.save")}
-              </Button>
-              {!isNew && (
-                <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
-                  <Send className="w-4 h-4 mr-1" /> {t("finance.send")}
-                </Button>
-              )}
-              {!isNew && (
-                <Button variant="destructive" size="sm" onClick={handleDelete} data-testid="delete-btn">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
-            </>
+            <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+              {t("common.save")}
+            </Button>
+          )}
+          {canSend && (
+            <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
+              <Send className="w-4 h-4 mr-1" /> {t("finance.send")}
+            </Button>
+          )}
+          {hasProject && (
+            <Button variant="outline" onClick={() => navigate(`/projects/${invoice.project_id}`)} data-testid="go-to-project-btn">
+              <ExternalLink className="w-4 h-4 mr-1" /> Към обекта
+            </Button>
+          )}
+          {!isNew && (
+            <Button variant="outline" onClick={handleDownloadPdf} data-testid="download-pdf-btn">
+              <Download className="w-4 h-4 mr-1" /> PDF
+            </Button>
           )}
           {canPay && (
             <Button onClick={openPayDialog} className="bg-emerald-600 hover:bg-emerald-700" data-testid="add-payment-btn">
@@ -456,6 +481,11 @@ export default function InvoiceEditorPage() {
           {canCancel && (
             <Button variant="outline" className="text-red-400 border-red-500/30" onClick={handleCancel} disabled={saving} data-testid="cancel-btn">
               <X className="w-4 h-4 mr-1" /> {t("finance.cancelInvoice")}
+            </Button>
+          )}
+          {canDeleteDraft && (
+            <Button variant="destructive" size="sm" onClick={handleDelete} data-testid="delete-btn">
+              <Trash2 className="w-4 h-4" />
             </Button>
           )}
           {invoice && invoice.direction === "Received" && isDraft && (
@@ -525,6 +555,8 @@ export default function InvoiceEditorPage() {
                   )}
                 </div>
                 {isNew && invoiceNo && <p className="text-[10px] text-muted-foreground">Номерът е генериран автоматично</p>}
+                {invoice?.status === "Paid" && <p className="text-[10px] text-amber-400">Платена фактура — само за преглед</p>}
+                {invoice?.status === "Cancelled" && <p className="text-[10px] text-red-400">Анулирана фактура — само за преглед</p>}
               </div>
               <div className="space-y-2">
                 <Label>{t("offers.project")}</Label>
