@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 16)
+### P1: BLOCK C — HR/Attendance/Payroll Improvements
+- **Employee Detail Page**: /employees/{id} with 4 tabs: Calendar, Обекти, Присъствия, Заплащане
+- **Personal Calendar**: Monthly grid view with attendance status (Present/Absent), project codes, hours per day
+- **Hours Summary**: Current month days + hours in header
+- **Project History**: Per-employee table with project code, role, days, hours, last attendance
+- **Pay Info Bar**: Pay type (Daily/Hourly/Monthly), rate, hours/day, active status
+- **Payroll Tab**: Recent payslips with gross/net/status
+- **Clickable Employees**: EmployeesPage rows navigate to detail page
+- New: /app/frontend/src/pages/EmployeeDetailPage.js
+- Backend: GET /api/employees/{id}/dashboard + GET /api/employees/{id}/calendar
+- Test report: /app/test_reports/iteration_30.json (100% backend 19/19, 100% frontend)
+
 ## Mar 9, 2026 (Session 15)
 ### P1: BLOCK B — Historical Offer Intelligence
 - **Historical Import**: POST /api/historical/import-preview (parse XLSX + normalize) + POST /api/historical/import-confirm (save)
