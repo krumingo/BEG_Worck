@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 6)
+### In-App Admin Notifications for AI Calibration Readiness
+- **Trigger**: When calibration category reaches >=10 samples, Admin gets in-app notification
+- **Anti-duplicate**: Unique key prevents duplicate notifications per category/city/small_qty
+- **Resolve on approve**: Notification auto-resolved (read=True, resolved=True) when admin approves calibration
+- **New cycle**: After revoke + new data, new notification created
+- **Frontend**: Violet Sparkles icon, "Отвори калибрация" deep link to /ai-calibration
+- Test report: /app/test_reports/iteration_21.json (100% backend 6/6, 100% frontend)
+
 ## Mar 8, 2026 (Session 5)
 ### Learning Loop + Price Calibration Analytics
 - **Data capture**: ai_calibration_events records AI vs user price deltas for every proposal
