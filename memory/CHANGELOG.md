@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 8)
+### P0/P1: Material Requests + Supplier Invoice Intake + Main Warehouse Posting
+- **Material Requests**: CRUD with auto-numbering (MR-XXXX), from-offer generation (incl. AI checklist materials), project/stage linking
+- **Supplier Invoices**: Create → Review/Correct (lines with discount) → Post to Warehouse
+- **Warehouse Posting**: Auto-creates Main Warehouse, creates intake transaction with full line details + links
+- **Procurement Page**: /procurement with tabs (Заявки + Входящи фактури), create/review/post dialogs
+- **Linking**: warehouse_transaction → supplier_invoice → material_request → offer → project
+- **OCR**: Manual-first review (AI-ready architecture for future M6)
+- New backend: /app/backend/app/routes/procurement.py
+- New frontend: /app/frontend/src/pages/ProcurementPage.js
+- Test report: /app/test_reports/iteration_23.json (100% backend 20/20, 100% frontend)
+
 ## Mar 9, 2026 (Session 7)
 ### P0/P1: Extra Offers Send + Approval + Version Tracking
 - **Send flow**: POST /api/offers/{id}/send generates review_token, creates auto version snapshot, records event
