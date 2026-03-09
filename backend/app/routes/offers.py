@@ -263,21 +263,57 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_manage_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    if offer["status"] != "Draft":
+    if offer["status"] not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Only Draft offers can be sent")
     if len(offer.get("lines", [])) == 0:
         raise HTTPException(status_code=400, detail="Offer must have at least one line")
     
     now = datetime.now(timezone.utc).isoformat()
+    review_token = offer.get("review_token") or str(uuid.uuid4()).replace("-", "")[:24]
+    
+    # Save version snapshot before sending
+    version_number = 1
+    last_ver = await db.offer_versions.find_one(
+        {"org_id": user["org_id"], "offer_id": offer_id}, sort=[("version_number", -1)]
+    )
+    if last_ver:
+        version_number = last_ver["version_number"] + 1
+    
+    snapshot = {
+        "offer_no": offer.get("offer_no"), "title": offer.get("title"),
+        "status": "Sent", "version": offer.get("version"),
+        "currency": offer.get("currency"), "vat_percent": offer.get("vat_percent"),
+        "notes": offer.get("notes"), "lines": offer.get("lines", []),
+        "subtotal": offer.get("subtotal"), "vat_amount": offer.get("vat_amount"),
+        "total": offer.get("total"),
+    }
+    await db.offer_versions.insert_one({
+        "id": str(uuid.uuid4()), "org_id": user["org_id"],
+        "project_id": offer["project_id"], "offer_id": offer_id,
+        "version_number": version_number, "created_at": now,
+        "created_by": user["id"], "note": "Автоматичен snapshot при изпращане",
+        "snapshot_json": snapshot, "is_auto_backup": True,
+    })
+    
     await db.offers.update_one({"id": offer_id}, {"$set": {
-        "status": "Sent",
-        "sent_at": now,
-        "updated_at": now,
+        "status": "Sent", "sent_at": now, "sent_by": user["id"],
+        "review_token": review_token, "updated_at": now,
     }})
+    
+    # Record event
+    await db.offer_events.insert_one({
+        "id": str(uuid.uuid4()), "org_id": user["org_id"],
+        "offer_id": offer_id, "event_type": "sent",
+        "actor": user["email"], "created_at": now,
+        "details": {"sent_by": user["id"]},
+    })
+    
     await log_audit(user["org_id"], user["id"], user["email"], "offer_sent", "offer", offer_id, 
                     {"offer_no": offer["offer_no"]})
     
-    return await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    result = await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    result["review_url"] = f"/offers/review/{review_token}"
+    return result
 
 
 @router.post("/offers/{offer_id}/accept")
@@ -472,3 +508,114 @@ async def get_offer_enums():
         "statuses": OFFER_STATUSES,
         "units": OFFER_UNITS,
     }
+
+
+
+# ── Public Offer Review (No Auth) ──────────────────────────────────
+
+@router.get("/offers/review/{review_token}")
+async def get_offer_review(review_token: str):
+    """Public endpoint - get offer for client review (no auth required)"""
+    offer = await db.offers.find_one({"review_token": review_token}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Офертата не е намерена")
+    
+    # Record view event (only first time)
+    if offer["status"] == "Sent":
+        now = datetime.now(timezone.utc).isoformat()
+        await db.offers.update_one({"review_token": review_token}, {"$set": {
+            "viewed_at": now, "updated_at": now,
+        }})
+        existing_view = await db.offer_events.find_one({
+            "offer_id": offer["id"], "event_type": "viewed",
+        })
+        if not existing_view:
+            await db.offer_events.insert_one({
+                "id": str(uuid.uuid4()), "org_id": offer["org_id"],
+                "offer_id": offer["id"], "event_type": "viewed",
+                "actor": "client", "created_at": now, "details": {},
+            })
+    
+    # Get project info
+    project = await db.projects.find_one({"id": offer["project_id"]}, {"_id": 0, "code": 1, "name": 1, "address_text": 1})
+    
+    # Get org info
+    org = await db.organizations.find_one({"id": offer["org_id"]}, {"_id": 0, "name": 1, "phone": 1, "email": 1})
+    
+    return {
+        "offer_no": offer.get("offer_no"),
+        "title": offer.get("title"),
+        "status": offer.get("status"),
+        "version": offer.get("version", 1),
+        "offer_type": offer.get("offer_type"),
+        "currency": offer.get("currency"),
+        "vat_percent": offer.get("vat_percent"),
+        "lines": offer.get("lines", []),
+        "subtotal": offer.get("subtotal"),
+        "vat_amount": offer.get("vat_amount"),
+        "total": offer.get("total"),
+        "notes": offer.get("notes"),
+        "sent_at": offer.get("sent_at"),
+        "project_code": project.get("code") if project else "",
+        "project_name": project.get("name") if project else "",
+        "project_address": project.get("address_text") if project else "",
+        "company_name": org.get("name") if org else "",
+        "company_phone": org.get("phone") if org else "",
+        "company_email": org.get("email") if org else "",
+    }
+
+
+@router.post("/offers/review/{review_token}/respond")
+async def respond_to_offer(review_token: str, data: dict):
+    """Public endpoint - client responds to offer (no auth required)"""
+    offer = await db.offers.find_one({"review_token": review_token})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Офертата не е намерена")
+    if offer["status"] not in ["Sent"]:
+        raise HTTPException(status_code=400, detail="Тази оферта вече е обработена")
+    
+    action = data.get("action")  # approve / reject / revision
+    comment = data.get("comment", "")
+    client_name = data.get("client_name", "")
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if action == "approve":
+        new_status = "Accepted"
+        event_type = "approved_by_client"
+        update_fields = {"status": new_status, "accepted_at": now, "client_comment": comment, "client_name": client_name, "updated_at": now}
+    elif action == "reject":
+        new_status = "Rejected"
+        event_type = "rejected_by_client"
+        update_fields = {"status": new_status, "reject_reason": comment, "client_comment": comment, "client_name": client_name, "updated_at": now}
+    elif action == "revision":
+        new_status = "NeedsRevision"
+        event_type = "revision_requested"
+        update_fields = {"status": new_status, "revision_comment": comment, "client_comment": comment, "client_name": client_name, "updated_at": now}
+    else:
+        raise HTTPException(status_code=400, detail="Невалидно действие")
+    
+    await db.offers.update_one({"review_token": review_token}, {"$set": update_fields})
+    
+    await db.offer_events.insert_one({
+        "id": str(uuid.uuid4()), "org_id": offer["org_id"],
+        "offer_id": offer["id"], "event_type": event_type,
+        "actor": client_name or "client", "created_at": now,
+        "details": {"comment": comment, "client_name": client_name},
+    })
+    
+    return {"ok": True, "status": new_status}
+
+
+# ── Offer Events History ───────────────────────────────────────────
+
+@router.get("/offers/{offer_id}/events")
+async def get_offer_events(offer_id: str, user: dict = Depends(require_m2)):
+    """Get event history for an offer"""
+    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    events = await db.offer_events.find(
+        {"offer_id": offer_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return events

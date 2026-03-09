@@ -4,7 +4,7 @@ Pydantic models - Offers / BOQ (M2).
 from pydantic import BaseModel
 from typing import Optional, List
 
-OFFER_STATUSES = ["Draft", "Sent", "Accepted", "Rejected", "Archived"]
+OFFER_STATUSES = ["Draft", "Sent", "Accepted", "Rejected", "NeedsRevision", "Archived"]
 OFFER_UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"]
 
 class OfferLineInput(BaseModel):

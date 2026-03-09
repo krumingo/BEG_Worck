@@ -46,6 +46,8 @@ import {
   ToggleRight,
   ChevronsUpDown,
   Sparkles,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
 import ActivityBudgetsPanel from "@/components/ActivityBudgetsPanel";
@@ -378,6 +380,10 @@ export default function OfferEditorPage() {
     }
   };
 
+  // Review link state
+  const [reviewUrl, setReviewUrl] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
   const handleSend = async () => {
     if (lines.length === 0) {
       alert(t("offers.addLineBeforeSend"));
@@ -385,12 +391,24 @@ export default function OfferEditorPage() {
     }
     setSaving(true);
     try {
-      await API.post(`/offers/${offerId}/send`);
+      const res = await API.post(`/offers/${offerId}/send`);
+      if (res.data.review_url) {
+        setReviewUrl(window.location.origin + res.data.review_url);
+      }
       await fetchData();
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.errorOccurred"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const copyReviewLink = () => {
+    const url = reviewUrl || (offer?.review_token ? `${window.location.origin}/offers/review/${offer.review_token}` : null);
+    if (url) {
+      navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
     }
   };
 
@@ -498,6 +516,16 @@ export default function OfferEditorPage() {
           {offer && offer.status !== "Draft" && canManage && (
             <Button variant="outline" onClick={handleNewVersion} disabled={saving} data-testid="new-version-btn">
               <Copy className="w-4 h-4 mr-1" /> {t("offers.newVersion")}
+            </Button>
+          )}
+          {offer?.review_token && (
+            <Button variant="outline" onClick={copyReviewLink} className="border-violet-500/30 text-violet-400 hover:bg-violet-500/10" data-testid="copy-link-btn">
+              <Link2 className="w-4 h-4 mr-1" /> {linkCopied ? "Копирано!" : "Копирай линк"}
+            </Button>
+          )}
+          {offer?.review_token && (
+            <Button variant="ghost" size="sm" onClick={() => window.open(`/offers/review/${offer.review_token}`, '_blank')} data-testid="open-review-btn">
+              <ExternalLink className="w-4 h-4" />
             </Button>
           )}
           {offer && (

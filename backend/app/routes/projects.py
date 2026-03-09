@@ -899,7 +899,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     
     # ── Card 6: Offers ──────────────────────────────────────────────────────
     offers = await db.offers.find(
-        {"project_id": project_id, "org_id": org_id, "status": "Approved"},
+        {"project_id": project_id, "org_id": org_id, "status": "Accepted"},
         {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
     ).to_list(500)
     
@@ -907,11 +907,22 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     offers_vat = sum(o.get("total_vat", 0) or 0 for o in offers)
     offers_inc_vat = sum(o.get("total_inc_vat", 0) or 0 for o in offers)
     
+    # Extra offers for this project
+    all_offers = await db.offers.find(
+        {"project_id": project_id, "org_id": org_id},
+        {"_id": 0, "id": 1, "offer_no": 1, "title": 1, "status": 1, "offer_type": 1,
+         "version": 1, "total": 1, "subtotal": 1, "currency": 1,
+         "sent_at": 1, "accepted_at": 1, "created_at": 1, "review_token": 1}
+    ).sort("created_at", -1).to_list(100)
+    
+    extra_offers = [o for o in all_offers if o.get("offer_type") == "extra"]
+    
     card_offers = {
         "approved_count": len(offers),
         "total_ex_vat": offers_ex_vat,
         "total_vat": offers_vat,
         "total_inc_vat": offers_inc_vat,
+        "extra_offers": extra_offers,
     }
     
     # ── Card 7: Materials (Warehouse) ───────────────────────────────────────

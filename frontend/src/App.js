@@ -53,6 +53,7 @@ import FinanceDetailsPage from "@/pages/FinanceDetailsPage";
 import DailyLogsPage from "@/pages/DailyLogsPage";
 import ChangeOrdersPage from "@/pages/ChangeOrdersPage";
 import AICalibrationPage from "@/pages/AICalibrationPage";
+import OfferReviewPage from "@/pages/OfferReviewPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -126,6 +127,8 @@ function AppRoutes() {
       <Route path="/login" element={<CompanyPublicRoute><LoginPage /></CompanyPublicRoute>} />
       <Route path="/signup" element={<CompanyPublicRoute><SignupPage /></CompanyPublicRoute>} />
       <Route path="/billing/cancel" element={<BillingCancelPage />} />
+      {/* Public offer review - no auth needed */}
+      <Route path="/offers/review/:reviewToken" element={<OfferReviewPage />} />
       
       {/* Protected company routes */}
       <Route path="/" element={<CompanyProtectedRoute><DashboardPage /></CompanyProtectedRoute>} />
