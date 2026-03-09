@@ -293,6 +293,84 @@ async def batch_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m
     }
 
 
+# ── Two-Stage AI Endpoints ─────────────────────────────────────────
+
+from app.services.ai_proposal import rule_based_proposal
+
+@router.post("/extra-works/ai-fast")
+async def fast_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2)):
+    """Stage A: Fast rule-based proposals for all lines (instant, no LLM)"""
+    results = []
+    combined_materials = {}
+    
+    for line in data.lines:
+        proposal = rule_based_proposal(line.title, line.unit, line.qty, data.city)
+        proposal = apply_hourly_pricing(proposal, line.qty)
+        proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
+                              "location_floor": line.location_floor, "location_room": line.location_room,
+                              "location_zone": line.location_zone}
+        proposal["stage"] = "fast"
+        results.append(proposal)
+        
+        for mat in proposal.get("materials", []):
+            key = mat["name"]
+            if key not in combined_materials:
+                combined_materials[key] = {**mat, "sources": [line.title]}
+            else:
+                if mat.get("estimated_qty"):
+                    combined_materials[key]["estimated_qty"] = round(
+                        (combined_materials[key].get("estimated_qty") or 0) + mat["estimated_qty"], 2)
+                combined_materials[key]["sources"].append(line.title)
+    
+    combined_list = sorted(combined_materials.values(), key=lambda x: (
+        0 if x["category"] == "primary" else 1 if x["category"] == "secondary" else 2, x["name"]))
+    
+    return {
+        "results": results,
+        "combined_materials": combined_list,
+        "grand_total": round(sum(r["pricing"]["total_estimated"] for r in results), 2),
+        "line_count": len(results),
+        "stage": "fast",
+    }
+
+
+@router.post("/extra-works/ai-refine")
+async def refine_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2)):
+    """Stage B: LLM refinement for all lines (slower, richer results)"""
+    results = []
+    combined_materials = {}
+    
+    for line in data.lines:
+        proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"])
+        proposal = apply_hourly_pricing(proposal, line.qty)
+        proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
+                              "location_floor": line.location_floor, "location_room": line.location_room,
+                              "location_zone": line.location_zone}
+        proposal["stage"] = "refined"
+        results.append(proposal)
+        
+        for mat in proposal.get("materials", []):
+            key = mat["name"]
+            if key not in combined_materials:
+                combined_materials[key] = {**mat, "sources": [line.title]}
+            else:
+                if mat.get("estimated_qty"):
+                    combined_materials[key]["estimated_qty"] = round(
+                        (combined_materials[key].get("estimated_qty") or 0) + mat["estimated_qty"], 2)
+                combined_materials[key]["sources"].append(line.title)
+    
+    combined_list = sorted(combined_materials.values(), key=lambda x: (
+        0 if x["category"] == "primary" else 1 if x["category"] == "secondary" else 2, x["name"]))
+    
+    return {
+        "results": results,
+        "combined_materials": combined_list,
+        "grand_total": round(sum(r["pricing"]["total_estimated"] for r in results), 2),
+        "line_count": len(results),
+        "stage": "refined",
+    }
+
+
 @router.post("/extra-works/{draft_id}/apply-ai")
 async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dict = Depends(require_m2)):
     """Generate and apply AI proposal to an existing draft"""

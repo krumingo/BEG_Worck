@@ -39,6 +39,10 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
   const [selectedRelated, setSelectedRelated] = useState({});
   // Expanded sections
   const [expandedMats, setExpandedMats] = useState({});
+  // Two-stage status
+  const [stageStatus, setStageStatus] = useState("idle"); // idle | fast_ready | refining | refined | refine_failed
+  const [userEditedFields, setUserEditedFields] = useState({}); // {lineIdx: Set of field names}
+  const [refineDelta, setRefineDelta] = useState({}); // {lineIdx: {field: newValue}} - pending refinement suggestions
 
   const reset = () => {
     setLines([emptyLine()]);
@@ -46,6 +50,9 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
     setEditedProposals({});
     setSelectedRelated({});
     setExpandedMats({});
+    setStageStatus("idle");
+    setUserEditedFields({});
+    setRefineDelta({});
   };
 
   // Line management
@@ -57,55 +64,126 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
   };
   const updateLine = (i, f, v) => { const n = [...lines]; n[i] = { ...n[i], [f]: v }; setLines(n); };
 
-  // Batch AI
+  // Two-Stage AI
+  const initProposals = (results) => {
+    const ep = {};
+    results.forEach((r, i) => {
+      ep[i] = {
+        title: r._input.title,
+        activity_type: r.recognized.activity_type,
+        activity_subtype: r.recognized.activity_subtype,
+        unit: r._input.unit,
+        qty: r._input.qty,
+        material_price: r.pricing.material_price_per_unit,
+        labor_price: r.pricing.labor_price_per_unit,
+        total_price: r.pricing.total_price_per_unit,
+        original_total_price: r.pricing.total_price_per_unit,
+        small_qty_adj: r.pricing.small_qty_adjustment_percent,
+        provider: r.provider,
+        confidence: r.confidence,
+        explanation: r.explanation,
+        materials: r.materials || [],
+        related_smr: r.related_smr || [],
+        hourly_info: r.hourly_info || null,
+        location_floor: r._input.location_floor,
+        location_room: r._input.location_room,
+        location_zone: r._input.location_zone,
+        stage: r.stage || "fast",
+      };
+    });
+    return ep;
+  };
+
   const handleBatchAI = async () => {
     const valid = lines.filter(l => l.title.trim());
     if (!valid.length) return;
+    const payload = {
+      lines: valid.map(l => ({ title: l.title, unit: l.unit, qty: parseFloat(l.qty) || 1,
+        location_floor: l.location_floor, location_room: l.location_room, location_zone: l.location_zone })),
+      city: city || null, project_id: projectId,
+    };
+
+    // Stage A: Fast (rule-based, instant)
     setAiLoading(true);
     try {
-      const res = await API.post("/extra-works/ai-batch", {
-        lines: valid.map(l => ({ title: l.title, unit: l.unit, qty: parseFloat(l.qty) || 1,
-          location_floor: l.location_floor, location_room: l.location_room, location_zone: l.location_zone })),
-        city: city || null, project_id: projectId,
-      });
-      setBatchResult(res.data);
-      // Initialize editable proposals
-      const ep = {};
-      res.data.results.forEach((r, i) => {
-        ep[i] = {
-          title: r._input.title,
-          activity_type: r.recognized.activity_type,
-          activity_subtype: r.recognized.activity_subtype,
-          unit: r._input.unit,
-          qty: r._input.qty,
-          material_price: r.pricing.material_price_per_unit,
-          labor_price: r.pricing.labor_price_per_unit,
-          total_price: r.pricing.total_price_per_unit,
-          original_total_price: r.pricing.total_price_per_unit,
-          small_qty_adj: r.pricing.small_qty_adjustment_percent,
-          provider: r.provider,
-          confidence: r.confidence,
-          explanation: r.explanation,
-          materials: r.materials || [],
-          related_smr: r.related_smr || [],
-          hourly_info: r.hourly_info || null,
-          location_floor: r._input.location_floor,
-          location_room: r._input.location_room,
-          location_zone: r._input.location_zone,
-        };
-      });
-      setEditedProposals(ep);
-      // Initialize all related as unselected
+      const fastRes = await API.post("/extra-works/ai-fast", payload);
+      setBatchResult(fastRes.data);
+      setEditedProposals(initProposals(fastRes.data.results));
       const sr = {};
-      res.data.results.forEach((r, i) => { sr[i] = {}; });
+      fastRes.data.results.forEach((_, i) => { sr[i] = {}; });
       setSelectedRelated(sr);
+      setStageStatus("fast_ready");
+      setAiLoading(false);
+
+      // Stage B: Refine (LLM, async non-blocking)
+      setStageStatus("refining");
+      try {
+        const refineRes = await API.post("/extra-works/ai-refine", payload);
+        // Smart merge: only update fields user hasn't edited
+        const delta = {};
+        refineRes.data.results.forEach((r, i) => {
+          const edited = userEditedFields[i] || new Set();
+          const updates = {};
+          if (!edited.has("material_price") && r.pricing.material_price_per_unit !== editedProposals[i]?.material_price)
+            updates.material_price = r.pricing.material_price_per_unit;
+          if (!edited.has("labor_price") && r.pricing.labor_price_per_unit !== editedProposals[i]?.labor_price)
+            updates.labor_price = r.pricing.labor_price_per_unit;
+          if (!edited.has("activity_type") && r.recognized.activity_type !== editedProposals[i]?.activity_type)
+            updates.activity_type = r.recognized.activity_type;
+          if (!edited.has("activity_subtype") && r.recognized.activity_subtype !== editedProposals[i]?.activity_subtype)
+            updates.activity_subtype = r.recognized.activity_subtype;
+          // Always update if not edited: explanation, confidence, related, materials
+          if (!edited.has("explanation")) updates.explanation = r.explanation;
+          updates.confidence = r.confidence;
+          updates.provider = r.provider;
+          updates.stage = "refined";
+          if (!edited.has("related_smr") && r.related_smr?.length > (editedProposals[i]?.related_smr?.length || 0))
+            updates.related_smr = r.related_smr;
+          if (!edited.has("materials") && r.materials?.length > (editedProposals[i]?.materials?.length || 0))
+            updates.materials = r.materials;
+          delta[i] = updates;
+        });
+        setRefineDelta(delta);
+        setBatchResult(prev => ({ ...prev, combined_materials: refineRes.data.combined_materials, grand_total: refineRes.data.grand_total }));
+        setStageStatus("refined");
+      } catch (e) {
+        console.warn("Refinement failed:", e);
+        setStageStatus("refine_failed");
+      }
     } catch (err) {
       alert(err.response?.data?.detail || "Грешка при AI");
-    } finally { setAiLoading(false); }
+      setAiLoading(false);
+    }
   };
 
-  // Edit proposal field
+  // Apply refinement delta for a specific line
+  const applyRefinement = (lineIdx) => {
+    const d = refineDelta[lineIdx];
+    if (!d) return;
+    setEditedProposals(prev => {
+      const updated = { ...prev[lineIdx], ...d };
+      if (d.material_price !== undefined || d.labor_price !== undefined) {
+        const mp = d.material_price ?? prev[lineIdx].material_price;
+        const lp = d.labor_price ?? prev[lineIdx].labor_price;
+        updated.total_price = round2(parseFloat(mp) + parseFloat(lp));
+      }
+      return { ...prev, [lineIdx]: updated };
+    });
+    setRefineDelta(prev => { const n = { ...prev }; delete n[lineIdx]; return n; });
+  };
+
+  // Apply all refinements
+  const applyAllRefinements = () => {
+    Object.keys(refineDelta).forEach(i => applyRefinement(parseInt(i)));
+  };
+
+  // Edit proposal field (tracks user edits for merge protection)
   const editProp = (i, f, v) => {
+    setUserEditedFields(prev => {
+      const set = new Set(prev[i] || []);
+      set.add(f);
+      return { ...prev, [i]: set };
+    });
     setEditedProposals(prev => {
       const updated = { ...prev[i], [f]: v };
       if (f === "material_price" || f === "labor_price") {
@@ -277,13 +355,24 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
         {/* Phase 2: Editable AI Results */}
         {batchResult && (
           <div className="space-y-3 py-2">
-            {/* Summary bar */}
+            {/* Summary bar with stage status */}
             <div className="flex items-center justify-between p-3 rounded-lg bg-violet-500/10 border border-violet-500/30">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-violet-400" />
                 <span className="text-sm font-medium text-violet-300">{batchResult.line_count} реда анализирани</span>
+                {stageStatus === "fast_ready" && <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30">Бърз анализ</Badge>}
+                {stageStatus === "refining" && <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/30 animate-pulse"><Loader2 className="w-2.5 h-2.5 animate-spin mr-0.5 inline" />LLM уточняване...</Badge>}
+                {stageStatus === "refined" && <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30"><CheckCircle2 className="w-2.5 h-2.5 mr-0.5 inline" />LLM уточнено</Badge>}
+                {stageStatus === "refine_failed" && <Badge variant="outline" className="text-[10px] bg-gray-500/10 text-gray-400 border-gray-500/30"><AlertTriangle className="w-2.5 h-2.5 mr-0.5 inline" />LLM недостъпен</Badge>}
               </div>
-              <div className="font-mono text-lg font-bold text-primary">{round2(grandTotal).toFixed(2)} лв</div>
+              <div className="flex items-center gap-3">
+                {stageStatus === "refined" && Object.keys(refineDelta).length > 0 && (
+                  <Button size="sm" variant="outline" onClick={applyAllRefinements} className="text-[10px] h-6 border-emerald-500/30 text-emerald-400" data-testid="apply-all-refine-btn">
+                    <CheckCircle2 className="w-3 h-3 mr-1" /> Приеми LLM подобрения ({Object.keys(refineDelta).length})
+                  </Button>
+                )}
+                <div className="font-mono text-lg font-bold text-primary">{round2(grandTotal).toFixed(2)} лв</div>
+              </div>
             </div>
 
             {/* Per-line editable results */}
@@ -291,8 +380,9 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
               const p = editedProposals[i];
               if (!p) return null;
               const lineTotal = round2((parseFloat(p.total_price) || 0) * (parseFloat(p.qty) || 1));
+              const hasRefine = refineDelta[i] && Object.keys(refineDelta[i]).length > 0;
               return (
-                <div key={i} className="rounded-lg border border-border overflow-hidden" data-testid={`result-line-${i}`}>
+                <div key={i} className={`rounded-lg border overflow-hidden ${hasRefine ? "border-blue-500/30" : "border-border"}`} data-testid={`result-line-${i}`}>
                   {/* Header */}
                   <div className="p-3 bg-muted/30 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -302,8 +392,17 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                         {p.provider === "llm" ? "LLM" : "Rule"}
                       </Badge>
                       <Badge variant="outline" className="text-[10px]">{Math.round(p.confidence * 100)}%</Badge>
+                      {p.stage === "fast" && <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400">Бърз</Badge>}
+                      {p.stage === "refined" && <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400">LLM</Badge>}
                     </div>
-                    <span className="font-mono font-bold text-primary">{lineTotal.toFixed(2)} лв</span>
+                    <div className="flex items-center gap-2">
+                      {hasRefine && (
+                        <Button size="sm" variant="ghost" onClick={() => applyRefinement(i)} className="text-[10px] h-5 text-blue-400" data-testid={`apply-refine-${i}`}>
+                          Приеми LLM
+                        </Button>
+                      )}
+                      <span className="font-mono font-bold text-primary">{lineTotal.toFixed(2)} лв</span>
+                    </div>
                   </div>
 
                   <div className="p-3 space-y-2">
