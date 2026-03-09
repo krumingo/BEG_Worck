@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 10)
+### P1: Inventory Dashboard + Stock Alerts + Warehouse Visibility
+- **Dashboard**: /inventory with 7 overview cards (materials, value, low stock, on projects, recent movements)
+- **Stock table**: Search + low stock filter + threshold + status badges (OK/Ниско)
+- **Low stock alerts**: Configurable threshold per material (default 5), PUT /api/inventory/threshold
+- **Movement insights**: Top moved materials (intake/issue/return counts)
+- **Project remainders**: Materials sitting on projects with remaining quantities
+- **3 tabs**: Наличности | Движения | По обекти
+- New frontend: /app/frontend/src/pages/InventoryDashboardPage.js
+- Test report: /app/test_reports/iteration_25.json (100% backend 12/12, 100% frontend)
+
 ## Mar 9, 2026 (Session 9)
 ### P1: Main Warehouse → Project Allocation + Consumption + Remaining Stock Control
 - **Warehouse Issue**: POST /api/warehouse-issue with stock validation (prevents over-issue)
