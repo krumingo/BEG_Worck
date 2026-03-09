@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 12)
+### P1/P2: Two-Stage AI for Extra Works and Offer AI Assist
+- **Stage A (Fast)**: POST /api/extra-works/ai-fast — rule-based, ~0.15s, instant usable proposals
+- **Stage B (Refine)**: POST /api/extra-works/ai-refine — LLM via GPT-4.1-mini, ~15-20s, richer results
+- **Non-blocking UX**: Fast results appear immediately, user can edit while LLM refines in background
+- **Smart merge**: User-edited fields protected from LLM overwrite (userEditedFields tracking)
+- **Apply refinement**: "Приеми LLM подобрения" button (global) + per-line "Приеми LLM" links
+- **Stage badges**: "Бърз анализ" → "LLM уточняване..." (pulsing) → "LLM уточнено" ✓ / "LLM недостъпен" ⚠
+- **Fallback**: If LLM fails, fast proposal remains fully usable
+- Test report: /app/test_reports/iteration_27.json (100% backend 10/10, 100% frontend)
+
 ## Mar 9, 2026 (Session 11)
 ### P0/P1: Editable AI Proposals + Multi-line Entry + Hourly Rate Logic
 - **Multi-line entry**: Add/remove/duplicate lines in ExtraWorkModal, each with location fields
