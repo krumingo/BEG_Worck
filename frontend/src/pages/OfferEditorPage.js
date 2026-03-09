@@ -95,13 +95,12 @@ export default function OfferEditorPage() {
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [selectedLineIndex, setSelectedLineIndex] = useState(null);
   
-  // AI Assist dialog
+  // AI Assist - multi-line with editable proposals
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
-  const [aiText, setAiText] = useState("");
-  const [aiUnit, setAiUnit] = useState("m2");
-  const [aiQty, setAiQty] = useState(1);
-  const [aiProposal, setAiProposal] = useState(null);
+  const [aiLines, setAiLines] = useState([{ id: "1", text: "", unit: "m2", qty: 1 }]);
+  const [aiResults, setAiResults] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiEdits, setAiEdits] = useState({});
   
   // Grouping state
   const [groupingEnabled, setGroupingEnabled] = useState(() => {
@@ -269,37 +268,89 @@ export default function OfferEditorPage() {
     setLines(lines.filter((_, i) => i !== idx));
   };
 
-  // AI Assist
+  // AI Assist handlers
+  const addAiLine = () => setAiLines([...aiLines, { id: Date.now().toString(), text: "", unit: "m2", qty: 1 }]);
+  const removeAiLine = (i) => { if (aiLines.length > 1) setAiLines(aiLines.filter((_, idx) => idx !== i)); };
+  const updateAiLine = (i, f, v) => { const n = [...aiLines]; n[i] = { ...n[i], [f]: v }; setAiLines(n); };
+
   const handleAiAssist = async () => {
-    if (!aiText.trim()) return;
+    const valid = aiLines.filter(l => l.text.trim());
+    if (!valid.length) return;
     setAiLoading(true);
+    setAiResults(null);
+    setAiEdits({});
     try {
-      const res = await API.post("/extra-works/ai-proposal", { title: aiText, unit: aiUnit, qty: parseFloat(aiQty) || 1 });
-      setAiProposal(res.data);
+      const res = await API.post("/extra-works/ai-fast", {
+        lines: valid.map(l => ({ title: l.text, unit: l.unit, qty: parseFloat(l.qty) || 1 })),
+        city: null,
+      });
+      setAiResults(res.data);
+      // Init editable state
+      const edits = {};
+      res.data.results.forEach((r, i) => {
+        edits[i] = {
+          text: r._input.title,
+          unit: r.recognized.suggested_unit || r._input.unit,
+          qty: r._input.qty,
+          material: r.pricing.material_price_per_unit,
+          labor: r.pricing.labor_price_per_unit,
+          type: r.recognized.activity_type,
+          subtype: r.recognized.activity_subtype,
+          note: r.pricing.small_qty_adjustment_percent > 0 ? `AI: +${r.pricing.small_qty_adjustment_percent}% малко к-во` : "",
+          confidence: r.confidence,
+          provider: r.provider,
+          explanation: r.explanation || "",
+          hint: r.internal_price_hint || null,
+          hourly: r.hourly_info || null,
+        };
+      });
+      setAiEdits(edits);
+      // Start LLM refinement in background
+      API.post("/extra-works/ai-refine", {
+        lines: valid.map(l => ({ title: l.text, unit: l.unit, qty: parseFloat(l.qty) || 1 })),
+        city: null,
+      }).then(refRes => {
+        setAiResults(prev => prev ? { ...prev, stage: "refined", combined_materials: refRes.data.combined_materials } : prev);
+        // Merge refined pricing where user hasn't edited
+        setAiEdits(prev => {
+          const updated = { ...prev };
+          refRes.data.results.forEach((r, i) => {
+            if (updated[i] && updated[i].material === prev[i]?.material && updated[i].labor === prev[i]?.labor) {
+              updated[i] = { ...updated[i], material: r.pricing.material_price_per_unit, labor: r.pricing.labor_price_per_unit,
+                confidence: r.confidence, provider: r.provider, explanation: r.explanation || updated[i].explanation,
+                hint: r.internal_price_hint || updated[i].hint };
+            }
+          });
+          return updated;
+        });
+      }).catch(() => {});
     } catch (err) { console.error(err); }
     finally { setAiLoading(false); }
   };
 
-  const addAiLineToOffer = () => {
-    if (!aiProposal) return;
-    const newLine = {
-      id: Date.now().toString(),
+  const editAiProp = (i, f, v) => setAiEdits(prev => ({ ...prev, [i]: { ...prev[i], [f]: v } }));
+
+  const addAiLinesToOffer = () => {
+    if (!aiEdits || !Object.keys(aiEdits).length) return;
+    const newLines = Object.values(aiEdits).map((e, i) => ({
+      id: Date.now().toString() + i,
       activity_code: "",
-      activity_name: aiText,
-      unit: aiProposal.recognized.suggested_unit || aiUnit,
-      qty: parseFloat(aiQty) || 1,
-      material_unit_cost: aiProposal.pricing.material_price_per_unit,
-      labor_unit_cost: aiProposal.pricing.labor_price_per_unit,
+      activity_name: e.text,
+      unit: e.unit,
+      qty: parseFloat(e.qty) || 1,
+      material_unit_cost: parseFloat(e.material) || 0,
+      labor_unit_cost: parseFloat(e.labor) || 0,
       labor_hours_per_unit: null,
-      note: aiProposal.pricing.small_qty_adjustment_percent > 0 ? `AI: +${aiProposal.pricing.small_qty_adjustment_percent}% корекция малко к-во` : "",
-      sort_order: lines.length,
-      activity_type: aiProposal.recognized.activity_type || "Общо",
-      activity_subtype: aiProposal.recognized.activity_subtype || "",
-    };
-    setLines([...lines, newLine]);
+      note: e.note,
+      sort_order: lines.length + i,
+      activity_type: e.type || "Общо",
+      activity_subtype: e.subtype || "",
+    }));
+    setLines([...lines, ...newLines]);
     setAiDialogOpen(false);
-    setAiText("");
-    setAiProposal(null);
+    setAiResults(null);
+    setAiEdits({});
+    setAiLines([{ id: "1", text: "", unit: "m2", qty: 1 }]);
   };
 
   const updateLine = (idx, field, value) => {
@@ -666,7 +717,7 @@ export default function OfferEditorPage() {
                   <Button size="sm" onClick={addLine} data-testid="add-line-btn">
                     <Plus className="w-4 h-4 mr-1" /> {t("offers.addLine")}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => { setAiText(""); setAiProposal(null); setAiDialogOpen(true); }} className="border-violet-500/30 text-violet-400 hover:bg-violet-500/10" data-testid="ai-assist-btn">
+                  <Button size="sm" variant="outline" onClick={() => { setAiLines([{ id: "1", text: "", unit: "m2", qty: 1 }]); setAiResults(null); setAiEdits({}); setAiDialogOpen(true); }} className="border-violet-500/30 text-violet-400 hover:bg-violet-500/10" data-testid="ai-assist-btn">
                     <Sparkles className="w-4 h-4 mr-1" /> AI помощ
                   </Button>
                   </>
@@ -1039,54 +1090,130 @@ export default function OfferEditorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* AI Assist Dialog */}
+      {/* AI Assist Dialog - Multi-line with editable proposals */}
       <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-card border-border" data-testid="ai-assist-dialog">
+        <DialogContent className="sm:max-w-[800px] bg-card border-border max-h-[90vh] overflow-y-auto" data-testid="ai-assist-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-violet-500" /> AI помощ за ред
+              <Sparkles className="w-5 h-5 text-violet-500" /> AI помощ за оферта
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <label className="text-sm text-muted-foreground">Описание на СМР</label>
-              <input value={aiText} onChange={e => setAiText(e.target.value)} placeholder="Напр. Боядисване на стени" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" data-testid="ai-text-input" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-sm text-muted-foreground">Мярка</label>
-                <select value={aiUnit} onChange={e => setAiUnit(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
-                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm text-muted-foreground">К-во</label>
-                <input type="number" min="0.01" step="0.01" value={aiQty} onChange={e => setAiQty(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono" />
-              </div>
-            </div>
-            <Button onClick={handleAiAssist} disabled={aiLoading || !aiText.trim()} className="w-full bg-violet-600 hover:bg-violet-700" data-testid="ai-get-proposal-btn">
-              {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
-              Анализирай
-            </Button>
-            {aiProposal && (
-              <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/30 space-y-2">
-                <p className="text-xs font-medium text-violet-300">{aiProposal.recognized.activity_type} / {aiProposal.recognized.activity_subtype}</p>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div><p className="text-[10px] text-muted-foreground">Материал</p><p className="font-mono">{aiProposal.pricing.material_price_per_unit.toFixed(2)}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Труд</p><p className="font-mono">{aiProposal.pricing.labor_price_per_unit.toFixed(2)}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Общо</p><p className="font-mono text-primary">{aiProposal.pricing.total_estimated.toFixed(2)}</p></div>
+            {/* Input phase */}
+            {!aiResults && (
+              <>
+                {aiLines.map((al, i) => (
+                  <div key={al.id} className="flex items-center gap-2" data-testid={`ai-input-${i}`}>
+                    <span className="text-xs text-muted-foreground font-mono w-4">{i+1}</span>
+                    <Input value={al.text} onChange={e => updateAiLine(i, "text", e.target.value)}
+                      placeholder="Описание на СМР" className="flex-1 bg-background text-sm" data-testid={`ai-text-${i}`} />
+                    <select value={al.unit} onChange={e => updateAiLine(i, "unit", e.target.value)}
+                      className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                    <Input type="number" min="0.01" step="0.01" value={al.qty}
+                      onChange={e => updateAiLine(i, "qty", e.target.value)}
+                      className="w-16 bg-background text-sm font-mono" />
+                    {aiLines.length > 1 && (
+                      <Button variant="ghost" size="sm" onClick={() => removeAiLine(i)} className="h-7 w-7 p-0 text-destructive">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={addAiLine} className="text-xs">
+                    <Plus className="w-3 h-3 mr-1" /> Добави ред
+                  </Button>
                 </div>
-                {aiProposal.pricing.small_qty_adjustment_percent > 0 && (
-                  <p className="text-[10px] text-amber-400">+{aiProposal.pricing.small_qty_adjustment_percent}% корекция малко к-во</p>
-                )}
-              </div>
+                <Button onClick={handleAiAssist} disabled={aiLoading || !aiLines.some(l => l.text.trim())}
+                  className="w-full bg-violet-600 hover:bg-violet-700" data-testid="ai-get-proposal-btn">
+                  {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                  Анализирай с AI ({aiLines.filter(l => l.text.trim()).length} {aiLines.filter(l => l.text.trim()).length === 1 ? "ред" : "реда"})
+                </Button>
+              </>
+            )}
+
+            {/* Results phase - editable proposals */}
+            {aiResults && (
+              <>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-violet-500/10 border border-violet-500/30">
+                  <span className="text-xs text-violet-300">{aiResults.line_count} реда</span>
+                  <span className="font-mono text-sm font-bold text-primary">
+                    {Object.values(aiEdits).reduce((s, e) => s + (parseFloat(e.material) + parseFloat(e.labor)) * parseFloat(e.qty), 0).toFixed(2)} лв
+                  </span>
+                </div>
+
+                {Object.entries(aiEdits).map(([i, e]) => {
+                  const total = ((parseFloat(e.material) || 0) + (parseFloat(e.labor) || 0));
+                  const lineTotal = total * (parseFloat(e.qty) || 1);
+                  return (
+                    <div key={i} className="rounded-lg border border-border p-3 space-y-2" data-testid={`ai-result-${i}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-muted-foreground">{parseInt(i)+1}</span>
+                          <span className="text-sm font-medium text-foreground">{e.text}</span>
+                          <Badge variant="outline" className={`text-[9px] ${e.provider === "llm" ? "bg-emerald-500/10 text-emerald-400" : "bg-gray-500/10 text-gray-400"}`}>
+                            {e.provider === "llm" ? "LLM" : "Rule"} {Math.round(e.confidence * 100)}%
+                          </Badge>
+                        </div>
+                        <span className="font-mono text-sm font-bold text-primary">{lineTotal.toFixed(2)}</span>
+                      </div>
+
+                      {/* Editable pricing row */}
+                      <div className="grid grid-cols-7 gap-2 items-end">
+                        <div className="col-span-2 space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground">Описание</label>
+                          <Input value={e.text} onChange={ev => editAiProp(i, "text", ev.target.value)} className="bg-background h-7 text-xs" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground">Мярка</label>
+                          <select value={e.unit} onChange={ev => editAiProp(i, "unit", ev.target.value)}
+                            className="w-full h-7 rounded border border-border bg-background px-1 text-xs">
+                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground">К-во</label>
+                          <Input type="number" step="0.01" value={e.qty} onChange={ev => editAiProp(i, "qty", parseFloat(ev.target.value) || 1)} className="bg-background h-7 text-xs font-mono" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground">Мат. лв/ед</label>
+                          <Input type="number" step="0.01" value={e.material} onChange={ev => editAiProp(i, "material", parseFloat(ev.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground">Труд лв/ед</label>
+                          <Input type="number" step="0.01" value={e.labor} onChange={ev => editAiProp(i, "labor", parseFloat(ev.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground">Общо/ед</label>
+                          <div className="h-7 px-2 flex items-center bg-muted/30 rounded text-xs font-mono font-bold text-primary">{total.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      {/* Info badges */}
+                      <div className="flex flex-wrap gap-1.5 text-[10px]">
+                        <span className="text-muted-foreground">{e.type}/{e.subtype}</span>
+                        {e.hourly && <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-400">{e.hourly.worker_type} {e.hourly.hourly_rate}лв/ч{e.hourly.min_applied ? " мин." : ""}</Badge>}
+                        {e.hint?.available && <Badge variant="outline" className="text-[9px] bg-violet-500/10 text-violet-400">Вътр. {e.hint.range_label} ({e.hint.sample_count}x)</Badge>}
+                        {e.explanation && <span className="text-muted-foreground/60 italic">{e.explanation.slice(0, 60)}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Recalculate button */}
+                <Button variant="outline" onClick={() => { setAiResults(null); }} className="w-full text-xs" data-testid="ai-back-btn">
+                  Обратно към входа (редактирай и пресметни отново)
+                </Button>
+              </>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAiDialogOpen(false)}>Затвори</Button>
-            {aiProposal && (
-              <Button onClick={addAiLineToOffer} className="bg-emerald-600 hover:bg-emerald-700" data-testid="ai-add-line-btn">
-                <Plus className="w-4 h-4 mr-1" /> Добави като ред
+            {aiResults && (
+              <Button onClick={addAiLinesToOffer} className="bg-emerald-600 hover:bg-emerald-700" data-testid="ai-add-line-btn">
+                <Plus className="w-4 h-4 mr-1" /> Добави {Object.keys(aiEdits).length} {Object.keys(aiEdits).length === 1 ? "ред" : "реда"} в офертата
               </Button>
             )}
           </DialogFooter>
