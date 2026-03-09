@@ -71,6 +71,7 @@ const ADMIN_NAV_CORE = [
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
   { to: "/procurement", icon: Package, labelKey: "nav.procurement" },
+  { to: "/inventory", icon: Warehouse, labelKey: "nav.inventory" },
 ];
 
 // Data module navigation (collapsible section)

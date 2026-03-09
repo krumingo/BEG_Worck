@@ -849,3 +849,146 @@ async def get_project_material_ledger(project_id: str, user: dict = Depends(requ
             warnings.append({"material": mat["material_name"], "type": "high_remaining", "message": f"{mat['material_name']}: оставащо {mat['remaining_on_project']} от {mat['issued_to_project']}"})
     
     return {"ledger": ledger, "warnings": warnings}
+
+
+
+# ── Inventory Dashboard ────────────────────────────────────────────
+
+DEFAULT_LOW_STOCK_THRESHOLD = 5
+
+
+@router.get("/inventory/dashboard")
+async def get_inventory_dashboard(user: dict = Depends(require_m2)):
+    """Comprehensive inventory dashboard with stock, alerts, movements, project remainders"""
+    org_id = user["org_id"]
+    
+    # Current warehouse stock
+    stock = await get_warehouse_stock(org_id)
+    stock_items = []
+    total_value = 0
+    low_stock_count = 0
+    
+    # Load thresholds
+    thresholds = {}
+    th_docs = await db.stock_thresholds.find({"org_id": org_id}, {"_id": 0}).to_list(200)
+    for t in th_docs:
+        thresholds[t.get("material_key", "")] = t.get("threshold", DEFAULT_LOW_STOCK_THRESHOLD)
+    
+    for key, v in stock.items():
+        if v["qty"] < 0.001:
+            continue
+        threshold = thresholds.get(key, DEFAULT_LOW_STOCK_THRESHOLD)
+        is_low = v["qty"] <= threshold
+        if is_low:
+            low_stock_count += 1
+        total_value += v["value"]
+        stock_items.append({
+            "material_name": v["material_name"],
+            "unit": v["unit"],
+            "qty": round(v["qty"], 2),
+            "value": round(v["value"], 2),
+            "low_stock_threshold": threshold,
+            "is_low_stock": is_low,
+        })
+    
+    stock_items.sort(key=lambda x: x["material_name"])
+    
+    # Movement stats (last 30 days)
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    recent_txns = await db.warehouse_transactions.find(
+        {"org_id": org_id, "created_at": {"$gte": cutoff}},
+        {"_id": 0, "type": 1, "lines": 1, "created_at": 1}
+    ).to_list(500)
+    
+    intake_count = sum(1 for t in recent_txns if t["type"] == "intake")
+    issue_count = sum(1 for t in recent_txns if t["type"] == "issue")
+    return_count = sum(1 for t in recent_txns if t["type"] == "return")
+    
+    # Top moved materials
+    movement_map = {}
+    for txn in recent_txns:
+        for line in txn.get("lines", []):
+            mat = line.get("material_name", "")
+            if mat not in movement_map:
+                movement_map[mat] = {"material_name": mat, "intake_qty": 0, "issue_qty": 0, "return_qty": 0, "moves": 0}
+            qty = float(line.get("qty_received", 0) or line.get("qty_issued", 0) or line.get("qty_returned", 0) or 0)
+            if txn["type"] == "intake":
+                movement_map[mat]["intake_qty"] += qty
+            elif txn["type"] == "issue":
+                movement_map[mat]["issue_qty"] += qty
+            elif txn["type"] == "return":
+                movement_map[mat]["return_qty"] += qty
+            movement_map[mat]["moves"] += 1
+    
+    top_moved = sorted(movement_map.values(), key=lambda x: x["moves"], reverse=True)[:10]
+    for m in top_moved:
+        for k in ["intake_qty", "issue_qty", "return_qty"]:
+            m[k] = round(m[k], 2)
+    
+    # Project remainders (materials sitting on projects)
+    projects = await db.projects.find({"org_id": org_id}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
+    project_remainders = []
+    total_on_projects = 0
+    
+    for proj in projects:
+        try:
+            ledger = await compute_project_ledger(org_id, proj["id"])
+            for mat in ledger:
+                if mat["remaining_on_project"] > 0.01:
+                    total_on_projects += 1
+                    project_remainders.append({
+                        "project_id": proj["id"],
+                        "project_code": proj["code"],
+                        "project_name": proj["name"],
+                        "material_name": mat["material_name"],
+                        "unit": mat["unit"],
+                        "issued": mat["issued_to_project"],
+                        "consumed": mat["consumed"],
+                        "returned": mat["returned"],
+                        "remaining": mat["remaining_on_project"],
+                    })
+        except Exception:
+            pass
+    
+    project_remainders.sort(key=lambda x: x["remaining"], reverse=True)
+    
+    return {
+        "overview": {
+            "total_materials": len(stock_items),
+            "total_value": round(total_value, 2),
+            "low_stock_count": low_stock_count,
+            "on_projects_count": total_on_projects,
+            "recent_intakes": intake_count,
+            "recent_issues": issue_count,
+            "recent_returns": return_count,
+        },
+        "stock": stock_items,
+        "top_moved": top_moved,
+        "project_remainders": project_remainders[:30],
+    }
+
+
+@router.put("/inventory/threshold")
+async def update_stock_threshold(data: dict, user: dict = Depends(require_m2)):
+    """Set low stock threshold for a material"""
+    if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    material_key = f"{data.get('material_name', '')}|{data.get('unit', '')}"
+    threshold = float(data.get("threshold", DEFAULT_LOW_STOCK_THRESHOLD))
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.stock_thresholds.update_one(
+        {"org_id": user["org_id"], "material_key": material_key},
+        {"$set": {
+            "org_id": user["org_id"],
+            "material_key": material_key,
+            "material_name": data.get("material_name", ""),
+            "unit": data.get("unit", ""),
+            "threshold": threshold,
+            "updated_at": now,
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "threshold": threshold}
