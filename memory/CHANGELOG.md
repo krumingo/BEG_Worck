@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 11)
+### P0/P1: Editable AI Proposals + Multi-line Entry + Hourly Rate Logic
+- **Multi-line entry**: Add/remove/duplicate lines in ExtraWorkModal, each with location fields
+- **Batch AI**: POST /api/extra-works/ai-batch processes N lines, returns per-line proposals + combined materials
+- **Editable proposals**: All pricing fields editable before accept (type, subtype, material/labor price, qty)
+- **Related SMR selection**: Clickable chips to select which related works to include
+- **Editable material checklist**: Add/remove/edit materials per line with category badges
+- **Hourly rates**: 8 worker types (15-28 лв/ч) with min_hours and min_job_price
+- **Small qty pricing**: min_job_price applied when estimated labor < minimum and qty <= 10
+- **Batch save**: POST /api/extra-works/batch-save with batch_id grouping
+- **Combined materials summary**: Deduplicated across all lines
+- Test report: /app/test_reports/iteration_26.json (100% backend 15/15, 100% frontend)
+
 ## Mar 9, 2026 (Session 10)
 ### P1: Inventory Dashboard + Stock Alerts + Warehouse Visibility
 - **Dashboard**: /inventory with 7 overview cards (materials, value, low stock, on projects, recent movements)
