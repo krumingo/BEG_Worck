@@ -651,3 +651,178 @@ async def get_payroll_enums():
         "payroll_statuses": PAYROLL_STATUSES,
         "payment_methods": PAYMENT_METHODS,
     }
+
+
+
+# ── Employee Dashboard / Detail ────────────────────────────────────
+
+@router.get("/employees/{user_id}/dashboard")
+async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4)):
+    """Comprehensive employee detail with attendance, projects, hours"""
+    org_id = user["org_id"]
+    if user["id"] != user_id and not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    target = await db.users.find_one({"id": user_id, "org_id": org_id},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1, "phone": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    profile = await db.employee_profiles.find_one({"org_id": org_id, "user_id": user_id}, {"_id": 0})
+    
+    # Recent attendance (last 30 days)
+    from datetime import timedelta
+    cutoff_30 = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    attendance = await db.attendance_entries.find(
+        {"org_id": org_id, "user_id": user_id, "date": {"$gte": cutoff_30}},
+        {"_id": 0}
+    ).sort("date", -1).to_list(60)
+    
+    # Enrich attendance with project names
+    for att in attendance:
+        if att.get("project_id"):
+            p = await db.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            att["project_code"] = p["code"] if p else ""
+            att["project_name"] = p["name"] if p else ""
+    
+    # Project history from team assignments
+    team_entries = await db.project_team.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).to_list(100)
+    
+    project_history = []
+    for te in team_entries:
+        p = await db.projects.find_one({"id": te["project_id"], "org_id": org_id}, {"_id": 0, "code": 1, "name": 1, "status": 1})
+        if p:
+            # Count attendance days for this project
+            days = await db.attendance_entries.count_documents(
+                {"org_id": org_id, "user_id": user_id, "project_id": te["project_id"], "status": "Present"})
+            # Count work report hours
+            reports = await db.work_reports.find(
+                {"org_id": org_id, "user_id": user_id, "project_id": te["project_id"]},
+                {"_id": 0, "lines": 1}
+            ).to_list(500)
+            total_hours = sum(
+                sum(l.get("hours", 0) for l in r.get("lines", []))
+                for r in reports
+            )
+            last_att = await db.attendance_entries.find_one(
+                {"org_id": org_id, "user_id": user_id, "project_id": te["project_id"]},
+                {"_id": 0, "date": 1}, sort=[("date", -1)])
+            
+            project_history.append({
+                "project_id": te["project_id"],
+                "project_code": p["code"],
+                "project_name": p["name"],
+                "project_status": p["status"],
+                "role_in_project": te.get("role_in_project", ""),
+                "days_present": days,
+                "total_hours": round(total_hours, 1),
+                "last_attendance": last_att["date"] if last_att else None,
+                "active": te.get("active", True),
+            })
+    
+    project_history.sort(key=lambda x: x.get("last_attendance") or "", reverse=True)
+    
+    # Hours summary (current month)
+    month_start = datetime.now(timezone.utc).strftime("%Y-%m-01")
+    month_att = await db.attendance_entries.count_documents(
+        {"org_id": org_id, "user_id": user_id, "date": {"$gte": month_start}, "status": "Present"})
+    month_reports = await db.work_reports.find(
+        {"org_id": org_id, "user_id": user_id, "created_at": {"$gte": month_start + "T00:00:00"}},
+        {"_id": 0, "lines": 1}
+    ).to_list(100)
+    month_hours = sum(sum(l.get("hours", 0) for l in r.get("lines", [])) for r in month_reports)
+    
+    # Recent payslips - enrich with period info from payroll_run
+    payslips_raw = await db.payslips.find(
+        {"org_id": org_id, "user_id": user_id},
+        {"_id": 0, "id": 1, "payroll_run_id": 1, "base_amount": 1, "net_pay": 1, "status": 1}
+    ).sort("created_at", -1).limit(5).to_list(5)
+    
+    payslips = []
+    for ps in payslips_raw:
+        run = await db.payroll_runs.find_one({"id": ps["payroll_run_id"]}, {"_id": 0, "period_start": 1, "period_end": 1})
+        ps["period_start"] = run.get("period_start") if run else None
+        ps["period_end"] = run.get("period_end") if run else None
+        ps["gross_pay"] = ps.get("base_amount", 0)
+        del ps["payroll_run_id"]
+        del ps["base_amount"]
+        payslips.append(ps)
+    
+    return {
+        "employee": target,
+        "profile": profile,
+        "attendance": attendance,
+        "project_history": project_history,
+        "hours_summary": {
+            "current_month_days": month_att,
+            "current_month_hours": round(month_hours, 1),
+            "total_projects": len(project_history),
+        },
+        "payslips": payslips,
+    }
+
+
+@router.get("/employees/{user_id}/calendar")
+async def get_employee_calendar(user_id: str, month: str = None, user: dict = Depends(require_m4)):
+    """Get calendar data for employee (attendance + work reports by day)"""
+    org_id = user["org_id"]
+    if user["id"] != user_id and not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    
+    date_from = f"{month}-01"
+    # Calculate last day of month
+    y, m = int(month[:4]), int(month[5:7])
+    if m == 12:
+        date_to = f"{y+1}-01-01"
+    else:
+        date_to = f"{y}-{m+1:02d}-01"
+    
+    attendance = await db.attendance_entries.find(
+        {"org_id": org_id, "user_id": user_id, "date": {"$gte": date_from, "$lt": date_to}},
+        {"_id": 0}
+    ).to_list(31)
+    
+    # Enrich with project info
+    for att in attendance:
+        if att.get("project_id"):
+            p = await db.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            att["project_code"] = p["code"] if p else ""
+    
+    work_reports = await db.work_reports.find(
+        {"org_id": org_id, "user_id": user_id, "date": {"$gte": date_from, "$lt": date_to}},
+        {"_id": 0, "date": 1, "project_id": 1, "lines": 1, "status": 1}
+    ).to_list(31)
+    
+    for wr in work_reports:
+        wr["total_hours"] = sum(l.get("hours", 0) for l in wr.get("lines", []))
+        if wr.get("project_id"):
+            p = await db.projects.find_one({"id": wr["project_id"]}, {"_id": 0, "code": 1})
+            wr["project_code"] = p["code"] if p else ""
+    
+    # Build calendar entries by day
+    days = {}
+    for att in attendance:
+        d = att["date"]
+        if d not in days:
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "total_hours": 0}
+        days[d]["attendance"] = {"status": att["status"], "project_code": att.get("project_code", "")}
+    
+    for wr in work_reports:
+        d = wr.get("date", "")
+        if d and d not in days:
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "total_hours": 0}
+        if d:
+            days[d]["work_reports"].append({"project_code": wr.get("project_code", ""), "hours": wr["total_hours"]})
+            days[d]["total_hours"] += wr["total_hours"]
+    
+    return {
+        "month": month,
+        "days": sorted(days.values(), key=lambda x: x["date"]),
+        "total_present": sum(1 for d in days.values() if d.get("attendance", {}).get("status") == "Present" if d.get("attendance")),
+        "total_hours": round(sum(d["total_hours"] for d in days.values()), 1),
+    }

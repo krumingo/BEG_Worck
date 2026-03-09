@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
@@ -44,6 +45,7 @@ const PAY_SCHEDULES = ["Weekly", "Monthly"];
 
 export default function EmployeesPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -163,7 +165,7 @@ export default function EmployeesPage() {
                 </TableRow>
               ) : (
                 employees.map((emp) => (
-                  <TableRow key={emp.id} className="table-row-hover" data-testid={`employee-row-${emp.id}`}>
+                  <TableRow key={emp.id} className="table-row-hover cursor-pointer" onClick={() => navigate(`/employees/${emp.id}`)} data-testid={`employee-row-${emp.id}`}>
                     <TableCell>
                       <p className="font-medium text-foreground">{emp.name || emp.email.split("@")[0]}</p>
                       <p className="text-xs text-muted-foreground">{emp.email}</p>
