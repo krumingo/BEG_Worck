@@ -492,3 +492,360 @@ async def list_warehouse_transactions(
     
     txns = await db.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     return txns
+
+
+
+# ── Stock Balance Helper ───────────────────────────────────────────
+
+async def get_warehouse_stock(org_id: str, warehouse_id: str = None) -> dict:
+    """Compute current stock by material from intake/issue/return transactions"""
+    if not warehouse_id:
+        wh = await db.warehouses.find_one({"org_id": org_id, "type": "main"})
+        if not wh:
+            return {}
+        warehouse_id = wh["id"]
+    
+    txns = await db.warehouse_transactions.find(
+        {"org_id": org_id, "warehouse_id": warehouse_id},
+        {"_id": 0, "type": 1, "lines": 1}
+    ).to_list(1000)
+    
+    stock = {}  # key = material_name|unit -> qty
+    for txn in txns:
+        for line in txn.get("lines", []):
+            key = f"{line.get('material_name', '')}|{line.get('unit', '')}"
+            if key not in stock:
+                stock[key] = {"material_name": line.get("material_name", ""), "unit": line.get("unit", ""), "qty": 0, "value": 0}
+            
+            qty = float(line.get("qty_received", 0) or line.get("qty_issued", 0) or line.get("qty_returned", 0) or 0)
+            val = float(line.get("total_price", 0) or 0)
+            
+            if txn["type"] == "intake":
+                stock[key]["qty"] += qty
+                stock[key]["value"] += val
+            elif txn["type"] == "issue":
+                stock[key]["qty"] -= qty
+                stock[key]["value"] -= val
+            elif txn["type"] == "return":
+                stock[key]["qty"] += qty
+                stock[key]["value"] += val
+    
+    return stock
+
+
+@router.get("/warehouse-stock")
+async def get_stock_balance(user: dict = Depends(require_m2)):
+    """Get current stock levels in Main Warehouse"""
+    stock = await get_warehouse_stock(user["org_id"])
+    items = [{"material_name": v["material_name"], "unit": v["unit"], "qty": round(v["qty"], 2), "value": round(v["value"], 2)}
+             for v in stock.values() if v["qty"] > 0.001]
+    items.sort(key=lambda x: x["material_name"])
+    return items
+
+
+# ── Warehouse Issue to Project ─────────────────────────────────────
+
+async def get_next_issue_number(org_id: str) -> str:
+    last = await db.warehouse_transactions.find_one(
+        {"org_id": org_id, "type": "issue"}, {"_id": 0, "issue_number": 1},
+        sort=[("created_at", -1)]
+    )
+    num = 1
+    if last and last.get("issue_number"):
+        try: num = int(last["issue_number"].split("-")[1]) + 1
+        except: pass
+    return f"WI-{num:04d}"
+
+
+@router.post("/warehouse-issue", status_code=201)
+async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
+    """Issue materials from Main Warehouse to a project"""
+    if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    org_id = user["org_id"]
+    project_id = data.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id required")
+    
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    lines_input = data.get("lines", [])
+    if not lines_input:
+        raise HTTPException(status_code=400, detail="No lines to issue")
+    
+    # Stock validation
+    stock = await get_warehouse_stock(org_id)
+    for line in lines_input:
+        key = f"{line.get('material_name', '')}|{line.get('unit', '')}"
+        available = stock.get(key, {}).get("qty", 0)
+        requested = float(line.get("qty_issued", 0))
+        if requested > available + 0.01:
+            raise HTTPException(status_code=400,
+                detail=f"Недостатъчна наличност: {line.get('material_name')} — налично {available:.2f}, поискано {requested:.2f}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    issue_no = await get_next_issue_number(org_id)
+    
+    wh = await db.warehouses.find_one({"org_id": org_id, "type": "main"})
+    
+    issue_lines = []
+    for line in lines_input:
+        issue_lines.append({
+            "id": str(uuid.uuid4()),
+            "material_name": line.get("material_name", ""),
+            "qty_issued": float(line.get("qty_issued", 0)),
+            "unit": line.get("unit", "бр"),
+            "dimension_spec": line.get("dimension_spec"),
+            "unit_price": float(line.get("unit_price", 0)),
+            "total_price": round(float(line.get("qty_issued", 0)) * float(line.get("unit_price", 0)), 2),
+            "notes": line.get("notes", ""),
+        })
+    
+    total = sum(l["total_price"] for l in issue_lines)
+    
+    txn = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "warehouse_id": wh["id"] if wh else None,
+        "type": "issue",
+        "issue_number": issue_no,
+        "project_id": project_id,
+        "linked_request_id": data.get("linked_request_id"),
+        "linked_offer_id": data.get("linked_offer_id"),
+        "stage_name": data.get("stage_name", ""),
+        "issued_by": user["id"],
+        "received_by": data.get("received_by", ""),
+        "issue_date": data.get("issue_date", now[:10]),
+        "notes": data.get("notes", ""),
+        "lines": issue_lines,
+        "total": round(total, 2),
+        "status": "posted",
+        "created_at": now,
+    }
+    await db.warehouse_transactions.insert_one(txn)
+    
+    await log_audit(org_id, user["id"], user.get("email", ""), "warehouse_issue", "warehouse_transaction", txn["id"],
+                    {"issue_number": issue_no, "project_id": project_id, "lines": len(issue_lines)})
+    
+    return {k: v for k, v in txn.items() if k != "_id"}
+
+
+# ── Consumption on Project ─────────────────────────────────────────
+
+@router.post("/project-consumption", status_code=201)
+async def record_consumption(data: dict, user: dict = Depends(require_m2)):
+    """Record material consumption on a project"""
+    org_id = user["org_id"]
+    project_id = data.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id required")
+    
+    lines_input = data.get("lines", [])
+    if not lines_input:
+        raise HTTPException(status_code=400, detail="No lines")
+    
+    # Check available on project
+    ledger = await compute_project_ledger(org_id, project_id)
+    for line in lines_input:
+        mat = line.get("material_name", "")
+        remaining = 0
+        for item in ledger:
+            if item["material_name"] == mat:
+                remaining = item["remaining_on_project"]
+                break
+        consume_qty = float(line.get("qty_consumed", 0))
+        if consume_qty > remaining + 0.01:
+            raise HTTPException(status_code=400,
+                detail=f"Недостатъчно по обекта: {mat} — налично {remaining:.2f}, отчитане {consume_qty:.2f}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    consumption_lines = []
+    for line in lines_input:
+        consumption_lines.append({
+            "id": str(uuid.uuid4()),
+            "material_name": line.get("material_name", ""),
+            "qty_consumed": float(line.get("qty_consumed", 0)),
+            "unit": line.get("unit", "бр"),
+            "stage_name": line.get("stage_name", data.get("stage_name", "")),
+            "notes": line.get("notes", ""),
+        })
+    
+    record = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "project_id": project_id,
+        "type": "consumption",
+        "date": data.get("date", now[:10]),
+        "recorded_by": user["id"],
+        "stage_name": data.get("stage_name", ""),
+        "notes": data.get("notes", ""),
+        "lines": consumption_lines,
+        "created_at": now,
+    }
+    await db.project_material_ops.insert_one(record)
+    return {k: v for k, v in record.items() if k != "_id"}
+
+
+# ── Return to Warehouse ────────────────────────────────────────────
+
+@router.post("/warehouse-return", status_code=201)
+async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
+    """Return unused materials from project to Main Warehouse"""
+    org_id = user["org_id"]
+    project_id = data.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id required")
+    
+    lines_input = data.get("lines", [])
+    if not lines_input:
+        raise HTTPException(status_code=400, detail="No lines")
+    
+    # Check available on project
+    ledger = await compute_project_ledger(org_id, project_id)
+    for line in lines_input:
+        mat = line.get("material_name", "")
+        remaining = 0
+        for item in ledger:
+            if item["material_name"] == mat:
+                remaining = item["remaining_on_project"]
+                break
+        ret_qty = float(line.get("qty_returned", 0))
+        if ret_qty > remaining + 0.01:
+            raise HTTPException(status_code=400,
+                detail=f"Недостатъчно по обекта: {mat} — налично {remaining:.2f}, връщане {ret_qty:.2f}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    wh = await db.warehouses.find_one({"org_id": org_id, "type": "main"})
+    
+    return_lines = []
+    for line in lines_input:
+        return_lines.append({
+            "id": str(uuid.uuid4()),
+            "material_name": line.get("material_name", ""),
+            "qty_returned": float(line.get("qty_returned", 0)),
+            "unit": line.get("unit", "бр"),
+            "notes": line.get("notes", ""),
+        })
+    
+    txn = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "warehouse_id": wh["id"] if wh else None,
+        "type": "return",
+        "project_id": project_id,
+        "returned_by": user["id"],
+        "return_date": data.get("date", now[:10]),
+        "notes": data.get("notes", ""),
+        "lines": return_lines,
+        "status": "posted",
+        "created_at": now,
+    }
+    await db.warehouse_transactions.insert_one(txn)
+    
+    return {k: v for k, v in txn.items() if k != "_id"}
+
+
+# ── Project Material Ledger ────────────────────────────────────────
+
+async def compute_project_ledger(org_id: str, project_id: str) -> list:
+    """Compute material ledger for a project across all operations"""
+    materials = {}  # key = material_name -> aggregated data
+    
+    # 1. Requested (from material_requests)
+    reqs = await db.material_requests.find(
+        {"org_id": org_id, "project_id": project_id, "status": {"$ne": "cancelled"}},
+        {"_id": 0, "lines": 1}
+    ).to_list(100)
+    for req in reqs:
+        for line in req.get("lines", []):
+            key = line.get("material_name", "")
+            if key not in materials:
+                materials[key] = {"material_name": key, "unit": line.get("unit", ""), "requested": 0, "purchased": 0, "received_to_warehouse": 0, "issued_to_project": 0, "consumed": 0, "returned": 0}
+            materials[key]["requested"] += float(line.get("qty_requested", 0))
+    
+    # 2. Purchased / received to warehouse (from warehouse intake transactions)
+    intakes = await db.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id, "type": "intake"},
+        {"_id": 0, "lines": 1}
+    ).to_list(100)
+    for txn in intakes:
+        for line in txn.get("lines", []):
+            key = line.get("material_name", "")
+            if key not in materials:
+                materials[key] = {"material_name": key, "unit": line.get("unit", ""), "requested": 0, "purchased": 0, "received_to_warehouse": 0, "issued_to_project": 0, "consumed": 0, "returned": 0}
+            qty = float(line.get("qty_received", 0))
+            materials[key]["purchased"] += qty
+            materials[key]["received_to_warehouse"] += qty
+    
+    # 3. Issued to project (from warehouse issue transactions)
+    issues = await db.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id, "type": "issue"},
+        {"_id": 0, "lines": 1}
+    ).to_list(100)
+    for txn in issues:
+        for line in txn.get("lines", []):
+            key = line.get("material_name", "")
+            if key not in materials:
+                materials[key] = {"material_name": key, "unit": line.get("unit", ""), "requested": 0, "purchased": 0, "received_to_warehouse": 0, "issued_to_project": 0, "consumed": 0, "returned": 0}
+            materials[key]["issued_to_project"] += float(line.get("qty_issued", 0))
+    
+    # 4. Consumed on project
+    consumptions = await db.project_material_ops.find(
+        {"org_id": org_id, "project_id": project_id, "type": "consumption"},
+        {"_id": 0, "lines": 1}
+    ).to_list(100)
+    for op in consumptions:
+        for line in op.get("lines", []):
+            key = line.get("material_name", "")
+            if key not in materials:
+                materials[key] = {"material_name": key, "unit": line.get("unit", ""), "requested": 0, "purchased": 0, "received_to_warehouse": 0, "issued_to_project": 0, "consumed": 0, "returned": 0}
+            materials[key]["consumed"] += float(line.get("qty_consumed", 0))
+    
+    # 5. Returned to warehouse
+    returns = await db.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id, "type": "return"},
+        {"_id": 0, "lines": 1}
+    ).to_list(100)
+    for txn in returns:
+        for line in txn.get("lines", []):
+            key = line.get("material_name", "")
+            if key not in materials:
+                materials[key] = {"material_name": key, "unit": line.get("unit", ""), "requested": 0, "purchased": 0, "received_to_warehouse": 0, "issued_to_project": 0, "consumed": 0, "returned": 0}
+            materials[key]["returned"] += float(line.get("qty_returned", 0))
+    
+    # Compute remaining
+    result = []
+    for mat in materials.values():
+        mat["remaining_on_project"] = round(mat["issued_to_project"] - mat["consumed"] - mat["returned"], 2)
+        for k in ["requested", "purchased", "received_to_warehouse", "issued_to_project", "consumed", "returned"]:
+            mat[k] = round(mat[k], 2)
+        result.append(mat)
+    
+    result.sort(key=lambda x: x["material_name"])
+    return result
+
+
+@router.get("/project-material-ledger/{project_id}")
+async def get_project_material_ledger(project_id: str, user: dict = Depends(require_m2)):
+    """Get material ledger for a project with full flow tracking"""
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    ledger = await compute_project_ledger(user["org_id"], project_id)
+    
+    # Warnings
+    warnings = []
+    for mat in ledger:
+        if mat["requested"] > 0 and mat["purchased"] < mat["requested"] * 0.9:
+            warnings.append({"material": mat["material_name"], "type": "under_purchased", "message": f"{mat['material_name']}: поръчано {mat['requested']}, купено {mat['purchased']}"})
+        if mat["remaining_on_project"] > 0 and mat["consumed"] == 0 and mat["issued_to_project"] > 0:
+            warnings.append({"material": mat["material_name"], "type": "not_consumed", "message": f"{mat['material_name']}: отпуснато {mat['issued_to_project']}, неотчетено изразходване"})
+        if mat["remaining_on_project"] > mat["issued_to_project"] * 0.3 and mat["issued_to_project"] > 0:
+            warnings.append({"material": mat["material_name"], "type": "high_remaining", "message": f"{mat['material_name']}: оставащо {mat['remaining_on_project']} от {mat['issued_to_project']}"})
+    
+    return {"ledger": ledger, "warnings": warnings}

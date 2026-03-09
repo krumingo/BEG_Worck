@@ -54,6 +54,7 @@ import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
 import ExtraWorkModal from "@/components/ExtraWorkModal";
 import ExtraWorksDraftPanel from "@/components/ExtraWorksDraftPanel";
+import ProjectMaterialLedger from "@/components/ProjectMaterialLedger";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -551,6 +552,9 @@ export default function ProjectDetailPage() {
             <p className="text-gray-500 text-sm">Няма издадени фактури</p>
           )}
         </div>
+
+        {/* Project Material Ledger */}
+        <ProjectMaterialLedger projectId={projectId} />
 
         {/* Extra Offers Section */}
         {offers.extra_offers && offers.extra_offers.length > 0 && (
