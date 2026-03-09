@@ -530,9 +530,28 @@ export default function OfferEditorPage() {
             </Button>
           )}
           {offer && (
-            <Button variant="ghost" size="sm" onClick={() => window.print()} data-testid="print-btn">
-              <Printer className="w-4 h-4" />
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={async () => {
+                try {
+                  const res = await API.get(`/offers/${offerId}/pdf`, { responseType: 'blob' });
+                  const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+                  const a = document.createElement('a'); a.href = url; a.download = `offer_${offer.offer_no}.pdf`;
+                  document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+                } catch (err) { alert("Грешка при PDF"); }
+              }} data-testid="export-pdf-btn" className="text-xs">
+                <Printer className="w-4 h-4 mr-1" /> PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={async () => {
+                try {
+                  const res = await API.get(`/offers/${offerId}/xlsx`, { responseType: 'blob' });
+                  const url = window.URL.createObjectURL(new Blob([res.data]));
+                  const a = document.createElement('a'); a.href = url; a.download = `offer_${offer.offer_no}.xlsx`;
+                  document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+                } catch (err) { alert("Грешка при Excel"); }
+              }} data-testid="export-xlsx-btn" className="text-xs">
+                <FileText className="w-4 h-4 mr-1" /> Excel
+              </Button>
+            </>
           )}
           {offer && ["Accepted", "Sent"].includes(offer.status) && (
             <Button variant="outline" size="sm" onClick={async () => {

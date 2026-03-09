@@ -1,10 +1,12 @@
 """
 Routes - Offers / BOQ (M2) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import io
 
 from app.db import db
 from app.deps.auth import get_current_user, can_access_project, can_manage_project, get_user_project_ids
@@ -510,8 +512,528 @@ async def get_offer_enums():
     }
 
 
+# ── Offer Export (PDF + XLSX) ──────────────────────────────────────
 
-# ── Public Offer Review (No Auth) ──────────────────────────────────
+UNIT_LABELS_BG = {"m2": "м2", "m": "м", "pcs": "бр", "hours": "часа", "lot": "к-т", "kg": "кг", "l": "л"}
+STATUS_LABELS_BG = {"Draft": "Чернова", "Sent": "Изпратена", "Accepted": "Одобрена", "Rejected": "Отказана", "NeedsRevision": "Корекция", "Archived": "Архивирана"}
+
+@router.get("/offers/{offer_id}/pdf")
+async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
+    """Export offer as PDF"""
+    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    project = await db.projects.find_one({"id": offer.get("project_id")}, {"_id": 0, "code": 1, "name": 1, "address_text": 1}) if offer.get("project_id") else None
+    
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table as RLTable, TableStyle
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError:
+        raise HTTPException(status_code=500, detail="reportlab not installed")
+    
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DejaVuBold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        fn, fb = 'DejaVu', 'DejaVuBold'
+    except Exception:
+        fn, fb = 'Helvetica', 'Helvetica-Bold'
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    styles = getSampleStyleSheet()
+    sTitle = ParagraphStyle('T', parent=styles['Title'], fontName=fb, fontSize=16, textColor=colors.HexColor('#333'))
+    sH2 = ParagraphStyle('H', parent=styles['Heading2'], fontName=fb, fontSize=11, textColor=colors.HexColor('#555'))
+    sN = ParagraphStyle('N', parent=styles['Normal'], fontName=fn, fontSize=9, leading=13)
+    sS = ParagraphStyle('S', parent=styles['Normal'], fontName=fn, fontSize=8, textColor=colors.HexColor('#888'))
+    sB = ParagraphStyle('B', parent=styles['Normal'], fontName=fb, fontSize=9, leading=13)
+    
+    is_extra = offer.get("offer_type") == "extra"
+    label = "Допълнителна оферта" if is_extra else "Оферта"
+    org_name = org.get("name", "") if org else ""
+    
+    elements = []
+    
+    # Header
+    hdr = [[Paragraph(f"<b>{org_name}</b>", sB), Paragraph(f"<b>{label}</b>", ParagraphStyle('R', parent=sTitle, alignment=2, fontSize=13))],
+           [Paragraph(org.get("address", "") if org else "", sS), Paragraph(f"<b>№ {offer.get('offer_no', '')}</b>  v{offer.get('version', 1)}", ParagraphStyle('R', parent=sB, alignment=2, fontSize=13))]]
+    ht = RLTable(hdr, colWidths=[300, 230])
+    ht.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('TOPPADDING', (0,0), (-1,-1), 2), ('BOTTOMPADDING', (0,0), (-1,-1), 2)]))
+    elements.extend([ht, Spacer(1, 5*mm)])
+    
+    # Meta
+    meta = [f"Дата: {offer.get('created_at', '')[:10]}", f"Статус: {STATUS_LABELS_BG.get(offer.get('status', ''), offer.get('status', ''))}"]
+    if project:
+        meta.append(f"Обект: {project.get('code', '')} - {project.get('name', '')}")
+    elements.extend([Paragraph(" | ".join(meta), sS), Spacer(1, 5*mm)])
+    
+    if offer.get("title"):
+        elements.extend([Paragraph(f"<b>{offer['title']}</b>", sB), Spacer(1, 3*mm)])
+    
+    # Lines table
+    cw = [22, 180, 35, 40, 55, 55, 55, 55]
+    line_data = [["№", "Описание", "Ед.", "К-во", "Мат./ед", "Труд/ед", "Мат. общо", "Общо"]]
+    for i, l in enumerate(offer.get("lines", [])):
+        qty = l.get("qty", 0)
+        mu = l.get("material_unit_cost", 0)
+        lu = l.get("labor_unit_cost", 0)
+        lmc = l.get("line_material_cost", round(qty * mu, 2))
+        lt = l.get("line_total", round(qty * (mu + lu), 2))
+        note = ""
+        if l.get("note"):
+            note = f"\n{l['note']}"
+        line_data.append([str(i+1), Paragraph(f"{l.get('activity_name', '')}{note}", sN), UNIT_LABELS_BG.get(l.get("unit", ""), l.get("unit", "")), f"{qty:.1f}", f"{mu:.2f}", f"{lu:.2f}", f"{lmc:.2f}", f"{lt:.2f}"])
+    
+    lt = RLTable(line_data, colWidths=cw, repeatRows=1)
+    lt.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f0f0f0')),
+        ('FONTNAME', (0,0), (-1,0), fb), ('FONTNAME', (0,1), (-1,-1), fn),
+        ('FONTSIZE', (0,0), (-1,-1), 8), ('ALIGN', (2,0), (-1,-1), 'RIGHT'), ('ALIGN', (0,0), (1,-1), 'LEFT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#ccc')),
+        ('TOPPADDING', (0,0), (-1,-1), 3), ('BOTTOMPADDING', (0,0), (-1,-1), 3), ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.extend([lt, Spacer(1, 5*mm)])
+    
+    # Totals
+    curr = offer.get("currency", "BGN")
+    sub = offer.get("subtotal", 0)
+    vp = offer.get("vat_percent", 0)
+    va = offer.get("vat_amount", 0)
+    tot = offer.get("total", 0)
+    td = [["", "", "", "", "", "", "Междинна сума:", f"{sub:.2f} {curr}"],
+          ["", "", "", "", "", "", f"ДДС ({vp}%):", f"{va:.2f} {curr}"],
+          ["", "", "", "", "", "", "ОБЩО:", f"{tot:.2f} {curr}"]]
+    tt = RLTable(td, colWidths=cw)
+    tt.setStyle(TableStyle([('FONTNAME', (0,0), (-1,-1), fn), ('FONTNAME', (6,2), (6,2), fb),
+        ('FONTSIZE', (0,0), (-1,-1), 9), ('FONTSIZE', (6,2), (7,2), 11),
+        ('ALIGN', (6,0), (-1,-1), 'RIGHT'), ('LINEABOVE', (6,2), (-1,2), 1, colors.black),
+        ('TOPPADDING', (0,0), (-1,-1), 2), ('BOTTOMPADDING', (0,0), (-1,-1), 2)]))
+    elements.append(tt)
+    
+    if offer.get("notes"):
+        elements.extend([Spacer(1, 6*mm), Paragraph("Бележки:", sH2), Paragraph(offer["notes"], sN)])
+    
+    doc.build(elements)
+    buffer.seek(0)
+    fn_name = f"offer_{offer.get('offer_no', offer_id)}.pdf"
+    return StreamingResponse(buffer, media_type="application/pdf",
+                            headers={"Content-Disposition": f'attachment; filename="{fn_name}"'})
+
+
+@router.get("/offers/{offer_id}/xlsx")
+async def export_offer_xlsx(offer_id: str, user: dict = Depends(require_m2)):
+    """Export offer as XLSX"""
+    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    project = await db.projects.find_one({"id": offer.get("project_id")}, {"_id": 0, "code": 1, "name": 1}) if offer.get("project_id") else None
+    
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Оферта"
+    
+    thin = Side(style='thin', color='CCCCCC')
+    header_fill = PatternFill(start_color='F0F0F0', end_color='F0F0F0', fill_type='solid')
+    bold_font = Font(bold=True, size=11)
+    header_font = Font(bold=True, size=9)
+    normal_font = Font(size=9)
+    
+    # Header info
+    ws.merge_cells('A1:H1')
+    ws['A1'] = org.get("name", "") if org else ""
+    ws['A1'].font = Font(bold=True, size=14)
+    
+    is_extra = offer.get("offer_type") == "extra"
+    ws.merge_cells('A2:H2')
+    ws['A2'] = f"{'Допълнителна оферта' if is_extra else 'Оферта'} {offer.get('offer_no', '')} v{offer.get('version', 1)}"
+    ws['A2'].font = bold_font
+    
+    ws['A3'] = "Проект:"
+    ws['B3'] = f"{project.get('code', '')} - {project.get('name', '')}" if project else ""
+    ws['A4'] = "Дата:"
+    ws['B4'] = offer.get("created_at", "")[:10]
+    ws['C4'] = "Статус:"
+    ws['D4'] = STATUS_LABELS_BG.get(offer.get("status", ""), offer.get("status", ""))
+    ws['E4'] = "Валута:"
+    ws['F4'] = offer.get("currency", "BGN")
+    
+    # Column headers
+    row = 6
+    headers = ["№", "Описание / Вид СМР", "Мярка", "Количество", "Цена материал", "Цена труд", "Материал общо", "Общо"]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=row, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.border = Border(top=thin, bottom=thin, left=thin, right=thin)
+        c.alignment = Alignment(horizontal='center')
+    
+    # Set column widths
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 40
+    ws.column_dimensions['C'].width = 8
+    ws.column_dimensions['D'].width = 10
+    ws.column_dimensions['E'].width = 14
+    ws.column_dimensions['F'].width = 14
+    ws.column_dimensions['G'].width = 14
+    ws.column_dimensions['H'].width = 14
+    
+    # Lines
+    for i, l in enumerate(offer.get("lines", [])):
+        row += 1
+        qty = l.get("qty", 0)
+        mu = l.get("material_unit_cost", 0)
+        lu = l.get("labor_unit_cost", 0)
+        lmc = round(qty * mu, 2)
+        lt = round(qty * (mu + lu), 2)
+        
+        desc = l.get("activity_name", "")
+        if l.get("note"):
+            desc += f" ({l['note']})"
+        
+        vals = [i+1, desc, UNIT_LABELS_BG.get(l.get("unit", ""), l.get("unit", "")), qty, mu, lu, lmc, lt]
+        for col, v in enumerate(vals, 1):
+            c = ws.cell(row=row, column=col, value=v)
+            c.font = normal_font
+            c.border = Border(top=thin, bottom=thin, left=thin, right=thin)
+            if col >= 4:
+                c.number_format = '#,##0.00'
+                c.alignment = Alignment(horizontal='right')
+    
+    # Totals
+    row += 2
+    ws.cell(row=row, column=7, value="Междинна сума:").font = bold_font
+    ws.cell(row=row, column=8, value=offer.get("subtotal", 0)).font = bold_font
+    ws.cell(row=row, column=8).number_format = '#,##0.00'
+    row += 1
+    ws.cell(row=row, column=7, value=f"ДДС ({offer.get('vat_percent', 0)}%):").font = normal_font
+    ws.cell(row=row, column=8, value=offer.get("vat_amount", 0)).number_format = '#,##0.00'
+    row += 1
+    ws.cell(row=row, column=7, value="ОБЩО:").font = Font(bold=True, size=12)
+    ws.cell(row=row, column=8, value=offer.get("total", 0)).font = Font(bold=True, size=12)
+    ws.cell(row=row, column=8).number_format = '#,##0.00'
+    
+    if offer.get("notes"):
+        row += 2
+        ws.cell(row=row, column=1, value="Бележки:").font = bold_font
+        ws.cell(row=row+1, column=1, value=offer["notes"]).font = normal_font
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    fn_name = f"offer_{offer.get('offer_no', offer_id)}.xlsx"
+    return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            headers={"Content-Disposition": f'attachment; filename="{fn_name}"'})
+
+
+# ── Offer Import from XLSX ─────────────────────────────────────────
+
+@router.post("/offers/import-preview")
+async def import_offer_preview(file: UploadFile = File(...), user: dict = Depends(require_m2)):
+    """Parse uploaded XLSX and return preview of lines for review"""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Поддържат се само .xlsx файлове")
+    
+    import openpyxl
+    
+    content = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    ws = wb.active
+    
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        raise HTTPException(status_code=400, detail="Файлът е празен")
+    
+    # Find header row (look for known column names)
+    header_row = None
+    header_idx = 0
+    known_headers = {"описание", "вид смр", "мярка", "количество", "цена", "материал", "труд", "общо", "description", "unit", "qty", "price"}
+    
+    for i, row in enumerate(rows[:10]):
+        row_lower = [str(c).lower().strip() if c else "" for c in row]
+        matches = sum(1 for h in row_lower if any(k in h for k in known_headers))
+        if matches >= 2:
+            header_row = row
+            header_idx = i
+            break
+    
+    if not header_row:
+        # Try first row as header
+        header_row = rows[0]
+        header_idx = 0
+    
+    # Map columns
+    col_map = {}
+    UNIT_REVERSE = {"м2": "m2", "м": "m", "бр": "pcs", "часа": "hours", "к-т": "lot", "кг": "kg", "л": "l"}
+    
+    for ci, cell in enumerate(header_row):
+        h = str(cell).lower().strip() if cell else ""
+        if any(k in h for k in ["описание", "вид смр", "description", "наименование", "дейност"]):
+            col_map["description"] = ci
+        elif any(k in h for k in ["мярка", "ед.", "unit"]):
+            col_map["unit"] = ci
+        elif any(k in h for k in ["количество", "к-во", "qty"]):
+            col_map["qty"] = ci
+        elif any(k in h for k in ["цена материал", "мат. цена", "material"]):
+            col_map["material_price"] = ci
+        elif any(k in h for k in ["цена труд", "труд", "labor"]):
+            col_map["labor_price"] = ci
+        elif any(k in h for k in ["обща цена", "общо", "total", "стойност"]):
+            col_map["total"] = ci
+        elif any(k in h for k in ["бележк", "note"]):
+            col_map["notes"] = ci
+        elif any(k in h for k in ["етаж", "floor"]):
+            col_map["floor"] = ci
+        elif any(k in h for k in ["помещение", "room"]):
+            col_map["room"] = ci
+        elif any(k in h for k in ["зона", "zone"]):
+            col_map["zone"] = ci
+    
+    # Parse data rows
+    lines = []
+    warnings = []
+    
+    for ri, row in enumerate(rows[header_idx + 1:], start=header_idx + 2):
+        if not row or all(c is None or str(c).strip() == "" for c in row):
+            continue
+        
+        desc = str(row[col_map["description"]]).strip() if "description" in col_map and col_map["description"] < len(row) and row[col_map["description"]] else ""
+        if not desc:
+            continue
+        
+        unit_raw = str(row[col_map["unit"]]).strip() if "unit" in col_map and col_map["unit"] < len(row) and row[col_map["unit"]] else "pcs"
+        unit = UNIT_REVERSE.get(unit_raw.lower(), unit_raw.lower()) if unit_raw else "pcs"
+        if unit not in OFFER_UNITS:
+            warnings.append(f"Ред {ri}: неразпозната мярка '{unit_raw}'")
+            unit = "pcs"
+        
+        def safe_float(val):
+            try: return float(val) if val else 0
+            except: return 0
+        
+        qty = safe_float(row[col_map["qty"]] if "qty" in col_map and col_map["qty"] < len(row) else 0)
+        mat_price = safe_float(row[col_map["material_price"]] if "material_price" in col_map and col_map["material_price"] < len(row) else 0)
+        lab_price = safe_float(row[col_map["labor_price"]] if "labor_price" in col_map and col_map["labor_price"] < len(row) else 0)
+        total = safe_float(row[col_map["total"]] if "total" in col_map and col_map["total"] < len(row) else 0)
+        
+        # If only total given, split 50/50
+        if total > 0 and mat_price == 0 and lab_price == 0 and qty > 0:
+            price_per_unit = total / qty
+            mat_price = round(price_per_unit * 0.4, 2)
+            lab_price = round(price_per_unit * 0.6, 2)
+        
+        if qty == 0:
+            warnings.append(f"Ред {ri}: количество е 0 за '{desc}'")
+        if mat_price == 0 and lab_price == 0:
+            warnings.append(f"Ред {ri}: няма цена за '{desc}'")
+        
+        note = str(row[col_map["notes"]]).strip() if "notes" in col_map and col_map["notes"] < len(row) and row[col_map["notes"]] else ""
+        floor = str(row[col_map["floor"]]).strip() if "floor" in col_map and col_map["floor"] < len(row) and row[col_map["floor"]] else ""
+        room = str(row[col_map["room"]]).strip() if "room" in col_map and col_map["room"] < len(row) and row[col_map["room"]] else ""
+        zone = str(row[col_map["zone"]]).strip() if "zone" in col_map and col_map["zone"] < len(row) and row[col_map["zone"]] else ""
+        
+        location_parts = [p for p in [floor and f"Ет.{floor}", room, zone] if p]
+        if location_parts and note:
+            note = f"Локация: {', '.join(location_parts)}; {note}"
+        elif location_parts:
+            note = f"Локация: {', '.join(location_parts)}"
+        
+        lines.append({
+            "row_number": ri,
+            "description": desc,
+            "unit": unit,
+            "qty": qty,
+            "material_price": mat_price,
+            "labor_price": lab_price,
+            "total": total,
+            "note": note,
+        })
+    
+    return {
+        "file_name": file.filename,
+        "total_rows": len(rows),
+        "parsed_lines": len(lines),
+        "column_mapping": col_map,
+        "headers_found": [str(c) for c in header_row if c],
+        "warnings": warnings,
+        "lines": lines,
+    }
+
+
+@router.post("/offers/import-confirm", status_code=201)
+async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
+    """Create offer from imported/previewed lines"""
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    project_id = data.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id required")
+    
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    import_lines = data.get("lines", [])
+    if not import_lines:
+        raise HTTPException(status_code=400, detail="No lines to import")
+    
+    offer_type = data.get("offer_type", "main")
+    title = data.get("title", f"Импортирана оферта ({datetime.now().strftime('%d.%m.%Y')})")
+    currency = data.get("currency", "BGN")
+    vat_percent = float(data.get("vat_percent", 20))
+    
+    now = datetime.now(timezone.utc).isoformat()
+    offer_no = await get_next_offer_no(user["org_id"])
+    
+    lines = []
+    for i, il in enumerate(import_lines):
+        qty = float(il.get("qty", 1))
+        mu = float(il.get("material_price", 0))
+        lu = float(il.get("labor_price", 0))
+        l = {
+            "id": str(uuid.uuid4()),
+            "activity_code": None,
+            "activity_name": il.get("description", ""),
+            "unit": il.get("unit", "pcs"),
+            "qty": qty,
+            "material_unit_cost": mu,
+            "labor_unit_cost": lu,
+            "labor_hours_per_unit": None,
+            "line_material_cost": round(qty * mu, 2),
+            "line_labor_cost": round(qty * lu, 2),
+            "line_total": round(qty * (mu + lu), 2),
+            "note": il.get("note", ""),
+            "sort_order": i,
+            "activity_type": "Общо",
+            "activity_subtype": "",
+        }
+        lines.append(l)
+    
+    subtotal = sum(l["line_total"] for l in lines)
+    vat_amount = round(subtotal * vat_percent / 100, 2)
+    total = round(subtotal + vat_amount, 2)
+    
+    offer = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": project_id,
+        "offer_no": offer_no,
+        "title": title,
+        "offer_type": offer_type,
+        "status": "Draft",
+        "version": 1,
+        "parent_offer_id": None,
+        "currency": currency,
+        "vat_percent": vat_percent,
+        "lines": lines,
+        "subtotal": round(subtotal, 2),
+        "vat_amount": vat_amount,
+        "total": total,
+        "notes": data.get("notes", f"Импортирана от файл: {data.get('file_name', '')}"),
+        "created_at": now,
+        "updated_at": now,
+        "sent_at": None,
+        "accepted_at": None,
+        "import_source": data.get("file_name"),
+    }
+    
+    await db.offers.insert_one(offer)
+    await log_audit(user["org_id"], user["id"], user["email"], "offer_imported", "offer", offer["id"],
+                    {"offer_no": offer_no, "lines": len(lines), "source": data.get("file_name")})
+    
+    return {k: v for k, v in offer.items() if k != "_id"}
+
+
+# ── Import Template Download ───────────────────────────────────────
+
+@router.get("/offer-import-template")
+async def download_import_template(user: dict = Depends(require_m2)):
+    """Download XLSX template for offer import"""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Оферта"
+    
+    thin = Side(style='thin', color='CCCCCC')
+    hdr_fill = PatternFill(start_color='E8F0FE', end_color='E8F0FE', fill_type='solid')
+    hdr_font = Font(bold=True, size=10)
+    
+    headers = ["Описание / Вид СМР", "Мярка", "Количество", "Цена материал", "Цена труд", "Обща цена", "Бележки", "Етаж", "Помещение", "Зона"]
+    for ci, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=ci, value=h)
+        c.font = hdr_font
+        c.fill = hdr_fill
+        c.border = Border(top=thin, bottom=thin, left=thin, right=thin)
+    
+    ws.column_dimensions['A'].width = 35
+    ws.column_dimensions['B'].width = 10
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 14
+    ws.column_dimensions['E'].width = 14
+    ws.column_dimensions['F'].width = 14
+    ws.column_dimensions['G'].width = 20
+    ws.column_dimensions['H'].width = 8
+    ws.column_dimensions['I'].width = 15
+    ws.column_dimensions['J'].width = 15
+    
+    # Example rows
+    examples = [
+        ["Направа на мазилка по стени", "м2", 25, 8.50, 12.00, 512.50, "", "1", "Спалня", "Южна стена"],
+        ["Боядисване на стени и тавани", "м2", 40, 4.50, 6.00, 420.00, "2 слоя латекс", "1", "Хол", ""],
+        ["Монтаж на ел. ключове/контакти", "бр", 8, 35.00, 25.00, 480.00, "Schneider серия", "", "", ""],
+    ]
+    for ri, ex in enumerate(examples, 2):
+        for ci, v in enumerate(ex, 1):
+            c = ws.cell(row=ri, column=ci, value=v)
+            c.font = Font(size=9, italic=True, color='888888')
+            if ci >= 3 and isinstance(v, (int, float)):
+                c.number_format = '#,##0.00'
+    
+    # Instructions sheet
+    ws2 = wb.create_sheet("Инструкции")
+    instructions = [
+        "ИНСТРУКЦИИ ЗА ИМПОРТ НА ОФЕРТИ",
+        "",
+        "Задължителни колони:",
+        "  - Описание / Вид СМР (текст)",
+        "  - Мярка: м2, м, бр, часа, к-т, кг, л",
+        "  - Количество (число)",
+        "",
+        "Поне едно от:",
+        "  - Цена материал + Цена труд (числа)",
+        "  - ИЛИ Обща цена (число, ще се разпредели 40/60)",
+        "",
+        "Допълнителни колони (незадължителни):",
+        "  - Бележки",
+        "  - Етаж, Помещение, Зона (за локация)",
+        "",
+        "Поддържани мерни единици:",
+        "  м2, м, бр, часа, к-т, кг, л",
+        "",
+        "Формат: .xlsx (Excel 2007+)",
+    ]
+    for ri, txt in enumerate(instructions, 1):
+        ws2.cell(row=ri, column=1, value=txt).font = Font(size=10, bold=(ri == 1))
+    ws2.column_dimensions['A'].width = 60
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            headers={"Content-Disposition": 'attachment; filename="BEG_Work_Offer_Import_Template.xlsx"'})
 
 @router.get("/offers/review/{review_token}")
 async def get_offer_review(review_token: str):
