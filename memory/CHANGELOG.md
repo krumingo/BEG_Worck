@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 17)
+### FOCUS PHASE 1: Complete AI Offer Module Core to Usable MVP
+- **Multi-line AI input** in Offer Editor: add/remove lines with description + unit + qty
+- **Two-stage analysis**: Fast rule-based (~0.2s) → LLM refinement (auto-merge in background)
+- **Fully editable proposals**: description, unit, qty, material price, labor price — all inline editable
+- **Provider badges**: Rule/LLM + confidence % + type/subtype
+- **Historical hints**: Internal price range badge when historical data exists
+- **Hourly rate badges**: worker type + rate + min applied indicator
+- **Recalculate flow**: "Обратно към входа" → edit → re-analyze
+- **Batch add**: "Добави N ред в офертата" adds all accepted lines to offer
+- Replaced old single-line AI dialog with production-ready multi-line panel
+- Test report: /app/test_reports/iteration_31.json (100% backend 11/11, 100% frontend)
+
 ## Mar 9, 2026 (Session 16)
 ### P1: BLOCK C — HR/Attendance/Payroll Improvements
 - **Employee Detail Page**: /employees/{id} with 4 tabs: Calendar, Обекти, Присъствия, Заплащане
