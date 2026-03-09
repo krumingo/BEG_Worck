@@ -11,6 +11,7 @@ import {
   FileText,
   ArrowRight,
   CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 
 export default function NotificationsPage() {
@@ -72,9 +73,11 @@ export default function NotificationsPage() {
         <div className="space-y-2" data-testid="notifications-list">
           {notifications.map((n) => {
             const isMissAtt = n.type === "MissingAttendance";
-            const Icon = isMissAtt ? CalendarCheck : FileText;
-            const iconColor = isMissAtt ? "text-amber-400" : "text-blue-400";
-            const bgColor = isMissAtt ? "bg-amber-500/10 border-amber-500/20" : "bg-blue-500/10 border-blue-500/20";
+            const isCalibration = n.type === "ai_calibration_ready";
+            const Icon = isCalibration ? Sparkles : isMissAtt ? CalendarCheck : FileText;
+            const iconColor = isCalibration ? "text-violet-400" : isMissAtt ? "text-amber-400" : "text-blue-400";
+            const bgColor = isCalibration ? "bg-violet-500/10 border-violet-500/20" : isMissAtt ? "bg-amber-500/10 border-amber-500/20" : "bg-blue-500/10 border-blue-500/20";
+            const iconBg = isCalibration ? "bg-violet-500/20" : isMissAtt ? "bg-amber-500/20" : "bg-blue-500/20";
 
             return (
               <div
@@ -84,7 +87,7 @@ export default function NotificationsPage() {
                 }`}
                 data-testid={`notification-${n.id}`}
               >
-                <div className={`w-10 h-10 rounded-full ${isMissAtt ? "bg-amber-500/20" : "bg-blue-500/20"} flex items-center justify-center flex-shrink-0`}>
+                <div className={`w-10 h-10 rounded-full ${iconBg} flex items-center justify-center flex-shrink-0`}>
                   <Icon className={`w-5 h-5 ${iconColor}`} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -94,7 +97,11 @@ export default function NotificationsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">{n.message}</p>
                   <div className="flex items-center gap-2">
-                    {isMissAtt ? (
+                    {isCalibration ? (
+                      <Button size="sm" variant="outline" onClick={() => navigate("/ai-calibration")} className="border-violet-500/30 text-violet-400" data-testid={`cta-calibration-${n.id}`}>
+                        Отвори калибрация <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    ) : isMissAtt ? (
                       <Button size="sm" variant="outline" onClick={() => navigate("/my-day")} data-testid={`cta-attendance-${n.id}`}>
                         {t("attendance.markAttendance")} <ArrowRight className="w-3.5 h-3.5 ml-1" />
                       </Button>

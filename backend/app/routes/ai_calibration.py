@@ -5,16 +5,101 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import logging
 
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["AI Calibration"])
 
 MIN_SAMPLES_FOR_SUGGESTION = 5
 MIN_SAMPLES_FOR_CALIBRATION = 10
 OUTLIER_THRESHOLD_PERCENT = 200  # Ignore edits > 200% delta
+
+
+# ── Notification Trigger ───────────────────────────────────────────
+
+async def check_and_notify_calibration_ready(org_id: str, activity_type: str, activity_subtype: str, city: str, small_qty: bool):
+    """Check if a calibration group just reached 'ready' threshold and notify admins"""
+    try:
+        # Count samples for this group
+        match = {
+            "org_id": org_id,
+            "normalized_activity_type": activity_type,
+            "normalized_activity_subtype": activity_subtype,
+            "city": city,
+            "small_qty_flag": small_qty,
+        }
+        count = await db.ai_calibration_events.count_documents(match)
+        
+        if count < MIN_SAMPLES_FOR_CALIBRATION:
+            return  # Not ready yet
+        
+        # Check if already approved
+        existing_cal = await db.ai_calibrations.find_one({
+            "org_id": org_id, "activity_type": activity_type,
+            "activity_subtype": activity_subtype, "city": city,
+            "small_qty": small_qty, "status": "approved",
+        })
+        if existing_cal:
+            return  # Already approved, no need to notify
+        
+        # Anti-duplicate: check if we already sent a notification for this key
+        notif_key = f"cal_ready|{activity_type}|{activity_subtype}|{city}|{small_qty}"
+        existing_notif = await db.notifications.find_one({
+            "org_id": org_id,
+            "type": "ai_calibration_ready",
+            "data.calibration_key": notif_key,
+            "data.resolved": {"$ne": True},
+        })
+        if existing_notif:
+            return  # Already notified, not yet resolved
+        
+        # Build notification message
+        parts = [activity_type]
+        if activity_subtype:
+            parts[0] = f"{activity_type}/{activity_subtype}"
+        if city:
+            parts.append(city)
+        if small_qty:
+            parts.append("малко количество")
+        label = ", ".join(parts)
+        
+        # Get all Admin users in this org
+        admins = await db.users.find(
+            {"org_id": org_id, "role": {"$in": ["Admin", "Owner"]}, "active": {"$ne": False}},
+            {"_id": 0, "id": 1}
+        ).to_list(20)
+        
+        now = datetime.now(timezone.utc).isoformat()
+        for admin in admins:
+            notif = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "user_id": admin["id"],
+                "type": "ai_calibration_ready",
+                "title": "AI Калибрация готова за одобрение",
+                "message": f"{label} ({count} случая) — готово за калибрация",
+                "data": {
+                    "calibration_key": notif_key,
+                    "activity_type": activity_type,
+                    "activity_subtype": activity_subtype,
+                    "city": city,
+                    "small_qty": small_qty,
+                    "sample_count": count,
+                    "resolved": False,
+                },
+                "is_read": False,
+                "created_at": now,
+            }
+            await db.notifications.insert_one(notif)
+        
+        logger.info(f"Calibration ready notification sent: {label} ({count} samples) to {len(admins)} admins")
+    except Exception as e:
+        logger.warning(f"Failed to check/send calibration notification: {e}")
 
 
 # ── Record AI Edit Event ───────────────────────────────────────────
@@ -62,6 +147,16 @@ async def record_ai_edit(data: dict, user: dict = Depends(require_m2)):
     }
     
     await db.ai_calibration_events.insert_one(event)
+    
+    # Check if any calibration group just became ready
+    await check_and_notify_calibration_ready(
+        user["org_id"],
+        data.get("normalized_activity_type"),
+        data.get("normalized_activity_subtype"),
+        data.get("city"),
+        bool(data.get("small_qty_flag", False)),
+    )
+    
     return {"ok": True, "event_id": event["id"], "was_edited": was_edited, "delta_percent": delta_pct}
 
 
@@ -251,6 +346,13 @@ async def approve_calibration(data: dict, user: dict = Depends(require_m2)):
         },
         {"$set": cal},
         upsert=True,
+    )
+    
+    # Resolve related notifications
+    notif_key = f"cal_ready|{cal['activity_type']}|{cal['activity_subtype']}|{cal['city']}|{cal['small_qty']}"
+    await db.notifications.update_many(
+        {"org_id": user["org_id"], "type": "ai_calibration_ready", "data.calibration_key": notif_key},
+        {"$set": {"is_read": True, "data.resolved": True}}
     )
     
     return {"ok": True, "calibration": cal}
