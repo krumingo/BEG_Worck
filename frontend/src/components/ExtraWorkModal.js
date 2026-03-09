@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -12,76 +13,197 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Loader2, Sparkles, CheckCircle2, Package, Wrench, Hammer, ChevronDown, ChevronRight, Plus,
+  Loader2, Sparkles, CheckCircle2, Package, Hammer, ChevronDown, ChevronRight,
+  Plus, Trash2, Copy, Clock, AlertTriangle,
 } from "lucide-react";
 
 const UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"];
-const UNIT_LABELS = { m2: "м2", m: "м", pcs: "бр", hours: "часа", lot: "к-т", kg: "кг", l: "л" };
+const UL = { m2: "м2", m: "м", pcs: "бр", hours: "часа", lot: "к-т", kg: "кг", l: "л" };
+
+const emptyLine = () => ({
+  id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+  title: "", unit: "m2", qty: 1,
+  location_floor: "", location_room: "", location_zone: "", location_notes: "",
+});
 
 export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreated }) {
-  const [form, setForm] = useState({
-    title: "", unit: "m2", qty: 1,
-    location_floor: "", location_room: "", location_zone: "", location_notes: "",
-    notes: "", work_date: new Date().toISOString().split("T")[0],
-  });
-  const [saving, setSaving] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [proposal, setProposal] = useState(null);
-  const [showMaterials, setShowMaterials] = useState(false);
+  const [lines, setLines] = useState([emptyLine()]);
   const [city, setCity] = useState("София");
+  const [workDate, setWorkDate] = useState(new Date().toISOString().split("T")[0]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [batchResult, setBatchResult] = useState(null);
+  const [saving, setSaving] = useState(false);
+  // Editable proposals per line
+  const [editedProposals, setEditedProposals] = useState({});
+  // Related SMR selections
+  const [selectedRelated, setSelectedRelated] = useState({});
+  // Expanded sections
+  const [expandedMats, setExpandedMats] = useState({});
 
-  const resetForm = () => {
-    setForm({ title: "", unit: "m2", qty: 1, location_floor: "", location_room: "", location_zone: "", location_notes: "", notes: "", work_date: new Date().toISOString().split("T")[0] });
-    setProposal(null);
-    setShowMaterials(false);
+  const reset = () => {
+    setLines([emptyLine()]);
+    setBatchResult(null);
+    setEditedProposals({});
+    setSelectedRelated({});
+    setExpandedMats({});
   };
 
-  const handleAI = async () => {
-    if (!form.title.trim()) return;
+  // Line management
+  const addLine = () => setLines([...lines, emptyLine()]);
+  const removeLine = (i) => { if (lines.length > 1) setLines(lines.filter((_, idx) => idx !== i)); };
+  const dupLine = (i) => {
+    const copy = { ...lines[i], id: Date.now().toString() + Math.random().toString(36).substr(2, 4) };
+    const n = [...lines]; n.splice(i + 1, 0, copy); setLines(n);
+  };
+  const updateLine = (i, f, v) => { const n = [...lines]; n[i] = { ...n[i], [f]: v }; setLines(n); };
+
+  // Batch AI
+  const handleBatchAI = async () => {
+    const valid = lines.filter(l => l.title.trim());
+    if (!valid.length) return;
     setAiLoading(true);
     try {
-      const res = await API.post("/extra-works/ai-proposal", {
-        title: form.title, unit: form.unit, qty: parseFloat(form.qty) || 1, city: city || null,
+      const res = await API.post("/extra-works/ai-batch", {
+        lines: valid.map(l => ({ title: l.title, unit: l.unit, qty: parseFloat(l.qty) || 1,
+          location_floor: l.location_floor, location_room: l.location_room, location_zone: l.location_zone })),
+        city: city || null, project_id: projectId,
       });
-      setProposal(res.data);
+      setBatchResult(res.data);
+      // Initialize editable proposals
+      const ep = {};
+      res.data.results.forEach((r, i) => {
+        ep[i] = {
+          title: r._input.title,
+          activity_type: r.recognized.activity_type,
+          activity_subtype: r.recognized.activity_subtype,
+          unit: r._input.unit,
+          qty: r._input.qty,
+          material_price: r.pricing.material_price_per_unit,
+          labor_price: r.pricing.labor_price_per_unit,
+          total_price: r.pricing.total_price_per_unit,
+          original_total_price: r.pricing.total_price_per_unit,
+          small_qty_adj: r.pricing.small_qty_adjustment_percent,
+          provider: r.provider,
+          confidence: r.confidence,
+          explanation: r.explanation,
+          materials: r.materials || [],
+          related_smr: r.related_smr || [],
+          hourly_info: r.hourly_info || null,
+          location_floor: r._input.location_floor,
+          location_room: r._input.location_room,
+          location_zone: r._input.location_zone,
+        };
+      });
+      setEditedProposals(ep);
+      // Initialize all related as unselected
+      const sr = {};
+      res.data.results.forEach((r, i) => { sr[i] = {}; });
+      setSelectedRelated(sr);
     } catch (err) {
-      console.error(err);
+      alert(err.response?.data?.detail || "Грешка при AI");
     } finally { setAiLoading(false); }
   };
 
-  const handleSaveDraft = async (applyAi = false) => {
-    if (!form.title.trim()) return;
+  // Edit proposal field
+  const editProp = (i, f, v) => {
+    setEditedProposals(prev => {
+      const updated = { ...prev[i], [f]: v };
+      if (f === "material_price" || f === "labor_price") {
+        updated.total_price = round2(parseFloat(updated.material_price || 0) + parseFloat(updated.labor_price || 0));
+      }
+      return { ...prev, [i]: updated };
+    });
+  };
+
+  // Toggle related SMR
+  const toggleRelated = (lineIdx, smrText) => {
+    setSelectedRelated(prev => {
+      const current = prev[lineIdx] || {};
+      return { ...prev, [lineIdx]: { ...current, [smrText]: !current[smrText] } };
+    });
+  };
+
+  // Edit material in proposal
+  const editMaterial = (lineIdx, matIdx, field, value) => {
+    setEditedProposals(prev => {
+      const mats = [...(prev[lineIdx]?.materials || [])];
+      mats[matIdx] = { ...mats[matIdx], [field]: value };
+      return { ...prev, [lineIdx]: { ...prev[lineIdx], materials: mats } };
+    });
+  };
+  const removeMaterial = (lineIdx, matIdx) => {
+    setEditedProposals(prev => {
+      const mats = (prev[lineIdx]?.materials || []).filter((_, i) => i !== matIdx);
+      return { ...prev, [lineIdx]: { ...prev[lineIdx], materials: mats } };
+    });
+  };
+  const addMaterial = (lineIdx) => {
+    setEditedProposals(prev => {
+      const mats = [...(prev[lineIdx]?.materials || []), { name: "", unit: "", estimated_qty: null, category: "primary", reason: "" }];
+      return { ...prev, [lineIdx]: { ...prev[lineIdx], materials: mats } };
+    });
+  };
+
+  // Save all accepted lines
+  const handleSaveAll = async () => {
+    if (!batchResult) return;
     setSaving(true);
     try {
-      const res = await API.post("/extra-works", { project_id: projectId, ...form, qty: parseFloat(form.qty) || 1 });
-      const draftId = res.data.id;
-      if (applyAi && proposal) {
-        await API.post(`/extra-works/${draftId}/apply-ai?city=${encodeURIComponent(city || "")}`);
-        // Record calibration event
-        try {
-          await API.post("/ai-calibration/record-edit", {
-            ai_provider_used: proposal.provider,
-            ai_confidence: proposal.confidence,
-            ai_material_price_per_unit: proposal.pricing.material_price_per_unit,
-            ai_labor_price_per_unit: proposal.pricing.labor_price_per_unit,
-            ai_total_price_per_unit: proposal.pricing.total_price_per_unit,
-            ai_small_qty_adjustment: proposal.pricing.small_qty_adjustment_percent,
-            final_material_price_per_unit: proposal.pricing.material_price_per_unit,
-            final_labor_price_per_unit: proposal.pricing.labor_price_per_unit,
-            final_total_price_per_unit: proposal.pricing.total_price_per_unit,
-            city: city || null,
-            project_id: projectId,
-            draft_id: draftId,
-            source_type: "extra_work",
-            normalized_activity_type: proposal.recognized.activity_type,
-            normalized_activity_subtype: proposal.recognized.activity_subtype,
-            unit: form.unit,
-            qty: parseFloat(form.qty) || 1,
-            small_qty_flag: (parseFloat(form.qty) || 1) <= 5,
-          });
-        } catch (e) { /* silent - analytics only */ }
+      const linesToSave = [];
+      // Main lines
+      Object.values(editedProposals).forEach(p => {
+        linesToSave.push(p);
+      });
+      // Selected related SMR
+      Object.entries(selectedRelated).forEach(([lineIdx, selected]) => {
+        const parentProp = editedProposals[lineIdx];
+        Object.entries(selected).forEach(([smrText, isSelected]) => {
+          if (isSelected) {
+            linesToSave.push({
+              title: smrText,
+              activity_type: parentProp?.activity_type || "Общо",
+              activity_subtype: "",
+              unit: parentProp?.unit || "m2",
+              qty: parentProp?.qty || 1,
+              material_price: 0, labor_price: 0, total_price: 0,
+              provider: "related_suggestion",
+              confidence: 0.5,
+              explanation: `Свързано с: ${parentProp?.title}`,
+              materials: [],
+              related_smr: [],
+              location_floor: parentProp?.location_floor,
+              location_room: parentProp?.location_room,
+              location_zone: parentProp?.location_zone,
+            });
+          }
+        });
+      });
+
+      await API.post("/extra-works/batch-save", {
+        project_id: projectId,
+        work_date: workDate,
+        lines: linesToSave,
+      });
+
+      // Record calibration events
+      for (const p of Object.values(editedProposals)) {
+        if (p.provider && p.total_price > 0) {
+          try {
+            await API.post("/ai-calibration/record-edit", {
+              ai_provider_used: p.provider, ai_confidence: p.confidence,
+              ai_material_price_per_unit: p.material_price, ai_labor_price_per_unit: p.labor_price,
+              ai_total_price_per_unit: p.original_total_price || p.total_price,
+              final_material_price_per_unit: p.material_price, final_labor_price_per_unit: p.labor_price,
+              final_total_price_per_unit: p.total_price,
+              city: city, project_id: projectId, source_type: "extra_work",
+              normalized_activity_type: p.activity_type, normalized_activity_subtype: p.activity_subtype,
+              unit: p.unit, qty: p.qty, small_qty_flag: (p.qty || 1) <= 5,
+            });
+          } catch { /* silent */ }
+        }
       }
-      resetForm();
+
+      reset();
       onOpenChange(false);
       onCreated?.();
     } catch (err) {
@@ -89,165 +211,212 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
     } finally { setSaving(false); }
   };
 
-  const primaryMats = proposal?.materials?.filter(m => m.category === "primary") || [];
-  const secondaryMats = proposal?.materials?.filter(m => m.category === "secondary") || [];
-  const consumables = proposal?.materials?.filter(m => m.category === "consumable") || [];
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const grandTotal = batchResult ? Object.values(editedProposals).reduce((s, p) =>
+    s + (parseFloat(p.total_price) || 0) * (parseFloat(p.qty) || 1), 0) : 0;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[700px] bg-card border-border max-h-[90vh] overflow-y-auto" data-testid="extra-work-modal">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+      <DialogContent className="sm:max-w-[900px] bg-card border-border max-h-[92vh] overflow-y-auto" data-testid="extra-work-modal">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Hammer className="w-5 h-5 text-amber-500" />
-            Ново допълнително СМР
+            Ново допълнително СМР {lines.length > 1 && `(${lines.length} реда)`}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-2">
-          {/* Left: Form */}
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Дата</Label>
-              <Input type="date" value={form.work_date} onChange={e => setForm({...form, work_date: e.target.value})} className="bg-background" data-testid="ew-date" />
-            </div>
-            <div className="space-y-1">
-              <Label>Описание на СМР *</Label>
-              <Textarea value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Напр. Направа на мазилка по стена" className="bg-background min-h-[60px]" data-testid="ew-title" />
-            </div>
+        {/* Phase 1: Entry */}
+        {!batchResult && (
+          <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Мярка</Label>
-                <Select value={form.unit} onValueChange={v => setForm({...form, unit: v})}>
-                  <SelectTrigger className="bg-background" data-testid="ew-unit"><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{UNIT_LABELS[u] || u}</SelectItem>)}</SelectContent>
-                </Select>
+                <Label>Дата</Label>
+                <Input type="date" value={workDate} onChange={e => setWorkDate(e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1">
-                <Label>Количество</Label>
-                <Input type="number" min="0.01" step="0.01" value={form.qty} onChange={e => setForm({...form, qty: e.target.value})} className="bg-background font-mono" data-testid="ew-qty" />
+                <Label>Град</Label>
+                <Input value={city} onChange={e => setCity(e.target.value)} placeholder="София" className="bg-background" data-testid="ew-city" />
               </div>
             </div>
 
-            {/* Location */}
-            <div className="p-3 rounded-lg bg-muted/30 border border-border space-y-2">
-              <Label className="text-xs text-muted-foreground font-medium">Местоположение</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <Input value={form.location_floor} onChange={e => setForm({...form, location_floor: e.target.value})} placeholder="Етаж" className="bg-background text-sm" data-testid="ew-floor" />
-                <Input value={form.location_room} onChange={e => setForm({...form, location_room: e.target.value})} placeholder="Помещение" className="bg-background text-sm" data-testid="ew-room" />
-                <Input value={form.location_zone} onChange={e => setForm({...form, location_zone: e.target.value})} placeholder="Зона" className="bg-background text-sm" data-testid="ew-zone" />
-              </div>
-              <Input value={form.location_notes} onChange={e => setForm({...form, location_notes: e.target.value})} placeholder="Доп. бележка за локация" className="bg-background text-sm" data-testid="ew-loc-notes" />
+            {/* Multi-line entry */}
+            <div className="space-y-2">
+              {lines.map((line, i) => (
+                <div key={line.id} className="p-3 rounded-lg bg-muted/20 border border-border space-y-2" data-testid={`entry-line-${i}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-mono w-5">{i + 1}</span>
+                    <Input value={line.title} onChange={e => updateLine(i, "title", e.target.value)}
+                      placeholder="Описание на СМР" className="flex-1 bg-background text-sm" data-testid={`ew-title-${i}`} />
+                    <Select value={line.unit} onValueChange={v => updateLine(i, "unit", v)}>
+                      <SelectTrigger className="w-20 bg-background text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{UL[u]}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Input type="number" min="0.01" step="0.01" value={line.qty} onChange={e => updateLine(i, "qty", e.target.value)}
+                      className="w-16 bg-background text-sm font-mono" />
+                    <Button variant="ghost" size="sm" onClick={() => dupLine(i)} className="h-7 w-7 p-0 text-muted-foreground"><Copy className="w-3 h-3" /></Button>
+                    {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(i)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3 h-3" /></Button>}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <Input value={line.location_floor} onChange={e => updateLine(i, "location_floor", e.target.value)} placeholder="Етаж" className="bg-background text-xs" />
+                    <Input value={line.location_room} onChange={e => updateLine(i, "location_room", e.target.value)} placeholder="Помещение" className="bg-background text-xs" />
+                    <Input value={line.location_zone} onChange={e => updateLine(i, "location_zone", e.target.value)} placeholder="Зона" className="bg-background text-xs" />
+                    <Input value={line.location_notes} onChange={e => updateLine(i, "location_notes", e.target.value)} placeholder="Бележка" className="bg-background text-xs" />
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={addLine}><Plus className="w-3 h-3 mr-1" /> Добави ред</Button>
             </div>
 
-            <div className="space-y-1">
-              <Label>Бележки</Label>
-              <Textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Допълнителни бележки" className="bg-background min-h-[40px] text-sm" />
-            </div>
-
-            <div className="space-y-1">
-              <Label>Град (за ценови ориентир)</Label>
-              <Input value={city} onChange={e => setCity(e.target.value)} placeholder="София" className="bg-background text-sm" data-testid="ew-city" />
-            </div>
-
-            <Button onClick={handleAI} disabled={aiLoading || !form.title.trim()} className="w-full bg-violet-600 hover:bg-violet-700" data-testid="ew-ai-btn">
+            <Button onClick={handleBatchAI} disabled={aiLoading || !lines.some(l => l.title.trim())} className="w-full bg-violet-600 hover:bg-violet-700" data-testid="batch-ai-btn">
               {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
-              AI предложение
+              Сметни с AI ({lines.filter(l => l.title.trim()).length} {lines.filter(l => l.title.trim()).length === 1 ? "ред" : "реда"})
             </Button>
           </div>
+        )}
 
-          {/* Right: AI Proposal */}
-          <div className="space-y-3">
-            {!proposal ? (
-              <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-6 rounded-lg border border-dashed border-border">
-                <div className="text-center">
-                  <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p>Натиснете "AI предложение" за автоматичен анализ</p>
+        {/* Phase 2: Editable AI Results */}
+        {batchResult && (
+          <div className="space-y-3 py-2">
+            {/* Summary bar */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-violet-500/10 border border-violet-500/30">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                <span className="text-sm font-medium text-violet-300">{batchResult.line_count} реда анализирани</span>
+              </div>
+              <div className="font-mono text-lg font-bold text-primary">{round2(grandTotal).toFixed(2)} лв</div>
+            </div>
+
+            {/* Per-line editable results */}
+            {batchResult.results.map((result, i) => {
+              const p = editedProposals[i];
+              if (!p) return null;
+              const lineTotal = round2((parseFloat(p.total_price) || 0) * (parseFloat(p.qty) || 1));
+              return (
+                <div key={i} className="rounded-lg border border-border overflow-hidden" data-testid={`result-line-${i}`}>
+                  {/* Header */}
+                  <div className="p-3 bg-muted/30 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-muted-foreground">{i + 1}</span>
+                      <span className="text-sm font-medium text-foreground">{p.title}</span>
+                      <Badge variant="outline" className={`text-[10px] ${p.provider === "llm" ? "bg-emerald-500/10 text-emerald-400" : "bg-gray-500/10 text-gray-400"}`}>
+                        {p.provider === "llm" ? "LLM" : "Rule"}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">{Math.round(p.confidence * 100)}%</Badge>
+                    </div>
+                    <span className="font-mono font-bold text-primary">{lineTotal.toFixed(2)} лв</span>
+                  </div>
+
+                  <div className="p-3 space-y-2">
+                    {/* Editable pricing */}
+                    <div className="grid grid-cols-6 gap-2">
+                      <div className="space-y-0.5">
+                        <label className="text-[10px] text-muted-foreground">Тип</label>
+                        <Input value={p.activity_type} onChange={e => editProp(i, "activity_type", e.target.value)} className="bg-background h-7 text-xs" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <label className="text-[10px] text-muted-foreground">Подтип</label>
+                        <Input value={p.activity_subtype} onChange={e => editProp(i, "activity_subtype", e.target.value)} className="bg-background h-7 text-xs" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <label className="text-[10px] text-muted-foreground">Мат. лв/ед</label>
+                        <Input type="number" step="0.01" value={p.material_price} onChange={e => editProp(i, "material_price", parseFloat(e.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <label className="text-[10px] text-muted-foreground">Труд лв/ед</label>
+                        <Input type="number" step="0.01" value={p.labor_price} onChange={e => editProp(i, "labor_price", parseFloat(e.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <label className="text-[10px] text-muted-foreground">Общо/ед</label>
+                        <div className="h-7 px-2 flex items-center bg-muted/30 rounded text-xs font-mono font-bold text-primary">{(parseFloat(p.total_price) || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <label className="text-[10px] text-muted-foreground">К-во</label>
+                        <Input type="number" step="0.01" value={p.qty} onChange={e => editProp(i, "qty", parseFloat(e.target.value) || 1)} className="bg-background h-7 text-xs font-mono" />
+                      </div>
+                    </div>
+
+                    {/* Hourly info + small qty */}
+                    <div className="flex flex-wrap gap-2 text-[10px]">
+                      {p.small_qty_adj > 0 && <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">+{p.small_qty_adj}% малко к-во</Badge>}
+                      {p.hourly_info && <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                        <Clock className="w-2.5 h-2.5 mr-0.5" />{p.hourly_info.worker_type} {p.hourly_info.hourly_rate}лв/ч
+                        {p.hourly_info.min_applied && " (мин.)"}
+                      </Badge>}
+                      {p.explanation && <span className="text-muted-foreground/70 italic">{p.explanation.slice(0, 80)}</span>}
+                    </div>
+
+                    {/* Related SMR */}
+                    {p.related_smr?.length > 0 && (
+                      <div className="pt-1">
+                        <label className="text-[10px] text-muted-foreground font-medium">Свързани СМР (избери за добавяне)</label>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {p.related_smr.map((smr, si) => {
+                            const sel = selectedRelated[i]?.[smr];
+                            return (
+                              <button key={si} onClick={() => toggleRelated(i, smr)}
+                                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${sel ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" : "bg-muted/20 border-border text-muted-foreground hover:border-primary/30"}`}>
+                                {sel && <CheckCircle2 className="w-2.5 h-2.5 inline mr-0.5" />}{smr}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Editable Materials */}
+                    <div className="pt-1">
+                      <button onClick={() => setExpandedMats(prev => ({ ...prev, [i]: !prev[i] }))} className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+                        {expandedMats[i] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                        <Package className="w-3 h-3" /> Материали ({p.materials?.length || 0})
+                      </button>
+                      {expandedMats[i] && (
+                        <div className="mt-1 space-y-1">
+                          {(p.materials || []).map((mat, mi) => (
+                            <div key={mi} className="flex items-center gap-1">
+                              <Badge variant="outline" className={`text-[8px] w-10 justify-center ${mat.category === "primary" ? "text-emerald-400" : mat.category === "secondary" ? "text-amber-400" : "text-gray-400"}`}>
+                                {mat.category === "primary" ? "Осн" : mat.category === "secondary" ? "Спом" : "Конс"}
+                              </Badge>
+                              <Input value={mat.name} onChange={e => editMaterial(i, mi, "name", e.target.value)} className="flex-1 bg-background h-6 text-[10px]" />
+                              <Input value={mat.estimated_qty || ""} onChange={e => editMaterial(i, mi, "estimated_qty", e.target.value)} className="w-12 bg-background h-6 text-[10px] font-mono" placeholder="к-во" />
+                              <Input value={mat.unit} onChange={e => editMaterial(i, mi, "unit", e.target.value)} className="w-10 bg-background h-6 text-[10px]" />
+                              <Button variant="ghost" size="sm" onClick={() => removeMaterial(i, mi)} className="h-6 w-6 p-0 text-destructive"><Trash2 className="w-2.5 h-2.5" /></Button>
+                            </div>
+                          ))}
+                          <Button variant="ghost" size="sm" onClick={() => addMaterial(i)} className="text-[10px] h-5"><Plus className="w-2.5 h-2.5 mr-0.5" /> Добави материал</Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Combined materials summary */}
+            {batchResult.combined_materials?.length > 0 && (
+              <div className="p-3 rounded-lg bg-muted/20 border border-border">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Общ материален списък ({batchResult.combined_materials.length} позиции)</p>
+                <div className="flex flex-wrap gap-1">
+                  {batchResult.combined_materials.slice(0, 15).map((m, i) => (
+                    <Badge key={i} variant="outline" className={`text-[9px] ${m.category === "primary" ? "text-emerald-400" : m.category === "secondary" ? "text-amber-400" : "text-gray-400"}`}>
+                      {m.name}{m.estimated_qty ? ` (${m.estimated_qty} ${m.unit})` : ""}
+                    </Badge>
+                  ))}
                 </div>
               </div>
-            ) : (
-              <>
-                {/* Recognition */}
-                <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/30">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-4 h-4 text-violet-400" />
-                    <span className="text-xs font-medium text-violet-300">Разпознаване</span>
-                    <Badge variant="outline" className="text-[10px] ml-auto">{Math.round(proposal.confidence * 100)}%</Badge>
-                    <Badge variant="outline" className={`text-[10px] ${proposal.provider === "llm" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-gray-500/10 text-gray-400 border-gray-500/30"}`}>
-                      {proposal.provider === "llm" ? "AI (LLM)" : "Rule-based"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-foreground">{proposal.recognized.activity_type} / {proposal.recognized.activity_subtype}</p>
-                  <p className="text-xs text-muted-foreground">Препоръчана мярка: {UNIT_LABELS[proposal.recognized.suggested_unit] || proposal.recognized.suggested_unit}</p>
-                  {proposal.explanation && <p className="text-[10px] text-muted-foreground/70 mt-1 italic">{proposal.explanation}</p>}
-                  {proposal.fallback_reason && <p className="text-[10px] text-amber-400 mt-1">{proposal.fallback_reason}</p>}
-                </div>
-
-                {/* Pricing */}
-                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-                  <p className="text-xs font-medium text-emerald-300 mb-2">Ценообразуване</p>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Материал/ед:</span><span className="font-mono">{proposal.pricing.material_price_per_unit.toFixed(2)} лв</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Труд/ед:</span><span className="font-mono">{proposal.pricing.labor_price_per_unit.toFixed(2)} лв</span></div>
-                    <div className="flex justify-between border-t border-border pt-1"><span className="text-muted-foreground font-medium">Общо/ед:</span><span className="font-mono font-medium text-emerald-400">{proposal.pricing.total_price_per_unit.toFixed(2)} лв</span></div>
-                    {proposal.pricing.small_qty_adjustment_percent > 0 && (
-                      <div className="text-xs mt-1">
-                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 border-amber-500/30 text-amber-400">+{proposal.pricing.small_qty_adjustment_percent}%</Badge>
-                        <span className="text-amber-400 ml-1">{proposal.pricing.small_qty_explanation || "корекция за малко количество"}</span>
-                      </div>
-                    )}
-                    {proposal.pricing.city && proposal.pricing.city_factor && (
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Град: {proposal.pricing.city} (коеф. {proposal.pricing.city_factor.toFixed(2)})
-                      </div>
-                    )}
-                    {proposal.calibration?.applied && (
-                      <div className="text-[10px] text-blue-400 mt-1 p-1.5 rounded bg-blue-500/10 border border-blue-500/20">
-                        Калибрация: {proposal.calibration.factor.toFixed(3)}x (от {proposal.calibration.sample_count} случая)
-                        <br/>Базова: {proposal.calibration.base_total_price.toFixed(2)} лв → Калибрирана: {proposal.calibration.calibrated_total_price.toFixed(2)} лв
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-1"><span className="text-muted-foreground">Прогноза общо:</span><span className="font-mono font-bold text-primary">{proposal.pricing.total_estimated.toFixed(2)} лв</span></div>
-                  </div>
-                </div>
-
-                {/* Related SMR */}
-                <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Свързани СМР</p>
-                  <div className="flex flex-wrap gap-1">
-                    {proposal.related_smr.map((r, i) => <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>)}
-                  </div>
-                </div>
-
-                {/* Materials Checklist */}
-                <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <button onClick={() => setShowMaterials(!showMaterials)} className="flex items-center gap-2 w-full text-left">
-                    <Package className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-medium">Материали ({proposal.materials.length})</span>
-                    {showMaterials ? <ChevronDown className="w-3 h-3 ml-auto" /> : <ChevronRight className="w-3 h-3 ml-auto" />}
-                  </button>
-                  {showMaterials && (
-                    <div className="mt-2 space-y-2">
-                      {primaryMats.length > 0 && (<div><p className="text-[10px] text-emerald-400 font-medium mb-1">Основни</p>{primaryMats.map((m,i) => <div key={i} className="flex justify-between text-xs text-foreground"><span>{m.name}</span><span className="font-mono text-muted-foreground">{m.estimated_qty} {m.unit}</span></div>)}</div>)}
-                      {secondaryMats.length > 0 && (<div><p className="text-[10px] text-amber-400 font-medium mb-1 mt-2">Спомагателни</p>{secondaryMats.map((m,i) => <div key={i} className="flex justify-between text-xs text-foreground"><span>{m.name}</span><span className="font-mono text-muted-foreground">{m.estimated_qty} {m.unit}</span></div>)}</div>)}
-                      {consumables.length > 0 && (<div><p className="text-[10px] text-gray-400 font-medium mb-1 mt-2">Консумативи</p>{consumables.map((m,i) => <div key={i} className="flex justify-between text-xs text-foreground"><span>{m.name}</span><span className="font-mono text-muted-foreground">{m.estimated_qty} {m.unit}</span></div>)}</div>)}
-                    </div>
-                  )}
-                </div>
-              </>
             )}
           </div>
-        </div>
+        )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>Затвори</Button>
-          <Button variant="outline" onClick={() => handleSaveDraft(false)} disabled={saving || !form.title.trim()} data-testid="ew-save-draft-btn">
-            <Plus className="w-4 h-4 mr-1" /> Добави в Draft
-          </Button>
-          {proposal && (
-            <Button onClick={() => handleSaveDraft(true)} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700" data-testid="ew-accept-ai-btn">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
-              Приеми и добави
-            </Button>
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Затвори</Button>
+          {batchResult && (
+            <>
+              <Button variant="outline" onClick={() => setBatchResult(null)}>Обратно към входа</Button>
+              <Button onClick={handleSaveAll} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-all-btn">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                Приеми всички ({Object.keys(editedProposals).length + Object.values(selectedRelated).reduce((s, o) => s + Object.values(o).filter(Boolean).length, 0)} реда)
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

@@ -67,6 +67,83 @@ class AIProposalRequest(BaseModel):
     city: Optional[str] = None
 
 
+class BatchLineInput(BaseModel):
+    title: str
+    unit: str = "m2"
+    qty: float = 1
+    location_floor: Optional[str] = None
+    location_room: Optional[str] = None
+    location_zone: Optional[str] = None
+
+class BatchAIRequest(BaseModel):
+    lines: List[BatchLineInput]
+    city: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+# ── Hourly Rate Configuration ──────────────────────────────────────
+
+WORKER_HOURLY_RATES = {
+    "общ работник": {"hourly_rate": 15, "min_hours": 2, "min_job_price": 40},
+    "майстор": {"hourly_rate": 22, "min_hours": 2, "min_job_price": 60},
+    "бояджия": {"hourly_rate": 18, "min_hours": 2, "min_job_price": 50},
+    "шпакловчик": {"hourly_rate": 20, "min_hours": 2, "min_job_price": 55},
+    "електротехник": {"hourly_rate": 28, "min_hours": 1, "min_job_price": 50},
+    "вик": {"hourly_rate": 26, "min_hours": 1, "min_job_price": 50},
+    "монтажник": {"hourly_rate": 20, "min_hours": 2, "min_job_price": 50},
+    "плочкаджия": {"hourly_rate": 25, "min_hours": 3, "min_job_price": 80},
+}
+
+ACTIVITY_TO_WORKER = {
+    "Мокри процеси": "майстор", "Довършителни": "майстор",
+    "Боядисване": "бояджия", "Шпакловка": "шпакловчик",
+    "Облицовка": "плочкаджия", "Инсталации": "електротехник",
+    "Електро": "електротехник", "ВиК": "вик",
+    "Сухо строителство": "монтажник",
+}
+
+def get_worker_rate(activity_type: str, activity_subtype: str = "") -> dict:
+    """Get worker hourly rate based on activity type"""
+    worker = ACTIVITY_TO_WORKER.get(activity_subtype) or ACTIVITY_TO_WORKER.get(activity_type) or "майстор"
+    rate = WORKER_HOURLY_RATES.get(worker, WORKER_HOURLY_RATES["майстор"])
+    return {"worker_type": worker, **rate}
+
+
+def apply_hourly_pricing(proposal: dict, qty: float) -> dict:
+    """Apply hourly rate logic to proposal for small quantities"""
+    rec = proposal.get("recognized", {})
+    worker = get_worker_rate(rec.get("activity_type", ""), rec.get("activity_subtype", ""))
+    
+    labor_price = proposal["pricing"]["labor_price_per_unit"]
+    estimated_labor_total = labor_price * qty
+    min_job = worker["min_job_price"]
+    min_hours_cost = worker["hourly_rate"] * worker["min_hours"]
+    
+    hourly_info = {
+        "worker_type": worker["worker_type"],
+        "hourly_rate": worker["hourly_rate"],
+        "min_hours": worker["min_hours"],
+        "min_job_price": min_job,
+        "estimated_labor_total": round(estimated_labor_total, 2),
+    }
+    
+    # If estimated labor is below minimum, apply minimum
+    if estimated_labor_total < min_job and qty <= 10:
+        adjusted_labor_per_unit = round(min_job / qty, 2) if qty > 0 else labor_price
+        proposal["pricing"]["labor_price_per_unit"] = adjusted_labor_per_unit
+        proposal["pricing"]["total_price_per_unit"] = round(
+            proposal["pricing"]["material_price_per_unit"] + adjusted_labor_per_unit, 2)
+        proposal["pricing"]["total_estimated"] = round(
+            proposal["pricing"]["total_price_per_unit"] * qty, 2)
+        hourly_info["min_applied"] = True
+        hourly_info["adjusted_labor_per_unit"] = adjusted_labor_per_unit
+    else:
+        hourly_info["min_applied"] = False
+    
+    proposal["hourly_info"] = hourly_info
+    return proposal
+
+
 # ── Extra Work Draft CRUD ──────────────────────────────────────────
 
 @router.post("/extra-works", status_code=201)
@@ -173,7 +250,47 @@ async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
 async def get_ai_proposal_endpoint(data: AIProposalRequest, user: dict = Depends(require_m2)):
     """Generate AI proposal using hybrid provider (LLM → rule-based fallback)"""
     proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city, user["org_id"])
+    proposal = apply_hourly_pricing(proposal, data.qty)
     return proposal
+
+
+@router.post("/extra-works/ai-batch")
+async def batch_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2)):
+    """Batch AI proposal for multiple lines at once"""
+    results = []
+    combined_materials = {}
+    
+    for line in data.lines:
+        proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"])
+        proposal = apply_hourly_pricing(proposal, line.qty)
+        proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
+                              "location_floor": line.location_floor, "location_room": line.location_room,
+                              "location_zone": line.location_zone}
+        results.append(proposal)
+        
+        # Aggregate materials
+        for mat in proposal.get("materials", []):
+            key = mat["name"]
+            if key not in combined_materials:
+                combined_materials[key] = {**mat, "sources": [line.title]}
+            else:
+                if mat.get("estimated_qty"):
+                    combined_materials[key]["estimated_qty"] = round(
+                        (combined_materials[key].get("estimated_qty") or 0) + mat["estimated_qty"], 2)
+                combined_materials[key]["sources"].append(line.title)
+    
+    # Deduplicate combined materials
+    combined_list = sorted(combined_materials.values(), key=lambda x: (
+        0 if x["category"] == "primary" else 1 if x["category"] == "secondary" else 2, x["name"]))
+    
+    grand_total = sum(r["pricing"]["total_estimated"] for r in results)
+    
+    return {
+        "results": results,
+        "combined_materials": combined_list,
+        "grand_total": round(grand_total, 2),
+        "line_count": len(results),
+    }
 
 
 @router.post("/extra-works/{draft_id}/apply-ai")
@@ -336,3 +453,78 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
                     {"offer_no": offer_no, "drafts_count": len(drafts)})
     
     return {k: v for k, v in offer.items() if k != "_id"}
+
+
+
+# ── Batch Save Drafts ──────────────────────────────────────────────
+
+@router.post("/extra-works/batch-save", status_code=201)
+async def batch_save_drafts(data: dict, user: dict = Depends(require_m2)):
+    """Save multiple extra work drafts with AI data in one call"""
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    project_id = data.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id required")
+    
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    lines = data.get("lines", [])
+    if not lines:
+        raise HTTPException(status_code=400, detail="No lines to save")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    batch_id = str(uuid.uuid4())
+    saved = []
+    
+    for line in lines:
+        draft = {
+            "id": str(uuid.uuid4()),
+            "org_id": user["org_id"],
+            "project_id": project_id,
+            "source_type": "extra_work",
+            "created_at": now,
+            "updated_at": now,
+            "created_by": user["id"],
+            "work_date": data.get("work_date", now[:10]),
+            "status": "draft",
+            "title": line.get("title", ""),
+            "normalized_activity_type": line.get("activity_type"),
+            "normalized_activity_subtype": line.get("activity_subtype"),
+            "unit": line.get("unit", "m2"),
+            "qty": float(line.get("qty", 1)),
+            "ai_provider_used": line.get("provider"),
+            "ai_material_price_per_unit": line.get("material_price"),
+            "ai_labor_price_per_unit": line.get("labor_price"),
+            "ai_total_price_per_unit": line.get("total_price"),
+            "ai_small_qty_adjustment": line.get("small_qty_adj"),
+            "ai_confidence": line.get("confidence"),
+            "ai_raw_response_summary": line.get("explanation"),
+            "ai_price_before_manual_edit": line.get("original_total_price"),
+            "final_user_accepted_price": line.get("total_price"),
+            "location_floor": line.get("location_floor"),
+            "location_room": line.get("location_room"),
+            "location_zone": line.get("location_zone"),
+            "location_notes": line.get("location_notes"),
+            "notes": line.get("notes"),
+            "photos": [],
+            "suggested_related_smr": line.get("related_smr", []),
+            "suggested_materials": line.get("materials", []),
+            "target_offer_id": None,
+            "group_batch_id": batch_id,
+        }
+        await db.extra_work_drafts.insert_one(draft)
+        saved.append(draft["id"])
+    
+    return {"ok": True, "saved_count": len(saved), "batch_id": batch_id, "draft_ids": saved}
+
+
+# ── Hourly Rates Config ────────────────────────────────────────────
+
+@router.get("/ai-config/hourly-rates")
+async def get_hourly_rates(user: dict = Depends(require_m2)):
+    """Get worker hourly rate configuration"""
+    return WORKER_HOURLY_RATES
