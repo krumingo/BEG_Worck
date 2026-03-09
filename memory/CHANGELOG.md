@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 9)
+### P1: Main Warehouse → Project Allocation + Consumption + Remaining Stock Control
+- **Warehouse Issue**: POST /api/warehouse-issue with stock validation (prevents over-issue)
+- **Stock Balance**: GET /api/warehouse-stock computes: intake + returns - issues
+- **Consumption**: POST /api/project-consumption with project-available validation
+- **Return**: POST /api/warehouse-return with project-available validation
+- **Material Ledger**: GET /api/project-material-ledger/{id} - requested/purchased/issued/consumed/returned/remaining
+- **Warnings**: under_purchased, not_consumed, high_remaining
+- **Frontend**: ProjectMaterialLedger component with 3 action buttons + warnings + comparison table
+- Test report: /app/test_reports/iteration_24.json (100% backend 16/16, 100% frontend)
+
 ## Mar 9, 2026 (Session 8)
 ### P0/P1: Material Requests + Supplier Invoice Intake + Main Warehouse Posting
 - **Material Requests**: CRUD with auto-numbering (MR-XXXX), from-offer generation (incl. AI checklist materials), project/stage linking
