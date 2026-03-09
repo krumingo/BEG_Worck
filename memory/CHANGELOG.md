@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 7)
+### P0/P1: Extra Offers Send + Approval + Version Tracking
+- **Send flow**: POST /api/offers/{id}/send generates review_token, creates auto version snapshot, records event
+- **Public review page**: /offers/review/{token} - standalone, no auth, shows lines/totals/company/project
+- **Client actions**: Approve (→Accepted), Reject (→Rejected), Request revision (→NeedsRevision)
+- **Event history**: offer_events collection tracks sent/viewed/approved/rejected/revision events
+- **Version snapshots**: Auto-created in offer_versions on send (is_auto_backup=True)
+- **Project visibility**: Extra offers section in ProjectDetailPage with status badges
+- **Copy link**: "Копирай линк" button in OfferEditorPage copies review URL
+- New frontend page: OfferReviewPage.js (public route)
+- Test report: /app/test_reports/iteration_22.json (100% backend 15/15, 100% frontend)
+
 ## Mar 9, 2026 (Session 6)
 ### In-App Admin Notifications for AI Calibration Readiness
 - **Trigger**: When calibration category reaches >=10 samples, Admin gets in-app notification
