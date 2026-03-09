@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 15)
+### P1: BLOCK B — Historical Offer Intelligence
+- **Historical Import**: POST /api/historical/import-preview (parse XLSX + normalize) + POST /api/historical/import-confirm (save)
+- **Normalization Layer**: NORMALIZATION_MAP (25+ keywords → type/subtype), SECTION_KEYWORDS filter, unit normalization
+- **Analytics**: GET /api/historical/analytics — median/avg/min/max by category/city/unit with sample counts
+- **Internal Price Base**: get_internal_price_hint() — lookups historical median for AI merge
+- **AI Merge**: AI proposals now include internal_price_hint field (available, median, range, sample_count)
+- **Frontend**: /historical-offers page with overview cards, comparative tables, import dialog
+- New backend: /app/backend/app/routes/historical_offers.py
+- New frontend: /app/frontend/src/pages/HistoricalOffersPage.js
+- Test report: /app/test_reports/iteration_29.json (100% backend 15/15, 100% frontend)
+
 ## Mar 9, 2026 (Session 14)
 ### P0: BLOCK A — Offer Import / Export
 - **PDF Export**: GET /api/offers/{id}/pdf — clean A4 PDF with company info, lines (material+labor), totals, DejaVu font
