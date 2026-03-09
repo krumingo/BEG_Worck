@@ -1067,6 +1067,10 @@ api_router.include_router(extra_works_router)
 from app.routes.ai_calibration import router as ai_calibration_router
 api_router.include_router(ai_calibration_router)
 
+# Import procurement router - includes material requests, supplier invoices, warehouse posting
+from app.routes.procurement import router as procurement_router
+api_router.include_router(procurement_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

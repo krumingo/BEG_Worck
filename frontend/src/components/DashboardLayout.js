@@ -70,6 +70,7 @@ const ADMIN_NAV_CORE = [
   { to: "/payroll", icon: Receipt, labelKey: "nav.payroll" },
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
+  { to: "/procurement", icon: Package, labelKey: "nav.procurement" },
 ];
 
 // Data module navigation (collapsible section)

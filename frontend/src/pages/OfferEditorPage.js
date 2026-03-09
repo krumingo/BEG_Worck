@@ -48,6 +48,7 @@ import {
   Sparkles,
   Link2,
   ExternalLink,
+  Package,
 } from "lucide-react";
 import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
 import ActivityBudgetsPanel from "@/components/ActivityBudgetsPanel";
@@ -531,6 +532,16 @@ export default function OfferEditorPage() {
           {offer && (
             <Button variant="ghost" size="sm" onClick={() => window.print()} data-testid="print-btn">
               <Printer className="w-4 h-4" />
+            </Button>
+          )}
+          {offer && ["Accepted", "Sent"].includes(offer.status) && (
+            <Button variant="outline" size="sm" onClick={async () => {
+              try {
+                const res = await API.post(`/material-requests/from-offer/${offer.id}`, { stage_name: offer.title });
+                navigate(`/procurement?tab=requests`);
+              } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+            }} className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10" data-testid="create-mr-btn">
+              <Package className="w-4 h-4 mr-1" /> Заявка материали
             </Button>
           )}
         </div>
