@@ -1,0 +1,125 @@
+{
+  "summary": "Testing BLOCK B - Historical Offer Intelligence. Backend: 15/15 tests passed (100%). Fixed character encoding bug in NORMALIZATION_MAP. Frontend: All features working - page loads, overview cards, analytics table, import dialog, tabs navigation. One pre-existing data quality issue identified (corrupted encoding in historical DB records).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "HistoricalOffersPage",
+        "issues": [
+          "One category shows 'Мокр�� процеси' with corrupted Cyrillic - this is pre-existing corrupted data in MongoDB from before encoding fix, not a code bug"
+        ]
+      },
+      {
+        "screen": "Import Dialog",
+        "issues": [
+          "Console warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent} - minor accessibility improvement needed"
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_historical_offers.py",
+    "/app/test_reports/pytest/test_historical_offers_results.xml"
+  ],
+  "action_items": [
+    "Consider adding DB cleanup script to fix corrupted historical records (Мокр�� → Мокри) if data accuracy is critical"
+  ],
+  "critical_code_review_comments": [
+    "FIXED: Encoding bug in /app/backend/app/routes/historical_offers.py line 23 - 'Мокр�� процеси' corrected to 'Мокри процеси', and line 28 '��лоч' corrected to 'плоч'",
+    "GET /api/historical/analytics - Returns categories with median/avg/min/max prices, batches list, unique types and cities",
+    "POST /api/historical/import-preview - Parses XLSX, normalizes SMR descriptions, skips section headers, normalizes units",
+    "POST /api/historical/import-confirm - Saves historical rows with batch metadata (project, date, city), requires Admin role",
+    "AI proposal internal_price_hint - Correctly returns historical price data when available for recognized categories",
+    "Normalization maps: мазилк→Мокри процеси/Мазилка, плоч→Облицовка, шпакл→Шпакловка, etc. all working",
+    "Section keywords (рекапитулация, subtotal, общо за) correctly skipped during import preview",
+    "Sidebar navigation link 'Ценова база' at /historical-offers present and working"
+  ],
+  "updated_files": [
+    "/app/backend/app/routes/historical_offers.py",
+    "/app/backend/tests/test_historical_offers.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Test imports created during backend tests (TEST_Project_Confirm), pre-seeded data: 10 rows in 2 batches (Хотел Бояна 2020 + Офис Люлин 2022, both София)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Historical offers feature (BLOCK B) fully tested. Endpoints: GET /api/historical/analytics (with city/activity_type filters), POST /api/historical/import-preview (XLSX parse), POST /api/historical/import-confirm (save). AI proposal at POST /api/extra-works/ai-proposal includes internal_price_hint field. Test file at /app/backend/tests/test_historical_offers.py. One DB data quality issue: some old records have corrupted Cyrillic encoding 'Мокр��' - need manual DB cleanup if desired.",
+  "features_tested": {
+    "POST /api/historical/import-preview parses XLSX, normalizes SMR, skips section headers": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Correctly parses XLSX, maps keywords to categories (мазилк→Мокри процеси/Мазилка etc), skips section headers (рекапитулация, subtotal)"
+    },
+    "POST /api/historical/import-confirm saves historical rows with batch metadata": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Creates batch record with project name, date, city, row count. Requires Admin/Owner role"
+    },
+    "GET /api/historical/analytics returns categories with median/avg/min/max prices": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns complete analytics with median_material, median_labor, median_total, min_total, max_total, sample_count"
+    },
+    "Analytics filters by city and activity_type": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Both query params work correctly"
+    },
+    "AI proposal includes internal_price_hint when historical data available": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns available=true with median prices and range_label when historical data exists for category"
+    },
+    "Normalization maps keywords like мазилк→Мокри процеси/Мазилка, плоч→Облицовка": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "All 5 tested keyword mappings correct (мазилк, боядисв, плоч, шпакл, гипсокарт)"
+    },
+    "Section headers (subtotal, рекапитулация) are skipped during normalization": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "3 section headers correctly skipped in test, only 3 real work rows imported"
+    },
+    "Frontend: /historical-offers page shows overview cards": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Cards show: Исторически редове (16), Импорт пакети (5), Категории (7), Градове (2)"
+    },
+    "Frontend: Comparative table shows category/subtype/unit/samples/median prices/min/max": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Table headers: Категория, Подтип, Ед., Случаи, Мед. материал, Мед. труд, Мед. общо, Мин., Макс."
+    },
+    "Frontend: Import dialog with file upload, metadata fields, preview table, confirm button": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Dialog opens, file upload input present, metadata fields appear after file upload"
+    },
+    "Frontend: Sidebar has 'Ценова база' navigation link": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Link at /historical-offers visible in sidebar and navigates correctly"
+    }
+  },
+  "bug_fix_applied": {
+    "file": "/app/backend/app/routes/historical_offers.py",
+    "description": "Fixed character encoding corruption in NORMALIZATION_MAP - line 23 had 'Мокр�� процеси' (corrupted и), line 28 had '��лоч' (corrupted п)",
+    "lines_changed": [23, 28],
+    "impact": "New imports now correctly normalize to 'Мокри процеси' and 'плоч' keywords"
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs - All endpoints use real backend with MongoDB",
+    "has_mocked_apis": false
+  }
+}

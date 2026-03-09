@@ -1071,6 +1071,10 @@ api_router.include_router(ai_calibration_router)
 from app.routes.procurement import router as procurement_router
 api_router.include_router(procurement_router)
 
+# Import historical offers router - includes historical import, analytics, price base
+from app.routes.historical_offers import router as historical_offers_router
+api_router.include_router(historical_offers_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

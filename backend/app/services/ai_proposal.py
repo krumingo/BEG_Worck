@@ -377,4 +377,15 @@ async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, o
         except Exception as e:
             logger.warning(f"Calibration lookup failed: {e}")
     
+    # Add internal historical price hint
+    if org_id:
+        try:
+            from app.routes.historical_offers import get_internal_price_hint
+            activity_type = result["recognized"]["activity_type"]
+            activity_subtype = result["recognized"]["activity_subtype"]
+            hint = await get_internal_price_hint(org_id, activity_type, activity_subtype, unit, city)
+            result["internal_price_hint"] = hint
+        except Exception as e:
+            logger.warning(f"Internal price hint lookup failed: {e}")
+    
     return result

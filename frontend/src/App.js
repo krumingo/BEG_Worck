@@ -56,6 +56,7 @@ import AICalibrationPage from "@/pages/AICalibrationPage";
 import OfferReviewPage from "@/pages/OfferReviewPage";
 import ProcurementPage from "@/pages/ProcurementPage";
 import InventoryDashboardPage from "@/pages/InventoryDashboardPage";
+import HistoricalOffersPage from "@/pages/HistoricalOffersPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -154,6 +155,7 @@ function AppRoutes() {
       <Route path="/ai-calibration" element={<CompanyProtectedRoute><AICalibrationPage /></CompanyProtectedRoute>} />
       <Route path="/procurement" element={<CompanyProtectedRoute><ProcurementPage /></CompanyProtectedRoute>} />
       <Route path="/inventory" element={<CompanyProtectedRoute><InventoryDashboardPage /></CompanyProtectedRoute>} />
+      <Route path="/historical-offers" element={<CompanyProtectedRoute><HistoricalOffersPage /></CompanyProtectedRoute>} />
       <Route path="/employees" element={<CompanyProtectedRoute><EmployeesPage /></CompanyProtectedRoute>} />
       <Route path="/advances" element={<CompanyProtectedRoute><AdvancesPage /></CompanyProtectedRoute>} />
       <Route path="/payroll" element={<CompanyProtectedRoute><PayrollRunsPage /></CompanyProtectedRoute>} />

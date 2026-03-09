@@ -36,7 +36,7 @@ import {
   Menu,
   X,
   Lock,
-  Database,
+  Archive,
   Warehouse,
   TrendingUp,
   BarChart3,
@@ -62,6 +62,7 @@ const ADMIN_NAV_CORE = [
   { to: "/offers", icon: FileText, labelKey: "nav.offers" },
   { to: "/activity-catalog", icon: Layers, labelKey: "nav.activities" },
   { to: "/ai-calibration", icon: Sparkles, labelKey: "nav.aiCalibration" },
+  { to: "/historical-offers", icon: Archive, labelKey: "nav.historicalOffers" },
   { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
   { to: "/review-reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
   { to: "/reminders", icon: Bell, labelKey: "nav.reminders" },
@@ -343,7 +344,7 @@ export default function DashboardLayout({ children }) {
                 className="sidebar-link w-full text-muted-foreground hover:text-foreground"
                 data-testid="nav-data-toggle"
               >
-                <Database className="w-[18px] h-[18px]" />
+                <Archive className="w-[18px] h-[18px]" />
                 <span className="flex-1 text-left">{t("nav.data")}</span>
                 {dataExpanded ? (
                   <ChevronDown className="w-4 h-4" />

@@ -85,6 +85,7 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
         materials: r.materials || [],
         related_smr: r.related_smr || [],
         hourly_info: r.hourly_info || null,
+        internal_hint: r.internal_price_hint || null,
         location_floor: r._input.location_floor,
         location_room: r._input.location_room,
         location_zone: r._input.location_zone,
@@ -442,6 +443,11 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                         {p.hourly_info.min_applied && " (мин.)"}
                       </Badge>}
                       {p.explanation && <span className="text-muted-foreground/70 italic">{p.explanation.slice(0, 80)}</span>}
+                      {p.internal_hint?.available && (
+                        <Badge variant="outline" className="bg-violet-500/10 text-violet-400 border-violet-500/30">
+                          Вътрешна: {p.internal_hint.range_label} лв ({p.internal_hint.sample_count}x)
+                        </Badge>
+                      )}
                     </div>
 
                     {/* Related SMR */}
