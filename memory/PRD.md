@@ -1,7 +1,242 @@
 # BEG_Work PRD (Product Requirements Document)
 
 ## Overview
-BEG_Work is an ERP system for construction/field service businesses with comprehensive project management, HR, finance, and inventory modules.
+BEG_Work is an ERP system for construction/field service businesses with comprehensive project management, HR, finance, inventory, and AI-assisted offer modules.
+
+---
+
+## Master Roadmap (Updated Mar 9, 2026)
+
+### COMPLETED BLOCKS:
+- Core Infrastructure (auth, billing, modules)
+- Projects & Attendance
+- Finance M5 (invoices, payments, accounts)
+- Invoice Numbering & Payments
+- Complete Invoice Workflow (PDF, edit, project sync)
+- AI Offers + Extra Works Draft Flow MVP
+- Real LLM Integration (Hybrid Mode)
+- Learning Loop + Price Calibration Analytics
+- In-App Admin Notifications
+- Extra Offers Send + Approval + Version Tracking
+- Material Requests + Supplier Invoice Intake + Warehouse Posting
+- Warehouse → Project Allocation + Consumption + Stock Control
+- Inventory Dashboard + Stock Alerts
+- Editable AI Proposals + Multi-line + Hourly Rates
+- Two-Stage AI (Fast + LLM Refinement)
+- Data Module (Warehouses, Counterparties, Items, Prices, Turnover)
+
+### UPCOMING PRIORITY BLOCKS:
+
+#### BLOCK A: Offer Import / Export (P0)
+- Export основни оферти в Excel (xlsx) и PDF
+- Export допълнителни оферти в Excel и PDF
+- Import на оферти от Excel в програмата
+- Historical import на стари оферти (Excel + PDF) за AI ценова база
+- Template format за import
+- Validation + preview преди import
+
+#### BLOCK B: Historical Offer Intelligence (P1)
+- Ingest на архивни оферти от последните 15 години
+- Нормализация на СМР (activity type/subtype mapping)
+- Извличане на цени за труд и материали
+- Сравнителни таблици (вътрешна цена vs пазарна)
+- Вътрешна ценова база за AI предложения
+- Хибридно AI предложение: интернет ориентир + вътрешна база + calibration
+
+#### BLOCK C: Personnel / HR / Attendance / Payroll (P1 — AUDIT NEEDED)
+- Въвеждане на персонал (вече частично)
+- Данни за всеки човек (профил, квалификации, документи)
+- Присъствия (вече частично)
+- Личен календар
+- По кои обекти е работил (вече частично чрез work reports)
+- Часове / дни (вече частично)
+- Заплати / ставки / справки (вече частично чрез payroll)
+
+### FUTURE BLOCKS:
+- P2: M6 — AI OCR разпознаване на фактури
+- P2: M8 — Активи и QR код
+- P2: M9 — Админ конзола / BI дашборд
+- P2: Мобилни потоци за техници (Фаза 3-5)
+
+---
+
+## AUDIT: Three Priority Blocks (Mar 9, 2026)
+
+### BLOCK A: Offer Import / Export — AUDIT
+
+**Какво СЪЩЕСТВУВА:**
+- PDF export за фактури (reportlab, DejaVu font, A4 layout) — `/api/finance/invoices/{id}/pdf`
+- XLSX export за финанси (openpyxl) — `/api/reports/company-finance-export`
+- Offer data model с lines (activity_name, unit, qty, material_unit_cost, labor_unit_cost)
+- Extra offers с offer_type="extra" и source_batch_id
+- Offer versioning (snapshots)
+- Libraries installed: `reportlab 4.4.10`, `openpyxl 3.1.5`, `pandas 3.0.0`
+
+**Какво ЛИПСВА напълно:**
+- Export на оферта в PDF (само фактури имат PDF)
+- Export на оферта в Excel
+- Import на оферта от Excel
+- Historical import pipeline за стари оферти
+- Template format за import/export
+- Validation/preview при import
+
+**Какво трябва да се ДОВЪРШИ (не от нулата):**
+- PDF offer export — може да се базира на invoice PDF pattern (reportlab + DejaVu)
+- XLSX offer export — може да се базира на finance XLSX pattern (openpyxl)
+- Import pipeline — нов, но Pydantic models за OfferLineInput вече съществуват
+
+**Липсващи UI entry points:**
+- Бутон "Експорт PDF/Excel" в OfferEditorPage header
+- Бутон "Импорт оферта" в OffersListPage
+- Секция "Исторически импорт" в Settings или отделна страница
+
+**Relevant files:**
+- `/app/backend/app/routes/offers.py` (offer CRUD, lines)
+- `/app/backend/app/routes/finance.py` (PDF pattern, lines 1120-1250)
+- `/app/backend/app/routes/reports.py` (XLSX pattern, lines 1234-1445)
+- `/app/backend/app/models/offers.py` (OfferLineInput, OfferCreate)
+- `/app/frontend/src/pages/OfferEditorPage.js`
+- `/app/frontend/src/pages/OffersListPage.js`
+
+---
+
+### BLOCK B: Historical Offer Intelligence — AUDIT
+
+**Какво СЪЩЕСТВУВА:**
+- AI proposal service с rule-based + LLM hybrid (`/app/backend/app/services/ai_proposal.py`)
+- ACTIVITY_KNOWLEDGE dict с 7 категории и ценови бази
+- Learning Loop (ai_calibration_events: 138 записа, ai_calibrations: 7 одобрени)
+- City-aware pricing (CITY_PRICE_FACTORS)
+- Hourly rates по worker type (8 типа)
+- Activity catalog collection (1 запис)
+- Two-stage AI (fast rule-based + LLM refinement)
+- 63 оферти в базата, 21 extra work drafts
+
+**Какво ЛИПСВА напълно:**
+- Ingest pipeline за архивни оферти (bulk import)
+- Нормализация layer за СМР (activity_name → normalized type/subtype)
+- Вътрешна ценова база от исторически данни (internal_price_db)
+- Сравнителни таблици (вътрешна цена vs LLM vs пазарна)
+- Merge на вътрешна база в AI proposal flow
+- Dashboard/UI за historical price analytics
+
+**Какво трябва да се ДОВЪРШИ:**
+- activity_catalog вече съществува но е почти празен (1 запис) — трябва да се запълни
+- ACTIVITY_KNOWLEDGE dict може да се надгради с исторически данни
+- Calibration infrastructure е готова — трябва да се разшири за bulk ingest
+- AI proposal service вече поддържа calibration factors — трябва internal_price_db source
+
+**Зависимост:** BLOCK B зависи силно от BLOCK A (Import) — без import няма данни за ingest
+
+**Relevant files:**
+- `/app/backend/app/services/ai_proposal.py` (hybrid provider, knowledge base)
+- `/app/backend/app/routes/ai_calibration.py` (calibration analytics)
+- `/app/backend/app/routes/extra_works.py` (AI proposal endpoints)
+- `/app/backend/app/routes/offers.py` (activity-catalog CRUD)
+
+---
+
+### BLOCK C: Personnel / HR / Attendance / Payroll — AUDIT
+
+**Какво СЪЩЕСТВУВА (обширно):**
+
+Backend (43 endpoints):
+- `/api/employees` — CRUD с профили (pay_type, hourly/daily/monthly rates, start_date)
+- `/api/advances` — аванси и заеми (create, apply deduction)
+- `/api/payroll-runs` — създаване, генериране, финализиране, изтриване
+- `/api/payslips` — генерирани фишове, удръжки, маркиране като платено
+- `/api/attendance/mark` — маркиране присъствие (self + for-user)
+- `/api/attendance/my-today`, `/my-range`, `/site-today`, `/missing-today`
+- `/api/work-reports` — draft, submit, approve, reject, my-today, project-day
+- `/api/reminders` — policy, missing-attendance, missing-work-reports, send, excuse
+- `/api/notifications/my`, `/mark-read`
+- `/api/daily-logs` — дневник на строителни работи
+- `/api/change-orders` — промени по СМР
+
+Frontend (3093 реда в 10 файла):
+- `EmployeesPage.js` (297 реда) — списък служители, профили
+- `PayrollRunsPage.js` (255 реда) — payroll run-ове
+- `PayrollDetailPage.js` (470 реда) — детайл на payroll run
+- `MyPayslipsPage.js` (224 реда) — лични фишове
+- `AdvancesPage.js` (259 реда) — аванси
+- `SiteAttendancePage.js` (264 реда) — присъствие по обект
+- `AttendanceHistoryPage.js` (157 реда) — история присъствие
+- `MyDayPage.js` (288 реда) — днешен ден (mark attendance + work report)
+- `WorkReportFormPage.js` (369 реда) — работен отчет
+- `DailyLogsPage.js` (510 реда) — дневник
+
+Navigation:
+- ✅ /employees
+- ✅ /advances
+- ✅ /payroll
+- ✅ /site-attendance
+- ✅ /review-reports
+- ✅ /reminders
+- ✅ /daily-logs
+- ✅ /change-orders
+- ✅ /my-day (за служители)
+- ✅ /attendance-history
+
+Models (hr.py):
+- EmployeeProfile: pay_type (Hourly/Daily/Monthly), hourly_rate, daily_rate, monthly_salary
+- AdvanceLoan: type, amount, currency
+- PayrollRun: period_type, period_start/end
+- Payslip: deductions, mark-paid
+
+**Какво ЛИПСВА:**
+- Личен календар (calendar view на присъствия/часове)
+- Квалификации / сертификати / документи на служител
+- Справка "по кои обекти е работил" (данните съществуват в work_reports, но няма dedicated report)
+- Детайлни часови справки (total hours per project per employee)
+- Детайлен employee profile view (сегашният е базов)
+
+**Какво е РАЗПИЛЯНО и трябва да се подреди:**
+- Work reports данните се записват, но няма обобщени справки (кой колко часа е работил къде)
+- Attendance + work reports са в един routes файл (attendance.py) с 25 endpoint-а
+- MyDayPage комбинира attendance + work report, но няма calendar view
+
+**Липсващи UI entry points:**
+- Employee detail page (сега само list + modal)
+- Per-employee project history view
+- Per-employee hours summary
+- Calendar view за присъствие
+
+**Relevant files:**
+- `/app/backend/app/routes/hr.py` (18 endpoints)
+- `/app/backend/app/routes/attendance.py` (25 endpoints)
+- `/app/backend/app/routes/work_logs.py` (daily-logs, change-orders)
+- `/app/backend/app/models/hr.py`
+- `/app/backend/app/models/attendance.py`
+- `/app/frontend/src/pages/EmployeesPage.js`
+- `/app/frontend/src/pages/PayrollRunsPage.js`
+- `/app/frontend/src/pages/PayrollDetailPage.js`
+- `/app/frontend/src/pages/SiteAttendancePage.js`
+- `/app/frontend/src/pages/MyDayPage.js`
+- `/app/frontend/src/pages/WorkReportFormPage.js`
+- `/app/frontend/src/pages/DailyLogsPage.js`
+
+---
+
+## RECOMMENDED NEXT PRIORITY
+
+### Препоръка: BLOCK A (Offer Import/Export) → BLOCK B (Historical Intelligence)
+
+**Защо BLOCK A е следващ:**
+1. **Най-висока бизнес стойност** — Export на оферти е P0 функционалност за ежедневна работа
+2. **Техническа готовност** — PDF + XLSX patterns вече съществуват (invoice PDF, finance XLSX)
+3. **Бърз за изпълнение** — не изисква нова архитектура, а адаптация на съществуващи patterns
+4. **Prerequisite за BLOCK B** — без Import няма данни за Historical Intelligence
+5. **Immediate user value** — потребителят може веднага да изпраща оферти в професионален формат
+
+**Защо НЕ BLOCK C:**
+- HR/Attendance/Payroll вече е **70-80% завършен** (43 backend endpoints, 10 frontend pages, 3093 реда)
+- Липсващите елементи (calendar, employee detail, hours report) са по-скоро **подобрения**, не foundation
+- Може да се довърши паралелно или след A+B
+
+**Логична последователност:**
+1. **BLOCK A** (1-2 сесии): Export PDF/XLSX + Import Excel + Template
+2. **BLOCK B** (2-3 сесии): Ingest pipeline + Нормализация + Вътрешна ценова база + AI merge
+3. **BLOCK C improvements** (1 сесия): Calendar view + Employee detail + Hours report
 
 ---
 

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 13)
+### Roadmap Update + Three-Block Audit
+- **Updated Master Roadmap** with 3 new priority blocks: A (Offer Import/Export), B (Historical Intelligence), C (HR/Attendance/Payroll)
+- **Full audit** of all three blocks: what exists, what's missing, what's scattered
+- **BLOCK A audit**: No offer export/import exists, but PDF+XLSX patterns ready (invoice PDF, finance XLSX)
+- **BLOCK B audit**: AI infrastructure ready (hybrid LLM, calibration, knowledge base), but no historical ingest pipeline
+- **BLOCK C audit**: 70-80% complete (43 endpoints, 10 pages, 3093 lines), missing calendar/employee detail/hours report
+- **Recommendation**: BLOCK A first (P0, prerequisite for B, quick to build on existing patterns)
+
 ## Mar 9, 2026 (Session 12)
 ### P1/P2: Two-Stage AI for Extra Works and Offer AI Assist
 - **Stage A (Fast)**: POST /api/extra-works/ai-fast — rule-based, ~0.15s, instant usable proposals
