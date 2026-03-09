@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 9, 2026 (Session 14)
+### P0: BLOCK A — Offer Import / Export
+- **PDF Export**: GET /api/offers/{id}/pdf — clean A4 PDF with company info, lines (material+labor), totals, DejaVu font
+- **XLSX Export**: GET /api/offers/{id}/xlsx — structured spreadsheet with headers, line data, totals
+- **Import Template**: GET /api/offer-import-template — template with example rows + instructions sheet
+- **Import Preview**: POST /api/offers/import-preview — parses XLSX, auto-detects columns, returns warnings
+- **Import Confirm**: POST /api/offers/import-confirm — creates offer from previewed lines
+- **Frontend**: OfferEditorPage has PDF+Excel export buttons; OffersListPage has Шаблон+Импорт+Нова оферта
+- **Import Dialog**: File upload → preview table → project select → confirm
+- Works for both main and extra offers; handles Bulgarian units (м2, бр, часа)
+- Test report: /app/test_reports/iteration_28.json (100% backend 16/16, 100% frontend)
+
 ## Mar 9, 2026 (Session 13)
 ### Roadmap Update + Three-Block Audit
 - **Updated Master Roadmap** with 3 new priority blocks: A (Offer Import/Export), B (Historical Intelligence), C (HR/Attendance/Payroll)
