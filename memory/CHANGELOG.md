@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 22)
+### FOCUS PHASE 3: Pricing Rules + Materials Generation
+- **AIPricingBreakdown component**: Reusable component showing type/subtype, worker rate badge, small qty badge, internal hint, explanation, collapsible materials list
+- **Materials display**: Grouped by Основни/Спомагателни/Консумативи with estimated quantities and reasons
+- **Pricing explanation**: Worker type + hourly rate + min-job indicator + small qty % + explanation text all visible
+- **Materials saved**: batch-save now stores materials array from proposals (was empty before)
+- **Both pages updated**: NovoSMRPage and OfferEditorPage AI dialog use AIPricingBreakdown
+- New: /app/frontend/src/components/AIPricingBreakdown.js
+- Test report: /app/test_reports/iteration_36.json (100% backend 12/12, 100% frontend)
+
 ## Mar 10, 2026 (Session 21)
 ### FINAL FIX: Source Link + Edit Mode + Clean Offer Detail (Polished)
 - **Източник deep-link**: Clickable link navigates to Project page → scrolls to #extra-works-section showing source rows with unit prices
