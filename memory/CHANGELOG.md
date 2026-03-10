@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 19)
+### FOCUS PHASE 2.1: Readability + Type Clarity for Additional Offers
+- **Type badges everywhere**: "Основна" (blue) / "Допълнителна" (amber) in offers list, offer detail header, project page
+- **Type filter**: Segmented buttons "Всички / Основни (60) / Допълнителни (4)" in offers list
+- **Source relation**: Offer detail header shows "Създадена от N допълнителни СМР" for extra offers
+- **KSS line notes**: Location/note text now visible under activity name in offer lines table
+- **Column widths**: Reduced numeric column widths to give more space to activity descriptions
+- **i18n fix**: NeedsRevision → "Корекция" translation added
+- **Project page**: Extra offers block with amber border, amber offer_no, better layout
+- Test report: /app/test_reports/iteration_33.json (100% frontend)
+
 ## Mar 10, 2026 (Session 18)
 ### FOCUS PHASE 2: Complete "Ново СМР" Flow
 - **Dedicated page**: /projects/{id}/novo-smr — standalone for site walkthrough extra works
