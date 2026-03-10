@@ -373,6 +373,7 @@
       "sent": "Изпратена",
       "accepted": "Приета",
       "rejected": "Отказана",
+      "needsrevision": "Корекция",
       "archived": "Архивирана"
     },
     "noOffers": "Няма намерени оферти",

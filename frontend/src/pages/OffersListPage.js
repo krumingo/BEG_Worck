@@ -61,6 +61,7 @@ export default function OffersListPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState(projectIdParam);
+  const [typeFilter, setTypeFilter] = useState("");
 
   const canCreate = ["Admin", "Owner", "SiteManager"].includes(user?.role);
 
@@ -90,13 +91,19 @@ export default function OffersListPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const filteredOffers = search
-    ? offers.filter(o => 
-        o.offer_no?.toLowerCase().includes(search.toLowerCase()) ||
-        o.title?.toLowerCase().includes(search.toLowerCase()) ||
-        o.project_code?.toLowerCase().includes(search.toLowerCase())
-      )
-    : offers;
+  const filteredOffers = offers.filter(o => {
+    if (search && !(
+      o.offer_no?.toLowerCase().includes(search.toLowerCase()) ||
+      o.title?.toLowerCase().includes(search.toLowerCase()) ||
+      o.project_code?.toLowerCase().includes(search.toLowerCase())
+    )) return false;
+    if (typeFilter === "main" && o.offer_type === "extra") return false;
+    if (typeFilter === "extra" && o.offer_type !== "extra") return false;
+    return true;
+  });
+
+  const mainCount = offers.filter(o => o.offer_type !== "extra").length;
+  const extraCount = offers.filter(o => o.offer_type === "extra").length;
 
   const formatCurrency = (amount, currency = "EUR") => {
     return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount || 0);
@@ -198,6 +205,11 @@ export default function OffersListPage() {
             <SelectItem value="Rejected">{t("offers.status.rejected")}</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex rounded-lg border border-border overflow-hidden" data-testid="type-filter">
+          <button onClick={() => setTypeFilter("")} className={`px-3 py-1.5 text-xs transition-colors ${!typeFilter ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}>Всички</button>
+          <button onClick={() => setTypeFilter("main")} className={`px-3 py-1.5 text-xs border-l border-border transition-colors ${typeFilter === "main" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}>Основни ({mainCount})</button>
+          <button onClick={() => setTypeFilter("extra")} className={`px-3 py-1.5 text-xs border-l border-border transition-colors ${typeFilter === "extra" ? "bg-amber-500 text-black" : "bg-card text-muted-foreground hover:text-foreground"}`}>Допълнителни ({extraCount})</button>
+        </div>
       </div>
 
       {/* Table */}
@@ -241,8 +253,13 @@ export default function OffersListPage() {
                     data-testid={`offer-row-${offer.id}`}
                   >
                     <TableCell>
-                      <p className="font-mono text-sm text-primary">{offer.offer_no}</p>
-                      <p className="text-sm text-foreground truncate max-w-[200px]">{offer.title}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-sm text-primary">{offer.offer_no}</p>
+                        <Badge variant="outline" className={`text-[9px] ${offer.offer_type === "extra" ? "bg-amber-500/15 text-amber-400 border-amber-500/30" : "bg-blue-500/10 text-blue-400 border-blue-500/30"}`}>
+                          {offer.offer_type === "extra" ? "Допълнителна" : "Основна"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-foreground truncate max-w-[250px]">{offer.title}</p>
                     </TableCell>
                     <TableCell>
                       <p className="font-mono text-xs text-primary">{offer.project_code}</p>

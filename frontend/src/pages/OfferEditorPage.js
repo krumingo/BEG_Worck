@@ -531,6 +531,9 @@ export default function OfferEditorPage() {
               </h1>
               {offer && (
                 <>
+                  <Badge variant="outline" className={`text-[10px] ${offer.offer_type === "extra" ? "bg-amber-500/15 text-amber-400 border-amber-500/30" : "bg-blue-500/10 text-blue-400 border-blue-500/30"}`}>
+                    {offer.offer_type === "extra" ? "Допълнителна" : "Основна"}
+                  </Badge>
                   <Badge variant="outline" className={`text-xs ${STATUS_COLORS[offer.status] || ""}`}>
                     {t(`offers.status.${offer.status.toLowerCase()}`)}
                   </Badge>
@@ -538,7 +541,14 @@ export default function OfferEditorPage() {
                 </>
               )}
             </div>
-            {offer && <p className="text-sm text-muted-foreground">{offer.project_code} - {offer.project_name}</p>}
+            {offer && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{offer.project_code} - {offer.project_name}</span>
+                {offer.offer_type === "extra" && offer.notes && (
+                  <span className="text-xs text-amber-400/70">• {offer.notes}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -729,14 +739,14 @@ export default function OfferEditorPage() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">{t("offers.activity")}</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">Тип</th>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.unit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">{t("offers.qty")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.matPerUnit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.labPerUnit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.material")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.labor")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[110px]">{t("common.total")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Тип</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[65px]">{t("offers.unit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[65px]">{t("offers.qty")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.matPerUnit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.labPerUnit")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">{t("offers.material")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">{t("offers.labor")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[95px]">{t("common.total")}</th>
                     {canEdit && <th className="w-[50px]"></th>}
                   </tr>
                 </thead>
@@ -825,10 +835,13 @@ export default function OfferEditorPage() {
                                   <Input
                                     value={line.activity_name}
                                     onChange={(e) => updateLine(line.originalIndex, "activity_name", e.target.value)}
-                                    placeholder="Activity name"
+                                    placeholder="Описание на СМР"
                                     disabled={!canEdit}
                                     className="bg-background h-8 text-sm"
                                   />
+                                  {line.note && (
+                                    <p className="text-[10px] text-muted-foreground/70 mt-0.5 truncate" title={line.note}>{line.note}</p>
+                                  )}
                                 </div>
                               </td>
                               <td className="p-2">

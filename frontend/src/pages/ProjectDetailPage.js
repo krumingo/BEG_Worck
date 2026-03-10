@@ -558,39 +558,36 @@ export default function ProjectDetailPage() {
 
         {/* Extra Offers Section */}
         {offers.extra_offers && offers.extra_offers.length > 0 && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-extra-offers">
+          <div className="bg-gray-800/50 border border-amber-500/20 rounded-lg p-4" data-testid="card-extra-offers">
             <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-violet-500" />
-              <h3 className="font-semibold text-white">Допълнителни оферти ({offers.extra_offers.length})</h3>
+              <FileText className="w-5 h-5 text-amber-500" />
+              <h3 className="font-semibold text-white">Допълнителни оферти</h3>
+              <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30">{offers.extra_offers.length}</Badge>
             </div>
             <div className="space-y-2">
               {offers.extra_offers.map((eo) => {
                 const sc = {
-                  Draft: "bg-gray-500/20 text-gray-400", Sent: "bg-blue-500/20 text-blue-400",
-                  Accepted: "bg-emerald-500/20 text-emerald-400", Rejected: "bg-red-500/20 text-red-400",
-                  NeedsRevision: "bg-amber-500/20 text-amber-400",
+                  Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30", Sent: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                  Accepted: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", Rejected: "bg-red-500/20 text-red-400 border-red-500/30",
+                  NeedsRevision: "bg-amber-500/20 text-amber-400 border-amber-500/30",
                 };
                 const sl = {
                   Draft: "Чернова", Sent: "Изпратена", Accepted: "Одобрена",
                   Rejected: "Отказана", NeedsRevision: "Корекция",
                 };
                 return (
-                  <div key={eo.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/30 cursor-pointer border border-transparent hover:border-gray-600 transition-colors"
+                  <div key={eo.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/15 hover:bg-muted/25 cursor-pointer border border-gray-700/50 hover:border-amber-500/30 transition-colors"
                     onClick={() => navigate(`/offers/${eo.id}`)} data-testid={`extra-offer-${eo.id}`}>
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm text-white">{eo.offer_no}</span>
-                          <Badge variant="outline" className={`text-[10px] ${sc[eo.status] || ""}`}>
-                            {sl[eo.status] || eo.status}
-                          </Badge>
-                          {eo.version > 1 && <Badge variant="outline" className="text-[10px]">v{eo.version}</Badge>}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-0.5">{eo.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-mono text-sm text-amber-400 font-medium">{eo.offer_no}</span>
+                        <Badge variant="outline" className={`text-[10px] ${sc[eo.status] || ""}`}>{sl[eo.status] || eo.status}</Badge>
+                        {eo.version > 1 && <span className="text-[10px] text-muted-foreground">v{eo.version}</span>}
                       </div>
+                      <p className="text-sm text-gray-300 truncate">{eo.title}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm text-amber-400">{formatCurrency(eo.total || 0, eo.currency || "BGN")}</p>
+                    <div className="text-right flex-shrink-0 ml-4">
+                      <p className="font-mono text-sm font-bold text-white">{formatCurrency(eo.total || 0, eo.currency || "BGN")}</p>
                       <p className="text-[10px] text-gray-500">{eo.sent_at ? `Изпр. ${formatDate(eo.sent_at)}` : formatDate(eo.created_at)}</p>
                     </div>
                   </div>

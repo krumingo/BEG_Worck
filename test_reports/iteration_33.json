@@ -1,0 +1,93 @@
+{
+  "summary": "Phase 2.1 Readability + Type Clarity for Additional Offers - Frontend Testing PASSED. All 9 features verified: type badges (Основна blue / Допълнителна amber), type filter buttons with counts, filtering functionality, offer detail header badges, source info display, KSS line notes in grouped view, NeedsRevision as 'Корекция', project page extra offers block with amber border, and amber offer_no color.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Offer detail KSS lines",
+        "issues": ["Note display only works in grouped view mode - flat view doesn't show notes under activity names. The code at line 842-843 shows notes only in grouped view."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_33.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "OffersListPage.js correctly implements type badges with proper colors (blue for Основна, amber for Допълнителна)",
+    "Type filter (data-testid='type-filter') shows counts: Всички / Основни (60) / Допълнителни (4)",
+    "OfferEditorPage.js header shows type badge with proper styling",
+    "Source info 'Създадена от N допълнителни СМР' displays correctly in offer header for extra offers",
+    "bg.json has correct translation: 'needsrevision': 'Корекция'",
+    "ProjectDetailPage.js extra offers block has amber border (border-amber-500/20) and amber offer_no text (text-amber-400)"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "None needed - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 2.1 frontend features all verified. Key testids: offers-list-page, type-filter, offers-table, offer-editor-page, card-extra-offers, project-detail-page. OFF-0103 is an extra offer with source info. PRJ-001 project has extra offers block visible. NeedsRevision status translates to 'Корекция'.",
+  "features_tested": {
+    "Offers list shows type badge (Основна blue / Допълнителна amber)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Type badges visible with correct colors - blue for Основна (bg-blue-500/10 text-blue-400), amber for Допълнителна (bg-amber-500/15 text-amber-400)"
+    },
+    "Type filter buttons: Всички / Основни (N) / Допълнителни (N)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Filter shows counts: Всички, Основни (60), Допълнителни (4)"
+    },
+    "Filtering by 'Допълнителни' shows only extra offers": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "After clicking Допълнителни filter, only 4 rows with 'Допълнителна' badges visible"
+    },
+    "Offer detail header shows type badge": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "OFF-0103 shows 'Допълнителна' badge with amber styling in header"
+    },
+    "Offer detail shows source info": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'Създадена от 3 допълнителни СМР' for OFF-0103"
+    },
+    "KSS line notes visible under activity name": {
+      "tested": true,
+      "result": "PARTIAL",
+      "notes": "Notes display implemented but only visible in grouped view mode, not in flat view"
+    },
+    "NeedsRevision status translated as 'Корекция'": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Корекция' status visible in offers list for offer OFF-0097"
+    },
+    "Project page extra offers block has amber border": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Extra offers card has classes: 'border border-amber-500/20'"
+    },
+    "Extra offers in project page show offer_no in amber color": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Offer numbers have 'text-amber-400' class for amber coloring"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs",
+    "has_mocked_apis": false
+  }
+}
