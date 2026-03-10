@@ -14,11 +14,12 @@ PAYMENT_METHODS = ["Cash", "BankTransfer"]
 
 class EmployeeProfileCreate(BaseModel):
     user_id: str
-    pay_type: str = "Daily"
+    pay_type: str = "Monthly"
     hourly_rate: Optional[float] = None
     daily_rate: Optional[float] = None
     monthly_salary: Optional[float] = None
     standard_hours_per_day: float = 8
+    working_days_per_month: float = 22
     pay_schedule: str = "Monthly"
     active: bool = True
     start_date: Optional[str] = None
@@ -29,6 +30,7 @@ class EmployeeProfileUpdate(BaseModel):
     daily_rate: Optional[float] = None
     monthly_salary: Optional[float] = None
     standard_hours_per_day: Optional[float] = None
+    working_days_per_month: Optional[float] = None
     pay_schedule: Optional[str] = None
     active: Optional[bool] = None
     start_date: Optional[str] = None

@@ -97,6 +97,7 @@ async def upsert_employee_profile(data: EmployeeProfileCreate, user: dict = Depe
         "daily_rate": data.daily_rate,
         "monthly_salary": data.monthly_salary,
         "standard_hours_per_day": data.standard_hours_per_day,
+        "working_days_per_month": data.working_days_per_month,
         "pay_schedule": data.pay_schedule,
         "active": data.active,
         "start_date": data.start_date,
@@ -137,6 +138,25 @@ async def update_employee_profile(user_id: str, data: EmployeeProfileUpdate, use
     await log_audit(user["org_id"], user["id"], user["email"], "employee_profile_updated", "employee", user_id, update)
     
     return await db.employee_profiles.find_one({"id": profile["id"]}, {"_id": 0})
+
+
+@router.put("/employees/{user_id}/basic")
+async def update_employee_basic(user_id: str, data: dict, user: dict = Depends(require_m4)):
+    """Update employee basic info (name, phone, role)"""
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    allowed = ["first_name", "last_name", "phone", "role"]
+    update = {k: v for k, v in data.items() if k in allowed and v is not None}
+    if update:
+        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one({"id": user_id}, {"$set": update})
+    
+    return await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "role": 1})
 
 
 # ── Advances / Loans ───────────────────────────────────────────────
