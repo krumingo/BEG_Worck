@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 23)
+### P0 RECOVERY: Restore HR, Remove Hardcoded Rates, Switch to EUR, Keep Historical Base
+- **HR restored**: Служители, Аванси, Заплати, Присъствие, Преглед отчети all verified working
+- **Pricing settings**: New section in CompanySettingsPage — 8 worker categories with EUR rates
+- **Org-specific rates**: GET/PUT /api/ai-config/hourly-rates loads from DB, not hardcoded
+- **DEMO fallback**: Hardcoded rates renamed to DEMO_WORKER_RATES, clearly marked as "ДЕМО ставки"
+- **EUR everywhere**: Default currency EUR in offers, imports, AI proposals; "лв" replaced with "EUR"
+- **AI is_demo flag**: hourly_info includes is_demo=true/false so UI can show warning
+- **Historical intact**: 331 rows, 22 categories, analytics page accessible
+- Test report: /app/test_reports/iteration_37.json (100% backend 9/9)
+
 ## Mar 10, 2026 (Session 22)
 ### FOCUS PHASE 3: Pricing Rules + Materials Generation
 - **AIPricingBreakdown component**: Reusable component showing type/subtype, worker rate badge, small qty badge, internal hint, explanation, collapsible materials list

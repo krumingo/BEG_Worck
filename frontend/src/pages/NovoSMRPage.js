@@ -327,7 +327,7 @@ export default function NovoSMRPage() {
               {refineStatus === "done" && <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400"><CheckCircle2 className="w-2.5 h-2.5 mr-0.5 inline" />LLM</Badge>}
               {refineStatus === "failed" && <Badge variant="outline" className="text-[9px] bg-gray-500/10 text-gray-400">LLM n/a</Badge>}
             </div>
-            <span className="font-mono text-lg font-bold text-primary">{grandTotal.toFixed(2)} лв</span>
+            <span className="font-mono text-lg font-bold text-primary">{grandTotal.toFixed(2)} EUR</span>
           </div>
 
           {/* Proposal rows */}
@@ -345,7 +345,7 @@ export default function NovoSMRPage() {
                   <Badge variant="outline" className={`text-[9px] ${p.provider === "llm" ? "bg-emerald-500/10 text-emerald-400" : "bg-gray-500/10 text-gray-400"}`}>
                     {p.provider === "llm" ? "LLM" : "Rule"} {Math.round(p.confidence * 100)}%
                   </Badge>
-                  <span className="font-mono text-sm font-bold text-primary">{lineTotal.toFixed(2)} лв</span>
+                  <span className="font-mono text-sm font-bold text-primary">{lineTotal.toFixed(2)} EUR</span>
                 </div>
 
                 {/* Editable fields */}
@@ -368,11 +368,11 @@ export default function NovoSMRPage() {
                         <Input type="number" step="0.01" value={p.qty} onChange={e => editProp(i, "qty", parseFloat(e.target.value) || 1)} className="bg-background h-7 text-xs font-mono" />
                       </div>
                       <div className="space-y-0.5">
-                        <label className="text-[10px] text-muted-foreground">Мат. лв/ед</label>
+                        <label className="text-[10px] text-muted-foreground">Мат. EUR/ед</label>
                         <Input type="number" step="0.01" value={p.material} onChange={e => editProp(i, "material", parseFloat(e.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                       </div>
                       <div className="space-y-0.5">
-                        <label className="text-[10px] text-muted-foreground">Труд лв/ед</label>
+                        <label className="text-[10px] text-muted-foreground">Труд EUR/ед</label>
                         <Input type="number" step="0.01" value={p.labor} onChange={e => editProp(i, "labor", parseFloat(e.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                       </div>
                       <div className="space-y-0.5">
@@ -405,7 +405,7 @@ export default function NovoSMRPage() {
               </Button>
               <Button onClick={() => handleSave("ready")} disabled={saving || !selectedCount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-ready-btn-bottom">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
-                Запази ({selectedCount} реда, {grandTotal.toFixed(2)} лв)
+                Запази ({selectedCount} реда, {grandTotal.toFixed(2)} EUR)
               </Button>
             </div>
           </div>

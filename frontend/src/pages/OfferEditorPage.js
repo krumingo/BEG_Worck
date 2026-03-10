@@ -1206,7 +1206,7 @@ export default function OfferEditorPage() {
                 <div className="flex items-center justify-between p-2 rounded-lg bg-violet-500/10 border border-violet-500/30">
                   <span className="text-xs text-violet-300">{aiResults.line_count} реда</span>
                   <span className="font-mono text-sm font-bold text-primary">
-                    {Object.values(aiEdits).reduce((s, e) => s + (parseFloat(e.material) + parseFloat(e.labor)) * parseFloat(e.qty), 0).toFixed(2)} лв
+                    {Object.values(aiEdits).reduce((s, e) => s + (parseFloat(e.material) + parseFloat(e.labor)) * parseFloat(e.qty), 0).toFixed(2)} EUR
                   </span>
                 </div>
 
@@ -1244,11 +1244,11 @@ export default function OfferEditorPage() {
                           <Input type="number" step="0.01" value={e.qty} onChange={ev => editAiProp(i, "qty", parseFloat(ev.target.value) || 1)} className="bg-background h-7 text-xs font-mono" />
                         </div>
                         <div className="space-y-0.5">
-                          <label className="text-[10px] text-muted-foreground">Мат. лв/ед</label>
+                          <label className="text-[10px] text-muted-foreground">Мат. EUR/ед</label>
                           <Input type="number" step="0.01" value={e.material} onChange={ev => editAiProp(i, "material", parseFloat(ev.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                         </div>
                         <div className="space-y-0.5">
-                          <label className="text-[10px] text-muted-foreground">Труд лв/ед</label>
+                          <label className="text-[10px] text-muted-foreground">Труд EUR/ед</label>
                           <Input type="number" step="0.01" value={e.labor} onChange={ev => editAiProp(i, "labor", parseFloat(ev.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                         </div>
                         <div className="space-y-0.5">
