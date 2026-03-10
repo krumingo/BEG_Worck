@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 20)
+### FINAL FIX: Additional Offer Detail Screen Layout
+- **Summary moved**: Right sidebar REMOVED for extra offers → horizontal summary strip above KSS table
+- **Unified header**: offer_no + Допълнителна (amber) + status + version + project + source relation in one block
+- **KSS columns rebuilt**: СМР | Тип | **Локация** (NEW) | Мярка | К-во | Мат/ед | Труд/ед | Материал | Труд | Общо
+- **Full SMR text visible**: Wrapping enabled, no more "Шпакл..." fragments
+- **Grouping default OFF** for extra offers (readability > compactness)
+- **Source section**: "Източник: Допълнителни СМР" badge + count in horizontal strip
+- **Location column**: Extracts Ет./Помещение/Зона from line notes for extra offers
+- **Main offers unchanged**: Still use sidebar layout with grouping toggle
+- Test report: /app/test_reports/iteration_34.json (100% frontend)
+
 ## Mar 10, 2026 (Session 19)
 ### FOCUS PHASE 2.1: Readability + Type Clarity for Additional Offers
 - **Type badges everywhere**: "Основна" (blue) / "Допълнителна" (amber) in offers list, offer detail header, project page
