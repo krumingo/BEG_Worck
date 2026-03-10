@@ -1,0 +1,118 @@
+{
+  "summary": "P0 Recovery testing: All 9 backend tests PASSED. HR modules visible and working. AI rates use org settings (source=organization). Settings area shows EUR. AIPricingBreakdown shows EUR for hourly rates. However, NovoSMRPage totals still display in 'лв' (BGN) instead of EUR.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "NovoSMRPage currency display",
+        "issue": "Totals and price labels show 'лв' (BGN) instead of EUR. Lines 330, 348, 371, 375, 408 in NovoSMRPage.js need to change from 'лв' to 'EUR'",
+        "affected_selectors": ["grandTotal", "lineTotal", "price labels"],
+        "priority": "HIGH"
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "CompanySettingsPage",
+        "issues": ["React hydration warning: nested div inside p element (cosmetic only)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_p0_recovery_hr_rates.py",
+    "/app/test_reports/pytest/test_p0_recovery_hr_rates_results.xml"
+  ],
+  "action_items": [
+    "Change NovoSMRPage.js lines 330, 348, 371, 375, 408 from 'лв' to 'EUR' to match AIPricingBreakdown component"
+  ],
+  "critical_code_review_comments": [
+    "AIPricingBreakdown.js correctly shows EUR/ч for hourly rates (line 29)",
+    "extra_works.py correctly uses DEMO_WORKER_RATES as fallback, org rates from db.settings when configured",
+    "hourly_info in AI response correctly includes currency='EUR' and is_demo=false when org rates configured",
+    "CompanySettingsPage loads rates from /ai-config/hourly-rates and shows 'Конфигурирани' badge when saved"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_p0_recovery_hr_rates.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "90% - EUR display issue in NovoSMRPage totals"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "None needed",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "P0 Recovery tested. Backend: All AI endpoints return hourly_info with currency='EUR', is_demo=false when org rates configured. HR endpoints (/employees, /payroll-runs, /advances) all working. Frontend: Worker rates section shows EUR and 'Конфигурирани' badge. AIPricingBreakdown shows EUR. Issue: NovoSMRPage totals still use 'лв' currency symbol.",
+  "features_tested": {
+    "Backend: GET /api/ai-config/hourly-rates returns source='organization'": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns source='organization' when org rates configured, currency='EUR'"
+    },
+    "Backend: PUT /api/ai-config/hourly-rates saves org-specific rates": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Saves to db.settings, returns ok=True and source='organization'"
+    },
+    "Backend: AI proposal uses org rates (is_demo=false)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "hourly_info.is_demo=false when org rates configured"
+    },
+    "Backend: AI proposal hourly_info includes currency='EUR'": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "apply_hourly_pricing() sets currency='EUR' in hourly_info"
+    },
+    "Backend: GET /api/employees returns employees list": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns list of employees with profile data"
+    },
+    "Backend: GET /api/payroll-runs returns payroll data": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns list of payroll runs"
+    },
+    "Backend: GET /api/historical/analytics returns historical price data": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns 461 rows, 60 categories - historical data intact"
+    },
+    "Frontend: Settings page has worker rates section with EUR": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'Ценообразуване / Часови ставки' with EUR labels and 'Конфигурирани' badge"
+    },
+    "Frontend: Sidebar shows HR links": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Служители, Аванси, Заплати, Присъствие, Преглед отчети all visible"
+    },
+    "Frontend: Employees page loads": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows employee list with pay types and EUR rates"
+    },
+    "Frontend: Historical offers page loads": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 461 rows, 25 batches, 60 categories"
+    },
+    "Frontend: Novo SMR AI shows EUR in pricing badges": {
+      "tested": true,
+      "result": "PARTIAL",
+      "notes": "AIPricingBreakdown shows EUR/ч for hourly rates, BUT NovoSMRPage totals still show 'лв' (lines 330, 348, 371, 375, 408)"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs - all endpoints using real backend",
+    "has_mocked_apis": false
+  }
+}

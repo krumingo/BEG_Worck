@@ -30,6 +30,12 @@ export default function CompanySettingsPage() {
   const [invSaving, setInvSaving] = useState(false);
   const [invSaved, setInvSaved] = useState(false);
 
+  // Worker rates state
+  const [workerRates, setWorkerRates] = useState({});
+  const [ratesSource, setRatesSource] = useState("demo");
+  const [ratesSaving, setRatesSaving] = useState(false);
+  const [ratesSaved, setRatesSaved] = useState(false);
+
   useEffect(() => {
     if (org) {
       setForm({
@@ -52,6 +58,12 @@ export default function CompanySettingsPage() {
         received_prefix: r.data.received_prefix || "BILL",
         received_next_number: r.data.received_next_number || 1,
       });
+    }).catch(() => {});
+    
+    // Load worker rates
+    API.get("/ai-config/hourly-rates").then((r) => {
+      setWorkerRates(r.data.rates || {});
+      setRatesSource(r.data.source || "demo");
     }).catch(() => {});
   }, [org]);
 
@@ -94,6 +106,28 @@ export default function CompanySettingsPage() {
   };
 
   const isAdmin = user?.role === "Admin" || user?.role === "Owner";
+
+  const handleSaveRates = async () => {
+    setRatesSaving(true);
+    setRatesSaved(false);
+    try {
+      await API.put("/ai-config/hourly-rates", { rates: workerRates });
+      setRatesSource("organization");
+      setRatesSaved(true);
+      setTimeout(() => setRatesSaved(false), 2000);
+    } catch (err) {
+      alert(err.response?.data?.detail || "Грешка");
+    } finally {
+      setRatesSaving(false);
+    }
+  };
+
+  const updateRate = (key, field, value) => {
+    setWorkerRates(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: parseFloat(value) || 0 },
+    }));
+  };
 
   return (
     <div className="p-8 max-w-[800px]" data-testid="company-settings-page">
@@ -348,6 +382,50 @@ export default function CompanySettingsPage() {
               <p className="text-xs text-muted-foreground mb-1">{t("common.currency")}</p>
               <p className="text-sm text-foreground">{sub.currency}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Worker Rates / Pricing Settings */}
+      {isAdmin && (
+        <div className="rounded-xl border border-border bg-card p-5 mt-6" data-testid="worker-rates-section">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                Ценообразуване / Часови ставки
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Тези ставки се използват от AI при ценови предложения. Валута: EUR.
+                {ratesSource === "demo" && <Badge variant="outline" className="ml-2 text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">ДЕМО стойности</Badge>}
+                {ratesSource === "organization" && <Badge variant="outline" className="ml-2 text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Конфигурирани</Badge>}
+              </p>
+            </div>
+            <Button onClick={handleSaveRates} disabled={ratesSaving} data-testid="save-rates-btn">
+              {ratesSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+              {ratesSaved ? "Запазено!" : "Запази ставки"}
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground font-medium px-2">
+              <span>Категория работник</span>
+              <span>Часова ставка (EUR)</span>
+              <span>Мин. часове</span>
+              <span>Мин. цена работа (EUR)</span>
+            </div>
+            {Object.entries(workerRates).map(([key, rate]) => (
+              <div key={key} className="grid grid-cols-4 gap-2 items-center px-2 py-1 rounded hover:bg-muted/20" data-testid={`rate-${key}`}>
+                <span className="text-sm text-foreground capitalize">{key}</span>
+                <Input type="number" step="0.5" value={rate.hourly_rate || 0}
+                  onChange={e => updateRate(key, "hourly_rate", e.target.value)}
+                  className="bg-background h-8 text-sm font-mono" />
+                <Input type="number" step="0.5" value={rate.min_hours || 0}
+                  onChange={e => updateRate(key, "min_hours", e.target.value)}
+                  className="bg-background h-8 text-sm font-mono" />
+                <Input type="number" step="1" value={rate.min_job_price || 0}
+                  onChange={e => updateRate(key, "min_job_price", e.target.value)}
+                  className="bg-background h-8 text-sm font-mono" />
+              </div>
+            ))}
           </div>
         </div>
       )}

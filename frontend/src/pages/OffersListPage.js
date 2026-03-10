@@ -129,7 +129,7 @@ export default function OffersListPage() {
     try {
       const res = await API.post("/offers/import-confirm", {
         project_id: importProject, title: importTitle, lines: importPreview.lines,
-        file_name: importFile?.name, offer_type: "main", currency: "BGN", vat_percent: 20,
+        file_name: importFile?.name, offer_type: "main", currency: "EUR", vat_percent: 20,
       });
       setImportOpen(false); setImportPreview(null); setImportFile(null);
       navigate(`/offers/${res.data.id}`);

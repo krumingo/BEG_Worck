@@ -26,9 +26,12 @@ export default function AIPricingBreakdown({ proposal: p }) {
         {p.hourly && (
           <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-400 border-blue-500/30">
             <Clock className="w-2.5 h-2.5 mr-0.5 inline" />
-            {p.hourly.worker_type} {p.hourly.hourly_rate}лв/ч
+            {p.hourly.worker_type} {p.hourly.hourly_rate} EUR/ч
             {p.hourly.min_applied && " (мин. работа)"}
           </Badge>
+        )}
+        {p.hourly?.is_demo && (
+          <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">ДЕМО ставки</Badge>
         )}
         
         {p.smallQty > 0 && (
@@ -40,7 +43,7 @@ export default function AIPricingBreakdown({ proposal: p }) {
         {p.hint?.available && (
           <Badge variant="outline" className="text-[9px] bg-violet-500/10 text-violet-400 border-violet-500/30">
             <TrendingUp className="w-2.5 h-2.5 mr-0.5 inline" />
-            Вътр. {p.hint.range_label} лв ({p.hint.sample_count}x)
+            Вътр. {p.hint.range_label} EUR ({p.hint.sample_count}x)
           </Badge>
         )}
         

@@ -56,7 +56,7 @@ class ExtraWorkUpdate(BaseModel):
 class CreateOfferFromDrafts(BaseModel):
     draft_ids: List[str]
     title: Optional[str] = None
-    currency: str = "BGN"
+    currency: str = "EUR"
     vat_percent: float = 20.0
 
 
@@ -83,7 +83,8 @@ class BatchAIRequest(BaseModel):
 
 # ── Hourly Rate Configuration ──────────────────────────────────────
 
-WORKER_HOURLY_RATES = {
+# DEMO defaults — used ONLY when org has no configured rates
+DEMO_WORKER_RATES = {
     "общ работник": {"hourly_rate": 15, "min_hours": 2, "min_job_price": 40},
     "майстор": {"hourly_rate": 22, "min_hours": 2, "min_job_price": 60},
     "бояджия": {"hourly_rate": 18, "min_hours": 2, "min_job_price": 50},
@@ -102,22 +103,30 @@ ACTIVITY_TO_WORKER = {
     "Сухо строителство": "монтажник",
 }
 
-def get_worker_rate(activity_type: str, activity_subtype: str = "") -> dict:
-    """Get worker hourly rate based on activity type"""
+async def get_org_worker_rates(org_id: str) -> dict:
+    """Load org-configured worker rates from DB, fallback to DEMO"""
+    settings = await db.settings.find_one({"_id": "worker_rates", "org_id": org_id})
+    if settings and settings.get("rates"):
+        return settings["rates"]
+    return None  # None means use DEMO
+
+def get_worker_rate_sync(activity_type: str, activity_subtype: str, org_rates: dict = None) -> dict:
+    """Get worker hourly rate — uses org rates if available, DEMO otherwise"""
     worker = ACTIVITY_TO_WORKER.get(activity_subtype) or ACTIVITY_TO_WORKER.get(activity_type) or "майстор"
-    rate = WORKER_HOURLY_RATES.get(worker, WORKER_HOURLY_RATES["майстор"])
-    return {"worker_type": worker, **rate}
+    source_rates = org_rates if org_rates else DEMO_WORKER_RATES
+    rate = source_rates.get(worker, source_rates.get("майстор", DEMO_WORKER_RATES["майстор"]))
+    is_demo = org_rates is None
+    return {"worker_type": worker, "is_demo": is_demo, **rate}
 
 
-def apply_hourly_pricing(proposal: dict, qty: float) -> dict:
+def apply_hourly_pricing(proposal: dict, qty: float, org_rates: dict = None) -> dict:
     """Apply hourly rate logic to proposal for small quantities"""
     rec = proposal.get("recognized", {})
-    worker = get_worker_rate(rec.get("activity_type", ""), rec.get("activity_subtype", ""))
+    worker = get_worker_rate_sync(rec.get("activity_type", ""), rec.get("activity_subtype", ""), org_rates)
     
     labor_price = proposal["pricing"]["labor_price_per_unit"]
     estimated_labor_total = labor_price * qty
     min_job = worker["min_job_price"]
-    min_hours_cost = worker["hourly_rate"] * worker["min_hours"]
     
     hourly_info = {
         "worker_type": worker["worker_type"],
@@ -125,6 +134,8 @@ def apply_hourly_pricing(proposal: dict, qty: float) -> dict:
         "min_hours": worker["min_hours"],
         "min_job_price": min_job,
         "estimated_labor_total": round(estimated_labor_total, 2),
+        "is_demo": worker.get("is_demo", False),
+        "currency": "EUR",
     }
     
     # If estimated labor is below minimum, apply minimum
@@ -249,20 +260,22 @@ async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
 @router.post("/extra-works/ai-proposal")
 async def get_ai_proposal_endpoint(data: AIProposalRequest, user: dict = Depends(require_m2)):
     """Generate AI proposal using hybrid provider (LLM → rule-based fallback)"""
+    org_rates = await get_org_worker_rates(user["org_id"])
     proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city, user["org_id"])
-    proposal = apply_hourly_pricing(proposal, data.qty)
+    proposal = apply_hourly_pricing(proposal, data.qty, org_rates)
     return proposal
 
 
 @router.post("/extra-works/ai-batch")
 async def batch_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2)):
     """Batch AI proposal for multiple lines at once"""
+    org_rates = await get_org_worker_rates(user["org_id"])
     results = []
     combined_materials = {}
     
     for line in data.lines:
         proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"])
-        proposal = apply_hourly_pricing(proposal, line.qty)
+        proposal = apply_hourly_pricing(proposal, line.qty, org_rates)
         proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
                               "location_floor": line.location_floor, "location_room": line.location_room,
                               "location_zone": line.location_zone}
@@ -300,12 +313,13 @@ from app.services.ai_proposal import rule_based_proposal
 @router.post("/extra-works/ai-fast")
 async def fast_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2)):
     """Stage A: Fast rule-based proposals for all lines (instant, no LLM)"""
+    org_rates = await get_org_worker_rates(user["org_id"])
     results = []
     combined_materials = {}
     
     for line in data.lines:
         proposal = rule_based_proposal(line.title, line.unit, line.qty, data.city)
-        proposal = apply_hourly_pricing(proposal, line.qty)
+        proposal = apply_hourly_pricing(proposal, line.qty, org_rates)
         proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
                               "location_floor": line.location_floor, "location_room": line.location_room,
                               "location_zone": line.location_zone}
@@ -337,12 +351,13 @@ async def fast_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2
 @router.post("/extra-works/ai-refine")
 async def refine_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m2)):
     """Stage B: LLM refinement for all lines (slower, richer results)"""
+    org_rates = await get_org_worker_rates(user["org_id"])
     results = []
     combined_materials = {}
     
     for line in data.lines:
         proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"])
-        proposal = apply_hourly_pricing(proposal, line.qty)
+        proposal = apply_hourly_pricing(proposal, line.qty, org_rates)
         proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
                               "location_floor": line.location_floor, "location_room": line.location_room,
                               "location_zone": line.location_zone}
@@ -604,5 +619,25 @@ async def batch_save_drafts(data: dict, user: dict = Depends(require_m2)):
 
 @router.get("/ai-config/hourly-rates")
 async def get_hourly_rates(user: dict = Depends(require_m2)):
-    """Get worker hourly rate configuration"""
-    return WORKER_HOURLY_RATES
+    """Get worker hourly rate configuration (org-specific or DEMO)"""
+    org_rates = await get_org_worker_rates(user["org_id"])
+    if org_rates:
+        return {"source": "organization", "currency": "EUR", "rates": org_rates}
+    return {"source": "demo", "currency": "EUR", "rates": DEMO_WORKER_RATES}
+
+
+@router.put("/ai-config/hourly-rates")
+async def save_hourly_rates(data: dict, user: dict = Depends(require_m2)):
+    """Save org-specific worker hourly rates"""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    rates = data.get("rates", {})
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.settings.update_one(
+        {"_id": "worker_rates", "org_id": user["org_id"]},
+        {"$set": {"_id": "worker_rates", "org_id": user["org_id"], "rates": rates, "updated_at": now, "updated_by": user["id"]}},
+        upsert=True,
+    )
+    return {"ok": True, "source": "organization", "rates": rates}

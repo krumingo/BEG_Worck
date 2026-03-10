@@ -56,7 +56,7 @@ export default function ExtraWorksDraftPanel({ projectId, refreshKey }) {
     setCreating(true);
     try {
       const res = await API.post("/extra-works/create-offer", {
-        draft_ids: selected, currency: "BGN", vat_percent: 20,
+        draft_ids: selected, currency: "EUR", vat_percent: 20,
       });
       setSelected([]);
       fetchDrafts();
