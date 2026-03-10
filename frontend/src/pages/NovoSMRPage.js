@@ -13,6 +13,7 @@ import {
   Sparkles, Plus, Trash2, Copy, Loader2, ArrowLeft, Save, Send,
   MapPin, Clock, CheckCircle2, X,
 } from "lucide-react";
+import AIPricingBreakdown from "@/components/AIPricingBreakdown";
 
 const UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"];
 const UL = { m2: "м2", m: "м", pcs: "бр", hours: "часа", lot: "к-т", kg: "кг", l: "л" };
@@ -108,6 +109,7 @@ export default function NovoSMRPage() {
           hint: r.internal_price_hint || null,
           hourly: r.hourly_info || null,
           smallQty: r.pricing.small_qty_adjustment_percent || 0,
+          materials: r.materials || [],
           floor: r._input.location_floor || "",
           room: r._input.location_room || "",
           zone: r._input.location_zone || "",
@@ -182,7 +184,7 @@ export default function NovoSMRPage() {
           provider: p.provider,
           confidence: p.confidence,
           explanation: p.explanation,
-          materials: [],
+          materials: p.materials || [],
           related_smr: [],
           location_floor: p.floor,
           location_room: p.room,
@@ -379,17 +381,13 @@ export default function NovoSMRPage() {
                       </div>
                     </div>
 
-                    {/* Info row */}
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                      <span className="text-muted-foreground">{p.type}/{p.subtype}</span>
-                      {p.hourly && <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-400"><Clock className="w-2.5 h-2.5 mr-0.5 inline" />{p.hourly.worker_type} {p.hourly.hourly_rate}лв/ч{p.hourly.min_applied ? " мин." : ""}</Badge>}
-                      {p.hint?.available && <Badge variant="outline" className="text-[9px] bg-violet-500/10 text-violet-400">Вътр. {p.hint.range_label} ({p.hint.sample_count}x)</Badge>}
-                      {p.smallQty > 0 && <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400">+{p.smallQty}% малко к-во</Badge>}
-                      {(p.floor || p.room || p.zone) && (
-                        <span className="text-muted-foreground/60"><MapPin className="w-2.5 h-2.5 inline mr-0.5" />{[p.floor && `Ет.${p.floor}`, p.room, p.zone].filter(Boolean).join(", ")}</span>
-                      )}
-                      {p.explanation && <span className="text-muted-foreground/50 italic ml-1">{p.explanation.slice(0, 50)}</span>}
-                    </div>
+                    {/* Pricing breakdown + Materials */}
+                    <AIPricingBreakdown proposal={p} />
+                    {(p.floor || p.room || p.zone) && (
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60 mt-0.5">
+                        <MapPin className="w-2.5 h-2.5" />{[p.floor && `Ет.${p.floor}`, p.room, p.zone].filter(Boolean).join(", ")}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
 import OfferVersionsPanel from "@/components/OfferVersionsPanel";
+import AIPricingBreakdown from "@/components/AIPricingBreakdown";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -305,6 +306,8 @@ export default function OfferEditorPage() {
           explanation: r.explanation || "",
           hint: r.internal_price_hint || null,
           hourly: r.hourly_info || null,
+          smallQty: r.pricing.small_qty_adjustment_percent || 0,
+          materials: r.materials || [],
         };
       });
       setAiEdits(edits);
@@ -1254,13 +1257,8 @@ export default function OfferEditorPage() {
                         </div>
                       </div>
 
-                      {/* Info badges */}
-                      <div className="flex flex-wrap gap-1.5 text-[10px]">
-                        <span className="text-muted-foreground">{e.type}/{e.subtype}</span>
-                        {e.hourly && <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-400">{e.hourly.worker_type} {e.hourly.hourly_rate}лв/ч{e.hourly.min_applied ? " мин." : ""}</Badge>}
-                        {e.hint?.available && <Badge variant="outline" className="text-[9px] bg-violet-500/10 text-violet-400">Вътр. {e.hint.range_label} ({e.hint.sample_count}x)</Badge>}
-                        {e.explanation && <span className="text-muted-foreground/60 italic">{e.explanation.slice(0, 60)}</span>}
-                      </div>
+                      {/* Pricing breakdown + Materials */}
+                      <AIPricingBreakdown proposal={e} />
                     </div>
                   );
                 })}
