@@ -1,0 +1,116 @@
+{
+  "summary": "Testing 'Ново СМР' Flow (Phase 2) - Complete. Backend: 16/16 tests passed (100%). Frontend: All features working - page loads with project context, multi-row input works, AI analysis (two-stage fast+LLM), editable proposals with badges, selective save with checkboxes, navigation back to project after save.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_novo_smr_flow.py",
+    "/app/test_reports/pytest/test_novo_smr_flow_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NovoSMRPage.js correctly implements two-phase UI (input -> results)",
+    "AI fast endpoint returns proposals instantly with rule-based provider",
+    "AI refine runs in background and updates proposals to LLM provider when complete",
+    "batch-save correctly creates drafts with batch_id linking them together",
+    "Location data (floor/room/zone) preserved through entire flow",
+    "Navigation after save works correctly (navigates back to /projects/{id})"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_novo_smr_flow.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Used existing project PRJ-001 (c3529276-8c03-49b3-92de-51216aab25da). Created TEST_ prefixed drafts for testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Novo SMR Flow (Phase 2) fully tested. Key route: /projects/{id}/novo-smr. Key endpoints: POST /api/extra-works/ai-fast (instant), POST /api/extra-works/ai-refine (LLM), POST /api/extra-works/batch-save (creates drafts). Test file: /app/backend/tests/test_novo_smr_flow.py. UI uses testids: novo-smr-page, smr-row-{i}, smr-text-{i}, analyze-btn, proposal-row-{i}, back-to-input-btn, save-draft-btn, save-ready-btn, save-draft-btn-bottom, save-ready-btn-bottom.",
+  "features_tested": {
+    "Frontend /projects/{id}/novo-smr page loads with project context": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Page shows project code (PRJ-001) and name, city defaults to 'София'"
+    },
+    "Frontend multi-row input with text + unit + qty + location": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Input rows have description field, unit selector (м2), qty input, and location fields (Етаж, Помещение, Зона/стена)"
+    },
+    "Frontend add/remove/duplicate row buttons work": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Добави ред' adds new row, trash icon removes row, copy icon duplicates row"
+    },
+    "Frontend 'Анализирай с AI' button triggers batch analysis": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Button shows count '(N реда)', triggers API call to ai-fast endpoint"
+    },
+    "Frontend results phase shows editable proposals": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Proposals have editable fields: Описание, Мярка, К-во, Мат. лв/ед, Труд лв/ед, Общо/ед"
+    },
+    "Frontend each proposal has checkbox for selective save": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Checkbox visible and functional, all checked by default"
+    },
+    "Frontend provider badge (Rule/LLM), confidence %": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'Rule 85%' initially, updates to 'LLM 90%' after refine completes"
+    },
+    "Frontend type/subtype shown": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'Мокри процеси/Мазилка', 'Довършителни/Шпакловка', etc."
+    },
+    "Frontend worker rate badge shown": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'майстор 22лв/ч мин.', 'шпакловчик 20лв/ч мин.', etc."
+    },
+    "Frontend internal price hint badge when historical data exists": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'Вътр. 17.7-20.5 (2x)' format when historical data available"
+    },
+    "Frontend 'Редактирай и пресметни' button returns to input phase": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Button returns to input phase with edited values preserved"
+    },
+    "Frontend 'Запази (N реда, X лв)' button saves and navigates": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Saves selected proposals as drafts, navigates back to project page"
+    },
+    "Backend POST /api/extra-works/batch-save creates drafts with batch_id": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns {ok, saved_count, batch_id, draft_ids}, all drafts have same batch_id"
+    },
+    "Backend saved drafts have correct project_id, location, pricing data": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Verified via GET endpoint - all fields preserved correctly"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs - Real AI (rule-based fast + LLM refine)",
+    "has_mocked_apis": false
+  }
+}

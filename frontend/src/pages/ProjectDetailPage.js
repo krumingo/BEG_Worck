@@ -154,8 +154,8 @@ export default function ProjectDetailPage() {
           <Badge className={STATUS_COLORS[project.status] || ""}>
             {project.status}
           </Badge>
-          <Button size="sm" onClick={() => setShowExtraWork(true)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
-            <Plus className="w-4 h-4 mr-1" /> Допълнително СМР
+          <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
+            <Plus className="w-4 h-4 mr-1" /> Ново СМР
           </Button>
         </div>
 
