@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 18)
+### FOCUS PHASE 2: Complete "Ново СМР" Flow
+- **Dedicated page**: /projects/{id}/novo-smr — standalone for site walkthrough extra works
+- **Multi-row input**: Description + unit + qty + location (floor/room/zone) per row, add/remove/duplicate
+- **Single AI action**: "Анализирай с AI (N реда)" processes all rows with two-stage (fast+LLM)
+- **Editable proposals**: Per-row checkboxes, inline editing of all fields, provider/confidence badges
+- **Smart info**: Hourly rate badges, internal price hints, small qty adjustments, location display
+- **Save options**: "Чернова" (draft) or "Запази като готово" (ready) — saves to extra_work_drafts with batch_id
+- **Recalculate**: "Редактирай и пресметни" returns to input phase preserving edits
+- **Enter key**: Adds new row when pressing Enter on last row
+- Entry point: "Ново СМР" button in ProjectDetailPage header → navigates to dedicated page
+- New: /app/frontend/src/pages/NovoSMRPage.js
+- Test report: /app/test_reports/iteration_32.json (100% backend 16/16, 100% frontend)
+
 ## Mar 9, 2026 (Session 17)
 ### FOCUS PHASE 1: Complete AI Offer Module Core to Usable MVP
 - **Multi-line AI input** in Offer Editor: add/remove lines with description + unit + qty
