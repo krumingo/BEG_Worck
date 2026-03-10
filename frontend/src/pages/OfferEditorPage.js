@@ -51,7 +51,6 @@ import {
   Package,
 } from "lucide-react";
 import ActivityTypeSelect, { ACTIVITY_TYPES } from "@/components/ActivityTypeSelect";
-import ActivityBudgetsPanel from "@/components/ActivityBudgetsPanel";
 import OfferVersionsPanel from "@/components/OfferVersionsPanel";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -510,7 +509,9 @@ export default function OfferEditorPage() {
   };
 
   const isDraft = !offer || offer.status === "Draft";
-  const canEdit = isDraft && canManage;
+  const canEdit = canManage && (!offer || !["Rejected"].includes(offer.status));
+  const [editMode, setEditMode] = useState(false);
+  const isEditing = isNew || (canEdit && editMode);
 
   if (loading) {
     return (
@@ -555,19 +556,34 @@ export default function OfferEditorPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {canEdit && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Edit mode toggle */}
+          {!isNew && canEdit && !editMode && (
+            <Button variant="outline" onClick={() => setEditMode(true)} data-testid="edit-btn">
+              <FileText className="w-4 h-4 mr-1" /> Редактиране
+            </Button>
+          )}
+          {editMode && (
             <>
               <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
                 {t("common.save")}
               </Button>
-              {!isNew && (
-                <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
-                  <Send className="w-4 h-4 mr-1" /> {t("common.send")}
-                </Button>
-              )}
+              <Button variant="ghost" onClick={() => { setEditMode(false); fetchData(); }} data-testid="cancel-edit-btn">
+                <X className="w-4 h-4 mr-1" /> Отказ
+              </Button>
             </>
+          )}
+          {isNew && (
+            <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+              {t("common.save")}
+            </Button>
+          )}
+          {isDraft && !isNew && editMode && (
+            <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
+              <Send className="w-4 h-4 mr-1" /> {t("common.send")}
+            </Button>
           )}
           {offer?.status === "Sent" && canAcceptReject && (
             <>
@@ -631,20 +647,23 @@ export default function OfferEditorPage() {
         </div>
       </div>
 
-      {/* Horizontal Summary Strip for extra offers (above KSS) */}
+      {/* Horizontal Summary Strip for extra offers */}
       {offer?.offer_type === "extra" && (
-        <div className="flex items-center justify-between p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 mb-4 mx-6 max-w-[1400px]" data-testid="summary-strip">
-          <div className="flex items-center gap-3 text-sm">
+        <div className="flex items-center justify-between p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 mb-4" data-testid="summary-strip">
+          <a href={`/projects/${offer.project_id}#extra-works-section`}
+            onClick={(e) => { e.preventDefault(); navigate(`/projects/${offer.project_id}#extra-works-section`); setTimeout(() => { const el = document.getElementById('extra-works-section'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 500); }}
+            className="flex items-center gap-2 text-sm hover:underline group cursor-pointer" data-testid="source-link">
             <span className="text-muted-foreground">Източник:</span>
-            <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30">Допълнителни СМР</Badge>
-            {offer.notes && <span className="text-xs text-muted-foreground">{offer.notes}</span>}
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground">{t("offers.subtotal")}:</span>
-            <span className="font-mono">{formatCurrency(subtotal)}</span>
-            <span className="text-muted-foreground">{t("offers.vat")} ({vatPercent}%):</span>
-            <span className="font-mono">{formatCurrency(vatAmount)}</span>
-            <span className="font-semibold text-foreground">{t("common.total")}:</span>
+            <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 group-hover:bg-amber-500/25">Допълнителни СМР</Badge>
+            {offer.notes && <span className="text-xs text-amber-400/80">{offer.notes}</span>}
+            <span className="text-[10px] text-primary underline">Отвори в обекта →</span>
+          </a>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground">Междинна:</span>
+            <span className="font-mono text-foreground">{formatCurrency(subtotal)}</span>
+            <span className="text-muted-foreground">ДДС ({vatPercent}%):</span>
+            <span className="font-mono text-foreground">{formatCurrency(vatAmount)}</span>
+            <span className="font-semibold">Общо:</span>
             <span className="font-mono text-lg font-bold text-primary">{formatCurrency(total)}</span>
           </div>
         </div>
@@ -678,14 +697,14 @@ export default function OfferEditorPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={t("offers.offerTitle")}
-                  disabled={!canEdit}
+                  disabled={!isEditing}
                   className="bg-background"
                   data-testid="title-input"
                 />
               </div>
               <div className="space-y-2">
                 <Label>{t("offers.currency")}</Label>
-                <Select value={currency} onValueChange={setCurrency} disabled={!canEdit}>
+                <Select value={currency} onValueChange={setCurrency} disabled={!isEditing}>
                   <SelectTrigger className="bg-background" data-testid="currency-select">
                     <SelectValue />
                   </SelectTrigger>
@@ -703,7 +722,7 @@ export default function OfferEditorPage() {
                   type="number"
                   value={vatPercent}
                   onChange={(e) => setVatPercent(parseFloat(e.target.value) || 0)}
-                  disabled={!canEdit}
+                  disabled={!isEditing}
                   className="bg-background"
                   data-testid="vat-input"
                 />
@@ -745,7 +764,7 @@ export default function OfferEditorPage() {
                   </div>
                 )}
                 
-                {canEdit && (
+                {isEditing && (
                   <>
                   <Button size="sm" onClick={addLine} data-testid="add-line-btn">
                     <Plus className="w-4 h-4 mr-1" /> {t("offers.addLine")}
@@ -764,14 +783,14 @@ export default function OfferEditorPage() {
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium min-w-[200px]">СМР</th>
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Тип</th>
                     {offer?.offer_type === "extra" && <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Локация</th>}
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[65px]">{t("offers.unit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[65px]">{t("offers.qty")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Мат/ед</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Труд/ед</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.material")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.labor")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">{t("common.total")}</th>
-                    {canEdit && <th className="w-[40px]"></th>}
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[60px]">Мярка</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[60px]">К-во</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">Мат/ед</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">Труд/ед</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[95px]">Материал</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[95px]">Труд</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Общо</th>
+                    {isEditing && <th className="w-[40px]"></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -860,7 +879,7 @@ export default function OfferEditorPage() {
                                     value={line.activity_name}
                                     onChange={(e) => updateLine(line.originalIndex, "activity_name", e.target.value)}
                                     placeholder="Описание на СМР"
-                                    disabled={!canEdit}
+                                    disabled={!isEditing}
                                     className="bg-background h-auto min-h-[32px] text-sm py-1"
                                   />
                                   {line.note && !line.note.startsWith("Локация:") && (
@@ -886,7 +905,7 @@ export default function OfferEditorPage() {
                                 </td>
                               )}
                               <td className="p-2">
-                                <Select value={line.unit} onValueChange={(v) => updateLine(line.originalIndex, "unit", v)} disabled={!canEdit}>
+                                <Select value={line.unit} onValueChange={(v) => updateLine(line.originalIndex, "unit", v)} disabled={!isEditing}>
                                   <SelectTrigger className="bg-background h-8 text-xs">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -900,7 +919,7 @@ export default function OfferEditorPage() {
                                   type="number"
                                   value={line.qty}
                                   onChange={(e) => updateLine(line.originalIndex, "qty", e.target.value)}
-                                  disabled={!canEdit}
+                                  disabled={!isEditing}
                                   className="bg-background h-8 text-sm text-right"
                                 />
                               </td>
@@ -909,7 +928,7 @@ export default function OfferEditorPage() {
                                   type="number"
                                   value={line.material_unit_cost}
                                   onChange={(e) => updateLine(line.originalIndex, "material_unit_cost", e.target.value)}
-                                  disabled={!canEdit}
+                                  disabled={!isEditing}
                                   className="bg-background h-8 text-sm text-right"
                                 />
                               </td>
@@ -918,7 +937,7 @@ export default function OfferEditorPage() {
                                   type="number"
                                   value={line.labor_unit_cost}
                                   onChange={(e) => updateLine(line.originalIndex, "labor_unit_cost", e.target.value)}
-                                  disabled={!canEdit}
+                                  disabled={!isEditing}
                                   className="bg-background h-8 text-sm text-right"
                                 />
                               </td>
@@ -931,7 +950,7 @@ export default function OfferEditorPage() {
                               <td className="p-2 text-right font-mono font-medium text-foreground">
                                 {formatCurrency(line.line_total)}
                               </td>
-                              {canEdit && (
+                              {isEditing && (
                                 <td className="p-2">
                                   <Button variant="ghost" size="sm" onClick={() => removeLine(line.originalIndex)} className="text-destructive hover:text-destructive">
                                     <Trash2 className="w-4 h-4" />
@@ -964,7 +983,7 @@ export default function OfferEditorPage() {
                               value={line.activity_name}
                               onChange={(e) => updateLine(idx, "activity_name", e.target.value)}
                               placeholder="Activity name"
-                              disabled={!canEdit}
+                              disabled={!isEditing}
                               className="bg-background h-8 text-sm"
                             />
                           </div>
@@ -987,7 +1006,7 @@ export default function OfferEditorPage() {
                           </td>
                         )}
                         <td className="p-2">
-                          <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={!canEdit}>
+                          <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={!isEditing}>
                             <SelectTrigger className="bg-background h-8 text-xs">
                               <SelectValue />
                             </SelectTrigger>
@@ -1001,7 +1020,7 @@ export default function OfferEditorPage() {
                             type="number"
                             value={line.qty}
                             onChange={(e) => updateLine(idx, "qty", e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!isEditing}
                             className="bg-background h-8 text-sm text-right"
                           />
                         </td>
@@ -1010,7 +1029,7 @@ export default function OfferEditorPage() {
                             type="number"
                             value={line.material_unit_cost}
                             onChange={(e) => updateLine(idx, "material_unit_cost", e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!isEditing}
                             className="bg-background h-8 text-sm text-right"
                           />
                         </td>
@@ -1019,7 +1038,7 @@ export default function OfferEditorPage() {
                             type="number"
                             value={line.labor_unit_cost}
                             onChange={(e) => updateLine(idx, "labor_unit_cost", e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!isEditing}
                             className="bg-background h-8 text-sm text-right"
                           />
                         </td>
@@ -1032,7 +1051,7 @@ export default function OfferEditorPage() {
                         <td className="p-2 text-right font-mono font-medium text-foreground">
                           {formatCurrency(line.line_total)}
                         </td>
-                        {canEdit && (
+                        {isEditing && (
                           <td className="p-2">
                             <Button variant="ghost" size="sm" onClick={() => removeLine(idx)} className="text-destructive hover:text-destructive">
                               <Trash2 className="w-4 h-4" />
@@ -1054,16 +1073,11 @@ export default function OfferEditorPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t("offers.notesPlaceholder")}
-              disabled={!canEdit}
+              disabled={!isEditing}
               className="bg-background min-h-[80px]"
               data-testid="notes-textarea"
             />
           </div>
-          
-          {/* Activity Budgets Panel */}
-          {projectId && (
-            <ActivityBudgetsPanel projectId={projectId} />
-          )}
         </div>
 
         {/* Sidebar - Totals + Versions (only for main offers) */}

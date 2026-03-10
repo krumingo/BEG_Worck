@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 21)
+### FINAL FIX: Source Link + Edit Mode + Clean Offer Detail (Polished)
+- **Източник deep-link**: Clickable link navigates to Project page → scrolls to #extra-works-section showing source rows with unit prices
+- **Scroll anchor**: `id="extra-works-section"` added to ExtraWorksDraftPanel for deep-link targeting
+- **"Отвори в обекта →"**: Underlined primary-color helper text in source section
+- **Clean import**: Removed unused ActivityBudgetsPanel import from OfferEditorPage
+- **Hash scroll**: ProjectDetailPage auto-scrolls to anchor on load (e.g. #extra-works-section)
+- All 9 requirements verified: source link, deep-link, values visible, edit button, full edit mode, budget removed, budget stays in project, no other modules touched
+
 ## Mar 10, 2026 (Session 20)
 ### FINAL FIX: Additional Offer Detail Screen Layout
 - **Summary moved**: Right sidebar REMOVED for extra offers → horizontal summary strip above KSS table

@@ -1,0 +1,99 @@
+{
+  "summary": "Complete frontend testing of offer detail page updates for FINAL FIX: Source Link + Full Edit Mode + Clean Offer Detail. All 11 features verified successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_35.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Line 514: editMode state properly defaults to false for VIEW mode",
+    "Line 515: isEditing computed as isNew || (canEdit && editMode) - correct logic",
+    "Lines 562-576: Edit/Cancel/Save button visibility properly conditional on editMode state",
+    "Line 654: source-link button navigates to project page using navigate(`/projects/${offer.project_id}`)",
+    "Line 659: 'Отвори в обекта →' helper text visible in source section",
+    "Lines 782-791: Column headers match expected: СМР, ТИП, ЛОКАЦИЯ (extra only), МЯРКА, К-ВО, МАТ/ЕД, ТРУД/ЕД, МАТЕРИАЛ, ТРУД, ОБЩО",
+    "ActivityBudgetsPanel import exists but is NOT rendered anywhere on offer detail page - correctly removed"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "None needed - used existing offers OFF-0103 (extra, Sent) and OFF-0104 (main, Draft)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "View/Edit mode toggle fully working. Key testids: edit-btn (VIEW->EDIT), save-btn, cancel-edit-btn (EDIT->VIEW), source-link (navigates to project). Extra offer OFF-0103 has 3 lines with Location column. Main offer OFF-0104 has sidebar with totals. All features working as expected.",
+  "features_tested": {
+    "Extra offer opens in VIEW mode by default (fields disabled)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "title-input has disabled attribute, all form fields non-editable in VIEW mode"
+    },
+    "'Редактиране' button visible in VIEW mode header": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "edit-btn with text 'Редактиране' visible in header for both extra and main offers"
+    },
+    "Clicking 'Редактиране' enters EDIT mode (fields become editable)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "After clicking edit-btn, title-input becomes enabled, add-line-btn and ai-assist-btn appear"
+    },
+    "EDIT mode shows 'Запази' and 'Отказ' buttons": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "save-btn with 'Запази' and cancel-edit-btn with 'Отказ' visible in EDIT mode"
+    },
+    "'Отказ' exits edit mode and restores data": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Clicking cancel-edit-btn returns to VIEW mode - edit-btn reappears, fields disabled again"
+    },
+    "'Източник' section is clickable and navigates to project page": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "source-link clicked, URL changed from /offers/... to /projects/5900f318-8515-48a3-b22d-fbe56bf22ab5"
+    },
+    "'Отвори в обекта →' helper text visible in source section": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Text found in source-link inner text: 'Източник: Допълнителни СМР ... Отвори в обекта →'"
+    },
+    "All monetary values fully visible (no clipping) in KSS table": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Screenshot shows full values: BGN 74.38, BGN 117.00, BGN 234.00 fully visible with proper column widths"
+    },
+    "'Бюджети по тип дейност' block NOT present on offer detail page": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Page text search for 'Бюджети по тип дейност' returned no matches"
+    },
+    "Main offer (Draft) still has functional edit capabilities": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "OFF-0104 Draft: edit-btn visible, clicking enters edit mode with save/cancel/send buttons, add-line-btn and ai-assist-btn present"
+    },
+    "Column headers: СМР, ТИП, ЛОКАЦИЯ, МЯРКА, К-ВО, МАТ/ЕД, ТРУД/ЕД, МАТЕРИАЛ, ТРУД, ОБЩО": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Extra offer headers include ЛОКАЦИЯ. Main offer headers exclude ЛОКАЦИЯ (correct conditional behavior)"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs",
+    "has_mocked_apis": false
+  }
+}

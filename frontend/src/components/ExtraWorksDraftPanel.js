@@ -76,7 +76,7 @@ export default function ExtraWorksDraftPanel({ projectId, refreshKey }) {
   if (drafts.length === 0) return null;
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="extra-works-panel">
+    <div id="extra-works-section" className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="extra-works-panel">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Hammer className="w-5 h-5 text-amber-500" />

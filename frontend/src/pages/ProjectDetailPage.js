@@ -101,6 +101,16 @@ export default function ProjectDetailPage() {
     fetchDashboard();
   }, [fetchDashboard]);
 
+  // Scroll to anchor (e.g. #extra-works-section) after load
+  useEffect(() => {
+    if (!loading && window.location.hash) {
+      setTimeout(() => {
+        const el = document.querySelector(window.location.hash);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300);
+    }
+  }, [loading]);
+
   const handleWarrantyChange = async (value) => {
     setSavingWarranty(true);
     try {
