@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 10, 2026 (Session 24)
+### HR FIX: Employee Editing + Phone + Salary + Auto Calculation
+- **Edit mode**: "Редактиране" button on Employee Detail → full edit form with Save/Cancel
+- **Basic fields**: Име, Фамилия, Телефон, Активен — via PUT /api/employees/{id}/basic
+- **Pay fields**: Тип (Месечно/Дневно/Почасово), Месечна заплата EUR, Работни дни/мес, Часове/ден
+- **Auto-calculation**: Monthly → Daily = monthly/22, Hourly = daily/8 (live in UI, green "(авто)")
+- **Formula display**: "2200 EUR / 22 дни = 100 EUR/ден → 100 / 8ч = 12.5 EUR/ч"
+- **View mode**: Pay info bar shows all rates in EUR + phone + type + active status
+- **Backend**: working_days_per_month added to EmployeeProfileCreate/Update models
+- **Backend**: PUT /api/employees/{id}/basic for name/phone/role updates
+- Test report: /app/test_reports/iteration_38.json (100% backend 16/16, 100% frontend)
+
 ## Mar 10, 2026 (Session 23)
 ### P0 RECOVERY: Restore HR, Remove Hardcoded Rates, Switch to EUR, Keep Historical Base
 - **HR restored**: Служители, Аванси, Заплати, Присъствие, Преглед отчети all verified working
