@@ -102,7 +102,7 @@ export default function OfferEditorPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiEdits, setAiEdits] = useState({});
   
-  // Grouping state
+  // Grouping state — default OFF for extra offers
   const [groupingEnabled, setGroupingEnabled] = useState(() => {
     const saved = localStorage.getItem("offer_grouping_enabled");
     return saved === "true";
@@ -125,6 +125,10 @@ export default function OfferEditorPage() {
         setVatPercent(offerRes.data.vat_percent);
         setNotes(offerRes.data.notes || "");
         setLines(offerRes.data.lines || []);
+        // Default grouping off for extra offers
+        if (offerRes.data.offer_type === "extra") {
+          setGroupingEnabled(false);
+        }
 
         // Load activities for the project
         const activitiesRes = await API.get(`/activity-catalog?project_id=${offerRes.data.project_id}`);
@@ -627,9 +631,28 @@ export default function OfferEditorPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Horizontal Summary Strip for extra offers (above KSS) */}
+      {offer?.offer_type === "extra" && (
+        <div className="flex items-center justify-between p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 mb-4 mx-6 max-w-[1400px]" data-testid="summary-strip">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground">Източник:</span>
+            <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30">Допълнителни СМР</Badge>
+            {offer.notes && <span className="text-xs text-muted-foreground">{offer.notes}</span>}
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-muted-foreground">{t("offers.subtotal")}:</span>
+            <span className="font-mono">{formatCurrency(subtotal)}</span>
+            <span className="text-muted-foreground">{t("offers.vat")} ({vatPercent}%):</span>
+            <span className="font-mono">{formatCurrency(vatAmount)}</span>
+            <span className="font-semibold text-foreground">{t("common.total")}:</span>
+            <span className="font-mono text-lg font-bold text-primary">{formatCurrency(total)}</span>
+          </div>
+        </div>
+      )}
+
+      <div className={offer?.offer_type === "extra" ? "" : "grid grid-cols-1 lg:grid-cols-4 gap-6"}>
         {/* Main Content */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className={offer?.offer_type === "extra" ? "space-y-6" : "lg:col-span-3 space-y-6"}>
           {/* Basic Info */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -738,22 +761,23 @@ export default function OfferEditorPage() {
               <table className="w-full text-sm" data-testid="lines-table">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium">{t("offers.activity")}</th>
+                    <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium min-w-[200px]">СМР</th>
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Тип</th>
+                    {offer?.offer_type === "extra" && <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Локация</th>}
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[65px]">{t("offers.unit")}</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[65px]">{t("offers.qty")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.matPerUnit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.labPerUnit")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">{t("offers.material")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">{t("offers.labor")}</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[95px]">{t("common.total")}</th>
-                    {canEdit && <th className="w-[50px]"></th>}
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Мат/ед</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[80px]">Труд/ед</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.material")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[85px]">{t("offers.labor")}</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">{t("common.total")}</th>
+                    {canEdit && <th className="w-[40px]"></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {computedLines.length === 0 ? (
                     <tr>
-                      <td colSpan={canEdit ? 10 : 9} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={canEdit ? (offer?.offer_type === "extra" ? 12 : 11) : (offer?.offer_type === "extra" ? 11 : 10)} className="text-center py-8 text-muted-foreground">
                         {t("offers.noLinesYet")}
                       </td>
                     </tr>
@@ -837,10 +861,10 @@ export default function OfferEditorPage() {
                                     onChange={(e) => updateLine(line.originalIndex, "activity_name", e.target.value)}
                                     placeholder="Описание на СМР"
                                     disabled={!canEdit}
-                                    className="bg-background h-8 text-sm"
+                                    className="bg-background h-auto min-h-[32px] text-sm py-1"
                                   />
-                                  {line.note && (
-                                    <p className="text-[10px] text-muted-foreground/70 mt-0.5 truncate" title={line.note}>{line.note}</p>
+                                  {line.note && !line.note.startsWith("Локация:") && (
+                                    <p className="text-[10px] text-muted-foreground/70 mt-0.5" title={line.note}>{line.note}</p>
                                   )}
                                 </div>
                               </td>
@@ -856,6 +880,11 @@ export default function OfferEditorPage() {
                                   compact
                                 />
                               </td>
+                              {offer?.offer_type === "extra" && (
+                                <td className="p-2 text-xs text-muted-foreground">
+                                  {line.note?.includes("Локация:") ? line.note.split("Локация:")[1]?.split(";")[0]?.trim() : ""}
+                                </td>
+                              )}
                               <td className="p-2">
                                 <Select value={line.unit} onValueChange={(v) => updateLine(line.originalIndex, "unit", v)} disabled={!canEdit}>
                                   <SelectTrigger className="bg-background h-8 text-xs">
@@ -952,6 +981,11 @@ export default function OfferEditorPage() {
                             compact
                           />
                         </td>
+                        {offer?.offer_type === "extra" && (
+                          <td className="p-2 text-xs text-muted-foreground">
+                            {line.note?.includes("Локация:") ? line.note.split("Локация:")[1]?.split(";")[0]?.trim() : ""}
+                          </td>
+                        )}
                         <td className="p-2">
                           <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={!canEdit}>
                             <SelectTrigger className="bg-background h-8 text-xs">
@@ -1032,7 +1066,8 @@ export default function OfferEditorPage() {
           )}
         </div>
 
-        {/* Sidebar - Totals + Versions */}
+        {/* Sidebar - Totals + Versions (only for main offers) */}
+        {offer?.offer_type !== "extra" && (
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5 sticky top-6" data-testid="totals-card">
             <h3 className="text-sm font-semibold text-foreground mb-4">{t("offers.summary")}</h3>
@@ -1070,6 +1105,7 @@ export default function OfferEditorPage() {
             />
           )}
         </div>
+        )}
       </div>
 
       {/* Activity Picker Dialog */}
