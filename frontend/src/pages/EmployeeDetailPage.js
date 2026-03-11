@@ -23,8 +23,13 @@ import {
 import ImageCropDialog from "@/components/ImageCropDialog";
 
 function Avatar({ name, url, size = 48 }) {
-  if (url) return <img src={url} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
+  const [imgError, setImgError] = useState(false);
   const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  
+  if (fullUrl && !imgError) {
+    return <img src={fullUrl} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} onError={() => setImgError(true)} />;
+  }
   return (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: size * 0.35 }}>
       {initials}
@@ -494,7 +499,9 @@ export default function EmployeeDetailPage() {
             fd.append("context_type", "profile");
             fd.append("context_id", userId);
             const res = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-            const avatarUrl = `/api/media/${res.data.id}/file`;
+            // Use public avatar URL: /api/media/avatar/{stored_filename}
+            const storedFilename = res.data.url.split("/").pop();
+            const avatarUrl = `/api/media/avatar/${storedFilename}`;
             await API.put(`/employees/${userId}/basic`, { avatar_url: avatarUrl });
             fetchData();
           } catch (err) { alert("Грешка при запис на снимка"); }

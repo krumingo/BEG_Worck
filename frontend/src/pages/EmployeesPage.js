@@ -25,8 +25,12 @@ const PAY_TYPES = [
 ];
 
 function Avatar({ name, url, size = 32 }) {
-  if (url) return <img src={url} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
+  const [imgErr, setImgErr] = useState(false);
   const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  if (fullUrl && !imgErr) {
+    return <img src={fullUrl} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
+  }
   return (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: size * 0.38 }}>
       {initials}

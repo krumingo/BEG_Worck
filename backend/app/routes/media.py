@@ -197,6 +197,21 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     return media
 
 
+@router.get("/media/avatar/{filename}")
+async def serve_avatar(filename: str):
+    """Serve avatar/profile image without auth (public)"""
+    from pathlib import Path
+    UPLOAD_DIR = Path("/app/backend/uploads")
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path, media_type="image/jpeg")
+
+
+
 @router.get("/media/file/{filename}")
 async def serve_media_file(filename: str, user: dict = Depends(get_current_user)):
     """Serve media file content"""
