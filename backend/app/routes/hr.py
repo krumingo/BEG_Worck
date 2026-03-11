@@ -131,7 +131,20 @@ async def update_employee_profile(user_id: str, data: EmployeeProfileUpdate, use
     
     profile = await db.employee_profiles.find_one({"org_id": user["org_id"], "user_id": user_id})
     if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        # Auto-create profile if missing
+        now = datetime.now(timezone.utc).isoformat()
+        profile = {
+            "id": str(uuid.uuid4()),
+            "org_id": user["org_id"],
+            "user_id": user_id,
+            "pay_type": "Monthly",
+            "active": True,
+            "standard_hours_per_day": 8,
+            "working_days_per_month": 22,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.employee_profiles.insert_one(profile)
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
