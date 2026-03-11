@@ -138,7 +138,7 @@ export default function EmployeesPage() {
           <p className="text-sm text-muted-foreground mt-1">{employees.length} служители</p>
         </div>
         {isAdmin && (
-          <Button onClick={() => { setCreateForm({ first_name: "", last_name: "", email: "", phone: "", role: "Technician", password: "", pay_type: "Monthly", monthly_salary: 0, daily_rate: 0, hourly_rate: 0, working_days: 22, hours_day: 8 }); setCreateOpen(true); }} data-testid="new-employee-btn">
+          <Button onClick={() => { setCreateForm({ first_name: "", last_name: "", email: "", phone: "", role: "Technician", password: "", position: "", pay_type: "Monthly", monthly_salary: 0, daily_rate: 0, hourly_rate: 0, working_days: 22, hours_day: 8, akord_note: "" }); setCreateOpen(true); }} data-testid="new-employee-btn">
             <UserPlus className="w-4 h-4 mr-1" /> Нов служител
           </Button>
         )}

@@ -71,7 +71,7 @@ export default function EmployeeDetailPage() {
       setData(res.data);
       const e = res.data.employee || {};
       const p = res.data.profile || {};
-      setEditBasic({ first_name: e.first_name || "", last_name: e.last_name || "", phone: e.phone || "", role: e.role || "" });
+      setEditBasic({ first_name: e.first_name || "", last_name: e.last_name || "", email: e.email || "", phone: e.phone || "", role: e.role || "" });
       setEditProfile({
         pay_type: p.pay_type || "Monthly",
         position: p.position || "",
@@ -143,7 +143,7 @@ export default function EmployeeDetailPage() {
     if (data) {
       const e = data.employee || {};
       const p = data.profile || {};
-      setEditBasic({ first_name: e.first_name || "", last_name: e.last_name || "", phone: e.phone || "", role: e.role || "" });
+      setEditBasic({ first_name: e.first_name || "", last_name: e.last_name || "", email: e.email || "", phone: e.phone || "", role: e.role || "" });
       setEditProfile({
         pay_type: p.pay_type || "Monthly", monthly_salary: p.monthly_salary || 0,
         daily_rate: p.daily_rate || 0, hourly_rate: p.hourly_rate || 0,
@@ -256,6 +256,10 @@ export default function EmployeeDetailPage() {
             <div className="space-y-1">
               <Label className="text-xs">Фамилия</Label>
               <Input value={editBasic.last_name} onChange={e => setEditBasic({...editBasic, last_name: e.target.value})} className="bg-background h-8 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Имейл</Label>
+              <Input type="email" value={editBasic.email} onChange={e => setEditBasic({...editBasic, email: e.target.value})} className="bg-background h-8 text-sm" data-testid="email-input" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Длъжност</Label>

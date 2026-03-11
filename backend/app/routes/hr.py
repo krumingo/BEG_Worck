@@ -165,7 +165,7 @@ async def update_employee_basic(user_id: str, data: dict, user: dict = Depends(r
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
-    allowed = ["first_name", "last_name", "phone", "role", "avatar_url"]
+    allowed = ["first_name", "last_name", "phone", "role", "avatar_url", "email"]
     update = {k: v for k, v in data.items() if k in allowed and v is not None}
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
