@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Mar 11, 2026 (Session 26)
+### HR FIX: Photo Crop + Position Field + Месечно/Акорд Pay Types
+- **Photo crop**: ImageCropDialog with react-easy-crop — round crop, zoom slider, 300x300 JPEG output
+- **File validation**: Only JPG/PNG/WebP accepted, max 10MB, clear error messages
+- **Длъжност field**: New position field in create + edit forms, visible in detail header
+- **Pay types**: Месечно + Акорд (пазарлък) — replaces old Daily/Hourly options
+- **Акорд mode**: Shows akord_note field instead of monthly salary; no misleading formula
+- **Месечно mode**: Full auto-calc (monthly / days = daily, daily / hours = hourly) with formula display
+- **Backend**: position, akord_note added to EmployeeProfileCreate/Update; PAY_TYPES = ["Monthly", "Akord"]
+- New: /app/frontend/src/components/ImageCropDialog.js
+- Test report: /app/test_reports/iteration_40.json (100% backend 8/8, 100% frontend)
+
 ## Mar 11, 2026 (Session 25)
 ### HR FIX: New Employee Flow + Employee Photo/Avatar
 - **"Нов служител" button**: In Employees list, opens create dialog
