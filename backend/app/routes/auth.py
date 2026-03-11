@@ -36,6 +36,7 @@ class UserUpdate(BaseModel):
     role: str = None
     phone: str = None
     is_active: bool = None
+    avatar_url: str = None
 
 class OrgUpdate(BaseModel):
     name: str = None

@@ -36,7 +36,7 @@ async def list_employees(user: dict = Depends(require_m4)):
     
     users = await db.users.find(
         {"org_id": user["org_id"], "role": {"$ne": "Admin"}},
-        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "name": 1, "email": 1, "role": 1, "phone": 1, "avatar_url": 1}
     ).to_list(500)
     
     # Get profiles
@@ -150,13 +150,13 @@ async def update_employee_basic(user_id: str, data: dict, user: dict = Depends(r
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
-    allowed = ["first_name", "last_name", "phone", "role"]
+    allowed = ["first_name", "last_name", "phone", "role", "avatar_url"]
     update = {k: v for k, v in data.items() if k in allowed and v is not None}
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.users.update_one({"id": user_id}, {"$set": update})
     
-    return await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "role": 1})
+    return await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "role": 1, "avatar_url": 1})
 
 
 # ── Advances / Loans ───────────────────────────────────────────────
@@ -684,7 +684,7 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     target = await db.users.find_one({"id": user_id, "org_id": org_id},
-        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1, "phone": 1})
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1, "phone": 1, "avatar_url": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Employee not found")
     

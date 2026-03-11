@@ -18,8 +18,18 @@ import {
 } from "@/components/ui/tabs";
 import {
   ArrowLeft, Calendar, Clock, MapPin, CreditCard, Loader2,
-  ChevronLeft, ChevronRight, Save, X, Pencil,
+  ChevronLeft, ChevronRight, Save, X, Pencil, Camera,
 } from "lucide-react";
+
+function Avatar({ name, url, size = 48 }) {
+  if (url) return <img src={url} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+  const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  return (
+    <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: size * 0.35 }}>
+      {initials}
+    </div>
+  );
+}
 
 const STATUS_COLORS = { Present: "bg-emerald-500/20 text-emerald-400", Absent: "bg-red-500/20 text-red-400", Late: "bg-amber-500/20 text-amber-400" };
 const STATUS_BG = { Present: "Присъства", Absent: "Отсъства", Late: "Закъснял" };
@@ -168,6 +178,28 @@ export default function EmployeeDetailPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate("/employees")}><ArrowLeft className="w-4 h-4 mr-1" /> Персонал</Button>
+          <div className="relative group">
+            <Avatar name={`${emp.first_name} ${emp.last_name}`} url={emp.avatar_url} size={48} />
+            {editMode && (
+              <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                <Camera className="w-4 h-4 text-white" />
+                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("context_type", "profile");
+                    fd.append("context_id", userId);
+                    const res = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                    const avatarUrl = `/api/media/${res.data.id}/file`;
+                    await API.put(`/employees/${userId}/basic`, { avatar_url: avatarUrl });
+                    fetchData();
+                  } catch (err) { alert("Грешка при качване на снимка"); }
+                }} />
+              </label>
+            )}
+          </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">{emp.first_name} {emp.last_name}</h1>
             <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
