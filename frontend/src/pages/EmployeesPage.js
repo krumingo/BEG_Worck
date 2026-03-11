@@ -21,8 +21,7 @@ import {
 
 const PAY_TYPES = [
   { value: "Monthly", label: "Месечно" },
-  { value: "Daily", label: "Дневно" },
-  { value: "Hourly", label: "Почасово" },
+  { value: "Akord", label: "Акорд" },
 ];
 
 function Avatar({ name, url, size = 32 }) {
@@ -47,9 +46,9 @@ export default function EmployeesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
     first_name: "", last_name: "", email: "", phone: "", role: "Technician",
-    password: "",
+    password: "", position: "",
     pay_type: "Monthly", monthly_salary: 0, daily_rate: 0, hourly_rate: 0,
-    working_days: 22, hours_day: 8,
+    working_days: 22, hours_day: 8, akord_note: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -97,13 +96,15 @@ export default function EmployeesPage() {
       });
       const newUserId = userRes.data.id;
 
-      // Create profile - correct endpoint is /employees (not /employees/profile)
+      // Create profile
       await API.post("/employees", {
         user_id: newUserId,
         pay_type: createForm.pay_type,
+        position: createForm.position || null,
         monthly_salary: parseFloat(createForm.monthly_salary) || null,
         daily_rate: parseFloat(createForm.daily_rate) || null,
         hourly_rate: parseFloat(createForm.hourly_rate) || null,
+        akord_note: createForm.akord_note || null,
         working_days_per_month: parseFloat(createForm.working_days) || 22,
         standard_hours_per_day: parseFloat(createForm.hours_day) || 8,
         active: true,
@@ -213,13 +214,14 @@ export default function EmployeesPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1"><Label className="text-xs">Длъжност</Label><Input value={createForm.position} onChange={e => setCreateForm({...createForm, position: e.target.value})} placeholder="Бояджия, Майстор..." className="bg-background" data-testid="create-position" /></div>
             </div>
 
             <div className="border-t border-border pt-3">
               <Label className="text-xs text-muted-foreground mb-2 block">Заплащане (EUR)</Label>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Тип</Label>
+                  <Label className="text-xs">Тип заплащане</Label>
                   <Select value={createForm.pay_type} onValueChange={v => updateCreatePay("pay_type", v)}>
                     <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                     <SelectContent>{PAY_TYPES.map(pt => <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>)}</SelectContent>

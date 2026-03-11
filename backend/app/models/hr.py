@@ -4,7 +4,7 @@ Pydantic models - HR / Payroll (M4).
 from pydantic import BaseModel
 from typing import Optional, List
 
-PAY_TYPES = ["Hourly", "Daily", "Monthly"]
+PAY_TYPES = ["Monthly", "Akord"]
 PAY_SCHEDULES = ["Weekly", "Monthly"]
 ADVANCE_TYPES = ["Advance", "Loan"]
 ADVANCE_STATUSES = ["Open", "Closed"]
@@ -15,9 +15,11 @@ PAYMENT_METHODS = ["Cash", "BankTransfer"]
 class EmployeeProfileCreate(BaseModel):
     user_id: str
     pay_type: str = "Monthly"
+    position: Optional[str] = None
     hourly_rate: Optional[float] = None
     daily_rate: Optional[float] = None
     monthly_salary: Optional[float] = None
+    akord_note: Optional[str] = None
     standard_hours_per_day: float = 8
     working_days_per_month: float = 22
     pay_schedule: str = "Monthly"
@@ -26,9 +28,11 @@ class EmployeeProfileCreate(BaseModel):
 
 class EmployeeProfileUpdate(BaseModel):
     pay_type: Optional[str] = None
+    position: Optional[str] = None
     hourly_rate: Optional[float] = None
     daily_rate: Optional[float] = None
     monthly_salary: Optional[float] = None
+    akord_note: Optional[str] = None
     standard_hours_per_day: Optional[float] = None
     working_days_per_month: Optional[float] = None
     pay_schedule: Optional[str] = None

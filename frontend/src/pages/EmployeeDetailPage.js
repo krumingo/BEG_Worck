@@ -20,6 +20,7 @@ import {
   ArrowLeft, Calendar, Clock, MapPin, CreditCard, Loader2,
   ChevronLeft, ChevronRight, Save, X, Pencil, Camera,
 } from "lucide-react";
+import ImageCropDialog from "@/components/ImageCropDialog";
 
 function Avatar({ name, url, size = 48 }) {
   if (url) return <img src={url} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
@@ -36,8 +37,7 @@ const STATUS_BG = { Present: "Присъства", Absent: "Отсъства", L
 const DAYS_BG = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 const PAY_TYPES = [
   { value: "Monthly", label: "Месечно" },
-  { value: "Daily", label: "Дневно" },
-  { value: "Hourly", label: "Почасово" },
+  { value: "Akord", label: "Акорд (пазарлък)" },
 ];
 
 export default function EmployeeDetailPage() {
@@ -56,20 +56,24 @@ export default function EmployeeDetailPage() {
   const [editBasic, setEditBasic] = useState({});
   const [editProfile, setEditProfile] = useState({});
   const [saving, setSaving] = useState(false);
+  // Crop state
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
       const res = await API.get(`/employees/${userId}/dashboard`);
       setData(res.data);
-      // Init edit forms
       const e = res.data.employee || {};
       const p = res.data.profile || {};
       setEditBasic({ first_name: e.first_name || "", last_name: e.last_name || "", phone: e.phone || "", role: e.role || "" });
       setEditProfile({
         pay_type: p.pay_type || "Monthly",
+        position: p.position || "",
         monthly_salary: p.monthly_salary || 0,
         daily_rate: p.daily_rate || 0,
         hourly_rate: p.hourly_rate || 0,
+        akord_note: p.akord_note || "",
         working_days_per_month: p.working_days_per_month || 22,
         standard_hours_per_day: p.standard_hours_per_day || 8,
         active: p.active !== false,
@@ -112,9 +116,11 @@ export default function EmployeeDetailPage() {
       // Update profile via PUT
       await API.put(`/employees/${userId}`, {
         pay_type: editProfile.pay_type,
+        position: editProfile.position || null,
         monthly_salary: parseFloat(editProfile.monthly_salary) || null,
         daily_rate: parseFloat(editProfile.daily_rate) || null,
         hourly_rate: parseFloat(editProfile.hourly_rate) || null,
+        akord_note: editProfile.akord_note || null,
         working_days_per_month: parseFloat(editProfile.working_days_per_month) || 22,
         standard_hours_per_day: parseFloat(editProfile.standard_hours_per_day) || 8,
         active: editProfile.active,
@@ -183,19 +189,19 @@ export default function EmployeeDetailPage() {
             {editMode && (
               <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
                 <Camera className="w-4 h-4 text-white" />
-                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  try {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    fd.append("context_type", "profile");
-                    fd.append("context_id", userId);
-                    const res = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-                    const avatarUrl = `/api/media/${res.data.id}/file`;
-                    await API.put(`/employees/${userId}/basic`, { avatar_url: avatarUrl });
-                    fetchData();
-                  } catch (err) { alert("Грешка при качване на снимка"); }
+                  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                    alert("Поддържани формати: JPG, PNG, WebP"); return;
+                  }
+                  if (file.size > 10 * 1024 * 1024) {
+                    alert("Файлът е твърде голям (макс. 10MB)"); return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = () => { setCropSrc(reader.result); setCropOpen(true); };
+                  reader.readAsDataURL(file);
+                  e.target.value = "";
                 }} />
               </label>
             )}
@@ -203,6 +209,7 @@ export default function EmployeeDetailPage() {
           <div>
             <h1 className="text-xl font-bold text-foreground">{emp.first_name} {emp.last_name}</h1>
             <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
+              {prof?.position && <span className="text-foreground font-medium">{prof.position}</span>}
               <Badge variant="outline">{emp.role}</Badge>
               {emp.email && <span>{emp.email}</span>}
               {emp.phone && <span>{emp.phone}</span>}
@@ -236,7 +243,7 @@ export default function EmployeeDetailPage() {
           <h3 className="text-sm font-semibold text-foreground">Редактиране на служител</h3>
           
           {/* Basic info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Име</Label>
               <Input value={editBasic.first_name} onChange={e => setEditBasic({...editBasic, first_name: e.target.value})} className="bg-background h-8 text-sm" />
@@ -244,6 +251,10 @@ export default function EmployeeDetailPage() {
             <div className="space-y-1">
               <Label className="text-xs">Фамилия</Label>
               <Input value={editBasic.last_name} onChange={e => setEditBasic({...editBasic, last_name: e.target.value})} className="bg-background h-8 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Длъжност</Label>
+              <Input value={editProfile.position} onChange={e => setEditProfile({...editProfile, position: e.target.value})} placeholder="Бояджия, Майстор..." className="bg-background h-8 text-sm" data-testid="position-input" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Телефон</Label>
@@ -264,9 +275,9 @@ export default function EmployeeDetailPage() {
           {/* Pay settings */}
           <div className="border-t border-border pt-3">
             <Label className="text-xs text-muted-foreground mb-2 block">Заплащане (EUR)</Label>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Тип</Label>
+                <Label className="text-xs">Тип заплащане</Label>
                 <Select value={editProfile.pay_type} onValueChange={v => updatePayField("pay_type", v)}>
                   <SelectTrigger className="bg-background h-8 text-sm" data-testid="pay-type-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -274,40 +285,54 @@ export default function EmployeeDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Месечна (EUR)</Label>
-                <Input type="number" step="0.01" value={editProfile.monthly_salary}
-                  onChange={e => updatePayField("monthly_salary", parseFloat(e.target.value) || 0)}
-                  disabled={editProfile.pay_type !== "Monthly"}
-                  className="bg-background h-8 text-sm font-mono" data-testid="monthly-salary-input" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Работни дни/мес</Label>
-                <Input type="number" step="1" value={editProfile.working_days_per_month}
-                  onChange={e => updatePayField("working_days_per_month", parseFloat(e.target.value) || 22)}
-                  className="bg-background h-8 text-sm font-mono" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Часове/ден</Label>
-                <Input type="number" step="0.5" value={editProfile.standard_hours_per_day}
-                  onChange={e => updatePayField("standard_hours_per_day", parseFloat(e.target.value) || 8)}
-                  className="bg-background h-8 text-sm font-mono" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Дневна (EUR) {editProfile.pay_type === "Monthly" && <span className="text-muted-foreground">(авто)</span>}</Label>
-                <Input type="number" step="0.01" value={editProfile.daily_rate}
-                  onChange={e => updatePayField("daily_rate", parseFloat(e.target.value) || 0)}
-                  disabled={editProfile.pay_type === "Monthly"}
-                  className={`bg-background h-8 text-sm font-mono ${editProfile.pay_type === "Monthly" ? "text-emerald-400" : ""}`} data-testid="daily-rate-input" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Часова (EUR) {editProfile.pay_type !== "Hourly" && <span className="text-muted-foreground">(авто)</span>}</Label>
-                <Input type="number" step="0.01" value={editProfile.hourly_rate}
-                  onChange={e => updatePayField("hourly_rate", parseFloat(e.target.value) || 0)}
-                  disabled={editProfile.pay_type !== "Hourly"}
-                  className={`bg-background h-8 text-sm font-mono ${editProfile.pay_type !== "Hourly" ? "text-emerald-400" : ""}`} data-testid="hourly-rate-input" />
-              </div>
+
+              {editProfile.pay_type === "Monthly" && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Месечна заплата (EUR)</Label>
+                    <Input type="number" step="0.01" value={editProfile.monthly_salary}
+                      onChange={e => updatePayField("monthly_salary", parseFloat(e.target.value) || 0)}
+                      className="bg-background h-8 text-sm font-mono" data-testid="monthly-salary-input" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Работни дни/мес</Label>
+                    <Input type="number" step="1" value={editProfile.working_days_per_month}
+                      onChange={e => updatePayField("working_days_per_month", parseFloat(e.target.value) || 22)}
+                      className="bg-background h-8 text-sm font-mono" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Часове/ден</Label>
+                    <Input type="number" step="0.5" value={editProfile.standard_hours_per_day}
+                      onChange={e => updatePayField("standard_hours_per_day", parseFloat(e.target.value) || 8)}
+                      className="bg-background h-8 text-sm font-mono" />
+                  </div>
+                </>
+              )}
+
+              {editProfile.pay_type === "Akord" && (
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs">Договорена основа / бележка за акорд</Label>
+                  <Input value={editProfile.akord_note} onChange={e => setEditProfile({...editProfile, akord_note: e.target.value})}
+                    placeholder="Напр. по обект, по задача, договорена цена..." className="bg-background h-8 text-sm" data-testid="akord-note-input" />
+                </div>
+              )}
             </div>
+
+            {editProfile.pay_type === "Monthly" && editProfile.monthly_salary > 0 && (
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Дневна (EUR) <span className="text-muted-foreground">(авто)</span></Label>
+                  <Input type="number" value={editProfile.daily_rate} disabled
+                    className="bg-background h-8 text-sm font-mono text-emerald-400" data-testid="daily-rate-input" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Часова (EUR) <span className="text-muted-foreground">(авто)</span></Label>
+                  <Input type="number" value={editProfile.hourly_rate} disabled
+                    className="bg-background h-8 text-sm font-mono text-emerald-400" data-testid="hourly-rate-input" />
+                </div>
+              </div>
+            )}
+
             {editProfile.pay_type === "Monthly" && editProfile.monthly_salary > 0 && (
               <p className="text-xs text-muted-foreground mt-2">
                 {editProfile.monthly_salary} EUR / {editProfile.working_days_per_month} дни = <span className="text-emerald-400 font-mono">{editProfile.daily_rate} EUR/ден</span>
@@ -319,13 +344,13 @@ export default function EmployeeDetailPage() {
       ) : (
         /* View mode pay info bar */
         <div className="flex items-center gap-6 p-3 rounded-lg bg-muted/20 border border-border mb-6 text-sm flex-wrap" data-testid="pay-info-bar">
+          {prof?.position && <div><span className="text-muted-foreground">Длъжност:</span> <span className="text-foreground font-medium">{prof.position}</span></div>}
           {emp.phone && <div><span className="text-muted-foreground">Тел:</span> <span className="text-foreground">{emp.phone}</span></div>}
           {prof && <div><span className="text-muted-foreground">Тип:</span> <span className="font-medium">{PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type}</span></div>}
-          {prof?.monthly_salary > 0 && <div><span className="text-muted-foreground">Месечна:</span> <span className="font-mono">{prof.monthly_salary} EUR</span></div>}
-          {displayDailyRate > 0 && <div><span className="text-muted-foreground">Дневна:</span> <span className="font-mono">{displayDailyRate} EUR</span></div>}
-          {displayHourlyRate > 0 && <div><span className="text-muted-foreground">Часова:</span> <span className="font-mono">{displayHourlyRate} EUR/ч</span></div>}
-          {prof && <div><span className="text-muted-foreground">Часове/ден:</span> <span className="font-mono">{prof.standard_hours_per_day || 8}</span></div>}
-          {prof && <div><span className="text-muted-foreground">Дни/мес:</span> <span className="font-mono">{prof.working_days_per_month || 22}</span></div>}
+          {prof?.pay_type === "Monthly" && prof?.monthly_salary > 0 && <div><span className="text-muted-foreground">Месечна:</span> <span className="font-mono">{prof.monthly_salary} EUR</span></div>}
+          {displayDailyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Дневна:</span> <span className="font-mono">{displayDailyRate} EUR</span></div>}
+          {displayHourlyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Часова:</span> <span className="font-mono">{displayHourlyRate} EUR/ч</span></div>}
+          {prof?.pay_type === "Akord" && <div><span className="text-muted-foreground">Акорд:</span> <span className="text-foreground">{prof.akord_note || "Договорено по задача"}</span></div>}
           <Badge variant="outline" className={prof?.active !== false ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>
             {prof?.active !== false ? "Активен" : "Неактивен"}
           </Badge>
@@ -456,6 +481,25 @@ export default function EmployeeDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Image Crop Dialog */}
+      <ImageCropDialog
+        open={cropOpen}
+        onOpenChange={setCropOpen}
+        imageSrc={cropSrc}
+        onCropComplete={async (blob) => {
+          try {
+            const fd = new FormData();
+            fd.append("file", blob, "avatar.jpg");
+            fd.append("context_type", "profile");
+            fd.append("context_id", userId);
+            const res = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            const avatarUrl = `/api/media/${res.data.id}/file`;
+            await API.put(`/employees/${userId}/basic`, { avatar_url: avatarUrl });
+            fetchData();
+          } catch (err) { alert("Грешка при запис на снимка"); }
+        }}
+      />
     </div>
   );
 }
