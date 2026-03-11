@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Mar 11, 2026 (Session 25)
+### HR FIX: New Employee Flow + Employee Photo/Avatar
+- **"Нов служител" button**: In Employees list, opens create dialog
+- **Create dialog**: Име, Фамилия, Имейл, Парола, Телефон, Роля + Заплащане (EUR) with auto-calc
+- **After create**: Redirects to new employee detail page
+- **Avatar**: Initials fallback (colored circle with 2 letters), supports uploaded photo
+- **Photo upload**: Camera overlay on avatar in edit mode → uploads via /api/media/upload
+- **Employees list columns**: Avatar | Име+email | Роля | Телефон | Тип | Ставка EUR | Статус
+- **Backend**: avatar_url added to user queries, employees list returns phone/first_name/last_name
+- Test report: /app/test_reports/iteration_39.json (100% backend 11/11, 100% frontend)
+
 ## Mar 10, 2026 (Session 24)
 ### HR FIX: Employee Editing + Phone + Salary + Auto Calculation
 - **Edit mode**: "Редактиране" button on Employee Detail → full edit form with Save/Cancel
