@@ -454,6 +454,12 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     material_returns = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
     net_material_cost = round(material_cost - material_returns, 2)
 
+    # Enhanced material from material_entries if available
+    from app.routes.material_smr import get_material_summary_for_project
+    material_summary = await get_material_summary_for_project(org_id, project_id)
+    if material_summary["has_data"]:
+        net_material_cost = material_summary["total_cost"]
+
     # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
     from app.routes.labor_smr import get_labor_summary_for_project
     labor_summary = await get_labor_summary_for_project(org_id, project_id)
@@ -558,6 +564,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
 
         "expenses": {
             "material": net_material_cost,
+            "material_detail": material_summary if material_summary["has_data"] else None,
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
             "labor_detail": labor_summary if labor_summary else None,

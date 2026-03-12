@@ -1091,6 +1091,10 @@ api_router.include_router(subcontractors_router)
 from app.routes.labor_smr import router as labor_smr_router
 api_router.include_router(labor_smr_router)
 
+# Import material cost by SMR router
+from app.routes.material_smr import router as material_smr_router
+api_router.include_router(material_smr_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
