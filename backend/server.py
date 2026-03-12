@@ -1083,6 +1083,10 @@ api_router.include_router(revenue_expense_router)
 from app.routes.materials_baseline import router as materials_baseline_router
 api_router.include_router(materials_baseline_router)
 
+# Import subcontractors router
+from app.routes.subcontractors import router as subcontractors_router
+api_router.include_router(subcontractors_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

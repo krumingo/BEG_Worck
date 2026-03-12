@@ -472,12 +472,19 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
             labor_cost += h * rate
     labor_cost = round(labor_cost, 2)
 
-    # Subcontract cost: placeholder — from received invoices linked to project
-    received_invoices = await db.invoices.find(
-        {"project_id": project_id, "org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled"]}},
-        {"_id": 0, "subtotal": 1, "total": 1}
-    ).to_list(100)
-    subcontract_cost = sum(i.get("subtotal", 0) or i.get("total", 0) for i in received_invoices)
+    # Subcontract cost: from subcontractor packages + acts + payments
+    from app.routes.subcontractors import get_subcontract_metrics
+    sub_metrics = await get_subcontract_metrics(org_id, project_id)
+    
+    # Fallback to received invoices if no subcontractor packages
+    if sub_metrics.get("available"):
+        subcontract_cost = sub_metrics["certified"]  # certified = execution cost basis
+    else:
+        received_invoices = await db.invoices.find(
+            {"project_id": project_id, "org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled"]}},
+            {"_id": 0, "subtotal": 1, "total": 1}
+        ).to_list(100)
+        subcontract_cost = sum(i.get("subtotal", 0) or i.get("total", 0) for i in received_invoices)
 
     # Overhead: from allocations if exist
     overhead_allocs = await db.project_overhead_alloc.find(
@@ -525,7 +532,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         "billed_revenue": len(issued_invoices) > 0,
         "material_cost": len(wh_issues) > 0,
         "labor_cost": len(reports) > 0,
-        "subcontract_cost": len(received_invoices) > 0,
+        "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
         "execution_packages": len(exec_pkgs) > 0,
     }
@@ -549,6 +556,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
             "subcontract": round(subcontract_cost, 2),
+            "subcontract_detail": sub_metrics if sub_metrics.get("available") else None,
             "overhead": round(overhead_cost, 2),
             "total": total_cost,
         },
