@@ -1,0 +1,132 @@
+{
+  "summary": "Materials Baseline + Request Matching Backend - All 19 tests passed. Phase 1 (Planned Materials Snapshot), Phase 2 (Coverage), and Phase 4 (Project Summary) endpoints fully operational.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_materials_baseline.py",
+    "/app/test_reports/pytest/test_materials_baseline_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_materials_baseline.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Generated planned materials for offer OFF-0102 with 15% waste. Test regeneration verified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Materials Baseline endpoints tested. Project PRJ-001 has 2 planned material rows (3162.5 EUR planned value). Coverage shows 0 fully requested. Summary shows purchased_value=1241 EUR, issued_value=43.2 EUR. All variance calculations working correctly.",
+  "features_tested": {
+    "P1: POST /api/planned-materials/from-offer/{id} generates planned material rows": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Creates planned material rows from offer lines with waste_percent calculation"
+    },
+    "P1: Duplicate protection returns 400 on second call": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns 400 with 'already exist' message when called twice"
+    },
+    "P1: DELETE /api/planned-materials/by-offer/{id} allows regeneration": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Deletes all planned materials for offer, enabling regeneration"
+    },
+    "P1: GET /api/planned-materials?project_id returns planned rows": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns list with all required fields including waste calculations"
+    },
+    "P1: Planned rows include waste_percent and planned_qty_with_waste": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Verified: 15% waste applied, planned_qty_with_waste = planned_qty * 1.15"
+    },
+    "P2: GET /api/planned-materials/coverage/{project_id} returns enriched rows": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns project_id, rows array, and summary object"
+    },
+    "P2: Coverage summary shows fully_requested/partially_requested/not_requested counts": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Summary includes all required count fields"
+    },
+    "P2: remaining_to_request and remaining_to_purchase calculated correctly": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "remaining_to_request = max(0, planned_qty - requested_qty), remaining_to_purchase = max(0, requested_qty - purchased_qty)"
+    },
+    "P4: GET /api/project-material-summary/{id} returns planned vs actual comparison": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns comprehensive summary with project info, planned, actual, variance, metrics_available"
+    },
+    "P4: Summary includes planned value, purchased value, issued value, returned value, net cost": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "planned.total_value=3162.5, actual.purchased_value=1241, actual.issued_value=43.2, actual.returned_value=0, actual.net_material_cost=43.2"
+    },
+    "P4: Variance calculated: plan_vs_purchased, plan_vs_issued": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "plan_vs_purchased=1921.5, plan_vs_issued=3119.3 (correctly calculated)"
+    },
+    "P4: metrics_available flags show data source availability": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "All 4 flags present: planned_materials=true, purchases=true, warehouse_issues=true, warehouse_returns=true"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs - all endpoints using real backend",
+    "has_mocked_apis": false
+  },
+  "sample_data": {
+    "planned_materials": [
+      {
+        "material_name": "Материали за: TEST_Activity_1",
+        "planned_qty": 100,
+        "waste_percent": 15,
+        "planned_qty_with_waste": 115,
+        "planned_total_cost": 1725
+      },
+      {
+        "material_name": "Материали за: TEST_Activity_2",
+        "planned_qty": 50,
+        "waste_percent": 15,
+        "planned_qty_with_waste": 57.5,
+        "planned_total_cost": 1437.5
+      }
+    ],
+    "coverage_summary": {
+      "total_planned_rows": 2,
+      "total_planned_value": 3162.5,
+      "fully_requested": 0,
+      "partially_requested": 0,
+      "not_requested": 2,
+      "currency": "EUR"
+    },
+    "project_summary": {
+      "planned_value": 3162.5,
+      "purchased_value": 1241,
+      "issued_value": 43.2,
+      "net_material_cost": 43.2,
+      "plan_vs_purchased_variance": 1921.5
+    }
+  }
+}

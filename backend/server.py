@@ -1079,6 +1079,10 @@ api_router.include_router(historical_offers_router)
 from app.routes.revenue_expense import router as revenue_expense_router
 api_router.include_router(revenue_expense_router)
 
+# Import materials baseline router
+from app.routes.materials_baseline import router as materials_baseline_router
+api_router.include_router(materials_baseline_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
