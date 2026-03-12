@@ -1095,6 +1095,10 @@ api_router.include_router(labor_smr_router)
 from app.routes.material_smr import router as material_smr_router
 api_router.include_router(material_smr_router)
 
+# Import full cost / overhead / margin router
+from app.routes.full_cost import router as full_cost_router
+api_router.include_router(full_cost_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
