@@ -1087,6 +1087,10 @@ api_router.include_router(materials_baseline_router)
 from app.routes.subcontractors import router as subcontractors_router
 api_router.include_router(subcontractors_router)
 
+# Import labor by SMR router
+from app.routes.labor_smr import router as labor_smr_router
+api_router.include_router(labor_smr_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

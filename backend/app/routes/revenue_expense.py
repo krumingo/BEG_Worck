@@ -454,23 +454,28 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     material_returns = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
     net_material_cost = round(material_cost - material_returns, 2)
 
-    # Labor cost: from work reports × hourly rates
-    profiles = await db.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
-    rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
-
-    reports = await db.work_reports.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "user_id": 1, "lines": 1}
-    ).to_list(1000)
-    labor_cost = 0
-    labor_hours = 0
-    for wr in reports:
-        rate = rate_map.get(wr["user_id"], 0)
-        for line in wr.get("lines", []):
-            h = float(line.get("hours", 0))
-            labor_hours += h
-            labor_cost += h * rate
-    labor_cost = round(labor_cost, 2)
+    # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
+    from app.routes.labor_smr import get_labor_summary_for_project
+    labor_summary = await get_labor_summary_for_project(org_id, project_id)
+    
+    if labor_summary["has_data"]:
+        labor_cost = labor_summary["total_cost"]
+        labor_hours = labor_summary["total_hours"]
+    else:
+        # Fallback to old work_reports aggregation
+        profiles = await db.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
+        rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
+        reports = await db.work_reports.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "user_id": 1, "lines": 1}).to_list(1000)
+        labor_cost = 0
+        labor_hours = 0
+        for wr in reports:
+            rate = rate_map.get(wr["user_id"], 0)
+            for line in wr.get("lines", []):
+                h = float(line.get("hours", 0))
+                labor_hours += h
+                labor_cost += h * rate
+        labor_cost = round(labor_cost, 2)
+        labor_summary = None
 
     # Subcontract cost: from subcontractor packages + acts + payments
     from app.routes.subcontractors import get_subcontract_metrics
@@ -531,7 +536,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         "earned_revenue": len(accepted_acts) > 0,
         "billed_revenue": len(issued_invoices) > 0,
         "material_cost": len(wh_issues) > 0,
-        "labor_cost": len(reports) > 0,
+        "labor_cost": labor_summary["has_data"] if labor_summary else len(reports) > 0,
         "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
         "execution_packages": len(exec_pkgs) > 0,
@@ -555,6 +560,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
             "material": net_material_cost,
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
+            "labor_detail": labor_summary if labor_summary else None,
             "subcontract": round(subcontract_cost, 2),
             "subcontract_detail": sub_metrics if sub_metrics.get("available") else None,
             "overhead": round(overhead_cost, 2),

@@ -1,0 +1,128 @@
+{
+  "summary": "Labor by SMR / Execution Package (5 Phases) - All 27 tests passed. Complete backend testing for Time Entry Linkage, Planned Hours Engine, Labor Cost by Execution Package, Variance/Warnings, and Project Profit Integration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_labor_smr_flow.py",
+    "/app/test_reports/pytest/test_labor_smr_flow_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_labor_smr_flow.py"
+  ],
+  "success_rate": {
+    "backend": "100% (27/27 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Created TEST_ prefixed labor entries for manual entry testing. tech1@begwork.com has hourly_rate=16.19 EUR/h.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Labor by SMR fully tested. Project PRJ-001 now has 5 labor_entries (3 mapped, 2 unmapped). 3 execution packages with planned_hours computed (2 from budget_estimate, 1 from offer_line). tech1 user has hourly_rate=16.19 EUR/h. Variance calculation: actual - budget (negative = under budget).",
+  "features_tested": {
+    "P1: POST /api/labor-entries creates entry with hourly_rate resolved from employee profile": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Creates entry with auto-generated ID. hourly_rate resolved from employee_profiles collection. labor_cost = hours * hourly_rate. If rate unavailable, both are None."
+    },
+    "P1: POST /api/labor-entries/sync-from-work-reports syncs work reports to labor_entries": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Clears old synced entries, creates new from work_reports. Uses case-insensitive activity_name matching for execution_package mapping."
+    },
+    "P1: GET /api/labor-entries filters by project/execution_package/employee": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "All 3 filter parameters working correctly. Returns sorted by date DESC."
+    },
+    "P2: POST /api/execution-packages/recompute-labor/{project_id} updates planned_hours and used_hours": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Recomputed 3 packages. Updates planned_hours, used_hours, remaining_hours, progress_percent_by_hours, actual_labor_cost, variance fields."
+    },
+    "P2: Planned hours from budget estimate when labor_hours_per_unit unavailable": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Uses default_rate=18 EUR/h. Example: budget=1000 EUR → planned=55.6h. Source tracked as 'budget_estimate'."
+    },
+    "P3: GET /api/labor-cost/by-execution-package/{id} returns by_employee and by_date breakdowns": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns detailed breakdown with planned/used/remaining hours, budget/actual/variance, by_employee and by_date arrays."
+    },
+    "P3: Returns planned/used/remaining hours and budget/actual/variance": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Example: TEST_Activity_1 - planned=55.6h, used=9.0h, remaining=46.6h, budget=1000 EUR, actual=64.76 EUR"
+    },
+    "P4: GET /api/labor-warnings/{project_id} returns warnings for over_hours and over_labor_budget": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns warnings array with type, message. Package summaries include flags array."
+    },
+    "P4: Unmapped entries counted and reported": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "2 unmapped entries detected. Warning: '2 от 5 записа за труд нямат връзка към СМР/пакет'"
+    },
+    "P5: GET /api/project-profit/{id} includes labor_detail with mapped/unmapped breakdown": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "labor_detail has: total_hours=15h, total_cost=161.9 EUR, mapped_hours=9h, mapped_cost=64.76 EUR, unmapped_hours=6h, unmapped_cost=97.14 EUR"
+    },
+    "P5: Labor budget_total and variance_value from execution packages": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "budget_total=1400 EUR (sum of package labor_budget_total). variance=-1238.1 EUR (under budget)"
+    },
+    "Backend: labor_cost = None when hourly_rate unavailable (not fabricated)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Verified: entries without hourly_rate have labor_cost=None"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs - all endpoints using real backend",
+    "has_mocked_apis": false
+  },
+  "sample_data_verified": {
+    "execution_packages": [
+      {
+        "name": "TEST_Activity_1",
+        "planned_hours": 55.6,
+        "used_hours": 9.0,
+        "labor_budget_total": 1000,
+        "planned_hours_source": "budget_estimate"
+      },
+      {
+        "name": "TEST_Activity_2",
+        "planned_hours": 13.9,
+        "used_hours": 0,
+        "labor_budget_total": 250,
+        "planned_hours_source": "budget_estimate"
+      },
+      {
+        "name": "Test Activity 38ddb48a",
+        "planned_hours": 5.0,
+        "used_hours": 0,
+        "labor_budget_total": 150,
+        "planned_hours_source": "offer_line"
+      }
+    ],
+    "labor_entries_count": 5,
+    "mapped_entries": 3,
+    "unmapped_entries": 2,
+    "tech1_hourly_rate": "16.19 EUR/h"
+  }
+}
