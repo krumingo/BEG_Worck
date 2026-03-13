@@ -1103,6 +1103,10 @@ api_router.include_router(full_cost_router)
 from app.routes.revenue_snapshot import router as revenue_snapshot_router
 api_router.include_router(revenue_snapshot_router)
 
+# Import budget freeze / progress router
+from app.routes.budget_progress import router as budget_progress_router
+api_router.include_router(budget_progress_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

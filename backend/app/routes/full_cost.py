@@ -482,6 +482,19 @@ async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
             elif pf == "some_unrequested_materials":
                 explanations.append(f"{proc_risk['not_requested_count']} материала не са заявени")
 
+    # Progress risk
+    from app.routes.budget_progress import get_progress_risk
+    prog_risk = await get_progress_risk(org_id, project_id)
+    if prog_risk.get("available"):
+        for pf in prog_risk.get("flags", []):
+            flags.append(pf)
+            if pf == "no_progress_data":
+                explanations.append("Няма въведен прогрес по пакети")
+            elif pf == "insufficient_progress_data":
+                explanations.append(f"Прогрес въведен за {prog_risk['with_progress']} от {prog_risk['total']} пакета")
+            elif pf == "critical_progress_lag":
+                explanations.append("Критично изоставане: нисък прогрес при висок разход")
+
     # Risk level
     critical = sum(1 for f in flags if f in ["overdue_invoices", "labor_over_budget", "margin_drop"])
     if critical >= 2:
