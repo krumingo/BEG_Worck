@@ -583,3 +583,135 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         "execution_packages": pkg_breakdown,
         "metrics_available": metrics_available,
     }
+
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PROJECT MAIN OFFER + SMR OPERATIONAL VIEW
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/project-smr-view/{project_id}")
+async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)):
+    """Operational SMR view for project — main offer + execution packages with labor focus"""
+    org_id = user["org_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Main offer (accepted, non-extra, most recent)
+    main_offer = await db.offers.find_one(
+        {"org_id": org_id, "project_id": project_id, "status": "Accepted", "offer_type": {"$ne": "extra"}},
+        {"_id": 0, "id": 1, "offer_no": 1, "title": 1, "status": 1, "total": 1, "subtotal": 1, "currency": 1, "accepted_at": 1, "lines": 1},
+        sort=[("accepted_at", -1)]
+    )
+    if not main_offer:
+        # Fallback to latest non-draft
+        main_offer = await db.offers.find_one(
+            {"org_id": org_id, "project_id": project_id, "offer_type": {"$ne": "extra"}, "status": {"$nin": ["Draft"]}},
+            {"_id": 0, "id": 1, "offer_no": 1, "title": 1, "status": 1, "total": 1, "subtotal": 1, "currency": 1, "lines": 1},
+            sort=[("created_at", -1)]
+        )
+
+    # Execution packages with progress + labor
+    pkgs = await db.execution_packages.find(
+        {"org_id": org_id, "project_id": project_id}, {"_id": 0}
+    ).to_list(200)
+
+    # Subcontract by package
+    sub_lines = await db.subcontractor_package_lines.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "execution_package_id": 1, "subcontract_total": 1, "certified_total": 1, "assigned_qty": 1}
+    ).to_list(500)
+    sub_by_pkg = {}
+    for sl in sub_lines:
+        ep_id = sl.get("execution_package_id")
+        if ep_id:
+            if ep_id not in sub_by_pkg:
+                sub_by_pkg[ep_id] = {"contract": 0, "certified": 0, "has_sub": True}
+            sub_by_pkg[ep_id]["contract"] += sl.get("subcontract_total", 0)
+            sub_by_pkg[ep_id]["certified"] += sl.get("certified_total", 0)
+
+    rows = []
+    for pkg in pkgs:
+        pid = pkg["id"]
+        sale = pkg.get("sale_total", 0)
+        lab_budget = pkg.get("labor_budget_total", 0)
+        lab_actual = pkg.get("actual_labor_cost", 0) or 0
+        lab_remaining = round(lab_budget - lab_actual, 2) if lab_budget > 0 else None
+        progress = pkg.get("progress_percent", 0) or 0
+        has_progress = pkg.get("progress_last_updated_at") is not None
+        sub = sub_by_pkg.get(pid)
+
+        # Determine mode
+        if sub and sub["has_sub"] and lab_actual > 0:
+            mode = "mixed"
+        elif sub and sub["has_sub"]:
+            mode = "akord"
+        else:
+            mode = "internal"
+
+        # Offer line price reference
+        offer_labor_price = None
+        if main_offer:
+            for ol in main_offer.get("lines", []):
+                if ol.get("id") == pkg.get("offer_line_id"):
+                    offer_labor_price = ol.get("labor_unit_cost", 0)
+                    break
+
+        # Warning flags
+        flags = []
+        if not has_progress:
+            flags.append("no_progress")
+        if lab_budget > 0 and lab_actual > lab_budget:
+            flags.append("labor_overrun")
+        planned_h = pkg.get("planned_hours")
+        used_h = pkg.get("used_hours", 0)
+        if planned_h and used_h > planned_h:
+            flags.append("hours_overrun")
+
+        rows.append({
+            "id": pid,
+            "activity_name": pkg.get("activity_name", ""),
+            "unit": pkg.get("unit", ""),
+            "qty": pkg.get("qty", 0),
+            "mode": mode,
+            "sale_total": sale,
+            "offer_labor_unit_price": offer_labor_price,
+            "labor_budget": lab_budget,
+            "labor_actual": lab_actual,
+            "labor_remaining": lab_remaining,
+            "planned_hours": planned_h,
+            "used_hours": used_h,
+            "remaining_hours": round(planned_h - used_h, 1) if planned_h else None,
+            "progress_percent": progress,
+            "has_progress": has_progress,
+            "material_actual": pkg.get("actual_material_cost", 0) or 0,
+            "subcontract": round(sub["certified"], 2) if sub else 0,
+            "total_actual": round(lab_actual + (pkg.get("actual_material_cost", 0) or 0) + (sub["certified"] if sub else 0), 2),
+            "flags": flags,
+            "status": pkg.get("status", ""),
+        })
+
+    return {
+        "project_id": project_id,
+        "project_code": project.get("code", ""),
+        "project_name": project.get("name", ""),
+        "currency": "EUR",
+        "main_offer": {
+            "id": main_offer["id"],
+            "offer_no": main_offer["offer_no"],
+            "title": main_offer.get("title", ""),
+            "status": main_offer["status"],
+            "total": main_offer.get("total", 0),
+            "subtotal": main_offer.get("subtotal", 0),
+            "line_count": len(main_offer.get("lines", [])),
+        } if main_offer else None,
+        "rows": rows,
+        "summary": {
+            "total_packages": len(rows),
+            "total_sale": round(sum(r["sale_total"] for r in rows), 2),
+            "total_labor_budget": round(sum(r["labor_budget"] for r in rows), 2),
+            "total_labor_actual": round(sum(r["labor_actual"] for r in rows), 2),
+            "with_warnings": sum(1 for r in rows if r["flags"]),
+        },
+    }

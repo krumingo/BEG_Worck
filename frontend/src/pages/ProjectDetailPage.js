@@ -56,6 +56,7 @@ import ClientPickerModal from "@/components/ClientPickerModal";
 import ExtraWorkModal from "@/components/ExtraWorkModal";
 import ExtraWorksDraftPanel from "@/components/ExtraWorksDraftPanel";
 import ProjectMaterialLedger from "@/components/ProjectMaterialLedger";
+import ProjectSMRTab from "@/components/ProjectSMRTab";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -482,6 +483,11 @@ export default function ProjectDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* CARD: SMR / Execution */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-smr">
+          <ProjectSMRTab projectId={projectId} />
         </div>
 
         {/* CARD 5: Фактури (Full Width) */}
