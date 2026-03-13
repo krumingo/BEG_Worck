@@ -168,6 +168,9 @@ export default function ProjectDetailPage() {
           <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${projectId}/financial`)} data-testid="project-financial-btn">
             <BarChart3 className="w-4 h-4 mr-1" /> Финанси
           </Button>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${projectId}/progress`)} data-testid="project-progress-btn">
+            <TrendingUp className="w-4 h-4 mr-1" /> Прогрес
+          </Button>
           <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
             <Plus className="w-4 h-4 mr-1" /> Ново СМР
           </Button>
