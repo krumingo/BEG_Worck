@@ -49,6 +49,7 @@ import {
   Boxes,
   Scale,
   UserPlus,
+  BarChart3,
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
@@ -164,6 +165,9 @@ export default function ProjectDetailPage() {
           <Badge className={STATUS_COLORS[project.status] || ""}>
             {project.status}
           </Badge>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${projectId}/financial`)} data-testid="project-financial-btn">
+            <BarChart3 className="w-4 h-4 mr-1" /> Финанси
+          </Button>
           <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
             <Plus className="w-4 h-4 mr-1" /> Ново СМР
           </Button>

@@ -59,6 +59,7 @@ import InventoryDashboardPage from "@/pages/InventoryDashboardPage";
 import HistoricalOffersPage from "@/pages/HistoricalOffersPage";
 import EmployeeDetailPage from "@/pages/EmployeeDetailPage";
 import NovoSMRPage from "@/pages/NovoSMRPage";
+import ProjectFinancialPage from "@/pages/ProjectFinancialPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -161,6 +162,7 @@ function AppRoutes() {
       <Route path="/employees" element={<CompanyProtectedRoute><EmployeesPage /></CompanyProtectedRoute>} />
       <Route path="/employees/:userId" element={<CompanyProtectedRoute><EmployeeDetailPage /></CompanyProtectedRoute>} />
       <Route path="/projects/:projectId/novo-smr" element={<CompanyProtectedRoute><NovoSMRPage /></CompanyProtectedRoute>} />
+      <Route path="/projects/:projectId/financial" element={<CompanyProtectedRoute><ProjectFinancialPage /></CompanyProtectedRoute>} />
       <Route path="/advances" element={<CompanyProtectedRoute><AdvancesPage /></CompanyProtectedRoute>} />
       <Route path="/payroll" element={<CompanyProtectedRoute><PayrollRunsPage /></CompanyProtectedRoute>} />
       <Route path="/payroll/:runId" element={<CompanyProtectedRoute><PayrollDetailPage /></CompanyProtectedRoute>} />
