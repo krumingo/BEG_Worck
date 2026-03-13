@@ -61,6 +61,7 @@ import EmployeeDetailPage from "@/pages/EmployeeDetailPage";
 import NovoSMRPage from "@/pages/NovoSMRPage";
 import ProjectFinancialPage from "@/pages/ProjectFinancialPage";
 import ProjectProgressPage from "@/pages/ProjectProgressPage";
+import ProjectOperationsPage from "@/pages/ProjectOperationsPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -165,6 +166,7 @@ function AppRoutes() {
       <Route path="/projects/:projectId/novo-smr" element={<CompanyProtectedRoute><NovoSMRPage /></CompanyProtectedRoute>} />
       <Route path="/projects/:projectId/financial" element={<CompanyProtectedRoute><ProjectFinancialPage /></CompanyProtectedRoute>} />
       <Route path="/projects/:projectId/progress" element={<CompanyProtectedRoute><ProjectProgressPage /></CompanyProtectedRoute>} />
+      <Route path="/projects/:projectId/operations" element={<CompanyProtectedRoute><ProjectOperationsPage /></CompanyProtectedRoute>} />
       <Route path="/advances" element={<CompanyProtectedRoute><AdvancesPage /></CompanyProtectedRoute>} />
       <Route path="/payroll" element={<CompanyProtectedRoute><PayrollRunsPage /></CompanyProtectedRoute>} />
       <Route path="/payroll/:runId" element={<CompanyProtectedRoute><PayrollDetailPage /></CompanyProtectedRoute>} />

@@ -50,6 +50,7 @@ import {
   Scale,
   UserPlus,
   BarChart3,
+  Hammer,
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
@@ -171,6 +172,9 @@ export default function ProjectDetailPage() {
           </Button>
           <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${projectId}/progress`)} data-testid="project-progress-btn">
             <TrendingUp className="w-4 h-4 mr-1" /> Прогрес
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${projectId}/operations`)} data-testid="project-operations-btn">
+            <Hammer className="w-4 h-4 mr-1" /> Операции
           </Button>
           <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
             <Plus className="w-4 h-4 mr-1" /> Ново СМР
