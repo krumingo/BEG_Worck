@@ -471,6 +471,17 @@ async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
         flags.append("overhead_not_allocated")
         explanations.append("Режийни не са разпределени")
 
+    # Procurement risk
+    from app.routes.revenue_snapshot import get_procurement_risk
+    proc_risk = await get_procurement_risk(org_id, project_id)
+    if proc_risk.get("available"):
+        for pf in proc_risk.get("flags", []):
+            flags.append(pf)
+            if pf == "high_unrequested_materials":
+                explanations.append(f"Висок дял незаявени материали ({proc_risk['not_requested_count']} от {proc_risk['planned_count']})")
+            elif pf == "some_unrequested_materials":
+                explanations.append(f"{proc_risk['not_requested_count']} материала не са заявени")
+
     # Risk level
     critical = sum(1 for f in flags if f in ["overdue_invoices", "labor_over_budget", "margin_drop"])
     if critical >= 2:

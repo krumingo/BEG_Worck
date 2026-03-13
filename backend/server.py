@@ -1099,6 +1099,10 @@ api_router.include_router(material_smr_router)
 from app.routes.full_cost import router as full_cost_router
 api_router.include_router(full_cost_router)
 
+# Import revenue snapshot / profit period / procurement router
+from app.routes.revenue_snapshot import router as revenue_snapshot_router
+api_router.include_router(revenue_snapshot_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 
