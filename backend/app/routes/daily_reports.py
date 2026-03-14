@@ -141,6 +141,38 @@ async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
     return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
+@router.post("/daily-reports/{report_id}/approve")
+async def approve_daily_report(report_id: str, user: dict = Depends(require_m4)):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Only SiteManager/Admin can approve")
+    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report["approval_status"] != "SUBMITTED":
+        raise HTTPException(status_code=400, detail="Only SUBMITTED reports can be approved")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+        "approval_status": "APPROVED", "approved_by": user["id"], "approved_at": now, "updated_at": now,
+    }})
+    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+
+
+@router.post("/daily-reports/{report_id}/reject")
+async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depends(require_m4)):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Only SiteManager/Admin can reject")
+    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report["approval_status"] != "SUBMITTED":
+        raise HTTPException(status_code=400, detail="Only SUBMITTED reports can be rejected")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+        "approval_status": "REJECTED", "reject_reason": data.get("reason", ""), "updated_at": now,
+    }})
+    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+
+
 @router.get("/daily-reports/{report_id}")
 async def get_daily_report(report_id: str, user: dict = Depends(require_m4)):
     report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})

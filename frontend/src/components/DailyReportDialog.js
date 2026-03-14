@@ -13,7 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   Loader2, Plus, Trash2, Check, Clock, User, FileText, AlertTriangle,
+  X, ThumbsUp, ThumbsDown, List,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatDate } from "@/lib/i18nUtils";
 
 const STATUS_LABELS = { WORKING: "На работа", LEAVE: "Отпуск", ABSENT_UNEXCUSED: "Самоотлъчка" };
 const STATUS_COLORS = { WORKING: "bg-emerald-500/15 text-emerald-400", LEAVE: "bg-blue-500/15 text-blue-400", ABSENT_UNEXCUSED: "bg-red-500/15 text-red-400" };
@@ -21,11 +24,23 @@ const APPROVAL_LABELS = { DRAFT: "Чернова", SUBMITTED: "Изпратен"
 const APPROVAL_COLORS = { DRAFT: "bg-gray-500/15 text-gray-400", SUBMITTED: "bg-blue-500/15 text-blue-400", APPROVED: "bg-emerald-500/15 text-emerald-400", REJECTED: "bg-red-500/15 text-red-400" };
 
 export default function DailyReportDialog({ open, onOpenChange, employeeId, employeeName, reportDate, existingReportId, onSaved }) {
+  const { user } = useAuth();
+  const canApprove = ["Admin", "Owner", "SiteManager"].includes(user?.role);
   const [projects, setProjects] = useState([]);
   const [smrByProject, setSmrByProject] = useState({});
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // New SMR inline form
+  const [newSmrOpen, setNewSmrOpen] = useState(null); // index of entry
+  const [newSmrTitle, setNewSmrTitle] = useState("");
+  const [newSmrSaving, setNewSmrSaving] = useState(false);
+
+  // Approval
+  const [approvalStatus, setApprovalStatus] = useState("DRAFT");
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Form
   const [selEmployee, setSelEmployee] = useState(employeeId || "");
@@ -58,6 +73,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
         setNotes(r.notes || "");
         setEntries(r.day_entries || []);
         setReportId(r.id);
+        setApprovalStatus(r.approval_status || "DRAFT");
         // Load SMR for each project in entries
         const pids = [...new Set(r.day_entries.map(e => e.project_id))];
         for (const pid of pids) {
@@ -88,6 +104,53 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
   const updateEntry = (i, f, v) => { const n = [...entries]; n[i] = { ...n[i], [f]: v }; setEntries(n); };
 
   const totalHours = entries.reduce((s, e) => s + (parseFloat(e.hours_worked) || 0), 0);
+
+  // Create new extra work SMR for a project
+  const handleNewSmr = async (entryIndex) => {
+    if (!newSmrTitle.trim()) return;
+    const projectId = entries[entryIndex]?.project_id;
+    if (!projectId) return;
+    setNewSmrSaving(true);
+    try {
+      const res = await API.post("/extra-works", {
+        project_id: projectId, title: newSmrTitle, unit: "m2", qty: 1,
+      });
+      const newId = res.data.id;
+      // Refresh SMR list for this project
+      const smrRes = await API.get(`/daily-reports/available-smr/${projectId}`);
+      setSmrByProject(prev => ({ ...prev, [projectId]: smrRes.data.smr }));
+      // Auto-select in entry
+      updateEntry(entryIndex, "smr_id", newId);
+      updateEntry(entryIndex, "extra_work_id", newId);
+      setNewSmrOpen(null);
+      setNewSmrTitle("");
+    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    finally { setNewSmrSaving(false); }
+  };
+
+  // Approve/reject
+  const handleApprove = async () => {
+    if (!reportId) return;
+    setSaving(true);
+    try {
+      await API.post(`/daily-reports/${reportId}/approve`);
+      setApprovalStatus("APPROVED");
+      onSaved?.();
+    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    finally { setSaving(false); }
+  };
+
+  const handleReject = async () => {
+    if (!reportId) return;
+    setSaving(true);
+    try {
+      await API.post(`/daily-reports/${reportId}/reject`, { reason: rejectReason });
+      setApprovalStatus("REJECTED");
+      setRejectOpen(false);
+      onSaved?.();
+    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    finally { setSaving(false); }
+  };
 
   // Save
   const handleSave = async (andSubmit = false) => {
@@ -203,6 +266,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => removeEntry(i)}><Trash2 className="w-3.5 h-3.5" /></Button>
                     </div>
                     {entry.project_id && (
+                      <>
                       <div className="flex items-center gap-2 ml-6">
                         <Select value={entry.smr_id || "none"} onValueChange={v => updateEntry(i, "smr_id", v === "none" ? "" : v)}>
                           <SelectTrigger className="bg-background text-xs h-7 flex-1"><SelectValue placeholder="СМР" /></SelectTrigger>
@@ -211,8 +275,21 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
                             {(smrByProject[entry.project_id] || []).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
+                        <Button variant="ghost" size="sm" className="h-7 text-[10px] px-1.5 text-primary" onClick={() => { setNewSmrOpen(i); setNewSmrTitle(""); }} data-testid={`new-smr-btn-${i}`}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
                         <Input value={entry.work_description} onChange={e => updateEntry(i, "work_description", e.target.value)} placeholder="Описание" className="bg-background text-xs h-7 flex-1" />
                       </div>
+                      {newSmrOpen === i && (
+                        <div className="flex items-center gap-2 ml-6 mt-1 p-2 rounded bg-primary/5 border border-primary/20">
+                          <Input value={newSmrTitle} onChange={e => setNewSmrTitle(e.target.value)} placeholder="Ново СМР описание..." className="bg-background text-xs h-7 flex-1" data-testid="new-smr-input" />
+                          <Button size="sm" className="h-7 text-[10px] bg-emerald-600" onClick={() => handleNewSmr(i)} disabled={newSmrSaving || !newSmrTitle.trim()} data-testid="save-new-smr-btn">
+                            {newSmrSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setNewSmrOpen(null)}><X className="w-3 h-3" /></Button>
+                        </div>
+                      )}
+                      </>
                     )}
                   </div>
                 ))}
@@ -230,13 +307,42 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Затвори</Button>
-          <Button variant="outline" onClick={() => handleSave(false)} disabled={saving} data-testid="save-draft-btn">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <FileText className="w-4 h-4 mr-1" />} Запази чернова
-          </Button>
-          <Button onClick={() => handleSave(true)} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-submit-btn">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} Запази и изпрати
-          </Button>
+          {approvalStatus === "SUBMITTED" && canApprove && (
+            <>
+              <Button variant="outline" className="border-red-500/30 text-red-400" onClick={() => setRejectOpen(true)} data-testid="reject-btn">
+                <ThumbsDown className="w-4 h-4 mr-1" /> Отхвърли
+              </Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={saving} data-testid="approve-btn">
+                <ThumbsUp className="w-4 h-4 mr-1" /> Одобри
+              </Button>
+            </>
+          )}
+          {(approvalStatus === "DRAFT" || approvalStatus === "REJECTED") && (
+            <>
+              <Button variant="outline" onClick={() => handleSave(false)} disabled={saving} data-testid="save-draft-btn">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <FileText className="w-4 h-4 mr-1" />} Запази чернова
+              </Button>
+              <Button onClick={() => handleSave(true)} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-submit-btn">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} Запази и изпрати
+              </Button>
+            </>
+          )}
+          {approvalStatus === "APPROVED" && <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 text-sm">Одобрен</Badge>}
         </DialogFooter>
+
+        {/* Reject reason dialog */}
+        {rejectOpen && (
+          <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+            <DialogContent className="sm:max-w-[350px] bg-card border-border">
+              <DialogHeader><DialogTitle>Причина за отхвърляне</DialogTitle></DialogHeader>
+              <Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Причина..." className="bg-background min-h-[60px]" />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRejectOpen(false)}>Отказ</Button>
+                <Button className="bg-red-600 hover:bg-red-700" onClick={handleReject} disabled={saving}><ThumbsDown className="w-4 h-4 mr-1" /> Отхвърли</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -249,6 +355,10 @@ export function ProjectPersonnelCard({ projectId }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [selectedReportId, setSelectedReportId] = useState(null);
+  // Reports list
+  const [reportsListOpen, setReportsListOpen] = useState(false);
+  const [reportsListEmp, setReportsListEmp] = useState(null);
+  const [reportsList, setReportsList] = useState([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -294,6 +404,16 @@ export function ProjectPersonnelCard({ projectId }) {
               ) : (
                 <Badge variant="outline" className="text-[9px] bg-gray-500/10 text-gray-500">Без отчет</Badge>
               )}
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Всички отчети" onClick={async () => {
+                setReportsListEmp(emp);
+                try {
+                  const res = await API.get(`/daily-reports?employee_id=${emp.employee_id}&project_id=${projectId}`);
+                  setReportsList(res.data);
+                } catch { setReportsList([]); }
+                setReportsListOpen(true);
+              }} data-testid={`all-reports-btn-${i}`}>
+                <List className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setSelectedEmp(emp.employee_id); setSelectedReportId(emp.report_id); setReportOpen(true); }}>
                 <FileText className="w-3.5 h-3.5 text-primary" />
               </Button>
@@ -311,6 +431,40 @@ export function ProjectPersonnelCard({ projectId }) {
         existingReportId={selectedReportId}
         onSaved={fetchData}
       />
+
+      {/* All reports list dialog */}
+      <Dialog open={reportsListOpen} onOpenChange={setReportsListOpen}>
+        <DialogContent className="sm:max-w-[550px] bg-card border-border max-h-[80vh] overflow-y-auto" data-testid="all-reports-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <List className="w-5 h-5 text-primary" />
+              Отчети: {reportsListEmp?.first_name} {reportsListEmp?.last_name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {reportsList.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Няма отчети</p>
+            ) : reportsList.map((r, i) => (
+              <div key={i} className="flex items-center justify-between p-2 rounded-lg border border-border hover:bg-muted/20 cursor-pointer" onClick={() => {
+                setReportsListOpen(false);
+                setSelectedEmp(r.employee_id);
+                setSelectedReportId(r.id);
+                setReportOpen(true);
+              }} data-testid={`report-item-${i}`}>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-mono">{r.report_date}</span>
+                  <Badge variant="outline" className={`text-[9px] ${STATUS_COLORS[r.day_status] || ""}`}>{STATUS_LABELS[r.day_status] || r.day_status}</Badge>
+                  <Badge variant="outline" className={`text-[9px] ${APPROVAL_COLORS[r.approval_status] || ""}`}>{APPROVAL_LABELS[r.approval_status]}</Badge>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="font-mono">{r.total_hours}ч</span>
+                  <span>{r.day_entries?.length || 0} СМР</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
