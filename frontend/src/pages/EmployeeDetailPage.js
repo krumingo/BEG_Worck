@@ -37,8 +37,8 @@ function Avatar({ name, url, size = 48 }) {
   );
 }
 
-const STATUS_COLORS = { Present: "bg-emerald-500/20 text-emerald-400", Absent: "bg-red-500/20 text-red-400", Late: "bg-amber-500/20 text-amber-400" };
-const STATUS_BG = { Present: "Присъства", Absent: "Отсъства", Late: "Закъснял" };
+const STATUS_COLORS = { Present: "bg-emerald-500/20 text-emerald-400", Absent: "bg-red-500/20 text-red-400", Late: "bg-amber-500/20 text-amber-400", Leave: "bg-blue-500/20 text-blue-400", Sick: "bg-orange-500/20 text-orange-400" };
+const STATUS_BG = { Present: "Присъства", Absent: "Отсъства", Late: "Закъснял", Leave: "Отпуск", Sick: "Болен" };
 const DAYS_BG = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 const PAY_TYPES = [
   { value: "Monthly", label: "Месечно" },
@@ -395,9 +395,11 @@ export default function EmployeeDetailPage() {
                     const att = d?.attendance;
                     const isPresent = att?.status === "Present";
                     const isAbsent = att?.status === "Absent";
+                    const isLeave = att?.status === "Leave";
+                    const isSick = att?.status === "Sick";
                     return (
-                      <div key={i} className={`h-16 rounded-md border text-xs p-1 ${isPresent ? "border-emerald-500/30 bg-emerald-500/10" : isAbsent ? "border-red-500/30 bg-red-500/10" : d ? "border-border bg-muted/20" : "border-transparent"}`}>
-                        <span className={`text-[10px] font-mono ${isPresent ? "text-emerald-400" : isAbsent ? "text-red-400" : "text-muted-foreground"}`}>{cell.day}</span>
+                      <div key={i} className={`h-16 rounded-md border text-xs p-1 ${isPresent ? "border-emerald-500/30 bg-emerald-500/10" : isAbsent ? "border-red-500/30 bg-red-500/10" : isLeave ? "border-blue-500/30 bg-blue-500/10" : isSick ? "border-orange-500/30 bg-orange-500/10" : d ? "border-border bg-muted/20" : "border-transparent"}`}>
+                        <span className={`text-[10px] font-mono ${isPresent ? "text-emerald-400" : isAbsent ? "text-red-400" : isLeave ? "text-blue-400" : isSick ? "text-orange-400" : "text-muted-foreground"}`}>{cell.day}</span>
                         {att && <div className="text-[9px] text-muted-foreground truncate">{att.project_code}</div>}
                         {d?.total_hours > 0 && <div className="text-[9px] font-mono text-amber-400">{d.total_hours}ч</div>}
                       </div>

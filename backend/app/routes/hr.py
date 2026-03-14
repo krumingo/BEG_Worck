@@ -937,6 +937,8 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
             days[d]["attendance"] = {"status": "Present", "project_code": ", ".join(set(proj_codes))}
         elif not days[d]["attendance"] and dr["day_status"] == "LEAVE":
             days[d]["attendance"] = {"status": "Leave", "project_code": ""}
+        elif not days[d]["attendance"] and dr["day_status"] == "SICK":
+            days[d]["attendance"] = {"status": "Sick", "project_code": ""}
         elif not days[d]["attendance"] and dr["day_status"] == "ABSENT_UNEXCUSED":
             days[d]["attendance"] = {"status": "Absent", "project_code": ""}
     

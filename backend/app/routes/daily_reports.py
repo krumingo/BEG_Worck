@@ -38,7 +38,7 @@ class DailyReportCreate(BaseModel):
 # ── Validation ─────────────────────────────────────────────────────
 
 def validate_report(data: DailyReportCreate):
-    if data.day_status not in ["WORKING", "LEAVE", "ABSENT_UNEXCUSED"]:
+    if data.day_status not in ["WORKING", "LEAVE", "ABSENT_UNEXCUSED", "SICK"]:
         raise HTTPException(status_code=400, detail="Invalid day_status")
     if data.day_status == "WORKING":
         for entry in data.day_entries:

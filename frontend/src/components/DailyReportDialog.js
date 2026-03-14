@@ -18,8 +18,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDate } from "@/lib/i18nUtils";
 
-const STATUS_LABELS = { WORKING: "На работа", LEAVE: "Отпуск", ABSENT_UNEXCUSED: "Самоотлъчка" };
-const STATUS_COLORS = { WORKING: "bg-emerald-500/15 text-emerald-400", LEAVE: "bg-blue-500/15 text-blue-400", ABSENT_UNEXCUSED: "bg-red-500/15 text-red-400" };
+const STATUS_LABELS = { WORKING: "На работа", LEAVE: "Отпуск", ABSENT_UNEXCUSED: "Самоотлъчка", SICK: "Болен" };
+const STATUS_COLORS = { WORKING: "bg-emerald-500/15 text-emerald-400", LEAVE: "bg-blue-500/15 text-blue-400", ABSENT_UNEXCUSED: "bg-red-500/15 text-red-400", SICK: "bg-orange-500/15 text-orange-400" };
 const APPROVAL_LABELS = { DRAFT: "Чернова", SUBMITTED: "Изпратен", APPROVED: "Одобрен", REJECTED: "Отхвърлен" };
 const APPROVAL_COLORS = { DRAFT: "bg-gray-500/15 text-gray-400", SUBMITTED: "bg-blue-500/15 text-blue-400", APPROVED: "bg-emerald-500/15 text-emerald-400", REJECTED: "bg-red-500/15 text-red-400" };
 
@@ -229,6 +229,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
                   <SelectContent>
                     <SelectItem value="WORKING">На работа</SelectItem>
                     <SelectItem value="LEAVE">Отпуск</SelectItem>
+                    <SelectItem value="SICK">Болен</SelectItem>
                     <SelectItem value="ABSENT_UNEXCUSED">Самоотлъчка</SelectItem>
                   </SelectContent>
                 </Select>
@@ -245,6 +246,10 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
 
             {dayStatus === "ABSENT_UNEXCUSED" && (
               <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20 text-sm text-red-400">Самоотлъчка</div>
+            )}
+
+            {dayStatus === "SICK" && (
+              <div className="p-3 rounded-lg bg-orange-500/5 border border-orange-500/20 text-sm text-orange-400">Болничен</div>
             )}
 
             {/* Work entries */}
