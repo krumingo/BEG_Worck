@@ -59,6 +59,7 @@ import ExtraWorksDraftPanel from "@/components/ExtraWorksDraftPanel";
 import ProjectMaterialLedger from "@/components/ProjectMaterialLedger";
 import ProjectSMRTab from "@/components/ProjectSMRTab";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
+import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -367,51 +368,9 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* CARD 4: Персонал */}
+          {/* CARD 4: Персонал (unified: Всички / Днес / Дневен отчет) */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 md:col-span-2" data-testid="card-team">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-cyan-500" />
-                <h3 className="font-semibold text-white">Персонал ({team.count})</h3>
-              </div>
-              <div className="text-sm">
-                <span className="text-gray-400">Платени заплати: </span>
-                <span className="text-green-400 font-medium">{formatCurrency(team.total_salaries_paid, "BGN")}</span>
-              </div>
-            </div>
-            
-            {team.members.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-gray-700">
-                    <TableHead className="text-gray-400">Име</TableHead>
-                    <TableHead className="text-gray-400">Длъжност</TableHead>
-                    <TableHead className="text-gray-400">Роля</TableHead>
-                    <TableHead className="text-gray-400 text-right">Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {team.members.map((member, idx) => (
-                    <TableRow key={idx} className="border-gray-700">
-                      <TableCell className="text-white">{member.name || "—"}</TableCell>
-                      <TableCell className="text-gray-400">{member.system_role || "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {member.role_in_project}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white text-xs">
-                          Отчет
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-gray-500 text-sm">Няма добавен персонал</p>
-            )}
+            <PersonnelUnified projectId={projectId} team={team} />
           </div>
 
           {/* CARD 6: Оферти */}
@@ -489,9 +448,6 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
-
-        {/* CARD: Personnel today */}
-        <ProjectPersonnelCard projectId={projectId} />
 
         {/* CARD: SMR / Execution */}
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-smr">
@@ -692,5 +648,41 @@ export default function ProjectDetailPage() {
           onCreated={() => setExtraWorkRefresh(prev => prev + 1)}
         />
       </div>
+  );
+}
+
+
+// ── Unified Personnel Component ─────────────────────────────────
+function PersonnelUnified({ projectId, team }) {
+  const [tab, setTab] = useState("today");
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-cyan-500" />
+          <h3 className="font-semibold text-white">Персонал</h3>
+        </div>
+        <div className="flex rounded-lg border border-gray-600 overflow-hidden">
+          <button onClick={() => setTab("all")} className={`px-3 py-1 text-xs ${tab === "all" ? "bg-primary text-primary-foreground" : "bg-gray-800 text-gray-400"}`}>Всички ({team.count})</button>
+          <button onClick={() => setTab("today")} className={`px-3 py-1 text-xs border-l border-gray-600 ${tab === "today" ? "bg-primary text-primary-foreground" : "bg-gray-800 text-gray-400"}`}>Днес</button>
+          <button onClick={() => setTab("report")} className={`px-3 py-1 text-xs border-l border-gray-600 ${tab === "report" ? "bg-amber-500 text-black" : "bg-gray-800 text-gray-400"}`}>Дневен отчет</button>
+        </div>
+      </div>
+      {tab === "all" && (
+        <div className="space-y-1">
+          {team.members.length > 0 ? team.members.map((m, i) => (
+            <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/10 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(m.name || "?")[0]}</div>
+                <span className="text-white">{m.name || "—"}</span>
+              </div>
+              <Badge variant="outline" className="text-[10px]">{m.role_in_project}</Badge>
+            </div>
+          )) : <p className="text-gray-500 text-sm">Няма добавен персонал</p>}
+        </div>
+      )}
+      {tab === "today" && <ProjectPersonnelCard projectId={projectId} />}
+      {tab === "report" && <ObjectDailyReportTab projectId={projectId} />}
+    </div>
   );
 }

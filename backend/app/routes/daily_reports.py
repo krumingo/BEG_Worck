@@ -299,3 +299,139 @@ async def get_available_smr(project_id: str, user: dict = Depends(require_m4)):
         })
 
     return {"project_id": project_id, "smr": smr_list}
+
+
+
+# ── Batch save for object-level daily report ───────────────────────
+
+@router.post("/daily-reports/batch-save")
+async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4)):
+    """Save multiple employee entries for a project+date in one call.
+    Input: { project_id, report_date, entries: [{ employee_id, smr_id, work_description, hours_worked, note }] }
+    Groups by employee, creates/updates one report per employee.
+    """
+    org_id = user["org_id"]
+    project_id = data.get("project_id")
+    report_date = data.get("report_date")
+    entries = data.get("entries", [])
+
+    if not project_id or not report_date:
+        raise HTTPException(status_code=400, detail="project_id and report_date required")
+
+    # Group entries by employee
+    by_emp = {}
+    for e in entries:
+        eid = e.get("employee_id")
+        if not eid:
+            continue
+        if eid not in by_emp:
+            by_emp[eid] = []
+        by_emp[eid].append({
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "smr_id": e.get("smr_id"),
+            "extra_work_id": e.get("extra_work_id"),
+            "work_description": e.get("work_description", ""),
+            "hours_worked": max(0, float(e.get("hours_worked", 0))),
+            "note": e.get("note", ""),
+        })
+
+    now = datetime.now(timezone.utc).isoformat()
+    saved = 0
+
+    for emp_id, emp_entries in by_emp.items():
+        total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
+
+        # Check for existing report
+        existing = await db.employee_daily_reports.find_one({
+            "org_id": org_id, "employee_id": emp_id, "report_date": report_date
+        })
+
+        if existing:
+            # Merge: add new entries to existing, avoid exact duplicates
+            old_entries = existing.get("day_entries", [])
+            # Keep old entries for OTHER projects, replace for THIS project
+            kept = [e for e in old_entries if e.get("project_id") != project_id]
+            merged = kept + emp_entries
+            merged_total = round(sum(e["hours_worked"] for e in merged), 2)
+            await db.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
+                "day_entries": merged, "total_hours": merged_total, "updated_at": now,
+            }})
+        else:
+            report = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "employee_id": emp_id,
+                "report_date": report_date,
+                "day_status": "WORKING",
+                "leave_from": None, "leave_to": None,
+                "notes": None,
+                "day_entries": emp_entries,
+                "total_hours": total_hours,
+                "approval_status": "DRAFT",
+                "created_by": user["id"],
+                "submitted_by": None, "approved_by": None, "approved_at": None,
+                "created_at": now, "updated_at": now,
+            }
+            await db.employee_daily_reports.insert_one(report)
+        saved += 1
+
+    return {"ok": True, "employees_saved": saved, "total_entries": len(entries)}
+
+
+@router.get("/daily-reports/project-entries/{project_id}")
+async def get_project_daily_entries(project_id: str, date: Optional[str] = None, user: dict = Depends(require_m4)):
+    """Get all daily entries for a project on a date, grouped by employee and by SMR"""
+    org_id = user["org_id"]
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "report_date": target_date, "day_entries.project_id": project_id},
+        {"_id": 0}
+    ).to_list(200)
+
+    # Load names
+    emp_ids = list(set(r["employee_id"] for r in reports))
+    users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
+    name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
+
+    # Flatten by employee
+    by_employee = []
+    for r in reports:
+        entries_for_project = [e for e in r.get("day_entries", []) if e.get("project_id") == project_id]
+        if entries_for_project:
+            by_employee.append({
+                "employee_id": r["employee_id"],
+                "employee_name": name_map.get(r["employee_id"], ""),
+                "report_id": r["id"],
+                "approval_status": r["approval_status"],
+                "entries": entries_for_project,
+                "total_hours": round(sum(e["hours_worked"] for e in entries_for_project), 2),
+            })
+
+    # Flatten by SMR
+    by_smr = {}
+    for r in reports:
+        for e in r.get("day_entries", []):
+            if e.get("project_id") != project_id:
+                continue
+            smr_key = e.get("smr_id") or "unassigned"
+            if smr_key not in by_smr:
+                by_smr[smr_key] = {"smr_id": e.get("smr_id"), "work_description": e.get("work_description", ""), "employees": [], "total_hours": 0}
+            by_smr[smr_key]["employees"].append({
+                "employee_id": r["employee_id"],
+                "employee_name": name_map.get(r["employee_id"], ""),
+                "hours_worked": e["hours_worked"],
+                "note": e.get("note", ""),
+            })
+            by_smr[smr_key]["total_hours"] += e["hours_worked"]
+
+    for v in by_smr.values():
+        v["total_hours"] = round(v["total_hours"], 2)
+
+    return {
+        "project_id": project_id,
+        "date": target_date,
+        "by_employee": by_employee,
+        "by_smr": list(by_smr.values()),
+    }

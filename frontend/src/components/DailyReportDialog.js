@@ -23,7 +23,7 @@ const STATUS_COLORS = { WORKING: "bg-emerald-500/15 text-emerald-400", LEAVE: "b
 const APPROVAL_LABELS = { DRAFT: "Чернова", SUBMITTED: "Изпратен", APPROVED: "Одобрен", REJECTED: "Отхвърлен" };
 const APPROVAL_COLORS = { DRAFT: "bg-gray-500/15 text-gray-400", SUBMITTED: "bg-blue-500/15 text-blue-400", APPROVED: "bg-emerald-500/15 text-emerald-400", REJECTED: "bg-red-500/15 text-red-400" };
 
-export default function DailyReportDialog({ open, onOpenChange, employeeId, employeeName, reportDate, existingReportId, onSaved }) {
+export default function DailyReportDialog({ open, onOpenChange, employeeId, employeeName, reportDate, existingReportId, lockedProjectId, onSaved }) {
   const { user } = useAuth();
   const canApprove = ["Admin", "Owner", "SiteManager"].includes(user?.role);
   const [projects, setProjects] = useState([]);
@@ -99,7 +99,11 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
   };
 
   // Entry management
-  const addEntry = () => setEntries([...entries, { id: Date.now().toString(), project_id: "", smr_id: "", work_description: "", hours_worked: 0, note: "" }]);
+  const addEntry = () => {
+    const newEntry = { id: Date.now().toString(), project_id: lockedProjectId || "", smr_id: "", work_description: "", hours_worked: 0, note: "" };
+    setEntries([...entries, newEntry]);
+    if (lockedProjectId) loadSmr(lockedProjectId);
+  };
   const removeEntry = (i) => setEntries(entries.filter((_, idx) => idx !== i));
   const updateEntry = (i, f, v) => { const n = [...entries]; n[i] = { ...n[i], [f]: v }; setEntries(n); };
 
@@ -255,7 +259,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-muted-foreground w-4">{i + 1}</span>
                       <div className="flex-1">
-                        <Select value={entry.project_id || ""} onValueChange={v => { updateEntry(i, "project_id", v); loadSmr(v); }}>
+                        <Select value={entry.project_id || ""} onValueChange={v => { updateEntry(i, "project_id", v); loadSmr(v); }} disabled={!!lockedProjectId}>
                           <SelectTrigger className="bg-background text-sm h-8"><SelectValue placeholder="Обект" /></SelectTrigger>
                           <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.code} — {p.name}</SelectItem>)}</SelectContent>
                         </Select>
