@@ -655,6 +655,32 @@ export default function ProjectDetailPage() {
 // ── Unified Personnel Component ─────────────────────────────────
 function PersonnelUnified({ projectId, team }) {
   const [tab, setTab] = useState("today");
+  const [allPersonnel, setAllPersonnel] = useState([]);
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    // Combine team members + people from daily reports
+    const fetchAll = async () => {
+      try {
+        const res = await API.get(`/daily-reports/project-day-status/${projectId}`);
+        // Merge with team members
+        const fromReports = res.data.employees || [];
+        const reportIds = new Set(fromReports.map(e => e.employee_id));
+        const combined = [...fromReports];
+        // Add team members not in reports
+        for (const m of (team.members || [])) {
+          if (m.user_id && !reportIds.has(m.user_id)) {
+            combined.push({ employee_id: m.user_id, first_name: m.name?.split(" ")[0] || "", last_name: m.name?.split(" ").slice(1).join(" ") || "", avatar_url: null, has_report: false, role: m.role_in_project });
+          }
+        }
+        setAllPersonnel(combined);
+      } catch { setAllPersonnel(team.members?.map(m => ({ employee_id: m.user_id, first_name: m.name || "", last_name: "", has_report: false, role: m.role_in_project })) || []); }
+    };
+    fetchAll();
+  }, [projectId, team]);
+
+  const count = allPersonnel.length || team.count || 0;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -663,22 +689,33 @@ function PersonnelUnified({ projectId, team }) {
           <h3 className="font-semibold text-white">Персонал</h3>
         </div>
         <div className="flex rounded-lg border border-gray-600 overflow-hidden">
-          <button onClick={() => setTab("all")} className={`px-3 py-1 text-xs ${tab === "all" ? "bg-primary text-primary-foreground" : "bg-gray-800 text-gray-400"}`}>Всички ({team.count})</button>
+          <button onClick={() => setTab("all")} className={`px-3 py-1 text-xs ${tab === "all" ? "bg-primary text-primary-foreground" : "bg-gray-800 text-gray-400"}`}>Всички ({count})</button>
           <button onClick={() => setTab("today")} className={`px-3 py-1 text-xs border-l border-gray-600 ${tab === "today" ? "bg-primary text-primary-foreground" : "bg-gray-800 text-gray-400"}`}>Днес</button>
           <button onClick={() => setTab("report")} className={`px-3 py-1 text-xs border-l border-gray-600 ${tab === "report" ? "bg-amber-500 text-black" : "bg-gray-800 text-gray-400"}`}>Дневен отчет</button>
         </div>
       </div>
       {tab === "all" && (
         <div className="space-y-1">
-          {team.members.length > 0 ? team.members.map((m, i) => (
-            <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/10 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(m.name || "?")[0]}</div>
-                <span className="text-white">{m.name || "—"}</span>
+          {allPersonnel.length > 0 ? allPersonnel.map((p, i) => {
+            const name = `${p.first_name || ""} ${p.last_name || ""}`.trim();
+            const initials = `${(p.first_name || "?")[0]}${(p.last_name || "")[0] || ""}`;
+            return (
+              <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/10 text-sm cursor-pointer hover:bg-muted/20" onClick={() => navigate(`/employees/${p.employee_id}`)}>
+                <div className="flex items-center gap-2">
+                  {p.avatar_url ? (
+                    <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{initials}</div>
+                  )}
+                  <span className="text-white">{name || "—"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {p.has_report && <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400">Отчет</Badge>}
+                  {p.role && <Badge variant="outline" className="text-[10px]">{p.role}</Badge>}
+                </div>
               </div>
-              <Badge variant="outline" className="text-[10px]">{m.role_in_project}</Badge>
-            </div>
-          )) : <p className="text-gray-500 text-sm">Няма добавен персонал</p>}
+            );
+          }) : <p className="text-gray-500 text-sm">Няма персонал по обекта</p>}
         </div>
       )}
       {tab === "today" && <ProjectPersonnelCard projectId={projectId} />}

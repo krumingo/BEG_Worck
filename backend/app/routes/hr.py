@@ -759,7 +759,45 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     
     project_history.sort(key=lambda x: x.get("last_attendance") or "", reverse=True)
     
-    # Hours summary (current month)
+    # Also include projects from daily reports not covered by project_team
+    daily_project_ids = await db.employee_daily_reports.distinct("day_entries.project_id", {"org_id": org_id, "employee_id": user_id})
+    existing_pids = set(ph["project_id"] for ph in project_history)
+    for dpid in daily_project_ids:
+        if not dpid or dpid in existing_pids:
+            continue
+        p = await db.projects.find_one({"id": dpid, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1, "status": 1})
+        if not p:
+            continue
+        # Count hours from daily reports
+        dr_list = await db.employee_daily_reports.find(
+            {"org_id": org_id, "employee_id": user_id, "day_entries.project_id": dpid},
+            {"_id": 0, "day_entries": 1, "report_date": 1}
+        ).to_list(500)
+        dr_hours = 0
+        dr_days = set()
+        last_date = None
+        for dr in dr_list:
+            for e in dr.get("day_entries", []):
+                if e.get("project_id") == dpid:
+                    dr_hours += e.get("hours_worked", 0)
+                    dr_days.add(dr["report_date"])
+            if not last_date or dr["report_date"] > last_date:
+                last_date = dr["report_date"]
+        project_history.append({
+            "project_id": dpid,
+            "project_code": p["code"],
+            "project_name": p["name"],
+            "project_status": p.get("status", ""),
+            "role_in_project": "",
+            "days_present": len(dr_days),
+            "total_hours": round(dr_hours, 1),
+            "last_attendance": last_date,
+            "active": True,
+            "source": "daily_reports",
+        })
+    project_history.sort(key=lambda x: x.get("last_attendance") or "", reverse=True)
+    
+    # Hours summary (current month) — includes both old work_reports and new daily_reports
     month_start = datetime.now(timezone.utc).strftime("%Y-%m-01")
     month_att = await db.attendance_entries.count_documents(
         {"org_id": org_id, "user_id": user_id, "date": {"$gte": month_start}, "status": "Present"})
@@ -768,6 +806,17 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
         {"_id": 0, "lines": 1}
     ).to_list(100)
     month_hours = sum(sum(l.get("hours", 0) for l in r.get("lines", [])) for r in month_reports)
+    
+    # Add hours from daily reports
+    month_daily = await db.employee_daily_reports.find(
+        {"org_id": org_id, "employee_id": user_id, "report_date": {"$gte": month_start}},
+        {"_id": 0, "total_hours": 1, "report_date": 1}
+    ).to_list(31)
+    daily_hours = sum(r.get("total_hours", 0) for r in month_daily)
+    daily_days = len(month_daily)
+    
+    combined_hours = month_hours + daily_hours
+    combined_days = month_att + daily_days
     
     # Recent payslips - enrich with period info from payroll_run
     payslips_raw = await db.payslips.find(
@@ -791,8 +840,8 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
         "attendance": attendance,
         "project_history": project_history,
         "hours_summary": {
-            "current_month_days": month_att,
-            "current_month_hours": round(month_hours, 1),
+            "current_month_days": combined_days,
+            "current_month_hours": round(combined_hours, 1),
             "total_projects": len(project_history),
         },
         "payslips": payslips,
@@ -844,16 +893,52 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
     for att in attendance:
         d = att["date"]
         if d not in days:
-            days[d] = {"date": d, "attendance": None, "work_reports": [], "total_hours": 0}
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0}
         days[d]["attendance"] = {"status": att["status"], "project_code": att.get("project_code", "")}
     
     for wr in work_reports:
         d = wr.get("date", "")
         if d and d not in days:
-            days[d] = {"date": d, "attendance": None, "work_reports": [], "total_hours": 0}
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0}
         if d:
             days[d]["work_reports"].append({"project_code": wr.get("project_code", ""), "hours": wr["total_hours"]})
             days[d]["total_hours"] += wr["total_hours"]
+    
+    # Include employee_daily_reports (new structured reports)
+    daily_reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "employee_id": user_id, "report_date": {"$gte": date_from, "$lt": date_to}},
+        {"_id": 0, "report_date": 1, "day_status": 1, "approval_status": 1, "total_hours": 1, "day_entries": 1}
+    ).to_list(31)
+    
+    for dr in daily_reports:
+        d = dr.get("report_date", "")
+        if not d:
+            continue
+        if d not in days:
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0}
+        # Build project codes from entries
+        proj_codes = []
+        for entry in dr.get("day_entries", []):
+            if entry.get("project_id"):
+                p = await db.projects.find_one({"id": entry["project_id"]}, {"_id": 0, "code": 1})
+                if p:
+                    proj_codes.append(p["code"])
+        days[d]["daily_report"] = {
+            "day_status": dr["day_status"],
+            "approval_status": dr["approval_status"],
+            "hours": dr.get("total_hours", 0),
+            "project_codes": list(set(proj_codes)),
+        }
+        # Add hours if not already counted
+        if days[d]["total_hours"] == 0:
+            days[d]["total_hours"] += dr.get("total_hours", 0)
+        # Set attendance from daily report if no old attendance exists
+        if not days[d]["attendance"] and dr["day_status"] == "WORKING":
+            days[d]["attendance"] = {"status": "Present", "project_code": ", ".join(set(proj_codes))}
+        elif not days[d]["attendance"] and dr["day_status"] == "LEAVE":
+            days[d]["attendance"] = {"status": "Leave", "project_code": ""}
+        elif not days[d]["attendance"] and dr["day_status"] == "ABSENT_UNEXCUSED":
+            days[d]["attendance"] = {"status": "Absent", "project_code": ""}
     
     return {
         "month": month,
