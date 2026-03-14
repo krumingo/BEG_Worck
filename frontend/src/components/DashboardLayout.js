@@ -64,7 +64,7 @@ const ADMIN_NAV_CORE = [
   { to: "/ai-calibration", icon: Sparkles, labelKey: "nav.aiCalibration" },
   { to: "/historical-offers", icon: Archive, labelKey: "nav.historicalOffers" },
   { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
-  { to: "/review-reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
+  { to: "/reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
   { to: "/reminders", icon: Bell, labelKey: "nav.reminders" },
   { to: "/employees", icon: UserCog, labelKey: "nav.employees" },
   { to: "/advances", icon: Wallet, labelKey: "nav.advances" },

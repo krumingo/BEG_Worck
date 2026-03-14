@@ -173,6 +173,135 @@ async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depe
     return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
+# ═══════════════════════════════════════════════════════════════════
+# CENTRAL REPORTS MODULE — Table + Calendar
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/daily-reports/reports-table")
+async def get_reports_table(
+    date_from: Optional[str] = None, date_to: Optional[str] = None,
+    project_id: Optional[str] = None, employee_id: Optional[str] = None,
+    approval_status: Optional[str] = None, day_status: Optional[str] = None,
+    user: dict = Depends(require_m4),
+):
+    """Central reports table with cost estimate"""
+    org_id = user["org_id"]
+    q = {"org_id": org_id}
+    if date_from or date_to:
+        q["report_date"] = {}
+        if date_from: q["report_date"]["$gte"] = date_from
+        if date_to: q["report_date"]["$lte"] = date_to
+    if project_id: q["day_entries.project_id"] = project_id
+    if employee_id: q["employee_id"] = employee_id
+    if approval_status: q["approval_status"] = approval_status
+    if day_status: q["day_status"] = day_status
+
+    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort("report_date", -1).to_list(500)
+
+    # Load employee names + profiles
+    emp_ids = list(set(r["employee_id"] for r in reports))
+    users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
+    name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
+
+    profiles = await db.employee_profiles.find({"user_id": {"$in": emp_ids}}, {"_id": 0, "user_id": 1, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
+    profile_map = {p["user_id"]: p for p in profiles}
+
+    # Load project codes
+    proj_ids = set()
+    for r in reports:
+        for e in r.get("day_entries", []):
+            if e.get("project_id"): proj_ids.add(e["project_id"])
+    projects = await db.projects.find({"id": {"$in": list(proj_ids)}}, {"_id": 0, "id": 1, "code": 1}).to_list(100)
+    proj_map = {p["id"]: p["code"] for p in projects}
+
+    rows = []
+    for r in reports:
+        emp_id = r["employee_id"]
+        prof = profile_map.get(emp_id, {})
+        pay_type = prof.get("pay_type", "Monthly")
+
+        # Compute hourly rate
+        hr_rate = prof.get("hourly_rate") or 0
+        if not hr_rate and prof.get("monthly_salary") and prof.get("working_days_per_month") and prof.get("standard_hours_per_day"):
+            hr_rate = round(prof["monthly_salary"] / prof["working_days_per_month"] / prof["standard_hours_per_day"], 2)
+
+        total_hours = r.get("total_hours", 0)
+        cost_estimate = round(total_hours * hr_rate, 2) if hr_rate > 0 else None
+        cost_basis = "hourly_rate" if hr_rate > 0 else "unavailable"
+
+        # Project codes for this report
+        pcodes = list(set(proj_map.get(e.get("project_id", ""), "") for e in r.get("day_entries", []) if e.get("project_id")))
+
+        rows.append({
+            "id": r["id"],
+            "report_date": r["report_date"],
+            "employee_id": emp_id,
+            "employee_name": name_map.get(emp_id, ""),
+            "day_status": r["day_status"],
+            "approval_status": r["approval_status"],
+            "project_codes": pcodes,
+            "pay_type": pay_type,
+            "total_hours": total_hours,
+            "cost_estimate": cost_estimate,
+            "hourly_rate": hr_rate,
+            "cost_basis": cost_basis,
+            "entries_count": len(r.get("day_entries", [])),
+        })
+
+    return {"rows": rows, "total": len(rows), "currency": "EUR"}
+
+
+@router.get("/daily-reports/reports-calendar")
+async def get_reports_calendar(
+    month: Optional[str] = None,
+    project_id: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    user: dict = Depends(require_m4),
+):
+    """Calendar view of daily reports for a month"""
+    org_id = user["org_id"]
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+
+    date_from = f"{month}-01"
+    y, m = int(month[:4]), int(month[5:7])
+    if m == 12:
+        date_to = f"{y+1}-01-01"
+    else:
+        date_to = f"{y}-{m+1:02d}-01"
+
+    q = {"org_id": org_id, "report_date": {"$gte": date_from, "$lt": date_to}}
+    if project_id: q["day_entries.project_id"] = project_id
+    if employee_id: q["employee_id"] = employee_id
+
+    reports = await db.employee_daily_reports.find(q, {"_id": 0}).to_list(1000)
+
+    # Load names
+    emp_ids = list(set(r["employee_id"] for r in reports))
+    users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
+    name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
+
+    # Group by date
+    by_date = {}
+    for r in reports:
+        d = r["report_date"]
+        if d not in by_date:
+            by_date[d] = {"date": d, "working": 0, "leave": 0, "absent": 0, "sick": 0, "people": []}
+        if r["day_status"] == "WORKING": by_date[d]["working"] += 1
+        elif r["day_status"] == "LEAVE": by_date[d]["leave"] += 1
+        elif r["day_status"] == "ABSENT_UNEXCUSED": by_date[d]["absent"] += 1
+        elif r["day_status"] == "SICK": by_date[d]["sick"] += 1
+        by_date[d]["people"].append({
+            "employee_id": r["employee_id"],
+            "name": name_map.get(r["employee_id"], ""),
+            "day_status": r["day_status"],
+            "hours": r.get("total_hours", 0),
+            "approval_status": r["approval_status"],
+        })
+
+    return {"month": month, "days": sorted(by_date.values(), key=lambda x: x["date"]), "total_reports": len(reports)}
+
+
 @router.get("/daily-reports/{report_id}")
 async def get_daily_report(report_id: str, user: dict = Depends(require_m4)):
     report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
@@ -435,3 +564,6 @@ async def get_project_daily_entries(project_id: str, date: Optional[str] = None,
         "by_employee": by_employee,
         "by_smr": list(by_smr.values()),
     }
+
+
+
