@@ -1107,6 +1107,10 @@ api_router.include_router(revenue_snapshot_router)
 from app.routes.budget_progress import router as budget_progress_router
 api_router.include_router(budget_progress_router)
 
+# Import employee daily reports router
+from app.routes.daily_reports import router as daily_reports_router
+api_router.include_router(daily_reports_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 # ── App Setup ────────────────────────────────────────────────────
 

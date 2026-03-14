@@ -58,6 +58,7 @@ import ExtraWorkModal from "@/components/ExtraWorkModal";
 import ExtraWorksDraftPanel from "@/components/ExtraWorksDraftPanel";
 import ProjectMaterialLedger from "@/components/ProjectMaterialLedger";
 import ProjectSMRTab from "@/components/ProjectSMRTab";
+import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -488,6 +489,9 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* CARD: Personnel today */}
+        <ProjectPersonnelCard projectId={projectId} />
 
         {/* CARD: SMR / Execution */}
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-smr">
