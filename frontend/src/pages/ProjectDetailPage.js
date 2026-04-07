@@ -58,6 +58,8 @@ import ExtraWorkModal from "@/components/ExtraWorkModal";
 import ExtraWorksDraftPanel from "@/components/ExtraWorksDraftPanel";
 import ProjectMaterialLedger from "@/components/ProjectMaterialLedger";
 import ProjectSMRTab from "@/components/ProjectSMRTab";
+import LocationTreePanel from "@/components/LocationTreePanel";
+import SMRLocationMap from "@/components/SMRLocationMap";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -452,6 +454,16 @@ export default function ProjectDetailPage() {
         {/* CARD: SMR / Execution */}
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-smr">
           <ProjectSMRTab projectId={projectId} />
+        </div>
+
+        {/* CARD: Location Tree */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-locations">
+          <LocationTreePanel projectId={projectId} />
+        </div>
+
+        {/* CARD: SMR Reverse Lookup */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-smr-reverse">
+          <SMRLocationMap projectId={projectId} />
         </div>
 
         {/* CARD 5: Фактури (Full Width) */}

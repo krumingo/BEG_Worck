@@ -1115,6 +1115,10 @@ api_router.include_router(daily_reports_router)
 from app.routes.missing_smr import router as missing_smr_router
 api_router.include_router(missing_smr_router)
 
+# Import locations router
+from app.routes.locations import router as locations_router
+api_router.include_router(locations_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
@@ -1249,6 +1253,11 @@ async def startup():
     await db.missing_smr.create_index([("org_id", 1), ("project_id", 1), ("status", 1)])
     await db.missing_smr.create_index([("org_id", 1), ("status", 1), ("created_at", -1)])
     await db.missing_smr.create_index([("org_id", 1), ("project_id", 1), ("floor", 1)])
+
+    # Location nodes indexes
+    await db.location_nodes.create_index([("org_id", 1), ("project_id", 1)])
+    await db.location_nodes.create_index([("org_id", 1), ("project_id", 1), ("parent_id", 1)])
+    await db.location_nodes.create_index([("org_id", 1), ("project_id", 1), ("type", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():

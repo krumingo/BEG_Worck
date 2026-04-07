@@ -1415,5 +1415,31 @@
     "linkedOffer": "Свързана оферта",
     "dateFrom": "Дата от",
     "dateTo": "Дата до"
+  },
+  "locations": {
+    "title": "Локации",
+    "loadError": "Грешка при зареждане на локациите",
+    "addBuilding": "Добави сграда",
+    "addNode": "Добави локация",
+    "childOf": "Дете на",
+    "rootNode": "Нов корен (сграда)",
+    "nodeType": "Тип",
+    "name": "Име",
+    "namePlaceholder": "напр. Сграда А, Ет.1, Хол",
+    "nameRequired": "Въведете име",
+    "code": "Код",
+    "area": "Площ (м2)",
+    "created": "Локацията е създадена",
+    "deleted": "Локацията е изтрита",
+    "confirmDelete": "Изтриване на",
+    "empty": "Няма дефинирани локации. Добавете сграда, за да започнете.",
+    "smrAt": "СМР в",
+    "noSMR": "Няма свързани СМР записи",
+    "selectLocation": "Изберете локация...",
+    "reverseTitle": "Обратна разгъвка СМР",
+    "reverseSearchPlaceholder": "Търси СМР тип (напр. гипсокартон, шпакловка)...",
+    "reverseNoResults": "Няма намерени резултати",
+    "reverseLocation": "Локация",
+    "reverseSource": "Източник"
   }
 }

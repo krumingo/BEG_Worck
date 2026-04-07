@@ -1233,5 +1233,31 @@
     "linkedOffer": "Linked offer",
     "dateFrom": "Date from",
     "dateTo": "Date to"
+  },
+  "locations": {
+    "title": "Locations",
+    "loadError": "Error loading locations",
+    "addBuilding": "Add building",
+    "addNode": "Add location",
+    "childOf": "Child of",
+    "rootNode": "New root (building)",
+    "nodeType": "Type",
+    "name": "Name",
+    "namePlaceholder": "e.g. Building A, Floor 1, Living room",
+    "nameRequired": "Name is required",
+    "code": "Code",
+    "area": "Area (m2)",
+    "created": "Location created",
+    "deleted": "Location deleted",
+    "confirmDelete": "Delete",
+    "empty": "No locations defined. Add a building to get started.",
+    "smrAt": "SMR at",
+    "noSMR": "No linked SMR records",
+    "selectLocation": "Select location...",
+    "reverseTitle": "SMR Reverse Lookup",
+    "reverseSearchPlaceholder": "Search SMR type (e.g. drywall, plastering)...",
+    "reverseNoResults": "No results found",
+    "reverseLocation": "Location",
+    "reverseSource": "Source"
   }
 }
