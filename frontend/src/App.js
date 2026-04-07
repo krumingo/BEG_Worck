@@ -64,6 +64,8 @@ import ProjectProgressPage from "@/pages/ProjectProgressPage";
 import ProjectOperationsPage from "@/pages/ProjectOperationsPage";
 import ReportsModulePage from "@/pages/ReportsModulePage";
 import MissingSMRPage from "@/pages/MissingSMRPage";
+import SMRAnalysisListPage from "@/pages/SMRAnalysisListPage";
+import SMRAnalysisPage from "@/pages/SMRAnalysisPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -196,6 +198,8 @@ function AppRoutes() {
       <Route path="/daily-logs" element={<CompanyProtectedRoute><DailyLogsPage /></CompanyProtectedRoute>} />
       <Route path="/change-orders" element={<CompanyProtectedRoute><ChangeOrdersPage /></CompanyProtectedRoute>} />
       <Route path="/missing-smr" element={<CompanyProtectedRoute><MissingSMRPage /></CompanyProtectedRoute>} />
+      <Route path="/smr-analyses" element={<CompanyProtectedRoute><SMRAnalysisListPage /></CompanyProtectedRoute>} />
+      <Route path="/projects/:projectId/smr-analysis/:analysisId" element={<CompanyProtectedRoute><SMRAnalysisPage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
