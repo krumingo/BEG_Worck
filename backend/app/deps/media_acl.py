@@ -33,7 +33,7 @@ from app.db import db
 from app.deps.auth import can_access_project, can_manage_project
 
 # Media context types
-MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project", "site"]
+MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project", "site", "missingSMR"]
 
 # Security logger
 security_logger = logging.getLogger("security")
@@ -153,6 +153,20 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         if not site:
             return False, "Site not found"
         return True, None
+    
+    elif context_type == "missingSMR":
+        item = await db.missing_smr.find_one(
+            {"id": context_id, "org_id": org_id},
+            {"_id": 0, "project_id": 1, "created_by": 1}
+        )
+        if not item:
+            return False, "Missing SMR item not found"
+        if item.get("created_by") == user_id:
+            return True, None
+        project_id = item.get("project_id")
+        if project_id and await can_access_project(user, project_id):
+            return True, None
+        return False, "No access to this missing SMR item"
     
     else:
         return False, f"Unknown context type: {context_type}"

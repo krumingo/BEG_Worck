@@ -63,6 +63,7 @@ import ProjectFinancialPage from "@/pages/ProjectFinancialPage";
 import ProjectProgressPage from "@/pages/ProjectProgressPage";
 import ProjectOperationsPage from "@/pages/ProjectOperationsPage";
 import ReportsModulePage from "@/pages/ReportsModulePage";
+import MissingSMRPage from "@/pages/MissingSMRPage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -194,6 +195,7 @@ function AppRoutes() {
       {/* Work Logs Module (Дневник + Промени СМР) */}
       <Route path="/daily-logs" element={<CompanyProtectedRoute><DailyLogsPage /></CompanyProtectedRoute>} />
       <Route path="/change-orders" element={<CompanyProtectedRoute><ChangeOrdersPage /></CompanyProtectedRoute>} />
+      <Route path="/missing-smr" element={<CompanyProtectedRoute><MissingSMRPage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       

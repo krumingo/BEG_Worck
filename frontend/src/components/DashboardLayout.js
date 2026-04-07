@@ -43,6 +43,7 @@ import {
   FilePlus2,
   ClipboardPen,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -89,6 +90,7 @@ const DATA_NAV = [
 const WORK_LOGS_NAV = [
   { to: "/daily-logs", icon: ClipboardPen, labelKey: "nav.dailyLogs" },
   { to: "/change-orders", icon: FilePlus2, labelKey: "nav.changeOrders" },
+  { to: "/missing-smr", icon: AlertTriangle, labelKey: "nav.missingSMR" },
 ];
 
 // Settings navigation
@@ -246,7 +248,7 @@ export default function DashboardLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [dataExpanded, setDataExpanded] = useState(location.pathname.startsWith("/data"));
-  const [workLogsExpanded, setWorkLogsExpanded] = useState(location.pathname.startsWith("/daily-logs") || location.pathname.startsWith("/change-orders"));
+  const [workLogsExpanded, setWorkLogsExpanded] = useState(location.pathname.startsWith("/daily-logs") || location.pathname.startsWith("/change-orders") || location.pathname.startsWith("/missing-smr"));
 
   const handleLogout = () => {
     logout();

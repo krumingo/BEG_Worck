@@ -183,7 +183,11 @@ export default function ReportsModulePage() {
                     <TableCell className="text-xs text-muted-foreground">{PT_LABELS[r.pay_type] || r.pay_type}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{r.total_hours}</TableCell>
                     <TableCell className={`text-right font-mono text-sm ${r.cost_estimate ? "text-foreground" : "text-muted-foreground"}`}>
-                      {r.cost_estimate != null ? r.cost_estimate.toFixed(2) : "—"}
+                      {r.cost_basis === "akord" ? (
+                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400">Акорд</Badge>
+                      ) : r.cost_estimate != null ? (
+                        <span title={`${r.total_hours}ч × ${r.hourly_rate} EUR/ч`}>{r.cost_estimate.toFixed(2)}</span>
+                      ) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -191,7 +195,11 @@ export default function ReportsModulePage() {
             </Table>
           </div>
 
-          <p className="text-[10px] text-muted-foreground mt-2">Сума = часове × часова ставка (от профила на служителя). Месечна заплата / работни дни / часове на ден = часова ставка.</p>
+          <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5">
+            <p><span className="font-medium">Месечно:</span> часове × (месечна заплата / работни дни / часове на ден)</p>
+            <p><span className="font-medium">Почасово:</span> часове × часова ставка</p>
+            <p><span className="font-medium">Акорд:</span> договорена сума по задача (не се изчислява автоматично)</p>
+          </div>
         </TabsContent>
 
         {/* ═══ CALENDAR ═══ */}

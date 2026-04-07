@@ -226,8 +226,16 @@ async def get_reports_table(
             hr_rate = round(prof["monthly_salary"] / prof["working_days_per_month"] / prof["standard_hours_per_day"], 2)
 
         total_hours = r.get("total_hours", 0)
-        cost_estimate = round(total_hours * hr_rate, 2) if hr_rate > 0 else None
-        cost_basis = "hourly_rate" if hr_rate > 0 else "unavailable"
+        
+        if pay_type == "Akord":
+            cost_estimate = None
+            cost_basis = "akord"
+        elif hr_rate > 0:
+            cost_estimate = round(total_hours * hr_rate, 2)
+            cost_basis = "derived_hourly" if not prof.get("hourly_rate") else "hourly_rate"
+        else:
+            cost_estimate = None
+            cost_basis = "unavailable"
 
         # Project codes for this report
         pcodes = list(set(proj_map.get(e.get("project_id", ""), "") for e in r.get("day_entries", []) if e.get("project_id")))
