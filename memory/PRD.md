@@ -25,6 +25,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Two-Stage AI (Fast + LLM Refinement)
 - Data Module (Warehouses, Counterparties, Items, Prices, Turnover)
 - Missing/Additional SMR Module (Липсващи/Допълнителни СМР) — Apr 7, 2026
+- Location Tree Module (Обектова йерархия) — Apr 7, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 
