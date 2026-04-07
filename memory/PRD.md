@@ -5,7 +5,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
-## Master Roadmap (Updated Mar 9, 2026)
+## Master Roadmap (Updated Apr 7, 2026)
 
 ### COMPLETED BLOCKS:
 - Core Infrastructure (auth, billing, modules)
@@ -24,6 +24,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Editable AI Proposals + Multi-line + Hourly Rates
 - Two-Stage AI (Fast + LLM Refinement)
 - Data Module (Warehouses, Counterparties, Items, Prices, Turnover)
+- Missing/Additional SMR Module (Липсващи/Допълнителни СМР) — Apr 7, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 
