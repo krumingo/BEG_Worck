@@ -26,6 +26,7 @@ PROJECT_TYPES = ["Billable", "Overhead", "Warranty"]
 PROJECT_TEAM_ROLES = ["SiteManager", "Technician", "Viewer"]
 OWNER_TYPES = ["person", "company"]
 WARRANTY_OPTIONS = [3, 6, 12, 24]  # months
+OBJECT_TYPES = ["apartment", "house", "office", "commercial", "industrial", "public", "other"]
 
 # Models
 class ProjectCreate(BaseModel):
@@ -45,6 +46,12 @@ class ProjectCreate(BaseModel):
     owner_type: Optional[str] = None  # "person" or "company"
     owner_id: Optional[str] = None
     warranty_months: Optional[int] = None  # 3, 6, 12, 24
+    # Extended fields
+    object_type: Optional[str] = None
+    structured_address: Optional[dict] = None
+    contacts: Optional[dict] = None
+    invoice_details: Optional[dict] = None
+    object_details: Optional[dict] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -62,6 +69,12 @@ class ProjectUpdate(BaseModel):
     owner_type: Optional[str] = None
     owner_id: Optional[str] = None
     warranty_months: Optional[int] = None  # 3, 6, 12, 24
+    # Extended fields
+    object_type: Optional[str] = None
+    structured_address: Optional[dict] = None
+    contacts: Optional[dict] = None
+    invoice_details: Optional[dict] = None
+    object_details: Optional[dict] = None
 
 class TeamMemberAdd(BaseModel):
     user_id: str
@@ -90,6 +103,7 @@ async def get_project_enums():
         "statuses": PROJECT_STATUSES,
         "types": PROJECT_TYPES,
         "team_roles": PROJECT_TEAM_ROLES,
+        "object_types": OBJECT_TYPES,
     }
 
 # Project CRUD
@@ -138,6 +152,22 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
     if existing:
         raise HTTPException(status_code=400, detail="Project code already exists in this organization")
     now = datetime.now(timezone.utc).isoformat()
+
+    # Generate formatted address_text from structured_address if provided
+    addr_text = data.address_text
+    sa = data.structured_address
+    if sa and not addr_text:
+        parts = []
+        if sa.get("city"): parts.append(f"гр. {sa['city']}")
+        if sa.get("district"): parts.append(f"кв. {sa['district']}")
+        if sa.get("street"): parts.append(sa["street"])
+        if sa.get("block"): parts.append(f"бл. {sa['block']}")
+        if sa.get("entrance"): parts.append(f"вх. {sa['entrance']}")
+        if sa.get("floor"): parts.append(f"ет. {sa['floor']}")
+        if sa.get("apartment"): parts.append(f"ап. {sa['apartment']}")
+        if parts:
+            addr_text = ", ".join(parts)
+
     project = {
         "id": str(uuid.uuid4()),
         "org_id": user["org_id"],
@@ -153,10 +183,16 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
         "tags": data.tags,
         "notes": data.notes,
         # Owner fields
-        "address_text": data.address_text,
+        "address_text": addr_text,
         "owner_type": data.owner_type,
         "owner_id": data.owner_id,
         "warranty_months": data.warranty_months,
+        # Extended fields
+        "object_type": data.object_type,
+        "structured_address": data.structured_address,
+        "contacts": data.contacts,
+        "invoice_details": data.invoice_details,
+        "object_details": data.object_details,
         "created_at": now,
         "updated_at": now,
     }
@@ -201,6 +237,19 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
         raise HTTPException(status_code=400, detail="Invalid status")
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
+    # Auto-generate address_text from structured_address
+    sa = update.get("structured_address")
+    if sa and "address_text" not in update:
+        parts = []
+        if sa.get("city"): parts.append(f"гр. {sa['city']}")
+        if sa.get("district"): parts.append(f"кв. {sa['district']}")
+        if sa.get("street"): parts.append(sa["street"])
+        if sa.get("block"): parts.append(f"бл. {sa['block']}")
+        if sa.get("entrance"): parts.append(f"вх. {sa['entrance']}")
+        if sa.get("floor"): parts.append(f"ет. {sa['floor']}")
+        if sa.get("apartment"): parts.append(f"ап. {sa['apartment']}")
+        if parts:
+            update["address_text"] = ", ".join(parts)
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.projects.update_one({"id": project_id}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
@@ -216,6 +265,68 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin)):
     await db.project_phases.delete_many({"project_id": project_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "project", project_id, {"code": project.get("code")})
     return {"ok": True}
+
+# ── Extended Project Details Endpoints ──────────────────────────────
+
+@router.get("/projects/{project_id}/invoice-details")
+async def get_invoice_details(project_id: str, user: dict = Depends(get_current_user)):
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"project_id": project_id, "invoice_details": project.get("invoice_details") or {}}
+
+
+@router.post("/projects/{project_id}/import-client-invoice")
+async def import_client_invoice(project_id: str, user: dict = Depends(get_current_user)):
+    """Copy invoice_details from the project's linked client/company record."""
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not await can_manage_project(user, project_id):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    owner_id = project.get("owner_id")
+    owner_type = project.get("owner_type")
+    if not owner_id:
+        raise HTTPException(status_code=400, detail="Project has no linked client")
+
+    invoice = {}
+    if owner_type == "company":
+        company = await db.companies.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        if not company:
+            company = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        if company:
+            invoice = {
+                "company_name": company.get("name") or company.get("companyName") or "",
+                "eik": company.get("eik") or "",
+                "vat_number": company.get("vat_number") or company.get("vatNumber") or "",
+                "mol": company.get("mol") or "",
+                "registered_address": company.get("address") or "",
+                "correspondence_address": "",
+                "bank_name": "",
+                "iban": "",
+                "is_vat_registered": bool(company.get("vat_number") or company.get("vatNumber")),
+                "notes": "",
+            }
+    elif owner_type == "person":
+        person = await db.persons.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        if not person:
+            person = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        if person:
+            invoice = {
+                "company_name": person.get("full_name") or person.get("fullName") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
+                "eik": person.get("egn") or "",
+                "registered_address": person.get("address") or "",
+                "is_vat_registered": False,
+            }
+
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Client data not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.projects.update_one({"id": project_id}, {"$set": {"invoice_details": invoice, "updated_at": now}})
+    return {"ok": True, "invoice_details": invoice}
+
 
 # Team routes
 @router.get("/projects/{project_id}/team")
