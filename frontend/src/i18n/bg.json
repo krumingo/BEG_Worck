@@ -1522,5 +1522,19 @@
     "unit": "Ед.",
     "medianPrice": "Медианна цена",
     "agents": "Агенти"
+  },
+  "workSessions": {
+    "todaySessions": "Работни сесии днес",
+    "start": "Започни",
+    "end": "Приключи",
+    "startSession": "Започни сесия",
+    "selectSite": "Изберете обект",
+    "totalHours": "Часове",
+    "totalCost": "Стойност",
+    "sessions": "Сесии",
+    "active": "Активни сесии",
+    "noSessions": "Няма сесии",
+    "sessionStarted": "Сесията е започната",
+    "sessionEnded": "Сесията е приключена"
   }
 }

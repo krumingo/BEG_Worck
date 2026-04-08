@@ -1340,5 +1340,19 @@
     "unit": "Unit",
     "medianPrice": "Median Price",
     "agents": "Agents"
+  },
+  "workSessions": {
+    "todaySessions": "Work Sessions Today",
+    "start": "Start",
+    "end": "End",
+    "startSession": "Start Session",
+    "selectSite": "Select site",
+    "totalHours": "Hours",
+    "totalCost": "Cost",
+    "sessions": "Sessions",
+    "active": "Active Sessions",
+    "noSessions": "No sessions",
+    "sessionStarted": "Session started",
+    "sessionEnded": "Session ended"
   }
 }

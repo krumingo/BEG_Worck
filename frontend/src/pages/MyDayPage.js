@@ -15,6 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   CheckCircle2,
   XCircle,
   Clock,
@@ -25,6 +33,9 @@ import {
   CalendarDays,
   FileText,
   ArrowRight,
+  Play,
+  Square,
+  Timer,
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -52,6 +63,11 @@ export default function MyDayPage() {
   const [marking, setMarking] = useState(false);
   const [note, setNote] = useState("");
   const [selectedProject, setSelectedProject] = useState("");
+  // Work sessions
+  const [sessions, setSessions] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [showStartSession, setShowStartSession] = useState(false);
+  const [sessionSite, setSessionSite] = useState("");
 
   const fetchToday = useCallback(async () => {
     try {
@@ -64,6 +80,11 @@ export default function MyDayPage() {
       if (attRes.data.active_projects?.length === 1) {
         setSelectedProject(attRes.data.active_projects[0].id);
       }
+      // Fetch work sessions
+      try {
+        const sessRes = await API.get("/work-sessions/my-today");
+        setSessions(sessRes.data);
+      } catch { /* work sessions optional */ }
     } catch (err) {
       console.error(err);
     } finally {
@@ -283,6 +304,106 @@ export default function MyDayPage() {
           )}
         </div>
       )}
+      {/* Work Sessions Timeline */}
+      {sessions && (
+        <div className="mt-6 space-y-3" data-testid="work-sessions-section">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Timer className="w-4 h-4 text-cyan-400" /> {t("workSessions.todaySessions")}
+            </h3>
+            {!sessions.has_open_session ? (
+              <Button size="sm" onClick={() => { setSessionSite(""); setShowStartSession(true); }} data-testid="start-session-btn">
+                <Play className="w-3.5 h-3.5 mr-1" /> {t("workSessions.start")}
+              </Button>
+            ) : (
+              <Button size="sm" variant="destructive" onClick={async () => {
+                setSessionLoading(true);
+                try { await API.post("/work-sessions/end", {}); await fetchToday(); } catch (e) { alert(e.response?.data?.detail || "Error"); }
+                finally { setSessionLoading(false); }
+              }} disabled={sessionLoading} data-testid="end-session-btn">
+                <Square className="w-3.5 h-3.5 mr-1" /> {t("workSessions.end")}
+              </Button>
+            )}
+          </div>
+
+          {/* Summary bar */}
+          <div className="flex gap-3 text-xs">
+            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-muted-foreground">{t("workSessions.totalHours")}</p>
+              <p className={`font-mono font-bold ${sessions.is_overtime ? "text-orange-400" : "text-foreground"}`}>
+                {sessions.total_hours.toFixed(1)}ч
+                {sessions.is_overtime && <span className="ml-1 text-[9px]">OT</span>}
+              </p>
+            </div>
+            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-muted-foreground">{t("workSessions.totalCost")}</p>
+              <p className="font-mono font-bold text-foreground">{sessions.total_cost.toFixed(2)} EUR</p>
+            </div>
+            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-muted-foreground">{t("workSessions.sessions")}</p>
+              <p className="font-mono font-bold text-foreground">{sessions.total_sessions}</p>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          {sessions.items.length > 0 && (
+            <div className="space-y-1">
+              {sessions.items.map((s) => {
+                const isOpen = !s.ended_at;
+                const startTime = new Date(s.started_at).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" });
+                const endTime = s.ended_at ? new Date(s.ended_at).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" }) : null;
+                const hours = s.duration_hours ?? s.elapsed_hours ?? 0;
+                return (
+                  <div key={s.id} className={`flex items-center gap-3 p-2.5 rounded-lg border text-sm ${isOpen ? "border-cyan-500/30 bg-cyan-500/5" : "border-border bg-card"}`} data-testid={`session-${s.id}`}>
+                    <div className="w-24 font-mono text-xs text-muted-foreground flex-shrink-0">
+                      {isOpen ? <span className="text-cyan-400 font-bold">{startTime} →</span> : `${startTime}-${endTime}`}
+                    </div>
+                    <div className="flex-1 min-w-0 truncate">{s.site_name}</div>
+                    <div className="font-mono text-xs flex-shrink-0">{hours.toFixed(1)}ч</div>
+                    {s.labor_cost > 0 && <div className="font-mono text-xs text-muted-foreground flex-shrink-0">{s.labor_cost.toFixed(0)}лв</div>}
+                    {s.is_overtime && <Badge variant="outline" className="text-[9px] text-orange-400 border-orange-400/30">OT</Badge>}
+                    {s.is_flagged && <Badge variant="outline" className="text-[9px] text-red-400 border-red-400/30">{s.flag_reason}</Badge>}
+                    {isOpen && <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0" />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Start Session Dialog */}
+      <Dialog open={showStartSession} onOpenChange={setShowStartSession}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("workSessions.startSession")}</DialogTitle>
+            <DialogDescription>{t("workSessions.selectSite")}</DialogDescription>
+          </DialogHeader>
+          <Select value={sessionSite || "none"} onValueChange={v => setSessionSite(v === "none" ? "" : v)}>
+            <SelectTrigger data-testid="session-site-select"><SelectValue placeholder={t("workSessions.selectSite")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("workSessions.selectSite")}</SelectItem>
+              {activeProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStartSession(false)}>{t("common.cancel")}</Button>
+            <Button onClick={async () => {
+              if (!sessionSite) return;
+              setSessionLoading(true);
+              try {
+                await API.post("/work-sessions/start", { site_id: sessionSite });
+                setShowStartSession(false);
+                await fetchToday();
+              } catch (e) { alert(e.response?.data?.detail || "Error"); }
+              finally { setSessionLoading(false); }
+            }} disabled={sessionLoading || !sessionSite} data-testid="confirm-start-session">
+              {sessionLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+              {t("workSessions.start")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
