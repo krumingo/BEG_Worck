@@ -190,7 +190,8 @@
     "changeOrders": "Changes",
     "missingSMR": "Missing SMR",
     "smrAnalysis": "SMR Analysis",
-    "pricing": "Pricing"
+    "pricing": "Pricing",
+    "contractPayments": "Contracts"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1369,5 +1370,33 @@
     "minPeople": "Min. people",
     "avgDailyWage": "Avg. daily wage",
     "coefficient": "Coefficient"
+  },
+  "weeklyPayroll": {
+    "weeklyRun": "Weekly Run",
+    "weekStart": "Week Start",
+    "weekEnd": "Week End",
+    "generateWeekly": "Generate from sessions",
+    "myWeekly": "My Week",
+    "regularHours": "Regular Hours",
+    "overtimeHours": "Overtime Hours"
+  },
+  "contractPayments": {
+    "title": "Contract Payments",
+    "subtitle": "External workers and one-time payments",
+    "newPayment": "New Payment",
+    "newDesc": "Create contract payment",
+    "worker": "Worker",
+    "workerPlaceholder": "Worker / brigade name",
+    "description": "Description",
+    "descPlaceholder": "Service description...",
+    "total": "Amount",
+    "paid": "Paid",
+    "site": "Site",
+    "noItems": "No contract payments",
+    "fillRequired": "Fill in worker and amount",
+    "created": "Payment created",
+    "tranchePaid": "Tranche paid",
+    "payTranche": "Pay",
+    "confirmDelete": "Delete this payment?"
   }
 }

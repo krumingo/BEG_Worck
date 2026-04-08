@@ -948,3 +948,372 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
         "total_present": sum(1 for d in days.values() if d.get("attendance", {}).get("status") == "Present" if d.get("attendance")),
         "total_hours": round(sum(d["total_hours"] for d in days.values()), 1),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# WEEKLY PAYROLL + CONTRACT PAYMENTS
+# ═══════════════════════════════════════════════════════════════════
+
+from pydantic import BaseModel as PydanticBaseModel
+from typing import List as TypingList
+
+class WeeklyRunCreate(PydanticBaseModel):
+    week_start: str
+    week_end: str
+    name: Optional[str] = None
+
+class ContractPaymentCreate(PydanticBaseModel):
+    worker_name: str
+    worker_id: Optional[str] = None
+    contract_type: str = "one_time"
+    description: str = ""
+    total_amount: float
+    site_id: Optional[str] = None
+    activity_budget_id: Optional[str] = None
+    tranches: list = []
+
+class ContractPaymentUpdate(PydanticBaseModel):
+    worker_name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+class PayTrancheRequest(PydanticBaseModel):
+    tranche_index: int
+    paid_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# ── Weekly Payroll ─────────────────────────────────────────────────
+
+@router.post("/payroll/weekly-run", status_code=201)
+async def create_weekly_run(data: WeeklyRunCreate, user: dict = Depends(require_m4)):
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    now = datetime.now(timezone.utc).isoformat()
+    name = data.name or f"Седмичен {data.week_start} — {data.week_end}"
+    run = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "period_type": "weekly",
+        "period_start": data.week_start,
+        "period_end": data.week_end,
+        "source": "work_sessions",
+        "status": "Draft",
+        "name": name,
+        "created_by_user_id": user["id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.payroll_runs.insert_one(run)
+    return {k: v for k, v in run.items() if k != "_id"}
+
+
+@router.post("/payroll/{run_id}/generate-weekly")
+async def generate_weekly_payroll(run_id: str, user: dict = Depends(require_m4)):
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    run = await db.payroll_runs.find_one({"id": run_id, "org_id": user["org_id"]})
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run["status"] != "Draft":
+        raise HTTPException(status_code=400, detail="Can only generate for Draft runs")
+
+    org_id = user["org_id"]
+    ws = run.get("period_start", "")
+    we = run.get("period_end", "")
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Get all work sessions in the period
+    sessions = await db.work_sessions.find(
+        {"org_id": org_id, "ended_at": {"$ne": None},
+         "started_at": {"$gte": f"{ws}T00:00:00", "$lte": f"{we}T23:59:59"}},
+        {"_id": 0},
+    ).to_list(5000)
+
+    # Group by worker
+    by_worker = {}
+    for s in sessions:
+        wid = s["worker_id"]
+        if wid not in by_worker:
+            by_worker[wid] = []
+        by_worker[wid].append(s)
+
+    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "currency": 1})
+    currency = org.get("currency", "EUR") if org else "EUR"
+
+    created = 0
+    for wid, worker_sessions in by_worker.items():
+        regular_hours = 0
+        ot_over8 = 0
+        ot_after20 = 0
+        ot_weekend = 0
+        regular_amount = 0
+        overtime_amount = 0
+        session_ids = []
+
+        for s in worker_sessions:
+            dur = s.get("duration_hours", 0) or 0
+            rate = s.get("hourly_rate_at_date", 0) or 0
+            coeff = s.get("overtime_coefficient", 1.0) or 1.0
+            session_ids.append(s["id"])
+
+            if s.get("is_overtime"):
+                ot_type = s.get("overtime_type", "over_8h")
+                if ot_type == "weekend":
+                    ot_weekend += dur
+                elif ot_type == "after_20":
+                    ot_after20 += dur
+                else:
+                    ot_over8 += dur
+                overtime_amount += round(dur * rate * coeff, 2)
+            else:
+                regular_hours += dur
+                regular_amount += round(dur * rate, 2)
+
+        gross = round(regular_amount + overtime_amount, 2)
+
+        # Get pending advances for deduction
+        advances = await db.advances.find(
+            {"org_id": org_id, "user_id": wid, "status": "Open"},
+            {"_id": 0},
+        ).to_list(50)
+        deductions = 0
+        advance_refs = []
+        for adv in advances:
+            remaining = (adv.get("amount", 0) or 0) - (adv.get("deducted_amount", 0) or 0)
+            if remaining > 0:
+                to_deduct = min(remaining, gross - deductions)
+                if to_deduct > 0:
+                    deductions += to_deduct
+                    advance_refs.append({"advance_id": adv["id"], "amount": round(to_deduct, 2)})
+
+        net = round(gross - deductions, 2)
+
+        # Get worker info
+        u = await db.users.find_one({"id": wid}, {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1})
+        worker_name = ""
+        if u:
+            worker_name = u.get("name") or f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+
+        existing = await db.payslips.find_one({"payroll_run_id": run_id, "user_id": wid})
+
+        payslip = {
+            "org_id": org_id,
+            "payroll_run_id": run_id,
+            "user_id": wid,
+            "base_amount": round(regular_amount, 2),
+            "overtime_amount": round(overtime_amount, 2),
+            "regular_hours": round(regular_hours, 2),
+            "overtime_hours": round(ot_over8 + ot_after20 + ot_weekend, 2),
+            "overtime_breakdown": {
+                "over_8h": round(ot_over8, 2),
+                "after_20": round(ot_after20, 2),
+                "weekend": round(ot_weekend, 2),
+            },
+            "regular_amount": round(regular_amount, 2),
+            "gross_amount": gross,
+            "deductions_amount": round(deductions, 2),
+            "advances_deducted_amount": round(deductions, 2),
+            "net_pay": net,
+            "currency": currency,
+            "work_sessions_ids": session_ids,
+            "advance_refs": advance_refs,
+            "details_json": {"source": "work_sessions", "period": f"{ws} — {we}", "worker_name": worker_name},
+            "status": "Draft",
+            "paid_at": None,
+            "paid_by_user_id": None,
+            "updated_at": now,
+        }
+
+        if existing:
+            await db.payslips.update_one({"id": existing["id"]}, {"$set": payslip})
+        else:
+            payslip["id"] = str(uuid.uuid4())
+            payslip["created_at"] = now
+            await db.payslips.insert_one(payslip)
+            created += 1
+
+    return {"ok": True, "created": created, "workers": len(by_worker)}
+
+
+@router.get("/payroll/my-weekly-summary")
+async def my_weekly_summary(
+    week_start: Optional[str] = None,
+    week_end: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    org_id = user["org_id"]
+    wid = user["id"]
+    now = datetime.now(timezone.utc)
+
+    if not week_start:
+        # Current week (Mon-Sun)
+        mon = now - __import__("datetime").timedelta(days=now.weekday())
+        week_start = mon.strftime("%Y-%m-%d")
+    if not week_end:
+        ws_dt = datetime.strptime(week_start, "%Y-%m-%d")
+        week_end = (ws_dt + __import__("datetime").timedelta(days=6)).strftime("%Y-%m-%d")
+
+    sessions = await db.work_sessions.find(
+        {"org_id": org_id, "worker_id": wid, "ended_at": {"$ne": None},
+         "started_at": {"$gte": f"{week_start}T00:00:00", "$lte": f"{week_end}T23:59:59"}},
+        {"_id": 0},
+    ).to_list(200)
+
+    regular_hours = 0
+    ot_hours = 0
+    ot_breakdown = {"over_8h": 0, "after_20": 0, "weekend": 0}
+    gross = 0
+    for s in sessions:
+        dur = s.get("duration_hours", 0) or 0
+        cost = s.get("labor_cost", 0) or 0
+        gross += cost
+        if s.get("is_overtime"):
+            ot_hours += dur
+            ot_type = s.get("overtime_type", "over_8h")
+            ot_breakdown[ot_type] = ot_breakdown.get(ot_type, 0) + dur
+        else:
+            regular_hours += dur
+
+    # Pending advances
+    advances = await db.advances.find({"org_id": org_id, "user_id": wid, "status": "Open"}, {"_id": 0}).to_list(20)
+    pending_deductions = sum(max((a.get("amount", 0) or 0) - (a.get("deducted_amount", 0) or 0), 0) for a in advances)
+
+    net = round(gross - min(pending_deductions, gross), 2)
+
+    return {
+        "week_start": week_start,
+        "week_end": week_end,
+        "regular_hours": round(regular_hours, 2),
+        "overtime_hours": round(ot_hours, 2),
+        "overtime_breakdown": {k: round(v, 2) for k, v in ot_breakdown.items()},
+        "gross": round(gross, 2),
+        "pending_deductions": round(pending_deductions, 2),
+        "net": net,
+        "sessions_count": len(sessions),
+    }
+
+
+# ── Contract Payments ──────────────────────────────────────────────
+
+@router.post("/contract-payments", status_code=201)
+async def create_contract_payment(data: ContractPaymentCreate, user: dict = Depends(require_m4)):
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    now = datetime.now(timezone.utc).isoformat()
+    tranches = data.tranches
+    if not tranches:
+        tranches = [{"amount": data.total_amount, "due_date": now[:10], "paid_date": None, "status": "pending", "paid_by": None, "notes": ""}]
+    else:
+        for t in tranches:
+            t.setdefault("status", "pending")
+            t.setdefault("paid_date", None)
+            t.setdefault("paid_by", None)
+            t.setdefault("notes", "")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "worker_name": data.worker_name,
+        "worker_id": data.worker_id,
+        "contract_type": data.contract_type,
+        "description": data.description,
+        "total_amount": data.total_amount,
+        "site_id": data.site_id,
+        "activity_budget_id": data.activity_budget_id,
+        "tranches": tranches,
+        "status": "active",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+    }
+    await db.contract_payments.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@router.get("/contract-payments")
+async def list_contract_payments(
+    site_id: Optional[str] = None,
+    status: Optional[str] = None,
+    worker_name: Optional[str] = None,
+    user: dict = Depends(require_m4),
+):
+    query = {"org_id": user["org_id"]}
+    if site_id:
+        query["site_id"] = site_id
+    if status:
+        query["status"] = status
+    if worker_name:
+        query["worker_name"] = {"$regex": worker_name, "$options": "i"}
+    items = await db.contract_payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/contract-payments/{payment_id}")
+async def get_contract_payment(payment_id: str, user: dict = Depends(require_m4)):
+    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Contract payment not found")
+    return doc
+
+
+@router.put("/contract-payments/{payment_id}")
+async def update_contract_payment(payment_id: str, data: ContractPaymentUpdate, user: dict = Depends(require_m4)):
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.contract_payments.update_one({"id": payment_id}, {"$set": update})
+    return await db.contract_payments.find_one({"id": payment_id}, {"_id": 0})
+
+
+@router.post("/contract-payments/{payment_id}/pay-tranche")
+async def pay_tranche(payment_id: str, data: PayTrancheRequest, user: dict = Depends(require_m4)):
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    tranches = doc.get("tranches", [])
+    idx = data.tranche_index
+    if idx < 0 or idx >= len(tranches):
+        raise HTTPException(status_code=400, detail="Invalid tranche index")
+    if tranches[idx]["status"] == "paid":
+        raise HTTPException(status_code=400, detail="Tranche already paid")
+
+    now = datetime.now(timezone.utc).isoformat()
+    tranches[idx]["status"] = "paid"
+    tranches[idx]["paid_date"] = data.paid_date or now[:10]
+    tranches[idx]["paid_by"] = user["id"]
+    tranches[idx]["notes"] = data.notes or tranches[idx].get("notes", "")
+
+    # Check if all tranches paid → complete
+    all_paid = all(t["status"] == "paid" for t in tranches)
+    new_status = "completed" if all_paid else "active"
+
+    await db.contract_payments.update_one(
+        {"id": payment_id},
+        {"$set": {"tranches": tranches, "status": new_status, "updated_at": now}},
+    )
+    return await db.contract_payments.find_one({"id": payment_id}, {"_id": 0})
+
+
+@router.delete("/contract-payments/{payment_id}")
+async def delete_contract_payment(payment_id: str, user: dict = Depends(require_m4)):
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    if any(t["status"] == "paid" for t in doc.get("tranches", [])):
+        raise HTTPException(status_code=400, detail="Cannot delete: has paid tranches")
+    await db.contract_payments.delete_one({"id": payment_id})
+    return {"ok": True}

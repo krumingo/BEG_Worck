@@ -204,7 +204,8 @@
     "changeOrders": "Промени",
     "missingSMR": "Липсващи СМР",
     "smrAnalysis": "Анализ СМР",
-    "pricing": "Ценообразуване"
+    "pricing": "Ценообразуване",
+    "contractPayments": "Договори"
   },
   "dashboard": {
     "title": "Табло",
@@ -1551,5 +1552,33 @@
     "minPeople": "Мин. хора",
     "avgDailyWage": "Ср. надница",
     "coefficient": "Коефициент"
+  },
+  "weeklyPayroll": {
+    "weeklyRun": "Седмичен Run",
+    "weekStart": "Начало на седмицата",
+    "weekEnd": "Край на седмицата",
+    "generateWeekly": "Генерирай от сесии",
+    "myWeekly": "Моята седмица",
+    "regularHours": "Редовни часове",
+    "overtimeHours": "Извънредни часове"
+  },
+  "contractPayments": {
+    "title": "Договорни плащания",
+    "subtitle": "Външни работници и еднократни плащания",
+    "newPayment": "Ново плащане",
+    "newDesc": "Създаване на договорно плащане",
+    "worker": "Работник",
+    "workerPlaceholder": "Име на работника / бригадата",
+    "description": "Описание",
+    "descPlaceholder": "Описание на услугата...",
+    "total": "Сума",
+    "paid": "Платено",
+    "site": "Обект",
+    "noItems": "Няма договорни плащания",
+    "fillRequired": "Попълнете работник и сума",
+    "created": "Плащането е създадено",
+    "tranchePaid": "Траншът е платен",
+    "payTranche": "Плати",
+    "confirmDelete": "Изтриване на плащането?"
   }
 }

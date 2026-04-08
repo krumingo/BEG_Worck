@@ -44,6 +44,7 @@ import {
   ClipboardPen,
   Sparkles,
   AlertTriangle,
+  Briefcase,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -72,6 +73,7 @@ const ADMIN_NAV_CORE = [
   { to: "/employees", icon: UserCog, labelKey: "nav.employees" },
   { to: "/advances", icon: Wallet, labelKey: "nav.advances" },
   { to: "/payroll", icon: Receipt, labelKey: "nav.payroll" },
+  { to: "/contract-payments", icon: Briefcase, labelKey: "nav.contractPayments" },
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
   { to: "/procurement", icon: Package, labelKey: "nav.procurement" },
