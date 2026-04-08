@@ -1536,5 +1536,20 @@
     "noSessions": "Няма сесии",
     "sessionStarted": "Сесията е започната",
     "sessionEnded": "Сесията е приключена"
+  },
+  "budgetForecast": {
+    "budgetHealth": "Здраве на бюджета",
+    "totalBudget": "Бюджет",
+    "totalSpent": "Изхарчено",
+    "remaining": "Остава",
+    "burnPct": "Burn %",
+    "earnedValue": "Earned Value Analysis",
+    "progress": "Прогрес",
+    "noData": "Няма данни за бюджет. Добавете activity budgets.",
+    "manDays": "Човекодни",
+    "minDays": "Мин. дни",
+    "minPeople": "Мин. хора",
+    "avgDailyWage": "Ср. надница",
+    "coefficient": "Коефициент"
   }
 }

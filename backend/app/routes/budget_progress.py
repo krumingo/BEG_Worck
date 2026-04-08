@@ -349,6 +349,24 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
             "message": f"{missing_updates} от {len(pkgs)} пакета нямат въведен прогрес",
         })
 
+    # Budget burn warnings from work_sessions
+    budgets = await db.activity_budgets.find(
+        {"org_id": org_id, "project_id": project_id}, {"_id": 0}
+    ).to_list(100)
+    sessions = await db.work_sessions.find(
+        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
+        {"_id": 0, "labor_cost": 1},
+    ).to_list(5000)
+    total_session_cost = sum(s.get("labor_cost", 0) for s in sessions)
+    total_labor_budget = sum(b.get("labor_budget", 0) for b in budgets)
+    if total_labor_budget > 0:
+        burn_pct = total_session_cost / total_labor_budget * 100
+        overall_progress = sum(p.get("progress_percent", 0) for p in pkgs) / max(len(pkgs), 1)
+        if burn_pct > 100:
+            warnings.append({"type": "budget_overrun", "severity": "critical", "message": f"Бюджетът за труд е надхвърлен: {round(burn_pct, 1)}%"})
+        elif burn_pct > 80 and overall_progress < 50:
+            warnings.append({"type": "budget_burn_high", "severity": "warning", "message": f"Бюджетът е {round(burn_pct, 1)}% изхарчен при {round(overall_progress, 1)}% прогрес"})
+
     return {
         "project_id": project_id,
         "warnings": warnings,

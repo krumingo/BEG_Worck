@@ -1354,5 +1354,20 @@
     "noSessions": "No sessions",
     "sessionStarted": "Session started",
     "sessionEnded": "Session ended"
+  },
+  "budgetForecast": {
+    "budgetHealth": "Budget Health",
+    "totalBudget": "Budget",
+    "totalSpent": "Spent",
+    "remaining": "Remaining",
+    "burnPct": "Burn %",
+    "earnedValue": "Earned Value Analysis",
+    "progress": "Progress",
+    "noData": "No budget data. Add activity budgets.",
+    "manDays": "Man-days",
+    "minDays": "Min. days",
+    "minPeople": "Min. people",
+    "avgDailyWage": "Avg. daily wage",
+    "coefficient": "Coefficient"
   }
 }

@@ -15,6 +15,8 @@ import {
   DollarSign, Users, Package, Hammer, Building2, BarChart3,
 } from "lucide-react";
 
+import BudgetForecastPanel from "@/components/BudgetForecastPanel";
+
 function Metric({ label, value, suffix = "", color = "", partial = false, small = false }) {
   return (
     <div className={small ? "" : ""}>
@@ -239,6 +241,11 @@ export default function ProjectFinancialPage() {
             </TableBody>
           </Table>
         </div>
+      </div>
+
+      {/* Budget Forecast & EV Analysis */}
+      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="budget-forecast-section">
+        <BudgetForecastPanel projectId={projectId} />
       </div>
 
       {/* ═══ PHASE 4: Package Detail Dialog ═══ */}
