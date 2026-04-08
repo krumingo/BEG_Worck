@@ -62,6 +62,7 @@ import LocationTreePanel from "@/components/LocationTreePanel";
 import SMRLocationMap from "@/components/SMRLocationMap";
 import ProjectInfoPanel from "@/components/ProjectInfoPanel";
 import SMRGroupsPanel from "@/components/SMRGroupsPanel";
+import ProjectPnLDashboard from "@/components/ProjectPnLDashboard";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -451,6 +452,11 @@ export default function ProjectDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* CARD: P&L Dashboard */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-pnl">
+          <ProjectPnLDashboard projectId={projectId} />
         </div>
 
         {/* CARD: Project Info (Address, Contacts, Invoice, Object Details) */}

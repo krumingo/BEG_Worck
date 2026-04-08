@@ -1135,6 +1135,10 @@ api_router.include_router(work_sessions_router)
 from app.routes.smr_groups import router as smr_groups_router
 api_router.include_router(smr_groups_router)
 
+# Import project P&L router
+from app.routes.project_pnl import router as project_pnl_router
+api_router.include_router(project_pnl_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

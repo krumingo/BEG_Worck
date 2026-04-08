@@ -1475,5 +1475,32 @@
     "grandTotal": "Project Total",
     "material": "Materials",
     "labor": "Labor"
+  },
+  "pnl": {
+    "title": "Revenue / Expense / Profit",
+    "budget": "Budget",
+    "revenue": "Revenue",
+    "expense": "Expense",
+    "profit": "Profit",
+    "profitable": "Profitable",
+    "loss": "Loss",
+    "breakEven": "Break Even",
+    "paid": "Received",
+    "budgetUsed": "Budget Used",
+    "breakdown": "Detailed Breakdown",
+    "expenseBreakdown": "Expenses",
+    "revenueBreakdown": "Revenue",
+    "laborCost": "Labor",
+    "materialCost": "Materials",
+    "subcontractorCost": "Subcontractors",
+    "contractCost": "External Payments",
+    "overhead": "Overhead",
+    "totalExpense": "Total Expense",
+    "totalRevenue": "Total Revenue",
+    "invoiced": "Invoiced",
+    "clientActs": "Client Acts",
+    "additionalOffered": "Additional (offered)",
+    "labor": "Labor",
+    "margin": "Margin"
   }
 }

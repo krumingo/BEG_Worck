@@ -1657,5 +1657,32 @@
     "grandTotal": "Общо по проект",
     "material": "Материали",
     "labor": "Труд"
+  },
+  "pnl": {
+    "title": "Приход / Разход / Печалба",
+    "budget": "Бюджет",
+    "revenue": "Приход",
+    "expense": "Разход",
+    "profit": "Печалба",
+    "profitable": "Печалба",
+    "loss": "Загуба",
+    "breakEven": "На нулата",
+    "paid": "Получено",
+    "budgetUsed": "Използван бюджет",
+    "breakdown": "Детайлна разбивка",
+    "expenseBreakdown": "Разходи",
+    "revenueBreakdown": "Приходи",
+    "laborCost": "Труд",
+    "materialCost": "Материали",
+    "subcontractorCost": "Подизпълнители",
+    "contractCost": "Външни плащания",
+    "overhead": "Режийни",
+    "totalExpense": "Общо разход",
+    "totalRevenue": "Общо приход",
+    "invoiced": "Фактурирано",
+    "clientActs": "Клиентски актове",
+    "additionalOffered": "Допълнителни (оферирани)",
+    "labor": "Труд",
+    "margin": "Маржин"
   }
 }
