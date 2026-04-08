@@ -14,12 +14,35 @@ from app.deps.modules import require_m2
 
 router = APIRouter(tags=["Missing SMR"])
 
-VALID_STATUSES = ["draft", "reported", "reviewed", "analyzed", "offered", "closed"]
+VALID_STATUSES = ["draft", "reported", "reviewed", "analyzed", "offered", "closed",
+                  "executed", "approved_by_client", "rejected_by_client"]
 VALID_SOURCES = ["mobile", "web", "daily_report", "change_order"]
 STATUS_TRANSITIONS = {
     "draft": ["reported", "closed"],
+    "reported": ["reviewed", "executed", "closed"],
+    "reviewed": ["analyzed", "approved_by_client", "rejected_by_client", "closed"],
+    "executed": ["analyzed", "closed"],
+    "approved_by_client": ["analyzed", "closed"],
+    "rejected_by_client": ["closed"],
+    "analyzed": ["offered", "closed"],
+    "offered": ["closed"],
+    "closed": [],
+}
+# Type-specific valid transitions
+EMERGENCY_TRANSITIONS = {
+    "draft": ["reported", "closed"],
+    "reported": ["executed", "closed"],
+    "executed": ["analyzed", "closed"],
+    "analyzed": ["offered", "closed"],
+    "offered": ["closed"],
+    "closed": [],
+}
+PLANNED_TRANSITIONS = {
+    "draft": ["reported", "closed"],
     "reported": ["reviewed", "closed"],
-    "reviewed": ["analyzed", "closed"],
+    "reviewed": ["approved_by_client", "rejected_by_client", "closed"],
+    "approved_by_client": ["analyzed", "closed"],
+    "rejected_by_client": ["closed", "reported"],
     "analyzed": ["offered", "closed"],
     "offered": ["closed"],
     "closed": [],
@@ -42,6 +65,10 @@ class MissingSMRCreate(BaseModel):
     labor_hours_est: Optional[float] = None
     material_notes: Optional[str] = None
     source: str = "web"
+    urgency_type: str = "planned"
+    emergency_reason: Optional[str] = None
+    executed_date: Optional[str] = None
+    executed_by: Optional[str] = None
 
 
 class MissingSMRUpdate(BaseModel):
@@ -102,6 +129,14 @@ async def create_missing_smr(data: MissingSMRCreate, user: dict = Depends(requir
         "attachments": [],
         "source": data.source,
         "status": "draft",
+        "urgency_type": data.urgency_type if data.urgency_type in ("emergency", "planned") else "planned",
+        "emergency_reason": data.emergency_reason,
+        "executed_date": data.executed_date,
+        "executed_by": data.executed_by,
+        "client_approval": None,
+        "ai_estimated_price": None,
+        "ai_price_breakdown": None,
+        "offer_line_ids": [],
         "created_at": now,
         "updated_at": now,
         "created_by": user["id"],
@@ -122,6 +157,7 @@ async def list_missing_smr(
     room: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    urgency_type: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
     query = {"org_id": user["org_id"]}
@@ -133,12 +169,22 @@ async def list_missing_smr(
         query["floor"] = floor
     if room:
         query["room"] = room
+    if urgency_type:
+        query["urgency_type"] = urgency_type
     if date_from:
         query.setdefault("created_at", {})["$gte"] = date_from
     if date_to:
         query.setdefault("created_at", {})["$lte"] = date_to + "T23:59:59"
 
     items = await db.missing_smr.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/missing-smr/pending-approval")
+async def pending_approval(user: dict = Depends(require_m2)):
+    items = await db.missing_smr.find(
+        {"org_id": user["org_id"], "client_approval.status": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
     return {"items": items, "total": len(items)}
 
 
@@ -193,10 +239,14 @@ async def update_status(
     target = data.status
     if target not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {VALID_STATUSES}")
-    if target not in STATUS_TRANSITIONS.get(current, []):
+    # Use type-specific transitions
+    urgency = item.get("urgency_type", "planned")
+    trans = EMERGENCY_TRANSITIONS if urgency == "emergency" else PLANNED_TRANSITIONS
+    allowed = trans.get(current, STATUS_TRANSITIONS.get(current, []))
+    if target not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot transition from '{current}' to '{target}'. Allowed: {STATUS_TRANSITIONS[current]}",
+            detail=f"Cannot transition from '{current}' to '{target}' (type={urgency}). Allowed: {allowed}",
         )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -259,10 +309,10 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
     item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
-    if item["status"] not in ["reported", "reviewed"]:
+    if item["status"] not in ["reported", "reviewed", "executed", "approved_by_client"]:
         raise HTTPException(
             status_code=400,
-            detail="Item must be in 'reported' or 'reviewed' status to send to analysis",
+            detail="Item must be in 'reported', 'reviewed', 'executed' or 'approved_by_client' status to send to analysis",
         )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -336,10 +386,10 @@ async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
     item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
-    if item["status"] not in ["reviewed", "analyzed"]:
+    if item["status"] not in ["reviewed", "analyzed", "executed", "approved_by_client"]:
         raise HTTPException(
             status_code=400,
-            detail="Item must be in 'reviewed' or 'analyzed' status to create an offer",
+            detail="Item must be in 'reviewed', 'analyzed', 'executed' or 'approved_by_client' status to create an offer",
         )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -438,3 +488,292 @@ async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
         "offer_id": offer["id"],
         "offer_no": offer_no,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TWO FLOWS: EMERGENCY vs PLANNED
+# ═══════════════════════════════════════════════════════════════════
+
+from app.services.ai_proposal import get_ai_proposal as hybrid_ai_proposal
+from app.services.pricing_engine import batch_get_prices
+
+
+class ExecuteRequest(BaseModel):
+    executed_date: Optional[str] = None
+    executed_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class RequestApprovalBody(BaseModel):
+    client_name: str
+    client_notes: Optional[str] = None
+
+
+class ClientDecisionBody(BaseModel):
+    client_notes: Optional[str] = None
+    signature_media_id: Optional[str] = None
+
+
+class BatchToOfferBody(BaseModel):
+    ids: List[str]
+    offer_name: Optional[str] = None
+
+
+# ── Execute (emergency only) ───────────────────────────────────────
+
+@router.put("/missing-smr/{item_id}/execute")
+async def execute_emergency(item_id: str, data: ExecuteRequest, user: dict = Depends(require_m2)):
+    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.get("urgency_type", "planned") != "emergency":
+        raise HTTPException(status_code=400, detail="Only emergency items can be marked as executed")
+    if item["status"] != "reported":
+        raise HTTPException(status_code=400, detail="Item must be in 'reported' status")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+        "status": "executed",
+        "executed_date": data.executed_date or now[:10],
+        "executed_by": data.executed_by,
+        "notes": data.notes or item.get("notes"),
+        "updated_at": now,
+    }})
+    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+
+
+# ── Request Approval (planned only) ───────────────────────────────
+
+@router.post("/missing-smr/{item_id}/request-approval")
+async def request_approval(item_id: str, data: RequestApprovalBody, user: dict = Depends(require_m2)):
+    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.get("urgency_type", "planned") != "planned":
+        raise HTTPException(status_code=400, detail="Only planned items need client approval")
+    if item["status"] not in ["reported", "reviewed"]:
+        raise HTTPException(status_code=400, detail="Item must be in 'reported' or 'reviewed' status")
+
+    now = datetime.now(timezone.utc).isoformat()
+    approval = {
+        "status": "pending",
+        "requested_at": now,
+        "decided_at": None,
+        "decided_by": None,
+        "client_name": data.client_name,
+        "client_notes": data.client_notes,
+        "signature_media_id": None,
+    }
+    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+        "status": "reviewed",
+        "client_approval": approval,
+        "updated_at": now,
+    }})
+    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+
+
+# ── Client Approve ─────────────────────────────────────────────────
+
+@router.put("/missing-smr/{item_id}/client-approve")
+async def client_approve(item_id: str, data: ClientDecisionBody, user: dict = Depends(require_m2)):
+    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item["status"] != "reviewed" or not item.get("client_approval"):
+        raise HTTPException(status_code=400, detail="Item must have pending client approval")
+
+    now = datetime.now(timezone.utc).isoformat()
+    approval = item["client_approval"]
+    approval["status"] = "approved"
+    approval["decided_at"] = now
+    approval["decided_by"] = user["id"]
+    approval["client_notes"] = data.client_notes or approval.get("client_notes")
+    approval["signature_media_id"] = data.signature_media_id
+
+    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+        "status": "approved_by_client",
+        "client_approval": approval,
+        "updated_at": now,
+    }})
+    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+
+
+# ── Client Reject ──────────────────────────────────────────────────
+
+@router.put("/missing-smr/{item_id}/client-reject")
+async def client_reject(item_id: str, data: ClientDecisionBody, user: dict = Depends(require_m2)):
+    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item["status"] != "reviewed" or not item.get("client_approval"):
+        raise HTTPException(status_code=400, detail="Item must have pending client approval")
+
+    now = datetime.now(timezone.utc).isoformat()
+    approval = item["client_approval"]
+    approval["status"] = "rejected"
+    approval["decided_at"] = now
+    approval["decided_by"] = user["id"]
+    approval["client_notes"] = data.client_notes or approval.get("client_notes")
+
+    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+        "status": "rejected_by_client",
+        "client_approval": approval,
+        "updated_at": now,
+    }})
+    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+
+
+# ── AI Estimate ────────────────────────────────────────────────────
+
+@router.post("/missing-smr/{item_id}/ai-estimate")
+async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
+    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    title = item.get("smr_type") or item.get("activity_type") or "СМР"
+    unit = item.get("unit", "m2")
+    qty = item.get("qty", 1)
+
+    # Get AI proposal
+    proposal = await hybrid_ai_proposal(title, unit, qty, None, user["org_id"])
+
+    # Get live prices for materials
+    mat_names = [m["name"] for m in proposal.get("materials", []) if m.get("name")]
+    price_results = []
+    if mat_names:
+        price_results = await batch_get_prices(mat_names, user["org_id"])
+
+    # Build breakdown
+    materials_with_prices = []
+    for m in proposal.get("materials", []):
+        entry = {**m}
+        for pr in price_results:
+            if isinstance(pr, dict) and pr.get("material_name_normalized") == m.get("name", "").lower().strip():
+                entry["live_price"] = pr.get("median_price")
+                entry["price_confidence"] = pr.get("confidence")
+        materials_with_prices.append(entry)
+
+    estimated_price = round(proposal["pricing"]["total_price_per_unit"] * qty, 2)
+    breakdown = {
+        "material_per_unit": proposal["pricing"]["material_price_per_unit"],
+        "labor_per_unit": proposal["pricing"]["labor_price_per_unit"],
+        "total_per_unit": proposal["pricing"]["total_price_per_unit"],
+        "total_estimated": estimated_price,
+        "materials": materials_with_prices,
+        "provider": proposal.get("provider", "rule-based"),
+        "confidence": proposal.get("confidence", 0),
+    }
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+        "ai_estimated_price": estimated_price,
+        "ai_price_breakdown": breakdown,
+        "updated_at": now,
+    }})
+
+    return {
+        "estimated_price": estimated_price,
+        "breakdown": breakdown,
+        "item": await db.missing_smr.find_one({"id": item_id}, {"_id": 0}),
+    }
+
+
+# ── Batch To Offer ─────────────────────────────────────────────────
+
+@router.post("/missing-smr/batch-to-offer")
+async def batch_to_offer(data: BatchToOfferBody, user: dict = Depends(require_m2)):
+    if not data.ids:
+        raise HTTPException(status_code=400, detail="No items provided")
+
+    org_id = user["org_id"]
+    items = await db.missing_smr.find(
+        {"id": {"$in": data.ids}, "org_id": org_id}, {"_id": 0}
+    ).to_list(100)
+    if not items:
+        raise HTTPException(status_code=404, detail="No valid items found")
+
+    # Verify all are from same project
+    project_ids = set(i["project_id"] for i in items)
+    if len(project_ids) > 1:
+        raise HTTPException(status_code=400, detail="All items must belong to the same project")
+
+    project_id = items[0]["project_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+
+    # Generate offer number
+    last = await db.offers.find_one({"org_id": org_id}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)])
+    num = 1
+    if last and last.get("offer_no"):
+        try:
+            num = int(last["offer_no"].split("-")[1]) + 1
+        except Exception:
+            pass
+    offer_no = f"OFF-{num:04d}"
+
+    now = datetime.now(timezone.utc).isoformat()
+    lines = []
+    for i, item in enumerate(items):
+        price = item.get("ai_estimated_price") or 0
+        qty = item.get("qty", 1)
+        per_unit = round(price / qty, 2) if qty > 0 else 0
+        lines.append({
+            "id": str(uuid.uuid4()),
+            "activity_code": None,
+            "activity_name": item.get("smr_type") or item.get("activity_type") or "Доп. СМР",
+            "unit": item.get("unit", "m2"),
+            "qty": qty,
+            "material_unit_cost": 0,
+            "labor_unit_cost": per_unit,
+            "labor_hours_per_unit": None,
+            "line_material_cost": 0,
+            "line_labor_cost": price,
+            "line_total": price,
+            "note": item.get("notes") or "",
+            "sort_order": i,
+            "activity_type": item.get("activity_type") or "Общо",
+            "activity_subtype": item.get("activity_subtype") or "",
+        })
+
+    subtotal = sum(l["line_total"] for l in lines)
+    vat = round(subtotal * 0.2, 2)
+    title = data.offer_name or f"Допълнителни СМР ({len(items)} бр.) — {project.get('code', '')}"
+
+    offer = {
+        "id": str(uuid.uuid4()),
+        "org_id": org_id,
+        "project_id": project_id,
+        "offer_no": offer_no,
+        "title": title,
+        "offer_type": "missing_smr_batch",
+        "status": "Draft",
+        "version": 1,
+        "parent_offer_id": None,
+        "currency": "EUR",
+        "vat_percent": 20.0,
+        "lines": lines,
+        "notes": f"Генерирана от {len(items)} допълнителни СМР записа",
+        "subtotal": round(subtotal, 2),
+        "vat_amount": vat,
+        "total": round(subtotal + vat, 2),
+        "created_at": now,
+        "updated_at": now,
+        "sent_at": None,
+        "accepted_at": None,
+    }
+    await db.offers.insert_one(offer)
+
+    # Update items
+    line_ids = [l["id"] for l in lines]
+    for item in items:
+        await db.missing_smr.update_one({"id": item["id"]}, {"$set": {
+            "status": "offered",
+            "linked_offer_id": offer["id"],
+            "offer_line_ids": line_ids,
+            "updated_at": now,
+        }})
+
+    return {"ok": True, "offer_id": offer["id"], "offer_no": offer_no, "items_count": len(items)}
+
+
+# (pending-approval endpoint moved before {item_id} to avoid route conflict)

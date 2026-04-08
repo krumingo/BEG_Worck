@@ -61,6 +61,9 @@ const STATUS_CONFIG = {
   draft: { label: "Чернова", variant: "secondary", color: "bg-slate-100 text-slate-700" },
   reported: { label: "Докладвано", variant: "outline", color: "bg-blue-50 text-blue-700 border-blue-200" },
   reviewed: { label: "Прегледано", variant: "outline", color: "bg-amber-50 text-amber-700 border-amber-200" },
+  executed: { label: "Извършено", variant: "outline", color: "bg-orange-50 text-orange-700 border-orange-200" },
+  approved_by_client: { label: "Одобрено", variant: "outline", color: "bg-green-50 text-green-700 border-green-200" },
+  rejected_by_client: { label: "Отказано", variant: "outline", color: "bg-red-50 text-red-700 border-red-200" },
   analyzed: { label: "Анализирано", variant: "outline", color: "bg-purple-50 text-purple-700 border-purple-200" },
   offered: { label: "Оферирано", variant: "outline", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   closed: { label: "Затворено", variant: "secondary", color: "bg-zinc-100 text-zinc-500" },
@@ -87,6 +90,10 @@ const EMPTY_FORM = {
   labor_hours_est: "",
   material_notes: "",
   source: "web",
+  urgency_type: "planned",
+  emergency_reason: "",
+  executed_date: "",
+  executed_by: "",
 };
 
 export default function MissingSMRPage() {
@@ -105,6 +112,7 @@ export default function MissingSMRPage() {
   const [fRoom, setFRoom] = useState("");
   const [fDateFrom, setFDateFrom] = useState("");
   const [fDateTo, setFDateTo] = useState("");
+  const [fUrgency, setFUrgency] = useState("");
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -137,6 +145,7 @@ export default function MissingSMRPage() {
       if (fRoom) params.append("room", fRoom);
       if (fDateFrom) params.append("date_from", fDateFrom);
       if (fDateTo) params.append("date_to", fDateTo);
+      if (fUrgency) params.append("urgency_type", fUrgency);
       const res = await API.get(`/missing-smr?${params.toString()}`);
       setItems(res.data.items || []);
     } catch {
@@ -144,7 +153,7 @@ export default function MissingSMRPage() {
     } finally {
       setLoading(false);
     }
-  }, [fProject, fStatus, fFloor, fRoom, fDateFrom, fDateTo, t]);
+  }, [fProject, fStatus, fFloor, fRoom, fDateFrom, fDateTo, fUrgency, t]);
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
@@ -270,6 +279,64 @@ export default function MissingSMRPage() {
   };
 
   const openDetail = (item) => { setSelected(item); setShowDetail(true); };
+
+  // New flow handlers
+  const handleExecute = async (id) => {
+    setActionLoading(true);
+    try {
+      const res = await API.put(`/missing-smr/${id}/execute`, { executed_date: new Date().toISOString().slice(0, 10) });
+      setSelected(res.data);
+      toast.success(t("missingSMR.executed"));
+      loadItems();
+    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleRequestApproval = async (id) => {
+    const name = prompt(t("missingSMR.clientName"));
+    if (!name) return;
+    setActionLoading(true);
+    try {
+      const res = await API.post(`/missing-smr/${id}/request-approval`, { client_name: name });
+      setSelected(res.data);
+      toast.success(t("missingSMR.requestApproval"));
+      loadItems();
+    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleClientApprove = async (id) => {
+    setActionLoading(true);
+    try {
+      const res = await API.put(`/missing-smr/${id}/client-approve`, {});
+      setSelected(res.data);
+      toast.success(t("missingSMR.approvedByClient"));
+      loadItems();
+    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleClientReject = async (id) => {
+    const notes = prompt(t("missingSMR.clientReject"));
+    setActionLoading(true);
+    try {
+      const res = await API.put(`/missing-smr/${id}/client-reject`, { client_notes: notes || "" });
+      setSelected(res.data);
+      toast.success(t("missingSMR.rejectedByClient"));
+      loadItems();
+    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleAIEstimate = async (id) => {
+    setActionLoading(true);
+    try {
+      const res = await API.post(`/missing-smr/${id}/ai-estimate`);
+      setSelected(res.data.item);
+      toast.success(`${t("missingSMR.aiEstimated")}: ${res.data.estimated_price} лв`);
+    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    finally { setActionLoading(false); }
+  };
 
   const setField = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -405,6 +472,13 @@ export default function MissingSMRPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{SOURCE_LABELS[item.source] || item.source}</TableCell>
+                        <TableCell className="text-xs">
+                          {item.urgency_type === "emergency" ? (
+                            <Badge variant="outline" className="text-[9px] bg-red-50 text-red-600 border-red-200">{t("missingSMR.emergency")}</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9px] bg-blue-50 text-blue-600 border-blue-200">{t("missingSMR.planned")}</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {new Date(item.created_at).toLocaleDateString("bg-BG")}
                         </TableCell>
@@ -649,32 +723,64 @@ export default function MissingSMRPage() {
                   </Button>
                 )}
 
-                {/* Status transitions */}
+                {/* Common: Draft → Reported */}
                 {selected.status === "draft" && (
                   <Button variant="outline" size="sm" disabled={actionLoading} onClick={() => handleStatus(selected.id, "reported")} data-testid="status-reported-btn">
                     <ChevronRight className="w-4 h-4 mr-1" /> {t("missingSMR.markReported")}
                   </Button>
                 )}
-                {selected.status === "reported" && (
+
+                {/* EMERGENCY flow */}
+                {selected.urgency_type === "emergency" && selected.status === "reported" && (
+                  <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => handleExecute(selected.id)} data-testid="execute-btn">
+                    <ChevronRight className="w-4 h-4 mr-1" /> {t("missingSMR.markExecuted")}
+                  </Button>
+                )}
+
+                {/* PLANNED flow */}
+                {(selected.urgency_type || "planned") === "planned" && selected.status === "reported" && (
                   <Button variant="outline" size="sm" disabled={actionLoading} onClick={() => handleStatus(selected.id, "reviewed")} data-testid="status-reviewed-btn">
                     <ChevronRight className="w-4 h-4 mr-1" /> {t("missingSMR.markReviewed")}
                   </Button>
                 )}
+                {(selected.urgency_type || "planned") === "planned" && selected.status === "reviewed" && !selected.client_approval && (
+                  <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => handleRequestApproval(selected.id)} data-testid="request-approval-btn">
+                    {t("missingSMR.requestApproval")}
+                  </Button>
+                )}
+                {selected.status === "reviewed" && selected.client_approval?.status === "pending" && (
+                  <>
+                    <Button size="sm" disabled={actionLoading} onClick={() => handleClientApprove(selected.id)} data-testid="client-approve-btn">
+                      {t("missingSMR.clientApprove")}
+                    </Button>
+                    <Button size="sm" variant="destructive" disabled={actionLoading} onClick={() => handleClientReject(selected.id)} data-testid="client-reject-btn">
+                      {t("missingSMR.clientReject")}
+                    </Button>
+                  </>
+                )}
 
-                {/* Bridge buttons */}
-                {["reported", "reviewed"].includes(selected.status) && (
+                {/* AI Estimate (any status before offered) */}
+                {!["offered", "closed"].includes(selected.status) && (
+                  <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => handleAIEstimate(selected.id)} data-testid="ai-estimate-btn">
+                    {t("missingSMR.aiEstimate")}
+                  </Button>
+                )}
+
+                {/* Bridge: To Analysis */}
+                {["reported", "reviewed", "executed", "approved_by_client"].includes(selected.status) && (
                   <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => handleToAnalysis(selected.id)} data-testid="to-analysis-btn">
                     <FlaskConical className="w-4 h-4 mr-1" /> {t("missingSMR.toAnalysis")}
                   </Button>
                 )}
-                {["reviewed", "analyzed"].includes(selected.status) && (
+                {/* Bridge: To Offer */}
+                {["reviewed", "analyzed", "executed", "approved_by_client"].includes(selected.status) && (
                   <Button size="sm" disabled={actionLoading} onClick={() => handleToOffer(selected.id)} data-testid="to-offer-btn">
                     <FileOutput className="w-4 h-4 mr-1" /> {t("missingSMR.toOffer")}
                   </Button>
                 )}
 
                 {/* Close */}
-                {selected.status !== "closed" && (
+                {!["closed", "rejected_by_client"].includes(selected.status) && (
                   <Button variant="ghost" size="sm" disabled={actionLoading} onClick={() => handleStatus(selected.id, "closed")} data-testid="status-close-btn">
                     <X className="w-4 h-4 mr-1" /> {t("missingSMR.close")}
                   </Button>
