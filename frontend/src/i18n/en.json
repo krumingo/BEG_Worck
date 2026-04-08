@@ -1502,5 +1502,24 @@
     "additionalOffered": "Additional (offered)",
     "labor": "Labor",
     "margin": "Margin"
+  },
+  "kss": {
+    "importExcel": "Import from Excel",
+    "exportExcel": "Export to Excel",
+    "importSuccess": "Imported",
+    "importLines": "lines",
+    "importWarnings": "warnings",
+    "toggleActive": "Toggle",
+    "bulkUpdate": "Bulk Update",
+    "bulkPrice": "Adjust price",
+    "bulkQty": "Adjust quantity",
+    "bulkToggle": "Toggle lines",
+    "fromOffer": "From offer",
+    "kssCreated": "KSS created",
+    "diffTitle": "Version Comparison",
+    "added": "Added",
+    "removed": "Removed",
+    "changed": "Changed",
+    "inactive": "Inactive"
   }
 }

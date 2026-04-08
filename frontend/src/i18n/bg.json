@@ -1684,5 +1684,24 @@
     "additionalOffered": "Допълнителни (оферирани)",
     "labor": "Труд",
     "margin": "Маржин"
+  },
+  "kss": {
+    "importExcel": "Импорт от Excel",
+    "exportExcel": "Експорт към Excel",
+    "importSuccess": "Импортирани",
+    "importLines": "реда",
+    "importWarnings": "предупреждения",
+    "toggleActive": "Вкл/Изкл",
+    "bulkUpdate": "Масова промяна",
+    "bulkPrice": "Промени цена",
+    "bulkQty": "Промени количество",
+    "bulkToggle": "Вкл/Изкл редове",
+    "fromOffer": "От оферта",
+    "kssCreated": "КСС е създадена",
+    "diffTitle": "Сравнение на версии",
+    "added": "Нови",
+    "removed": "Махнати",
+    "changed": "Променени",
+    "inactive": "Неактивен"
   }
 }

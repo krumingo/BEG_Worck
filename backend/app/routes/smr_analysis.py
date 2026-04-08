@@ -97,7 +97,7 @@ def calc_line(line: dict) -> dict:
 
 
 def calc_totals(lines: list) -> dict:
-    """Compute analysis-level totals from all lines."""
+    """Compute analysis-level totals from all ACTIVE lines."""
     material_total = 0
     labor_total = 0
     logistics_total = 0
@@ -107,6 +107,8 @@ def calc_totals(lines: list) -> dict:
     grand_total = 0
 
     for ln in lines:
+        if not ln.get("is_active", True):
+            continue
         qty = ln.get("qty", 1) or 1
         mat_raw = ln.get("material_cost_per_unit", 0) or 0
         labor = ln.get("labor_price_per_unit", 0) or 0
@@ -587,3 +589,329 @@ async def to_offer(analysis_id: str, user: dict = Depends(require_m2)):
     await db.offers.insert_one(offer)
 
     return {"ok": True, "offer_id": offer["id"], "offer_no": offer_no}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# KSS EXTENSIONS: Excel Import/Export, Toggle, Bulk, Diff
+# ═══════════════════════════════════════════════════════════════════
+
+from fastapi import UploadFile, File, Form
+from fastapi.responses import Response
+from app.services.excel_import import import_kss_from_excel, export_kss_to_excel
+
+
+class BulkUpdateRequest(BaseModel):
+    action: str  # adjust_price | adjust_qty | toggle
+    filter: Optional[dict] = None
+    adjustment: Optional[dict] = None
+    active: Optional[bool] = None
+
+
+# ── Import Excel ───────────────────────────────────────────────────
+
+@router.post("/smr-analyses/import-excel", status_code=201)
+async def import_excel(
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    name: str = Form(""),
+    user: dict = Depends(require_m2),
+):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    content = await file.read()
+    result = await import_kss_from_excel(content, user["org_id"], project_id, user["id"], project.get("name", ""))
+
+    if not result["lines"]:
+        raise HTTPException(status_code=400, detail="No valid lines found in Excel file")
+
+    # Recalculate lines
+    for ln in result["lines"]:
+        calc_line(ln)
+
+    now = datetime.now(timezone.utc).isoformat()
+    last = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": project_id},
+        {"_id": 0, "version": 1}, sort=[("version", -1)],
+    )
+    version = (last["version"] + 1) if last else 1
+
+    analysis = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": project_id,
+        "project_name": project.get("name", ""),
+        "name": name or f"КСС Import - {file.filename}",
+        "version": version,
+        "status": "draft",
+        "analysis_type": "kss",
+        "is_kss": True,
+        "imported_from": "excel",
+        "import_filename": file.filename,
+        "lines": result["lines"],
+        "totals": calc_totals(result["lines"]),
+        "created_from": None,
+        "created_from_type": None,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+        "approved_by": None,
+        "approved_at": None,
+    }
+    await db.smr_analyses.insert_one(analysis)
+
+    return {
+        "analysis_id": analysis["id"],
+        "lines_imported": result["lines_count"],
+        "skipped": result["skipped_count"],
+        "warnings": result["warnings"],
+    }
+
+
+# ── Export Excel ───────────────────────────────────────────────────
+
+@router.get("/smr-analyses/{analysis_id}/export-excel")
+async def export_excel(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    xlsx_bytes = export_kss_to_excel(doc)
+    safe_name = "".join(c if c.isascii() and c.isalnum() or c in "-_." else "_" for c in doc.get("name", "export"))
+    filename = f"KSS_{safe_name}.xlsx"
+
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ── Toggle Line Active/Inactive ────────────────────────────────────
+
+@router.put("/smr-analyses/{analysis_id}/lines/{line_id}/toggle")
+async def toggle_line(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = doc.get("lines", [])
+    found = False
+    for ln in lines:
+        if ln["line_id"] == line_id:
+            ln["is_active"] = not ln.get("is_active", True)
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Line not found")
+
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+# ── Bulk Update ────────────────────────────────────────────────────
+
+@router.put("/smr-analyses/{analysis_id}/bulk-update")
+async def bulk_update(analysis_id: str, data: BulkUpdateRequest, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = doc.get("lines", [])
+    filt = data.filter or {}
+    smr_filter = filt.get("smr_type", "").lower() if filt.get("smr_type") else None
+    affected = 0
+
+    for ln in lines:
+        # Apply filter
+        if smr_filter and smr_filter not in (ln.get("smr_type") or "").lower():
+            continue
+
+        if data.action == "toggle":
+            ln["is_active"] = data.active if data.active is not None else not ln.get("is_active", True)
+            affected += 1
+
+        elif data.action == "adjust_price" and data.adjustment:
+            adj = data.adjustment
+            if "markup_pct" in adj:
+                val = str(adj["markup_pct"])
+                if val.startswith("+"):
+                    ln["markup_pct"] = (ln.get("markup_pct") or 0) + float(val[1:])
+                elif val.startswith("-"):
+                    ln["markup_pct"] = max((ln.get("markup_pct") or 0) - float(val[1:]), 0)
+                else:
+                    ln["markup_pct"] = float(val)
+            if "labor_price_per_unit" in adj:
+                val = str(adj["labor_price_per_unit"])
+                if val.startswith("*"):
+                    ln["labor_price_per_unit"] = round((ln.get("labor_price_per_unit") or 0) * float(val[1:]), 2)
+                else:
+                    ln["labor_price_per_unit"] = float(val)
+            calc_line(ln)
+            affected += 1
+
+        elif data.action == "adjust_qty" and data.adjustment:
+            adj = data.adjustment
+            val = str(adj.get("qty", "1"))
+            if val.startswith("*"):
+                ln["qty"] = round((ln.get("qty") or 1) * float(val[1:]), 2)
+            elif val.startswith("+"):
+                ln["qty"] = round((ln.get("qty") or 1) + float(val[1:]), 2)
+            else:
+                ln["qty"] = float(val)
+            calc_line(ln)
+            affected += 1
+
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    updated = await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return {"ok": True, "affected": affected, "analysis": updated}
+
+
+# ── Extended Diff ──────────────────────────────────────────────────
+
+@router.get("/smr-analyses/{analysis_id}/diff/{version}")
+async def diff_versions(analysis_id: str, version: int, user: dict = Depends(require_m2)):
+    current = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not current:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    other = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": current["project_id"], "version": version},
+        {"_id": 0},
+    )
+    if not other:
+        raise HTTPException(status_code=404, detail=f"Version {version} not found")
+
+    # Build line maps by smr_type for comparison
+    cur_lines = {ln.get("smr_type", ""): ln for ln in current.get("lines", [])}
+    oth_lines = {ln.get("smr_type", ""): ln for ln in other.get("lines", [])}
+
+    added = []
+    removed = []
+    changed = []
+
+    for key, ln in cur_lines.items():
+        if key not in oth_lines:
+            added.append({"smr_type": key, "qty": ln.get("qty"), "final_total": ln.get("final_total")})
+        else:
+            oln = oth_lines[key]
+            diffs = []
+            for field in ["qty", "labor_price_per_unit", "material_cost_per_unit", "markup_pct", "risk_pct", "final_total"]:
+                ov = oln.get(field, 0) or 0
+                nv = ln.get(field, 0) or 0
+                if abs(ov - nv) > 0.01:
+                    diffs.append({"field": field, "old": ov, "new": nv})
+            if diffs:
+                changed.append({"smr_type": key, "changes": diffs})
+
+    for key in oth_lines:
+        if key not in cur_lines:
+            oln = oth_lines[key]
+            removed.append({"smr_type": key, "qty": oln.get("qty"), "final_total": oln.get("final_total")})
+
+    old_total = other.get("totals", {}).get("grand_total", 0)
+    new_total = current.get("totals", {}).get("grand_total", 0)
+    change_pct = round((new_total - old_total) / old_total * 100, 1) if old_total > 0 else 0
+
+    return {
+        "added_lines": added,
+        "removed_lines": removed,
+        "changed_lines": changed,
+        "total_diff": {
+            "old_total": old_total,
+            "new_total": new_total,
+            "change_amount": round(new_total - old_total, 2),
+            "change_pct": change_pct,
+        },
+    }
+
+
+# ── Create KSS from Offer ─────────────────────────────────────────
+
+@router.post("/smr-analyses/from-offer/{offer_id}", status_code=201)
+async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
+    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+
+    project_id = offer["project_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
+
+    now = datetime.now(timezone.utc).isoformat()
+    last = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": project_id},
+        {"_id": 0, "version": 1}, sort=[("version", -1)],
+    )
+    version = (last["version"] + 1) if last else 1
+
+    lines = []
+    for i, oln in enumerate(offer.get("lines", [])):
+        mat = oln.get("material_unit_cost", 0) or 0
+        lab = oln.get("labor_unit_cost", 0) or 0
+        qty = oln.get("qty", 1) or 1
+        total_per = round(mat + lab, 2)
+        line = {
+            "line_id": str(uuid.uuid4()),
+            "smr_type": oln.get("activity_name", ""),
+            "smr_subtype": oln.get("activity_subtype", ""),
+            "unit": oln.get("unit", "m2"),
+            "qty": qty,
+            "materials": [],
+            "material_cost_per_unit": mat,
+            "labor_price_per_unit": lab,
+            "logistics_pct": 0,
+            "markup_pct": 0,
+            "risk_pct": 0,
+            "total_cost_per_unit": total_per,
+            "final_price_per_unit": total_per,
+            "final_total": round(total_per * qty, 2),
+            "is_active": True,
+            "original_qty": qty,
+            "original_price": total_per,
+            "line_order": i,
+        }
+        lines.append(line)
+
+    analysis = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": project_id,
+        "project_name": project.get("name", "") if project else "",
+        "name": f"КСС от {offer.get('offer_no', offer_id[:8])}",
+        "version": version,
+        "status": "draft",
+        "analysis_type": "kss",
+        "is_kss": True,
+        "imported_from": "offer",
+        "lines": lines,
+        "totals": calc_totals(lines),
+        "created_from": offer_id,
+        "created_from_type": "offer",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+        "approved_by": None,
+        "approved_at": None,
+    }
+    await db.smr_analyses.insert_one(analysis)
+    return {k: v for k, v in analysis.items() if k != "_id"}

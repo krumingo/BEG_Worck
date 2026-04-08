@@ -35,6 +35,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - SMR Groups Triple Hierarchy (Location → Group → Lines with aggregation) — Apr 8, 2026
 - Missing SMR Two Flows (emergency vs planned with client approval) — Apr 8, 2026
 - Project P&L Dashboard (unified revenue/expense/profit from all sources) — Apr 8, 2026
+- KSS Module (Excel import/export, toggle lines, bulk update, version diff) — Apr 8, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 
