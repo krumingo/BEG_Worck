@@ -62,6 +62,7 @@ const ADMIN_NAV_CORE = [
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
   { to: "/offers", icon: FileText, labelKey: "nav.offers" },
   { to: "/smr-analyses", icon: Calculator, labelKey: "nav.smrAnalysis" },
+  { to: "/pricing", icon: TrendingUp, labelKey: "nav.pricing" },
   { to: "/activity-catalog", icon: Layers, labelKey: "nav.activities" },
   { to: "/ai-calibration", icon: Sparkles, labelKey: "nav.aiCalibration" },
   { to: "/historical-offers", icon: Archive, labelKey: "nav.historicalOffers" },

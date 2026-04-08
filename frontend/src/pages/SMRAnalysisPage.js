@@ -21,6 +21,7 @@ import {
   Copy, FileOutput, Trash2, RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
+import PricingPanel from "@/components/PricingPanel";
 
 const STATUS_CFG = {
   draft: { label: "Чернова", color: "bg-slate-100 text-slate-700" },
@@ -379,6 +380,22 @@ export default function SMRAnalysisPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pricing Panels for lines with materials */}
+      {lines.filter(ln => ln.materials?.length > 0).map(ln => (
+        <Card key={`pricing-${ln.line_id}`}>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground mb-2">{ln.smr_type}</p>
+            <PricingPanel
+              analysisId={analysisId}
+              lineId={ln.line_id}
+              materials={ln.materials}
+              onUpdated={setAnalysis}
+              disabled={isLocked}
+            />
+          </CardContent>
+        </Card>
+      ))}
 
       {/* Add Line Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

@@ -189,7 +189,8 @@
     "dailyLogs": "Daily Log",
     "changeOrders": "Changes",
     "missingSMR": "Missing SMR",
-    "smrAnalysis": "SMR Analysis"
+    "smrAnalysis": "SMR Analysis",
+    "pricing": "Pricing"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1312,5 +1313,32 @@
     "sumMarkup": "Markup",
     "sumRisk": "Risk",
     "compare": "Compare versions"
+  },
+  "pricing": {
+    "liveTitle": "Live Pricing",
+    "refreshAll": "Refresh all prices",
+    "pricesUpdated": "Prices updated",
+    "materials": "materials",
+    "breakdown": "Breakdown from 3 agents",
+    "recommendedPrice": "Recommended price",
+    "confidence": "Confidence",
+    "source": "Source",
+    "price": "Price",
+    "fresh": "Freshness",
+    "fromCache": "From cache (valid 7 days)",
+    "noData": "No pricing data",
+    "catalogTitle": "Materials Catalog",
+    "catalogSubtitle": "Live prices from 3 agents: stores, catalogs, internal database",
+    "lookupPrice": "Lookup Price",
+    "lookupDesc": "Enter material name for price research",
+    "lookupPlaceholder": "e.g. Interior latex, Primer...",
+    "category": "Category",
+    "categoryPlaceholder": "Filter by category...",
+    "noCatalog": "Catalog is empty",
+    "noCatalogHint": "Use \"Lookup Price\" to add materials",
+    "materialName": "Material",
+    "unit": "Unit",
+    "medianPrice": "Median Price",
+    "agents": "Agents"
   }
 }

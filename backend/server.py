@@ -1123,6 +1123,10 @@ api_router.include_router(locations_router)
 from app.routes.smr_analysis import router as smr_analysis_router
 api_router.include_router(smr_analysis_router)
 
+# Import pricing router
+from app.routes.pricing import router as pricing_router
+api_router.include_router(pricing_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
@@ -1266,6 +1270,10 @@ async def startup():
     # SMR analyses indexes
     await db.smr_analyses.create_index([("org_id", 1), ("project_id", 1), ("version", -1)])
     await db.smr_analyses.create_index([("org_id", 1), ("status", 1)])
+
+    # Material prices indexes
+    await db.material_prices.create_index([("org_id", 1), ("material_name_normalized", 1)], unique=True)
+    await db.material_prices.create_index([("org_id", 1), ("material_category", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():

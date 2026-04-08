@@ -203,7 +203,8 @@
     "dailyLogs": "Дневен отчет",
     "changeOrders": "Промени",
     "missingSMR": "Липсващи СМР",
-    "smrAnalysis": "Анализ СМР"
+    "smrAnalysis": "Анализ СМР",
+    "pricing": "Ценообразуване"
   },
   "dashboard": {
     "title": "Табло",
@@ -1494,5 +1495,32 @@
     "sumMarkup": "Markup",
     "sumRisk": "Риск",
     "compare": "Сравни версии"
+  },
+  "pricing": {
+    "liveTitle": "Live ценообразуване",
+    "refreshAll": "Обнови всички цени",
+    "pricesUpdated": "Цените са обновени",
+    "materials": "материала",
+    "breakdown": "Разбивка от 3 агента",
+    "recommendedPrice": "Препоръчана цена",
+    "confidence": "Увереност",
+    "source": "Източник",
+    "price": "Цена",
+    "fresh": "Свежест",
+    "fromCache": "От кеша (валиден 7 дни)",
+    "noData": "Няма данни за цена",
+    "catalogTitle": "Каталог материали",
+    "catalogSubtitle": "Актуални цени от 3 агента: магазини, каталози, вътрешна база",
+    "lookupPrice": "Търси цена",
+    "lookupDesc": "Въведете име на материал за ценово проучване",
+    "lookupPlaceholder": "напр. Латекс интериорен, Грунд...",
+    "category": "Категория",
+    "categoryPlaceholder": "Филтър по категория...",
+    "noCatalog": "Каталогът е празен",
+    "noCatalogHint": "Използвайте \"Търси цена\" за да добавите материали",
+    "materialName": "Материал",
+    "unit": "Ед.",
+    "medianPrice": "Медианна цена",
+    "agents": "Агенти"
   }
 }
