@@ -32,6 +32,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Budget Labor Forecast (man-days formula + burn tracking + EV Analysis) — Apr 8, 2026
 - Weekly Payroll + Contract Payments (external workers, tranches) — Apr 8, 2026
 - Extended Project Details (structured address, contacts, invoice, object info) — Apr 8, 2026
+- SMR Groups Triple Hierarchy (Location → Group → Lines with aggregation) — Apr 8, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 

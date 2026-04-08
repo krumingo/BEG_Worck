@@ -61,6 +61,7 @@ import ProjectSMRTab from "@/components/ProjectSMRTab";
 import LocationTreePanel from "@/components/LocationTreePanel";
 import SMRLocationMap from "@/components/SMRLocationMap";
 import ProjectInfoPanel from "@/components/ProjectInfoPanel";
+import SMRGroupsPanel from "@/components/SMRGroupsPanel";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -465,6 +466,11 @@ export default function ProjectDetailPage() {
         {/* CARD: Location Tree */}
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-locations">
           <LocationTreePanel projectId={projectId} />
+        </div>
+
+        {/* CARD: SMR Groups (Location → Group → Lines) */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-smr-groups">
+          <SMRGroupsPanel projectId={projectId} />
         </div>
 
         {/* CARD: SMR Reverse Lookup */}

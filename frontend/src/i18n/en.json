@@ -1435,5 +1435,25 @@
     "inhabited": "Inhabited",
     "parking": "Parking",
     "elevator": "Elevator"
+  },
+  "smrGroups": {
+    "title": "SMR Groups",
+    "newGroup": "New Group",
+    "newGroupDesc": "Create an SMR line group",
+    "location": "Location",
+    "selectLocation": "No location",
+    "noLocationOpt": "No location",
+    "noLocation": "No location",
+    "groupName": "Group Name",
+    "groupNamePlaceholder": "e.g. Tiles, Plumbing, Finishing",
+    "nameRequired": "Enter group name",
+    "created": "Group created",
+    "deleted": "Group deleted",
+    "confirmDelete": "Delete group? Lines will remain.",
+    "empty": "No groups created. Create a group to organize SMR lines.",
+    "groups": "groups",
+    "grandTotal": "Project Total",
+    "material": "Materials",
+    "labor": "Labor"
   }
 }

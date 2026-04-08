@@ -1131,6 +1131,10 @@ api_router.include_router(pricing_router)
 from app.routes.work_sessions import router as work_sessions_router
 api_router.include_router(work_sessions_router)
 
+# Import SMR groups router
+from app.routes.smr_groups import router as smr_groups_router
+api_router.include_router(smr_groups_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
@@ -1283,6 +1287,10 @@ async def startup():
     await db.work_sessions.create_index([("org_id", 1), ("worker_id", 1), ("ended_at", 1)])
     await db.work_sessions.create_index([("org_id", 1), ("site_id", 1), ("started_at", -1)])
     await db.work_sessions.create_index([("org_id", 1), ("worker_id", 1), ("started_at", -1)])
+
+    # SMR groups indexes
+    await db.smr_groups.create_index([("org_id", 1), ("project_id", 1), ("location_id", 1)])
+    await db.smr_groups.create_index([("org_id", 1), ("project_id", 1), ("sort_order", 1)])
 
     # Start background reminder scheduler
     async def reminder_loop():
