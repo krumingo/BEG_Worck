@@ -1139,6 +1139,10 @@ api_router.include_router(smr_groups_router)
 from app.routes.project_pnl import router as project_pnl_router
 api_router.include_router(project_pnl_router)
 
+# Import price modifiers router
+from app.routes.price_modifiers import router as price_modifiers_router
+api_router.include_router(price_modifiers_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

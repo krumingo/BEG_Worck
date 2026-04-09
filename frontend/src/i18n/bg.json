@@ -1703,5 +1703,27 @@
     "removed": "Махнати",
     "changed": "Променени",
     "inactive": "Неактивен"
+  },
+  "priceModifiers": {
+    "title": "Ценови модификатори",
+    "orgDefaults": "Фирмени настройки",
+    "projectOverride": "Настройки за проект",
+    "waste": "Фири/отпадък",
+    "floor": "Етажност",
+    "center": "Център/достъп",
+    "inhabited": "Обитаемост",
+    "overhead": "Режийни",
+    "risk": "Риск",
+    "profit": "Печалба",
+    "baseCost": "Себестойност",
+    "finalPrice": "Крайна цена",
+    "totalMarkup": "Общо надценка",
+    "autoFloor": "Авто етажност",
+    "autoInhabited": "Авто обитаемост",
+    "floorPerFloor": "% на етаж над 2-ри",
+    "inhabitedValue": "% за обитаем обект",
+    "saved": "Модификаторите са запазени",
+    "resetToDefault": "Върни на default",
+    "breakdown": "Разбивка"
   }
 }

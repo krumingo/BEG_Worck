@@ -1521,5 +1521,27 @@
     "removed": "Removed",
     "changed": "Changed",
     "inactive": "Inactive"
+  },
+  "priceModifiers": {
+    "title": "Price Modifiers",
+    "orgDefaults": "Organization Defaults",
+    "projectOverride": "Project Override",
+    "waste": "Waste/Scrap",
+    "floor": "Floor Surcharge",
+    "center": "Center/Access",
+    "inhabited": "Inhabited",
+    "overhead": "Overhead",
+    "risk": "Risk",
+    "profit": "Profit",
+    "baseCost": "Base Cost",
+    "finalPrice": "Final Price",
+    "totalMarkup": "Total Markup",
+    "autoFloor": "Auto Floor",
+    "autoInhabited": "Auto Inhabited",
+    "floorPerFloor": "% per floor above 2nd",
+    "inhabitedValue": "% for inhabited",
+    "saved": "Modifiers saved",
+    "resetToDefault": "Reset to default",
+    "breakdown": "Breakdown"
   }
 }
