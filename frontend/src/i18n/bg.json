@@ -1765,5 +1765,29 @@
     "site": "Обект",
     "when": "Кога",
     "noAlarms": "Няма активни аларми"
+  },
+  "technician": {
+    "myDay": "Моят ден",
+    "noSites": "Няма назначени обекти",
+    "reported": "Отчетено",
+    "noReport": "Без отчет",
+    "dailyReport": "Дневен отчет",
+    "addRow": "Нов ред",
+    "workerName": "Име на работник",
+    "smrType": "Вид СМР",
+    "hours": "Часове",
+    "notes": "Бележки",
+    "generalNotes": "Общи бележки за деня...",
+    "submitReport": "Изпрати отчет",
+    "reportSubmitted": "Отчетът е изпратен",
+    "fillEntries": "Попълнете поне един ред",
+    "newSMR": "Ново СМР",
+    "newSMRDesc": "Ново СМР от терена",
+    "newSMRCreated": "нови СМР създадени",
+    "smrCreated": "СМР е създадено",
+    "qty": "Количество",
+    "description": "Описание",
+    "photoInvoice": "Снимай фактура",
+    "invoiceUploaded": "Фактурата е качена за одобрение"
   }
 }

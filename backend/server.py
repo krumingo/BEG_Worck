@@ -1155,6 +1155,10 @@ api_router.include_router(pulse_router)
 from app.routes.alarms import router as alarms_router
 api_router.include_router(alarms_router)
 
+# Import technician router
+from app.routes.technician import router as technician_router
+api_router.include_router(technician_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

@@ -1583,5 +1583,29 @@
     "site": "Site",
     "when": "When",
     "noAlarms": "No active alarms"
+  },
+  "technician": {
+    "myDay": "My Day",
+    "noSites": "No assigned sites",
+    "reported": "Reported",
+    "noReport": "No report",
+    "dailyReport": "Daily Report",
+    "addRow": "Add row",
+    "workerName": "Worker name",
+    "smrType": "SMR type",
+    "hours": "Hours",
+    "notes": "Notes",
+    "generalNotes": "General notes for the day...",
+    "submitReport": "Submit Report",
+    "reportSubmitted": "Report submitted",
+    "fillEntries": "Fill at least one entry",
+    "newSMR": "New SMR",
+    "newSMRDesc": "New SMR from the field",
+    "newSMRCreated": "new SMR created",
+    "smrCreated": "SMR created",
+    "qty": "Quantity",
+    "description": "Description",
+    "photoInvoice": "Photo Invoice",
+    "invoiceUploaded": "Invoice uploaded for approval"
   }
 }

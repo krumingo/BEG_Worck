@@ -70,6 +70,7 @@ import MaterialCatalogPage from "@/pages/MaterialCatalogPage";
 import ContractPaymentsPage from "@/pages/ContractPaymentsPage";
 import WorkerCalendarPage from "@/pages/WorkerCalendarPage";
 import AlarmsDashboardPage from "@/pages/AlarmsDashboardPage";
+import TechnicianDashboard from "@/pages/TechnicianDashboard";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -208,6 +209,7 @@ function AppRoutes() {
       <Route path="/contract-payments" element={<CompanyProtectedRoute><ContractPaymentsPage /></CompanyProtectedRoute>} />
       <Route path="/worker-calendar" element={<CompanyProtectedRoute><WorkerCalendarPage /></CompanyProtectedRoute>} />
       <Route path="/alarms" element={<CompanyProtectedRoute><AlarmsDashboardPage /></CompanyProtectedRoute>} />
+      <Route path="/tech" element={<CompanyProtectedRoute><TechnicianDashboard /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
