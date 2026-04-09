@@ -205,7 +205,8 @@
     "missingSMR": "Липсващи СМР",
     "smrAnalysis": "Анализ СМР",
     "pricing": "Ценообразуване",
-    "contractPayments": "Договори"
+    "contractPayments": "Договори",
+    "workerCalendar": "Календар"
   },
   "dashboard": {
     "title": "Табло",
@@ -1725,5 +1726,17 @@
     "saved": "Модификаторите са запазени",
     "resetToDefault": "Върни на default",
     "breakdown": "Разбивка"
+  },
+  "workerCalendar": {
+    "title": "Работен календар",
+    "subtitle": "Статус на работниците по дни — режийни в реално време",
+    "worker": "Работник",
+    "sync": "Синхронизирай",
+    "synced": "Синхронизирани записи",
+    "fixedTotal": "Фиксирани разходи",
+    "ohPerPersonDay": "Режийни/човек/ден",
+    "avgWorking": "Ср. работещи/ден",
+    "workingDays": "Работни дни",
+    "employees": "Служители"
   }
 }

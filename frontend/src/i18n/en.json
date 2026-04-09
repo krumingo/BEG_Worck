@@ -191,7 +191,8 @@
     "missingSMR": "Missing SMR",
     "smrAnalysis": "SMR Analysis",
     "pricing": "Pricing",
-    "contractPayments": "Contracts"
+    "contractPayments": "Contracts",
+    "workerCalendar": "Calendar"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1543,5 +1544,17 @@
     "saved": "Modifiers saved",
     "resetToDefault": "Reset to default",
     "breakdown": "Breakdown"
+  },
+  "workerCalendar": {
+    "title": "Worker Calendar",
+    "subtitle": "Worker status per day — real-time overhead",
+    "worker": "Worker",
+    "sync": "Sync",
+    "synced": "Synced entries",
+    "fixedTotal": "Fixed Expenses",
+    "ohPerPersonDay": "Overhead/person/day",
+    "avgWorking": "Avg working/day",
+    "workingDays": "Working days",
+    "employees": "Employees"
   }
 }

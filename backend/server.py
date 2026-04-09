@@ -1143,6 +1143,10 @@ api_router.include_router(project_pnl_router)
 from app.routes.price_modifiers import router as price_modifiers_router
 api_router.include_router(price_modifiers_router)
 
+# Import overhead realtime router
+from app.routes.overhead_realtime import router as overhead_realtime_router
+api_router.include_router(overhead_realtime_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

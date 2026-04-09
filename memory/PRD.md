@@ -37,6 +37,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Project P&L Dashboard (unified revenue/expense/profit from all sources) — Apr 8, 2026
 - KSS Module (Excel import/export, toggle lines, bulk update, version diff) — Apr 8, 2026
 - Price Modifiers (waste, floor, center, inhabited, overhead, risk, profit — 3-level cascade) — Apr 9, 2026
+- Realtime Overhead (worker calendar, fixed expenses, overhead/person/day, auto-sync) — Apr 9, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 

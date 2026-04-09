@@ -76,6 +76,7 @@ const ADMIN_NAV_CORE = [
   { to: "/contract-payments", icon: Briefcase, labelKey: "nav.contractPayments" },
   { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
   { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
+  { to: "/worker-calendar", icon: CalendarDays, labelKey: "nav.workerCalendar" },
   { to: "/procurement", icon: Package, labelKey: "nav.procurement" },
   { to: "/inventory", icon: Warehouse, labelKey: "nav.inventory" },
 ];
