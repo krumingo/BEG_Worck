@@ -35,6 +35,7 @@ import SMRGroupsPanel from "@/components/SMRGroupsPanel";
 import ProjectPnLDashboard from "@/components/ProjectPnLDashboard";
 import ExpectedActualPanel from "@/components/ExpectedActualPanel";
 import MaterialWastePanel from "@/components/MaterialWastePanel";
+import SubcontractorPerformancePanel from "@/components/SubcontractorPerformancePanel";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -250,6 +251,9 @@ export default function ProjectDetailPage() {
 
           {/* Material Waste */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><MaterialWastePanel projectId={projectId} /></div>
+
+          {/* Subcontractor Performance */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SubcontractorPerformancePanel projectId={projectId} /></div>
 
           {/* Invoices */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-invoices">

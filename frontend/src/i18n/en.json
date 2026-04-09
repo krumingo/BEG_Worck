@@ -1755,5 +1755,25 @@
     "saveAsTemplate": "Save as template",
     "templateName": "Template name",
     "templateSaved": "Template saved"
+  },
+  "subcontractorPerformance": {
+    "title": "Subcontractor Performance",
+    "issues": "issues",
+    "addRecord": "Add Record",
+    "addDesc": "Record promised vs actual performance",
+    "subs": "Subs",
+    "delayed": "Delayed",
+    "overBudget": "Over Budget",
+    "mixed": "Mixed",
+    "subId": "Subcontractor ID",
+    "promised": "Promised Amount",
+    "paid": "Paid Amount",
+    "promisedDate": "Promised Date",
+    "actualDate": "Actual Date",
+    "quality": "Quality",
+    "notes": "Notes",
+    "fillRequired": "Enter subcontractor",
+    "added": "Record added",
+    "noData": "No performance records"
   }
 }

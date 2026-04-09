@@ -1179,6 +1179,10 @@ api_router.include_router(material_waste_router)
 from app.routes.excel_import_v2 import router as excel_import_v2_router
 api_router.include_router(excel_import_v2_router)
 
+# Import subcontractor performance router
+from app.routes.subcontractor_performance import router as subcontractor_perf_router
+api_router.include_router(subcontractor_perf_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
