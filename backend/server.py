@@ -1167,6 +1167,10 @@ api_router.include_router(morning_briefing_router)
 from app.routes.cashflow_forecast import router as cashflow_forecast_router
 api_router.include_router(cashflow_forecast_router)
 
+# Import expected vs actual router
+from app.routes.expected_actual import router as expected_actual_router
+api_router.include_router(expected_actual_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

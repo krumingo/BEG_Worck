@@ -1697,5 +1697,20 @@
     "saved": "Data saved",
     "viewClient": "View client",
     "dataFromClient": "Invoice data from client"
+  },
+  "expectedActual": {
+    "title": "Expected vs Actual",
+    "overBudget": "over budget",
+    "plannedHours": "Planned hrs",
+    "actualHours": "Actual hrs",
+    "plannedCost": "Planned budget",
+    "actualCost": "Actual cost",
+    "byActivity": "By Activity",
+    "byGroup": "By Group",
+    "byLocation": "By Location",
+    "plan": "Plan",
+    "actual": "Actual",
+    "variance": "Var.",
+    "noData": "No comparison data"
   }
 }

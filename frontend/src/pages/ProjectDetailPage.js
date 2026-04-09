@@ -33,6 +33,7 @@ import SMRLocationMap from "@/components/SMRLocationMap";
 import ProjectInfoPanel from "@/components/ProjectInfoPanel";
 import SMRGroupsPanel from "@/components/SMRGroupsPanel";
 import ProjectPnLDashboard from "@/components/ProjectPnLDashboard";
+import ExpectedActualPanel from "@/components/ExpectedActualPanel";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -242,6 +243,9 @@ export default function ProjectDetailPage() {
         {/* ════ TAB: FINANCE ════ */}
         <TabsContent value="finance" className="space-y-4 mt-4">
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectPnLDashboard projectId={projectId} /></div>
+
+          {/* Expected vs Actual */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ExpectedActualPanel projectId={projectId} /></div>
 
           {/* Invoices */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-invoices">

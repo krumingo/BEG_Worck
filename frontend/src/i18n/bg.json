@@ -1879,5 +1879,20 @@
     "saved": "Данните са запазени",
     "viewClient": "Виж клиент",
     "dataFromClient": "Фактурни данни от клиент"
+  },
+  "expectedActual": {
+    "title": "Планирано срещу Реално",
+    "overBudget": "над прогноза",
+    "plannedHours": "Планирани ч.",
+    "actualHours": "Реални ч.",
+    "plannedCost": "Планиран бюджет",
+    "actualCost": "Реален разход",
+    "byActivity": "По дейност",
+    "byGroup": "По група",
+    "byLocation": "По локация",
+    "plan": "План",
+    "actual": "Реално",
+    "variance": "Откл.",
+    "noData": "Няма данни за сравнение"
   }
 }
