@@ -48,8 +48,11 @@ async def list_alarms(
     type: Optional[str] = None,
     site_id: Optional[str] = None,
     status: str = "active",
+    page: int = 1,
+    page_size: int = 50,
     user: dict = Depends(get_current_user),
 ):
+    from app.utils.pagination import paginate_query
     query = {"org_id": user["org_id"]}
     if status:
         query["status"] = status
@@ -59,8 +62,7 @@ async def list_alarms(
         query["type"] = type
     if site_id:
         query["site_id"] = site_id
-    items = await db.alarm_events.find(query, {"_id": 0}).sort([("severity", -1), ("triggered_at", -1)]).to_list(200)
-    return {"items": items, "total": len(items)}
+    return await paginate_query(db.alarm_events, query, page, page_size, "triggered_at", -1)
 
 
 @router.get("/alarms/count")

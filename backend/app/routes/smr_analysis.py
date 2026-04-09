@@ -213,15 +213,17 @@ async def create_analysis(data: AnalysisCreate, user: dict = Depends(require_m2)
 async def list_analyses(
     project_id: Optional[str] = None,
     status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     user: dict = Depends(require_m2),
 ):
+    from app.utils.pagination import paginate_query
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     if status:
         query["status"] = status
-    items = await db.smr_analyses.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
-    return {"items": items, "total": len(items)}
+    return await paginate_query(db.smr_analyses, query, page, page_size, "created_at", -1)
 
 
 @router.get("/smr-analyses/{analysis_id}")

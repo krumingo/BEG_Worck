@@ -158,8 +158,11 @@ async def list_missing_smr(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     urgency_type: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     user: dict = Depends(require_m2),
 ):
+    from app.utils.pagination import paginate_query
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
@@ -176,8 +179,7 @@ async def list_missing_smr(
     if date_to:
         query.setdefault("created_at", {})["$lte"] = date_to + "T23:59:59"
 
-    items = await db.missing_smr.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return {"items": items, "total": len(items)}
+    return await paginate_query(db.missing_smr, query, page, page_size, "created_at", -1)
 
 
 @router.get("/missing-smr/pending-approval")

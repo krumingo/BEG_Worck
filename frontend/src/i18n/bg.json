@@ -216,7 +216,8 @@
     "settingsGroup": "Настройки",
     "reference": "Справочници",
     "alarms": "Аларми",
-    "techView": "Терен"
+    "techView": "Терен",
+    "techDashboard": "Моят работен ден"
   },
   "dashboard": {
     "title": "Табло",

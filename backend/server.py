@@ -1171,6 +1171,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global error handler (catches unhandled exceptions)
+from app.middleware.error_handler import ErrorHandlerMiddleware
+app.add_middleware(ErrorHandlerMiddleware)
+
 @app.on_event("startup")
 async def startup():
     await seed_data()

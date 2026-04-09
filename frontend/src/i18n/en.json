@@ -202,7 +202,8 @@
     "settingsGroup": "Settings",
     "reference": "Reference",
     "alarms": "Alarms",
-    "techView": "Field"
+    "techView": "Field",
+    "techDashboard": "My Workday"
   },
   "dashboard": {
     "title": "Dashboard",

@@ -106,9 +106,9 @@ const PLATFORM_ADMIN_CHILDREN = [
 ];
 
 const WORKER_NAV = [
+  { to: "/tech", icon: ClipboardList, labelKey: "nav.techDashboard" },
   { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
   { to: "/my-day", icon: CalendarCheck, labelKey: "nav.myDay" },
-  { to: "/tech", icon: ClipboardList, labelKey: "nav.techView" },
   { to: "/attendance-history", icon: CalendarDays, labelKey: "nav.history" },
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
   { to: "/my-payslips", icon: Receipt, labelKey: "nav.myPayslips" },

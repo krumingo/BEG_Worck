@@ -235,8 +235,11 @@ async def list_sessions(
     date_to: Optional[str] = None,
     is_flagged: Optional[bool] = None,
     is_overtime: Optional[bool] = None,
+    page: int = 1,
+    page_size: int = 50,
     user: dict = Depends(get_current_user),
 ):
+    from app.utils.pagination import paginate_query
     query = {"org_id": user["org_id"]}
     if worker_id:
         query["worker_id"] = worker_id
@@ -254,8 +257,7 @@ async def list_sessions(
     if is_overtime is not None:
         query["is_overtime"] = is_overtime
 
-    items = await db.work_sessions.find(query, {"_id": 0}).sort("started_at", -1).to_list(500)
-    return {"items": items, "total": len(items)}
+    return await paginate_query(db.work_sessions, query, page, page_size, "started_at", -1)
 
 
 # ── Active Sessions ────────────────────────────────────────────────
