@@ -241,6 +241,18 @@
       "missing": "Missing",
       "overdue": "Overdue",
       "dueSoon": "Due Soon"
+    },
+    "cashflowForecast": {
+      "title": "Cash Flow Forecast (30 days)",
+      "incoming": "Expected Incoming",
+      "outgoing": "Expected Outgoing",
+      "net": "Net",
+      "overdue": "Overdue",
+      "details": "Details",
+      "topIncoming": "Top Incoming",
+      "topOutgoing": "Top Outgoing",
+      "viewFinance": "Finance",
+      "viewPayroll": "Payroll"
     }
   },
   "projects": {

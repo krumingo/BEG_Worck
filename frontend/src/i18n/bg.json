@@ -256,6 +256,18 @@
       "overdue": "Просрочено",
       "dueSoon": "Скоро"
     },
+    "cashflowForecast": {
+      "title": "Cash Flow прогноза (30 дни)",
+      "incoming": "Очаквани входящи",
+      "outgoing": "Очаквани изходящи",
+      "net": "Нетно",
+      "overdue": "Просрочени",
+      "details": "Детайли",
+      "topIncoming": "Най-големи входящи",
+      "topOutgoing": "Най-големи изходящи",
+      "viewFinance": "Финанси",
+      "viewPayroll": "Заплати"
+    },
     "financeSection": "Финанси",
     "totalIncome": "Общо приходи",
     "totalExpenses": "Общо разходи",

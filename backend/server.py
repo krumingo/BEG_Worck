@@ -1163,6 +1163,10 @@ api_router.include_router(technician_router)
 from app.routes.morning_briefing import router as morning_briefing_router
 api_router.include_router(morning_briefing_router)
 
+# Import cashflow forecast router
+from app.routes.cashflow_forecast import router as cashflow_forecast_router
+api_router.include_router(cashflow_forecast_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

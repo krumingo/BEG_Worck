@@ -17,6 +17,7 @@ import {
 import FinanceSummaryWidget from "@/components/FinanceSummaryWidget";
 import SitePulseCard from "@/components/SitePulseCard";
 import MorningBriefingPanel from "@/components/MorningBriefingPanel";
+import CashflowForecastPanel from "@/components/CashflowForecastPanel";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -136,6 +137,9 @@ export default function DashboardPage() {
 
       {/* MORNING BRIEFING */}
       {isManager && <MorningBriefingPanel />}
+
+      {/* CASH FLOW FORECAST */}
+      {isManager && <CashflowForecastPanel />}
 
       {/* SECTION 2: Alarms Banner */}
       {isManager && alarms && (
