@@ -206,7 +206,17 @@
     "smrAnalysis": "Анализ СМР",
     "pricing": "Ценообразуване",
     "contractPayments": "Договори",
-    "workerCalendar": "Календар"
+    "workerCalendar": "Календар",
+    "objects": "Обекти",
+    "smrOffers": "СМР и Оферти",
+    "personnel": "Персонал",
+    "finances": "Финанси",
+    "financeDetails": "Фин. детайли",
+    "warehouseGroup": "Склад",
+    "settingsGroup": "Настройки",
+    "reference": "Справочници",
+    "alarms": "Аларми",
+    "techView": "Терен"
   },
   "dashboard": {
     "title": "Табло",
