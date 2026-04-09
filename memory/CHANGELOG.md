@@ -299,3 +299,17 @@
 - Frontend: Bulgarian status labels
 - Fix: update_invoice_status correctly handles reverting from PartiallyPaid when all payments removed
 - Test report: /app/test_reports/iteration_16.json (100% backend, 100% frontend)
+
+
+## Apr 9, 2026 — Contract Freeze & Guardrails
+- Created /app/memory/CONTRACTS.md — protected modules, API contracts, safe extension points, risk list
+- 0 code changes. Documentation-only guardrails step.
+
+## Apr 7-9, 2026 — Session 2 (28 tasks)
+### Backend Modules Built (20):
+Missing SMR, Location Tree, SMR Analysis, Live Pricing Engine, WorkSession/SiteClock, Budget Labor Forecast, Weekly Payroll + Contract Payments, Extended Project Details, SMR Groups, Missing SMR Two Flows, Project P&L Dashboard, KSS Excel Import/Export, Price Modifiers, Realtime Overhead, Site Pulse, Centralized Alarms, Technician Mobile, Client Summary, Error Handler Middleware, Pagination Helper
+
+### Frontend Tasks (8):
+Sidebar Restructure, ProjectDetailPage Tabs, Dashboard Integration, Project Context, Client Detail Page, Technician Dashboard, Worker Calendar Page, Alarms Dashboard Page
+
+### Stats: ~200 tests, ~300 i18n keys, 15 new test files, 12 new collections
