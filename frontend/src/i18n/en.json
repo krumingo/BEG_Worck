@@ -220,7 +220,18 @@
     "everyoneCheckedIn": "Everyone has checked in today",
     "allReportsSubmitted": "All reports submitted",
     "recentActivity": "Recent Activity",
-    "noActivity": "No activity yet"
+    "noActivity": "No activity yet",
+    "activeAlarms": "Active Alarms",
+    "noAlarms": "No active alarms",
+    "todayPulse": "Today's Pulse",
+    "pnlOverview": "Revenue / Expense by Site",
+    "pnlSite": "Site",
+    "pnlBudget": "Budget",
+    "pnlRevenue": "Revenue",
+    "pnlExpense": "Expense",
+    "pnlProfit": "Profit",
+    "overheadPerDay": "Overhead/person/day",
+    "workingToday": "Working"
   },
   "projects": {
     "title": "Projects",
