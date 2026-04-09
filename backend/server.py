@@ -1147,6 +1147,10 @@ api_router.include_router(price_modifiers_router)
 from app.routes.overhead_realtime import router as overhead_realtime_router
 api_router.include_router(overhead_realtime_router)
 
+# Import pulse router
+from app.routes.pulse import router as pulse_router
+api_router.include_router(pulse_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

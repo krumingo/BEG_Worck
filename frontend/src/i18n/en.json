@@ -1556,5 +1556,15 @@
     "avgWorking": "Avg working/day",
     "workingDays": "Working days",
     "employees": "Employees"
+  },
+  "pulse": {
+    "title": "Daily Pulse",
+    "budget": "Budget",
+    "details": "Details",
+    "workers": "Workers",
+    "more": "more",
+    "reportSubmitted": "Report submitted",
+    "reportMissing": "No report",
+    "noData": "No data for today"
   }
 }

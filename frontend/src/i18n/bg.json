@@ -1738,5 +1738,15 @@
     "avgWorking": "Ср. работещи/ден",
     "workingDays": "Работни дни",
     "employees": "Служители"
+  },
+  "pulse": {
+    "title": "Дневен Pulse",
+    "budget": "Бюджет",
+    "details": "Детайли",
+    "workers": "Работници",
+    "more": "още",
+    "reportSubmitted": "Отчет подаден",
+    "reportMissing": "Няма отчет",
+    "noData": "Няма данни за днес"
   }
 }
