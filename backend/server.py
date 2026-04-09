@@ -1175,6 +1175,10 @@ api_router.include_router(expected_actual_router)
 from app.routes.material_waste import router as material_waste_router
 api_router.include_router(material_waste_router)
 
+# Import excel import v2 router
+from app.routes.excel_import_v2 import router as excel_import_v2_router
+api_router.include_router(excel_import_v2_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

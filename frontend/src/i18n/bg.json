@@ -1916,5 +1916,26 @@
     "fillRequired": "Попълнете материал и количество",
     "added": "Записът е добавен",
     "noData": "Няма данни за материали"
+  },
+  "excelImportV2": {
+    "title": "Импорт от Excel",
+    "step1": "Изберете файл и шаблон",
+    "step2": "Преглед и проверка на колони",
+    "step3": "Потвърдете и импортирайте",
+    "preview": "Преглед",
+    "rows": "реда",
+    "confidence": "Увереност",
+    "detectedColumns": "Разпознати колони",
+    "confirmMapping": "Потвърди mapping",
+    "rowsReady": "реда готови за импорт",
+    "warnings": "предупреждения",
+    "import": "Импортирай",
+    "imported": "Импортирани",
+    "lines": "реда",
+    "useTemplate": "Използвай шаблон",
+    "noTemplate": "Без шаблон (auto-detect)",
+    "saveAsTemplate": "Запази като шаблон",
+    "templateName": "Име на шаблона",
+    "templateSaved": "Шаблонът е запазен"
   }
 }

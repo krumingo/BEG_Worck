@@ -1734,5 +1734,26 @@
     "fillRequired": "Fill material and quantity",
     "added": "Entry added",
     "noData": "No material data"
+  },
+  "excelImportV2": {
+    "title": "Import from Excel",
+    "step1": "Select file and template",
+    "step2": "Preview and check columns",
+    "step3": "Confirm and import",
+    "preview": "Preview",
+    "rows": "rows",
+    "confidence": "Confidence",
+    "detectedColumns": "Detected columns",
+    "confirmMapping": "Confirm mapping",
+    "rowsReady": "rows ready to import",
+    "warnings": "warnings",
+    "import": "Import",
+    "imported": "Imported",
+    "lines": "lines",
+    "useTemplate": "Use template",
+    "noTemplate": "No template (auto-detect)",
+    "saveAsTemplate": "Save as template",
+    "templateName": "Template name",
+    "templateSaved": "Template saved"
   }
 }
