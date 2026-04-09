@@ -1159,6 +1159,10 @@ api_router.include_router(alarms_router)
 from app.routes.technician import router as technician_router
 api_router.include_router(technician_router)
 
+# Import morning briefing router
+from app.routes.morning_briefing import router as morning_briefing_router
+api_router.include_router(morning_briefing_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

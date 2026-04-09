@@ -247,6 +247,15 @@
     "pnlProfit": "Печалба",
     "overheadPerDay": "Режийни/човек/ден",
     "workingToday": "Работещи",
+    "morningBriefing": {
+      "title": "Утринен брифинг",
+      "allClear": "Няма важни сигнали за днес",
+      "risks": "Рискови обекти",
+      "payments": "Плащания",
+      "missing": "Липсващи",
+      "overdue": "Просрочено",
+      "dueSoon": "Скоро"
+    },
     "financeSection": "Финанси",
     "totalIncome": "Общо приходи",
     "totalExpenses": "Общо разходи",

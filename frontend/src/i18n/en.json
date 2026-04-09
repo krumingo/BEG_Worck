@@ -232,7 +232,16 @@
     "pnlExpense": "Expense",
     "pnlProfit": "Profit",
     "overheadPerDay": "Overhead/person/day",
-    "workingToday": "Working"
+    "workingToday": "Working",
+    "morningBriefing": {
+      "title": "Morning Briefing",
+      "allClear": "No important signals for today",
+      "risks": "Risky Sites",
+      "payments": "Payments",
+      "missing": "Missing",
+      "overdue": "Overdue",
+      "dueSoon": "Due Soon"
+    }
   },
   "projects": {
     "title": "Projects",

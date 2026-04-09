@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import FinanceSummaryWidget from "@/components/FinanceSummaryWidget";
 import SitePulseCard from "@/components/SitePulseCard";
+import MorningBriefingPanel from "@/components/MorningBriefingPanel";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -132,6 +133,9 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* MORNING BRIEFING */}
+      {isManager && <MorningBriefingPanel />}
 
       {/* SECTION 2: Alarms Banner */}
       {isManager && alarms && (
