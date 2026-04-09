@@ -1712,5 +1712,27 @@
     "actual": "Actual",
     "variance": "Var.",
     "noData": "No comparison data"
+  },
+  "materialWaste": {
+    "title": "Material Variance",
+    "addWaste": "Add Waste / Scrap",
+    "addDesc": "Register waste, damage or loss",
+    "materials": "Materials",
+    "wasteEntries": "Entries",
+    "wasteQty": "Waste qty",
+    "overuse": "Overuse",
+    "material": "Material",
+    "materialPlaceholder": "e.g. Cement, Plaster...",
+    "plan": "Plan",
+    "issued": "Issued",
+    "waste": "Waste",
+    "variance": "Var.",
+    "qty": "Quantity",
+    "unit": "Unit",
+    "wasteType": "Waste Type",
+    "notes": "Notes",
+    "fillRequired": "Fill material and quantity",
+    "added": "Entry added",
+    "noData": "No material data"
   }
 }

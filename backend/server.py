@@ -1171,6 +1171,10 @@ api_router.include_router(cashflow_forecast_router)
 from app.routes.expected_actual import router as expected_actual_router
 api_router.include_router(expected_actual_router)
 
+# Import material waste router
+from app.routes.material_waste import router as material_waste_router
+api_router.include_router(material_waste_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
