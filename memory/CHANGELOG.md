@@ -1,3 +1,13 @@
+## Apr 9, 2026 — Integration Smoke Map
+- Created /app/memory/INTEGRATION_MAP.md
+- 5 integration chains mapped (field report→money, SMR→commercial, project/client/finance, materials/warehouse, location/group/SMR)
+- Source-of-truth matrix (15 domains)
+- 6 integration risk hotspots documented
+- Safe extension points per domain
+- Recommended order for next 9 improvements
+- 0 code changes
+
+
 # CHANGELOG
 
 ## Mar 11, 2026 (Session 26)
