@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
+import { useActiveProject } from "@/contexts/ProjectContext";
 import API from "@/lib/api";
 import { formatDate, formatTime } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
@@ -53,8 +55,11 @@ const STATUS_ICONS = {
 
 export default function SiteAttendancePage() {
   const { t, i18n } = useTranslation();
+  const { activeProject } = useActiveProject();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
-  const [selectedProject, setSelectedProject] = useState("all");
+  const initProject = searchParams.get("project") || (activeProject?.id ? activeProject.id : "all");
+  const [selectedProject, setSelectedProject] = useState(initProject);
   const [siteData, setSiteData] = useState(null);
   const [loading, setLoading] = useState(true);
 

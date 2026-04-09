@@ -11,6 +11,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
+import { useActiveProject } from "@/contexts/ProjectContext";
+import { useSearchParams } from "react-router-dom";
 import API from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,14 +101,17 @@ const EMPTY_FORM = {
 export default function MissingSMRPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { activeProject } = useActiveProject();
+  const [searchParams] = useSearchParams();
 
   // Data
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Filters
-  const [fProject, setFProject] = useState("");
+  // Filters — pre-select from URL param or active project context
+  const initProject = searchParams.get("project") || "";
+  const [fProject, setFProject] = useState(initProject);
   const [fStatus, setFStatus] = useState("");
   const [fFloor, setFFloor] = useState("");
   const [fRoom, setFRoom] = useState("");
@@ -128,6 +133,13 @@ export default function MissingSMRPage() {
   const [uploading, setUploading] = useState(false);
 
   const canEdit = ["Admin", "Owner", "SiteManager"].includes(user?.role);
+
+  // Apply active project context if no filter set
+  useEffect(() => {
+    if (!fProject && activeProject?.id && !searchParams.get("project")) {
+      setFProject(activeProject.id);
+    }
+  }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load projects once
   useEffect(() => {

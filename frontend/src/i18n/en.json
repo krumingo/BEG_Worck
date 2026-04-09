@@ -1638,5 +1638,13 @@
     "description": "Description",
     "photoInvoice": "Photo Invoice",
     "invoiceUploaded": "Invoice uploaded for approval"
+  },
+  "projectContext": {
+    "active": "Site",
+    "change": "Change",
+    "clear": "Clear",
+    "attendance": "Attendance",
+    "reports": "Reports",
+    "requests": "Missing SMR"
   }
 }

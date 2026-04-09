@@ -1820,5 +1820,13 @@
     "description": "Описание",
     "photoInvoice": "Снимай фактура",
     "invoiceUploaded": "Фактурата е качена за одобрение"
+  },
+  "projectContext": {
+    "active": "Обект",
+    "change": "Смени",
+    "clear": "Изчисти",
+    "attendance": "Присъствие",
+    "reports": "Отчети",
+    "requests": "Липсващи СМР"
   }
 }

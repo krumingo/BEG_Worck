@@ -1,6 +1,7 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth, PlatformAuthProvider, usePlatformAuth } from "@/contexts/AuthContext";
+import { ProjectProvider } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import PlatformAdminGuard from "@/components/PlatformAdminGuard";
 import PlatformLayout from "@/components/PlatformLayout";
@@ -256,9 +257,11 @@ function App() {
   return (
     <AuthProvider>
       <PlatformAuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <ProjectProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ProjectProvider>
       </PlatformAuthProvider>
     </AuthProvider>
   );

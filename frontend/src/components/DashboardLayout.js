@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useActiveProject } from "@/contexts/ProjectContext";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -189,6 +190,7 @@ function MobileProfileMenu({ user, onLogout, onClose, onChangePassword }) {
 
 export default function DashboardLayout({ children }) {
   const { user, org, logout } = useAuth();
+  const { activeProject, clearActiveProject } = useActiveProject();
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -294,6 +296,15 @@ export default function DashboardLayout({ children }) {
           </div>
           <NotificationBell />
         </div>
+
+        {/* Active Project Banner */}
+        {activeProject && (
+          <div className="mx-3 mb-1 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-2" data-testid="active-project-banner">
+            <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+            <span className="text-[11px] text-primary truncate flex-1">{activeProject.name}</span>
+            <button onClick={clearActiveProject} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3 h-3" /></button>
+          </div>
+        )}
 
         <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
           {isAdmin ? renderGroupedNav() : WORKER_NAV.map(item => renderNavItem(item))}

@@ -10,6 +10,8 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
+import { useActiveProject } from "@/contexts/ProjectContext";
 import API from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,8 +69,11 @@ export default function DailyLogsPage() {
   const [sites, setSites] = useState([]);
   const [workTypes, setWorkTypes] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const { activeProject } = useActiveProject();
+  const [searchParams] = useSearchParams();
+  const initSite = searchParams.get("project") || "";
   
-  const [selectedSite, setSelectedSite] = useState("");
+  const [selectedSite, setSelectedSite] = useState(initSite);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedWorkType, setSelectedWorkType] = useState("");
   const [selectedEntries, setSelectedEntries] = useState([]);
@@ -97,6 +102,13 @@ export default function DailyLogsPage() {
     };
     loadData();
   }, []);
+
+  // Apply active project context
+  useEffect(() => {
+    if (!selectedSite && activeProject?.id && !searchParams.get("project")) {
+      setSelectedSite(activeProject.id);
+    }
+  }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Load team when site changes
   useEffect(() => {

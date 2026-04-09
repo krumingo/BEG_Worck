@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useActiveProject } from "@/contexts/ProjectContext";
 import API from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export default function ProjectDetailPage() {
   const location = useLocation();
   const { t } = useTranslation();
 
+  const { setActiveProject } = useActiveProject();
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
@@ -77,9 +79,12 @@ export default function ProjectDetailPage() {
     try {
       const res = await API.get(`/projects/${projectId}/dashboard`);
       setDashboard(res.data);
+      // Set active project context
+      const p = res.data.project;
+      if (p) setActiveProject({ id: p.id || projectId, name: p.name, code: p.code, address_text: p.address_text });
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [projectId]);
+  }, [projectId, setActiveProject]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
@@ -112,6 +117,17 @@ export default function ProjectDetailPage() {
         <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
           <Plus className="w-4 h-4 mr-1" /> Ново СМР
         </Button>
+      </div>
+
+      {/* Quick nav with context */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { to: `/site-attendance?project=${projectId}`, label: t("projectContext.attendance") },
+          { to: `/daily-logs?project=${projectId}`, label: t("projectContext.reports") },
+          { to: `/missing-smr?project=${projectId}`, label: t("projectContext.requests") },
+        ].map(({ to, label }) => (
+          <Button key={to} variant="outline" size="sm" onClick={() => navigate(to)} className="text-xs h-7">{label}</Button>
+        ))}
       </div>
 
       {/* Tabs */}
