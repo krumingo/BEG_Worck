@@ -1649,6 +1649,16 @@
     "parking": "Паркинг",
     "elevator": "Асансьор"
   },
+  "projectDetail": {
+    "tabs": {
+      "overview": "Обзор",
+      "smr": "СМР",
+      "locations": "Локации",
+      "finance": "Финанси",
+      "info": "Информация",
+      "team": "Екип"
+    }
+  },
   "smrGroups": {
     "title": "СМР Групи",
     "newGroup": "Нова група",

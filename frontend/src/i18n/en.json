@@ -1467,6 +1467,16 @@
     "parking": "Parking",
     "elevator": "Elevator"
   },
+  "projectDetail": {
+    "tabs": {
+      "overview": "Overview",
+      "smr": "SMR",
+      "locations": "Locations",
+      "finance": "Finance",
+      "info": "Information",
+      "team": "Team"
+    }
+  },
   "smrGroups": {
     "title": "SMR Groups",
     "newGroup": "New Group",
