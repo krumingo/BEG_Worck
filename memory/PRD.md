@@ -39,6 +39,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Price Modifiers (waste, floor, center, inhabited, overhead, risk, profit — 3-level cascade) — Apr 9, 2026
 - Realtime Overhead (worker calendar, fixed expenses, overhead/person/day, auto-sync) — Apr 9, 2026
 - Site Pulse (automated daily snapshots, alerts, budget tracking, pulse summary) — Apr 9, 2026
+- Centralized Alarm System (configurable rules, severity levels, ack/resolve workflow) — Apr 9, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 

@@ -1566,5 +1566,22 @@
     "reportSubmitted": "Report submitted",
     "reportMissing": "No report",
     "noData": "No data for today"
+  },
+  "alarms": {
+    "title": "Alarms",
+    "subtitle": "Centralized notification and warning system",
+    "evaluate": "Evaluate Now",
+    "evaluated": "Evaluated",
+    "newEvents": "new alarms",
+    "allSeverity": "All Severities",
+    "active": "Active",
+    "ack": "Acknowledged",
+    "resolvedStatus": "Resolved",
+    "acknowledged": "Acknowledged",
+    "resolved": "Resolved",
+    "message": "Message",
+    "site": "Site",
+    "when": "When",
+    "noAlarms": "No active alarms"
   }
 }

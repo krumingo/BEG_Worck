@@ -1748,5 +1748,22 @@
     "reportSubmitted": "Отчет подаден",
     "reportMissing": "Няма отчет",
     "noData": "Няма данни за днес"
+  },
+  "alarms": {
+    "title": "Аларми",
+    "subtitle": "Централизирана система за известия и предупреждения",
+    "evaluate": "Провери сега",
+    "evaluated": "Проверено",
+    "newEvents": "нови аларми",
+    "allSeverity": "Всички нива",
+    "active": "Активни",
+    "ack": "Видяни",
+    "resolvedStatus": "Решени",
+    "acknowledged": "Маркирано като видяно",
+    "resolved": "Решено",
+    "message": "Съобщение",
+    "site": "Обект",
+    "when": "Кога",
+    "noAlarms": "Няма активни аларми"
   }
 }

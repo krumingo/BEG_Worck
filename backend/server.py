@@ -1151,6 +1151,10 @@ api_router.include_router(overhead_realtime_router)
 from app.routes.pulse import router as pulse_router
 api_router.include_router(pulse_router)
 
+# Import alarms router
+from app.routes.alarms import router as alarms_router
+api_router.include_router(alarms_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
