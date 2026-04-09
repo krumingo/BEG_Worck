@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft, Plus, Loader2, Calculator, Sparkles, Check, Lock,
-  Copy, FileOutput, Trash2, RefreshCcw,
+  Copy, FileOutput, Trash2, RefreshCcw, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import PricingPanel from "@/components/PricingPanel";
@@ -291,6 +291,11 @@ export default function SMRAnalysisPage() {
         </Button>
         <Button size="sm" onClick={handleToOffer} disabled={actionLoading} data-testid="to-offer-btn">
           <FileOutput className="w-4 h-4 mr-1" /> {t("smrAnalysis.toOffer")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => {
+          window.open(`${process.env.REACT_APP_BACKEND_URL}/api/smr-analyses/${analysisId}/export-excel`, "_blank");
+        }} data-testid="export-excel-btn">
+          <Download className="w-4 h-4 mr-1" /> Excel
         </Button>
       </div>
 

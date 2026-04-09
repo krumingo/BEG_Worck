@@ -19,8 +19,9 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Calculator, Plus, Loader2, Search, Eye } from "lucide-react";
+import { Calculator, Plus, Loader2, Search, Eye, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
+import ExcelImportV2Modal from "@/components/ExcelImportV2Modal";
 
 const STATUS_CFG = {
   draft: { label: "Чернова", color: "bg-slate-100 text-slate-700" },
@@ -42,6 +43,10 @@ export default function SMRAnalysisListPage() {
   const [createProjectId, setCreateProjectId] = useState("");
   const [createName, setCreateName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Import V2 modal
+  const [showImport, setShowImport] = useState(false);
+  const [importProjectId, setImportProjectId] = useState("");
 
   useEffect(() => {
     API.get("/projects").then(r => setProjects(r.data.items || r.data || [])).catch(() => {});
@@ -89,9 +94,14 @@ export default function SMRAnalysisListPage() {
             <p className="text-sm text-muted-foreground">{t("smrAnalysis.listSubtitle")}</p>
           </div>
         </div>
-        <Button onClick={() => { setCreateName(""); setCreateProjectId(""); setShowCreate(true); }} data-testid="new-analysis-btn">
-          <Plus className="w-4 h-4 mr-2" /> {t("smrAnalysis.newAnalysis")}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setImportProjectId(""); setShowImport(true); }} data-testid="import-excel-btn">
+            <FileSpreadsheet className="w-4 h-4 mr-2" /> {t("excelImportV2.title")}
+          </Button>
+          <Button onClick={() => { setCreateName(""); setCreateProjectId(""); setShowCreate(true); }} data-testid="new-analysis-btn">
+            <Plus className="w-4 h-4 mr-2" /> {t("smrAnalysis.newAnalysis")}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -195,6 +205,20 @@ export default function SMRAnalysisListPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Excel Import V2 Modal */}
+      <ExcelImportV2Modal
+        open={showImport}
+        onOpenChange={setShowImport}
+        projectId={importProjectId || fProject || (projects[0]?.id)}
+        onImported={(result) => {
+          loadItems();
+          if (result?.analysis_id) {
+            const pid = importProjectId || fProject || projects[0]?.id;
+            navigate(`/projects/${pid}/smr-analysis/${result.analysis_id}`);
+          }
+        }}
+      />
     </div>
   );
 }
