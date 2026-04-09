@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ const OBJ_TYPES = [
 
 export default function ProjectInfoPanel({ projectId, project, onUpdated }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -154,12 +156,22 @@ export default function ProjectInfoPanel({ projectId, project, onUpdated }) {
             <span className="font-semibold text-sm">{t("projectDetails.invoiceDetails")}</span>
           </div>
           {project?.owner_id && (
-            <Button variant="outline" size="sm" onClick={handleImportInvoice} disabled={importing} data-testid="import-invoice-btn">
-              {importing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
-              {t("projectDetails.importFromClient")}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate(`/clients/${project.owner_id}`)} className="text-xs">
+                {t("clientDetail.viewClient")} →
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleImportInvoice} disabled={importing} data-testid="import-invoice-btn">
+                {importing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+                {t("projectDetails.importFromClient")}
+              </Button>
+            </div>
           )}
         </div>
+        {project?.owner_id && invoice.company_name && (
+          <div className="mb-3 p-2 rounded bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+            {t("clientDetail.dataFromClient")}: <strong className="text-foreground">{invoice.company_name}</strong>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="space-y-1"><Label className="text-xs">{t("projectDetails.companyName")}</Label><Input value={invoice.company_name || ""} onChange={e => setInv("company_name", e.target.value)} data-testid="invoice-company" /></div>
           <div className="space-y-1"><Label className="text-xs">ЕИК</Label><Input value={invoice.eik || ""} onChange={e => setInv("eik", e.target.value)} /></div>

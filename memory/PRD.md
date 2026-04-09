@@ -41,6 +41,11 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Site Pulse (automated daily snapshots, alerts, budget tracking, pulse summary) — Apr 9, 2026
 - Centralized Alarm System (configurable rules, severity levels, ack/resolve workflow) — Apr 9, 2026
 - Technician Mobile View (daily reports, quick SMR, material requests, photo invoices) — Apr 9, 2026
+- Sidebar Navigation Restructure (grouped categories, collapsible) — Apr 9, 2026
+- ProjectDetailPage Tabs (6 tabs: Overview/SMR/Locations/Finance/Info/Team) — Apr 9, 2026
+- Dashboard Integration (Pulse + Alarms + P&L + Overhead) — Apr 9, 2026
+- Project Context (auto-select across pages, URL params, sidebar banner) — Apr 9, 2026
+- Unified Client Card (summary, projects, invoices, deduplication) — Apr 9, 2026
 
 ### UPCOMING PRIORITY BLOCKS:
 

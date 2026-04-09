@@ -720,3 +720,122 @@ async def update_project_client_link(
     
     return {"ok": True, "message": "Клиентът е свързан с проекта"}
 
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CLIENT SUMMARY (unified card)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/clients/{client_id}/summary")
+async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
+    """Full client summary: projects, invoices, totals, activity."""
+    org_id = user["org_id"]
+    client = await db.clients.find_one({"id": client_id, "org_id": org_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Projects linked to this client
+    projects = await db.projects.find(
+        {"org_id": org_id, "owner_id": client_id},
+        {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1, "start_date": 1, "end_date": 1},
+    ).to_list(100)
+
+    project_summaries = []
+    total_revenue = 0
+    total_paid = 0
+    total_outstanding = 0
+    active_count = 0
+    completed_count = 0
+    first_date = None
+    last_date = None
+
+    for p in projects:
+        pid = p["id"]
+        invs = await db.invoices.find(
+            {"org_id": org_id, "project_id": pid},
+            {"_id": 0, "total": 1, "paid_amount": 1, "status": 1},
+        ).to_list(200)
+        inv_total = sum(i.get("total", 0) for i in invs)
+        inv_paid = sum(i.get("paid_amount", 0) or 0 for i in invs)
+        inv_due = round(inv_total - inv_paid, 2)
+
+        project_summaries.append({
+            "id": pid, "name": p["name"], "code": p.get("code", ""),
+            "status": p.get("status", "Draft"),
+            "start_date": p.get("start_date"), "end_date": p.get("end_date"),
+            "total_invoiced": round(inv_total, 2),
+            "total_paid": round(inv_paid, 2),
+            "balance_due": inv_due,
+        })
+
+        total_revenue += inv_total
+        total_paid += inv_paid
+        total_outstanding += inv_due
+        if p.get("status") == "Active":
+            active_count += 1
+        elif p.get("status") in ("Completed", "Finished"):
+            completed_count += 1
+        sd = p.get("start_date")
+        if sd:
+            if not first_date or sd < first_date:
+                first_date = sd
+            if not last_date or sd > last_date:
+                last_date = sd
+
+    # Last 10 invoices
+    all_pids = [p["id"] for p in projects]
+    invoices = []
+    if all_pids:
+        inv_docs = await db.invoices.find(
+            {"org_id": org_id, "project_id": {"$in": all_pids}},
+            {"_id": 0, "id": 1, "invoice_number": 1, "project_id": 1, "total": 1, "paid_amount": 1, "status": 1, "issue_date": 1},
+        ).sort("issue_date", -1).to_list(10)
+        pid_map = {p["id"]: p["name"] for p in projects}
+        for inv in inv_docs:
+            invoices.append({
+                "id": inv["id"], "invoice_no": inv.get("invoice_number", ""),
+                "project_name": pid_map.get(inv.get("project_id"), ""),
+                "total": inv.get("total", 0), "paid": inv.get("paid_amount", 0),
+                "status": inv.get("status"), "issue_date": inv.get("issue_date"),
+            })
+
+    return {
+        "client": client,
+        "projects": project_summaries,
+        "totals": {
+            "projects_count": len(projects),
+            "active_projects": active_count,
+            "completed_projects": completed_count,
+            "total_revenue": round(total_revenue, 2),
+            "total_paid": round(total_paid, 2),
+            "total_outstanding": round(total_outstanding, 2),
+            "first_project_date": first_date,
+            "last_project_date": last_date,
+        },
+        "invoices": invoices,
+    }
+
+
+@router.get("/clients/{client_id}/projects")
+async def get_client_projects(client_id: str, user: dict = Depends(require_m5)):
+    org_id = user["org_id"]
+    projects = await db.projects.find(
+        {"org_id": org_id, "owner_id": client_id},
+        {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1, "start_date": 1, "end_date": 1},
+    ).to_list(100)
+    return {"items": projects, "total": len(projects)}
+
+
+@router.get("/clients/{client_id}/invoices")
+async def get_client_invoices(client_id: str, user: dict = Depends(require_m5)):
+    org_id = user["org_id"]
+    projects = await db.projects.find(
+        {"org_id": org_id, "owner_id": client_id}, {"_id": 0, "id": 1}
+    ).to_list(100)
+    pids = [p["id"] for p in projects]
+    if not pids:
+        return {"items": [], "total": 0}
+    invoices = await db.invoices.find(
+        {"org_id": org_id, "project_id": {"$in": pids}}, {"_id": 0}
+    ).sort("issue_date", -1).to_list(200)
+    return {"items": invoices, "total": len(invoices)}
