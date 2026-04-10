@@ -388,6 +388,11 @@ async def copy_yesterday_roster(project_id: str, user: dict = Depends(get_curren
 
 @router.post("/technician/daily-report")
 async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_current_user)):
+    """
+    DRAFT ONLY: Saves to employee_daily_reports with status=Draft.
+    work_sessions are created on APPROVE, not here.
+    See /app/memory/SOURCE_OF_TRUTH.md for full policy.
+    """
     org_id = user["org_id"]
     today = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()

@@ -46,6 +46,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     total_revenue = max(paid_total, invoiced_total)
 
     # ── c. LABOR COST (from work_sessions) ─────────────────────────
+    # READS FROM: work_sessions — the source of truth for labor cost.
+    # See /app/memory/SOURCE_OF_TRUTH.md
     sessions = await db.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "labor_cost": 1, "duration_hours": 1, "is_overtime": 1},

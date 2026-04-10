@@ -1,3 +1,31 @@
+## Apr 10, 2026 — Phase 1 Core Closure (Фази 1.1-1.4)
+
+### Phase 1.1: Roster (site_daily_rosters)
+- 4 new endpoints: GET/POST roster, suggestions, copy-yesterday
+- New collection: site_daily_rosters
+
+### Phase 1.2: DRAFT Submit
+- POST /technician/daily-report now creates DRAFTs in employee_daily_reports
+- NO work_sessions created at submit time
+- 2-step frontend: Roster → Report
+
+### Phase 1.3: Approval = Posting Event
+- POST /daily-reports/{id}/approve creates work_sessions + worker_calendar + slip_number
+- POST /daily-reports/{id}/reject sets REJECTED, no sessions
+- POST /daily-reports/{id}/reset voids sessions (flagged, not deleted)
+- org_counters for per-org slip numbering
+
+### Phase 1.4: Source of Truth Policy
+- Created /app/memory/SOURCE_OF_TRUTH.md
+- work_sessions = ONLY source of truth for labor cost
+- employee_daily_reports = DRAFT input, NOT financial truth
+- Code comments added at 3 key locations
+
+### Also in this session:
+- Technician activity dropdown: real data from 5 sources, priority-sorted, noise-filtered
+- expected_actual: replaced hardcoded 25 with real avg_daily_wage
+
+
 ## Apr 9, 2026 — Integration Smoke Map
 - Created /app/memory/INTEGRATION_MAP.md
 - 5 integration chains mapped (field report→money, SMR→commercial, project/client/finance, materials/warehouse, location/group/SMR)

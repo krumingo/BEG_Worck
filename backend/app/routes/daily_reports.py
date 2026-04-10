@@ -164,6 +164,11 @@ async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
 
 @router.post("/daily-reports/{report_id}/approve")
 async def approve_daily_report(report_id: str, user: dict = Depends(require_m4)):
+    """
+    SOURCE OF TRUTH: This is the POSTING EVENT.
+    Approve creates work_sessions (the only source of truth for labor cost).
+    See /app/memory/SOURCE_OF_TRUTH.md for full policy.
+    """
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only SiteManager/Admin can approve")
     report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
