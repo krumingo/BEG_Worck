@@ -12,6 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import LocationPicker from "@/components/LocationPicker";
 import {
   Loader2, Sparkles, CheckCircle2, Package, Hammer, ChevronDown, ChevronRight,
   Plus, Trash2, Copy, Clock, AlertTriangle,
@@ -335,11 +336,21 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                     <Button variant="ghost" size="sm" onClick={() => dupLine(i)} className="h-7 w-7 p-0 text-muted-foreground"><Copy className="w-3 h-3" /></Button>
                     {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(i)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3 h-3" /></Button>}
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <Input value={line.location_floor} onChange={e => updateLine(i, "location_floor", e.target.value)} placeholder="Етаж" className="bg-background text-xs" />
-                    <Input value={line.location_room} onChange={e => updateLine(i, "location_room", e.target.value)} placeholder="Помещение" className="bg-background text-xs" />
-                    <Input value={line.location_zone} onChange={e => updateLine(i, "location_zone", e.target.value)} placeholder="Зона" className="bg-background text-xs" />
-                    <Input value={line.location_notes} onChange={e => updateLine(i, "location_notes", e.target.value)} placeholder="Бележка" className="bg-background text-xs" />
+                  <div className="space-y-2">
+                    <LocationPicker projectId={projectId} value={line.location_id} onChange={(id, node) => {
+                      updateLine(i, "location_id", id);
+                      if (node) {
+                        if (node.type === "floor") updateLine(i, "location_floor", node.name);
+                        else if (node.type === "room") updateLine(i, "location_room", node.name);
+                        else if (node.type === "zone") updateLine(i, "location_zone", node.name);
+                      }
+                    }} />
+                    <div className="grid grid-cols-4 gap-2">
+                      <Input value={line.location_floor} onChange={e => updateLine(i, "location_floor", e.target.value)} placeholder="Етаж" className="bg-background text-xs" />
+                      <Input value={line.location_room} onChange={e => updateLine(i, "location_room", e.target.value)} placeholder="Помещение" className="bg-background text-xs" />
+                      <Input value={line.location_zone} onChange={e => updateLine(i, "location_zone", e.target.value)} placeholder="Зона" className="bg-background text-xs" />
+                      <Input value={line.location_notes} onChange={e => updateLine(i, "location_notes", e.target.value)} placeholder="Бележка" className="bg-background text-xs" />
+                    </div>
                   </div>
                 </div>
               ))}

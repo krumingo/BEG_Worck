@@ -58,6 +58,7 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
+import LocationPicker from "@/components/LocationPicker";
 
 const STATUS_CONFIG = {
   draft: { label: "Чернова", variant: "secondary", color: "bg-slate-100 text-slate-700" },
@@ -96,6 +97,7 @@ const EMPTY_FORM = {
   emergency_reason: "",
   executed_date: "",
   executed_by: "",
+  location_id: "",
 };
 
 export default function MissingSMRPage() {
@@ -545,6 +547,23 @@ export default function MissingSMRPage() {
             </div>
 
             {/* Location */}
+            {form.project_id && (
+              <div className="space-y-1">
+                <Label>{t("locations.selectLocation")}</Label>
+                <LocationPicker
+                  projectId={form.project_id}
+                  value={form.location_id}
+                  onChange={(id, node) => {
+                    setField("location_id", id);
+                    if (node) {
+                      if (node.type === "floor") setField("floor", node.name);
+                      else if (node.type === "room") setField("room", node.name);
+                      else if (node.type === "zone") setField("zone", node.name);
+                    }
+                  }}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{t("missingSMR.floor")}</Label>

@@ -13,6 +13,7 @@ import {
   Sparkles, Plus, Trash2, Copy, Loader2, ArrowLeft, Save, Send,
   MapPin, Clock, CheckCircle2, X,
 } from "lucide-react";
+import LocationPicker from "@/components/LocationPicker";
 import AIPricingBreakdown from "@/components/AIPricingBreakdown";
 
 const UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"];
@@ -289,9 +290,18 @@ export default function NovoSMRPage() {
                 {/* Location fields */}
                 <div className="flex items-center gap-2 ml-7">
                   <MapPin className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <Input value={row.floor} onChange={e => updateRow(i, "floor", e.target.value)} placeholder="Етаж" className="w-16 bg-background text-xs h-7" />
-                  <Input value={row.room} onChange={e => updateRow(i, "room", e.target.value)} placeholder="Помещение" className="flex-1 bg-background text-xs h-7" />
-                  <Input value={row.zone} onChange={e => updateRow(i, "zone", e.target.value)} placeholder="Зона / стена" className="flex-1 bg-background text-xs h-7" />
+                  <div className="flex-1">
+                    <LocationPicker projectId={projectId} value={row.location_id} onChange={(id, node) => {
+                      updateRow(i, "location_id", id);
+                      if (node) {
+                        if (node.type === "floor") updateRow(i, "floor", node.name);
+                        else if (node.type === "room") updateRow(i, "room", node.name);
+                        else if (node.type === "zone") updateRow(i, "zone", node.name);
+                      }
+                    }} />
+                  </div>
+                  <Input value={row.floor} onChange={e => updateRow(i, "floor", e.target.value)} placeholder="Етаж" className="w-14 bg-background text-xs h-7" />
+                  <Input value={row.room} onChange={e => updateRow(i, "room", e.target.value)} placeholder="Пом." className="w-14 bg-background text-xs h-7" />
                 </div>
               </div>
             ))}
