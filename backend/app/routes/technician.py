@@ -250,7 +250,141 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
     return {"tasks": tasks, "total": len(tasks)}
 
 
-# ── Daily Report ───────────────────────────────────────────────────
+# ── Roster (Присъстващи днес) ─────────────────────────────────────
+
+class RosterSubmit(BaseModel):
+    date: Optional[str] = None
+    workers: list  # [{worker_id, worker_name}]
+
+
+@router.get("/technician/site/{project_id}/roster")
+async def get_roster(project_id: str, date: Optional[str] = None, user: dict = Depends(get_current_user)):
+    org_id = user["org_id"]
+    d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    doc = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": d}, {"_id": 0}
+    )
+    if not doc:
+        return {"project_id": project_id, "date": d, "workers": [], "id": None}
+    return doc
+
+
+@router.post("/technician/site/{project_id}/roster")
+async def save_roster(project_id: str, data: RosterSubmit, user: dict = Depends(get_current_user)):
+    org_id = user["org_id"]
+    d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).isoformat()
+
+    workers = [{"worker_id": w.get("worker_id") or w.get("id", ""), "worker_name": w.get("worker_name") or w.get("name", "")} for w in data.workers if w.get("worker_id") or w.get("id")]
+
+    existing = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    if existing:
+        await db.site_daily_rosters.update_one({"id": existing["id"]}, {"$set": {
+            "workers": workers, "updated_at": now,
+        }})
+        return await db.site_daily_rosters.find_one({"id": existing["id"]}, {"_id": 0})
+
+    doc = {
+        "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
+        "date": d, "workers": workers,
+        "created_by": user["id"], "created_at": now, "updated_at": now,
+    }
+    await db.site_daily_rosters.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@router.get("/technician/site/{project_id}/roster/suggestions")
+async def roster_suggestions(project_id: str, user: dict = Depends(get_current_user)):
+    org_id = user["org_id"]
+    now = datetime.now(timezone.utc)
+    cutoff = (now - __import__("datetime").timedelta(days=14)).isoformat()
+
+    # Recent workers from work_sessions + rosters
+    recent_ids = set()
+    recent = []
+
+    # From past rosters
+    past_rosters = await db.site_daily_rosters.find(
+        {"org_id": org_id, "project_id": project_id, "date": {"$gte": cutoff[:10]}},
+        {"_id": 0, "workers": 1},
+    ).to_list(30)
+    for r in past_rosters:
+        for w in r.get("workers", []):
+            wid = w.get("worker_id")
+            if wid and wid not in recent_ids:
+                recent_ids.add(wid)
+                recent.append({"worker_id": wid, "worker_name": w.get("worker_name", ""), "source": "recent"})
+
+    # From work_sessions
+    sessions = await db.work_sessions.find(
+        {"org_id": org_id, "site_id": project_id, "started_at": {"$gte": cutoff}},
+        {"_id": 0, "worker_id": 1, "worker_name": 1},
+    ).to_list(500)
+    for s in sessions:
+        wid = s.get("worker_id")
+        if wid and wid not in recent_ids:
+            recent_ids.add(wid)
+            recent.append({"worker_id": wid, "worker_name": s.get("worker_name", ""), "source": "recent"})
+
+    # All active employees
+    all_employees = []
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
+    ).to_list(200)
+    profile_ids = {p["user_id"] for p in profiles}
+
+    users = await db.users.find(
+        {"org_id": org_id, "id": {"$in": list(profile_ids)}},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
+    ).to_list(200)
+    for u in users:
+        name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+        all_employees.append({"worker_id": u["id"], "worker_name": name, "source": "all"})
+
+    # If no profiles, fall back to all org users
+    if not all_employees:
+        all_users = await db.users.find(
+            {"org_id": org_id},
+            {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
+        ).to_list(200)
+        for u in all_users:
+            name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+            all_employees.append({"worker_id": u["id"], "worker_name": name, "source": "all"})
+
+    return {"recent": recent, "all": all_employees}
+
+
+@router.post("/technician/site/{project_id}/roster/copy-yesterday")
+async def copy_yesterday_roster(project_id: str, user: dict = Depends(get_current_user)):
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Find most recent roster before today
+    prev = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": {"$lt": today}},
+        {"_id": 0}, sort=[("date", -1)],
+    )
+    if not prev or not prev.get("workers"):
+        raise HTTPException(status_code=404, detail="No previous roster found")
+
+    existing = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": today})
+    if existing:
+        await db.site_daily_rosters.update_one({"id": existing["id"]}, {"$set": {
+            "workers": prev["workers"], "updated_at": now,
+        }})
+        return await db.site_daily_rosters.find_one({"id": existing["id"]}, {"_id": 0})
+
+    doc = {
+        "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
+        "date": today, "workers": prev["workers"],
+        "created_by": user["id"], "created_at": now, "updated_at": now,
+    }
+    await db.site_daily_rosters.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+# ── Daily Report (DRAFT — NO work_sessions) ───────────────────────
 
 @router.post("/technician/daily-report")
 async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_current_user)):
@@ -262,10 +396,15 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    sessions_created = 0
-    missing_smr_created = []
+    # Get roster for validation
+    roster = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": data.project_id, "date": today}, {"_id": 0}
+    )
+    roster_ids = set()
+    if roster:
+        roster_ids = {w.get("worker_id") for w in roster.get("workers", [])}
 
-    # Get known SMR types for this project
+    # Get known SMR types
     known_types = set()
     budgets = await db.activity_budgets.find(
         {"org_id": org_id, "project_id": data.project_id}, {"_id": 0, "type": 1}
@@ -280,40 +419,61 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
             t = ln.get("activity_type") or ln.get("activity_name", "")
             if t:
                 known_types.add(t.lower())
+    analyses = await db.smr_analyses.find(
+        {"org_id": org_id, "project_id": data.project_id}, {"_id": 0, "lines": 1}
+    ).to_list(50)
+    for a in analyses:
+        for ln in a.get("lines", []):
+            if ln.get("smr_type"):
+                known_types.add(ln["smr_type"].lower())
+
+    missing_smr_created = []
+    draft_ids = []
 
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
-        rate = await _get_hourly_rate(org_id, wid)
 
-        # Create work session
-        session = {
+        # Validate worker is in roster (if roster exists)
+        if roster_ids and wid not in roster_ids and wid != user["id"]:
+            raise HTTPException(status_code=400, detail=f"Worker {wid} not in today's roster")
+
+        # Get worker name
+        worker_name = entry.worker_name
+        if not worker_name and roster:
+            for rw in roster.get("workers", []):
+                if rw.get("worker_id") == wid:
+                    worker_name = rw.get("worker_name", "")
+                    break
+        if not worker_name:
+            worker_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+
+        # Determine SMR source
+        smr_source = "known" if entry.smr_type.lower() in known_types else "manual"
+
+        # Create DRAFT in employee_daily_reports
+        draft = {
             "id": str(uuid.uuid4()),
             "org_id": org_id,
+            "project_id": data.project_id,
+            "date": today,
             "worker_id": wid,
-            "worker_name": entry.worker_name or f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
-            "site_id": data.project_id,
-            "site_name": project.get("name", ""),
-            "smr_type_id": entry.smr_type,
-            "started_at": f"{today}T08:00:00",
-            "ended_at": f"{today}T{8 + int(entry.hours):02d}:{int((entry.hours % 1) * 60):02d}:00",
-            "source_method": "MANUAL",
-            "is_flagged": False,
-            "flag_reason": None,
-            "duration_hours": round(entry.hours, 2),
-            "is_overtime": entry.hours > 8,
-            "overtime_type": "over_8h" if entry.hours > 8 else None,
-            "overtime_coefficient": 1.0,
-            "hourly_rate_at_date": rate,
-            "labor_cost": round(entry.hours * rate, 2),
-            "notes": entry.notes,
+            "worker_name": worker_name,
+            "smr_type": entry.smr_type,
+            "smr_subtype": entry.smr_subtype or "",
+            "hours": round(entry.hours, 2),
+            "notes": entry.notes or "",
+            "location_id": entry.location_id,
+            "smr_source": smr_source,
+            "status": "Draft",
+            "submitted_by": user["id"],
             "created_at": now,
             "updated_at": now,
         }
-        await db.work_sessions.insert_one(session)
-        sessions_created += 1
+        await db.employee_daily_reports.insert_one(draft)
+        draft_ids.append(draft["id"])
 
-        # Check if SMR type is known
-        if entry.smr_type.lower() not in known_types:
+        # Check if SMR type is unknown → create missing_smr
+        if smr_source == "manual":
             ms = {
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
@@ -332,7 +492,7 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
                 "created_at": now,
                 "updated_at": now,
                 "created_by": user["id"],
-                "created_by_name": session["worker_name"],
+                "created_by_name": worker_name,
                 "attachments": [],
                 "client_approval": None,
                 "ai_estimated_price": None,
@@ -345,7 +505,8 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
             await db.missing_smr.insert_one(ms)
             missing_smr_created.append(ms["id"])
 
-    # Create daily report record
+    # Create/update work_report summary
+    total_hours = round(sum(e.hours for e in data.entries), 2)
     report = {
         "id": str(uuid.uuid4()),
         "org_id": org_id,
@@ -355,21 +516,20 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
         "submitted_by": user["id"],
         "submitted_at": now,
         "entries_count": len(data.entries),
-        "total_hours": round(sum(e.hours for e in data.entries), 2),
+        "total_hours": total_hours,
         "general_notes": data.general_notes,
         "photos": data.photos,
         "source": "technician_mobile",
-        "status": "Submitted",
+        "status": "Draft",
     }
-    # Upsert to avoid duplicate key
     existing_report = await db.work_reports.find_one(
         {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}
     )
     if existing_report:
         await db.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
-            "entries_count": report["entries_count"], "total_hours": report["total_hours"],
+            "entries_count": report["entries_count"], "total_hours": total_hours,
             "general_notes": report["general_notes"], "photos": report["photos"],
-            "submitted_at": now, "status": "Submitted",
+            "submitted_at": now, "status": "Draft",
         }})
         report["id"] = existing_report["id"]
     else:
@@ -377,9 +537,10 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
 
     return {
         "report_id": report["id"],
-        "sessions_created": sessions_created,
+        "draft_report_ids": draft_ids,
+        "roster_id": roster["id"] if roster else None,
         "missing_smr_created": missing_smr_created,
-        "total_hours": report["total_hours"],
+        "total_hours": total_hours,
     }
 
 
