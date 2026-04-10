@@ -11,6 +11,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Loader2, Clock, AlertTriangle } from "lucide-react";
+import ActivityReportsList from "@/components/ActivityReportsList";
 
 const STATUS_DOT = {
   green: "bg-emerald-500",
@@ -28,6 +29,7 @@ export default function ProjectActivitiesTable({ projectId }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [drillSmr, setDrillSmr] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -93,7 +95,7 @@ export default function ProjectActivitiesTable({ projectId }) {
                   <TableCell className="text-right">
                     {a.actual_hours > 0 ? (
                       <button
-                        onClick={() => navigate(`/daily-logs?project=${projectId}`)}
+                        onClick={() => setDrillSmr(a.activity_name)}
                         className={`font-mono font-bold px-1.5 py-0.5 rounded ${burnColor} hover:underline`}
                         data-testid={`actual-hours-${i}`}
                       >
@@ -131,6 +133,14 @@ export default function ProjectActivitiesTable({ projectId }) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Level 2 Drill-down */}
+      <ActivityReportsList
+        projectId={projectId}
+        smrType={drillSmr}
+        open={!!drillSmr}
+        onClose={() => setDrillSmr(null)}
+      />
     </div>
   );
 }

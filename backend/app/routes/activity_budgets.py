@@ -769,3 +769,188 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
             "green_count": sum(1 for a in activities if a["status"] == "green"),
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# LEVEL 2: ACTIVITY REPORTS LIST (Фаза 4.1)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/projects/{project_id}/activity-reports/{smr_type}")
+async def get_activity_reports(
+    project_id: str, smr_type: str,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    page: int = 1, page_size: int = 50,
+    user: dict = Depends(get_current_user),
+):
+    """Level 2 drill-down: list reports for a specific activity/smr_type."""
+    org_id = user["org_id"]
+
+    # Find work_sessions matching this project + smr_type
+    ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
+    smr_lower = smr_type.lower().strip()
+    # Match by case-insensitive smr_type_id
+    ws_query["$or"] = [
+        {"smr_type_id": smr_type},
+        {"smr_type_id": {"$regex": f"^{smr_lower}$", "$options": "i"}},
+    ]
+    if date_from:
+        ws_query.setdefault("started_at", {})["$gte"] = f"{date_from}T00:00:00"
+    if date_to:
+        ws_query.setdefault("started_at", {})["$lte"] = f"{date_to}T23:59:59"
+
+    sessions = await db.work_sessions.find(ws_query, {"_id": 0}).sort("started_at", -1).to_list(2000)
+
+    # Group by worker_id + date
+    from collections import defaultdict
+    grouped = defaultdict(lambda: {"hours": 0, "cost": 0, "sessions": [], "rate": 0})
+    for s in sessions:
+        wid = s.get("worker_id", "")
+        d = s.get("started_at", "")[:10]
+        key = f"{wid}|{d}"
+        grouped[key]["hours"] += s.get("duration_hours", 0)
+        grouped[key]["cost"] += s.get("labor_cost", 0)
+        grouped[key]["rate"] = s.get("hourly_rate_at_date", 0)
+        grouped[key]["sessions"].append(s)
+        grouped[key]["worker_id"] = wid
+        grouped[key]["worker_name"] = s.get("worker_name", "")
+        grouped[key]["date"] = d
+        grouped[key]["source_method"] = s.get("source_method", "")
+        grouped[key]["approved_report_id"] = s.get("approved_report_id")
+
+    # Enrich with report info
+    reports = []
+    for key, g in grouped.items():
+        report_status = "Approved" if g.get("approved_report_id") else "Unknown"
+        slip = None
+        created_by = None
+        approved_by = None
+
+        # Try to find the linked report
+        rid = g.get("approved_report_id")
+        if rid:
+            rep = await db.employee_daily_reports.find_one({"id": rid}, {"_id": 0, "approval_status": 1, "status": 1, "slip_number": 1, "submitted_by": 1, "approved_by": 1})
+            if rep:
+                report_status = rep.get("status") or rep.get("approval_status", "Unknown")
+                slip = rep.get("slip_number")
+                approved_by = rep.get("approved_by")
+                created_by = rep.get("submitted_by")
+
+        # Status filter
+        if status and report_status.lower() != status.lower():
+            continue
+
+        reports.append({
+            "worker_id": g["worker_id"],
+            "worker_name": g["worker_name"],
+            "date": g["date"],
+            "total_hours": round(g["hours"], 2),
+            "total_cost": round(g["cost"], 2),
+            "hourly_rate": round(g["rate"], 2),
+            "status": report_status,
+            "slip_number": slip,
+            "created_by": created_by,
+            "approved_by": approved_by,
+            "source_report_id": rid,
+            "session_ids": [s["id"] for s in g["sessions"]],
+            "source_method": g["source_method"],
+        })
+
+    reports.sort(key=lambda x: x["date"], reverse=True)
+
+    # Paginate
+    total = len(reports)
+    start = (page - 1) * page_size
+    paged = reports[start:start + page_size]
+
+    return {
+        "project_id": project_id,
+        "smr_type": smr_type,
+        "reports": paged,
+        "totals": {
+            "total_hours": round(sum(r["total_hours"] for r in reports), 2),
+            "total_cost": round(sum(r["total_cost"] for r in reports), 2),
+            "reports_count": total,
+        },
+        "pagination": {"page": page, "page_size": page_size, "total": total},
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# LEVEL 3: WORKER-DAY DETAIL (Фаза 4.2)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/work-sessions/{session_id}/detail")
+async def get_session_detail(session_id: str, user: dict = Depends(get_current_user)):
+    """Level 3 drill-down: detailed view of a work session / worker-day."""
+    session = await db.work_sessions.find_one(
+        {"id": session_id, "org_id": user["org_id"]}, {"_id": 0}
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    org_id = user["org_id"]
+    wid = session.get("worker_id", "")
+
+    # Worker profile
+    profile = await db.employee_profiles.find_one(
+        {"org_id": org_id, "user_id": wid}, {"_id": 0, "pay_type": 1, "base_salary": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1}
+    )
+    pay_type_raw = (profile.get("pay_type", "Monthly") if profile else "Monthly").strip()
+    pay_type_display = {"Hourly": "Почасово", "Daily": "Дневно", "Monthly": "Месечно"}.get(pay_type_raw, pay_type_raw)
+
+    # Report info
+    rid = session.get("approved_report_id")
+    report_status = "Unknown"
+    slip = None
+    approved_by_name = None
+    approved_at = None
+    created_by_name = None
+    created_at = session.get("created_at")
+    is_paid = None
+
+    if rid:
+        rep = await db.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
+        if rep:
+            report_status = rep.get("status") or rep.get("approval_status", "Unknown")
+            slip = rep.get("slip_number")
+            approved_at = rep.get("approved_at")
+            # Get approver name
+            if rep.get("approved_by"):
+                approver = await db.users.find_one({"id": rep["approved_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+                if approver:
+                    approved_by_name = f"{approver.get('first_name', '')} {approver.get('last_name', '')}".strip()
+            if rep.get("submitted_by"):
+                creator = await db.users.find_one({"id": rep["submitted_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+                if creator:
+                    created_by_name = f"{creator.get('first_name', '')} {creator.get('last_name', '')}".strip()
+            is_paid = rep.get("payroll_ready", False) and report_status == "APPROVED"
+
+    # Project name
+    project = await db.projects.find_one({"id": session.get("site_id")}, {"_id": 0, "name": 1})
+
+    return {
+        "session_id": session_id,
+        "worker_name": session.get("worker_name", ""),
+        "worker_id": wid,
+        "date": session.get("started_at", "")[:10],
+        "project_name": (project or {}).get("name", ""),
+        "project_id": session.get("site_id", ""),
+        "smr_type": session.get("smr_type_id", ""),
+        "pay_type": pay_type_display,
+        "hourly_rate": session.get("hourly_rate_at_date", 0),
+        "hours": session.get("duration_hours", 0),
+        "total_cost": session.get("labor_cost", 0),
+        "slip_number": slip,
+        "status": report_status,
+        "approved_by_name": approved_by_name,
+        "approved_at": approved_at,
+        "created_by_name": created_by_name,
+        "created_at": created_at,
+        "updated_at": session.get("updated_at"),
+        "is_paid": is_paid,
+        "is_overtime": session.get("is_overtime", False),
+        "overtime_type": session.get("overtime_type"),
+        "source_method": session.get("source_method", ""),
+    }
