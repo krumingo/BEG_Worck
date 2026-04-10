@@ -156,43 +156,66 @@ async def my_sites(user: dict = Depends(get_current_user)):
 async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
 
-    # From activity budgets
+    tasks = []
+    seen = set()
+
+    def _add(smr_type, smr_subtype="", unit="m2", qty=0, source=""):
+        key = smr_type.strip().lower()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        tasks.append({
+            "smr_type": smr_type.strip(), "smr_subtype": smr_subtype,
+            "unit": unit, "qty_total": qty, "qty_completed": 0,
+            "status": "active", "source": source,
+        })
+
+    # 1. Activity budgets
     budgets = await db.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "type": 1, "subtype": 1, "labor_budget": 1},
+        {"_id": 0, "type": 1, "subtype": 1},
     ).to_list(100)
+    for b in budgets:
+        _add(b["type"], b.get("subtype", ""), source="budget")
 
-    # From offer lines
+    # 2. Offer lines
     offers = await db.offers.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["Accepted", "Sent", "Draft"]}},
         {"_id": 0, "lines": 1},
     ).to_list(50)
-
-    tasks = []
-    seen = set()
-    for b in budgets:
-        key = f"{b['type']}|{b.get('subtype', '')}"
-        if key not in seen:
-            seen.add(key)
-            tasks.append({
-                "smr_type": b["type"], "smr_subtype": b.get("subtype", ""),
-                "unit": "m2", "qty_total": 0, "qty_completed": 0,
-                "status": "active",
-            })
-
     for o in offers:
         for ln in o.get("lines", []):
-            key = f"{ln.get('activity_type', '')}|{ln.get('activity_subtype', '')}"
-            if key not in seen:
-                seen.add(key)
-                tasks.append({
-                    "smr_type": ln.get("activity_type") or ln.get("activity_name", ""),
-                    "smr_subtype": ln.get("activity_subtype", ""),
-                    "unit": ln.get("unit", "m2"),
-                    "qty_total": ln.get("qty", 0),
-                    "qty_completed": 0,
-                    "status": "active",
-                })
+            t = ln.get("activity_type") or ln.get("activity_name", "")
+            if t:
+                _add(t, ln.get("activity_subtype", ""), ln.get("unit", "m2"), ln.get("qty", 0), "offer")
+
+    # 3. SMR analysis lines
+    analyses = await db.smr_analyses.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "lines": 1},
+    ).to_list(50)
+    for a in analyses:
+        for ln in a.get("lines", []):
+            if ln.get("smr_type"):
+                _add(ln["smr_type"], ln.get("smr_subtype", ""), ln.get("unit", "m2"), ln.get("qty", 0), "analysis")
+
+    # 4. Missing SMR records
+    missing = await db.missing_smr.find(
+        {"org_id": org_id, "project_id": project_id, "status": {"$nin": ["closed", "rejected_by_client"]}},
+        {"_id": 0, "smr_type": 1, "activity_type": 1, "unit": 1, "qty": 1},
+    ).to_list(100)
+    for m in missing:
+        t = m.get("smr_type") or m.get("activity_type", "")
+        if t:
+            _add(t, "", m.get("unit", "m2"), m.get("qty", 0), "missing_smr")
+
+    # 5. Past work_sessions SMR types (previously reported)
+    distinct_types = await db.work_sessions.distinct(
+        "smr_type_id", {"org_id": org_id, "site_id": project_id, "smr_type_id": {"$ne": None}}
+    )
+    for t in distinct_types:
+        if t:
+            _add(t, source="history")
 
     return {"tasks": tasks, "total": len(tasks)}
 

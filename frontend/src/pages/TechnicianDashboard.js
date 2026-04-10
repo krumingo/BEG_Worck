@@ -12,6 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
@@ -32,6 +35,10 @@ export default function TechnicianDashboard() {
   const [generalNotes, setGeneralNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Available tasks for selected site
+  const [availableTasks, setAvailableTasks] = useState([]);
+  const [customSmrMode, setCustomSmrMode] = useState({});  // {entryId: true} for entries using free text
+
   // Quick SMR
   const [showQuickSMR, setShowQuickSMR] = useState(false);
   const [quickType, setQuickType] = useState("");
@@ -48,10 +55,18 @@ export default function TechnicianDashboard() {
 
   useEffect(() => { loadSites(); }, [loadSites]);
 
-  const openSite = (site) => {
+  const openSite = async (site) => {
     setSelectedSite(site);
     setEntries([{ id: Date.now(), worker_name: `${user?.first_name || ""} ${user?.last_name || ""}`.trim(), smr_type: "", hours: "8", notes: "" }]);
     setGeneralNotes("");
+    setCustomSmrMode({});
+    // Load available tasks for this site
+    try {
+      const res = await API.get(`/technician/site/${site.project_id}/tasks`);
+      setAvailableTasks(res.data.tasks || []);
+    } catch {
+      setAvailableTasks([]);
+    }
   };
 
   const addEntry = () => setEntries(prev => [...prev, { id: Date.now(), worker_name: "", smr_type: "", hours: "", notes: "" }]);
@@ -145,7 +160,39 @@ export default function TechnicianDashboard() {
                   <Button variant="ghost" size="sm" onClick={() => removeEntry(entry.id)} className="h-11"><Trash2 className="w-4 h-4 text-red-400" /></Button>
                 )}
               </div>
-              <Input value={entry.smr_type} onChange={e => setEntry(entry.id, "smr_type", e.target.value)} placeholder={t("technician.smrType")} className="h-11 text-base" data-testid="entry-smr-type" />
+              {/* SMR Type: Select from available tasks, or free text */}
+              {availableTasks.length > 0 && !customSmrMode[entry.id] ? (
+                <Select value={entry.smr_type || "none"} onValueChange={v => {
+                  if (v === "__custom__") {
+                    setCustomSmrMode(prev => ({ ...prev, [entry.id]: true }));
+                    setEntry(entry.id, "smr_type", "");
+                  } else if (v !== "none") {
+                    setEntry(entry.id, "smr_type", v);
+                  }
+                }}>
+                  <SelectTrigger className="h-11 text-base" data-testid="entry-smr-type">
+                    <SelectValue placeholder={t("technician.selectSmr")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>
+                    {availableTasks.map((task, idx) => (
+                      <SelectItem key={`${task.smr_type}-${idx}`} value={task.smr_type}>
+                        {task.smr_type}{task.smr_subtype ? ` / ${task.smr_subtype}` : ""}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">{t("technician.otherSmr")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex gap-2">
+                  <Input value={entry.smr_type} onChange={e => setEntry(entry.id, "smr_type", e.target.value)} placeholder={t("technician.smrType")} className="h-11 text-base flex-1" data-testid="entry-smr-type" />
+                  {availableTasks.length > 0 && (
+                    <Button variant="outline" size="sm" className="h-11 text-xs" onClick={() => { setCustomSmrMode(prev => ({ ...prev, [entry.id]: false })); setEntry(entry.id, "smr_type", ""); }}>
+                      {t("technician.pickFromList")}
+                    </Button>
+                  )}
+                </div>
+              )}
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Input type="number" value={entry.hours} onChange={e => setEntry(entry.id, "hours", e.target.value)} placeholder={t("technician.hours")} className="h-11 text-base" min="0" max="24" step="0.5" data-testid="entry-hours" />
