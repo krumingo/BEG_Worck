@@ -15,6 +15,27 @@ from app.deps.modules import require_m4
 router = APIRouter(tags=["Employee Daily Reports"])
 
 
+# ── Helpers ────────────────────────────────────────────────────────
+
+async def _get_hourly_rate_for_approval(org_id: str, worker_id: str) -> float:
+    """Get hourly rate from employee profile for work_session creation."""
+    profile = await db.employee_profiles.find_one(
+        {"org_id": org_id, "user_id": worker_id}, {"_id": 0}
+    )
+    if not profile:
+        return 0
+    pay = (profile.get("pay_type") or "Monthly").strip()
+    if pay == "Hourly":
+        return float(profile.get("hourly_rate") or 0)
+    elif pay == "Daily":
+        return round(float(profile.get("daily_rate") or profile.get("base_salary") or 0) / 8, 2)
+    else:
+        ms = float(profile.get("monthly_salary") or profile.get("base_salary") or 0)
+        days = int(profile.get("working_days_per_month") or 22)
+        hours = int(profile.get("standard_hours_per_day") or 8)
+        return round(ms / max(days * hours, 1), 2)
+
+
 # ── Models ─────────────────────────────────────────────────────────
 
 class DayEntryInput(BaseModel):
@@ -148,12 +169,105 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
     report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if report["approval_status"] != "SUBMITTED":
-        raise HTTPException(status_code=400, detail="Only SUBMITTED reports can be approved")
+
+    # Support both old (approval_status) and new (status) naming
+    current_status = report.get("approval_status") or report.get("status", "")
+    if current_status not in ["SUBMITTED", "Draft", "Submitted"]:
+        raise HTTPException(status_code=400, detail=f"Only SUBMITTED/Draft reports can be approved (current: {current_status})")
+
     now = datetime.now(timezone.utc).isoformat()
-    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
-        "approval_status": "APPROVED", "approved_by": user["id"], "approved_at": now, "updated_at": now,
-    }})
+    org_id = user["org_id"]
+
+    # A) Generate slip number (per-org auto-increment)
+    counter = await db.org_counters.find_one_and_update(
+        {"org_id": org_id, "counter_type": "slip_number"},
+        {"$inc": {"value": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    slip_number = counter["value"] if counter and "_id" in counter else 1
+    # Handle case where find_one_and_update returns the pre-update doc
+    if isinstance(counter, dict) and "value" in counter:
+        slip_number = counter["value"]
+
+    # B) Create work_session from this entry (if it has worker_id + hours)
+    worker_id = report.get("worker_id")
+    hours = report.get("hours") or report.get("hours_worked", 0)
+    project_id = report.get("project_id")
+    smr_type = report.get("smr_type") or report.get("activity_type", "")
+    report_date = report.get("date", now[:10])
+
+    sessions_created = 0
+    if worker_id and hours and hours > 0 and project_id:
+        # Check for existing session (avoid duplicate)
+        existing_ws = await db.work_sessions.find_one({
+            "org_id": org_id, "worker_id": worker_id, "site_id": project_id,
+            "smr_type_id": smr_type,
+            "started_at": {"$gte": f"{report_date}T00:00:00", "$lte": f"{report_date}T23:59:59"},
+            "source_method": "APPROVED_REPORT",
+        })
+        if not existing_ws:
+            # Get hourly rate
+            rate = await _get_hourly_rate_for_approval(org_id, worker_id)
+
+            project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
+            session = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "worker_id": worker_id,
+                "worker_name": report.get("worker_name", ""),
+                "site_id": project_id,
+                "site_name": (project or {}).get("name", ""),
+                "smr_type_id": smr_type,
+                "started_at": f"{report_date}T08:00:00",
+                "ended_at": f"{report_date}T{8 + int(hours):02d}:{int((hours % 1) * 60):02d}:00",
+                "source_method": "APPROVED_REPORT",
+                "is_flagged": False,
+                "flag_reason": None,
+                "duration_hours": round(hours, 2),
+                "is_overtime": hours > 8,
+                "overtime_type": "over_8h" if hours > 8 else None,
+                "overtime_coefficient": 1.0,
+                "hourly_rate_at_date": rate,
+                "labor_cost": round(hours * rate, 2),
+                "notes": report.get("notes", ""),
+                "approved_report_id": report_id,
+                "created_at": now,
+                "updated_at": now,
+            }
+            await db.work_sessions.insert_one(session)
+            sessions_created = 1
+
+        # C) Update worker_calendar
+        cal_existing = await db.worker_calendar.find_one(
+            {"org_id": org_id, "worker_id": worker_id, "date": report_date}
+        )
+        cal_doc = {
+            "org_id": org_id, "worker_id": worker_id, "date": report_date,
+            "status": "working", "site_id": project_id,
+            "hours": round(hours, 2), "source": "approved_report",
+            "updated_at": now,
+        }
+        if cal_existing:
+            await db.worker_calendar.update_one({"id": cal_existing["id"]}, {"$set": cal_doc})
+        else:
+            cal_doc["id"] = str(uuid.uuid4())
+            cal_doc["created_at"] = now
+            cal_doc["created_by"] = "system"
+            await db.worker_calendar.insert_one(cal_doc)
+
+    # D) Update report status + metadata
+    update = {
+        "approval_status": "APPROVED",
+        "status": "APPROVED",
+        "approved_by": user["id"],
+        "approved_at": now,
+        "updated_at": now,
+        "slip_number": slip_number,
+        "payroll_ready": True,
+        "sessions_created": sessions_created,
+    }
+    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
     return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -164,11 +278,55 @@ async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depe
     report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if report["approval_status"] != "SUBMITTED":
-        raise HTTPException(status_code=400, detail="Only SUBMITTED reports can be rejected")
+    current_status = report.get("approval_status") or report.get("status", "")
+    if current_status not in ["SUBMITTED", "Draft", "Submitted"]:
+        raise HTTPException(status_code=400, detail="Only SUBMITTED/Draft reports can be rejected")
     now = datetime.now(timezone.utc).isoformat()
     await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
-        "approval_status": "REJECTED", "reject_reason": data.get("reason", ""), "updated_at": now,
+        "approval_status": "REJECTED", "status": "REJECTED",
+        "reject_reason": data.get("reason", ""), "updated_at": now,
+    }})
+    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+
+
+@router.post("/daily-reports/{report_id}/reset")
+async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
+    """Reset an APPROVED report back to SUBMITTED. Voids created work_sessions."""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner can reset")
+    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    current_status = report.get("approval_status") or report.get("status", "")
+    if current_status != "APPROVED":
+        raise HTTPException(status_code=400, detail="Only APPROVED reports can be reset")
+
+    # Check payroll not finalized for this period
+    report_date = report.get("date", "")
+    if report_date:
+        finalized = await db.payroll_runs.find_one({
+            "org_id": user["org_id"],
+            "status": {"$in": ["Finalized", "Paid"]},
+            "period_start": {"$lte": report_date},
+            "period_end": {"$gte": report_date},
+        })
+        if finalized:
+            raise HTTPException(status_code=400, detail="Cannot reset: payroll for this period is finalized")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Void work_sessions created by this report
+    await db.work_sessions.update_many(
+        {"approved_report_id": report_id, "org_id": user["org_id"]},
+        {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
+    )
+
+    # Reset report
+    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+        "approval_status": "SUBMITTED", "status": "SUBMITTED",
+        "approved_by": None, "approved_at": None,
+        "payroll_ready": False, "sessions_created": 0,
+        "updated_at": now,
     }})
     return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
