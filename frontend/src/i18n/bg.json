@@ -217,7 +217,8 @@
     "reference": "Справочници",
     "alarms": "Аларми",
     "techView": "Терен",
-    "techDashboard": "Моят работен ден"
+    "techDashboard": "Моят работен ден",
+    "ocrInvoices": "OCR Фактури"
   },
   "dashboard": {
     "title": "Табло",
@@ -1957,5 +1958,32 @@
     "fillRequired": "Въведете подизпълнител",
     "added": "Записът е добавен",
     "noData": "Няма записи за изпълнение"
+  },
+  "ocrInvoice": {
+    "title": "OCR Фактури",
+    "subtitle": "Качване и автоматично разпознаване на фактури",
+    "upload": "Качи фактура",
+    "uploaded": "Фактурата е качена и обработена",
+    "project": "Проект",
+    "file": "Файл",
+    "supplier": "Доставчик",
+    "amount": "Сума",
+    "confidence": "Увереност",
+    "noItems": "Няма качени фактури",
+    "review": "Преглед на фактура",
+    "supplierName": "Доставчик",
+    "invoiceNumber": "Номер фактура",
+    "invoiceDate": "Дата",
+    "totalAmount": "Обща сума",
+    "vatAmount": "ДДС",
+    "currency": "Валута",
+    "notes": "Бележки",
+    "rawText": "Суров текст",
+    "saveReview": "Запази преглед",
+    "approve": "Одобри",
+    "reject": "Откажи",
+    "reviewed": "Прегледът е запазен",
+    "approved": "Фактурата е одобрена",
+    "rejected": "Фактурата е отказана"
   }
 }

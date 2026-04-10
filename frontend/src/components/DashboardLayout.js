@@ -10,7 +10,7 @@ import {
   Wallet, UserCog, Landmark, Calculator, CreditCard, Smartphone,
   User, Package, Truck, RotateCcw, Settings, HelpCircle, Info,
   Menu, X, Lock, Archive, Warehouse, TrendingUp, BarChart3,
-  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase,
+  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -67,6 +67,7 @@ const NAV_GROUPS = [
     children: [
       { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
       { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
+      { to: "/ocr-invoices", icon: ScanLine, labelKey: "nav.ocrInvoices" },
       { to: "/reports/finance-details", icon: BarChart3, labelKey: "nav.financeDetails" },
     ],
   },

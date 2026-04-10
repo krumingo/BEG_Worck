@@ -203,7 +203,8 @@
     "reference": "Reference",
     "alarms": "Alarms",
     "techView": "Field",
-    "techDashboard": "My Workday"
+    "techDashboard": "My Workday",
+    "ocrInvoices": "OCR Invoices"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1775,5 +1776,32 @@
     "fillRequired": "Enter subcontractor",
     "added": "Record added",
     "noData": "No performance records"
+  },
+  "ocrInvoice": {
+    "title": "OCR Invoices",
+    "subtitle": "Upload and auto-recognize invoices",
+    "upload": "Upload Invoice",
+    "uploaded": "Invoice uploaded and processed",
+    "project": "Project",
+    "file": "File",
+    "supplier": "Supplier",
+    "amount": "Amount",
+    "confidence": "Confidence",
+    "noItems": "No uploaded invoices",
+    "review": "Invoice Review",
+    "supplierName": "Supplier",
+    "invoiceNumber": "Invoice Number",
+    "invoiceDate": "Date",
+    "totalAmount": "Total Amount",
+    "vatAmount": "VAT",
+    "currency": "Currency",
+    "notes": "Notes",
+    "rawText": "Raw Text",
+    "saveReview": "Save Review",
+    "approve": "Approve",
+    "reject": "Reject",
+    "reviewed": "Review saved",
+    "approved": "Invoice approved",
+    "rejected": "Invoice rejected"
   }
 }

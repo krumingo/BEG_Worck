@@ -1,0 +1,5 @@
+Firma Test EOOD
+Faktura No 12345
+Data: 01.04.2026
+Obshto: 1500.00 lv
+DDS: 250.00

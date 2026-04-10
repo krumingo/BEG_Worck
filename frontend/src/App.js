@@ -73,6 +73,7 @@ import WorkerCalendarPage from "@/pages/WorkerCalendarPage";
 import AlarmsDashboardPage from "@/pages/AlarmsDashboardPage";
 import TechnicianDashboard from "@/pages/TechnicianDashboard";
 import ClientDetailPage from "@/pages/ClientDetailPage";
+import OCRInvoicePage from "@/pages/OCRInvoicePage";
 // Platform Admin Pages
 import PlatformLoginPage from "@/pages/PlatformLoginPage";
 import PlatformDashboardPage from "@/pages/PlatformDashboardPage";
@@ -213,6 +214,7 @@ function AppRoutes() {
       <Route path="/alarms" element={<CompanyProtectedRoute><AlarmsDashboardPage /></CompanyProtectedRoute>} />
       <Route path="/tech" element={<CompanyProtectedRoute><TechnicianDashboard /></CompanyProtectedRoute>} />
       <Route path="/clients/:clientId" element={<CompanyProtectedRoute><ClientDetailPage /></CompanyProtectedRoute>} />
+      <Route path="/ocr-invoices" element={<CompanyProtectedRoute><OCRInvoicePage /></CompanyProtectedRoute>} />
       <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
       <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
       
