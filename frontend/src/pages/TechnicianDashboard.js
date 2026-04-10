@@ -177,7 +177,8 @@ export default function TechnicianDashboard() {
                     <SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>
                     {availableTasks.map((task, idx) => (
                       <SelectItem key={`${task.smr_type}-${idx}`} value={task.smr_type}>
-                        {task.smr_type}{task.smr_subtype ? ` / ${task.smr_subtype}` : ""}
+                        <span>{task.smr_type}{task.smr_subtype ? ` / ${task.smr_subtype}` : ""}</span>
+                        {task.source === "budget" && <span className="ml-2 text-[10px] text-muted-foreground opacity-60">(план)</span>}
                       </SelectItem>
                     ))}
                     <SelectItem value="__custom__">{t("technician.otherSmr")}</SelectItem>

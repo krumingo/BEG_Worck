@@ -156,21 +156,45 @@ async def my_sites(user: dict = Depends(get_current_user)):
 async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
 
-    tasks = []
-    seen = set()
+    # Priority order: 1=budget, 2=offer, 3=analysis, 4=missing_smr, 5=history
+    SOURCE_PRIORITY = {"budget": 1, "offer": 2, "analysis": 3, "missing_smr": 4, "history": 5}
+
+    # Dev/test noise patterns (case-insensitive prefix check)
+    NOISE_PREFIXES = ("test_", "тест_", "dummy", "sample", "todo", "tmp_")
+
+    seen = {}  # key(lower) → task dict
+    primary_count = 0  # count from sources 1-4
+
+    def _is_noise(name: str) -> bool:
+        low = name.lower()
+        return any(low.startswith(p) for p in NOISE_PREFIXES)
 
     def _add(smr_type, smr_subtype="", unit="m2", qty=0, source=""):
-        key = smr_type.strip().lower()
-        if not key or key in seen:
+        name = (smr_type or "").strip()
+        if not name:
             return
-        seen.add(key)
-        tasks.append({
-            "smr_type": smr_type.strip(), "smr_subtype": smr_subtype,
+        if _is_noise(name):
+            return
+        key = name.lower()
+        existing = seen.get(key)
+        if existing:
+            # Keep higher-priority source
+            if SOURCE_PRIORITY.get(source, 9) < SOURCE_PRIORITY.get(existing["source"], 9):
+                existing["smr_type"] = name
+                existing["smr_subtype"] = smr_subtype
+                existing["source"] = source
+                if qty > 0:
+                    existing["qty_total"] = qty
+                if unit != "m2":
+                    existing["unit"] = unit
+            return
+        seen[key] = {
+            "smr_type": name, "smr_subtype": smr_subtype,
             "unit": unit, "qty_total": qty, "qty_completed": 0,
             "status": "active", "source": source,
-        })
+        }
 
-    # 1. Activity budgets
+    # 1. Activity budgets (highest priority)
     budgets = await db.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "type": 1, "subtype": 1},
@@ -209,13 +233,19 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
         if t:
             _add(t, "", m.get("unit", "m2"), m.get("qty", 0), "missing_smr")
 
-    # 5. Past work_sessions SMR types (previously reported)
-    distinct_types = await db.work_sessions.distinct(
-        "smr_type_id", {"org_id": org_id, "site_id": project_id, "smr_type_id": {"$ne": None}}
-    )
-    for t in distinct_types:
-        if t:
-            _add(t, source="history")
+    primary_count = len(seen)
+
+    # 5. History (only if primary sources yielded < 3 tasks)
+    if primary_count < 3:
+        distinct_types = await db.work_sessions.distinct(
+            "smr_type_id", {"org_id": org_id, "site_id": project_id, "smr_type_id": {"$ne": None}}
+        )
+        for t in distinct_types:
+            if t:
+                _add(t, source="history")
+
+    # Sort: by source priority, then alphabetically
+    tasks = sorted(seen.values(), key=lambda x: (SOURCE_PRIORITY.get(x["source"], 9), x["smr_type"]))
 
     return {"tasks": tasks, "total": len(tasks)}
 
