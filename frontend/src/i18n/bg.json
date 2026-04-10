@@ -1916,6 +1916,21 @@
     "variance": "Откл.",
     "noData": "Няма данни за сравнение"
   },
+  "activitiesTable": {
+    "title": "Дейности по проекта",
+    "noData": "Няма бюджетни дейности",
+    "section": "Раздел",
+    "activity": "Дейност",
+    "unit": "Мярка",
+    "material": "Материал",
+    "labor": "Труд",
+    "total": "Общо",
+    "forecastHH": "Прогноза ч.ч.",
+    "reportHH": "Отчет ч.ч.",
+    "label": "Етикет",
+    "extraWork": "Допълнителна работа",
+    "totalRow": "ОБЩО"
+  },
   "materialWaste": {
     "title": "Материални отклонения",
     "addWaste": "Добави отпадък / брак",

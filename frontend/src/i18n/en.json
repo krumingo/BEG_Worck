@@ -1734,6 +1734,21 @@
     "variance": "Var.",
     "noData": "No comparison data"
   },
+  "activitiesTable": {
+    "title": "Project Activities",
+    "noData": "No budget activities",
+    "section": "Section",
+    "activity": "Activity",
+    "unit": "Unit",
+    "material": "Material",
+    "labor": "Labor",
+    "total": "Total",
+    "forecastHH": "Forecast MH",
+    "reportHH": "Report MH",
+    "label": "Label",
+    "extraWork": "Extra Work",
+    "totalRow": "TOTAL"
+  },
   "materialWaste": {
     "title": "Material Variance",
     "addWaste": "Add Waste / Scrap",

@@ -622,3 +622,150 @@ async def get_earned_value(project_id: str, user: dict = Depends(get_current_use
         "progress_pct": round(progress_pct * 100, 1),
         "status": status,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ACTIVITIES OVERVIEW (Фаза 3.1)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/projects/{project_id}/activities-overview")
+async def get_activities_overview(project_id: str, user: dict = Depends(get_current_user)):
+    """Full activities table: budget + actuals + extras + status."""
+    if not await can_access_project(user, project_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    org_id = user["org_id"]
+    from app.services.budget_formula import calculate_budget_formula_sync
+
+    # 1. Budget lines
+    budgets = await db.activity_budgets.find(
+        {"org_id": org_id, "project_id": project_id}, {"_id": 0}
+    ).to_list(200)
+
+    # 2. Actual hours/cost from work_sessions grouped by smr_type
+    sessions = await db.work_sessions.find(
+        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
+        {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1},
+    ).to_list(5000)
+
+    actuals_by_type = {}
+    for s in sessions:
+        key = (s.get("smr_type_id") or "").lower().strip()
+        if not key:
+            continue
+        if key not in actuals_by_type:
+            actuals_by_type[key] = {"hours": 0, "cost": 0}
+        actuals_by_type[key]["hours"] += s.get("duration_hours", 0)
+        actuals_by_type[key]["cost"] += s.get("labor_cost", 0)
+
+    # 3. Extra work (missing_smr + extra_work_drafts)
+    missing = await db.missing_smr.find(
+        {"org_id": org_id, "project_id": project_id, "status": {"$nin": ["closed", "rejected_by_client"]}},
+        {"_id": 0, "id": 1, "smr_type": 1, "activity_type": 1, "qty": 1, "unit": 1, "notes": 1},
+    ).to_list(200)
+
+    # 4. Build activities list
+    activities = []
+    seen_types = set()
+
+    # A) From budget lines
+    for b in budgets:
+        btype = b.get("type", "")
+        bsub = b.get("subtype", "")
+        name = bsub if bsub else btype
+        key = name.lower().strip()
+        seen_types.add(key)
+
+        lb = b.get("labor_budget", 0)
+        mb = b.get("materials_budget", 0)
+        planned_mh = b.get("planned_man_hours")
+        if planned_mh is None:
+            coeff = b.get("coefficient", 1.0) or 1.0
+            wage = b.get("avg_daily_wage_at_calc") or 200
+            r = calculate_budget_formula_sync(lb, coeff, wage)
+            planned_mh = r["planned_man_hours"]
+
+        actual = actuals_by_type.get(key, {"hours": 0, "cost": 0})
+        # Also check by type key
+        if actual["hours"] == 0:
+            actual = actuals_by_type.get(btype.lower().strip(), {"hours": 0, "cost": 0})
+
+        ah = round(actual["hours"], 1)
+        ac = round(actual["cost"], 2)
+        burn = round(ah / planned_mh * 100, 1) if planned_mh > 0 else 0
+        status = "green" if burn < 80 else ("yellow" if burn <= 100 else "red")
+
+        activities.append({
+            "budget_id": b.get("id"),
+            "category": btype,
+            "activity_name": name,
+            "unit": "m2",
+            "qty": 0,
+            "material_budget": round(mb, 2),
+            "labor_budget": round(lb, 2),
+            "total_budget": round(mb + lb, 2),
+            "planned_man_hours": round(planned_mh, 1),
+            "actual_hours": ah,
+            "actual_cost": ac,
+            "burn_pct": burn,
+            "status": status,
+            "subcontractor_price": None,
+            "is_extra": False,
+            "source": "budget",
+            "notes": b.get("notes", ""),
+        })
+
+    # B) From extra works (missing_smr not already in budget)
+    for m in missing:
+        name = m.get("smr_type") or m.get("activity_type", "")
+        key = name.lower().strip()
+        if key in seen_types:
+            continue
+        seen_types.add(key)
+
+        actual = actuals_by_type.get(key, {"hours": 0, "cost": 0})
+        ah = round(actual["hours"], 1)
+
+        activities.append({
+            "budget_id": None,
+            "category": "Допълнителни",
+            "activity_name": name,
+            "unit": m.get("unit", ""),
+            "qty": m.get("qty", 0),
+            "material_budget": 0,
+            "labor_budget": 0,
+            "total_budget": 0,
+            "planned_man_hours": 0,
+            "actual_hours": ah,
+            "actual_cost": round(actual["cost"], 2),
+            "burn_pct": 0,
+            "status": "green" if ah == 0 else "yellow",
+            "subcontractor_price": None,
+            "is_extra": True,
+            "source": "missing_smr",
+            "notes": m.get("notes", ""),
+        })
+
+    # 5. Totals
+    total_planned = round(sum(a["planned_man_hours"] for a in activities), 1)
+    total_actual = round(sum(a["actual_hours"] for a in activities), 1)
+    total_lb = round(sum(a["labor_budget"] for a in activities), 2)
+    total_ac = round(sum(a["actual_cost"] for a in activities), 2)
+    total_burn = round(total_actual / total_planned * 100, 1) if total_planned > 0 else 0
+
+    return {
+        "project_id": project_id,
+        "activities": activities,
+        "totals": {
+            "total_planned_hours": total_planned,
+            "total_actual_hours": total_actual,
+            "total_burn_pct": total_burn,
+            "total_labor_budget": total_lb,
+            "total_actual_cost": total_ac,
+            "activities_count": len(activities),
+            "extra_count": sum(1 for a in activities if a["is_extra"]),
+            "red_count": sum(1 for a in activities if a["status"] == "red"),
+            "yellow_count": sum(1 for a in activities if a["status"] == "yellow"),
+            "green_count": sum(1 for a in activities if a["status"] == "green"),
+        },
+    }
