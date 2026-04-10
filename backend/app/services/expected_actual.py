@@ -3,6 +3,7 @@ Service - Expected vs Actual comparison layer.
 Compares planned (budgets/analyses) vs real (work_sessions) by activity, group, location.
 """
 from app.db import db
+from app.routes.activity_budgets import compute_avg_daily_wage, DEFAULT_DAILY_WAGE
 
 
 def _status(actual, planned):
@@ -23,6 +24,10 @@ def _variance_pct(actual, planned):
 
 
 async def build_expected_actual(org_id: str, project_id: str, date_from: str = None, date_to: str = None) -> dict:
+    # ── Compute real hourly rate for this project ────────────────
+    avg_daily = await compute_avg_daily_wage(org_id, project_id)
+    hourly_rate = round(avg_daily / 8, 2) if avg_daily > 0 else round(DEFAULT_DAILY_WAGE / 8, 2)
+
     # ── Planned data ────────────────────────────────────────────
     budgets = await db.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
@@ -36,8 +41,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         lb = b.get("labor_budget", 0)
         planned_by_type[key]["cost"] += lb
         coeff = b.get("coefficient", 1) or 1
-        # Estimate hours from budget: hours = budget / avg_rate. Use default 25/h
-        planned_by_type[key]["hours"] += round(lb / 25 / coeff, 1) if lb > 0 else 0
+        planned_by_type[key]["hours"] += round(lb / hourly_rate / coeff, 1) if lb > 0 else 0
 
     # ── Actual data (work_sessions) ─────────────────────────────
     ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
@@ -91,7 +95,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             for ln in a.get("lines", []):
                 if ln.get("group_id") == g["id"] and ln.get("is_active", True):
                     planned_c += ln.get("final_total", 0)
-                    planned_h += (ln.get("labor_price_per_unit", 0) * ln.get("qty", 0)) / 25 if ln.get("labor_price_per_unit") else 0
+                    planned_h += (ln.get("labor_price_per_unit", 0) * ln.get("qty", 0)) / hourly_rate if ln.get("labor_price_per_unit") else 0
 
         # Actual from sessions with matching smr_type
         actual_h = 0
