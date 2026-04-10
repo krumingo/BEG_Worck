@@ -46,6 +46,9 @@ async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = De
 
     now = datetime.now(timezone.utc).isoformat()
     pkg_snapshots = []
+    # FUTURE TODO: align planned_hours with budget_formula.py
+    # Currently reads from execution_packages.planned_hours which is a separate model.
+    # See /app/memory/SOURCE_OF_TRUTH.md
     totals = {"material": 0, "labor": 0, "subcontract": 0, "overhead": 0, "planned_hours": 0}
 
     for pkg in pkgs:

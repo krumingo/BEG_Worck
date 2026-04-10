@@ -357,9 +357,12 @@ async def get_forecast(budget_id: str, user: dict = Depends(get_current_user)):
     ppd = budget.get("planned_people_per_day")
     ptd = budget.get("planned_target_days")
 
-    avg_daily = await compute_avg_daily_wage(user["org_id"], budget["project_id"])
-
-    man_days = round(labor_budget / avg_daily / coefficient, 2) if avg_daily > 0 and coefficient > 0 else 0
+    from app.services.budget_formula import calculate_budget_formula
+    result = await calculate_budget_formula(
+        labor_budget, coefficient, org_id=user["org_id"], project_id=budget["project_id"]
+    )
+    man_days = result["planned_man_days"]
+    avg_daily = result["avg_daily_wage_used"]
     min_days = math.ceil(man_days / ppd) if ppd and ppd > 0 else None
     min_people = math.ceil(man_days / ptd) if ptd and ptd > 0 else None
 
@@ -387,23 +390,21 @@ async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depen
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
-    labor_budget = budget.get("labor_budget", 0)
-    coefficient = budget.get("coefficient", 1.0) or 1.0
-    avg_daily = await compute_avg_daily_wage(user["org_id"], project_id)
-    hours_per_day = 8
-
-    akord = round(labor_budget / coefficient, 2) if coefficient > 0 else 0
-    planned_man_days = round(akord / avg_daily, 2) if avg_daily > 0 else 0
-    planned_man_hours = round(planned_man_days * hours_per_day, 2)
+    from app.services.budget_formula import calculate_budget_formula
+    result = await calculate_budget_formula(
+        budget.get("labor_budget", 0),
+        budget.get("coefficient", 1.0),
+        org_id=user["org_id"], project_id=project_id,
+    )
 
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
-        "planned_man_hours": planned_man_hours,
-        "planned_man_days": planned_man_days,
-        "akord": akord,
-        "avg_daily_wage_at_calc": avg_daily,
-        "hours_per_day_at_calc": hours_per_day,
-        "coefficient_at_calc": coefficient,
+        "planned_man_hours": result["planned_man_hours"],
+        "planned_man_days": result["planned_man_days"],
+        "akord": result["akord"],
+        "avg_daily_wage_at_calc": result["avg_daily_wage_used"],
+        "hours_per_day_at_calc": result["hours_per_day_used"],
+        "coefficient_at_calc": result["coefficient_used"],
         "currency_at_calc": "EUR",
         "snapshot_calculated_at": now,
         "updated_at": now,
@@ -415,30 +416,28 @@ async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depen
 @router.post("/projects/{project_id}/activity-budgets/calculate-all-snapshots")
 async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_current_user)):
     """Calculate snapshots for ALL budget lines in a project."""
+    from app.services.budget_formula import calculate_budget_formula_sync
     org_id = user["org_id"]
     budgets = await db.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
+    # Compute wage once for the project
     avg_daily = await compute_avg_daily_wage(org_id, project_id)
-    hours_per_day = 8
     now = datetime.now(timezone.utc).isoformat()
     updated = 0
 
     for b in budgets:
-        labor_budget = b.get("labor_budget", 0)
-        coefficient = b.get("coefficient", 1.0) or 1.0
-        akord = round(labor_budget / coefficient, 2) if coefficient > 0 else 0
-        planned_man_days = round(akord / avg_daily, 2) if avg_daily > 0 else 0
-        planned_man_hours = round(planned_man_days * hours_per_day, 2)
-
+        r = calculate_budget_formula_sync(
+            b.get("labor_budget", 0), b.get("coefficient", 1.0), avg_daily
+        )
         await db.activity_budgets.update_one({"id": b["id"]}, {"$set": {
-            "planned_man_hours": planned_man_hours,
-            "planned_man_days": planned_man_days,
-            "akord": akord,
-            "avg_daily_wage_at_calc": avg_daily,
-            "hours_per_day_at_calc": hours_per_day,
-            "coefficient_at_calc": coefficient,
+            "planned_man_hours": r["planned_man_hours"],
+            "planned_man_days": r["planned_man_days"],
+            "akord": r["akord"],
+            "avg_daily_wage_at_calc": r["avg_daily_wage_used"],
+            "hours_per_day_at_calc": r["hours_per_day_used"],
+            "coefficient_at_calc": r["coefficient_used"],
             "currency_at_calc": "EUR",
             "snapshot_calculated_at": now,
             "updated_at": now,
@@ -466,13 +465,15 @@ async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
     remaining = round(labor_budget - burn["actual_cost"], 2)
     on_track = burn_pct <= 100
 
-    # Use snapshot for planned hours if available, else on-the-fly
+    # Use snapshot for planned hours if available, else on-the-fly via budget_formula
     planned_man_hours = budget.get("planned_man_hours")
     if planned_man_hours is None:
-        avg_daily = await compute_avg_daily_wage(user["org_id"], budget["project_id"])
-        hourly = avg_daily / 8 if avg_daily > 0 else DEFAULT_DAILY_WAGE / 8
-        coeff = budget.get("coefficient", 1.0) or 1.0
-        planned_man_hours = round(labor_budget / hourly / coeff, 2) if hourly > 0 else 0
+        from app.services.budget_formula import calculate_budget_formula
+        r = await calculate_budget_formula(
+            labor_budget, budget.get("coefficient", 1.0),
+            org_id=user["org_id"], project_id=budget["project_id"],
+        )
+        planned_man_hours = r["planned_man_hours"]
 
     burn_hours_pct = round(burn["actual_hours"] / planned_man_hours * 100, 1) if planned_man_hours > 0 else 0
 

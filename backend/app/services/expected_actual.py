@@ -4,6 +4,7 @@ Compares planned (budgets/analyses) vs real (work_sessions) by activity, group, 
 """
 from app.db import db
 from app.routes.activity_budgets import compute_avg_daily_wage, DEFAULT_DAILY_WAGE
+from app.services.budget_formula import calculate_budget_formula_sync
 
 
 def _status(actual, planned):
@@ -40,13 +41,14 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             planned_by_type[key] = {"hours": 0, "cost": 0}
         lb = b.get("labor_budget", 0)
         planned_by_type[key]["cost"] += lb
-        # Prefer snapshot planned_man_hours if available, else compute on-the-fly
+        # Prefer snapshot planned_man_hours if available, else compute via budget_formula
         snapshot_hours = b.get("planned_man_hours")
         if snapshot_hours is not None:
             planned_by_type[key]["hours"] += snapshot_hours
         else:
             coeff = b.get("coefficient", 1) or 1
-            planned_by_type[key]["hours"] += round(lb / hourly_rate / coeff, 1) if lb > 0 else 0
+            r = calculate_budget_formula_sync(lb, coeff, hourly_rate * 8)
+            planned_by_type[key]["hours"] += r["planned_man_hours"]
 
     # ── Actual data (work_sessions) ─────────────────────────────
     ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
@@ -100,7 +102,10 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             for ln in a.get("lines", []):
                 if ln.get("group_id") == g["id"] and ln.get("is_active", True):
                     planned_c += ln.get("final_total", 0)
-                    planned_h += (ln.get("labor_price_per_unit", 0) * ln.get("qty", 0)) / hourly_rate if ln.get("labor_price_per_unit") else 0
+                    if ln.get("labor_price_per_unit"):
+                        labor_line = ln.get("labor_price_per_unit", 0) * ln.get("qty", 0)
+                        r = calculate_budget_formula_sync(labor_line, 1.0, hourly_rate * 8)
+                        planned_h += r["planned_man_hours"]
 
         # Actual from sessions with matching smr_type
         actual_h = 0

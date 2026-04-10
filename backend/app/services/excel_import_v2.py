@@ -287,31 +287,26 @@ def parse_construction_budget(file_bytes: bytes, sheet_name: str = None, column_
         coefficient = raw_coeff if raw_coeff > 0 else 2
 
         # Mode A: Excel has all values → use them directly
-        # Mode B: Missing values → compute from formula
-        if raw_akord > 0:
-            akord = raw_akord
-        else:
-            akord = round(labor_total / coefficient, 2) if coefficient > 0 else 0
-
-        if raw_man_days > 0:
-            man_days = raw_man_days
-        elif raw_wage > 0:
-            man_days = round(akord / raw_wage, 2) if raw_wage > 0 else 0
-        else:
-            man_days = 0  # will be computed from project team later
-
+        # Mode B: Missing values → compute from budget_formula
         hours_per_day = raw_hpd if raw_hpd > 0 else 8
 
-        if raw_man_hours > 0:
+        if raw_akord > 0 and raw_man_days > 0 and raw_man_hours > 0:
+            # Mode A: all values present in Excel
+            akord = raw_akord
+            man_days = raw_man_days
             man_hours = raw_man_hours
-        elif man_days > 0:
-            man_hours = round(man_days * hours_per_day, 2)
+            mode = "A"
         else:
-            man_hours = 0
+            # Mode B: compute from formula
+            from app.services.budget_formula import calculate_budget_formula_sync
+            wage_for_calc = raw_wage if raw_wage > 0 else 200  # default, will be overridden at commit
+            r = calculate_budget_formula_sync(labor_total, coefficient, wage_for_calc, hours_per_day)
+            akord = raw_akord if raw_akord > 0 else r["akord"]
+            man_days = raw_man_days if raw_man_days > 0 else r["planned_man_days"]
+            man_hours = raw_man_hours if raw_man_hours > 0 else r["planned_man_hours"]
+            mode = "B"
 
         avg_wage = raw_wage if raw_wage > 0 else None  # None = compute from project team
-
-        mode = "A" if raw_man_hours > 0 and raw_akord > 0 else "B"
 
         lines.append({
             "category": category,
