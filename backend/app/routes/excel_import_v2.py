@@ -191,3 +191,132 @@ async def commit_import(
         "warnings": result["warnings"],
         "detected_columns": result.get("detected_columns", {}),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CONSTRUCTION BUDGET IMPORT (Фаза 2.2)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/excel-import/preview-budget")
+async def preview_budget(
+    file: UploadFile = File(...),
+    sheet_name: str = Form(None),
+    user: dict = Depends(get_current_user),
+):
+    """Preview a construction budget Excel template with man-hours formula."""
+    from app.services.excel_import_v2 import parse_construction_budget
+    content = await file.read()
+    result = parse_construction_budget(content, sheet_name)
+    # Add preview summary
+    total_hours = round(sum(ln["planned_man_hours"] for ln in result["lines"]), 1)
+    total_labor = round(sum(ln["labor_total"] for ln in result["lines"]), 2)
+    total_materials = round(sum(ln["materials_total"] for ln in result["lines"]), 2)
+    result["preview_summary"] = {
+        "total_lines": result["lines_count"],
+        "total_man_hours": total_hours,
+        "total_labor_budget": total_labor,
+        "total_materials_budget": total_materials,
+        "mode_a_count": sum(1 for ln in result["lines"] if ln["import_mode"] == "A"),
+        "mode_b_count": sum(1 for ln in result["lines"] if ln["import_mode"] == "B"),
+    }
+    # Limit preview to first 15 lines
+    result["preview_rows"] = result["lines"][:15]
+    return result
+
+
+@router.post("/excel-import/commit-budget")
+async def commit_budget_import(
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    sheet_name: str = Form(None),
+    user: dict = Depends(get_current_user),
+):
+    """Import construction budget → creates activity_budgets with snapshot fields."""
+    from app.services.excel_import_v2 import parse_construction_budget
+    from app.routes.activity_budgets import compute_avg_daily_wage
+
+    content = await file.read()
+    org_id = user["org_id"]
+
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = parse_construction_budget(content, sheet_name)
+    if not result["lines"]:
+        raise HTTPException(status_code=400, detail="No valid lines found")
+
+    # Compute project avg_daily_wage for Mode B lines without wage
+    project_wage = await compute_avg_daily_wage(org_id, project_id)
+
+    now = datetime.now(timezone.utc).isoformat()
+    import uuid as _uuid
+    created = 0
+    updated = 0
+
+    for ln in result["lines"]:
+        # Fill missing avg_daily_wage from project team
+        avg_wage = ln["avg_daily_wage"] or project_wage
+        hours_per_day = ln["hours_per_day"] or 8
+        coefficient = ln["coefficient"] or 2
+
+        # Recompute if Mode B and wage was missing
+        if ln["import_mode"] == "B" and ln["avg_daily_wage"] is None and avg_wage > 0:
+            akord = round(ln["labor_total"] / coefficient, 2) if coefficient > 0 else 0
+            man_days = round(akord / avg_wage, 2) if avg_wage > 0 else 0
+            man_hours = round(man_days * hours_per_day, 2)
+        else:
+            akord = ln["akord"]
+            man_days = ln["planned_man_days"]
+            man_hours = ln["planned_man_hours"]
+
+        budget_type = ln["category"] or ln["activity_name"]
+        budget_subtype = ln["activity_name"] if ln["category"] else ""
+
+        # Upsert by type + subtype
+        existing = await db.activity_budgets.find_one({
+            "org_id": org_id, "project_id": project_id,
+            "type": budget_type, "subtype": budget_subtype,
+        })
+
+        doc = {
+            "labor_budget": ln["labor_total"],
+            "materials_budget": ln["materials_total"],
+            "coefficient": coefficient,
+            "planned_man_hours": man_hours,
+            "planned_man_days": man_days,
+            "akord": akord,
+            "avg_daily_wage_at_calc": avg_wage,
+            "hours_per_day_at_calc": hours_per_day,
+            "coefficient_at_calc": coefficient,
+            "currency_at_calc": "EUR",
+            "snapshot_calculated_at": now,
+            "updated_at": now,
+        }
+
+        if existing:
+            await db.activity_budgets.update_one({"id": existing["id"]}, {"$set": doc})
+            updated += 1
+        else:
+            doc.update({
+                "id": str(_uuid.uuid4()),
+                "org_id": org_id,
+                "project_id": project_id,
+                "type": budget_type,
+                "subtype": budget_subtype,
+                "notes": f"Import: {ln['activity_name']} ({ln['unit']})",
+                "planned_people_per_day": None,
+                "planned_target_days": None,
+                "created_at": now,
+            })
+            await db.activity_budgets.insert_one(doc)
+            created += 1
+
+    return {
+        "ok": True,
+        "created": created,
+        "updated": updated,
+        "total_lines": result["lines_count"],
+        "warnings": result["warnings"],
+        "avg_daily_wage_used": project_wage,
+    }
