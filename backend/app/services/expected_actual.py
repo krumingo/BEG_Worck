@@ -40,8 +40,13 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             planned_by_type[key] = {"hours": 0, "cost": 0}
         lb = b.get("labor_budget", 0)
         planned_by_type[key]["cost"] += lb
-        coeff = b.get("coefficient", 1) or 1
-        planned_by_type[key]["hours"] += round(lb / hourly_rate / coeff, 1) if lb > 0 else 0
+        # Prefer snapshot planned_man_hours if available, else compute on-the-fly
+        snapshot_hours = b.get("planned_man_hours")
+        if snapshot_hours is not None:
+            planned_by_type[key]["hours"] += snapshot_hours
+        else:
+            coeff = b.get("coefficient", 1) or 1
+            planned_by_type[key]["hours"] += round(lb / hourly_rate / coeff, 1) if lb > 0 else 0
 
     # ── Actual data (work_sessions) ─────────────────────────────
     ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}

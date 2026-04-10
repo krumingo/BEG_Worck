@@ -376,11 +376,83 @@ async def get_forecast(budget_id: str, user: dict = Depends(get_current_user)):
     }
 
 
+# ── Snapshot Calculation ───────────────────────────────────────────
+
+@router.post("/projects/{project_id}/activity-budgets/{budget_id}/calculate-snapshot")
+async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depends(get_current_user)):
+    """Calculate and persist man-hours/man-days snapshot for a budget line."""
+    budget = await db.activity_budgets.find_one(
+        {"id": budget_id, "org_id": user["org_id"], "project_id": project_id}, {"_id": 0}
+    )
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    labor_budget = budget.get("labor_budget", 0)
+    coefficient = budget.get("coefficient", 1.0) or 1.0
+    avg_daily = await compute_avg_daily_wage(user["org_id"], project_id)
+    hours_per_day = 8
+
+    akord = round(labor_budget / coefficient, 2) if coefficient > 0 else 0
+    planned_man_days = round(akord / avg_daily, 2) if avg_daily > 0 else 0
+    planned_man_hours = round(planned_man_days * hours_per_day, 2)
+
+    now = datetime.now(timezone.utc).isoformat()
+    snapshot = {
+        "planned_man_hours": planned_man_hours,
+        "planned_man_days": planned_man_days,
+        "akord": akord,
+        "avg_daily_wage_at_calc": avg_daily,
+        "hours_per_day_at_calc": hours_per_day,
+        "coefficient_at_calc": coefficient,
+        "currency_at_calc": "EUR",
+        "snapshot_calculated_at": now,
+        "updated_at": now,
+    }
+    await db.activity_budgets.update_one({"id": budget_id}, {"$set": snapshot})
+    return await db.activity_budgets.find_one({"id": budget_id}, {"_id": 0})
+
+
+@router.post("/projects/{project_id}/activity-budgets/calculate-all-snapshots")
+async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_current_user)):
+    """Calculate snapshots for ALL budget lines in a project."""
+    org_id = user["org_id"]
+    budgets = await db.activity_budgets.find(
+        {"org_id": org_id, "project_id": project_id}, {"_id": 0}
+    ).to_list(200)
+
+    avg_daily = await compute_avg_daily_wage(org_id, project_id)
+    hours_per_day = 8
+    now = datetime.now(timezone.utc).isoformat()
+    updated = 0
+
+    for b in budgets:
+        labor_budget = b.get("labor_budget", 0)
+        coefficient = b.get("coefficient", 1.0) or 1.0
+        akord = round(labor_budget / coefficient, 2) if coefficient > 0 else 0
+        planned_man_days = round(akord / avg_daily, 2) if avg_daily > 0 else 0
+        planned_man_hours = round(planned_man_days * hours_per_day, 2)
+
+        await db.activity_budgets.update_one({"id": b["id"]}, {"$set": {
+            "planned_man_hours": planned_man_hours,
+            "planned_man_days": planned_man_days,
+            "akord": akord,
+            "avg_daily_wage_at_calc": avg_daily,
+            "hours_per_day_at_calc": hours_per_day,
+            "coefficient_at_calc": coefficient,
+            "currency_at_calc": "EUR",
+            "snapshot_calculated_at": now,
+            "updated_at": now,
+        }})
+        updated += 1
+
+    return {"ok": True, "updated": updated, "avg_daily_wage": avg_daily}
+
+
 # ── Burn Tracking Endpoint ─────────────────────────────────────────
 
 @router.get("/activity-budgets/{budget_id}/burn")
 async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
-    """Burn tracking: actual vs budget from work_sessions."""
+    """Burn tracking: actual vs budget from work_sessions. Uses snapshot if available."""
     budget = await db.activity_budgets.find_one(
         {"id": budget_id, "org_id": user["org_id"]}, {"_id": 0}
     )
@@ -394,15 +466,28 @@ async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
     remaining = round(labor_budget - burn["actual_cost"], 2)
     on_track = burn_pct <= 100
 
+    # Use snapshot for planned hours if available, else on-the-fly
+    planned_man_hours = budget.get("planned_man_hours")
+    if planned_man_hours is None:
+        avg_daily = await compute_avg_daily_wage(user["org_id"], budget["project_id"])
+        hourly = avg_daily / 8 if avg_daily > 0 else DEFAULT_DAILY_WAGE / 8
+        coeff = budget.get("coefficient", 1.0) or 1.0
+        planned_man_hours = round(labor_budget / hourly / coeff, 2) if hourly > 0 else 0
+
+    burn_hours_pct = round(burn["actual_hours"] / planned_man_hours * 100, 1) if planned_man_hours > 0 else 0
+
     return {
         "budget_id": budget_id,
         "labor_budget": labor_budget,
         "actual_cost": burn["actual_cost"],
         "actual_hours": burn["actual_hours"],
         "actual_man_days": round(burn["actual_hours"] / 8, 2),
+        "planned_man_hours": round(planned_man_hours, 2),
         "budget_remaining": remaining,
         "burn_pct": burn_pct,
+        "burn_hours_pct": burn_hours_pct,
         "on_track": on_track,
+        "snapshot_used": budget.get("planned_man_hours") is not None,
     }
 
 
