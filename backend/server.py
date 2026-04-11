@@ -1187,6 +1187,10 @@ api_router.include_router(subcontractor_perf_router)
 from app.routes.centralized_reports import router as centralized_reports_router
 api_router.include_router(centralized_reports_router)
 
+# Import resource model router
+from app.routes.resource_model import router as resource_model_router
+api_router.include_router(resource_model_router)
+
 # Import OCR invoice router
 from app.routes.ocr_invoice import router as ocr_invoice_router
 api_router.include_router(ocr_invoice_router)
