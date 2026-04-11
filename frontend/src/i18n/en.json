@@ -1702,7 +1702,16 @@
     "responsible": "Responsible",
     "onSite": "On Site",
     "hoursToday": "Hours Today",
-    "people": "People"
+    "people": "People",
+    "todayRoster": "Today on site",
+    "add": "Add",
+    "noPeopleYet": "No people on site today",
+    "addPeople": "Add people",
+    "allOnSite": "All available people are already on site",
+    "addSelected": "Add selected",
+    "workersAdded": "workers added",
+    "workerRemoved": "Worker removed",
+    "overtime": "Overtime"
   },
   "projectContext": {
     "active": "Site",

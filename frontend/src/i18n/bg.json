@@ -1884,7 +1884,16 @@
     "responsible": "Отговорник",
     "onSite": "На обекта",
     "hoursToday": "Часове днес",
-    "people": "Хора"
+    "people": "Хора",
+    "todayRoster": "Днес на обекта",
+    "add": "Добави",
+    "noPeopleYet": "Няма хора на обекта за днес",
+    "addPeople": "Добави хора",
+    "allOnSite": "Всички налични хора вече са на обекта",
+    "addSelected": "Добави избраните",
+    "workersAdded": "работника добавени",
+    "workerRemoved": "Работникът е махнат",
+    "overtime": "Наднормено"
   },
   "projectContext": {
     "active": "Обект",

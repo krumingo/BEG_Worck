@@ -460,6 +460,153 @@ async def copy_yesterday_roster(project_id: str, user: dict = Depends(get_curren
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
+# ── Roster: Enriched + Available People ────────────────────────────
+
+@router.get("/technician/site/{project_id}/roster/enriched")
+async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_user)):
+    """Get today's roster with profile info (photo, position, daily hours)."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    doc = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0}
+    )
+    workers_raw = doc.get("workers", []) if doc else []
+
+    workers = []
+    for w in workers_raw:
+        wid = w.get("worker_id", "")
+        # Get profile
+        profile = await db.employee_profiles.find_one(
+            {"org_id": org_id, "user_id": wid},
+            {"_id": 0, "avatar_url": 1, "position": 1, "role": 1},
+        )
+        # Get today's hours from drafts
+        today_reports = await db.employee_daily_reports.find(
+            {"org_id": org_id, "project_id": project_id, "worker_id": wid, "date": today},
+            {"_id": 0, "hours": 1},
+        ).to_list(20)
+        total_hours = round(sum(r.get("hours", 0) for r in today_reports), 2)
+        normal_hours = min(total_hours, 8)
+        overtime_hours = round(max(total_hours - 8, 0), 2)
+
+        workers.append({
+            "worker_id": wid,
+            "worker_name": w.get("worker_name", ""),
+            "avatar_url": (profile or {}).get("avatar_url"),
+            "position": (profile or {}).get("position") or (profile or {}).get("role", ""),
+            "total_hours": total_hours,
+            "normal_hours": normal_hours,
+            "overtime_hours": overtime_hours,
+            "has_overtime": overtime_hours > 0,
+        })
+
+    return {"workers": workers, "total": len(workers), "date": today}
+
+
+@router.get("/technician/site/{project_id}/roster/available")
+async def get_available_people(project_id: str, user: dict = Depends(get_current_user)):
+    """Get all active employees NOT already in today's roster for this site."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Current roster IDs
+    doc = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0, "workers": 1}
+    )
+    existing_ids = {w.get("worker_id") for w in (doc or {}).get("workers", [])}
+
+    # All active profiles
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "active": True},
+        {"_id": 0, "user_id": 1, "avatar_url": 1, "position": 1, "role": 1},
+    ).to_list(200)
+    profile_map = {p["user_id"]: p for p in profiles}
+    profile_ids = set(profile_map.keys())
+
+    # All org users
+    all_users = await db.users.find(
+        {"org_id": org_id},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
+    ).to_list(200)
+
+    available = []
+    for u in all_users:
+        uid = u["id"]
+        if uid in existing_ids:
+            continue
+        # Prefer users with profiles, but include all
+        p = profile_map.get(uid, {})
+        name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+        available.append({
+            "worker_id": uid,
+            "worker_name": name,
+            "avatar_url": p.get("avatar_url"),
+            "position": p.get("position") or p.get("role", ""),
+            "has_profile": uid in profile_ids,
+        })
+
+    available.sort(key=lambda x: (0 if x["has_profile"] else 1, x["worker_name"]))
+    return {"available": available, "total": len(available)}
+
+
+@router.post("/technician/site/{project_id}/roster/remove-worker")
+async def remove_worker_from_roster(project_id: str, data: dict, user: dict = Depends(get_current_user)):
+    """Remove a single worker from today's roster."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    worker_id = data.get("worker_id")
+    if not worker_id:
+        raise HTTPException(status_code=400, detail="worker_id required")
+
+    doc = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="No roster for today")
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_workers = [w for w in doc.get("workers", []) if w.get("worker_id") != worker_id]
+    await db.site_daily_rosters.update_one({"id": doc["id"]}, {"$set": {"workers": new_workers, "updated_at": now}})
+    return {"ok": True, "remaining": len(new_workers)}
+
+
+@router.post("/technician/site/{project_id}/roster/add-workers")
+async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depends(get_current_user)):
+    """Add workers to today's roster (without replacing existing ones)."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    new_workers = data.get("workers", [])
+    if not new_workers:
+        raise HTTPException(status_code=400, detail="workers list required")
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}
+    )
+
+    if doc:
+        existing = doc.get("workers", [])
+        existing_ids = {w.get("worker_id") for w in existing}
+        for nw in new_workers:
+            if nw.get("worker_id") not in existing_ids:
+                existing.append({"worker_id": nw["worker_id"], "worker_name": nw.get("worker_name", "")})
+        await db.site_daily_rosters.update_one({"id": doc["id"]}, {"$set": {"workers": existing, "updated_at": now}})
+    else:
+        import uuid as _uuid
+        doc = {
+            "id": str(_uuid.uuid4()), "org_id": org_id, "project_id": project_id,
+            "date": today, "workers": [{"worker_id": w["worker_id"], "worker_name": w.get("worker_name", "")} for w in new_workers],
+            "created_by": user["id"], "created_at": now, "updated_at": now,
+        }
+        await db.site_daily_rosters.insert_one(doc)
+
+    result = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0}
+    )
+    return {k: v for k, v in result.items() if k != "_id"}
+
+
 # ── Daily Report (DRAFT — NO work_sessions) ───────────────────────
 
 @router.post("/technician/daily-report")

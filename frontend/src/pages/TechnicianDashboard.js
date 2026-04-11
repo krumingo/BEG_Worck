@@ -26,7 +26,7 @@ export default function TechnicianDashboard() {
   const { user } = useAuth();
 
   // Navigation state
-  const [screen, setScreen] = useState("myDay"); // myDay | object | roster | report | review
+  const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSite, setSelectedSite] = useState(null);
@@ -36,6 +36,12 @@ export default function TechnicianDashboard() {
   const [suggestions, setSuggestions] = useState({ recent: [], all: [] });
   const [showAll, setShowAll] = useState(false);
   const [rosterSaving, setRosterSaving] = useState(false);
+
+  // People screen
+  const [enrichedRoster, setEnrichedRoster] = useState([]);
+  const [availablePeople, setAvailablePeople] = useState([]);
+  const [showAddPeople, setShowAddPeople] = useState(false);
+  const [selectedToAdd, setSelectedToAdd] = useState([]);
 
   // Report
   const [reportMode, setReportMode] = useState("person"); // person | group
@@ -125,6 +131,46 @@ export default function TechnicianDashboard() {
       setRoster(res.data.workers || []);
       toast.success(t("technician.copiedYesterday"));
     } catch { toast.error(t("technician.noPreviousRoster")); }
+  };
+
+  // ── People Management ───────────────────────────────────────
+  const openPeople = async () => {
+    setScreen("people");
+    setShowAddPeople(false);
+    try {
+      const [enrichedRes, availRes] = await Promise.all([
+        API.get(`/technician/site/${selectedSite.project_id}/roster/enriched`),
+        API.get(`/technician/site/${selectedSite.project_id}/roster/available`),
+      ]);
+      setEnrichedRoster(enrichedRes.data.workers || []);
+      setAvailablePeople(availRes.data.available || []);
+    } catch { setEnrichedRoster([]); setAvailablePeople([]); }
+  };
+
+  const removeWorker = async (workerId) => {
+    try {
+      await API.post(`/technician/site/${selectedSite.project_id}/roster/remove-worker`, { worker_id: workerId });
+      setEnrichedRoster(prev => prev.filter(w => w.worker_id !== workerId));
+      toast.success(t("technician.workerRemoved"));
+      // Refresh available
+      const avRes = await API.get(`/technician/site/${selectedSite.project_id}/roster/available`);
+      setAvailablePeople(avRes.data.available || []);
+    } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
+  };
+
+  const addSelectedWorkers = async () => {
+    if (!selectedToAdd.length) return;
+    const toAdd = selectedToAdd.map(wid => {
+      const p = availablePeople.find(a => a.worker_id === wid);
+      return { worker_id: wid, worker_name: p?.worker_name || "" };
+    });
+    try {
+      await API.post(`/technician/site/${selectedSite.project_id}/roster/add-workers`, { workers: toAdd });
+      toast.success(`${toAdd.length} ${t("technician.workersAdded")}`);
+      setSelectedToAdd([]);
+      setShowAddPeople(false);
+      openPeople();
+    } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
   };
 
   // ── Report helpers ──────────────────────────────────────────
@@ -312,7 +358,7 @@ export default function TechnicianDashboard() {
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">
           <Button onClick={openRoster} className="h-20 rounded-2xl flex-col text-sm font-semibold"><FileText className="w-6 h-6 mb-1" />{t("technician.dailyReport")}</Button>
-          <Button variant="outline" onClick={() => { openRoster(); }} className="h-20 rounded-2xl flex-col text-sm"><Users className="w-6 h-6 mb-1 text-cyan-400" />{t("technician.people")}</Button>
+          <Button variant="outline" onClick={openPeople} className="h-20 rounded-2xl flex-col text-sm"><Users className="w-6 h-6 mb-1 text-cyan-400" />{t("technician.people")}</Button>
           <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-20 rounded-2xl flex-col text-sm"><AlertTriangle className="w-6 h-6 mb-1 text-orange-400" />{t("technician.newSMR")}</Button>
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-20 rounded-2xl flex-col text-sm"><Camera className="w-6 h-6 mb-1 text-blue-400" />{t("technician.photoInvoice")}</Button>
         </div>
@@ -327,6 +373,65 @@ export default function TechnicianDashboard() {
       </div>
     );
   }
+
+  // ════════════════════════════════════════════════════════════
+  // PEOPLE MANAGEMENT
+  // ════════════════════════════════════════════════════════════
+  if (screen === "people") return (
+    <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-people">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>
+        <div className="flex-1"><h2 className="font-bold">{t("technician.people")}</h2><p className="text-xs text-muted-foreground">{selectedSite?.name} — {t("technician.todayRoster")}</p></div>
+        <Button size="sm" onClick={() => { setSelectedToAdd([]); setShowAddPeople(true); }}><Plus className="w-4 h-4 mr-1" />{t("technician.add")}</Button>
+      </div>
+
+      {/* Current roster */}
+      {enrichedRoster.length === 0 ? (
+        <p className="text-center py-8 text-muted-foreground text-sm">{t("technician.noPeopleYet")}</p>
+      ) : enrichedRoster.map(w => (
+        <div key={w.worker_id} className="flex items-center gap-3 p-3 rounded-2xl border border-border bg-card">
+          {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-11 h-11 rounded-full object-cover" alt="" /> : (
+            <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{w.worker_name}</p>
+            <p className="text-[10px] text-muted-foreground">{w.position || "Работник"}</p>
+            {w.total_hours > 0 && <p className="text-[10px] font-mono">{w.normal_hours}ч{w.has_overtime && <span className="text-orange-400 ml-1">+{w.overtime_hours}ч OT</span>}</p>}
+          </div>
+          {w.has_overtime && <Badge className="bg-orange-500/20 text-orange-400 text-[9px]">{t("technician.overtime")}</Badge>}
+          <Button variant="ghost" size="sm" onClick={() => removeWorker(w.worker_id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+        </div>
+      ))}
+
+      {/* Add People Modal */}
+      {showAddPeople && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end justify-center">
+          <div className="w-full max-w-lg bg-card border-t border-border rounded-t-2xl p-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold">{t("technician.addPeople")}</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddPeople(false)}>✕</Button>
+            </div>
+            {availablePeople.length === 0 ? <p className="text-center py-4 text-muted-foreground text-sm">{t("technician.allOnSite")}</p> : (
+              <div className="space-y-2">
+                {availablePeople.map(p => (
+                  <label key={p.worker_id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedToAdd.includes(p.worker_id) ? "border-primary bg-primary/5" : "border-border"}`}>
+                    <Checkbox checked={selectedToAdd.includes(p.worker_id)} onCheckedChange={c => setSelectedToAdd(prev => c ? [...prev, p.worker_id] : prev.filter(id => id !== p.worker_id))} />
+                    {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-9 h-9 rounded-full object-cover" alt="" /> : (
+                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(p.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                    )}
+                    <div className="flex-1"><p className="text-sm font-medium">{p.worker_name}</p><p className="text-[10px] text-muted-foreground">{p.position || "—"}</p></div>
+                  </label>
+                ))}
+              </div>
+            )}
+            {selectedToAdd.length > 0 && (
+              <Button onClick={addSelectedWorkers} className="w-full h-14 text-lg rounded-2xl mt-3"><Plus className="w-5 h-5 mr-2" />{t("technician.addSelected")} ({selectedToAdd.length})</Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   // ════════════════════════════════════════════════════════════
   // ROSTER
