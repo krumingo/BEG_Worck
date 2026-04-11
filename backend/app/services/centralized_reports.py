@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from collections import defaultdict
 from app.db import db
 from app.services.budget_formula import calculate_budget_formula_sync
+from app.services.resolve_hourly_rate import resolve_worker_hourly_rate
 
 
 async def get_overhead_rate(org_id: str) -> float:
@@ -40,31 +41,25 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         {"_id": 0},
     ).to_list(2000)
 
+    # Cache resolved rates per worker
+    rate_cache = {}
+
     for d in drafts:
         hours = d.get("hours") or d.get("hours_worked", 0)
-        rate = d.get("hourly_rate", 0)
-        # Try to get rate from profile if not stored
-        if rate == 0:
-            profile = await db.employee_profiles.find_one(
-                {"org_id": org_id, "user_id": d.get("worker_id")},
-                {"_id": 0, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "base_salary": 1},
-            )
-            if profile:
-                pt = (profile.get("pay_type") or "Monthly").strip()
-                if pt == "Hourly":
-                    rate = float(profile.get("hourly_rate") or 0)
-                elif pt == "Daily":
-                    rate = round(float(profile.get("daily_rate") or profile.get("base_salary") or 0) / 8, 2)
-                else:
-                    ms = float(profile.get("monthly_salary") or profile.get("base_salary") or 0)
-                    rate = round(ms / max(22 * 8, 1), 2)
+        wid = d.get("worker_id", "")
+
+        # Resolve rate using shared helper (cached)
+        if wid not in rate_cache:
+            rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
+        resolved = rate_cache[wid]
+        rate = resolved["rate"]
 
         clean = round(hours * rate, 2)
         oh_amount = round(hours * overhead_hourly, 2)
 
         entries.append({
             "id": d.get("id"),
-            "worker_id": d.get("worker_id", ""),
+            "worker_id": wid,
             "worker_name": d.get("worker_name", ""),
             "project_id": project_id,
             "report_date": d.get("date", ""),
@@ -80,6 +75,8 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             "approved_by": None,
             "payroll_ready": False,
             "source": "employee_daily_reports",
+            "missing_rate": resolved["missing_rate"],
+            "rate_source": resolved["source"],
         })
 
     # B) Approved entries from work_sessions
@@ -92,7 +89,20 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     for s in sessions:
         hours = s.get("duration_hours", 0)
         rate = s.get("hourly_rate_at_date", 0)
-        clean = s.get("labor_cost", 0)
+        wid = s.get("worker_id", "")
+
+        # If stored rate is 0, resolve from profile
+        missing_rate = False
+        rate_source = "work_session"
+        if rate == 0 and wid:
+            if wid not in rate_cache:
+                rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
+            resolved = rate_cache[wid]
+            rate = resolved["rate"]
+            missing_rate = resolved["missing_rate"]
+            rate_source = resolved["source"]
+
+        clean = round(hours * rate, 2) if rate > 0 else s.get("labor_cost", 0)
         oh_amount = round(hours * overhead_hourly, 2)
 
         # Get report info
@@ -111,7 +121,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
 
         entries.append({
             "id": s.get("id"),
-            "worker_id": s.get("worker_id", ""),
+            "worker_id": wid,
             "worker_name": s.get("worker_name", ""),
             "project_id": project_id,
             "report_date": s.get("started_at", "")[:10],
@@ -127,6 +137,8 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             "approved_by": approved_by,
             "payroll_ready": payroll_ready,
             "source": "work_sessions",
+            "missing_rate": missing_rate,
+            "rate_source": rate_source,
         })
 
     # ── PROJECTION 1: Activities ────────────────────────────────
@@ -227,6 +239,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     by_worker = defaultdict(lambda: {
         "draft_count": 0, "approved_count": 0,
         "clean_amount": 0, "overhead_amount": 0, "total_hours": 0,
+        "missing_rate": False, "rate_source": "",
     })
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     today_workers = set()
@@ -239,10 +252,14 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             by_worker[wid]["draft_count"] += 1
         else:
             by_worker[wid]["approved_count"] += 1
-            by_worker[wid]["clean_amount"] += e["amount_clean_labor"]
-            by_worker[wid]["overhead_amount"] += e["amount_overhead"]
+        by_worker[wid]["clean_amount"] += e["amount_clean_labor"]
+        by_worker[wid]["overhead_amount"] += e["amount_overhead"]
         by_worker[wid]["total_hours"] += e["hours"]
         by_worker[wid]["name"] = e["worker_name"]
+        if e.get("missing_rate"):
+            by_worker[wid]["missing_rate"] = True
+        if e.get("rate_source"):
+            by_worker[wid]["rate_source"] = e["rate_source"]
         if e["report_date"] == today:
             today_workers.add(wid)
 
@@ -258,6 +275,8 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             "clean_amount": round(w["clean_amount"], 2),
             "overhead_amount": round(w["overhead_amount"], 2),
             "total_amount": round(w["clean_amount"] + w["overhead_amount"], 2),
+            "missing_rate": w["missing_rate"],
+            "rate_source": w["rate_source"],
         })
     personnel.sort(key=lambda x: x["total_hours"], reverse=True)
 
@@ -265,6 +284,9 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     total_clean = round(sum(e["amount_clean_labor"] for e in entries if e["approval_status"] == "approved"), 2)
     total_oh = round(sum(e["amount_overhead"] for e in entries if e["approval_status"] == "approved"), 2)
     total_labor_with_oh = round(total_clean + total_oh, 2)
+    # Include draft amounts as separate line for visibility
+    draft_clean = round(sum(e["amount_clean_labor"] for e in entries if e["approval_status"] == "draft"), 2)
+    draft_oh = round(sum(e["amount_overhead"] for e in entries if e["approval_status"] == "draft"), 2)
 
     # Materials from warehouse
     issues = await db.warehouse_transactions.find(
@@ -291,11 +313,14 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "total_clean_labor": total_clean,
         "total_overhead": total_oh,
         "total_labor_with_overhead": total_labor_with_oh,
+        "draft_clean_labor": draft_clean,
+        "draft_overhead": draft_oh,
         "total_materials": total_materials,
         "total_expense": total_expense,
         "total_revenue": total_revenue,
         "balance": balance,
         "margin_pct": margin,
+        "missing_rate_count": sum(1 for e in entries if e.get("missing_rate")),
     }
 
     return {

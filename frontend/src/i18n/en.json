@@ -1777,7 +1777,8 @@
     "totalExpense": "Total expense",
     "revenue": "Revenue",
     "balance": "Balance",
-    "margin": "Margin"
+    "margin": "Margin",
+    "missingRate": "Missing rate"
   },
   "activityReports": {
     "title": "Activity Reports",

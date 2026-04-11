@@ -121,7 +121,10 @@ export default function CentralizedProjectView({ projectId, tab = "activities" }
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">{t("centralReports.noPersonnel")}</TableCell></TableRow>
               ) : personnel.map((p, i) => (
                 <TableRow key={i} className="text-xs cursor-pointer hover:bg-muted/20" onClick={() => navigate(`/projects/${projectId}#team`)}>
-                  <TableCell className="font-medium">{p.worker_name}</TableCell>
+                  <TableCell className="font-medium">
+                    {p.worker_name}
+                    {p.missing_rate && <Badge variant="outline" className="ml-1 text-[8px] text-red-400 border-red-400/30">{t("centralReports.missingRate")}</Badge>}
+                  </TableCell>
                   <TableCell className="text-center">{p.today_present ? <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> : <span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" />}</TableCell>
                   <TableCell className="text-right font-mono text-blue-400">{p.draft_reports_count || "—"}</TableCell>
                   <TableCell className="text-right font-mono text-emerald-400">{p.approved_reports_count || "—"}</TableCell>
