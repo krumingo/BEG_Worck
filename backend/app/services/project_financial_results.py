@@ -31,12 +31,33 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
 
     # Cash out: actual payments made (payroll paid + supplier paid + contract paid)
-    # Payroll: sum labor_cost from approved work_sessions
+    # Payroll: sum labor_cost from approved work_sessions (reported/operational)
     sessions = await db.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}, "is_flagged": {"$ne": True}},
         {"_id": 0, "labor_cost": 1, "duration_hours": 1, "hourly_rate_at_date": 1, "worker_id": 1},
     ).to_list(5000)
-    paid_labor = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
+    reported_labor = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
+
+    # ── PAID LABOR LAYER (from payroll_payment_allocations) ──
+    paid_allocs = await db.payroll_payment_allocations.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "allocated_gross_labor": 1, "allocated_hours": 1,
+         "worker_id": 1, "worker_name": 1, "week_start": 1, "week_end": 1,
+         "payroll_batch_id": 1},
+    ).to_list(500)
+    paid_labor_expense = round(sum(a.get("allocated_gross_labor", 0) for a in paid_allocs), 2)
+    paid_labor_hours = round(sum(a.get("allocated_hours", 0) for a in paid_allocs), 1)
+
+    # Determine labor_expense_basis
+    if paid_labor_expense > 0 and reported_labor > 0:
+        labor_expense_basis = "mixed"
+    elif paid_labor_expense > 0:
+        labor_expense_basis = "paid"
+    else:
+        labor_expense_basis = "reported"
+
+    # Cash result uses PAID labor if available, else reported
+    effective_cash_labor = paid_labor_expense if paid_labor_expense > 0 else reported_labor
 
     # Supplier/material payments
     issues = await db.warehouse_transactions.find(
@@ -67,19 +88,36 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
                 paid_contracts += tr.get("amount", 0)
     paid_contracts = round(paid_contracts, 2)
 
-    cash_out = round(paid_labor + paid_materials + paid_subcontractors + paid_contracts, 2)
+    cash_out = round(effective_cash_labor + paid_materials + paid_subcontractors + paid_contracts, 2)
+
+    # Unpaid approved labor
+    unpaid_approved = round(max(0, reported_labor - paid_labor_expense), 2) if reported_labor > paid_labor_expense else 0
 
     cash_result = {
         "cash_in": cash_in,
         "cash_out": cash_out,
         "cash_balance": round(cash_in - cash_out, 2),
         "breakdown": {
-            "paid_labor": paid_labor,
+            "paid_labor": effective_cash_labor,
             "paid_materials": paid_materials,
             "paid_subcontractors": paid_subcontractors,
             "paid_contracts": paid_contracts,
         },
     }
+
+    # ── LABOR SUMMARY ──
+    labor_summary = {
+        "reported_labor_value": reported_labor,
+        "paid_labor_expense": paid_labor_expense,
+        "paid_labor_hours": paid_labor_hours,
+        "unpaid_approved_labor": unpaid_approved,
+        "labor_expense_basis": labor_expense_basis,
+        "allocation_count": len(paid_allocs),
+    }
+    if unpaid_approved > 0:
+        warnings.append(f"Одобрен, но неплатен труд: {unpaid_approved} EUR")
+    if paid_labor_expense > 0 and reported_labor == 0:
+        warnings.append("Има платен труд, но няма отчетен труд от work_sessions")
 
     # ══════════════════════════════════════════════════════════════
     # B) OPERATING RESULT
@@ -208,5 +246,6 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "cash": cash_result,
         "operating": operating_result,
         "fully_loaded": fully_loaded_result,
+        "labor": labor_summary,
         "warnings": warnings,
     }

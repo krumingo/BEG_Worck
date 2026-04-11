@@ -2030,7 +2030,11 @@
     "subBurden": "Подизпълнител (тежест)",
     "contractBurden": "Договори (тежест)",
     "oh": "Режийни:",
-    "totalCost": "Общ разход"
+    "totalCost": "Общ разход",
+    "laborSection": "Труд",
+    "reportedLabor": "Отчетен труд (оперативно)",
+    "paidLabor": "Платен труд (реален разход)",
+    "unpaidLabor": "Неплатен одобрен труд"
   },
   "personnelPanel": {
     "total": "Общо",

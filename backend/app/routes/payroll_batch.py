@@ -442,6 +442,13 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
     if batch.get("status") == "paid":
         raise HTTPException(status_code=400, detail="Already paid")
 
+    # Idempotency: check if allocations already exist for this batch
+    existing_allocs = await db.payroll_payment_allocations.count_documents(
+        {"org_id": org_id, "payroll_batch_id": batch_id}
+    )
+    if existing_allocs > 0:
+        raise HTTPException(status_code=409, detail="Allocations already exist for this batch")
+
     now = datetime.now(timezone.utc).isoformat()
     paid_at = data.paid_at or now
 

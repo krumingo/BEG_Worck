@@ -38,8 +38,9 @@ export default function FinancialResultsCard({ projectId }) {
   if (loading) return <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin" /></div>;
   if (!data) return null;
 
-  const { cash, operating, fully_loaded, warnings } = data;
+  const { cash, operating, fully_loaded, labor, warnings } = data;
   const resultColor = (val) => val > 0 ? "text-emerald-400" : val < 0 ? "text-red-400" : "text-muted-foreground";
+  const lb = labor || {};
 
   return (
     <div className="space-y-4" data-testid="financial-results-card">
@@ -122,8 +123,32 @@ export default function FinancialResultsCard({ projectId }) {
 
       {showBreakdown && (
         <div className="rounded-lg border border-border p-3 space-y-1.5 text-xs">
+          {/* Labor: Reported vs Paid */}
+          {(lb.reported_labor_value > 0 || lb.paid_labor_expense > 0) && (
+            <div className="space-y-1 mb-2 pb-2 border-b border-border/50">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">{t("finResults.laborSection")}</p>
+              {lb.reported_labor_value > 0 && (
+                <div className="flex items-center justify-between py-1 px-2 rounded bg-muted/10">
+                  <div className="flex items-center gap-2"><Users className={`w-3 h-3 text-blue-400`} /><span>{t("finResults.reportedLabor")}</span></div>
+                  <span className="font-mono">{fmt(lb.reported_labor_value)}</span>
+                </div>
+              )}
+              {lb.paid_labor_expense > 0 && (
+                <div className="flex items-center justify-between py-1 px-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-2"><DollarSign className={`w-3 h-3 text-emerald-400`} /><span className="text-emerald-400 font-medium">{t("finResults.paidLabor")}</span></div>
+                  <span className="font-mono text-emerald-400 font-bold">{fmt(lb.paid_labor_expense)}</span>
+                </div>
+              )}
+              {lb.unpaid_approved_labor > 0 && (
+                <div className="flex items-center justify-between py-1 px-2 rounded bg-amber-500/10">
+                  <div className="flex items-center gap-2"><AlertTriangle className={`w-3 h-3 text-amber-400`} /><span className="text-amber-400">{t("finResults.unpaidLabor")}</span></div>
+                  <span className="font-mono text-amber-400">{fmt(lb.unpaid_approved_labor)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {[
-            { icon: Users, label: t("finResults.directLabor"), val: operating.direct_labor, color: "text-blue-400" },
             { icon: Shield, label: t("finResults.insurance"), val: fully_loaded.insurance_burden, color: "text-cyan-400" },
             { icon: Package, label: t("finResults.materials"), val: operating.materials, color: "text-orange-400" },
             { icon: Building2, label: t("finResults.subDirect"), val: operating.subcontractor_direct, color: "text-violet-400" },

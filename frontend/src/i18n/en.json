@@ -1848,7 +1848,11 @@
     "subBurden": "Subcontractor (burden)",
     "contractBurden": "Contracts (burden)",
     "oh": "Overhead:",
-    "totalCost": "Total Cost"
+    "totalCost": "Total Cost",
+    "laborSection": "Labor",
+    "reportedLabor": "Reported Labor (operational)",
+    "paidLabor": "Paid Labor (real expense)",
+    "unpaidLabor": "Unpaid Approved Labor"
   },
   "personnelPanel": {
     "total": "Total",

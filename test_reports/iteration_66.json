@@ -1,0 +1,65 @@
+{
+  "summary": "Paid Labor Integration in Project Financial Results - All tests passed. Backend: 18/18 tests passed (100%). Frontend: Finance tab correctly shows paid labor breakdown with 'Платен труд (реален разход)' in green, warning about paid labor without work_sessions, and cash result using paid labor. No regression on Всички отчети, Седмица, Заплати tabs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Payroll page",
+        "issues": ["Some i18n keys not translated (payroll.payrollRuns, payroll.subtitle) - minor cosmetic issue"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_paid_labor_financial_results.py",
+    "/app/test_reports/pytest/test_paid_labor_financial_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_paid_labor_financial_results.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@begwork.com / AdminTest123!Secure",
+  "seed_data_creation": "None - used existing project f5255fdb-337e-4650-a50b-1e9354145257 (Къща_Миро) and paid batch c3ed7745-af58-46d7-8f58-28c81b19d7ff",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Paid Labor Integration feature fully tested. Key findings: 1) GET /api/projects/{pid}/financial-results now includes 'labor' field with reported_labor_value, paid_labor_expense, paid_labor_hours, unpaid_approved_labor, labor_expense_basis, allocation_count. 2) Cash result uses paid_labor_expense when available (labor_expense_basis='paid'). 3) Warning 'Има платен труд, но няма отчетен труд от work_sessions' shows correctly when paid labor exists but no work_sessions. 4) Idempotency guard: re-paying paid batch returns 400 'Already paid'. 5) Finance tab shows 'ТРУД' section with 'Платен труд (реален разход)' in green. 6) No regression on Всички отчети, Седмица, Заплати tabs.",
+  "features_tested": {
+    "backend_apis": [
+      "GET /api/projects/{pid}/financial-results - includes new 'labor' field",
+      "labor.reported_labor_value from work_sessions",
+      "labor.paid_labor_expense from payroll_payment_allocations",
+      "labor.labor_expense_basis = 'paid' when allocations exist",
+      "Cash result uses paid_labor_expense in cash_out",
+      "Warning when paid labor exists but no reported labor",
+      "Warning when unpaid approved labor exists",
+      "POST /api/payroll-batch/{id}/pay - idempotency guard returns 400 'Already paid'",
+      "GET /api/projects/{pid}/paid-labor - returns paid labor data",
+      "GET /api/payroll-batch/{id}/allocations - returns allocations grouped by project"
+    ],
+    "frontend_ui": [
+      "Finance tab (Финанси) shows Ликвидност with paid labor in breakdown",
+      "ТРУД section shows 'Платен труд (реален разход)' in green with 130 EUR",
+      "Warning message 'Има платен труд, но няма отчетен труд от work_sessions' displayed in amber",
+      "No regression on 'Всички отчети' tab - reports table working",
+      "No regression on 'Седмица' tab - weekly matrix working",
+      "No regression on 'Заплати' tab - shows 'Платен' status badge"
+    ]
+  },
+  "verified_data": {
+    "project_id": "f5255fdb-337e-4650-a50b-1e9354145257",
+    "project_name": "Къща_Миро",
+    "paid_batch_id": "c3ed7745-af58-46d7-8f58-28c81b19d7ff",
+    "paid_labor_expense": "130 EUR (displayed in Finance tab)",
+    "labor_expense_basis": "paid",
+    "warning_displayed": "Има платен труд, но няма отчетен труд от work_sessions"
+  }
+}
