@@ -1191,6 +1191,10 @@ api_router.include_router(centralized_reports_router)
 from app.routes.resource_model import router as resource_model_router
 api_router.include_router(resource_model_router)
 
+# Import financial results router
+from app.routes.financial_results import router as financial_results_router
+api_router.include_router(financial_results_router)
+
 # Import OCR invoice router
 from app.routes.ocr_invoice import router as ocr_invoice_router
 api_router.include_router(ocr_invoice_router)
