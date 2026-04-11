@@ -142,6 +142,11 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         })
 
     # ── PROJECTION 1: Activities ────────────────────────────────
+    # Test/dev noise filter
+    NOISE_PREFIXES = ("test_", "тест_", "dummy", "sample", "tmp_")
+    def _is_noise(name):
+        return name.lower().strip().startswith(NOISE_PREFIXES) if name else True
+
     budgets = await db.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
@@ -153,7 +158,12 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         {"_id": 0, "smr_type": 1, "activity_type": 1, "qty": 1, "unit": 1},
     ).to_list(200)
 
-    by_smr = defaultdict(lambda: {"draft_hours": 0, "approved_hours": 0, "draft_clean": 0, "approved_clean": 0, "draft_oh": 0, "approved_oh": 0})
+    by_smr = defaultdict(lambda: {
+        "draft_hours": 0, "approved_hours": 0,
+        "draft_clean": 0, "approved_clean": 0,
+        "draft_oh": 0, "approved_oh": 0,
+        "has_missing_rate": False,
+    })
     for e in entries:
         key = (e["smr_type"] or "").lower().strip()
         if not key:
@@ -166,11 +176,15 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             by_smr[key]["approved_hours"] += e["hours"]
             by_smr[key]["approved_clean"] += e["amount_clean_labor"]
             by_smr[key]["approved_oh"] += e["amount_overhead"]
+        if e.get("missing_rate"):
+            by_smr[key]["has_missing_rate"] = True
 
     activities = []
     seen = set()
     for b in budgets:
         name = b.get("subtype") or b.get("type", "")
+        if _is_noise(name):
+            continue
         key = name.lower().strip()
         seen.add(key)
         lb = b.get("labor_budget", 0)
@@ -188,6 +202,10 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         burn_total = round(total_h / planned * 100, 1) if planned > 0 else 0
         status = "green" if burn_total < 80 else ("yellow" if burn_total <= 100 else "red")
 
+        # Include BOTH draft AND approved costs
+        total_clean = round(smr.get("draft_clean", 0) + smr.get("approved_clean", 0), 2)
+        total_oh = round(smr.get("draft_oh", 0) + smr.get("approved_oh", 0), 2)
+
         activities.append({
             "category": b.get("type", ""),
             "activity_name": name,
@@ -200,18 +218,21 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             "draft_hours": dh,
             "approved_hours": ah,
             "total_reported_hours": total_h,
-            "clean_labor_cost": round(smr.get("approved_clean", 0), 2),
-            "labor_cost_with_overhead": round(smr.get("approved_clean", 0) + smr.get("approved_oh", 0), 2),
+            "clean_labor_cost": total_clean,
+            "labor_cost_with_overhead": round(total_clean + total_oh, 2),
             "subcontractor_price": None,
             "burn_pct_approved": burn_approved,
             "burn_pct_total": burn_total,
             "risk_status": status,
             "is_extra": False,
             "source": "budget",
+            "has_missing_rate": smr.get("has_missing_rate", False),
         })
 
     for ex in extras:
         name = ex.get("smr_type") or ex.get("activity_type", "")
+        if _is_noise(name):
+            continue
         key = name.lower().strip()
         if key in seen:
             continue
@@ -219,6 +240,8 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         smr = by_smr.get(key, {})
         dh = round(smr.get("draft_hours", 0), 1)
         ah = round(smr.get("approved_hours", 0), 1)
+        total_clean = round(smr.get("draft_clean", 0) + smr.get("approved_clean", 0), 2)
+        total_oh = round(smr.get("draft_oh", 0) + smr.get("approved_oh", 0), 2)
         activities.append({
             "category": "Допълнителни",
             "activity_name": name,
@@ -227,12 +250,13 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
             "material_budget": 0, "labor_budget": 0, "total_budget": 0,
             "planned_hours": 0, "draft_hours": dh, "approved_hours": ah,
             "total_reported_hours": round(dh + ah, 1),
-            "clean_labor_cost": round(smr.get("approved_clean", 0), 2),
-            "labor_cost_with_overhead": round(smr.get("approved_clean", 0) + smr.get("approved_oh", 0), 2),
+            "clean_labor_cost": total_clean,
+            "labor_cost_with_overhead": round(total_clean + total_oh, 2),
             "subcontractor_price": None,
             "burn_pct_approved": 0, "burn_pct_total": 0,
             "risk_status": "yellow" if (dh + ah) > 0 else "green",
             "is_extra": True, "source": "missing_smr",
+            "has_missing_rate": smr.get("has_missing_rate", False),
         })
 
     # ── PROJECTION 2: Personnel ─────────────────────────────────

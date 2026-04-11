@@ -51,6 +51,7 @@ export default function CentralizedActivitiesTable({ projectId }) {
   const redCount = activities.filter(a => a.risk_status === "red").length;
   const yellowCount = activities.filter(a => a.risk_status === "yellow").length;
   const extraCount = activities.filter(a => a.is_extra).length;
+  const missingRateCount = activities.filter(a => a.has_missing_rate).length;
 
   return (
     <div className="space-y-3" data-testid="centralized-activities-table">
@@ -65,6 +66,7 @@ export default function CentralizedActivitiesTable({ projectId }) {
           {redCount > 0 && <Badge className="bg-red-500/20 text-red-400 text-[9px]">{redCount} {t("actTable.overBudget")}</Badge>}
           {yellowCount > 0 && <Badge className="bg-amber-500/20 text-amber-400 text-[9px]">{yellowCount} {t("actTable.warning")}</Badge>}
           {extraCount > 0 && <Badge className="bg-blue-500/20 text-blue-400 text-[9px]">{extraCount} {t("actTable.extra")}</Badge>}
+          {missingRateCount > 0 && <Badge className="bg-red-500/20 text-red-400 text-[9px]">{missingRateCount} {t("actTable.missingRate")}</Badge>}
         </div>
       </div>
 
@@ -140,6 +142,7 @@ export default function CentralizedActivitiesTable({ projectId }) {
                   <TableCell>
                     {a.is_extra && <Badge variant="outline" className="text-[8px] bg-amber-500/10 text-amber-400">{t("actTable.extraLabel")}</Badge>}
                     {!a.planned_hours && !a.is_extra && <Badge variant="outline" className="text-[8px] text-muted-foreground">{t("actTable.noBudget")}</Badge>}
+                    {a.has_missing_rate && <Badge variant="outline" className="text-[8px] bg-red-500/10 text-red-400 border-red-400/30 ml-0.5">{t("actTable.missingRate")}</Badge>}
                   </TableCell>
                   <TableCell>
                     {a.total_reported_hours > 0 && (

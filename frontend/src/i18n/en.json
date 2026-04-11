@@ -1843,7 +1843,8 @@
     "warning": "warning",
     "extra": "extra",
     "extraLabel": "Extra",
-    "noBudget": "No budget"
+    "noBudget": "No budget",
+    "missingRate": "Missing rate"
   },
   "activityReports": {
     "title": "Activity Reports",

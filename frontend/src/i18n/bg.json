@@ -2025,7 +2025,8 @@
     "warning": "внимание",
     "extra": "допълнителни",
     "extraLabel": "Допълнителна",
-    "noBudget": "Без бюджет"
+    "noBudget": "Без бюджет",
+    "missingRate": "Липсва ставка"
   },
   "activityReports": {
     "title": "Отчети за дейност",
