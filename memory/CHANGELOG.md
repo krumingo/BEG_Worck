@@ -1,3 +1,12 @@
+## Apr 11, 2026 — Cash Result Fix: ONLY paid labor, no fallback
+
+### Fix
+- `effective_cash_labor = paid_labor_expense` (was: `paid if >0 else reported`)
+- Cash out = paid labor only. If no paid allocations → labor cash out = 0
+- New warning: "Има отчетен труд (X EUR), който още не е платен — не е включен в cash out"
+- 1 file changed: project_financial_results.py (3 lines)
+
+
 ## Apr 11, 2026 — Paid Labor → Project Financial Results Integration
 
 ### Backend: compute_financial_results enriched

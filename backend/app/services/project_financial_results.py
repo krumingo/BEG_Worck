@@ -56,8 +56,9 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     else:
         labor_expense_basis = "reported"
 
-    # Cash result uses PAID labor if available, else reported
-    effective_cash_labor = paid_labor_expense if paid_labor_expense > 0 else reported_labor
+    # Cash result uses ONLY paid labor — no fallback to reported
+    # reported labor is operational value, NOT cash out
+    effective_cash_labor = paid_labor_expense
 
     # Supplier/material payments
     issues = await db.warehouse_transactions.find(
@@ -118,6 +119,8 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         warnings.append(f"Одобрен, но неплатен труд: {unpaid_approved} EUR")
     if paid_labor_expense > 0 and reported_labor == 0:
         warnings.append("Има платен труд, но няма отчетен труд от work_sessions")
+    if reported_labor > 0 and paid_labor_expense == 0:
+        warnings.append(f"Има отчетен труд ({reported_labor} EUR), който още не е платен — не е включен в cash out")
 
     # ══════════════════════════════════════════════════════════════
     # B) OPERATING RESULT
