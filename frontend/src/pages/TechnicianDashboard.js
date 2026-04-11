@@ -42,6 +42,8 @@ export default function TechnicianDashboard() {
   const [availablePeople, setAvailablePeople] = useState([]);
   const [showAddPeople, setShowAddPeople] = useState(false);
   const [selectedToAdd, setSelectedToAdd] = useState([]);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerFilter, setPickerFilter] = useState("all");
 
   // Report
   const [reportMode, setReportMode] = useState("person"); // person | group
@@ -382,7 +384,7 @@ export default function TechnicianDashboard() {
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1"><h2 className="font-bold">{t("technician.people")}</h2><p className="text-xs text-muted-foreground">{selectedSite?.name} — {t("technician.todayRoster")}</p></div>
-        <Button size="sm" onClick={() => { setSelectedToAdd([]); setShowAddPeople(true); }}><Plus className="w-4 h-4 mr-1" />{t("technician.add")}</Button>
+        <Button size="sm" onClick={() => { setSelectedToAdd([]); setPickerSearch(""); setPickerFilter("all"); setShowAddPeople(true); }}><Plus className="w-4 h-4 mr-1" />{t("technician.add")}</Button>
       </div>
 
       {/* Current roster */}
@@ -404,32 +406,66 @@ export default function TechnicianDashboard() {
       ))}
 
       {/* Add People Modal */}
-      {showAddPeople && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end justify-center">
-          <div className="w-full max-w-lg bg-card border-t border-border rounded-t-2xl p-4 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold">{t("technician.addPeople")}</h3>
-              <Button variant="ghost" size="sm" onClick={() => setShowAddPeople(false)}>✕</Button>
-            </div>
-            {availablePeople.length === 0 ? <p className="text-center py-4 text-muted-foreground text-sm">{t("technician.allOnSite")}</p> : (
-              <div className="space-y-2">
-                {availablePeople.map(p => (
-                  <label key={p.worker_id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedToAdd.includes(p.worker_id) ? "border-primary bg-primary/5" : "border-border"}`}>
-                    <Checkbox checked={selectedToAdd.includes(p.worker_id)} onCheckedChange={c => setSelectedToAdd(prev => c ? [...prev, p.worker_id] : prev.filter(id => id !== p.worker_id))} />
-                    {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-9 h-9 rounded-full object-cover" alt="" /> : (
-                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(p.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
-                    )}
-                    <div className="flex-1"><p className="text-sm font-medium">{p.worker_name}</p><p className="text-[10px] text-muted-foreground">{p.position || "—"}</p></div>
-                  </label>
-                ))}
+      {showAddPeople && (() => {
+        const filtered = availablePeople.filter(p => {
+          if (pickerSearch) {
+            const q = pickerSearch.toLowerCase();
+            if (!((p.worker_name || "").toLowerCase().includes(q) || (p.position || "").toLowerCase().includes(q))) return false;
+          }
+          if (pickerFilter && pickerFilter !== "all") {
+            if ((p.position || "").toLowerCase() !== pickerFilter.toLowerCase()) return false;
+          }
+          return true;
+        });
+        const positions = [...new Set(availablePeople.map(p => p.position).filter(Boolean))].sort();
+
+        return (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end justify-center">
+            <div className="w-full max-w-lg bg-card border-t border-border rounded-t-2xl p-4 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold">{t("technician.addPeople")}</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowAddPeople(false)}>✕</Button>
               </div>
-            )}
-            {selectedToAdd.length > 0 && (
-              <Button onClick={addSelectedWorkers} className="w-full h-14 text-lg rounded-2xl mt-3"><Plus className="w-5 h-5 mr-2" />{t("technician.addSelected")} ({selectedToAdd.length})</Button>
-            )}
+
+              {/* Search */}
+              <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder={t("technician.searchPeople")} className="h-11 mb-2" />
+
+              {/* Position filter chips */}
+              {positions.length > 0 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 flex-shrink-0">
+                  <button onClick={() => setPickerFilter("all")} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${!pickerFilter || pickerFilter === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{t("common.all")}</button>
+                  {positions.map(pos => (
+                    <button key={pos} onClick={() => setPickerFilter(pos)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${pickerFilter === pos ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{pos}</button>
+                  ))}
+                </div>
+              )}
+
+              {/* List */}
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {filtered.length === 0 ? <p className="text-center py-8 text-muted-foreground text-sm">{pickerSearch ? t("technician.noSearchResults") : t("technician.allOnSite")}</p> : (
+                  filtered.map(p => (
+                    <label key={p.worker_id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer active:scale-[0.98] transition-transform ${selectedToAdd.includes(p.worker_id) ? "border-primary bg-primary/5" : "border-border"}`}>
+                      <Checkbox checked={selectedToAdd.includes(p.worker_id)} onCheckedChange={c => setSelectedToAdd(prev => c ? [...prev, p.worker_id] : prev.filter(id => id !== p.worker_id))} />
+                      {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" /> : (
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(p.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{p.worker_name}</p>
+                        <p className="text-[10px] text-muted-foreground">{p.position || "—"}</p>
+                      </div>
+                      {p.recent_on_site && <Badge variant="outline" className="text-[8px] text-cyan-400 border-cyan-400/30 flex-shrink-0">{t("technician.recent")}</Badge>}
+                    </label>
+                  ))
+                )}
+              </div>
+
+              {selectedToAdd.length > 0 && (
+                <Button onClick={addSelectedWorkers} className="w-full h-14 text-lg rounded-2xl mt-3 flex-shrink-0"><Plus className="w-5 h-5 mr-2" />{t("technician.addSelected")} ({selectedToAdd.length})</Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 

@@ -1711,7 +1711,9 @@
     "addSelected": "Add selected",
     "workersAdded": "workers added",
     "workerRemoved": "Worker removed",
-    "overtime": "Overtime"
+    "overtime": "Overtime",
+    "searchPeople": "Search by name or position...",
+    "noSearchResults": "No matches found"
   },
   "projectContext": {
     "active": "Site",

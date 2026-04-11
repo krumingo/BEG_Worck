@@ -521,6 +521,17 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
     )
     existing_ids = {w.get("worker_id") for w in (doc or {}).get("workers", [])}
 
+    # Recent workers on this site (last 14 days)
+    cutoff = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=14)).strftime("%Y-%m-%d")
+    recent_ids = set()
+    past_rosters = await db.site_daily_rosters.find(
+        {"org_id": org_id, "project_id": project_id, "date": {"$gte": cutoff}},
+        {"_id": 0, "workers": 1},
+    ).to_list(30)
+    for r in past_rosters:
+        for w in r.get("workers", []):
+            recent_ids.add(w.get("worker_id"))
+
     # All active profiles
     profiles = await db.employee_profiles.find(
         {"org_id": org_id, "active": True},
@@ -528,6 +539,7 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
     ).to_list(200)
     profile_map = {p["user_id"]: p for p in profiles}
     profile_ids = set(profile_map.keys())
+    positions_set = set()
 
     # All org users (with avatar from users collection)
     all_users = await db.users.find(
@@ -542,16 +554,20 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
             continue
         p = profile_map.get(uid, {})
         name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+        pos = p.get("position") or p.get("role", "")
+        if pos:
+            positions_set.add(pos)
         available.append({
             "worker_id": uid,
             "worker_name": name,
             "avatar_url": u.get("avatar_url") or p.get("avatar_url"),
-            "position": p.get("position") or p.get("role", ""),
+            "position": pos,
             "has_profile": uid in profile_ids,
+            "recent_on_site": uid in recent_ids,
         })
 
-    available.sort(key=lambda x: (0 if x["has_profile"] else 1, x["worker_name"]))
-    return {"available": available, "total": len(available)}
+    available.sort(key=lambda x: (0 if x["recent_on_site"] else 1, x["worker_name"]))
+    return {"available": available, "total": len(available), "positions": sorted(positions_set)}
 
 
 @router.post("/technician/site/{project_id}/roster/remove-worker")

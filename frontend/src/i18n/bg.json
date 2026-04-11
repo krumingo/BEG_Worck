@@ -1893,7 +1893,9 @@
     "addSelected": "Добави избраните",
     "workersAdded": "работника добавени",
     "workerRemoved": "Работникът е махнат",
-    "overtime": "Наднормено"
+    "overtime": "Наднормено",
+    "searchPeople": "Търси по име или длъжност...",
+    "noSearchResults": "Няма съвпадения"
   },
   "projectContext": {
     "active": "Обект",
