@@ -17,9 +17,10 @@ import {
 import {
   Clock, Users, FileText, AlertTriangle, Filter, ChevronLeft,
   ChevronRight, ArrowUpDown, MapPin, User, Check, X as XIcon,
-  Briefcase, Eye, CalendarDays, List,
+  Briefcase, Eye, CalendarDays, List, DollarSign,
 } from "lucide-react";
 import WeeklyMatrixSection from "@/components/WeeklyMatrixSection";
+import PayrollBatchSection from "@/components/PayrollBatchSection";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -136,10 +137,20 @@ export default function AllReportsPage() {
         >
           <CalendarDays className="w-3.5 h-3.5" />{t("allReports.tabWeekly")}
         </button>
+        <button
+          onClick={() => setActiveTab("payroll")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "payroll" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="tab-payroll"
+        >
+          <DollarSign className="w-3.5 h-3.5" />{t("allReports.tabPayroll")}
+        </button>
       </div>
 
       {/* Weekly Matrix Tab */}
       {activeTab === "weekly" && <WeeklyMatrixSection />}
+
+      {/* Payroll Batch Tab */}
+      {activeTab === "payroll" && <PayrollBatchSection />}
 
       {/* All Reports Tab */}
       {activeTab === "all" && (
