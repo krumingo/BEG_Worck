@@ -1,3 +1,29 @@
+## Apr 11, 2026 — Official Payslip + Legacy Demotion
+
+### New Payslip Endpoint: GET /api/payslip/{batch_id}/{worker_id}
+- Returns: worker info, summary (days/hours/normal/OT/gross/bonuses/deductions/net)
+- Breakdowns: by_day (entries), by_project (hours+value), by_smr (hours), allocations
+- Traceability: batch_id → report_ids → worker → projects → paid_at
+
+### Frontend: PayslipDialog.js
+- Worker header + status badge + period
+- 6-card summary: Дни | Часове | Норм. | Извънр. | Брутно | Нетно
+- ПО ДНИ table: date, hours, normal, overtime, details (SMR@Project)
+- ПО ОБЕКТИ: project name, hours, value
+- Final calculation: Брутно → Бонуси → Удръжки → За плащане
+- Paid indicator: ✓ Платено на YYYY-MM-DD
+
+### Visible "Фиш" button:
+- Payroll tab → ФИШОВЕ ЗА ЗАПЛАТИ section (for paid weeks)
+- Employee dossier → Заплати tab → Фиш per week row
+
+### Legacy demotion:
+- Sidebar: /payroll renamed to "Фишове (стар)" via nav.payrollLegacy
+
+### Test: 100% backend (16/16) + 100% frontend
+- /app/test_reports/iteration_69.json
+
+
 ## Apr 11, 2026 — Final Dossier Wiring (All Reports + Weekly + Payroll)
 
 ### Worker Name/Avatar Links Added:
