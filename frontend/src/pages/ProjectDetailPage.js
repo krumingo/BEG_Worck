@@ -39,6 +39,7 @@ import SubcontractorPerformancePanel from "@/components/SubcontractorPerformance
 import ProjectActivitiesTable from "@/components/ProjectActivitiesTable";
 import CentralizedProjectView from "@/components/CentralizedProjectView";
 import FinancialResultsCard from "@/components/FinancialResultsCard";
+import ProjectPersonnelPanel from "@/components/ProjectPersonnelPanel";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -337,6 +338,9 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: TEAM ════ */}
         <TabsContent value="team" className="space-y-4 mt-4">
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <ProjectPersonnelPanel projectId={projectId} />
+          </div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <PersonnelUnified projectId={projectId} team={team} />
           </div>

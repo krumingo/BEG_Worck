@@ -1806,6 +1806,25 @@
     "oh": "Overhead:",
     "totalCost": "Total Cost"
   },
+  "personnelPanel": {
+    "total": "Total",
+    "today": "Today",
+    "withDrafts": "With Drafts",
+    "withApproved": "With Approved",
+    "cleanLabor": "Clean Labor",
+    "loadedLabor": "Loaded",
+    "missingRate": "worker(s) without rate",
+    "noWorkers": "No personnel data for this project",
+    "worker": "Worker",
+    "todayStatus": "Today",
+    "drafts": "Drafts",
+    "approved": "Approved",
+    "hours": "Hours",
+    "clean": "Clean",
+    "loaded": "Loaded",
+    "viewReports": "Reports",
+    "noRate": "No rate"
+  },
   "activityReports": {
     "title": "Activity Reports",
     "status": "Status",

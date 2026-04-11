@@ -1988,6 +1988,25 @@
     "oh": "Режийни:",
     "totalCost": "Общ разход"
   },
+  "personnelPanel": {
+    "total": "Общо",
+    "today": "Днес",
+    "withDrafts": "С чернови",
+    "withApproved": "С одобрени",
+    "cleanLabor": "Чист труд",
+    "loadedLabor": "С режийни",
+    "missingRate": "работник(а) без ставка",
+    "noWorkers": "Няма данни за персонал по обекта",
+    "worker": "Работник",
+    "todayStatus": "Днес",
+    "drafts": "Чернови",
+    "approved": "Одобрени",
+    "hours": "Часове",
+    "clean": "Чист",
+    "loaded": "С режийни",
+    "viewReports": "Отчети",
+    "noRate": "Без ставка"
+  },
   "activityReports": {
     "title": "Отчети за дейност",
     "status": "Статус",
