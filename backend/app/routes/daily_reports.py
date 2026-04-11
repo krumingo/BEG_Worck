@@ -237,6 +237,9 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
                 "labor_cost": round(hours * rate, 2),
                 "notes": report.get("notes", ""),
                 "approved_report_id": report_id,
+                "entered_by_admin": report.get("entered_by_admin", False),
+                "entry_mode": report.get("entry_mode", "technician_portal"),
+                "submitted_by": report.get("submitted_by"),
                 "created_at": now,
                 "updated_at": now,
             }

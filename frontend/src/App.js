@@ -99,6 +99,22 @@ function CompanyProtectedRoute({ children }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+// Admin-only route guard: redirects non-admin roles to /tech
+const ADMIN_ROLES = ["Admin", "Owner", "SiteManager", "Accountant"];
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!ADMIN_ROLES.includes(user.role)) return <Navigate to="/tech" replace />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
 function CompanyPublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -150,73 +166,74 @@ function AppRoutes() {
       {/* Public offer review - no auth needed */}
       <Route path="/offers/review/:reviewToken" element={<OfferReviewPage />} />
       
-      {/* Protected company routes */}
+      {/* Routes accessible to ALL authenticated users (including Technician/Worker) */}
       <Route path="/" element={<CompanyProtectedRoute><DashboardPage /></CompanyProtectedRoute>} />
       <Route path="/projects" element={<CompanyProtectedRoute><ProjectsListPage /></CompanyProtectedRoute>} />
       <Route path="/projects/:projectId" element={<CompanyProtectedRoute><ProjectDetailPage /></CompanyProtectedRoute>} />
-      {/* Redirect old /sites routes to /projects */}
       <Route path="/sites" element={<Navigate to="/projects" replace />} />
       <Route path="/sites/:siteId" element={<Navigate to="/projects" replace />} />
       <Route path="/my-day" element={<CompanyProtectedRoute><MyDayPage /></CompanyProtectedRoute>} />
       <Route path="/attendance-history" element={<CompanyProtectedRoute><AttendanceHistoryPage /></CompanyProtectedRoute>} />
-      <Route path="/site-attendance" element={<CompanyProtectedRoute><SiteAttendancePage /></CompanyProtectedRoute>} />
-      <Route path="/work-reports/new" element={<CompanyProtectedRoute><WorkReportFormPage /></CompanyProtectedRoute>} />
-      <Route path="/work-reports/:reportId" element={<CompanyProtectedRoute><WorkReportFormPage /></CompanyProtectedRoute>} />
-      <Route path="/review-reports" element={<CompanyProtectedRoute><WorkReportReviewPage /></CompanyProtectedRoute>} />
-      <Route path="/reports" element={<CompanyProtectedRoute><ReportsModulePage /></CompanyProtectedRoute>} />
-      <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
-      <Route path="/reminders" element={<CompanyProtectedRoute><RemindersPage /></CompanyProtectedRoute>} />
-      <Route path="/offers" element={<CompanyProtectedRoute><OffersListPage /></CompanyProtectedRoute>} />
-      <Route path="/offers/new" element={<CompanyProtectedRoute><OfferEditorPage /></CompanyProtectedRoute>} />
-      <Route path="/offers/:offerId" element={<CompanyProtectedRoute><OfferEditorPage /></CompanyProtectedRoute>} />
-      <Route path="/activity-catalog" element={<CompanyProtectedRoute><ActivityCatalogPage /></CompanyProtectedRoute>} />
-      <Route path="/ai-calibration" element={<CompanyProtectedRoute><AICalibrationPage /></CompanyProtectedRoute>} />
-      <Route path="/procurement" element={<CompanyProtectedRoute><ProcurementPage /></CompanyProtectedRoute>} />
-      <Route path="/inventory" element={<CompanyProtectedRoute><InventoryDashboardPage /></CompanyProtectedRoute>} />
-      <Route path="/historical-offers" element={<CompanyProtectedRoute><HistoricalOffersPage /></CompanyProtectedRoute>} />
-      <Route path="/employees" element={<CompanyProtectedRoute><EmployeesPage /></CompanyProtectedRoute>} />
-      <Route path="/employees/:userId" element={<CompanyProtectedRoute><EmployeeDetailPage /></CompanyProtectedRoute>} />
-      <Route path="/projects/:projectId/novo-smr" element={<CompanyProtectedRoute><NovoSMRPage /></CompanyProtectedRoute>} />
-      <Route path="/projects/:projectId/financial" element={<CompanyProtectedRoute><ProjectFinancialPage /></CompanyProtectedRoute>} />
-      <Route path="/projects/:projectId/progress" element={<CompanyProtectedRoute><ProjectProgressPage /></CompanyProtectedRoute>} />
-      <Route path="/projects/:projectId/operations" element={<CompanyProtectedRoute><ProjectOperationsPage /></CompanyProtectedRoute>} />
-      <Route path="/advances" element={<CompanyProtectedRoute><AdvancesPage /></CompanyProtectedRoute>} />
-      <Route path="/payroll" element={<CompanyProtectedRoute><PayrollRunsPage /></CompanyProtectedRoute>} />
-      <Route path="/payroll/:runId" element={<CompanyProtectedRoute><PayrollDetailPage /></CompanyProtectedRoute>} />
       <Route path="/my-payslips" element={<CompanyProtectedRoute><MyPayslipsPage /></CompanyProtectedRoute>} />
-      <Route path="/finance" element={<CompanyProtectedRoute><FinanceOverviewPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/accounts" element={<CompanyProtectedRoute><FinancialAccountsPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/invoices" element={<CompanyProtectedRoute><InvoicesPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/invoices/new" element={<CompanyProtectedRoute><InvoiceEditorPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/invoices/:invoiceId" element={<CompanyProtectedRoute><InvoiceEditorPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/invoices/:invoiceId/lines" element={<CompanyProtectedRoute><InvoiceLinesPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/payments" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
-      <Route path="/finance/payments/new" element={<CompanyProtectedRoute><PaymentsPage /></CompanyProtectedRoute>} />
-      <Route path="/overhead" element={<CompanyProtectedRoute><OverheadPage /></CompanyProtectedRoute>} />
-      <Route path="/overhead/snapshots/:snapshotId" element={<CompanyProtectedRoute><OverheadSnapshotDetailPage /></CompanyProtectedRoute>} />
-      {/* Data Module Routes */}
-      <Route path="/data/warehouses" element={<CompanyProtectedRoute><WarehousesPage /></CompanyProtectedRoute>} />
-      <Route path="/data/counterparties" element={<CompanyProtectedRoute><CounterpartiesPage /></CompanyProtectedRoute>} />
-      <Route path="/data/items" element={<CompanyProtectedRoute><ItemsPage /></CompanyProtectedRoute>} />
-      <Route path="/data/prices" element={<CompanyProtectedRoute><PricesPage /></CompanyProtectedRoute>} />
-      <Route path="/data/turnover" element={<CompanyProtectedRoute><TurnoverPage /></CompanyProtectedRoute>} />
-      <Route path="/data/clients" element={<CompanyProtectedRoute><ClientsPage /></CompanyProtectedRoute>} />
-      <Route path="/reports/finance-details" element={<CompanyProtectedRoute><FinanceDetailsPage /></CompanyProtectedRoute>} />
-      {/* Work Logs Module (Дневник + Промени СМР) */}
-      <Route path="/daily-logs" element={<CompanyProtectedRoute><DailyLogsPage /></CompanyProtectedRoute>} />
-      <Route path="/change-orders" element={<CompanyProtectedRoute><ChangeOrdersPage /></CompanyProtectedRoute>} />
-      <Route path="/missing-smr" element={<CompanyProtectedRoute><MissingSMRPage /></CompanyProtectedRoute>} />
-      <Route path="/smr-analyses" element={<CompanyProtectedRoute><SMRAnalysisListPage /></CompanyProtectedRoute>} />
-      <Route path="/projects/:projectId/smr-analysis/:analysisId" element={<CompanyProtectedRoute><SMRAnalysisPage /></CompanyProtectedRoute>} />
-      <Route path="/pricing" element={<CompanyProtectedRoute><MaterialCatalogPage /></CompanyProtectedRoute>} />
-      <Route path="/contract-payments" element={<CompanyProtectedRoute><ContractPaymentsPage /></CompanyProtectedRoute>} />
-      <Route path="/worker-calendar" element={<CompanyProtectedRoute><WorkerCalendarPage /></CompanyProtectedRoute>} />
-      <Route path="/alarms" element={<CompanyProtectedRoute><AlarmsDashboardPage /></CompanyProtectedRoute>} />
       <Route path="/tech" element={<CompanyProtectedRoute><TechnicianDashboard /></CompanyProtectedRoute>} />
-      <Route path="/clients/:clientId" element={<CompanyProtectedRoute><ClientDetailPage /></CompanyProtectedRoute>} />
-      <Route path="/ocr-invoices" element={<CompanyProtectedRoute><OCRInvoicePage /></CompanyProtectedRoute>} />
-      <Route path="/users" element={<CompanyProtectedRoute><UsersPage /></CompanyProtectedRoute>} />
-      <Route path="/settings" element={<CompanyProtectedRoute><CompanySettingsPage /></CompanyProtectedRoute>} />
+      <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
+
+      {/* Admin-only routes — Technician/Worker/Driver redirected to /tech */}
+      <Route path="/site-attendance" element={<AdminRoute><SiteAttendancePage /></AdminRoute>} />
+      <Route path="/work-reports/new" element={<AdminRoute><WorkReportFormPage /></AdminRoute>} />
+      <Route path="/work-reports/:reportId" element={<AdminRoute><WorkReportFormPage /></AdminRoute>} />
+      <Route path="/review-reports" element={<AdminRoute><WorkReportReviewPage /></AdminRoute>} />
+      <Route path="/reports" element={<AdminRoute><ReportsModulePage /></AdminRoute>} />
+      <Route path="/reminders" element={<AdminRoute><RemindersPage /></AdminRoute>} />
+      <Route path="/offers" element={<AdminRoute><OffersListPage /></AdminRoute>} />
+      <Route path="/offers/new" element={<AdminRoute><OfferEditorPage /></AdminRoute>} />
+      <Route path="/offers/:offerId" element={<AdminRoute><OfferEditorPage /></AdminRoute>} />
+      <Route path="/activity-catalog" element={<AdminRoute><ActivityCatalogPage /></AdminRoute>} />
+      <Route path="/ai-calibration" element={<AdminRoute><AICalibrationPage /></AdminRoute>} />
+      <Route path="/procurement" element={<AdminRoute><ProcurementPage /></AdminRoute>} />
+      <Route path="/inventory" element={<AdminRoute><InventoryDashboardPage /></AdminRoute>} />
+      <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
+      <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
+      <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/novo-smr" element={<AdminRoute><NovoSMRPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/financial" element={<AdminRoute><ProjectFinancialPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/progress" element={<AdminRoute><ProjectProgressPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/operations" element={<AdminRoute><ProjectOperationsPage /></AdminRoute>} />
+      <Route path="/advances" element={<AdminRoute><AdvancesPage /></AdminRoute>} />
+      <Route path="/payroll" element={<AdminRoute><PayrollRunsPage /></AdminRoute>} />
+      <Route path="/payroll/:runId" element={<AdminRoute><PayrollDetailPage /></AdminRoute>} />
+      <Route path="/finance" element={<AdminRoute><FinanceOverviewPage /></AdminRoute>} />
+      <Route path="/finance/accounts" element={<AdminRoute><FinancialAccountsPage /></AdminRoute>} />
+      <Route path="/finance/invoices" element={<AdminRoute><InvoicesPage /></AdminRoute>} />
+      <Route path="/finance/invoices/new" element={<AdminRoute><InvoiceEditorPage /></AdminRoute>} />
+      <Route path="/finance/invoices/:invoiceId" element={<AdminRoute><InvoiceEditorPage /></AdminRoute>} />
+      <Route path="/finance/invoices/:invoiceId/lines" element={<AdminRoute><InvoiceLinesPage /></AdminRoute>} />
+      <Route path="/finance/payments" element={<AdminRoute><PaymentsPage /></AdminRoute>} />
+      <Route path="/finance/payments/new" element={<AdminRoute><PaymentsPage /></AdminRoute>} />
+      <Route path="/overhead" element={<AdminRoute><OverheadPage /></AdminRoute>} />
+      <Route path="/overhead/snapshots/:snapshotId" element={<AdminRoute><OverheadSnapshotDetailPage /></AdminRoute>} />
+      {/* Data Module Routes */}
+      <Route path="/data/warehouses" element={<AdminRoute><WarehousesPage /></AdminRoute>} />
+      <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
+      <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
+      <Route path="/data/prices" element={<AdminRoute><PricesPage /></AdminRoute>} />
+      <Route path="/data/turnover" element={<AdminRoute><TurnoverPage /></AdminRoute>} />
+      <Route path="/data/clients" element={<AdminRoute><ClientsPage /></AdminRoute>} />
+      <Route path="/reports/finance-details" element={<AdminRoute><FinanceDetailsPage /></AdminRoute>} />
+      {/* Work Logs Module */}
+      <Route path="/daily-logs" element={<AdminRoute><DailyLogsPage /></AdminRoute>} />
+      <Route path="/change-orders" element={<AdminRoute><ChangeOrdersPage /></AdminRoute>} />
+      <Route path="/missing-smr" element={<AdminRoute><MissingSMRPage /></AdminRoute>} />
+      <Route path="/smr-analyses" element={<AdminRoute><SMRAnalysisListPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/smr-analysis/:analysisId" element={<AdminRoute><SMRAnalysisPage /></AdminRoute>} />
+      <Route path="/pricing" element={<AdminRoute><MaterialCatalogPage /></AdminRoute>} />
+      <Route path="/contract-payments" element={<AdminRoute><ContractPaymentsPage /></AdminRoute>} />
+      <Route path="/worker-calendar" element={<AdminRoute><WorkerCalendarPage /></AdminRoute>} />
+      <Route path="/alarms" element={<AdminRoute><AlarmsDashboardPage /></AdminRoute>} />
+      <Route path="/clients/:clientId" element={<AdminRoute><ClientDetailPage /></AdminRoute>} />
+      <Route path="/ocr-invoices" element={<AdminRoute><OCRInvoicePage /></AdminRoute>} />
+      <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+      <Route path="/settings" element={<AdminRoute><CompanySettingsPage /></AdminRoute>} />
       
       {/* Company routes that also require platform admin (hybrid) */}
       <Route path="/plans" element={<CompanyProtectedRoute><PlatformAdminGuard><PlanSelectionPage /></PlatformAdminGuard></CompanyProtectedRoute>} />
