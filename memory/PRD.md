@@ -59,6 +59,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Read-only personnel status card: counters, alerts, per-person status/site/report
   - Sources: users + profiles + worker_calendar + rosters + daily_reports
   - Verified: 100% backend (12/12) + 100% frontend
+- **Всички отчети (All Reports) — Нов основен Tab** — Apr 11, 2026
+  - Централна read-only таблица за целия отчетен труд
+  - Filters, sorting, pagination, detail modal, value disclaimer
+  - Verified: 100% backend (17/17) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 

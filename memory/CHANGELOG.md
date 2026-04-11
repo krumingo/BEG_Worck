@@ -1,3 +1,30 @@
+## Apr 11, 2026 — New Main Tab: Всички отчети (All Reports)
+
+### Backend: GET /api/all-reports
+- Merges 2 report styles: new (technician portal flat) + old (structured day_entries)
+- Enriches with user names/avatars, project names, hourly rates, labor values
+- Filters: date_from, date_to, worker_id, project_id, smr, report_status, only_overtime
+- Sorting: date, worker, hours, value, status (asc/desc)
+- Pagination: page + page_size
+- Summary: total_hours, normal_hours, overtime_hours, total_value, by_status breakdown
+
+### Frontend: /all-reports (AllReportsPage.js)
+- Summary cards: Общо часове | Нормални | Наднормени | Стойност по отчет (EUR)
+- Status chips: Чернова (gray) | Подаден (blue) | Одобрен (green) | Отхвърлен (red)
+- Table: 12 columns — Дата, Служител (avatar+name), Обект (link), СМР, Часове, Норм., Извънр., Ставка, Стойност, Статус, Заплата, Детайл
+- Filters panel: дати, СМР, статус, само наднормено
+- Detail modal: full breakdown + audit info + value disclaimer
+- Sidebar: "Всички отчети" first item in "Дневник СМР" group
+
+### Status Logic
+- Report: Draft → Submitted → Approved / Rejected
+- Payroll: none → eligible → batched → paid (future)
+- Value disclaimer: "Стойност по отчет ≠ реален разход по проекта"
+
+### Test: 100% backend (17/17) + 100% frontend
+- /app/test_reports/iteration_62.json
+
+
 ## Apr 11, 2026 — Dashboard: Персонал днес
 
 ### New: Personnel Today Card
