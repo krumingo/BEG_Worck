@@ -1,3 +1,27 @@
+## Apr 11, 2026 — Unified Employee Dossier (Route Unification)
+
+### Single Route: /employees/:id?tab=
+- 7 tabs: Календар | Отчети | Заплати | Обекти | Заеми | Присъствия | Фишове
+- Deep links: ?tab=reports, ?tab=payroll-weeks, ?tab=advances, etc.
+- Summary cards: Общо часове | Изработено EUR | Платено EUR | Отчети count
+- Warnings: unpaid weeks, active loans, missing rate
+
+### Entry Points (all navigate to same /employees/:id):
+- Персонал → Служители list → click row
+- Отчети → Досие tab → worker picker → navigate to /employees/:id?tab=reports
+- Dashboard → Персонал днес → click worker name
+- All Reports table → worker name click
+- Weekly Matrix → worker click
+
+### Changes:
+- EmployeeDossierSection.js: rewritten to be worker picker → navigate (no duplicate dossier)
+- EmployeeDetailPage.js: added 3 new tabs (Отчети, Заплати, Заеми), dossier summary cards, warnings, ?tab= deep link
+- PersonnelTodayCard.js: worker name click → /employees/:id
+- Fixed: calendar endpoint 500 error in hr.py
+
+### Test: /app/test_reports/iteration_68.json — 100% frontend
+
+
 ## Apr 11, 2026 — Employee Dossier (Досие на служител)
 
 ### Backend: GET /api/employee-dossier/{worker_id}

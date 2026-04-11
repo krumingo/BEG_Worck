@@ -86,6 +86,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Aggregate view per worker: reports, payroll, calendar, advances, warnings
   - 4th tab in Reports: worker picker → header + inner tabs
   - Verified: 100% backend (15/15) + 100% frontend
+- **Unified Employee Dossier (Route Unification)** — Apr 11, 2026
+  - Single route /employees/:id with ?tab= deep links (7 tabs total)
+  - All entry points navigate to same dossier (Personnel, Reports, Dashboard, Payroll)
+  - Verified: 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 
