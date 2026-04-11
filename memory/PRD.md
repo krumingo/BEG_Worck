@@ -46,6 +46,12 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - Dashboard Integration (Pulse + Alarms + P&L + Overhead) — Apr 9, 2026
 - Project Context (auto-select across pages, URL params, sidebar banner) — Apr 9, 2026
 - Unified Client Card (summary, projects, invoices, deduplication) — Apr 9, 2026
+- Core Closure Phase 1-4: Technician Mobile Wizard, Approval = Posting, Centralized Reports, Financial Modeling — Apr 10, 2026
+- Admin Field Mode: Official admin entry to field portal with audit markers — Apr 10, 2026
+- **Admin Field Mode Hardening** (Route Protection + Audit Propagation) — Apr 11, 2026
+  - Frontend `AdminRoute` guard: non-admin roles redirected to `/tech` on direct URL access
+  - Audit markers (`entered_by_admin`, `entry_mode`, `submitted_by`) now propagated from `employee_daily_reports` to `work_sessions` on approval
+  - Verified: 100% backend (8/8) + 100% frontend (6/6) acceptance criteria
 
 ### UPCOMING PRIORITY BLOCKS:
 

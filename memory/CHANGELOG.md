@@ -1,3 +1,23 @@
+## Apr 11, 2026 — Admin Field Mode Hardening & Verification
+
+### Access Hardening
+- **AdminRoute guard** in App.js: 60+ admin-only routes now protected with role check
+- Non-admin roles (Technician, Worker, Driver, Viewer) redirected to `/tech` on direct URL access
+- Protected routes: /employees, /finance, /payroll, /offers, /settings, /data/*, /reports/*, /overhead, etc.
+- Allowed for all: /, /projects, /my-day, /attendance-history, /my-payslips, /tech, /notifications
+
+### Audit Marker Propagation Fix
+- `entered_by_admin`, `entry_mode`, `submitted_by` now propagated from `employee_daily_reports` to `work_sessions` on approval
+- Previously only saved in draft, NOT in the source-of-truth `work_sessions` collection
+
+### Verification (100% Pass)
+- Backend: 8/8 pytest tests passed (/app/backend/tests/test_admin_field_mode.py)
+- Frontend: 6/6 acceptance criteria verified via Playwright
+- E2E: Admin → field portal → roster → report → approve → work_session with audit markers confirmed
+- Route protection: /employees, /finance, /settings, /payroll all redirect to /tech for technician
+- Test report: /app/test_reports/iteration_59.json
+
+
 ## Apr 10, 2026 — Phase 1 Core Closure (Фази 1.1-1.4)
 
 ### Phase 1.1: Roster (site_daily_rosters)
