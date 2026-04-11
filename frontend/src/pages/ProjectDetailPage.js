@@ -37,6 +37,7 @@ import ExpectedActualPanel from "@/components/ExpectedActualPanel";
 import MaterialWastePanel from "@/components/MaterialWastePanel";
 import SubcontractorPerformancePanel from "@/components/SubcontractorPerformancePanel";
 import ProjectActivitiesTable from "@/components/ProjectActivitiesTable";
+import CentralizedProjectView from "@/components/CentralizedProjectView";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -227,6 +228,11 @@ export default function ProjectDetailPage() {
                 <div className="flex justify-between"><span className="text-gray-400">С ДДС:</span><span className="text-yellow-500 font-mono">{formatCurrency(offers.total_inc_vat, "BGN")}</span></div>
               </div>
             </div>
+          </div>
+
+          {/* Centralized View — single source for Activities/Personnel/Finance */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
+            <CentralizedProjectView projectId={projectId} />
           </div>
         </TabsContent>
 

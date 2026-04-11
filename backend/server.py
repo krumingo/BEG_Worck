@@ -1183,6 +1183,10 @@ api_router.include_router(excel_import_v2_router)
 from app.routes.subcontractor_performance import router as subcontractor_perf_router
 api_router.include_router(subcontractor_perf_router)
 
+# Import centralized reports router
+from app.routes.centralized_reports import router as centralized_reports_router
+api_router.include_router(centralized_reports_router)
+
 # Import OCR invoice router
 from app.routes.ocr_invoice import router as ocr_invoice_router
 api_router.include_router(ocr_invoice_router)
