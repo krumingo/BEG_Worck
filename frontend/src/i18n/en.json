@@ -204,6 +204,7 @@
     "alarms": "Alarms",
     "techView": "Field",
     "techDashboard": "My Workday",
+    "fieldPortal": "Field Portal",
     "ocrInvoices": "OCR Invoices"
   },
   "dashboard": {
@@ -1713,7 +1714,8 @@
     "workerRemoved": "Worker removed",
     "overtime": "Overtime",
     "searchPeople": "Search by name or position...",
-    "noSearchResults": "No matches found"
+    "noSearchResults": "No matches found",
+    "adminMode": "Admin Mode"
   },
   "projectContext": {
     "active": "Site",

@@ -218,6 +218,7 @@
     "alarms": "Аларми",
     "techView": "Терен",
     "techDashboard": "Моят работен ден",
+    "fieldPortal": "Теренен портал",
     "ocrInvoices": "OCR Фактури"
   },
   "dashboard": {
@@ -1895,7 +1896,8 @@
     "workerRemoved": "Работникът е махнат",
     "overtime": "Наднормено",
     "searchPeople": "Търси по име или длъжност...",
-    "noSearchResults": "Няма съвпадения"
+    "noSearchResults": "Няма съвпадения",
+    "adminMode": "Админ режим"
   },
   "projectContext": {
     "active": "Обект",

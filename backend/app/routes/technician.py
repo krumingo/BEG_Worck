@@ -699,6 +699,7 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
         smr_source = "known" if entry.smr_type.lower() in known_types else "manual"
 
         # Create DRAFT in employee_daily_reports
+        is_admin_entry = user["role"] in ["Admin", "Owner", "SiteManager"]
         draft = {
             "id": str(uuid.uuid4()),
             "org_id": org_id,
@@ -714,6 +715,8 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
             "smr_source": smr_source,
             "status": "Draft",
             "submitted_by": user["id"],
+            "entered_by_admin": is_admin_entry,
+            "entry_mode": "admin_field_portal" if is_admin_entry else "technician_portal",
             "created_at": now,
             "updated_at": now,
         }

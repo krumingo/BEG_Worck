@@ -30,6 +30,7 @@ const NAV_GROUPS = [
     children: [
       { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
       { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
+      { to: "/tech", icon: ClipboardPen, labelKey: "nav.fieldPortal" },
     ],
   },
   {

@@ -24,6 +24,7 @@ import { toast } from "sonner";
 export default function TechnicianDashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const isAdmin = ["Admin", "Owner", "SiteManager"].includes(user?.role);
 
   // Navigation state
   const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
@@ -264,6 +265,7 @@ export default function TechnicianDashboard() {
         <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-xl font-bold text-primary mx-auto mb-2">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
         <h1 className="text-xl font-bold">{user?.first_name} {user?.last_name}</h1>
         <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}</p>
+        {isAdmin && <Badge className="mt-2 bg-violet-500/20 text-violet-400 border-violet-500/30">{t("technician.adminMode")}</Badge>}
       </div>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t("technician.mySites")}</h2>
       {sites.length === 0 ? <p className="text-center py-8 text-muted-foreground">{t("technician.noSites")}</p> : sites.map(s => (
