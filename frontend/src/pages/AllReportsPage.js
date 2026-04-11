@@ -17,8 +17,9 @@ import {
 import {
   Clock, Users, FileText, AlertTriangle, Filter, ChevronLeft,
   ChevronRight, ArrowUpDown, MapPin, User, Check, X as XIcon,
-  Briefcase, Eye,
+  Briefcase, Eye, CalendarDays, List,
 } from "lucide-react";
+import WeeklyMatrixSection from "@/components/WeeklyMatrixSection";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -39,6 +40,7 @@ const PAYROLL_BADGE = {
 export default function AllReportsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("all"); // all | weekly
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -110,12 +112,40 @@ export default function AllReportsPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px]" data-testid="all-reports-page">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header + Tabs */}
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">{t("allReports.title")}</h1>
+          <h1 className="text-2xl font-bold">{t("allReports.pageTitle")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{t("allReports.subtitle")}</p>
         </div>
+      </div>
+
+      {/* Internal Tabs */}
+      <div className="flex items-center gap-1 mb-6 border-b border-border" data-testid="reports-tabs">
+        <button
+          onClick={() => setActiveTab("all")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "all" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="tab-all"
+        >
+          <List className="w-3.5 h-3.5" />{t("allReports.tabAll")}
+        </button>
+        <button
+          onClick={() => setActiveTab("weekly")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "weekly" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="tab-weekly"
+        >
+          <CalendarDays className="w-3.5 h-3.5" />{t("allReports.tabWeekly")}
+        </button>
+      </div>
+
+      {/* Weekly Matrix Tab */}
+      {activeTab === "weekly" && <WeeklyMatrixSection />}
+
+      {/* All Reports Tab */}
+      {activeTab === "all" && (
+      <>
+      {/* Filter button */}
+      <div className="flex justify-end mb-4">
         <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5" data-testid="toggle-filters-btn">
           <Filter className="w-3.5 h-3.5" />
           {t("allReports.filters")}
@@ -363,6 +393,8 @@ export default function AllReportsPage() {
           )}
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

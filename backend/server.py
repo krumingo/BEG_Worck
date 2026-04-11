@@ -1202,6 +1202,9 @@ api_router.include_router(ocr_invoice_router)
 from app.routes.all_reports import router as all_reports_router
 api_router.include_router(all_reports_router)
 
+from app.routes.weekly_matrix import router as weekly_matrix_router
+api_router.include_router(weekly_matrix_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

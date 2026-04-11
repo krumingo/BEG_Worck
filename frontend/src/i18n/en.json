@@ -2033,7 +2033,10 @@
     "noReportShort": "None"
   },
   "allReports": {
+    "pageTitle": "Reports",
     "title": "All Reports",
+    "tabAll": "All Reports",
+    "tabWeekly": "Weekly",
     "subtitle": "Central view of all reported labor",
     "filters": "Filters",
     "dateFrom": "From",
@@ -2072,5 +2075,25 @@
     "adminEntry": "Admin entry",
     "notes": "Notes",
     "valueDisclaimer": "Report value is operational / payroll source value. It does not automatically represent actual project expense."
+  },
+  "weekly": {
+    "satToFri": "Saturday → Friday",
+    "today": "Today",
+    "workers": "Workers",
+    "totalHours": "Total Hours",
+    "totalH": "Total h.",
+    "normal": "Normal",
+    "overtime": "Overtime",
+    "worker": "Worker",
+    "days": "Days",
+    "rate": "Rate",
+    "laborVal": "Labor",
+    "bonuses": "Bonuses",
+    "deductions": "Deductions",
+    "netPay": "Net Pay",
+    "grandTotal": "TOTAL",
+    "dayValue": "Day value",
+    "noData": "No data for selected week",
+    "valueDisclaimer": "Labor value is operational / payroll source value. Not automatically a real project expense."
   }
 }
