@@ -71,6 +71,12 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Third tab: eligible entries → day selection → adjustments → create batch → mark paid
   - Batch lifecycle: eligible → batched → paid. Does NOT allocate to projects yet
   - Verified: 100% backend (23/23) + 100% frontend
+- **Payment Allocation (Paid → Project Expense)** — Apr 11, 2026
+  - On batch Paid: gross labor allocated back to projects from report lines
+  - New collection: payroll_payment_allocations (full traceability)
+  - New endpoints: /payroll-batch/{id}/allocations, /projects/{pid}/paid-labor
+  - Deductions stay payroll-only, project expense = gross allocated
+  - Verified: 100% backend (15/15) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 

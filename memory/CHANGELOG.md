@@ -1,3 +1,32 @@
+## Apr 11, 2026 — Payment Allocation (Paid → Project Expense)
+
+### Core Logic
+- On batch `Paid`: gross labor allocated back to projects from included report lines
+- Allocation by value: each report line's gross = hours × hourly_rate → mapped to its project_id
+- Deductions (loans, fines, rent) stay payroll-only — do NOT reduce project labor expense
+- Project labor expense = sum of allocated_gross_labor from payroll_payment_allocations
+
+### New Collection: payroll_payment_allocations
+- Fields: id, org_id, payroll_batch_id, worker_id, worker_name, project_id, project_name
+- allocated_hours, allocated_gross_labor, allocation_basis (value|hours)
+- lines (array of {report_id, date, smr, hours, gross})
+- week_start, week_end, paid_at, created_by, created_at
+
+### New Endpoints
+- `GET /api/payroll-batch/{id}/allocations` — allocations grouped by project with workers
+- `GET /api/projects/{pid}/paid-labor` — total paid labor for a project (by_worker, by_week)
+
+### UI: Allocation Summary in Payroll Tab
+- Green card: "Разнесено по обекти" with project count badge + total EUR
+- Per project: name, worker count, hours, gross EUR
+- Disclaimer: "Брутната стойност на труда е разнесена обратно по обектите от включените отчети. Удръжките са само в заплатата."
+
+### Traceability: batch → worker → report_lines → project (full chain)
+
+### Test: 100% backend (15/15) + 100% frontend
+- /app/test_reports/iteration_65.json
+
+
 ## Apr 11, 2026 — Payroll Batch (Заплати Съб→Пет)
 
 ### Backend: /api/payroll-batch/*
