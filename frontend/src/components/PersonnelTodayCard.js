@@ -117,8 +117,8 @@ export default function PersonnelTodayCard() {
               )}
 
               {/* Name + Position */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{p.first_name} {p.last_name}</p>
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/employees/${p.id}`)}>
+                <p className="text-sm font-medium truncate hover:text-primary transition-colors">{p.first_name} {p.last_name}</p>
                 <p className="text-[10px] text-muted-foreground truncate">{p.position || p.role || "—"}</p>
               </div>
 

@@ -945,7 +945,7 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
     return {
         "month": month,
         "days": sorted(days.values(), key=lambda x: x["date"]),
-        "total_present": sum(1 for d in days.values() if d.get("attendance", {}).get("status") == "Present" if d.get("attendance")),
+        "total_present": sum(1 for d in days.values() if d.get("attendance") and d["attendance"].get("status") == "Present"),
         "total_hours": round(sum(d["total_hours"] for d in days.values()), 1),
     }
 

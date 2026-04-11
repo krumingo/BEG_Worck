@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
@@ -19,6 +19,7 @@ import {
 import {
   ArrowLeft, Calendar, Clock, MapPin, CreditCard, Loader2,
   ChevronLeft, ChevronRight, Save, X, Pencil, Camera,
+  FileText, DollarSign, Banknote, AlertTriangle, Briefcase, Check,
 } from "lucide-react";
 import ImageCropDialog from "@/components/ImageCropDialog";
 
@@ -48,13 +49,18 @@ const PAY_TYPES = [
 export default function EmployeeDetailPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const canEdit = ["Admin", "Owner"].includes(user?.role);
+  const defaultTab = searchParams.get("tab") || "calendar";
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [calMonth, setCalMonth] = useState(new Date().toISOString().slice(0, 7));
   const [calendar, setCalendar] = useState(null);
+
+  // Dossier data (reports, payroll batches, advances, dossier calendar)
+  const [dossier, setDossier] = useState(null);
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -96,6 +102,13 @@ export default function EmployeeDetailPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
+
+  // Load dossier data (reports, payroll batches, advances)
+  useEffect(() => {
+    API.get(`/employee-dossier/${userId}`)
+      .then(r => setDossier(r.data))
+      .catch(() => {});
+  }, [userId]);
 
   // Auto-calculation
   const updatePayField = (field, value) => {
@@ -366,12 +379,48 @@ export default function EmployeeDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue="calendar">
-        <TabsList className="mb-4">
+      {/* Dossier warnings */}
+      {dossier?.warnings?.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4" data-testid="dossier-warnings">
+          {dossier.warnings.map((w, i) => (
+            <Badge key={i} variant="outline" className={`text-[10px] ${w.type === "rate" ? "text-red-400 bg-red-500/10 border-red-500/30" : "text-amber-400 bg-amber-500/10 border-amber-500/30"}`}>
+              <AlertTriangle className="w-2.5 h-2.5 mr-1" />{w.text}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Dossier summary cards */}
+      {dossier && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4" data-testid="dossier-summary-cards">
+          <div className="rounded-lg bg-card border border-border p-2.5 text-center">
+            <p className="text-lg font-bold font-mono">{dossier.reports?.total_hours || 0}<span className="text-xs text-muted-foreground">ч</span></p>
+            <p className="text-[9px] text-muted-foreground">Общо часове</p>
+          </div>
+          <div className="rounded-lg bg-card border border-border p-2.5 text-center">
+            <p className="text-lg font-bold font-mono text-primary">{(dossier.reports?.total_value || 0).toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+            <p className="text-[9px] text-muted-foreground">Изработено</p>
+          </div>
+          <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5 text-center">
+            <p className="text-lg font-bold font-mono text-emerald-400">{(dossier.payroll?.total_paid || 0).toFixed(0)}<span className="text-xs text-emerald-400/60"> EUR</span></p>
+            <p className="text-[9px] text-emerald-400/70">Платено</p>
+          </div>
+          <div className="rounded-lg bg-card border border-border p-2.5 text-center">
+            <p className="text-lg font-bold font-mono">{dossier.reports?.count || 0}</p>
+            <p className="text-[9px] text-muted-foreground">Отчети</p>
+          </div>
+        </div>
+      )}
+
+      <Tabs defaultValue={defaultTab}>
+        <TabsList className="mb-4 flex-wrap">
           <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="w-4 h-4 mr-1" /> Календар</TabsTrigger>
+          <TabsTrigger value="reports" data-testid="tab-reports"><FileText className="w-4 h-4 mr-1" /> Отчети</TabsTrigger>
+          <TabsTrigger value="payroll-weeks" data-testid="tab-payroll-weeks"><DollarSign className="w-4 h-4 mr-1" /> Заплати</TabsTrigger>
           <TabsTrigger value="projects" data-testid="tab-projects"><MapPin className="w-4 h-4 mr-1" /> Обекти ({project_history.length})</TabsTrigger>
+          <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Заеми</TabsTrigger>
           <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="w-4 h-4 mr-1" /> Присъствия</TabsTrigger>
-          <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Заплащане</TabsTrigger>
+          <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Фишове</TabsTrigger>
         </TabsList>
 
         {/* Calendar Tab */}
@@ -463,7 +512,128 @@ export default function EmployeeDetailPage() {
           </div>
         </TabsContent>
 
-        {/* Payroll Tab */}
+        {/* ═══ DOSSIER: Reports Tab ═══ */}
+        <TabsContent value="reports">
+          <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="dossier-reports-tab">
+            {!dossier?.reports?.lines?.length ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">Няма отчети</div>
+            ) : (
+              <>
+                <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
+                  <span>Общо: <strong className="text-foreground">{dossier.reports.total_hours}ч</strong></span>
+                  <span>Стойност: <strong className="text-primary font-mono">{dossier.reports.total_value?.toFixed(0)} EUR</strong></span>
+                  <span>Записи: {dossier.reports.count}</span>
+                </div>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead className="text-[10px]">Дата</TableHead>
+                    <TableHead className="text-[10px]">Обект</TableHead>
+                    <TableHead className="text-[10px]">СМР</TableHead>
+                    <TableHead className="text-[10px] text-center">Часове</TableHead>
+                    <TableHead className="text-[10px] text-center">Извънр.</TableHead>
+                    <TableHead className="text-[10px] text-center">Стойност</TableHead>
+                    <TableHead className="text-[10px]">Статус</TableHead>
+                    <TableHead className="text-[10px]">Заплата</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {dossier.reports.lines.map((r, i) => (
+                      <TableRow key={`${r.id}-${i}`} className="hover:bg-muted/10">
+                        <TableCell className="text-xs font-mono">{r.date}</TableCell>
+                        <TableCell>{r.project_name ? <button onClick={() => navigate(`/projects/${r.project_id}`)} className="text-[10px] text-primary hover:underline flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{r.project_name}</button> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                        <TableCell className="text-xs truncate max-w-[120px]">{r.smr || "—"}</TableCell>
+                        <TableCell className="text-center text-xs font-mono font-bold">{r.hours}</TableCell>
+                        <TableCell className={`text-center text-xs font-mono ${r.overtime > 0 ? "text-amber-400 font-bold" : "text-muted-foreground"}`}>{r.overtime > 0 ? `+${r.overtime}` : "—"}</TableCell>
+                        <TableCell className="text-center text-xs font-mono text-primary">{r.value > 0 ? r.value.toFixed(0) : "—"}</TableCell>
+                        <TableCell><Badge variant="outline" className={`text-[9px] ${r.status === "APPROVED" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : r.status === "DRAFT" ? "bg-gray-500/15 text-gray-400 border-gray-500/30" : r.status === "SUBMITTED" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-red-500/15 text-red-400 border-red-500/30"}`}>{r.status === "APPROVED" ? "Одобрен" : r.status === "DRAFT" ? "Чернова" : r.status === "SUBMITTED" ? "Подаден" : r.status}</Badge></TableCell>
+                        <TableCell>{r.payroll_status === "paid" ? <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Платен</Badge> : r.payroll_status === "batched" ? <Badge variant="outline" className="text-[9px] bg-violet-500/15 text-violet-400 border-violet-500/30">В пакет</Badge> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ═══ DOSSIER: Payroll Weeks Tab ═══ */}
+        <TabsContent value="payroll-weeks">
+          <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="dossier-payroll-tab">
+            {!dossier?.payroll?.weeks?.length ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">Няма седмични заплати</div>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead className="text-[10px]">Седмица</TableHead>
+                  <TableHead className="text-[10px] text-center">Дни</TableHead>
+                  <TableHead className="text-[10px] text-center">Часове</TableHead>
+                  <TableHead className="text-[10px] text-center">Брутно</TableHead>
+                  <TableHead className="text-[10px] text-center">Бонуси</TableHead>
+                  <TableHead className="text-[10px] text-center">Удръжки</TableHead>
+                  <TableHead className="text-[10px] text-center bg-primary/5">Нетно</TableHead>
+                  <TableHead className="text-[10px]">Статус</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {dossier.payroll.weeks.map(w => (
+                    <TableRow key={w.batch_id} className="hover:bg-muted/10">
+                      <TableCell className="text-xs font-mono">{w.week_start} → {w.week_end}</TableCell>
+                      <TableCell className="text-center text-xs font-mono">{w.days}</TableCell>
+                      <TableCell className="text-center text-xs font-mono font-bold">{w.hours}</TableCell>
+                      <TableCell className="text-center text-xs font-mono text-primary">{w.gross > 0 ? w.gross.toFixed(0) : "—"}</TableCell>
+                      <TableCell className="text-center text-xs font-mono text-emerald-400">{w.bonuses > 0 ? w.bonuses.toFixed(0) : "—"}</TableCell>
+                      <TableCell className="text-center text-xs font-mono text-red-400">{w.deductions > 0 ? `-${w.deductions.toFixed(0)}` : "—"}</TableCell>
+                      <TableCell className="text-center text-xs font-mono font-bold text-primary bg-primary/5">{w.net > 0 ? w.net.toFixed(0) : "—"}</TableCell>
+                      <TableCell><Badge variant="outline" className={`text-[9px] ${w.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : w.status === "batched" ? "bg-violet-500/15 text-violet-400 border-violet-500/30" : "bg-gray-500/15 text-gray-400 border-gray-500/30"}`}>{w.status === "paid" ? "Платен" : w.status === "batched" ? "В пакет" : w.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="border-t-2 border-border font-bold">
+                    <TableCell className="text-xs">ОБЩО</TableCell>
+                    <TableCell />
+                    <TableCell className="text-center text-xs font-mono">{dossier.payroll.weeks.reduce((s, w) => s + w.hours, 0).toFixed(0)}</TableCell>
+                    <TableCell className="text-center text-xs font-mono text-primary">{dossier.payroll.total_gross?.toFixed(0)}</TableCell>
+                    <TableCell />
+                    <TableCell />
+                    <TableCell className="text-center text-xs font-mono font-bold text-primary">{dossier.payroll.total_net?.toFixed(0)}</TableCell>
+                    <TableCell><span className="text-[9px] text-emerald-400">Платено: {dossier.payroll.total_paid?.toFixed(0)}</span></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ═══ DOSSIER: Advances Tab ═══ */}
+        <TabsContent value="advances">
+          <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="dossier-advances-tab">
+            {!dossier?.advances?.length ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">Няма записи за заеми / аванси</div>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead className="text-[10px]">Вид</TableHead>
+                  <TableHead className="text-[10px]">Дата</TableHead>
+                  <TableHead className="text-[10px] text-center">Сума</TableHead>
+                  <TableHead className="text-[10px] text-center">Остатък</TableHead>
+                  <TableHead className="text-[10px]">Статус</TableHead>
+                  <TableHead className="text-[10px]">Бележка</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {dossier.advances.map(a => (
+                    <TableRow key={a.id} className="hover:bg-muted/10">
+                      <TableCell className="text-xs">{a.type === "advance" ? "Аванс" : a.type === "loan" ? "Заем" : a.type}</TableCell>
+                      <TableCell className="text-xs font-mono">{a.date || "—"}</TableCell>
+                      <TableCell className="text-center text-xs font-mono">{a.amount?.toFixed(0)} EUR</TableCell>
+                      <TableCell className={`text-center text-xs font-mono ${a.remaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{a.remaining?.toFixed(0)} EUR</TableCell>
+                      <TableCell><Badge variant="outline" className={`text-[9px] ${a.status === "active" || a.status === "approved" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" : "text-muted-foreground"}`}>{a.status}</Badge></TableCell>
+                      <TableCell className="text-[10px] text-muted-foreground truncate max-w-[150px]">{a.note || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Payroll Tab (legacy payslips) */}
         <TabsContent value="payroll">
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="payroll-table">
             <Table>
