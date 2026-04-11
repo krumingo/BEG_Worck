@@ -2127,6 +2127,10 @@
     "adjustments": "Adjustments",
     "weekDetail": "Week Detail",
     "pendingAdvances": "Pending advances",
-    "valueDisclaimer": "Payroll is not a project expense until paid and allocated."
+    "valueDisclaimer": "Payroll is not a project expense until paid and allocated.",
+    "allocationTitle": "Allocated to projects",
+    "projects": "projects",
+    "workersShort": "workers",
+    "allocationNote": "Gross labor value allocated back to projects from included report lines. Deductions are payroll-only."
   }
 }

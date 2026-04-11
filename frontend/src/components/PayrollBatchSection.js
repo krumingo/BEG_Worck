@@ -58,9 +58,11 @@ export default function PayrollBatchSection() {
   const [adjType, setAdjType] = useState("deduction");
   const [adjAmount, setAdjAmount] = useState("");
   const [adjNote, setAdjNote] = useState("");
+  const [allocations, setAllocations] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setAllocations(null);
     try {
       const res = await API.get(`/payroll-batch/eligible?week_of=${weekStart}`);
       setData(res.data);
@@ -73,6 +75,13 @@ export default function PayrollBatchSection() {
       }
       setIncludedDays(allDatesWithData);
       setAdjustments({});
+      // Load allocations if batch exists and is paid
+      if (res.data.existing_batch?.status === "paid") {
+        try {
+          const allocRes = await API.get(`/payroll-batch/${res.data.existing_batch.id}/allocations`);
+          setAllocations(allocRes.data);
+        } catch { /* */ }
+      }
     } catch { setData(null); }
     finally { setLoading(false); }
   }, [weekStart]);
@@ -214,13 +223,14 @@ export default function PayrollBatchSection() {
         <div className="rounded-xl border border-border bg-card p-12 flex items-center justify-center">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : !data || data.workers.length === 0 ? (
+      ) : !data || (data.workers.length === 0 && !allocations) ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground" data-testid="no-eligible">
           {t("payroll.noEligible")}
         </div>
       ) : (
         <>
-          {/* Day Selection */}
+          {/* Day Selection — only show when there are workers */}
+          {data.workers.length > 0 && (
           <div className="flex items-center gap-3 mb-4 flex-wrap" data-testid="day-selection">
             <span className="text-xs text-muted-foreground">{t("payroll.includeDays")}:</span>
             {(data.dates || []).map((d, i) => {
@@ -243,7 +253,11 @@ export default function PayrollBatchSection() {
               );
             })}
           </div>
+          )}
 
+          {/* Summary + Table + Actions — only when there are workers */}
+          {data.workers.length > 0 && (
+          <>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4" data-testid="payroll-summary">
             <div className="rounded-lg bg-card border border-border p-3 text-center">
@@ -361,6 +375,38 @@ export default function PayrollBatchSection() {
               )}
             </div>
           </div>
+          </>
+          )}
+
+          {/* Allocation Summary (shown after paid — always visible even with 0 workers) */}
+          {allocations && allocations.by_project?.length > 0 && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mt-4" data-testid="allocation-summary">
+              <div className="flex items-center gap-2 mb-3">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-emerald-400">{t("payroll.allocationTitle")}</h3>
+                <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                  {allocations.by_project.length} {t("payroll.projects")}
+                </Badge>
+                <span className="text-xs font-mono text-emerald-400 ml-auto">{allocations.total_allocated?.toFixed(0)} EUR</span>
+              </div>
+              <div className="space-y-2">
+                {allocations.by_project.map(p => (
+                  <div key={p.project_id} className="flex items-center justify-between rounded-lg bg-card border border-border px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                      <span className="text-xs font-medium truncate">{p.project_name || p.project_id}</span>
+                      <span className="text-[9px] text-muted-foreground">{p.worker_count} {t("payroll.workersShort")}</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-[10px] text-muted-foreground">{p.allocated_hours}ч</span>
+                      <span className="text-xs font-mono font-bold text-primary">{p.allocated_gross?.toFixed(0)} EUR</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[9px] text-emerald-400/60 mt-2">{t("payroll.allocationNote")}</p>
+            </div>
+          )}
         </>
       )}
 

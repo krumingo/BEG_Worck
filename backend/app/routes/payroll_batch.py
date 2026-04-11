@@ -420,10 +420,18 @@ async def get_payroll_batch(batch_id: str, user: dict = Depends(get_current_user
     return batch
 
 
-# ── Mark batch as paid ─────────────────────────────────────────────
+# ── Mark batch as paid + ALLOCATE back to projects ─────────────────
 
 @router.post("/payroll-batch/{batch_id}/pay")
 async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depends(get_current_user)):
+    """
+    Mark batch as paid AND create allocation back to projects.
+    Allocation rule:
+    - gross labor is allocated per included report lines to their projects
+    - first by value (hours × rate per line), fallback by hours proportion
+    - deductions do NOT reduce project labor expense
+    - project expense = allocated gross labor
+    """
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
 
@@ -437,20 +445,169 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
     now = datetime.now(timezone.utc).isoformat()
     paid_at = data.paid_at or now
 
+    # ── Build allocations from batch employee_summaries ────────────
+    report_ids = batch.get("report_ids", [])
+
+    # Fetch all included reports to get project_id + hours for each line
+    new_reports = await db.employee_daily_reports.find(
+        {"id": {"$in": report_ids}, "org_id": org_id, "worker_id": {"$exists": True}},
+        {"_id": 0, "id": 1, "worker_id": 1, "project_id": 1, "hours": 1, "smr_type": 1, "date": 1},
+    ).to_list(5000)
+
+    old_reports = await db.employee_daily_reports.find(
+        {"id": {"$in": [rid.split("_")[0] for rid in report_ids]}, "org_id": org_id, "employee_id": {"$exists": True}},
+        {"_id": 0, "id": 1, "employee_id": 1, "report_date": 1, "day_entries": 1},
+    ).to_list(5000)
+
+    # Get profiles for rate calculation
+    worker_ids = list({r.get("worker_id") for r in new_reports if r.get("worker_id")})
+    worker_ids += list({r.get("employee_id") for r in old_reports if r.get("employee_id")})
+    worker_ids = list(set(worker_ids))
+
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "user_id": {"$in": worker_ids}},
+        {"_id": 0, "user_id": 1, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1,
+         "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1},
+    ).to_list(300)
+    prof_map = {p["user_id"]: p for p in profiles}
+
+    # Build flat list: {worker_id, project_id, hours, report_id, date, smr}
+    flat_lines = []
+    for r in new_reports:
+        flat_lines.append({
+            "worker_id": r.get("worker_id"),
+            "project_id": r.get("project_id", ""),
+            "hours": float(r.get("hours") or 0),
+            "report_id": r["id"],
+            "date": r.get("date", ""),
+            "smr": r.get("smr_type", ""),
+        })
+
+    for r in old_reports:
+        for e in r.get("day_entries", []):
+            flat_lines.append({
+                "worker_id": r.get("employee_id"),
+                "project_id": e.get("project_id", ""),
+                "hours": float(e.get("hours_worked") or 0),
+                "report_id": r["id"],
+                "date": r.get("report_date", ""),
+                "smr": e.get("work_description", ""),
+            })
+
+    # Group by worker → project, compute allocated gross
+    # worker → {project → {hours, gross}}
+    allocations = []
+    worker_project_map = {}
+
+    for line in flat_lines:
+        wid = line["worker_id"]
+        pid = line["project_id"]
+        if not wid or not pid:
+            continue
+        rate = _calc_rate(prof_map.get(wid, {}))
+        line_gross = round(line["hours"] * rate, 2)
+
+        key = f"{wid}_{pid}"
+        if key not in worker_project_map:
+            worker_project_map[key] = {
+                "worker_id": wid, "project_id": pid,
+                "hours": 0, "gross": 0, "lines": [],
+            }
+        worker_project_map[key]["hours"] += line["hours"]
+        worker_project_map[key]["gross"] += line_gross
+        worker_project_map[key]["lines"].append({
+            "report_id": line["report_id"],
+            "date": line["date"],
+            "smr": line["smr"],
+            "hours": line["hours"],
+            "gross": line_gross,
+        })
+
+    # Project names
+    all_pids = list({v["project_id"] for v in worker_project_map.values()})
+    proj_names = {}
+    if all_pids:
+        projects = await db.projects.find(
+            {"id": {"$in": all_pids}}, {"_id": 0, "id": 1, "name": 1}
+        ).to_list(200)
+        proj_names = {p["id"]: p.get("name", "") for p in projects}
+
+    # Worker names
+    users_docs = await db.users.find(
+        {"id": {"$in": worker_ids}},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
+    ).to_list(300)
+    user_names = {u["id"]: f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users_docs}
+
+    # Create allocation documents
+    for wp in worker_project_map.values():
+        alloc = {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "payroll_batch_id": batch_id,
+            "worker_id": wp["worker_id"],
+            "worker_name": user_names.get(wp["worker_id"], ""),
+            "project_id": wp["project_id"],
+            "project_name": proj_names.get(wp["project_id"], ""),
+            "allocated_hours": round(wp["hours"], 2),
+            "allocated_gross_labor": round(wp["gross"], 2),
+            "allocation_basis": "value" if wp["gross"] > 0 else "hours",
+            "lines": wp["lines"],
+            "week_start": batch.get("week_start", ""),
+            "week_end": batch.get("week_end", ""),
+            "paid_at": paid_at,
+            "created_by": user["id"],
+            "created_at": now,
+        }
+        allocations.append(alloc)
+
+    if allocations:
+        await db.payroll_payment_allocations.insert_many(allocations)
+
+    # Update batch status
+    alloc_summary = {}
+    for a in allocations:
+        pid = a["project_id"]
+        if pid not in alloc_summary:
+            alloc_summary[pid] = {"project_name": a["project_name"], "gross": 0, "hours": 0, "workers": set()}
+        alloc_summary[pid]["gross"] += a["allocated_gross_labor"]
+        alloc_summary[pid]["hours"] += a["allocated_hours"]
+        alloc_summary[pid]["workers"].add(a["worker_id"])
+
+    alloc_by_project = [
+        {"project_id": pid, "project_name": v["project_name"],
+         "allocated_gross": round(v["gross"], 2), "allocated_hours": round(v["hours"], 1),
+         "worker_count": len(v["workers"])}
+        for pid, v in alloc_summary.items()
+    ]
+
     await db.payroll_batches.update_one(
         {"id": batch_id},
-        {"$set": {"status": "paid", "paid_at": paid_at, "updated_at": now}},
+        {"$set": {
+            "status": "paid",
+            "paid_at": paid_at,
+            "updated_at": now,
+            "allocation_created": True,
+            "allocation_count": len(allocations),
+            "allocation_by_project": alloc_by_project,
+        }},
     )
 
     # Mark all included reports as paid
-    report_ids = batch.get("report_ids", [])
     if report_ids:
         await db.employee_daily_reports.update_many(
             {"id": {"$in": report_ids}, "org_id": org_id},
-            {"$set": {"payroll_status": "paid"}},
+            {"$set": {"payroll_status": "paid", "payroll_allocated": True}},
         )
 
-    return {"ok": True, "status": "paid", "paid_at": paid_at}
+    return {
+        "ok": True,
+        "status": "paid",
+        "paid_at": paid_at,
+        "allocations_created": len(allocations),
+        "allocation_by_project": alloc_by_project,
+        "total_allocated_gross": round(sum(a["allocated_gross_labor"] for a in allocations), 2),
+    }
 
 
 # ── Carry forward unpaid ───────────────────────────────────────────
@@ -476,3 +633,91 @@ async def carry_forward_unpaid(user: dict = Depends(get_current_user), week_of: 
     )
 
     return {"ok": True, "modified": result.modified_count}
+
+
+# ── Allocation Read Endpoints ──────────────────────────────────────
+
+@router.get("/payroll-batch/{batch_id}/allocations")
+async def get_batch_allocations(batch_id: str, user: dict = Depends(get_current_user)):
+    """Get all allocations created by a specific batch."""
+    org_id = user["org_id"]
+    allocs = await db.payroll_payment_allocations.find(
+        {"org_id": org_id, "payroll_batch_id": batch_id},
+        {"_id": 0},
+    ).to_list(500)
+    # Group by project
+    by_project = {}
+    for a in allocs:
+        pid = a["project_id"]
+        if pid not in by_project:
+            by_project[pid] = {"project_id": pid, "project_name": a.get("project_name", ""),
+                               "allocated_gross": 0, "hours": 0, "workers": []}
+        by_project[pid]["allocated_gross"] += a["allocated_gross_labor"]
+        by_project[pid]["hours"] += a["allocated_hours"]
+        by_project[pid]["workers"].append({
+            "worker_id": a["worker_id"], "worker_name": a.get("worker_name", ""),
+            "hours": a["allocated_hours"], "gross": a["allocated_gross_labor"],
+            "lines": a.get("lines", []),
+        })
+    projects = sorted(by_project.values(), key=lambda x: x["allocated_gross"], reverse=True)
+    for p in projects:
+        p["allocated_gross"] = round(p["allocated_gross"], 2)
+        p["hours"] = round(p["hours"], 1)
+    return {
+        "batch_id": batch_id,
+        "allocations": allocs,
+        "by_project": projects,
+        "total_allocated": round(sum(a["allocated_gross_labor"] for a in allocs), 2),
+    }
+
+
+@router.get("/projects/{project_id}/paid-labor")
+async def get_project_paid_labor(project_id: str, user: dict = Depends(get_current_user)):
+    """Get all paid labor allocations for a project (real project expense layer)."""
+    org_id = user["org_id"]
+    allocs = await db.payroll_payment_allocations.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0},
+    ).to_list(500)
+
+    total_gross = round(sum(a["allocated_gross_labor"] for a in allocs), 2)
+    total_hours = round(sum(a["allocated_hours"] for a in allocs), 1)
+
+    # Group by worker
+    by_worker = {}
+    for a in allocs:
+        wid = a["worker_id"]
+        if wid not in by_worker:
+            by_worker[wid] = {"worker_id": wid, "worker_name": a.get("worker_name", ""),
+                              "gross": 0, "hours": 0, "batches": []}
+        by_worker[wid]["gross"] += a["allocated_gross_labor"]
+        by_worker[wid]["hours"] += a["allocated_hours"]
+        by_worker[wid]["batches"].append(a.get("payroll_batch_id"))
+
+    workers = sorted(by_worker.values(), key=lambda x: x["gross"], reverse=True)
+    for w in workers:
+        w["gross"] = round(w["gross"], 2)
+        w["hours"] = round(w["hours"], 1)
+        w["batches"] = list(set(w["batches"]))
+
+    # Group by week
+    by_week = {}
+    for a in allocs:
+        ws = a.get("week_start", "")
+        if ws not in by_week:
+            by_week[ws] = {"week_start": ws, "week_end": a.get("week_end", ""), "gross": 0, "hours": 0}
+        by_week[ws]["gross"] += a["allocated_gross_labor"]
+        by_week[ws]["hours"] += a["allocated_hours"]
+    weeks = sorted(by_week.values(), key=lambda x: x["week_start"], reverse=True)
+    for w in weeks:
+        w["gross"] = round(w["gross"], 2)
+        w["hours"] = round(w["hours"], 1)
+
+    return {
+        "project_id": project_id,
+        "total_paid_labor": total_gross,
+        "total_paid_hours": total_hours,
+        "by_worker": workers,
+        "by_week": weeks,
+        "allocation_count": len(allocs),
+    }
