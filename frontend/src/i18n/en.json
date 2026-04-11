@@ -1825,6 +1825,26 @@
     "viewReports": "Reports",
     "noRate": "No rate"
   },
+  "actTable": {
+    "title": "Project Activities",
+    "noData": "No activities",
+    "section": "Section",
+    "activity": "Activity",
+    "planned": "Forecast",
+    "draft": "Draft",
+    "approved": "Approved",
+    "total": "Total",
+    "clean": "Clean",
+    "loaded": "Loaded",
+    "sub": "Subcontr.",
+    "burn": "Burn %",
+    "label": "Label",
+    "overBudget": "over budget",
+    "warning": "warning",
+    "extra": "extra",
+    "extraLabel": "Extra",
+    "noBudget": "No budget"
+  },
   "activityReports": {
     "title": "Activity Reports",
     "status": "Status",

@@ -2007,6 +2007,26 @@
     "viewReports": "Отчети",
     "noRate": "Без ставка"
   },
+  "actTable": {
+    "title": "Дейности по проекта",
+    "noData": "Няма дейности",
+    "section": "Раздел",
+    "activity": "Дейност",
+    "planned": "Прогноза",
+    "draft": "Чернова",
+    "approved": "Одобрено",
+    "total": "Общо",
+    "clean": "Чист труд",
+    "loaded": "С режийни",
+    "sub": "Подизпълн.",
+    "burn": "Burn %",
+    "label": "Етикет",
+    "overBudget": "над прогноза",
+    "warning": "внимание",
+    "extra": "допълнителни",
+    "extraLabel": "Допълнителна",
+    "noBudget": "Без бюджет"
+  },
   "activityReports": {
     "title": "Отчети за дейност",
     "status": "Статус",

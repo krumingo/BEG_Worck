@@ -37,6 +37,7 @@ import ExpectedActualPanel from "@/components/ExpectedActualPanel";
 import MaterialWastePanel from "@/components/MaterialWastePanel";
 import SubcontractorPerformancePanel from "@/components/SubcontractorPerformancePanel";
 import ProjectActivitiesTable from "@/components/ProjectActivitiesTable";
+import CentralizedActivitiesTable from "@/components/CentralizedActivitiesTable";
 import CentralizedProjectView from "@/components/CentralizedProjectView";
 import FinancialResultsCard from "@/components/FinancialResultsCard";
 import ProjectPersonnelPanel from "@/components/ProjectPersonnelPanel";
@@ -240,8 +241,7 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: SMR ════ */}
         <TabsContent value="smr" className="space-y-4 mt-4">
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectActivitiesTable projectId={projectId} /></div>
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectSMRTab projectId={projectId} /></div>
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRGroupsPanel projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRLocationMap projectId={projectId} /></div>
           <ExtraWorksDraftPanel projectId={projectId} refreshKey={extraWorkRefresh} />
