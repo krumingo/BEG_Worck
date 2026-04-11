@@ -55,6 +55,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 - **Technician Wizard Review/Overtime Polish** — Apr 11, 2026
   - Day Summary (4 quadrants), per-worker cards with normal/overtime, warning card, live recalc
   - Verified: 100% frontend (11/11)
+- **Dashboard: Персонал днес** — Apr 11, 2026
+  - Read-only personnel status card: counters, alerts, per-person status/site/report
+  - Sources: users + profiles + worker_calendar + rosters + daily_reports
+  - Verified: 100% backend (12/12) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 

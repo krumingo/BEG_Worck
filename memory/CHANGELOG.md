@@ -1,3 +1,19 @@
+## Apr 11, 2026 — Dashboard: Персонал днес
+
+### New: Personnel Today Card
+- **Backend**: `GET /api/dashboard/personnel-today` — aggregates 5 data sources (users, profiles, worker_calendar, site_daily_rosters, employee_daily_reports)
+- **Counters**: Всички, На работа, С отчет, Без отчет, Болни, Отпуска, Самоотлъчка
+- **Status rules**: working (roster/calendar), sick, leave, absent, unknown
+- **Alerts**: Amber "на работа без отчет", Red "самоотлъчка", Gray "без статус"
+- **Sorting**: Problems first (absent → unknown → working-no-report → working-with-report → sick → leave)
+- **Per-person row**: avatar, name, position, status badge, site link, report indicator + hours
+- **Amber highlight** on working-without-report rows
+- **Click actions**: site name → project detail, "Виж всички" → employees page
+- **Filtered**: test accounts excluded by email prefix
+- **i18n**: 19 BG + 19 EN keys in new `personnel` namespace
+- Test report: /app/test_reports/iteration_61.json (100% backend 12/12, 100% frontend)
+
+
 ## Apr 11, 2026 — Technician Wizard Review/Overtime Polish
 
 ### Enhanced Review Step (Step 3)
