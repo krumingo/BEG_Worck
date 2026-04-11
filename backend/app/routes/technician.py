@@ -741,3 +741,63 @@ async def request_equipment(data: EquipmentRequest, user: dict = Depends(get_cur
     }
     await db.equipment_requests.insert_one(req)
     return {"request_id": req["id"]}
+
+
+# ── Draft Editing ──────────────────────────────────────────────────
+
+class DraftLineUpdate(BaseModel):
+    smr_type: Optional[str] = None
+    hours: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@router.get("/technician/site/{project_id}/my-drafts")
+async def get_my_drafts(project_id: str, user: dict = Depends(get_current_user)):
+    """Get current user's draft report entries for a project today."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    drafts = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today,
+         "status": {"$in": ["Draft", "Submitted"]},
+         "submitted_by": user["id"]},
+        {"_id": 0},
+    ).sort("created_at", 1).to_list(200)
+    return {"items": drafts, "total": len(drafts), "date": today}
+
+
+@router.put("/technician/draft/{draft_id}")
+async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depends(get_current_user)):
+    """Edit a draft report line (only if still Draft status)."""
+    doc = await db.employee_daily_reports.find_one(
+        {"id": draft_id, "org_id": user["org_id"]}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if doc.get("status") not in ["Draft", "Submitted"]:
+        raise HTTPException(status_code=400, detail="Cannot edit approved/rejected reports")
+
+    now = datetime.now(timezone.utc).isoformat()
+    update = {"updated_at": now}
+    if data.smr_type is not None:
+        update["smr_type"] = data.smr_type
+    if data.hours is not None:
+        update["hours"] = round(data.hours, 2)
+    if data.notes is not None:
+        update["notes"] = data.notes
+
+    await db.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    return await db.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
+
+
+@router.delete("/technician/draft/{draft_id}")
+async def delete_draft(draft_id: str, user: dict = Depends(get_current_user)):
+    """Delete a draft report line (only if still Draft)."""
+    doc = await db.employee_daily_reports.find_one(
+        {"id": draft_id, "org_id": user["org_id"]}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if doc.get("status") not in ["Draft"]:
+        raise HTTPException(status_code=400, detail="Can only delete Draft entries")
+    await db.employee_daily_reports.delete_one({"id": draft_id})
+    return {"ok": True}
