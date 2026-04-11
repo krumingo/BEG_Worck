@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import WeeklyMatrixSection from "@/components/WeeklyMatrixSection";
 import PayrollBatchSection from "@/components/PayrollBatchSection";
+import EmployeeDossierSection from "@/components/EmployeeDossierSection";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -144,6 +145,13 @@ export default function AllReportsPage() {
         >
           <DollarSign className="w-3.5 h-3.5" />{t("allReports.tabPayroll")}
         </button>
+        <button
+          onClick={() => setActiveTab("dossier")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "dossier" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="tab-dossier"
+        >
+          <User className="w-3.5 h-3.5" />{t("allReports.tabDossier")}
+        </button>
       </div>
 
       {/* Weekly Matrix Tab */}
@@ -151,6 +159,9 @@ export default function AllReportsPage() {
 
       {/* Payroll Batch Tab */}
       {activeTab === "payroll" && <PayrollBatchSection />}
+
+      {/* Dossier Tab */}
+      {activeTab === "dossier" && <EmployeeDossierSection />}
 
       {/* All Reports Tab */}
       {activeTab === "all" && (
