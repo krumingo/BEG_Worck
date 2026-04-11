@@ -1,3 +1,25 @@
+## Apr 11, 2026 — Weekly Matrix (Седмица Съб→Пет)
+
+### Backend: GET /api/weekly-matrix
+- `week_of` parameter finds containing Saturday→Friday payroll week
+- Returns: rows (per worker), 7 day columns, totals
+- Per day: hours, normal, overtime, entries array
+- Per worker: total_hours, worked_days, hourly_rate, labor_value, bonuses, deductions, net_pay
+- Grand totals: hours, normal, overtime, value, workers, workers_with_data
+
+### Frontend: WeeklyMatrixSection.js (inside AllReportsPage tabs)
+- Internal tabs: "Всички отчети" | "Седмица"
+- Week picker: ← 11.04–17.04.2026 → | Днес
+- Matrix: Служител | Съб | Нед | Пон | Вт | Ср | Чет | Пет | Общо ч. | Дни | Ставка | Труд | Бонуси | Удръжки | Нетно
+- Day cells: hours + amber overtime badge (e.g. 50 + +42)
+- Day detail modal: entries with СМР, обект, часове, статус
+- ОБЩО ред + value disclaimer
+- i18n: 21 BG + 21 EN keys
+
+### Test: 100% backend (21/21) + 100% frontend
+- /app/test_reports/iteration_63.json
+
+
 ## Apr 11, 2026 — New Main Tab: Всички отчети (All Reports)
 
 ### Backend: GET /api/all-reports

@@ -63,6 +63,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Централна read-only таблица за целия отчетен труд
   - Filters, sorting, pagination, detail modal, value disclaimer
   - Verified: 100% backend (17/17) + 100% frontend
+- **Седмична матрица (Weekly Matrix Sat→Fri)** — Apr 11, 2026
+  - Payroll week matrix: workers × 7 days + summary columns
+  - Week picker, day detail modal, overtime badges, value disclaimer
+  - Verified: 100% backend (21/21) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 
