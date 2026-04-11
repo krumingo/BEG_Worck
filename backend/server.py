@@ -1199,6 +1199,9 @@ api_router.include_router(financial_results_router)
 from app.routes.ocr_invoice import router as ocr_invoice_router
 api_router.include_router(ocr_invoice_router)
 
+from app.routes.all_reports import router as all_reports_router
+api_router.include_router(all_reports_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
