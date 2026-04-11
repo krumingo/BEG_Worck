@@ -344,17 +344,21 @@ async def create_payroll_batch(data: BatchCreateInput, user: dict = Depends(get_
             "position": w.get("position", ""),
             "pay_type": w.get("pay_type", ""),
             "hourly_rate": rate,
+            "frozen_hourly_rate": rate,
+            "frozen_pay_type": (prof_map.get(wid, {}).get("pay_type") or ""),
             "included_days": inc_days,
             "total_hours": round(inc_hours, 1),
             "normal_hours": round(inc_normal, 1),
             "overtime_hours": round(inc_overtime, 1),
             "gross": gross,
+            "frozen_gross": gross,
             "bonuses": round(total_bonuses, 2),
             "deductions": round(total_deductions, 2),
             "net": net,
             "adjustments": adjustments,
             "report_ids": list(set(day_report_ids)),
             "payroll_status": "batched",
+            "rate_frozen_at": now,
         })
         included_report_ids.extend(day_report_ids)
         grand_gross += gross
@@ -455,6 +459,13 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
     # ── Build allocations from batch employee_summaries ────────────
     report_ids = batch.get("report_ids", [])
 
+    # Build frozen rate map from batch employee_summaries (FREEZE SOURCE)
+    frozen_rate_map = {}  # worker_id -> frozen_hourly_rate
+    for es in batch.get("employee_summaries", []):
+        wid = es.get("worker_id")
+        if wid:
+            frozen_rate_map[wid] = es.get("frozen_hourly_rate") or es.get("hourly_rate", 0)
+
     # Fetch all included reports to get project_id + hours for each line
     new_reports = await db.employee_daily_reports.find(
         {"id": {"$in": report_ids}, "org_id": org_id, "worker_id": {"$exists": True}},
@@ -511,7 +522,16 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
         pid = line["project_id"]
         if not wid or not pid:
             continue
-        rate = _calc_rate(prof_map.get(wid, {}))
+
+        # Use FROZEN rate from batch (primary), fallback to current profile (legacy)
+        frozen_rate = frozen_rate_map.get(wid)
+        if frozen_rate is not None and frozen_rate > 0:
+            rate = frozen_rate
+            rate_source = "frozen"
+        else:
+            rate = _calc_rate(prof_map.get(wid, {}))
+            rate_source = "legacy_profile_rate"
+
         line_gross = round(line["hours"] * rate, 2)
 
         key = f"{wid}_{pid}"
@@ -519,6 +539,7 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
             worker_project_map[key] = {
                 "worker_id": wid, "project_id": pid,
                 "hours": 0, "gross": 0, "lines": [],
+                "rate_source": rate_source,
             }
         worker_project_map[key]["hours"] += line["hours"]
         worker_project_map[key]["gross"] += line_gross
@@ -528,6 +549,8 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
             "smr": line["smr"],
             "hours": line["hours"],
             "gross": line_gross,
+            "frozen_rate": rate,
+            "rate_source": rate_source,
         })
 
     # Project names
@@ -559,6 +582,7 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
             "allocated_hours": round(wp["hours"], 2),
             "allocated_gross_labor": round(wp["gross"], 2),
             "allocation_basis": "value" if wp["gross"] > 0 else "hours",
+            "rate_source": wp.get("rate_source", "frozen"),
             "lines": wp["lines"],
             "week_start": batch.get("week_start", ""),
             "week_end": batch.get("week_end", ""),
@@ -811,7 +835,8 @@ async def get_official_payslip(batch_id: str, worker_id: str, user: dict = Depen
             by_smr[smr] = {"smr": smr, "hours": 0}
         by_smr[smr]["hours"] += hours
 
-    rate = worker_summary.get("hourly_rate", 0)
+    rate = worker_summary.get("frozen_hourly_rate") or worker_summary.get("hourly_rate", 0)
+    is_frozen = "frozen_hourly_rate" in worker_summary
     for p in by_project.values():
         p["value"] = round(p["hours"] * rate, 2)
         p["hours"] = round(p["hours"], 1)
@@ -845,13 +870,15 @@ async def get_official_payslip(batch_id: str, worker_id: str, user: dict = Depen
             "position": prof.get("position", worker_summary.get("position", "")),
             "pay_type": prof.get("pay_type", worker_summary.get("pay_type", "")),
             "hourly_rate": rate,
+            "rate_frozen": is_frozen,
+            "rate_source": "frozen" if is_frozen else "legacy_profile",
         },
         "summary": {
             "included_days": worker_summary.get("included_days", 0),
             "total_hours": worker_summary.get("total_hours", 0),
             "normal_hours": worker_summary.get("normal_hours", 0),
             "overtime_hours": worker_summary.get("overtime_hours", 0),
-            "gross": worker_summary.get("gross", 0),
+            "gross": worker_summary.get("frozen_gross") or worker_summary.get("gross", 0),
             "bonuses": worker_summary.get("bonuses", 0),
             "deductions": worker_summary.get("deductions", 0),
             "net": worker_summary.get("net", 0),

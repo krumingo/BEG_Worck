@@ -1,3 +1,27 @@
+## Apr 11, 2026 — Rate Freeze at Batch Creation
+
+### Freeze Fields Added to employee_summaries:
+- `frozen_hourly_rate` — rate at batch creation time
+- `frozen_pay_type` — pay type at batch creation time
+- `frozen_gross` — calculated gross at batch creation time
+- `rate_frozen_at` — timestamp of freeze
+
+### Allocation Uses Frozen Rate:
+- Primary: `frozen_hourly_rate` from batch employee_summaries
+- Fallback: `_calc_rate(profile)` only if no frozen field (legacy batches)
+- Each allocation line tagged with `rate_source: "frozen"` or `"legacy_profile_rate"`
+
+### Payslip Shows Rate Source:
+- `rate_frozen: true` + "Ставка замразена при създаване" (green)
+- `rate_frozen: false` + "Ставка от текущ профил (стар batch)" (amber)
+
+### Legacy Backward Compatibility:
+- Old batches without freeze fields → fallback to current profile rate
+- Warning badge in payslip for legacy rate source
+
+### Files: payroll_batch.py (batch creation + allocation + payslip), PayslipDialog.js, i18n
+
+
 ## Apr 11, 2026 — Official Payslip + Legacy Demotion
 
 ### New Payslip Endpoint: GET /api/payslip/{batch_id}/{worker_id}

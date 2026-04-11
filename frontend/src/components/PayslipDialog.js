@@ -74,6 +74,8 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
               <div className="text-right">
                 <Badge variant="outline" className={stb.cls}>{stb.label}</Badge>
                 <p className="text-[10px] text-muted-foreground mt-1">{data.week_start} → {data.week_end}</p>
+                {w.rate_frozen && <p className="text-[8px] text-emerald-400/60 mt-0.5">{t("payslip.rateFrozen")}</p>}
+                {w.rate_source === "legacy_profile" && <p className="text-[8px] text-amber-400/60 mt-0.5">{t("payslip.rateLegacy")}</p>}
               </div>
             </div>
 

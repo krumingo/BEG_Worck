@@ -2395,6 +2395,8 @@
     "bonusesTotal": "Бонуси",
     "deductionsTotal": "Удръжки",
     "netPayable": "За плащане",
-    "paidOn": "Платено на"
+    "paidOn": "Платено на",
+    "rateFrozen": "Ставка замразена при създаване",
+    "rateLegacy": "Ставка от текущ профил (стар batch)"
   }
 }

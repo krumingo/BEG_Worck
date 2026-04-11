@@ -2213,6 +2213,8 @@
     "bonusesTotal": "Bonuses",
     "deductionsTotal": "Deductions",
     "netPayable": "Net Payable",
-    "paidOn": "Paid on"
+    "paidOn": "Paid on",
+    "rateFrozen": "Rate frozen at batch creation",
+    "rateLegacy": "Rate from current profile (legacy batch)"
   }
 }
