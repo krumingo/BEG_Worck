@@ -2011,5 +2011,24 @@
     "reviewed": "Review saved",
     "approved": "Invoice approved",
     "rejected": "Invoice rejected"
+  },
+  "personnel": {
+    "todayTitle": "Personnel Today",
+    "total": "Total",
+    "working": "Working",
+    "withReport": "Reported",
+    "noReport": "No Report",
+    "sick": "Sick",
+    "leave": "Leave",
+    "absent": "Absent",
+    "status_working": "Working",
+    "status_sick": "Sick",
+    "status_leave": "Leave",
+    "status_absent": "Absent",
+    "status_unknown": "No Status",
+    "alertNoReport": "{{count}} working without report",
+    "alertAbsent": "{{count}} absent without excuse",
+    "alertUnknown": "{{count}} without status",
+    "noReportShort": "None"
   }
 }

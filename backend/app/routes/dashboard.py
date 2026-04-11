@@ -14,6 +14,167 @@ from app.deps.modules import require_m5
 router = APIRouter(tags=["Dashboard"])
 
 
+# ── Personnel Today ────────────────────────────────────────────────
+
+@router.get("/dashboard/personnel-today")
+async def get_personnel_today(user: dict = Depends(get_current_user)):
+    """
+    Read-only dashboard projection: today's personnel status.
+    Sources: users, employee_profiles, worker_calendar, site_daily_rosters, employee_daily_reports
+    """
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # 1) All active employees (exclude test users)
+    employees = await db.users.find(
+        {"org_id": org_id, "is_active": True},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1, "avatar_url": 1},
+    ).to_list(200)
+    emp_ids = [e["id"] for e in employees]
+    # Filter out obvious test accounts
+    employees = [e for e in employees if not (e.get("email", "").startswith("test_") or e.get("email", "").startswith("fullflow_") or e.get("email", "").startswith("ui_fixed_"))]
+    emp_ids = [e["id"] for e in employees]
+
+    # 2) Profiles (position)
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "user_id": {"$in": emp_ids}},
+        {"_id": 0, "user_id": 1, "position": 1},
+    ).to_list(200)
+    profile_map = {p["user_id"]: p for p in profiles}
+
+    # 3) Worker calendar entries for today (source of approved statuses)
+    calendar = await db.worker_calendar.find(
+        {"org_id": org_id, "date": today, "worker_id": {"$in": emp_ids}},
+        {"_id": 0, "worker_id": 1, "status": 1, "site_id": 1, "hours": 1, "notes": 1},
+    ).to_list(200)
+    cal_map = {c["worker_id"]: c for c in calendar}
+
+    # 4) Roster presence today (across all projects)
+    rosters = await db.site_daily_rosters.find(
+        {"org_id": org_id, "date": today},
+        {"_id": 0, "project_id": 1, "workers": 1},
+    ).to_list(100)
+    # Build worker_id -> project_id map
+    roster_map = {}  # worker_id -> project_id
+    for r in rosters:
+        for w in r.get("workers", []):
+            wid = w.get("worker_id")
+            if wid:
+                roster_map[wid] = r["project_id"]
+
+    # 5) Draft/submitted/approved reports today
+    reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "date": today, "worker_id": {"$in": emp_ids}},
+        {"_id": 0, "worker_id": 1, "status": 1, "approval_status": 1, "hours": 1, "project_id": 1},
+    ).to_list(500)
+    # Group by worker: aggregate hours and pick best status
+    report_map = {}  # worker_id -> {has_report, hours, status, project_id}
+    for rpt in reports:
+        wid = rpt.get("worker_id")
+        if not wid:
+            continue
+        status = rpt.get("status") or rpt.get("approval_status", "")
+        hours = float(rpt.get("hours") or 0)
+        if wid not in report_map:
+            report_map[wid] = {"has_report": True, "hours": 0, "status": status, "project_id": rpt.get("project_id")}
+        report_map[wid]["hours"] += hours
+
+    # 6) Project names lookup
+    all_project_ids = set(roster_map.values())
+    for rm in report_map.values():
+        if rm.get("project_id"):
+            all_project_ids.add(rm["project_id"])
+    for c in calendar:
+        if c.get("site_id"):
+            all_project_ids.add(c["site_id"])
+    project_names = {}
+    if all_project_ids:
+        projects = await db.projects.find(
+            {"id": {"$in": list(all_project_ids)}},
+            {"_id": 0, "id": 1, "name": 1, "code": 1},
+        ).to_list(100)
+        project_names = {p["id"]: p.get("name") or p.get("code", "") for p in projects}
+
+    # 7) Build personnel list
+    personnel = []
+    for emp in employees:
+        uid = emp["id"]
+        prof = profile_map.get(uid, {})
+        cal = cal_map.get(uid)
+        in_roster = uid in roster_map
+        rpt = report_map.get(uid)
+
+        # Determine status
+        cal_status = (cal.get("status", "") if cal else "").lower()
+        if cal_status in ("sick", "болен"):
+            day_status = "sick"
+        elif cal_status in ("leave", "отпуска", "vacation"):
+            day_status = "leave"
+        elif cal_status in ("absent_unexcused", "самоотлъчка", "absent"):
+            day_status = "absent"
+        elif in_roster or cal_status == "working":
+            day_status = "working"
+        elif rpt and rpt["has_report"]:
+            day_status = "working"
+        else:
+            day_status = "unknown"
+
+        # Determine site
+        site_id = roster_map.get(uid) or (cal.get("site_id") if cal else None) or (rpt.get("project_id") if rpt else None)
+        site_name = project_names.get(site_id, "") if site_id else ""
+
+        has_report = bool(rpt and rpt["has_report"])
+        total_hours = round(rpt["hours"], 1) if rpt else 0
+
+        personnel.append({
+            "id": uid,
+            "first_name": emp.get("first_name", ""),
+            "last_name": emp.get("last_name", ""),
+            "avatar_url": emp.get("avatar_url"),
+            "position": prof.get("position", ""),
+            "role": emp.get("role", ""),
+            "day_status": day_status,
+            "site_id": site_id,
+            "site_name": site_name,
+            "has_report": has_report,
+            "hours": total_hours,
+        })
+
+    # Sort: problems first (absent, working-no-report, unknown), then working, then leave/sick
+    STATUS_ORDER = {"absent": 0, "unknown": 1, "working": 2, "sick": 3, "leave": 4}
+    personnel.sort(key=lambda p: (
+        STATUS_ORDER.get(p["day_status"], 5),
+        0 if (p["day_status"] == "working" and not p["has_report"]) else 1,
+        p["last_name"],
+    ))
+
+    # Counters
+    total = len(personnel)
+    working = sum(1 for p in personnel if p["day_status"] == "working")
+    with_report = sum(1 for p in personnel if p["day_status"] == "working" and p["has_report"])
+    no_report = sum(1 for p in personnel if p["day_status"] == "working" and not p["has_report"])
+    sick = sum(1 for p in personnel if p["day_status"] == "sick")
+    leave = sum(1 for p in personnel if p["day_status"] == "leave")
+    absent = sum(1 for p in personnel if p["day_status"] == "absent")
+    unknown = sum(1 for p in personnel if p["day_status"] == "unknown")
+
+    return {
+        "date": today,
+        "counters": {
+            "total": total,
+            "working": working,
+            "with_report": with_report,
+            "no_report": no_report,
+            "sick": sick,
+            "leave": leave,
+            "absent": absent,
+            "unknown": unknown,
+        },
+        "personnel": personnel,
+    }
+
+
+
 # ── Dashboard Activity ─────────────────────────────────────────────
 
 @router.get("/dashboard/activity")

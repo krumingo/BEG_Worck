@@ -2193,5 +2193,24 @@
     "reviewed": "Прегледът е запазен",
     "approved": "Фактурата е одобрена",
     "rejected": "Фактурата е отказана"
+  },
+  "personnel": {
+    "todayTitle": "Персонал днес",
+    "total": "Всички",
+    "working": "На работа",
+    "withReport": "С отчет",
+    "noReport": "Без отчет",
+    "sick": "Болни",
+    "leave": "Отпуска",
+    "absent": "Самоотлъчка",
+    "status_working": "На работа",
+    "status_sick": "Болен",
+    "status_leave": "Отпуска",
+    "status_absent": "Самоотлъчка",
+    "status_unknown": "Няма статус",
+    "alertNoReport": "{{count}} на работа без отчет",
+    "alertAbsent": "{{count}} самоотлъчка",
+    "alertUnknown": "{{count}} без статус",
+    "noReportShort": "Няма"
   }
 }

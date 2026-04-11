@@ -18,6 +18,7 @@ import FinanceSummaryWidget from "@/components/FinanceSummaryWidget";
 import SitePulseCard from "@/components/SitePulseCard";
 import MorningBriefingPanel from "@/components/MorningBriefingPanel";
 import CashflowForecastPanel from "@/components/CashflowForecastPanel";
+import PersonnelTodayCard from "@/components/PersonnelTodayCard";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -200,6 +201,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* PERSONNEL TODAY */}
+      {isManager && <PersonnelTodayCard />}
 
       {/* Projects summary row */}
       <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="projects-summary">
