@@ -38,6 +38,7 @@ import MaterialWastePanel from "@/components/MaterialWastePanel";
 import SubcontractorPerformancePanel from "@/components/SubcontractorPerformancePanel";
 import ProjectActivitiesTable from "@/components/ProjectActivitiesTable";
 import CentralizedProjectView from "@/components/CentralizedProjectView";
+import FinancialResultsCard from "@/components/FinancialResultsCard";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -252,6 +253,11 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: FINANCE ════ */}
         <TabsContent value="finance" className="space-y-4 mt-4">
+          {/* Financial Results: Cash / Operating / Fully Loaded */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <FinancialResultsCard projectId={projectId} />
+          </div>
+
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectPnLDashboard projectId={projectId} /></div>
 
           {/* Expected vs Actual */}
