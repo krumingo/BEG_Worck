@@ -1,3 +1,17 @@
+## Apr 11, 2026 — Technician Wizard Review/Overtime Polish
+
+### Enhanced Review Step (Step 3)
+- **Day Summary card**: 4 quadrants — Хора, Общо часове, Нормални (green), Наднормени (amber)
+- **Per-worker cards**: Avatar, name, activity count, total hours, normal/overtime breakdown
+- **Overtime badge**: "Наднормено" amber badge when worker has >8h total
+- **Warning card**: Amber AlertTriangle card showing count of workers with overtime
+- **Activity lines**: SMR name + hours + notes shown under each worker card
+- **Live recalculation**: Summary updates automatically when editing and returning to review
+- **i18n**: Added 8 new BG + EN keys for overtime review (normalHours, overtimeHours, daySummary, etc.)
+- Fixed i18n interpolation: `{count}` → `{{count}}` for i18next
+- Test report: /app/test_reports/iteration_60.json (100% frontend 11/11)
+
+
 ## Apr 11, 2026 — Admin Field Mode Hardening & Verification
 
 ### Access Hardening

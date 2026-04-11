@@ -52,6 +52,9 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Frontend `AdminRoute` guard: non-admin roles redirected to `/tech` on direct URL access
   - Audit markers (`entered_by_admin`, `entry_mode`, `submitted_by`) now propagated from `employee_daily_reports` to `work_sessions` on approval
   - Verified: 100% backend (8/8) + 100% frontend (6/6) acceptance criteria
+- **Technician Wizard Review/Overtime Polish** — Apr 11, 2026
+  - Day Summary (4 quadrants), per-worker cards with normal/overtime, warning card, live recalc
+  - Verified: 100% frontend (11/11)
 
 ### UPCOMING PRIORITY BLOCKS:
 
