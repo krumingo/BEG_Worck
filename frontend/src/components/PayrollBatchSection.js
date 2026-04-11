@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ const BATCH_STATUS_BADGE = {
 
 export default function PayrollBatchSection() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [weekStart, setWeekStart] = useState(() => getPayrollWeek(new Date().toISOString().slice(0, 10)));
@@ -309,7 +311,7 @@ export default function PayrollBatchSection() {
                     return (
                       <TableRow key={w.worker_id} className="hover:bg-muted/10" data-testid={`payroll-row-${w.worker_id}`}>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${w.worker_id}?tab=payroll-weeks`)}>
                             {w.avatar_url ? (
                               <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" />
                             ) : (
@@ -318,7 +320,7 @@ export default function PayrollBatchSection() {
                               </div>
                             )}
                             <div>
-                              <p className="text-xs font-medium">{w.first_name} {w.last_name}</p>
+                              <p className="text-xs font-medium hover:text-primary transition-colors">{w.first_name} {w.last_name}</p>
                               <p className="text-[9px] text-muted-foreground">{w.position || w.pay_type || "—"}</p>
                             </div>
                           </div>

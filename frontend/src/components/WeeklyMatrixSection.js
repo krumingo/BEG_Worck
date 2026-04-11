@@ -131,7 +131,7 @@ export default function WeeklyMatrixPage() {
                   <TableRow key={row.worker_id} className="hover:bg-muted/10" data-testid={`matrix-row-${row.worker_id}`}>
                     {/* Worker */}
                     <TableCell className="sticky left-0 bg-card z-10">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${row.worker_id}?tab=calendar`)}>
                         {row.avatar_url ? (
                           <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt="" />
                         ) : (
@@ -140,7 +140,7 @@ export default function WeeklyMatrixPage() {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-xs font-medium truncate max-w-[110px]">{row.first_name} {row.last_name}</p>
+                          <p className="text-xs font-medium truncate max-w-[110px] hover:text-primary transition-colors">{row.first_name} {row.last_name}</p>
                           <p className="text-[9px] text-muted-foreground truncate max-w-[110px]">{row.position || row.pay_type || "—"}</p>
                         </div>
                       </div>

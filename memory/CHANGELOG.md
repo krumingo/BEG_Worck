@@ -1,3 +1,21 @@
+## Apr 11, 2026 — Final Dossier Wiring (All Reports + Weekly + Payroll)
+
+### Worker Name/Avatar Links Added:
+- **AllReportsPage**: click worker → `/employees/:id?tab=reports`
+- **WeeklyMatrixSection**: click worker → `/employees/:id?tab=calendar`
+- **PayrollBatchSection**: click worker → `/employees/:id?tab=payroll-weeks`
+
+### All Entry Points Complete:
+1. Персонал → Служители → click row → `/employees/:id`
+2. Отчети → Досие tab → worker picker → `/employees/:id?tab=reports`
+3. Dashboard → Персонал днес → click name → `/employees/:id`
+4. Всички отчети → click worker → `/employees/:id?tab=reports` ✅ NEW
+5. Седмица → click worker → `/employees/:id?tab=calendar` ✅ NEW
+6. Заплати → click worker → `/employees/:id?tab=payroll-weeks` ✅ NEW
+
+### Files: AllReportsPage.js, WeeklyMatrixSection.js, PayrollBatchSection.js (cursor + navigate)
+
+
 ## Apr 11, 2026 — Unified Employee Dossier (Route Unification)
 
 ### Single Route: /employees/:id?tab=

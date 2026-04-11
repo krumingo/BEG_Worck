@@ -278,7 +278,7 @@ export default function AllReportsPage() {
                   <TableRow key={r.id} className="hover:bg-muted/20" data-testid={`report-row-${r.id}`}>
                     <TableCell className="text-xs font-mono whitespace-nowrap">{r.date}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${r.worker_id}?tab=reports`)}>
                         {r.worker_avatar ? (
                           <img src={`${process.env.REACT_APP_BACKEND_URL}${r.worker_avatar}`} className="w-6 h-6 rounded-full object-cover" alt="" />
                         ) : (
@@ -286,7 +286,7 @@ export default function AllReportsPage() {
                             {(r.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}
                           </div>
                         )}
-                        <span className="text-xs truncate max-w-[120px]">{r.worker_name}</span>
+                        <span className="text-xs truncate max-w-[120px] hover:text-primary transition-colors">{r.worker_name}</span>
                       </div>
                     </TableCell>
                     <TableCell>
