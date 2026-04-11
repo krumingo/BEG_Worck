@@ -481,6 +481,11 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
             {"org_id": org_id, "user_id": wid},
             {"_id": 0, "avatar_url": 1, "position": 1, "role": 1},
         )
+        # Get avatar from users collection (primary source)
+        user_doc = await db.users.find_one(
+            {"id": wid}, {"_id": 0, "avatar_url": 1}
+        )
+        avatar = (user_doc or {}).get("avatar_url") or (profile or {}).get("avatar_url")
         # Get today's hours from drafts
         today_reports = await db.employee_daily_reports.find(
             {"org_id": org_id, "project_id": project_id, "worker_id": wid, "date": today},
@@ -493,7 +498,7 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
         workers.append({
             "worker_id": wid,
             "worker_name": w.get("worker_name", ""),
-            "avatar_url": (profile or {}).get("avatar_url"),
+            "avatar_url": avatar,
             "position": (profile or {}).get("position") or (profile or {}).get("role", ""),
             "total_hours": total_hours,
             "normal_hours": normal_hours,
@@ -524,10 +529,10 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
     profile_map = {p["user_id"]: p for p in profiles}
     profile_ids = set(profile_map.keys())
 
-    # All org users
+    # All org users (with avatar from users collection)
     all_users = await db.users.find(
         {"org_id": org_id},
-        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1},
     ).to_list(200)
 
     available = []
@@ -535,13 +540,12 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
         uid = u["id"]
         if uid in existing_ids:
             continue
-        # Prefer users with profiles, but include all
         p = profile_map.get(uid, {})
         name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
         available.append({
             "worker_id": uid,
             "worker_name": name,
-            "avatar_url": p.get("avatar_url"),
+            "avatar_url": u.get("avatar_url") or p.get("avatar_url"),
             "position": p.get("position") or p.get("role", ""),
             "has_profile": uid in profile_ids,
         })
