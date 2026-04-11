@@ -560,35 +560,126 @@ export default function TechnicianDashboard() {
   );
 
   // ════════════════════════════════════════════════════════════
-  // REVIEW
+  // REVIEW (with overtime breakdown)
   // ════════════════════════════════════════════════════════════
-  if (screen === "review") return (
-    <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-review">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => setScreen("report")}><ArrowLeft className="w-4 h-4" /></Button>
-        <h2 className="font-bold">{t("technician.step3Review")}</h2>
-      </div>
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
-        <p className="text-xs text-muted-foreground">{selectedSite?.name} | {payload.length} {t("technician.entries")}</p>
-        {payload.map((p, i) => (
-          <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-border/50 last:border-0">
-            <span>{p.worker_name}</span>
-            <span className="font-mono">{p.smr_type} — {p.hours}ч</span>
+  if (screen === "review") {
+    const NORMAL_DAY = 8;
+    // Group payload by worker
+    const workerMap = {};
+    for (const p of payload) {
+      if (!workerMap[p.worker_id]) workerMap[p.worker_id] = { name: p.worker_name, lines: [], total: 0 };
+      workerMap[p.worker_id].lines.push(p);
+      workerMap[p.worker_id].total += p.hours;
+    }
+    const workers = Object.values(workerMap);
+    const totalHours = workers.reduce((s, w) => s + w.total, 0);
+    const totalNormal = workers.reduce((s, w) => s + Math.min(w.total, NORMAL_DAY), 0);
+    const totalOvertime = workers.reduce((s, w) => s + Math.max(0, w.total - NORMAL_DAY), 0);
+    const overtimeCount = workers.filter(w => w.total > NORMAL_DAY).length;
+
+    return (
+      <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-review">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setScreen("report")} data-testid="review-back-btn"><ArrowLeft className="w-4 h-4" /></Button>
+          <h2 className="font-bold">{t("technician.step3Review")}</h2>
+        </div>
+
+        {/* Overtime Warning */}
+        {overtimeCount > 0 && (
+          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex items-start gap-3" data-testid="overtime-warning">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm text-amber-300">{t("technician.overtimeWarning", { count: overtimeCount })}</p>
+              <p className="text-xs text-amber-400/70 mt-0.5">{t("technician.overtimeNote")}</p>
+            </div>
           </div>
-        ))}
-        <div className="flex justify-between font-bold pt-2 border-t border-border">
-          <span>{t("technician.totalHours")}</span>
-          <span className="font-mono">{payload.reduce((s, p) => s + p.hours, 0)}ч</span>
+        )}
+
+        {/* Day Summary */}
+        <div className="rounded-2xl border border-border bg-card p-4" data-testid="day-summary">
+          <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-3">{t("technician.daySummary")}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-muted/30 p-3 text-center">
+              <p className="text-2xl font-bold">{workers.length}</p>
+              <p className="text-[10px] text-muted-foreground">{t("technician.totalPeople")}</p>
+            </div>
+            <div className="rounded-xl bg-muted/30 p-3 text-center">
+              <p className="text-2xl font-bold font-mono">{totalHours}<span className="text-sm text-muted-foreground">ч</span></p>
+              <p className="text-[10px] text-muted-foreground">{t("technician.totalHours")}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
+              <p className="text-2xl font-bold font-mono text-emerald-400">{totalNormal}<span className="text-sm text-emerald-400/60">ч</span></p>
+              <p className="text-[10px] text-emerald-400/70">{t("technician.normalHours")}</p>
+            </div>
+            <div className={`rounded-xl p-3 text-center ${totalOvertime > 0 ? "bg-amber-500/10 border border-amber-500/20" : "bg-muted/30"}`}>
+              <p className={`text-2xl font-bold font-mono ${totalOvertime > 0 ? "text-amber-400" : "text-muted-foreground"}`}>{totalOvertime}<span className={`text-sm ${totalOvertime > 0 ? "text-amber-400/60" : "text-muted-foreground/60"}`}>ч</span></p>
+              <p className={`text-[10px] ${totalOvertime > 0 ? "text-amber-400/70" : "text-muted-foreground"}`}>{t("technician.overtimeHours")}</p>
+            </div>
+          </div>
+          {overtimeCount > 0 && (
+            <p className="text-[10px] text-amber-400/60 text-center mt-2">{overtimeCount} {t("technician.withOvertime")}</p>
+          )}
+        </div>
+
+        {/* Per-worker cards */}
+        {workers.map((w, wi) => {
+          const normal = Math.min(w.total, NORMAL_DAY);
+          const overtime = Math.max(0, w.total - NORMAL_DAY);
+          return (
+            <div key={wi} className="rounded-2xl border border-border bg-card overflow-hidden" data-testid={`review-worker-${wi}`}>
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
+                    {w.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{w.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{w.lines.length} {t("technician.workerActivities")}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="font-mono font-bold text-sm">{w.total}ч</span>
+                  {overtime > 0 && <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px]">{t("technician.overtime")}</Badge>}
+                </div>
+              </div>
+              {/* Hours bar */}
+              <div className="px-4 pb-2 flex gap-3 text-[10px]">
+                <span className="text-emerald-400">{t("technician.normalHours")}: {normal}ч</span>
+                {overtime > 0 && <span className="text-amber-400">{t("technician.overtimeHours")}: +{overtime}ч</span>}
+              </div>
+              {/* Activity lines */}
+              <div className="border-t border-border/50">
+                {w.lines.map((ln, li) => (
+                  <div key={li} className="px-4 py-2 flex items-center justify-between text-sm border-b border-border/30 last:border-0">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-foreground">{ln.smr_type}</span>
+                      {ln.notes && <p className="text-[10px] text-muted-foreground truncate">{ln.notes}</p>}
+                    </div>
+                    <span className={`font-mono text-xs flex-shrink-0 ml-2 ${ln.hours > NORMAL_DAY ? "text-amber-400" : ""}`}>{ln.hours}ч</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* General notes */}
+        {generalNotes && (
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground mb-1">{t("technician.generalNotes")}</p>
+            <p className="text-sm">{generalNotes}</p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setScreen("report")} className="flex-1 h-14 rounded-2xl" data-testid="review-edit-btn"><Pencil className="w-4 h-4 mr-2" />{t("technician.back")}</Button>
+          <Button onClick={handleSubmit} disabled={submitting} className="flex-1 h-14 rounded-2xl text-lg" data-testid="review-submit-btn">
+            {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}{t("technician.submit")}
+          </Button>
         </div>
       </div>
-      <div className="flex gap-3">
-        <Button variant="outline" onClick={() => setScreen("report")} className="flex-1 h-14 rounded-2xl">{t("technician.back")}</Button>
-        <Button onClick={handleSubmit} disabled={submitting} className="flex-1 h-14 rounded-2xl text-lg">
-          {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}{t("technician.submit")}
-        </Button>
-      </div>
-    </div>
-  );
+    );
+  }
 
   return null;
 }

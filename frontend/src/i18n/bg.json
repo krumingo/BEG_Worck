@@ -1897,7 +1897,15 @@
     "overtime": "Наднормено",
     "searchPeople": "Търси по име или длъжност...",
     "noSearchResults": "Няма съвпадения",
-    "adminMode": "Админ режим"
+    "adminMode": "Админ режим",
+    "normalHours": "Нормални",
+    "overtimeHours": "Наднормени",
+    "totalPeople": "Хора",
+    "daySummary": "Обобщение на деня",
+    "overtimeWarning": "Има наднормено време за {{count}} човека",
+    "overtimeNote": "Часове над 8ч/ден се считат за наднормени",
+    "withOvertime": "с наднормено",
+    "workerActivities": "дейности"
   },
   "projectContext": {
     "active": "Обект",

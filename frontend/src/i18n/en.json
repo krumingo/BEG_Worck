@@ -1715,7 +1715,15 @@
     "overtime": "Overtime",
     "searchPeople": "Search by name or position...",
     "noSearchResults": "No matches found",
-    "adminMode": "Admin Mode"
+    "adminMode": "Admin Mode",
+    "normalHours": "Normal",
+    "overtimeHours": "Overtime",
+    "totalPeople": "People",
+    "daySummary": "Day Summary",
+    "overtimeWarning": "Overtime reported for {count} worker(s)",
+    "overtimeNote": "Hours above 8h/day count as overtime",
+    "withOvertime": "with overtime",
+    "workerActivities": "activities"
   },
   "projectContext": {
     "active": "Site",
