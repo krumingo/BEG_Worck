@@ -1,3 +1,20 @@
+## Apr 11, 2026 — Paid Labor → Project Financial Results Integration
+
+### Backend: compute_financial_results enriched
+- New `labor` section: reported_labor_value, paid_labor_expense, paid_labor_hours, unpaid_approved_labor, labor_expense_basis, allocation_count
+- Cash result now uses paid labor (from payroll_payment_allocations) when available
+- Warnings: "Одобрен, но неплатен труд", "Има платен труд, но няма отчетен труд от work_sessions"
+- Idempotency guard: double-pay blocked (400 "Already paid" + 409 "Allocations already exist")
+
+### Frontend: FinancialResultsCard breakdown enriched
+- New "ТРУД" section in breakdown: Отчетен труд (blue) | Платен труд (green highlight) | Неплатен одобрен (amber)
+- Cash result card reflects paid labor in "Плащания"
+- i18n: 4 new BG + 4 new EN keys (finResults.laborSection, reportedLabor, paidLabor, unpaidLabor)
+
+### Test: 100% backend (18/18) + 100% frontend
+- /app/test_reports/iteration_66.json
+
+
 ## Apr 11, 2026 — Payment Allocation (Paid → Project Expense)
 
 ### Core Logic

@@ -77,6 +77,11 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - New endpoints: /payroll-batch/{id}/allocations, /projects/{pid}/paid-labor
   - Deductions stay payroll-only, project expense = gross allocated
   - Verified: 100% backend (15/15) + 100% frontend
+- **Paid Labor → Project Financial Results** — Apr 11, 2026
+  - Financial results now read payroll_payment_allocations as real project expense
+  - Breakdown: "Отчетен труд" (operational) vs "Платен труд" (real expense, green)
+  - Idempotency guard on pay action (400 + 409)
+  - Verified: 100% backend (18/18) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 
