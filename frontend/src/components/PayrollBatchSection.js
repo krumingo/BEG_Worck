@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import PayslipDialog from "@/components/PayslipDialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import {
   ChevronLeft, ChevronRight, DollarSign, Check, AlertTriangle,
-  Plus, Minus, Eye, Loader2, Banknote, MapPin,
+  Plus, Minus, Eye, Loader2, Banknote, MapPin, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,14 +58,17 @@ export default function PayrollBatchSection() {
   const [paying, setPaying] = useState(false);
   const [workerDetail, setWorkerDetail] = useState(null);
   const [adjDialog, setAdjDialog] = useState(null);
+  const [payslipOpen, setPayslipOpen] = useState(null); // {batchId, workerId}
   const [adjType, setAdjType] = useState("deduction");
   const [adjAmount, setAdjAmount] = useState("");
   const [adjNote, setAdjNote] = useState("");
   const [allocations, setAllocations] = useState(null);
+  const [paidBatchDetail, setPaidBatchDetail] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setAllocations(null);
+    setPaidBatchDetail(null);
     try {
       const res = await API.get(`/payroll-batch/eligible?week_of=${weekStart}`);
       setData(res.data);
@@ -80,8 +84,12 @@ export default function PayrollBatchSection() {
       // Load allocations if batch exists and is paid
       if (res.data.existing_batch?.status === "paid") {
         try {
-          const allocRes = await API.get(`/payroll-batch/${res.data.existing_batch.id}/allocations`);
+          const [allocRes, batchRes] = await Promise.all([
+            API.get(`/payroll-batch/${res.data.existing_batch.id}/allocations`),
+            API.get(`/payroll-batch/${res.data.existing_batch.id}`),
+          ]);
           setAllocations(allocRes.data);
+          setPaidBatchDetail(batchRes.data);
         } catch { /* */ }
       }
     } catch { setData(null); }
@@ -339,6 +347,11 @@ export default function PayrollBatchSection() {
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setWorkerDetail(w)} data-testid={`detail-${w.worker_id}`}>
                               <Eye className="w-3.5 h-3.5" />
                             </Button>
+                            {hasBatch && (
+                              <Button variant="ghost" size="sm" className="h-7 px-1.5 text-[9px]" onClick={() => setPayslipOpen({ batchId: hasBatch.id, workerId: w.worker_id })} data-testid={`payslip-${w.worker_id}`}>
+                                <FileText className="w-3 h-3 mr-0.5" />{t("payroll.payslipBtn")}
+                              </Button>
+                            )}
                             {!hasBatch && (
                               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setAdjDialog(w); setAdjType("deduction"); setAdjAmount(""); setAdjNote(""); }}>
                                 <Plus className="w-3.5 h-3.5" />
@@ -407,6 +420,31 @@ export default function PayrollBatchSection() {
                 ))}
               </div>
               <p className="text-[9px] text-emerald-400/60 mt-2">{t("payroll.allocationNote")}</p>
+            </div>
+          )}
+
+          {/* Payslips for paid batch */}
+          {paidBatchDetail?.employee_summaries?.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4 mt-4" data-testid="payslip-list">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("payroll.payslipsTitle")}</p>
+              <div className="space-y-2">
+                {paidBatchDetail.employee_summaries.map(es => (
+                  <div key={es.worker_id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/10 border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
+                        {(es.first_name?.[0] || "")}{(es.last_name?.[0] || "")}
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium">{es.first_name} {es.last_name}</p>
+                        <p className="text-[9px] text-muted-foreground">{es.total_hours}ч | {es.gross?.toFixed(0)} EUR → {es.net?.toFixed(0)} EUR</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1" onClick={() => setPayslipOpen({ batchId: paidBatchDetail.id, workerId: es.worker_id })} data-testid={`payslip-${es.worker_id}`}>
+                      <FileText className="w-3 h-3" />{t("payroll.payslipBtn")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -504,6 +542,14 @@ export default function PayrollBatchSection() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Official Payslip Dialog */}
+      <PayslipDialog
+        open={!!payslipOpen}
+        onClose={() => setPayslipOpen(null)}
+        batchId={payslipOpen?.batchId}
+        workerId={payslipOpen?.workerId}
+      />
     </div>
   );
 }

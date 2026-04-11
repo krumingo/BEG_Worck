@@ -728,3 +728,141 @@ async def get_project_paid_labor(project_id: str, user: dict = Depends(get_curre
         "by_week": weeks,
         "allocation_count": len(allocs),
     }
+
+
+# ── Official Payslip (per worker per batch) ────────────────────────
+
+@router.get("/payslip/{batch_id}/{worker_id}")
+async def get_official_payslip(batch_id: str, worker_id: str, user: dict = Depends(get_current_user)):
+    """
+    Official payslip document for a worker in a specific payroll batch.
+    Shows: period, days breakdown, project breakdown, SMR breakdown,
+    normal/overtime, gross, adjustments, net, status, traceability.
+    """
+    org_id = user["org_id"]
+
+    batch = await db.payroll_batches.find_one(
+        {"id": batch_id, "org_id": org_id}, {"_id": 0}
+    )
+    if not batch:
+        return {"error": "Batch not found"}
+
+    # Find this worker's summary in the batch
+    worker_summary = None
+    for es in batch.get("employee_summaries", []):
+        if es.get("worker_id") == worker_id:
+            worker_summary = es
+            break
+    if not worker_summary:
+        return {"error": "Worker not in this batch"}
+
+    # Get worker info
+    emp = await db.users.find_one(
+        {"id": worker_id, "org_id": org_id},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "avatar_url": 1},
+    ) or {}
+
+    prof = await db.employee_profiles.find_one(
+        {"org_id": org_id, "user_id": worker_id},
+        {"_id": 0, "position": 1, "pay_type": 1},
+    ) or {}
+
+    # Get included report lines for this worker
+    report_ids = worker_summary.get("report_ids", [])
+    reports = await db.employee_daily_reports.find(
+        {"id": {"$in": report_ids}, "org_id": org_id},
+        {"_id": 0, "id": 1, "date": 1, "hours": 1, "smr_type": 1, "project_id": 1, "notes": 1},
+    ).to_list(500)
+
+    # Project names
+    pids = list({r.get("project_id") for r in reports if r.get("project_id")})
+    proj_map = {}
+    if pids:
+        projects = await db.projects.find(
+            {"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}
+        ).to_list(100)
+        proj_map = {p["id"]: p.get("name", "") for p in projects}
+
+    # Build day breakdown
+    NORMAL_DAY_H = 8
+    by_day = {}
+    by_project = {}
+    by_smr = {}
+    for r in reports:
+        d = r.get("date", "")
+        pid = r.get("project_id", "")
+        smr = r.get("smr_type", "") or "Общо"
+        hours = float(r.get("hours") or 0)
+        pname = proj_map.get(pid, pid)
+
+        # Day
+        if d not in by_day:
+            by_day[d] = {"date": d, "hours": 0, "entries": []}
+        by_day[d]["hours"] += hours
+        by_day[d]["entries"].append({"smr": smr, "project": pname, "hours": hours})
+
+        # Project
+        if pid not in by_project:
+            by_project[pid] = {"project_id": pid, "project_name": pname, "hours": 0, "value": 0}
+        by_project[pid]["hours"] += hours
+
+        # SMR
+        if smr not in by_smr:
+            by_smr[smr] = {"smr": smr, "hours": 0}
+        by_smr[smr]["hours"] += hours
+
+    rate = worker_summary.get("hourly_rate", 0)
+    for p in by_project.values():
+        p["value"] = round(p["hours"] * rate, 2)
+        p["hours"] = round(p["hours"], 1)
+
+    days_list = sorted(by_day.values(), key=lambda x: x["date"])
+    for d in days_list:
+        d["hours"] = round(d["hours"], 1)
+        d["normal"] = round(min(d["hours"], NORMAL_DAY_H), 1)
+        d["overtime"] = round(max(0, d["hours"] - NORMAL_DAY_H), 1)
+
+    # Get allocations for this worker in this batch
+    allocs = await db.payroll_payment_allocations.find(
+        {"org_id": org_id, "payroll_batch_id": batch_id, "worker_id": worker_id},
+        {"_id": 0, "project_id": 1, "project_name": 1, "allocated_gross_labor": 1, "allocated_hours": 1},
+    ).to_list(50)
+
+    return {
+        "batch_id": batch_id,
+        "worker_id": worker_id,
+        "week_start": batch.get("week_start", ""),
+        "week_end": batch.get("week_end", ""),
+        "batch_status": batch.get("status", ""),
+        "paid_at": batch.get("paid_at"),
+        "created_at": batch.get("created_at"),
+        "worker": {
+            "first_name": emp.get("first_name", worker_summary.get("first_name", "")),
+            "last_name": emp.get("last_name", worker_summary.get("last_name", "")),
+            "email": emp.get("email", ""),
+            "phone": emp.get("phone", ""),
+            "avatar_url": emp.get("avatar_url"),
+            "position": prof.get("position", worker_summary.get("position", "")),
+            "pay_type": prof.get("pay_type", worker_summary.get("pay_type", "")),
+            "hourly_rate": rate,
+        },
+        "summary": {
+            "included_days": worker_summary.get("included_days", 0),
+            "total_hours": worker_summary.get("total_hours", 0),
+            "normal_hours": worker_summary.get("normal_hours", 0),
+            "overtime_hours": worker_summary.get("overtime_hours", 0),
+            "gross": worker_summary.get("gross", 0),
+            "bonuses": worker_summary.get("bonuses", 0),
+            "deductions": worker_summary.get("deductions", 0),
+            "net": worker_summary.get("net", 0),
+            "adjustments": worker_summary.get("adjustments", []),
+        },
+        "by_day": days_list,
+        "by_project": sorted(by_project.values(), key=lambda x: x["value"], reverse=True),
+        "by_smr": sorted(by_smr.values(), key=lambda x: x["hours"], reverse=True),
+        "allocations": [
+            {"project_name": a.get("project_name", ""), "gross": a.get("allocated_gross_labor", 0), "hours": a.get("allocated_hours", 0)}
+            for a in allocs
+        ],
+        "report_count": len(reports),
+    }

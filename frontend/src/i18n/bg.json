@@ -167,6 +167,7 @@
     "employees": "Служители",
     "advances": "Аванси",
     "payroll": "Заплати",
+    "payrollLegacy": "Фишове (стар)",
     "finance": "Финанси",
     "overhead": "Режийни",
     "procurement": "Снабдяване",
@@ -2318,7 +2319,9 @@
     "allocationTitle": "Разнесено по обекти",
     "projects": "обекта",
     "workersShort": "човека",
-    "allocationNote": "Брутната стойност на труда е разнесена обратно по обектите от включените отчети. Удръжките са само в заплатата."
+    "allocationNote": "Брутната стойност на труда е разнесена обратно по обектите от включените отчети. Удръжките са само в заплатата.",
+    "payslipBtn": "Фиш",
+    "payslipsTitle": "Фишове за заплати"
   },
   "dossier": {
     "title": "Досие на служител",
@@ -2365,5 +2368,33 @@
     "noAdvances": "Няма записи",
     "advance": "Аванс",
     "loan": "Заем"
+  },
+  "payslip": {
+    "title": "Фиш за заплата",
+    "noData": "Няма данни",
+    "days": "Дни",
+    "hours": "Часове",
+    "normal": "Норм.",
+    "overtime": "Извънр.",
+    "gross": "Брутно",
+    "net": "Нетно",
+    "paid": "Платен",
+    "batched": "В пакет",
+    "byDay": "По дни",
+    "date": "Дата",
+    "normalH": "Норм.",
+    "overtimeH": "Извънр.",
+    "details": "Детайл",
+    "byProject": "По обекти",
+    "adjustments": "Корекции",
+    "adjBonus": "Бонус",
+    "adjDeduction": "Удръжка",
+    "adjLoan": "Заем",
+    "adjRent": "Наем",
+    "adjFine": "Глоба",
+    "bonusesTotal": "Бонуси",
+    "deductionsTotal": "Удръжки",
+    "netPayable": "За плащане",
+    "paidOn": "Платено на"
   }
 }

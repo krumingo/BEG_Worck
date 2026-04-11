@@ -22,6 +22,7 @@ import {
   FileText, DollarSign, Banknote, AlertTriangle, Briefcase, Check,
 } from "lucide-react";
 import ImageCropDialog from "@/components/ImageCropDialog";
+import PayslipDialog from "@/components/PayslipDialog";
 
 function Avatar({ name, url, size = 48 }) {
   const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
@@ -61,6 +62,7 @@ export default function EmployeeDetailPage() {
 
   // Dossier data (reports, payroll batches, advances, dossier calendar)
   const [dossier, setDossier] = useState(null);
+  const [payslipOpen, setPayslipOpen] = useState(null); // {batchId, workerId}
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -571,6 +573,7 @@ export default function EmployeeDetailPage() {
                   <TableHead className="text-[10px] text-center">Удръжки</TableHead>
                   <TableHead className="text-[10px] text-center bg-primary/5">Нетно</TableHead>
                   <TableHead className="text-[10px]">Статус</TableHead>
+                  <TableHead className="text-[10px] w-[50px]" />
                 </TableRow></TableHeader>
                 <TableBody>
                   {dossier.payroll.weeks.map(w => (
@@ -583,6 +586,11 @@ export default function EmployeeDetailPage() {
                       <TableCell className="text-center text-xs font-mono text-red-400">{w.deductions > 0 ? `-${w.deductions.toFixed(0)}` : "—"}</TableCell>
                       <TableCell className="text-center text-xs font-mono font-bold text-primary bg-primary/5">{w.net > 0 ? w.net.toFixed(0) : "—"}</TableCell>
                       <TableCell><Badge variant="outline" className={`text-[9px] ${w.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : w.status === "batched" ? "bg-violet-500/15 text-violet-400 border-violet-500/30" : "bg-gray-500/15 text-gray-400 border-gray-500/30"}`}>{w.status === "paid" ? "Платен" : w.status === "batched" ? "В пакет" : w.status}</Badge></TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" className="h-7 px-1.5 text-[9px]" onClick={() => setPayslipOpen({ batchId: w.batch_id, workerId: userId })} data-testid={`payslip-btn-${w.batch_id}`}>
+                          <FileText className="w-3 h-3 mr-0.5" />Фиш
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2 border-border font-bold">
@@ -675,13 +683,20 @@ export default function EmployeeDetailPage() {
             fd.append("context_type", "profile");
             fd.append("context_id", userId);
             const res = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-            // Use public avatar URL: /api/media/avatar/{stored_filename}
             const storedFilename = res.data.url.split("/").pop();
             const avatarUrl = `/api/media/avatar/${storedFilename}`;
             await API.put(`/employees/${userId}/basic`, { avatar_url: avatarUrl });
             fetchData();
           } catch (err) { alert("Грешка при запис на снимка"); }
         }}
+      />
+
+      {/* Official Payslip Dialog */}
+      <PayslipDialog
+        open={!!payslipOpen}
+        onClose={() => setPayslipOpen(null)}
+        batchId={payslipOpen?.batchId}
+        workerId={payslipOpen?.workerId}
       />
     </div>
   );

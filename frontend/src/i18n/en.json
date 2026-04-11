@@ -155,6 +155,7 @@
     "employees": "Employees",
     "advances": "Advances",
     "payroll": "Payroll",
+    "payrollLegacy": "Payslips (legacy)",
     "finance": "Finance",
     "overhead": "Overhead",
     "users": "Users",
@@ -2136,7 +2137,9 @@
     "allocationTitle": "Allocated to projects",
     "projects": "projects",
     "workersShort": "workers",
-    "allocationNote": "Gross labor value allocated back to projects from included report lines. Deductions are payroll-only."
+    "allocationNote": "Gross labor value allocated back to projects from included report lines. Deductions are payroll-only.",
+    "payslipBtn": "Slip",
+    "payslipsTitle": "Payslips"
   },
   "dossier": {
     "title": "Employee Dossier",
@@ -2183,5 +2186,33 @@
     "noAdvances": "No records",
     "advance": "Advance",
     "loan": "Loan"
+  },
+  "payslip": {
+    "title": "Payslip",
+    "noData": "No data",
+    "days": "Days",
+    "hours": "Hours",
+    "normal": "Normal",
+    "overtime": "OT",
+    "gross": "Gross",
+    "net": "Net",
+    "paid": "Paid",
+    "batched": "Batched",
+    "byDay": "By Day",
+    "date": "Date",
+    "normalH": "Normal",
+    "overtimeH": "OT",
+    "details": "Details",
+    "byProject": "By Project",
+    "adjustments": "Adjustments",
+    "adjBonus": "Bonus",
+    "adjDeduction": "Deduction",
+    "adjLoan": "Loan",
+    "adjRent": "Rent",
+    "adjFine": "Fine",
+    "bonusesTotal": "Bonuses",
+    "deductionsTotal": "Deductions",
+    "netPayable": "Net Payable",
+    "paidOn": "Paid on"
   }
 }
