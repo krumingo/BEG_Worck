@@ -82,6 +82,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Breakdown: "Отчетен труд" (operational) vs "Платен труд" (real expense, green)
   - Idempotency guard on pay action (400 + 409)
   - Verified: 100% backend (18/18) + 100% frontend
+- **Employee Dossier (Досие на служител)** — Apr 11, 2026
+  - Aggregate view per worker: reports, payroll, calendar, advances, warnings
+  - 4th tab in Reports: worker picker → header + inner tabs
+  - Verified: 100% backend (15/15) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 

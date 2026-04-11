@@ -1,3 +1,22 @@
+## Apr 11, 2026 — Employee Dossier (Досие на служител)
+
+### Backend: GET /api/employee-dossier/{worker_id}
+- Aggregates: users + profiles + reports (old+new) + payroll_batches + advances + worker_calendar + rosters
+- Returns: header, reports (flat lines), payroll (weekly), advances, calendar (daily), warnings
+
+### Frontend: EmployeeDossierSection.js (4th tab in AllReportsPage)
+- 4 tabs total: Всички отчети | Седмица | Заплати | Досие
+- Worker picker: search + avatar cards → select worker
+- Dossier header: photo, name, position, pay type, rate, active badge
+- Summary: 4 cards (Общо часове | Изработено EUR | Платено EUR | Отчети)
+- Inner tabs: Отчети (report lines) | Заплати (weekly payroll) | Календар (daily status) | Заеми (advances)
+- Warnings: unpaid weeks, active loans, missing rate, no payroll status
+- i18n: 47 BG + 47 EN keys
+
+### Test: 100% backend (15/15) + 100% frontend
+- /app/test_reports/iteration_67.json
+
+
 ## Apr 11, 2026 — Cash Result Fix: ONLY paid labor, no fallback
 
 ### Fix
