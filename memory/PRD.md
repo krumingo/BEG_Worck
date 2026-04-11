@@ -67,6 +67,10 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Payroll week matrix: workers × 7 days + summary columns
   - Week picker, day detail modal, overtime badges, value disclaimer
   - Verified: 100% backend (21/21) + 100% frontend
+- **Payroll Batch (Заплати Sat→Fri)** — Apr 11, 2026
+  - Third tab: eligible entries → day selection → adjustments → create batch → mark paid
+  - Batch lifecycle: eligible → batched → paid. Does NOT allocate to projects yet
+  - Verified: 100% backend (23/23) + 100% frontend
 
 ### UPCOMING PRIORITY BLOCKS:
 

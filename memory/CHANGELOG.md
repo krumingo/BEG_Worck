@@ -1,3 +1,30 @@
+## Apr 11, 2026 — Payroll Batch (Заплати Съб→Пет)
+
+### Backend: /api/payroll-batch/*
+- `GET /eligible?week_of=` — approved+unpaid entries per worker per day
+- `POST /` — create batch with included_days + adjustments
+- `POST /{id}/pay` — mark batch paid, update report payroll_status
+- `GET /list` — list all batches
+- `GET /{id}` — single batch detail
+- `POST /carry-forward?week_of=` — mark unbatched as carry_forward
+- Model: payroll_batches collection (id, week_start/end, included_days, employee_summaries, totals, status)
+
+### Frontend: PayrollBatchSection.js (third tab in AllReportsPage)
+- 3 tabs: Всички отчети | Седмица | Заплати
+- Week picker (Sat→Fri) with prev/next/today
+- Day selection checkboxes (only days with data enabled)
+- Summary cards: Общо часове | Брутно | Бонуси | Удръжки | Нетно
+- Worker table: Дни, Часове, Норм., Извънр., Ставка, Брутно, Бонуси, Удръжки, Нетно
+- Adjustments dialog: bonus, deduction, loan, rent, fine
+- Worker detail modal with day breakdown
+- Batch lifecycle: Създай пакет → Маркирай платен → Платен
+- Value disclaimer: "Заплатата не е разход по обекта, докато не бъде платена и алокирана."
+- i18n: 32 BG + 32 EN keys
+
+### Test: 100% backend (23/23) + 100% frontend
+- /app/test_reports/iteration_64.json
+
+
 ## Apr 11, 2026 — Weekly Matrix (Седмица Съб→Пет)
 
 ### Backend: GET /api/weekly-matrix
