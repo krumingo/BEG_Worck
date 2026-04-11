@@ -52,6 +52,9 @@ export default function TechnicianDashboard() {
   // Draft editing
   const [existingDrafts, setExistingDrafts] = useState([]);
 
+  // Object detail
+  const [siteDetail, setSiteDetail] = useState(null);
+
   // Quick actions
   const [quickScreen, setQuickScreen] = useState(null); // quickSmr | photoInvoice
 
@@ -69,12 +72,17 @@ export default function TechnicianDashboard() {
   const openObject = async (site) => {
     setSelectedSite(site);
     setScreen("object");
+    setSiteDetail(null);
     try {
-      const [tasksRes] = await Promise.all([
+      const [tasksRes, detailRes, draftsRes] = await Promise.all([
         API.get(`/technician/site/${site.project_id}/tasks`),
+        API.get(`/technician/site/${site.project_id}/detail`),
+        API.get(`/technician/site/${site.project_id}/my-drafts`),
       ]);
       setAvailableTasks(tasksRes.data.tasks || []);
-    } catch { setAvailableTasks([]); }
+      setSiteDetail(detailRes.data);
+      setExistingDrafts(draftsRes.data.items || []);
+    } catch { setAvailableTasks([]); setSiteDetail(null); setExistingDrafts([]); }
   };
 
   // ── Open Roster ─────────────────────────────────────────────
@@ -229,27 +237,96 @@ export default function TechnicianDashboard() {
   // ════════════════════════════════════════════════════════════
   // OBJECT SCREEN
   // ════════════════════════════════════════════════════════════
-  if (screen === "object" && selectedSite) return (
-    <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-object">
-      <Button variant="ghost" size="sm" onClick={() => { setScreen("myDay"); setSelectedSite(null); }}><ArrowLeft className="w-4 h-4 mr-1" /> {t("technician.back")}</Button>
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-lg font-bold mb-1">{selectedSite.name}</h2>
-        {selectedSite.address_text && <p className="text-sm text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{selectedSite.address_text}</p>}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Button onClick={openRoster} className="h-20 rounded-2xl flex-col text-sm font-semibold"><FileText className="w-6 h-6 mb-1" />{t("technician.dailyReport")}</Button>
-        <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-20 rounded-2xl flex-col text-sm"><AlertTriangle className="w-6 h-6 mb-1 text-orange-400" />{t("technician.newSMR")}</Button>
-        <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-20 rounded-2xl flex-col text-sm"><Camera className="w-6 h-6 mb-1 text-blue-400" />{t("technician.photoInvoice")}</Button>
-        <Button variant="outline" className="h-20 rounded-2xl flex-col text-sm" onClick={async () => { try { await API.post("/technician/material-request", { project_id: selectedSite.project_id, items: [{ item_name: "Материал", qty: 1, unit: "бр" }], urgent: false }); toast.success("Заявка създадена"); } catch {} }}><Package className="w-6 h-6 mb-1 text-emerald-400" />{t("technician.requestMaterial")}</Button>
-      </div>
-      {existingDrafts.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-xs font-semibold text-amber-400 mb-2">{t("technician.existingDrafts")} ({existingDrafts.length})</p>
-          {existingDrafts.slice(0, 3).map(d => <p key={d.id} className="text-xs text-muted-foreground">{d.worker_name} — {d.smr_type} — {d.hours}ч</p>)}
+  if (screen === "object" && selectedSite) {
+    const d = siteDetail;
+    const co = d?.contact_owner || {};
+    const cr = d?.contact_responsible || {};
+    const od = d?.object_details || {};
+    const ct = d?.counters || {};
+    const addr = d?.address || {};
+    const fullAddr = d?.address_text || [addr.city && `гр. ${addr.city}`, addr.district, addr.street, addr.block && `бл. ${addr.block}`, addr.floor && `ет. ${addr.floor}`].filter(Boolean).join(", ");
+
+    return (
+      <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-object">
+        <Button variant="ghost" size="sm" onClick={() => { setScreen("myDay"); setSelectedSite(null); }}><ArrowLeft className="w-4 h-4 mr-1" /> {t("technician.back")}</Button>
+
+        {/* Object Info Card */}
+        <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
+          <h2 className="text-lg font-bold">{selectedSite.name}</h2>
+          {fullAddr && <p className="text-sm text-muted-foreground flex items-start gap-2"><MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />{fullAddr}</p>}
+          {od.access_notes && <p className="text-xs text-muted-foreground bg-muted/20 rounded-lg p-2">{od.access_notes}</p>}
+
+          {/* Contacts */}
+          <div className="flex gap-3">
+            {(co.name || co.phone) && (
+              <div className="flex-1 text-xs">
+                <p className="text-muted-foreground mb-0.5">{t("technician.owner")}</p>
+                <p className="font-medium">{co.name}</p>
+                {co.phone && <a href={`tel:${co.phone}`} className="flex items-center gap-1 text-primary hover:underline mt-0.5"><Phone className="w-3 h-3" />{co.phone}</a>}
+              </div>
+            )}
+            {(cr.name || cr.phone) && (
+              <div className="flex-1 text-xs">
+                <p className="text-muted-foreground mb-0.5">{t("technician.responsible")}</p>
+                <p className="font-medium">{cr.name}</p>
+                {cr.phone && <a href={`tel:${cr.phone}`} className="flex items-center gap-1 text-primary hover:underline mt-0.5"><Phone className="w-3 h-3" />{cr.phone}</a>}
+              </div>
+            )}
+          </div>
+
+          {/* Object badges */}
+          <div className="flex gap-2 flex-wrap">
+            {d?.object_type && <Badge variant="outline" className="text-[10px]">{d.object_type}</Badge>}
+            {od.is_inhabited && <Badge variant="outline" className="text-[10px] text-amber-400">Обитаем</Badge>}
+            {od.parking_available && <Badge variant="outline" className="text-[10px]">Паркинг</Badge>}
+            {od.elevator_available && <Badge variant="outline" className="text-[10px]">Асансьор</Badge>}
+          </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Guidance Photos */}
+        {d?.guidance_photos?.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {d.guidance_photos.map(p => <img key={p.id} src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-20 h-20 rounded-xl object-cover border border-border flex-shrink-0" />)}
+          </div>
+        )}
+
+        {/* Counters */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-border bg-card p-3 text-center">
+            <Users className="w-5 h-5 mx-auto mb-1 text-cyan-400" />
+            <p className="text-xl font-bold">{ct.roster_count || 0}</p>
+            <p className="text-[10px] text-muted-foreground">{t("technician.onSite")}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3 text-center">
+            <FileText className="w-5 h-5 mx-auto mb-1 text-emerald-400" />
+            <p className="text-xl font-bold">{ct.reported_workers || 0}</p>
+            <p className="text-[10px] text-muted-foreground">{t("technician.reported")}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3 text-center">
+            <Clock className="w-5 h-5 mx-auto mb-1 text-primary" />
+            <p className="text-xl font-bold">{ct.reported_hours || 0}</p>
+            <p className="text-[10px] text-muted-foreground">{t("technician.hoursToday")}</p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          <Button onClick={openRoster} className="h-20 rounded-2xl flex-col text-sm font-semibold"><FileText className="w-6 h-6 mb-1" />{t("technician.dailyReport")}</Button>
+          <Button variant="outline" onClick={() => { openRoster(); }} className="h-20 rounded-2xl flex-col text-sm"><Users className="w-6 h-6 mb-1 text-cyan-400" />{t("technician.people")}</Button>
+          <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-20 rounded-2xl flex-col text-sm"><AlertTriangle className="w-6 h-6 mb-1 text-orange-400" />{t("technician.newSMR")}</Button>
+          <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-20 rounded-2xl flex-col text-sm"><Camera className="w-6 h-6 mb-1 text-blue-400" />{t("technician.photoInvoice")}</Button>
+        </div>
+
+        {/* Existing Drafts */}
+        {existingDrafts.length > 0 && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-xs font-semibold text-amber-400 mb-2">{t("technician.existingDrafts")} ({existingDrafts.length})</p>
+            {existingDrafts.slice(0, 5).map(dd => <p key={dd.id} className="text-xs text-muted-foreground">{dd.worker_name} — {dd.smr_type} — {dd.hours}ч</p>)}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ════════════════════════════════════════════════════════════
   // ROSTER

@@ -1697,7 +1697,12 @@
     "submit": "Submit",
     "existingDrafts": "Drafts for today",
     "requestMaterial": "Request Material",
-    "dailyReport": "Daily Report"
+    "dailyReport": "Daily Report",
+    "owner": "Owner",
+    "responsible": "Responsible",
+    "onSite": "On Site",
+    "hoursToday": "Hours Today",
+    "people": "People"
   },
   "projectContext": {
     "active": "Site",

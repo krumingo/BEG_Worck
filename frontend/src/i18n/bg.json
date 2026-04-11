@@ -1879,7 +1879,12 @@
     "submit": "Изпрати",
     "existingDrafts": "Чернови за днес",
     "requestMaterial": "Заяви материал",
-    "dailyReport": "Отчет за деня"
+    "dailyReport": "Отчет за деня",
+    "owner": "Собственик",
+    "responsible": "Отговорник",
+    "onSite": "На обекта",
+    "hoursToday": "Часове днес",
+    "people": "Хора"
   },
   "projectContext": {
     "active": "Обект",

@@ -150,6 +150,82 @@ async def my_sites(user: dict = Depends(get_current_user)):
     return {"sites": result, "total": len(result)}
 
 
+# ── Object Detail ──────────────────────────────────────────────────
+
+@router.get("/technician/site/{project_id}/detail")
+async def get_site_detail(project_id: str, user: dict = Depends(get_current_user)):
+    """Rich object detail for technician: info, contacts, counters, photos."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    project = await db.projects.find_one(
+        {"id": project_id, "org_id": org_id},
+        {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1,
+         "structured_address": 1, "contacts": 1, "object_details": 1,
+         "object_type": 1, "notes": 1},
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    sa = project.get("structured_address") or {}
+    contacts = project.get("contacts") or {}
+    od = project.get("object_details") or {}
+
+    # Counters
+    roster = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0, "workers": 1}
+    )
+    roster_count = len(roster.get("workers", [])) if roster else 0
+
+    drafts_today = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today,
+         "status": {"$in": ["Draft", "Submitted", "SUBMITTED", "APPROVED"]}},
+        {"_id": 0, "worker_id": 1, "hours": 1},
+    ).to_list(200)
+    reported_workers = len(set(d.get("worker_id") for d in drafts_today))
+    reported_hours = round(sum(d.get("hours", 0) for d in drafts_today), 1)
+
+    # Guidance photos (from media linked to project context)
+    photos = await db.media_files.find(
+        {"org_id": org_id, "context_type": "project", "context_id": project_id},
+        {"_id": 0, "id": 1, "url": 1, "filename": 1},
+    ).sort("created_at", -1).to_list(6)
+
+    return {
+        "project_id": project_id,
+        "name": project.get("name", ""),
+        "code": project.get("code", ""),
+        "address_text": project.get("address_text", ""),
+        "address": {
+            "city": sa.get("city", ""),
+            "district": sa.get("district", ""),
+            "street": sa.get("street", ""),
+            "block": sa.get("block", ""),
+            "entrance": sa.get("entrance", ""),
+            "floor": sa.get("floor", ""),
+            "apartment": sa.get("apartment", ""),
+            "postal_code": sa.get("postal_code", ""),
+            "notes": sa.get("notes", ""),
+        },
+        "contact_owner": contacts.get("owner") or {},
+        "contact_responsible": contacts.get("responsible") or {},
+        "object_type": project.get("object_type", ""),
+        "object_details": {
+            "floors_count": od.get("floors_count"),
+            "is_inhabited": od.get("is_inhabited", False),
+            "parking_available": od.get("parking_available", False),
+            "elevator_available": od.get("elevator_available", False),
+            "access_notes": od.get("access_notes", ""),
+        },
+        "counters": {
+            "roster_count": roster_count,
+            "reported_workers": reported_workers,
+            "reported_hours": reported_hours,
+        },
+        "guidance_photos": [{"id": p["id"], "url": p["url"], "filename": p.get("filename", "")} for p in photos],
+    }
+
+
 # ── Site Tasks ─────────────────────────────────────────────────────
 
 @router.get("/technician/site/{project_id}/tasks")
