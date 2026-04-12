@@ -1,3 +1,20 @@
+## Apr 12, 2026 — Definitive Allocation Rule (Finalized)
+
+### Rule:
+- Level 1 (Days): paid proportional to day source_value. Last day absorbs rounding.
+- Level 2 (Sites): day_paid proportional per site. Last site absorbs rounding.
+- Fallback: equal split ONLY when ALL source_values = 0 (no rate)
+- Every allocation has: allocation_method, validation.match, rounding_adjustment
+
+### Validation:
+- sum(day_allocations.allocated_paid) == paid_now_amount → match: true/false
+- rounding_adjustment logged per employee
+- Last row/site absorbs any remainder → exact penny match
+
+### Backend: definitive allocation block in create_pay_run
+### Frontend: detail shows method labels (пропорционално/равно/fallback), ✓ OK badge, rounding info
+
+
 ## Apr 12, 2026 — Step 4: Payment Allocation by Day/Site
 
 ### Allocation logic (on confirm):

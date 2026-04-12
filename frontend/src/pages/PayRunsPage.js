@@ -930,28 +930,57 @@ export default function PayRunsPage() {
                   )}
 
                   {/* Per-employee allocation */}
-                  {allocData.employees.map(emp => (
-                    <div key={emp.employee_id} className="rounded-lg border border-border/50 p-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium">{emp.first_name} {emp.last_name}</span>
+                  {allocData.employees.map(emp => {
+                    const v = emp.validation || {};
+                    return (
+                    <div key={emp.employee_id} className="rounded-lg border border-border/50 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className="text-xs font-medium">{emp.first_name} {emp.last_name}</span>
+                          <span className="text-[8px] text-muted-foreground ml-2">метод: {emp.allocation_method_day === "proportional_value" ? "пропорционално" : "равно (fallback)"}</span>
+                        </div>
                         <div className="flex gap-2 text-[10px]">
                           <span className="text-emerald-400 font-mono">Платено: {emp.paid_now_amount}</span>
-                          {emp.remaining_carry_forward > 0 && <span className="text-amber-400 font-mono">Остатък: {emp.remaining_carry_forward}</span>}
+                          {emp.remaining_carry_forward !== 0 && <span className={`font-mono ${emp.remaining_carry_forward > 0 ? "text-amber-400" : "text-red-400"}`}>Остатък: {emp.remaining_carry_forward}</span>}
+                          {v.match === true && <span className="text-[7px] text-emerald-400">✓ OK</span>}
+                          {v.match === false && <span className="text-[7px] text-red-400">✗ Разминаване</span>}
                         </div>
                       </div>
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         {emp.day_allocations?.map((da, di) => (
-                          <div key={di} className="flex items-center justify-between text-[9px] px-2 py-0.5 rounded bg-muted/10">
-                            <span className="font-mono text-muted-foreground">{da.date}</span>
-                            <span>{da.hours}ч / {da.source_value} EUR</span>
-                            <span className="text-emerald-400 font-mono">→ {da.allocated_paid}</span>
-                            {da.allocated_remaining > 0 && <span className="text-amber-400 font-mono">+{da.allocated_remaining}</span>}
-                            <span className="text-muted-foreground">{da.sites?.map(s => s.site_name).join(", ")}</span>
+                          <div key={di} className="rounded bg-muted/10 px-2 py-1">
+                            <div className="flex items-center justify-between text-[9px]">
+                              <span className="font-mono text-muted-foreground w-[75px]">{da.date}</span>
+                              <span className="w-[70px]">{da.hours}ч / {da.source_value}</span>
+                              <span className="text-emerald-400 font-mono w-[55px] text-right">→ {da.allocated_paid}</span>
+                              <span className={`font-mono w-[55px] text-right ${da.allocated_remaining > 0 ? "text-amber-400" : da.allocated_remaining < 0 ? "text-red-400" : "text-muted-foreground"}`}>{da.allocated_remaining !== 0 ? da.allocated_remaining : "0"}</span>
+                              <span className="text-[7px] text-muted-foreground/60 w-[60px] text-right">{da.allocation_method === "proportional_value" ? "пропорц." : "равно"}</span>
+                            </div>
+                            {da.sites?.length > 1 && (
+                              <div className="ml-[75px] mt-0.5 space-y-0.5">
+                                {da.sites.map((sa, si) => (
+                                  <div key={si} className="flex items-center gap-2 text-[8px] text-muted-foreground">
+                                    <span className="text-primary">{sa.site_name}</span>
+                                    <span>{sa.hours}ч</span>
+                                    <span className="text-emerald-400 font-mono">{sa.paid}</span>
+                                    {sa.remaining !== 0 && <span className="text-amber-400 font-mono">{sa.remaining > 0 ? "+" : ""}{sa.remaining}</span>}
+                                    <span className="text-[6px]">{sa.method?.includes("remainder") ? "(закр.)" : ""}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {da.sites?.length === 1 && (
+                              <div className="text-[8px] text-muted-foreground ml-[75px]">{da.sites[0]?.site_name}</div>
+                            )}
                           </div>
                         ))}
                       </div>
+                      {emp.rounding_adjustment !== 0 && (
+                        <p className="text-[7px] text-muted-foreground mt-1">Закръгляне: {emp.rounding_adjustment} EUR (последен ред поема остатъка)</p>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
