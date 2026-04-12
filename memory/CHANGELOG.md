@@ -1,3 +1,32 @@
+## Apr 12, 2026 — Pay Runs (Разплащане) — Stage 5 Core
+
+### New Data Model: pay_runs collection
+Fields: id, org_id, number (PR-XXXX), run_type (weekly/advance/month_close), period_start, period_end, week_number, status (confirmed/paid), employee_rows[], totals, created_by, confirmed_at, paid_at
+
+### Employee Row (frozen at confirm):
+frozen_hourly_rate, approved_days, approved_hours, normal_hours, overtime_hours, earned_amount, bonuses_amount, deductions_amount, previously_paid, paid_now_amount, remaining_after_payment, sites[], notes
+
+### Formula: remaining = earned + bonuses - deductions - previously_paid - paid_now
+
+### Source of Truth:
+- earned_amount from approved report lines × frozen_hourly_rate
+- paid_now_amount set by admin at confirm time
+- remaining_after_payment = math result
+- All values frozen in snapshot at confirm
+
+### Backend: /app/backend/app/routes/pay_runs.py
+- GET /pay-runs/generate — preview from approved reports
+- POST /pay-runs — create + confirm with frozen values
+- GET /pay-runs — list history
+- GET /pay-runs/{id} — detail
+- POST /pay-runs/{id}/mark-paid
+
+### Frontend: /app/frontend/src/pages/PayRunsPage.js
+- Tab "Ново разплащане": period picker, editable table (бонуси/удръжки/плащане), confirm button
+- Tab "История": list with detail modal, mark-paid button
+- Sidebar: Персонал → Разплащане
+
+
 ## Apr 11, 2026 — Unified Report Model Cleanup
 
 ### Official Report Model: Flat normalized line

@@ -1211,6 +1211,9 @@ api_router.include_router(payroll_batch_router)
 from app.routes.employee_dossier import router as employee_dossier_router
 api_router.include_router(employee_dossier_router)
 
+from app.routes.pay_runs import router as pay_runs_router
+api_router.include_router(pay_runs_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

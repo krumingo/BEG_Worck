@@ -58,8 +58,8 @@ const NAV_GROUPS = [
     id: "personnel", icon: UserCog, labelKey: "nav.personnel",
     children: [
       { to: "/employees", icon: UserCog, labelKey: "nav.employees" },
+      { to: "/pay-runs", icon: Receipt, labelKey: "nav.payRuns" },
       { to: "/worker-calendar", icon: CalendarDays, labelKey: "nav.workerCalendar" },
-      { to: "/payroll", icon: Receipt, labelKey: "nav.payrollLegacy" },
       { to: "/advances", icon: Wallet, labelKey: "nav.advances" },
       { to: "/contract-payments", icon: Briefcase, labelKey: "nav.contractPayments" },
     ],
