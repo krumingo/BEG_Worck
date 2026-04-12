@@ -55,6 +55,13 @@ export default function EmployeeDetailPage() {
   const canEdit = ["Admin", "Owner"].includes(user?.role);
   const defaultTab = searchParams.get("tab") || "calendar";
 
+  // Unified period controller
+  const [periodFrom, setPeriodFrom] = useState(() => {
+    const d = new Date(); d.setDate(1); // first of current month
+    return d.toISOString().slice(0, 10);
+  });
+  const [periodTo, setPeriodTo] = useState(() => new Date().toISOString().slice(0, 10));
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [calMonth, setCalMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -105,12 +112,17 @@ export default function EmployeeDetailPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
 
-  // Load dossier data (reports, payroll batches, advances)
+  // Sync calendar month with period
   useEffect(() => {
-    API.get(`/employee-dossier/${userId}`)
+    setCalMonth(periodFrom.slice(0, 7));
+  }, [periodFrom]);
+
+  // Load dossier data with period
+  useEffect(() => {
+    API.get(`/employee-dossier/${userId}?date_from=${periodFrom}&date_to=${periodTo}`)
       .then(r => setDossier(r.data))
       .catch(() => {});
-  }, [userId]);
+  }, [userId, periodFrom, periodTo]);
 
   // Auto-calculation
   const updatePayField = (field, value) => {
@@ -393,26 +405,61 @@ export default function EmployeeDetailPage() {
       )}
 
       {/* Dossier summary cards */}
-      {dossier && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4" data-testid="dossier-summary-cards">
-          <div className="rounded-lg bg-card border border-border p-2.5 text-center">
-            <p className="text-lg font-bold font-mono">{dossier.reports?.total_hours || 0}<span className="text-xs text-muted-foreground">ч</span></p>
-            <p className="text-[9px] text-muted-foreground">Общо часове</p>
+      {dossier && (() => {
+        const rpt = dossier.reports || {};
+        const pay = dossier.payroll || {};
+        const advActive = (dossier.advances || []).filter(a => a.remaining > 0);
+        const totalLoans = advActive.reduce((s, a) => s + a.remaining, 0);
+        const remaining = Math.round(((rpt.total_value || 0) - (pay.total_paid || 0)) * 100) / 100;
+        return (
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" data-testid="dossier-summary-cards">
+          <div className="rounded-lg bg-card border border-border p-2 text-center">
+            <p className="text-base font-bold font-mono">{rpt.total_hours || 0}<span className="text-[10px] text-muted-foreground">ч</span></p>
+            <p className="text-[8px] text-muted-foreground">Часове</p>
           </div>
-          <div className="rounded-lg bg-card border border-border p-2.5 text-center">
-            <p className="text-lg font-bold font-mono text-primary">{(dossier.reports?.total_value || 0).toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
-            <p className="text-[9px] text-muted-foreground">Изработено</p>
+          <div className="rounded-lg bg-card border border-border p-2 text-center">
+            <p className="text-base font-bold font-mono">{rpt.count || 0}</p>
+            <p className="text-[8px] text-muted-foreground">Отчети</p>
           </div>
-          <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5 text-center">
-            <p className="text-lg font-bold font-mono text-emerald-400">{(dossier.payroll?.total_paid || 0).toFixed(0)}<span className="text-xs text-emerald-400/60"> EUR</span></p>
-            <p className="text-[9px] text-emerald-400/70">Платено</p>
+          <div className="rounded-lg bg-card border border-border p-2 text-center">
+            <p className="text-base font-bold font-mono text-primary">{(rpt.total_value || 0).toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+            <p className="text-[8px] text-muted-foreground">Изработено</p>
           </div>
-          <div className="rounded-lg bg-card border border-border p-2.5 text-center">
-            <p className="text-lg font-bold font-mono">{dossier.reports?.count || 0}</p>
-            <p className="text-[9px] text-muted-foreground">Отчети</p>
+          <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
+            <p className="text-base font-bold font-mono text-emerald-400">{(pay.total_paid || 0).toFixed(0)}<span className="text-[10px] text-emerald-400/60"> EUR</span></p>
+            <p className="text-[8px] text-emerald-400/70">Платено</p>
+          </div>
+          <div className={`rounded-lg p-2 text-center ${remaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : "bg-card border border-border"}`}>
+            <p className={`text-base font-bold font-mono ${remaining > 0 ? "text-amber-400" : remaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{remaining.toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+            <p className="text-[8px] text-muted-foreground">Остатък</p>
+          </div>
+          <div className={`rounded-lg p-2 text-center ${totalLoans > 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
+            <p className={`text-base font-bold font-mono ${totalLoans > 0 ? "text-red-400" : "text-muted-foreground"}`}>{totalLoans > 0 ? totalLoans.toFixed(0) : "0"}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+            <p className="text-[8px] text-muted-foreground">Заеми</p>
           </div>
         </div>
-      )}
+        );
+      })()}
+
+      {/* Unified Period Controller */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap" data-testid="period-controller">
+        <span className="text-[10px] text-muted-foreground font-semibold uppercase">Период:</span>
+        <Input type="date" value={periodFrom} onChange={e => setPeriodFrom(e.target.value)} className="h-8 text-xs w-[130px]" />
+        <span className="text-[10px] text-muted-foreground">→</span>
+        <Input type="date" value={periodTo} onChange={e => setPeriodTo(e.target.value)} className="h-8 text-xs w-[130px]" />
+        <div className="flex gap-1">
+          {[
+            { label: "Този месец", fn: () => { const d = new Date(); setPeriodFrom(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`); setPeriodTo(d.toISOString().slice(0,10)); }},
+            { label: "Миналият", fn: () => { const d = new Date(); d.setMonth(d.getMonth()-1); const y=d.getFullYear(); const m=d.getMonth()+1; setPeriodFrom(`${y}-${String(m).padStart(2,"0")}-01`); setPeriodTo(`${y}-${String(m).padStart(2,"0")}-${new Date(y,m,0).getDate()}`); }},
+            { label: "3 месеца", fn: () => { const d = new Date(); const d3 = new Date(); d3.setMonth(d3.getMonth()-3); setPeriodFrom(d3.toISOString().slice(0,10)); setPeriodTo(d.toISOString().slice(0,10)); }},
+          ].map(p => (
+            <Button key={p.label} variant="ghost" size="sm" className="h-7 text-[10px] px-2" onClick={p.fn}>{p.label}</Button>
+          ))}
+        </div>
+        <span className="text-[10px] text-muted-foreground ml-auto">
+          {dossier?.reports?.count || 0} отчети | {dossier?.reports?.total_hours || 0}ч | {(dossier?.reports?.total_value || 0).toFixed(0)} EUR
+        </span>
+      </div>
 
       <Tabs defaultValue={defaultTab}>
         <TabsList className="mb-4 flex-wrap">
@@ -560,7 +607,7 @@ export default function EmployeeDetailPage() {
         {/* ═══ DOSSIER: Payroll Weeks Tab ═══ */}
         {/* ═══ DOSSIER: Payroll Weeks Tab — real pay runs data ═══ */}
         <TabsContent value="payroll-weeks">
-          <EmployeePayrollWeeks userId={userId} onViewSlip={(slipId) => {
+          <EmployeePayrollWeeks userId={userId} periodFrom={periodFrom} periodTo={periodTo} onViewSlip={(slipId) => {
             API.get(`/payment-slips/${slipId}`).then(r => setPayslipOpen({ slip: r.data })).catch(() => {});
           }} />
         </TabsContent>
@@ -599,7 +646,7 @@ export default function EmployeeDetailPage() {
 
         {/* Фишове Tab — real payment slips */}
         <TabsContent value="payroll">
-          <EmployeeSlips userId={userId} />
+          <EmployeeSlips userId={userId} periodFrom={periodFrom} periodTo={periodTo} />
         </TabsContent>
       </Tabs>
 
@@ -635,17 +682,26 @@ export default function EmployeeDetailPage() {
 }
 
 
-function EmployeePayrollWeeks({ userId, onViewSlip }) {
+function EmployeePayrollWeeks({ userId, periodFrom, periodTo, onViewSlip }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    setLoading(true);
     API.get(`/payroll-weeks?employee_id=${userId}`)
-      .then(r => setWeeks(r.data?.items || []))
+      .then(r => {
+        // Filter by period on client side
+        const items = (r.data?.items || []).filter(w => {
+          if (periodFrom && w.period_end < periodFrom) return false;
+          if (periodTo && w.period_start > periodTo) return false;
+          return true;
+        });
+        setWeeks(items);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, periodFrom, periodTo]);
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>;
   if (!weeks.length) return <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">Няма pay run записи</div>;
@@ -695,17 +751,25 @@ function EmployeePayrollWeeks({ userId, onViewSlip }) {
   );
 }
 
-function EmployeeSlips({ userId }) {
+function EmployeeSlips({ userId, periodFrom, periodTo }) {
   const [slips, setSlips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState(null);
 
   useEffect(() => {
+    setLoading(true);
     API.get(`/payment-slips?employee_id=${userId}`)
-      .then(r => setSlips(r.data?.items || []))
+      .then(r => {
+        const items = (r.data?.items || []).filter(s => {
+          if (periodFrom && s.period_end < periodFrom) return false;
+          if (periodTo && s.period_start > periodTo) return false;
+          return true;
+        });
+        setSlips(items);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, periodFrom, periodTo]);
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>;
   if (!slips.length) return <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">Няма фишове</div>;

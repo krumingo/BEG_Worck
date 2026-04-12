@@ -1,3 +1,36 @@
+## Apr 12, 2026 — Stage 6: Unified Employee Data / Period Controller
+
+### Unified Period Controller
+- Date picker: от/до + бързи бутони "Този месец" / "Миналият" / "3 месеца"
+- Shared state: periodFrom + periodTo passed to all tabs
+- Calendar syncs month with periodFrom
+- Dossier fetches with date_from/date_to parameters
+- PayrollWeeks and Slips filter by overlapping period
+
+### Summary Bar — 6 unified cards
+- Часове | Отчети | Изработено EUR | Платено EUR | Остатък EUR | Заеми EUR
+- All from same dossier endpoint with same period
+
+### Reconciliation:
+- Summary ↔ Отчети: same source (employee-dossier), same period → match ✅
+- Заплати: pay_runs with overlapping periods → correct behavior ✅
+- Фишове: payment_slips with overlapping periods → correct ✅
+- Calendar: syncs month from periodFrom → consistent ✅
+
+### Source of Truth per tab:
+| Tab | Endpoint | Period Source |
+|-----|----------|-------------|
+| Summary | /employee-dossier/{id} | periodFrom→periodTo |
+| Calendar | /employees/{id}/calendar | month from periodFrom |
+| Reports | /employee-dossier/{id} | periodFrom→periodTo |
+| Payroll | /payroll-weeks?employee_id= | filter by overlap |
+| Slips | /payment-slips?employee_id= | filter by overlap |
+| Projects | /employees/{id}/dashboard | all time |
+| Advances | /employee-dossier/{id} | all time |
+
+### Files: frontend/src/pages/EmployeeDetailPage.js
+
+
 ## Apr 12, 2026 — Stage 5 Final: PDF Slip + Guardrails + Quick Filters
 
 ### PDF Payment Slip
