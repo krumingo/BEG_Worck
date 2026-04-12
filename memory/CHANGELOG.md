@@ -1,3 +1,29 @@
+## Apr 12, 2026 — Step 3: Group Payment with Partial Pay + Carry Forward
+
+### Step 3 UI:
+- Columns: Checkbox | Служител (avatar+name) | Нетно | Реално платено (editable) | Остатък
+- Header: Избрани X | Нетно X | Платено X | Остатък X
+- Quick actions: "Платено = Нетно" | "Нулирай"
+
+### Payment logic:
+- paid_now_amount = editable per employee (can be < net, 0, or exact)
+- remaining = net - paid_now_amount
+- Unselected employees don't enter batch
+- "Потвърди плащане (X EUR)" sends only selected rows with actual paid amounts
+
+### Detail statuses per employee:
+- Платен (green): paid > 0 && remaining <= 0
+- Частичен (amber): paid > 0 && remaining > 0
+- Неплатен (gray): paid = 0
+
+### 3-step flow complete:
+1. Дни (weekly grid, select days/employees)
+2. Корекции (advance/loan/deduction/bonus per employee)
+3. Плащане (actual paid amounts, partial/full, confirm)
+
+### Files: frontend/src/pages/PayRunsPage.js — Step 3 table + payment state + detail statuses
+
+
 ## Apr 12, 2026 — Editable Day Cells + Step 2 Adjustments
 
 ### Day ordering: Sat→Fri (frontend sort by getDay)

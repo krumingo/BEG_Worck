@@ -52,12 +52,15 @@ export default function PayRunsPage() {
   const [selectedEmps, setSelectedEmps] = useState(new Set());
   const [selectedDays, setSelectedDays] = useState({});
 
-  // Step: "grid" or "adjustments"
+  // Step: "grid" | "adjustments" | "payment"
   const [step, setStep] = useState("grid");
   // Day overrides: { `${eid}_${date}`: { hours, value, reason } }
   const [dayOverrides, setDayOverrides] = useState({});
   // Adjustment rows per employee
   const [adjustments, setAdjustments] = useState({});
+  // Step 3: actual payment amounts
+  const [paidAmounts, setPaidAmounts] = useState({}); // { eid: number }
+  const [paySelected, setPaySelected] = useState(new Set()); // which employees are in payment batch
   // Day edit dialog
   const [dayEditDialog, setDayEditDialog] = useState(null);
   const [dayEditHours, setDayEditHours] = useState("");
@@ -90,6 +93,8 @@ export default function PayRunsPage() {
       setOverrides({});
       setDayOverrides({});
       setAdjustments({});
+      setPaidAmounts({});
+      setPaySelected(new Set());
       setStep("grid");
       // Auto-select all employees with data and all their days
       const emps = new Set();
@@ -146,14 +151,15 @@ export default function PayRunsPage() {
 
   const buildRows = () => {
     if (!preview) return [];
-    return preview.rows.filter(r => selectedEmps.has(r.employee_id)).map(r => {
+    const usePayment = step === "payment";
+    const filterSet = usePayment ? paySelected : selectedEmps;
+    return preview.rows.filter(r => filterSet.has(r.employee_id)).map(r => {
       const empDays = selectedDays[r.employee_id] || new Set();
-      const selCells = (r.day_cells || []).filter(d => empDays.has(d.date));
-      const paidAmount = selCells.reduce((s, d) => s + getDayValue(r.employee_id, d), 0);
       const empAdj = getEmpAdj(r.employee_id);
+      const paidNow = usePayment ? (paidAmounts[r.employee_id] ?? getEmpNet(r)) : getEmpNet(r);
       return {
         employee_id: r.employee_id,
-        paid_now_amount: getEmpNet(r),
+        paid_now_amount: Math.round(paidNow * 100) / 100,
         adjustments: empAdj.map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
         notes: "",
       };
@@ -233,6 +239,52 @@ export default function PayRunsPage() {
 
   const totalSelectedEmps = selectedEmps.size;
   const totalSelectedDays = Object.values(selectedDays).reduce((s, ds) => s + ds.size, 0);
+
+  // Step 3 helpers
+  const getActualPaid = (eid) => paidAmounts[eid] ?? null; // null = not set yet
+  const getRemaining = (row) => {
+    const net = getEmpNet(row);
+    const paid = getActualPaid(row.employee_id);
+    return paid !== null ? Math.round((net - paid) * 100) / 100 : 0;
+  };
+
+  const initPaymentStep = () => {
+    // Pre-fill paid amounts = net for all selected employees
+    const amounts = {};
+    const selected = new Set();
+    for (const r of (preview?.rows || [])) {
+      if (selectedEmps.has(r.employee_id) && getEmpPayAmount(r) > 0) {
+        amounts[r.employee_id] = getEmpNet(r);
+        selected.add(r.employee_id);
+      }
+    }
+    setPaidAmounts(amounts);
+    setPaySelected(selected);
+    setStep("payment");
+  };
+
+  const fillAllPaidEqNet = () => {
+    const amounts = { ...paidAmounts };
+    for (const r of (preview?.rows || [])) {
+      if (paySelected.has(r.employee_id)) {
+        amounts[r.employee_id] = getEmpNet(r);
+      }
+    }
+    setPaidAmounts(amounts);
+  };
+
+  const clearAllPaid = () => {
+    const amounts = { ...paidAmounts };
+    for (const eid of paySelected) amounts[eid] = 0;
+    setPaidAmounts(amounts);
+  };
+
+  const payTotals = (() => {
+    const rows = (preview?.rows || []).filter(r => paySelected.has(r.employee_id));
+    const net = rows.reduce((s, r) => s + getEmpNet(r), 0);
+    const paid = rows.reduce((s, r) => s + (paidAmounts[r.employee_id] ?? 0), 0);
+    return { count: rows.length, net: Math.round(net * 100) / 100, paid: Math.round(paid * 100) / 100, carry: Math.round((net - paid) * 100) / 100 };
+  })();
 
   const handleSaveDraft = async () => {
     if (!preview) return;
@@ -370,9 +422,11 @@ export default function PayRunsPage() {
             <>
               {/* Step tabs */}
               <div className="flex items-center gap-2 mb-3">
-                <button onClick={() => setStep("grid")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "grid" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>1. Избор на дни</button>
-                <span className="text-muted-foreground">→</span>
+                <button onClick={() => setStep("grid")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "grid" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>1. Дни</button>
+                <span className="text-muted-foreground text-xs">→</span>
                 <button onClick={() => setStep("adjustments")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "adjustments" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>2. Корекции</button>
+                <span className="text-muted-foreground text-xs">→</span>
+                <button onClick={() => initPaymentStep()} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "payment" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>3. Плащане</button>
               </div>
 
               {/* Header */}
@@ -523,21 +577,80 @@ export default function PayRunsPage() {
               </div>
               )}
 
+              {/* Step 3: Payment */}
+              {step === "payment" && (
+              <div className="rounded-xl border border-border bg-card overflow-hidden mb-4" data-testid="payment-table">
+                <div className="flex items-center justify-between p-3 border-b border-border">
+                  <div className="flex items-center gap-4 text-xs">
+                    <span>Избрани: <strong className="text-foreground">{payTotals.count}</strong></span>
+                    <span>Нетно: <strong className="text-primary font-mono">{payTotals.net.toFixed(0)}</strong></span>
+                    <span>Платено: <strong className="text-emerald-400 font-mono">{payTotals.paid.toFixed(0)}</strong></span>
+                    <span className={payTotals.carry > 0 ? "text-amber-400" : "text-emerald-400"}>Остатък: <strong className="font-mono">{payTotals.carry.toFixed(0)}</strong></span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={fillAllPaidEqNet}>Платено = Нетно</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={clearAllPaid}>Нулирай</Button>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead className="text-[10px] w-[30px]"><input type="checkbox" checked={payTotals.count === (preview?.rows || []).filter(r => selectedEmps.has(r.employee_id) && getEmpPayAmount(r) > 0).length} onChange={e => { const sel = new Set(); if (e.target.checked) (preview?.rows || []).filter(r => selectedEmps.has(r.employee_id) && getEmpPayAmount(r) > 0).forEach(r => sel.add(r.employee_id)); setPaySelected(sel); }} className="rounded" /></TableHead>
+                    <TableHead className="text-[10px] min-w-[140px]">Служител</TableHead>
+                    <TableHead className="text-[10px] text-center">Нетно</TableHead>
+                    <TableHead className="text-[10px] text-center min-w-[100px]">Реално платено</TableHead>
+                    <TableHead className="text-[10px] text-center bg-primary/5">Остатък</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {(preview?.rows || []).filter(r => selectedEmps.has(r.employee_id) && getEmpPayAmount(r) > 0).map(row => {
+                      const eid = row.employee_id;
+                      const net = getEmpNet(row);
+                      const isPay = paySelected.has(eid);
+                      const paid = paidAmounts[eid] ?? net;
+                      const remain = Math.round((net - paid) * 100) / 100;
+                      return (
+                        <TableRow key={eid} className={isPay ? "" : "opacity-40"}>
+                          <TableCell><input type="checkbox" checked={isPay} onChange={() => { const s = new Set(paySelected); if (s.has(eid)) s.delete(eid); else s.add(eid); setPaySelected(s); }} className="rounded" /></TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
+                              <div><p className="text-xs font-medium">{row.first_name} {row.last_name}</p><p className="text-[8px] text-muted-foreground">{row.position || "—"}</p></div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center text-sm font-mono font-bold text-primary">{net.toFixed(0)}</TableCell>
+                          <TableCell className="text-center">
+                            <Input type="number" value={paid} onChange={e => setPaidAmounts(prev => ({ ...prev, [eid]: parseFloat(e.target.value) || 0 }))} className="h-8 w-24 text-sm font-mono text-center mx-auto font-bold text-emerald-400" disabled={!isPay} />
+                          </TableCell>
+                          <TableCell className={`text-center text-sm font-mono font-bold bg-primary/5 ${remain > 0 ? "text-amber-400" : remain < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                            {remain.toFixed(0)}
+                            {remain < 0 && <span className="text-[8px] block text-red-400">надплащане</span>}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              )}
+
               {/* Actions */}
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  {step === "adjustments" && <Button variant="ghost" size="sm" onClick={() => setStep("grid")} className="text-xs">← Назад към дни</Button>}
+                  {step === "adjustments" && <Button variant="ghost" size="sm" onClick={() => setStep("grid")} className="text-xs">← Назад</Button>}
+                  {step === "payment" && <Button variant="ghost" size="sm" onClick={() => setStep("adjustments")} className="text-xs">← Корекции</Button>}
                 </div>
                 <div className="flex gap-2">
-                  {step === "grid" && <Button variant="outline" onClick={() => setStep("adjustments")} disabled={totalSelectedPay === 0} className="gap-1.5">Напред → Корекции</Button>}
+                  {step === "grid" && <Button variant="outline" onClick={() => setStep("adjustments")} disabled={totalSelectedPay === 0} className="gap-1.5">Напред →</Button>}
+                  {step === "adjustments" && <Button variant="outline" onClick={initPaymentStep} disabled={totalSelectedPay === 0} className="gap-1.5">Напред → Плащане</Button>}
                   <Button variant="outline" onClick={handleSaveDraft} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="save-draft-btn">
                     {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                     Чернова
                   </Button>
-                  <Button onClick={handleCreate} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="create-payrun-btn">
-                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    Потвърди ({totalSelectedPay.toFixed(0)} EUR)
-                  </Button>
+                  {step === "payment" && (
+                    <Button onClick={handleCreate} disabled={creating || payTotals.count === 0} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="create-payrun-btn">
+                      {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Потвърди плащане ({payTotals.paid.toFixed(0)} EUR)
+                    </Button>
+                  )}
                 </div>
               </div>
             </>
@@ -740,9 +853,13 @@ export default function PayRunsPage() {
                     <TableHead className="text-[10px] text-center">Корекции</TableHead>
                     <TableHead className="text-[10px] text-center">Платено</TableHead>
                     <TableHead className="text-[10px] text-center bg-primary/5">Остатък</TableHead>
+                    <TableHead className="text-[10px]">Статус</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {detailRun.employee_rows?.map(r => (
+                    {detailRun.employee_rows?.map(r => {
+                      const isPaid = r.paid_now_amount > 0 && r.remaining_after_payment <= 0;
+                      const isPartial = r.paid_now_amount > 0 && r.remaining_after_payment > 0;
+                      return (
                       <TableRow key={r.employee_id}>
                         <TableCell className="text-xs font-medium">{r.first_name} {r.last_name}</TableCell>
                         <TableCell className="text-center text-xs font-mono">{r.approved_hours}</TableCell>
@@ -754,8 +871,14 @@ export default function PayRunsPage() {
                         </TableCell>
                         <TableCell className="text-center text-xs font-mono text-emerald-400">{r.paid_now_amount?.toFixed(0)}</TableCell>
                         <TableCell className={`text-center text-xs font-mono font-bold bg-primary/5 ${r.remaining_after_payment > 0 ? "text-amber-400" : r.remaining_after_payment < 0 ? "text-red-400" : "text-emerald-400"}`}>{r.remaining_after_payment?.toFixed(0)}</TableCell>
-                      </TableRow>
-                    ))}
+                        <TableCell>
+                          {isPaid ? <Badge variant="outline" className="text-[8px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Платен</Badge>
+                          : isPartial ? <Badge variant="outline" className="text-[8px] bg-amber-500/15 text-amber-400 border-amber-500/30">Частичен</Badge>
+                          : r.paid_now_amount === 0 ? <Badge variant="outline" className="text-[8px] bg-gray-500/15 text-gray-400 border-gray-500/30">Неплатен</Badge>
+                          : null}
+                        </TableCell>
+                      </TableRow>);
+                    })}
                   </TableBody>
                 </Table>
               </div>
