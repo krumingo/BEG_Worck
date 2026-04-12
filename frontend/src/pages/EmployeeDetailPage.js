@@ -466,7 +466,7 @@ export default function EmployeeDetailPage() {
           <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="w-4 h-4 mr-1" /> Календар</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports"><FileText className="w-4 h-4 mr-1" /> Отчети</TabsTrigger>
           <TabsTrigger value="payroll-weeks" data-testid="tab-payroll-weeks"><DollarSign className="w-4 h-4 mr-1" /> Заплати</TabsTrigger>
-          <TabsTrigger value="projects" data-testid="tab-projects"><MapPin className="w-4 h-4 mr-1" /> Обекти ({project_history.length})</TabsTrigger>
+          <TabsTrigger value="projects" data-testid="tab-projects"><MapPin className="w-4 h-4 mr-1" /> Обекти</TabsTrigger>
           <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Заеми</TabsTrigger>
           <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="w-4 h-4 mr-1" /> Присъствия</TabsTrigger>
           <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Фишове</TabsTrigger>
@@ -510,54 +510,114 @@ export default function EmployeeDetailPage() {
         </TabsContent>
 
         {/* Projects Tab */}
+        {/* Projects Tab — derived from dossier reports for period consistency */}
         <TabsContent value="projects">
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="projects-table">
-            <Table>
-              <TableHeader><TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase text-muted-foreground">Обект</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground">Роля</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground text-right">Дни</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground text-right">Часове</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground">Последно</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {project_history.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Няма данни</TableCell></TableRow>
-                ) : project_history.map((ph, i) => (
-                  <TableRow key={i} className="cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/projects/${ph.project_id}`)}>
-                    <TableCell><span className="font-mono text-primary text-sm">{ph.project_code}</span> <span className="text-muted-foreground text-sm">{ph.project_name}</span></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{ph.role_in_project || "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{ph.days_present}</TableCell>
-                    <TableCell className="text-right font-mono text-sm text-amber-400">{ph.total_hours || "—"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{ph.last_attendance ? formatDate(ph.last_attendance) : "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {(() => {
+              const lines = dossier?.reports?.lines || [];
+              const byProj = {};
+              lines.forEach(r => {
+                const pid = r.project_id || "unknown";
+                if (!byProj[pid]) byProj[pid] = { project_id: pid, project_name: r.project_name || "—", hours: 0, value: 0, days: new Set() };
+                byProj[pid].hours += r.hours;
+                byProj[pid].value += r.value || 0;
+                byProj[pid].days.add(r.date);
+              });
+              const projects = Object.values(byProj).map(p => ({...p, days: p.days.size})).sort((a,b) => b.hours - a.hours);
+              const totalH = projects.reduce((s,p) => s + p.hours, 0);
+              const totalV = projects.reduce((s,p) => s + p.value, 0);
+              return projects.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">Няма данни за периода</div>
+              ) : (
+                <>
+                <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
+                  <span>Обекти: <strong className="text-foreground">{projects.length}</strong></span>
+                  <span>Часове: <strong className="text-foreground font-mono">{totalH.toFixed(0)}ч</strong></span>
+                  <span>Стойност: <strong className="text-primary font-mono">{totalV.toFixed(0)} EUR</strong></span>
+                </div>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead className="text-[10px]">Обект</TableHead>
+                    <TableHead className="text-[10px] text-center">Дни</TableHead>
+                    <TableHead className="text-[10px] text-center">Часове</TableHead>
+                    <TableHead className="text-[10px] text-center">Стойност</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {projects.map(p => (
+                      <TableRow key={p.project_id} className="cursor-pointer hover:bg-muted/30" onClick={() => p.project_id !== "unknown" && navigate(`/projects/${p.project_id}`)}>
+                        <TableCell className="text-sm"><MapPin className="w-3 h-3 inline mr-1 text-primary" /><span className="text-primary">{p.project_name}</span></TableCell>
+                        <TableCell className="text-center font-mono text-sm">{p.days}</TableCell>
+                        <TableCell className="text-center font-mono text-sm font-bold">{p.hours.toFixed(0)}</TableCell>
+                        <TableCell className="text-center font-mono text-sm text-primary">{p.value.toFixed(0)} EUR</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="border-t-2 border-border font-bold">
+                      <TableCell className="text-xs">ОБЩО</TableCell>
+                      <TableCell />
+                      <TableCell className="text-center font-mono text-xs">{totalH.toFixed(0)}</TableCell>
+                      <TableCell className="text-center font-mono text-xs text-primary">{totalV.toFixed(0)} EUR</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+                </>
+              );
+            })()}
           </div>
         </TabsContent>
 
-        {/* Attendance Tab */}
+        {/* Attendance Tab — derived from dossier calendar for period consistency */}
         <TabsContent value="attendance">
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="attendance-table">
-            <Table>
-              <TableHeader><TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs uppercase text-muted-foreground">Дата</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground">Статус</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground">Обект</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {attendance.length === 0 ? (
-                  <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Няма записи</TableCell></TableRow>
-                ) : attendance.map((att, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-sm font-mono">{att.date}</TableCell>
-                    <TableCell><Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[att.status] || ""}`}>{STATUS_BG[att.status] || att.status}</Badge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{att.project_code || "—"} {att.project_name || ""}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {(() => {
+              const cal = (dossier?.calendar || []).filter(d => d.date >= periodFrom && d.date <= periodTo);
+              const working = cal.filter(d => d.status === "working");
+              const sick = cal.filter(d => d.status === "sick");
+              const leave = cal.filter(d => d.status === "leave");
+              return (
+                <>
+                <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
+                  <span>На работа: <strong className="text-emerald-400">{working.length}</strong></span>
+                  <span>Болни: <strong className="text-rose-400">{sick.length}</strong></span>
+                  <span>Отпуска: <strong className="text-sky-400">{leave.length}</strong></span>
+                  <span>С отчет: <strong className="text-primary">{cal.filter(d => d.has_report).length}</strong></span>
+                  <span>Часове: <strong className="font-mono">{cal.reduce((s,d) => s + d.hours, 0).toFixed(0)}ч</strong></span>
+                </div>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead className="text-[10px]">Дата</TableHead>
+                    <TableHead className="text-[10px]">Ден</TableHead>
+                    <TableHead className="text-[10px]">Статус</TableHead>
+                    <TableHead className="text-[10px] text-center">Часове</TableHead>
+                    <TableHead className="text-[10px]">Отчет</TableHead>
+                    <TableHead className="text-[10px]">Обект</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {cal.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">Няма записи за периода</TableCell></TableRow>
+                    ) : cal.map(d => {
+                      const wd = ["Пон","Вт","Ср","Чет","Пет","Съб","Нед"][d.weekday];
+                      const isWeekend = d.weekday >= 5;
+                      return (
+                        <TableRow key={d.date} className={isWeekend ? "bg-muted/10" : ""}>
+                          <TableCell className="text-xs font-mono">{d.date}</TableCell>
+                          <TableCell className="text-[10px] text-muted-foreground">{wd}</TableCell>
+                          <TableCell>
+                            {d.status === "working" ? <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">На работа</Badge>
+                            : d.status === "sick" ? <Badge variant="outline" className="text-[9px] bg-rose-500/15 text-rose-400 border-rose-500/30">Болен</Badge>
+                            : d.status === "leave" ? <Badge variant="outline" className="text-[9px] bg-sky-500/15 text-sky-400 border-sky-500/30">Отпуска</Badge>
+                            : <span className="text-[10px] text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className={`text-center text-xs font-mono ${d.hours > 0 ? "font-bold" : "text-muted-foreground"}`}>{d.hours > 0 ? d.hours : "—"}</TableCell>
+                          <TableCell>{d.has_report ? <Check className="w-3 h-3 text-emerald-400" /> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                          <TableCell>{d.site_name ? <span className="text-[10px] text-primary">{d.site_name}</span> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                </>
+              );
+            })()}
           </div>
         </TabsContent>
 
@@ -615,32 +675,48 @@ export default function EmployeeDetailPage() {
         {/* ═══ DOSSIER: Advances Tab ═══ */}
         <TabsContent value="advances">
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="dossier-advances-tab">
-            {!dossier?.advances?.length ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">Няма записи за заеми / аванси</div>
-            ) : (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead className="text-[10px]">Вид</TableHead>
-                  <TableHead className="text-[10px]">Дата</TableHead>
-                  <TableHead className="text-[10px] text-center">Сума</TableHead>
-                  <TableHead className="text-[10px] text-center">Остатък</TableHead>
-                  <TableHead className="text-[10px]">Статус</TableHead>
-                  <TableHead className="text-[10px]">Бележка</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {dossier.advances.map(a => (
-                    <TableRow key={a.id} className="hover:bg-muted/10">
-                      <TableCell className="text-xs">{a.type === "advance" ? "Аванс" : a.type === "loan" ? "Заем" : a.type}</TableCell>
-                      <TableCell className="text-xs font-mono">{a.date || "—"}</TableCell>
-                      <TableCell className="text-center text-xs font-mono">{a.amount?.toFixed(0)} EUR</TableCell>
-                      <TableCell className={`text-center text-xs font-mono ${a.remaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{a.remaining?.toFixed(0)} EUR</TableCell>
-                      <TableCell><Badge variant="outline" className={`text-[9px] ${a.status === "active" || a.status === "approved" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" : "text-muted-foreground"}`}>{a.status}</Badge></TableCell>
-                      <TableCell className="text-[10px] text-muted-foreground truncate max-w-[150px]">{a.note || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+            {(() => {
+              const all = dossier?.advances || [];
+              const active = all.filter(a => a.remaining > 0 && (a.status === "active" || a.status === "approved"));
+              const returned = all.filter(a => a.remaining === 0);
+              const totalActive = active.reduce((s, a) => s + a.remaining, 0);
+              const totalAll = all.reduce((s, a) => s + a.amount, 0);
+              return all.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">Няма записи за заеми / аванси</div>
+              ) : (
+                <>
+                <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
+                  <span>Общо: <strong className="text-foreground">{all.length}</strong></span>
+                  <span>Активни: <strong className="text-amber-400">{active.length}</strong></span>
+                  <span>Върнати: <strong className="text-emerald-400">{returned.length}</strong></span>
+                  <span>Дълг: <strong className="text-red-400 font-mono">{totalActive.toFixed(0)} EUR</strong></span>
+                  <span>Издадени общо: <strong className="font-mono">{totalAll.toFixed(0)} EUR</strong></span>
+                </div>
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead className="text-[10px]">Вид</TableHead>
+                    <TableHead className="text-[10px]">Дата</TableHead>
+                    <TableHead className="text-[10px] text-center">Сума</TableHead>
+                    <TableHead className="text-[10px] text-center">Остатък</TableHead>
+                    <TableHead className="text-[10px]">Статус</TableHead>
+                    <TableHead className="text-[10px]">Бележка</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {all.map(a => (
+                      <TableRow key={a.id} className={`hover:bg-muted/10 ${a.remaining > 0 ? "" : "opacity-50"}`}>
+                        <TableCell className="text-xs">{a.type === "advance" ? "Аванс" : a.type === "loan" ? "Заем" : a.type}</TableCell>
+                        <TableCell className="text-xs font-mono">{a.date || "—"}</TableCell>
+                        <TableCell className="text-center text-xs font-mono">{a.amount?.toFixed(0)} EUR</TableCell>
+                        <TableCell className={`text-center text-xs font-mono ${a.remaining > 0 ? "text-amber-400 font-bold" : "text-emerald-400"}`}>{a.remaining?.toFixed(0)} EUR</TableCell>
+                        <TableCell><Badge variant="outline" className={`text-[9px] ${a.status === "active" || a.status === "approved" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" : a.remaining === 0 ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" : "text-muted-foreground"}`}>{a.status === "active" ? "Активен" : a.status === "approved" ? "Одобрен" : a.remaining === 0 ? "Върнат" : a.status}</Badge></TableCell>
+                        <TableCell className="text-[10px] text-muted-foreground truncate max-w-[150px]">{a.note || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                </>
+              );
+            })()}
           </div>
         </TabsContent>
 

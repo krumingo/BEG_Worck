@@ -1,3 +1,25 @@
+## Apr 12, 2026 — Stage 6 Final: All Employee Tabs Unified at 100%
+
+### Tabs fixed to use period-aware sources:
+- **Обекти**: Rewritten — derives from dossier.reports.lines, groups by project, shows Дни/Часове/Стойност + ОБЩО row. Period-aware.
+- **Присъствия**: Rewritten — derives from dossier.calendar, filters by periodFrom/periodTo. Summary: На работа/Болни/Отпуска/С отчет/Часове. Period-aware.
+- **Заеми**: Enhanced — summary bar (Общо/Активни/Върнати/Дълг/Издадени) + status breakdown (Активен/Одобрен/Върнат). All-time correct.
+- **Заплати + Фишове**: Already period-filtered (from previous stage)
+
+### Reconciliation verified (Светлин, 04/01→04/12):
+- Summary.часове = Отчети.часове = Обекти.ОБЩО = Присъствия.часове = 30ч ✅
+- Summary.стойност = Отчети.стойност = Обекти.ОБЩО.стойност = 486 EUR ✅
+- Summary.заеми = Заеми.издадени = 4100 EUR ✅
+
+### All tabs now use same source chain:
+employee-dossier/{id}?date_from&date_to → Summary + Отчети + Обекти + Присъствия + Заеми
+payroll-weeks?employee_id + client filter → Заплати
+payment-slips?employee_id + client filter → Фишове
+employees/{id}/calendar?month (synced) → Календар
+
+### Files: frontend/src/pages/EmployeeDetailPage.js (Обекти + Присъствия rewritten, Заеми enhanced)
+
+
 ## Apr 12, 2026 — Stage 6: Unified Employee Data / Period Controller
 
 ### Unified Period Controller
