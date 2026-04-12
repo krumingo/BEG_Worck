@@ -336,6 +336,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "paid_now_amount": round(paid_now, 2),
             "remaining_after_payment": remaining,
             "sites": row.get("sites", []),
+            "day_cells": row.get("day_cells", []),
             "notes": notes,
         }
         employee_rows.append(frozen_row)
@@ -425,6 +426,85 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     # Only generate slips for confirmed runs
     if data.status == "confirmed" and slips:
         await db.payment_slips.insert_many(slips)
+
+    # Generate allocations for confirmed runs
+    if data.status == "confirmed":
+        allocations = []
+        for er in employee_rows:
+            eid = er["employee_id"]
+            paid_total = er["paid_now_amount"]
+            cells = er.get("day_cells", [])
+            total_cell_value = sum(c.get("value", 0) for c in cells)
+
+            day_allocs = []
+            for dc in cells:
+                # Proportional allocation per day cell
+                if total_cell_value > 0:
+                    ratio = dc.get("value", 0) / total_cell_value
+                else:
+                    ratio = 1.0 / max(len(cells), 1)
+                day_paid = round(paid_total * ratio, 2)
+                day_remaining = round(dc.get("value", 0) - day_paid, 2)
+
+                # Per-site breakdown within the day
+                sites = dc.get("sites", [])
+                if len(sites) <= 1:
+                    site_allocs = [{"site_name": sites[0] if sites else "", "hours": dc.get("hours", 0), "value": dc.get("value", 0), "paid": day_paid, "remaining": day_remaining}]
+                else:
+                    # Multi-site: split equally by site count
+                    per_site = round(day_paid / len(sites), 2)
+                    per_site_val = round(dc.get("value", 0) / len(sites), 2)
+                    per_site_hrs = round(dc.get("hours", 0) / len(sites), 1)
+                    site_allocs = [{"site_name": s, "hours": per_site_hrs, "value": per_site_val, "paid": per_site, "remaining": round(per_site_val - per_site, 2)} for s in sites]
+
+                day_allocs.append({
+                    "date": dc.get("date", ""),
+                    "hours": dc.get("hours", 0),
+                    "source_value": dc.get("value", 0),
+                    "allocated_paid": day_paid,
+                    "allocated_remaining": day_remaining,
+                    "sites": site_allocs,
+                })
+
+            allocations.append({
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "pay_run_id": run_id,
+                "pay_run_number": run_number,
+                "employee_id": eid,
+                "first_name": er["first_name"],
+                "last_name": er["last_name"],
+                "period_start": data.period_start,
+                "period_end": data.period_end,
+                "week_number": week_num,
+                "paid_now_amount": paid_total,
+                "remaining_carry_forward": er["remaining_after_payment"],
+                "day_allocations": day_allocs,
+                "created_at": now,
+            })
+
+        if allocations:
+            await db.pay_run_allocations.insert_many(allocations)
+
+        # Store allocation summary on the pay_run
+        site_summary = {}
+        for alloc in allocations:
+            for da in alloc.get("day_allocations", []):
+                for sa in da.get("sites", []):
+                    sn = sa["site_name"] or "Без обект"
+                    if sn not in site_summary:
+                        site_summary[sn] = {"site_name": sn, "paid": 0, "remaining": 0, "hours": 0}
+                    site_summary[sn]["paid"] += sa["paid"]
+                    site_summary[sn]["remaining"] += sa["remaining"]
+                    site_summary[sn]["hours"] += sa["hours"]
+        for v in site_summary.values():
+            v["paid"] = round(v["paid"], 2)
+            v["remaining"] = round(v["remaining"], 2)
+            v["hours"] = round(v["hours"], 1)
+
+        await db.pay_runs.update_one({"id": run_id}, {"$set": {
+            "allocation_summary": list(site_summary.values()),
+        }})
 
     return {k: v for k, v in pay_run.items() if k != "_id"}
 
@@ -692,6 +772,35 @@ async def get_pay_run_history(run_id: str, user: dict = Depends(get_current_user
         raise HTTPException(status_code=404, detail="Not found")
     return {"id": run["id"], "number": run.get("number"), "version": run.get("version", 1),
             "status": run.get("status"), "history": run.get("history", [])}
+
+
+
+# ── Allocations ────────────────────────────────────────────────────
+
+@router.get("/pay-runs/{run_id}/allocations")
+async def get_pay_run_allocations(run_id: str, user: dict = Depends(get_current_user)):
+    """Get allocation breakdown for a pay run — by employee, day, site."""
+    org_id = user["org_id"]
+    allocs = await db.pay_run_allocations.find(
+        {"org_id": org_id, "pay_run_id": run_id}, {"_id": 0}
+    ).to_list(200)
+
+    # Also get allocation_summary from the run itself
+    run = await db.pay_runs.find_one(
+        {"id": run_id, "org_id": org_id},
+        {"_id": 0, "allocation_summary": 1},
+    )
+
+    total_paid = round(sum(a.get("paid_now_amount", 0) for a in allocs), 2)
+    total_remaining = round(sum(a.get("remaining_carry_forward", 0) for a in allocs), 2)
+
+    return {
+        "pay_run_id": run_id,
+        "employees": allocs,
+        "site_summary": (run or {}).get("allocation_summary", []),
+        "total_paid": total_paid,
+        "total_remaining": total_remaining,
+    }
 
 
 # ── Payment Slips ──────────────────────────────────────────────────

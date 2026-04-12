@@ -365,13 +365,20 @@ export default function PayRunsPage() {
   };
 
   const [historyData, setHistoryData] = useState(null);
+  const [allocData, setAllocData] = useState(null);
   const loadHistory = async (runId) => {
     try { const res = await API.get(`/pay-runs/${runId}/history`); setHistoryData(res.data); }
     catch { setHistoryData(null); }
   };
 
+  const loadAlloc = async (runId) => {
+    try { const res = await API.get(`/pay-runs/${runId}/allocations`); setAllocData(res.data); }
+    catch { setAllocData(null); }
+  };
+
   const loadDetail = async (runId) => {
     try { const res = await API.get(`/pay-runs/${runId}`); setDetailRun(res.data); } catch {}
+    loadAlloc(runId);
   };
 
   const totals = preview?.totals || {};
@@ -900,6 +907,52 @@ export default function PayRunsPage() {
               {/* Version badge */}
               {detailRun.version > 1 && (
                 <p className="text-[9px] text-muted-foreground">Версия {detailRun.version}</p>
+              )}
+
+              {/* Allocation breakdown */}
+              {allocData && allocData.employees?.length > 0 && (
+                <div className="space-y-3 border-t border-border pt-3">
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">Разнасяне по обекти</p>
+                  {/* Site summary */}
+                  {allocData.site_summary?.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-testid="alloc-site-summary">
+                      {allocData.site_summary.map((s, i) => (
+                        <div key={i} className="rounded-lg border border-border p-2">
+                          <p className="text-xs font-medium truncate">{s.site_name}</p>
+                          <div className="flex items-center gap-2 text-[10px] mt-1">
+                            <span className="text-muted-foreground">{s.hours}ч</span>
+                            <span className="text-emerald-400 font-mono">{s.paid} EUR</span>
+                            {s.remaining > 0 && <span className="text-amber-400 font-mono">+{s.remaining}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Per-employee allocation */}
+                  {allocData.employees.map(emp => (
+                    <div key={emp.employee_id} className="rounded-lg border border-border/50 p-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium">{emp.first_name} {emp.last_name}</span>
+                        <div className="flex gap-2 text-[10px]">
+                          <span className="text-emerald-400 font-mono">Платено: {emp.paid_now_amount}</span>
+                          {emp.remaining_carry_forward > 0 && <span className="text-amber-400 font-mono">Остатък: {emp.remaining_carry_forward}</span>}
+                        </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        {emp.day_allocations?.map((da, di) => (
+                          <div key={di} className="flex items-center justify-between text-[9px] px-2 py-0.5 rounded bg-muted/10">
+                            <span className="font-mono text-muted-foreground">{da.date}</span>
+                            <span>{da.hours}ч / {da.source_value} EUR</span>
+                            <span className="text-emerald-400 font-mono">→ {da.allocated_paid}</span>
+                            {da.allocated_remaining > 0 && <span className="text-amber-400 font-mono">+{da.allocated_remaining}</span>}
+                            <span className="text-muted-foreground">{da.sites?.map(s => s.site_name).join(", ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}

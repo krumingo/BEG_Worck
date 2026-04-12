@@ -1,3 +1,32 @@
+## Apr 12, 2026 — Step 4: Payment Allocation by Day/Site
+
+### Allocation logic (on confirm):
+- For each employee: take paid_now_amount and day_cells
+- Proportional split: each day gets (day_value / total_value) × paid_amount
+- 1 site per day: allocated entirely to that site
+- Multiple sites per day: split equally among sites
+- Remaining per day: source_value - allocated_paid
+
+### New collection: pay_run_allocations
+- Fields: id, org_id, pay_run_id, employee_id, paid_now_amount, remaining_carry_forward
+- day_allocations[]: { date, hours, source_value, allocated_paid, allocated_remaining, sites[] }
+- sites[]: { site_name, hours, value, paid, remaining }
+
+### Pay run stores allocation_summary[] (by site):
+- { site_name, paid, remaining, hours }
+
+### New endpoint: GET /api/pay-runs/{id}/allocations
+- Returns: employees[], site_summary[], total_paid, total_remaining
+
+### Frontend: Detail modal shows:
+- "РАЗНАСЯНЕ ПО ОБЕКТИ" — site summary cards
+- Per-employee: day → hours/value → paid → remaining → site names
+
+### Files:
+- backend/app/routes/pay_runs.py — allocation generation in create + endpoint
+- frontend/src/pages/PayRunsPage.js — allocation display in detail modal
+
+
 ## Apr 12, 2026 — Step 3: Group Payment with Partial Pay + Carry Forward
 
 ### Step 3 UI:
