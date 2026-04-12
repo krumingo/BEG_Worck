@@ -18,10 +18,10 @@ router = APIRouter(tags=["Pay Runs"])
 # ── Earned Calculation Engine ──────────────────────────────────────
 
 def calc_earned(profile: dict, approved_hours: float, approved_days: int,
-                period_days: int = 7) -> dict:
+                period_days: int = 7, approved_value: float = 0) -> dict:
     """
     Multi pay-type earned engine.
-    Returns: {earned, rate, rate_type, daily_rate, hourly_rate}
+    Returns: {earned, rate, rate_type, daily_rate, hourly_rate, formula}
     """
     pay = (profile.get("pay_type") or "Monthly").strip()
     hr = float(profile.get("hourly_rate") or 0)
@@ -33,31 +33,52 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
     if pay == "Hourly":
         earned = round(approved_hours * hr, 2)
         return {"earned": earned, "rate": hr, "rate_type": "hourly",
-                "daily_rate": round(hr * hd, 2), "hourly_rate": hr}
+                "daily_rate": round(hr * hd, 2), "hourly_rate": hr,
+                "formula": f"{approved_hours}ч × {hr} EUR/ч"}
 
     elif pay == "Daily":
+        earned = round(approved_days * dr, 2)
         effective_hr = round(dr / max(hd, 1), 2)
-        earned = round(approved_hours * effective_hr, 2)
         return {"earned": earned, "rate": dr, "rate_type": "daily",
-                "daily_rate": dr, "hourly_rate": effective_hr}
+                "daily_rate": dr, "hourly_rate": effective_hr,
+                "formula": f"{approved_days}д × {dr} EUR/д"}
 
     elif pay == "Monthly":
-        effective_hr = round(ms / max(wd * hd, 1), 2)
-        earned = round(approved_hours * effective_hr, 2)
+        # Pro-rated: (monthly / working_days) × approved_days
+        daily = round(ms / max(wd, 1), 2)
+        earned = round(daily * approved_days, 2)
+        effective_hr = round(daily / max(hd, 1), 2)
         return {"earned": earned, "rate": ms, "rate_type": "monthly",
-                "daily_rate": round(ms / max(wd, 1), 2), "hourly_rate": effective_hr}
+                "daily_rate": daily, "hourly_rate": effective_hr,
+                "formula": f"{ms} EUR/мес ÷ {wd}д = {daily} EUR/д × {approved_days}д"}
 
     elif pay == "Akord":
-        # Piecework: earned from approved value directly, rate=0
-        earned = round(approved_hours * hr, 2) if hr > 0 else 0
+        # Piecework: use approved_value if available, else hours × rate
+        if approved_value > 0:
+            earned = round(approved_value, 2)
+            formula = f"Одобрена стойност: {approved_value} EUR"
+        elif hr > 0:
+            earned = round(approved_hours * hr, 2)
+            formula = f"{approved_hours}ч × {hr} EUR/ч (акорд)"
+        else:
+            earned = 0
+            formula = "Няма ставка / стойност"
         return {"earned": earned, "rate": hr, "rate_type": "piecework",
-                "daily_rate": 0, "hourly_rate": hr}
+                "daily_rate": 0, "hourly_rate": hr, "formula": formula}
 
-    else:  # mixed or unknown
-        effective_hr = round(ms / max(wd * hd, 1), 2) if ms > 0 else hr
-        earned = round(approved_hours * effective_hr, 2)
-        return {"earned": earned, "rate": effective_hr, "rate_type": "mixed",
-                "daily_rate": round(effective_hr * hd, 2), "hourly_rate": effective_hr}
+    else:  # mixed
+        # Sum applicable: daily part + hourly overtime if any
+        daily = round(ms / max(wd, 1), 2) if ms > 0 else dr
+        base_earned = round(daily * approved_days, 2) if daily > 0 else 0
+        effective_hr = round(daily / max(hd, 1), 2) if daily > 0 else hr
+        overtime_h = max(0, approved_hours - approved_days * hd)
+        ot_earned = round(overtime_h * effective_hr * 1.5, 2) if overtime_h > 0 else 0
+        earned = round(base_earned + ot_earned, 2)
+        formula = f"{approved_days}д × {daily} EUR/д"
+        if ot_earned > 0:
+            formula += f" + {overtime_h}ч OT × {effective_hr}×1.5"
+        return {"earned": earned, "rate": daily, "rate_type": "mixed",
+                "daily_rate": daily, "hourly_rate": effective_hr, "formula": formula}
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -184,6 +205,7 @@ async def generate_pay_run(
             "normal_hours": normal_hours,
             "overtime_hours": overtime_hours,
             "earned_amount": e["earned"],
+            "earned_formula": e.get("formula", ""),
             "adjustments": [],
             "bonuses_amount": 0,
             "deductions_amount": 0,
@@ -445,3 +467,79 @@ async def get_payment_slip(slip_id: str, user: dict = Depends(get_current_user))
     if not slip:
         raise HTTPException(status_code=404, detail="Slip not found")
     return slip
+
+
+# ── Payroll Weeks (calendar view) ──────────────────────────────────
+
+@router.get("/payroll-weeks")
+async def get_payroll_weeks(
+    user: dict = Depends(get_current_user),
+    employee_id: Optional[str] = None,
+    month: Optional[str] = None,
+    status: Optional[str] = None,
+    only_unpaid: bool = False,
+):
+    """
+    Payroll weeks view: all pay run rows grouped by week + unmatched approved weeks.
+    """
+    org_id = user["org_id"]
+
+    q = {"org_id": org_id}
+    if status:
+        q["status"] = status
+    runs = await db.pay_runs.find(q, {"_id": 0}).sort("period_start", -1).to_list(200)
+
+    # Flatten: one row per employee per pay run
+    rows = []
+    for run in runs:
+        for er in run.get("employee_rows", []):
+            if employee_id and er.get("employee_id") != employee_id:
+                continue
+            if month:
+                if not run.get("period_start", "").startswith(month):
+                    continue
+
+            row = {
+                "pay_run_id": run["id"],
+                "pay_run_number": run.get("number", ""),
+                "run_type": run.get("run_type", ""),
+                "period_start": run.get("period_start", ""),
+                "period_end": run.get("period_end", ""),
+                "week_number": run.get("week_number"),
+                "run_status": run.get("status", ""),
+                "paid_at": run.get("paid_at"),
+                "employee_id": er.get("employee_id", ""),
+                "first_name": er.get("first_name", ""),
+                "last_name": er.get("last_name", ""),
+                "position": er.get("position", ""),
+                "pay_type": er.get("pay_type", ""),
+                "approved_days": er.get("approved_days", 0),
+                "approved_hours": er.get("approved_hours", 0),
+                "earned_amount": er.get("earned_amount", 0),
+                "bonuses_amount": er.get("bonuses_amount", 0),
+                "deductions_amount": er.get("deductions_amount", 0),
+                "previously_paid": er.get("previously_paid", 0),
+                "paid_now_amount": er.get("paid_now_amount", 0),
+                "remaining_after_payment": er.get("remaining_after_payment", 0),
+                "adjustments": er.get("adjustments", []),
+                "sites": er.get("sites", []),
+            }
+
+            if only_unpaid and row["run_status"] == "paid":
+                continue
+
+            # Find associated slip
+            slip = await db.payment_slips.find_one(
+                {"org_id": org_id, "pay_run_id": run["id"], "employee_id": er["employee_id"]},
+                {"_id": 0, "id": 1, "slip_number": 1, "status": 1},
+            )
+            row["slip_id"] = slip["id"] if slip else None
+            row["slip_number"] = slip["slip_number"] if slip else None
+            row["slip_status"] = slip["status"] if slip else None
+
+            rows.append(row)
+
+    return {
+        "items": rows,
+        "total": len(rows),
+    }

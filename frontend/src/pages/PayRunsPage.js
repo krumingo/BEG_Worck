@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt,
+  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,6 +54,10 @@ export default function PayRunsPage() {
   const [loadingSlips, setLoadingSlips] = useState(false);
   const [detailSlip, setDetailSlip] = useState(null);
 
+  const [weeks, setWeeks] = useState([]);
+  const [loadingWeeks, setLoadingWeeks] = useState(false);
+  const [weeksOnlyUnpaid, setWeeksOnlyUnpaid] = useState(false);
+
   const [adjDialog, setAdjDialog] = useState(null);
   const [adjType, setAdjType] = useState("deduction");
   const [adjTitle, setAdjTitle] = useState("");
@@ -84,9 +88,21 @@ export default function PayRunsPage() {
     finally { setLoadingSlips(false); }
   }, []);
 
+  const loadWeeks = useCallback(async () => {
+    setLoadingWeeks(true);
+    try {
+      const params = new URLSearchParams();
+      if (weeksOnlyUnpaid) params.set("only_unpaid", "true");
+      const res = await API.get(`/payroll-weeks?${params}`);
+      setWeeks(res.data.items || []);
+    } catch { setWeeks([]); }
+    finally { setLoadingWeeks(false); }
+  }, [weeksOnlyUnpaid]);
+
   useEffect(() => { if (tab === "generate") loadPreview(); }, [tab, loadPreview]);
   useEffect(() => { if (tab === "history") loadRuns(); }, [tab, loadRuns]);
   useEffect(() => { if (tab === "slips") loadSlips(); }, [tab, loadSlips]);
+  useEffect(() => { if (tab === "weeks") loadWeeks(); }, [tab, loadWeeks]);
 
   const getOvr = (eid) => overrides[eid] || { paid: null, adjustments: [] };
   const setOvr = (eid, field, value) => {
@@ -164,6 +180,7 @@ export default function PayRunsPage() {
       <div className="flex items-center gap-1 mb-6 border-b border-border" data-testid="pay-runs-tabs">
         {[
           { id: "generate", icon: DollarSign, label: "Ново разплащане" },
+          { id: "weeks", icon: Calendar, label: "Седмици" },
           { id: "history", icon: FileText, label: "История" },
           { id: "slips", icon: Receipt, label: "Фишове" },
         ].map(t => (
@@ -304,6 +321,69 @@ export default function PayRunsPage() {
               </TableBody>
             </Table>
           </div>
+      )}
+
+      {/* ═══ WEEKS ═══ */}
+      {tab === "weeks" && (
+        <>
+          <div className="flex items-center gap-3 mb-4">
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <input type="checkbox" checked={weeksOnlyUnpaid} onChange={e => setWeeksOnlyUnpaid(e.target.checked)} className="rounded" />
+              Само неплатени
+            </label>
+          </div>
+          {loadingWeeks ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
+          : weeks.length === 0 ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма данни</div>
+          : <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="weeks-table">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead className="text-[10px]">Сед. №</TableHead>
+                  <TableHead className="text-[10px]">Период</TableHead>
+                  <TableHead className="text-[10px]">Човек</TableHead>
+                  <TableHead className="text-[10px]">Обект</TableHead>
+                  <TableHead className="text-[10px] text-center">Дни</TableHead>
+                  <TableHead className="text-[10px] text-center">Часове</TableHead>
+                  <TableHead className="text-[10px] text-center">Изработено</TableHead>
+                  <TableHead className="text-[10px] text-center">Корекции</TableHead>
+                  <TableHead className="text-[10px] text-center">Платено</TableHead>
+                  <TableHead className="text-[10px] text-center bg-primary/5">Остатък</TableHead>
+                  <TableHead className="text-[10px]">Статус</TableHead>
+                  <TableHead className="text-[10px]">Фиш</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {weeks.map((w, i) => {
+                    const isPaid = w.run_status === "paid";
+                    const hasRemaining = w.remaining_after_payment > 0;
+                    const adjTotal = w.bonuses_amount - w.deductions_amount;
+                    return (
+                      <TableRow key={`${w.pay_run_id}-${w.employee_id}-${i}`} className={`hover:bg-muted/10 ${isPaid ? "bg-emerald-500/3" : hasRemaining ? "bg-amber-500/3" : ""}`}>
+                        <TableCell className="text-xs font-mono font-bold">{w.week_number || "—"}</TableCell>
+                        <TableCell className="text-xs font-mono">{w.period_start} → {w.period_end}</TableCell>
+                        <TableCell>
+                          <button onClick={() => navigate(`/employees/${w.employee_id}?tab=payroll-weeks`)} className="text-xs font-medium hover:text-primary">{w.first_name} {w.last_name}</button>
+                          <p className="text-[9px] text-muted-foreground">{w.position || w.pay_type || "—"}</p>
+                        </TableCell>
+                        <TableCell>{w.sites?.length > 0 ? w.sites.map((s, si) => <span key={si} className="text-[9px] text-primary">{si > 0 ? ", " : ""}{s}</span>) : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                        <TableCell className="text-center text-xs font-mono">{w.approved_days}</TableCell>
+                        <TableCell className="text-center text-xs font-mono font-bold">{w.approved_hours}</TableCell>
+                        <TableCell className="text-center text-xs font-mono text-primary">{w.earned_amount?.toFixed(0)}</TableCell>
+                        <TableCell className="text-center text-[10px] font-mono">{adjTotal !== 0 ? <span className={adjTotal > 0 ? "text-emerald-400" : "text-red-400"}>{adjTotal > 0 ? "+" : ""}{adjTotal}</span> : "—"}</TableCell>
+                        <TableCell className="text-center text-xs font-mono text-emerald-400">{w.paid_now_amount?.toFixed(0)}</TableCell>
+                        <TableCell className={`text-center text-xs font-mono font-bold bg-primary/5 ${w.remaining_after_payment > 0 ? "text-amber-400" : w.remaining_after_payment < 0 ? "text-red-400" : "text-emerald-400"}`}>{w.remaining_after_payment?.toFixed(0)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[9px] ${isPaid ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-violet-500/15 text-violet-400 border-violet-500/30"}`}>
+                            {isPaid ? "Платен" : "Потвърден"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{w.slip_number ? <Badge variant="outline" className="text-[9px] cursor-pointer hover:bg-muted" onClick={() => { if (w.slip_id) { API.get(`/payment-slips/${w.slip_id}`).then(r => setDetailSlip(r.data)).catch(() => {}); } }}>{w.slip_number}</Badge> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          }
+        </>
       )}
 
       {/* ═══ SLIPS ═══ */}

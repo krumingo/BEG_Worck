@@ -1,3 +1,33 @@
+## Apr 12, 2026 — Payroll Weeks View + Earned Engine Fix + Employee Integration
+
+### Earned Engine Corrections:
+- **monthly**: Pro-rated: (monthly_salary / working_days) × approved_days. Formula shown in UI.
+- **daily**: approved_days × daily_rate (not hours × hourly equivalent)
+- **akord/piecework**: Uses approved_value when available, falls back to hours × hourly_rate
+- **mixed**: Base (daily × days) + overtime at 1.5× rate
+- All types return `formula` string for UI display
+
+### Payroll Weeks View (new tab "Седмици"):
+- Global view: Сед.№ | Период | Човек | Обект | Дни | Часове | Изработено | Корекции | Платено | Остатък | Статус | Фиш
+- Filter: "Само неплатени" checkbox
+- Paid rows: green tint | Partial: amber остатък | Slip badge clickable
+
+### Employee Integration (real data, not dossier fallback):
+- Tab "Заплати": loads /api/payroll-weeks?employee_id={id} — shows real pay run rows per employee
+- Tab "Фишове": loads /api/payment-slips?employee_id={id} — shows real slips with detail modal
+- Summary bar: Изработено X EUR | Платено Y EUR | Записи N
+
+### Backend: GET /api/payroll-weeks
+- Flattens all pay_runs → per-employee rows
+- Enriches with slip_id/slip_number/slip_status
+- Filters: employee_id, month, status, only_unpaid
+
+### Files:
+- backend/app/routes/pay_runs.py — calc_earned fix + formula + /payroll-weeks endpoint
+- frontend/src/pages/PayRunsPage.js — "Седмици" tab
+- frontend/src/pages/EmployeeDetailPage.js — real EmployeePayrollWeeks + EmployeeSlips components
+
+
 ## Apr 12, 2026 — Pay Runs v2: Multi-type Earned Engine + Adjustments + Payment Slips
 
 ### Payment Profile (from employee_profiles):
