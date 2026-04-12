@@ -86,6 +86,12 @@ export default function PayRunsPage() {
   const [adjAmount, setAdjAmount] = useState("");
   const [adjNote, setAdjNote] = useState("");
 
+  // Monthly calendar
+  const [monthYear, setMonthYear] = useState(() => new Date().toISOString().slice(0, 7));
+  const [monthData, setMonthData] = useState(null);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+  const [monthDetail, setMonthDetail] = useState(null); // employee detail
+
   const loadPreview = useCallback(async () => {
     setLoadingPreview(true);
     try {
@@ -135,10 +141,20 @@ export default function PayRunsPage() {
     finally { setLoadingWeeks(false); }
   }, []);
 
+  const loadMonth = useCallback(async () => {
+    setLoadingMonth(true);
+    try {
+      const res = await API.get(`/payroll-weeks?month=${monthYear}`);
+      setMonthData(res.data.items || []);
+    } catch { setMonthData(null); }
+    finally { setLoadingMonth(false); }
+  }, [monthYear]);
+
   useEffect(() => { if (tab === "generate") loadPreview(); }, [tab, loadPreview]);
   useEffect(() => { if (tab === "history") loadRuns(); }, [tab, loadRuns]);
   useEffect(() => { if (tab === "slips") loadSlips(); }, [tab, loadSlips]);
   useEffect(() => { if (tab === "weeks") loadWeeks(); }, [tab, loadWeeks]);
+  useEffect(() => { if (tab === "monthly") loadMonth(); }, [tab, loadMonth, monthYear]);
 
   const getRowCalc = (row) => {
     const ovr = getOvr(row.employee_id);
@@ -396,6 +412,7 @@ export default function PayRunsPage() {
       <div className="flex items-center gap-1 mb-6 border-b border-border" data-testid="pay-runs-tabs">
         {[
           { id: "generate", icon: DollarSign, label: "Ново разплащане" },
+          { id: "monthly", icon: Calendar, label: "Месечен" },
           { id: "weeks", icon: Calendar, label: "Седмици" },
           { id: "history", icon: FileText, label: "История" },
           { id: "slips", icon: Receipt, label: "Фишове" },
@@ -667,6 +684,179 @@ export default function PayRunsPage() {
           })()}
         </>
       )}
+
+      {/* ═══ MONTHLY ═══ */}
+      {tab === "monthly" && (() => {
+        if (loadingMonth) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+        const items = monthData || [];
+        // Group by employee → by week_number
+        const empMap = {};
+        const weekNums = new Set();
+        items.forEach(w => {
+          const eid = w.employee_id;
+          if (!empMap[eid]) empMap[eid] = { ...w, weeks: {}, totalPaid: 0, totalEarned: 0, totalBonuses: 0, totalDeductions: 0, totalDays: 0, lastRemaining: 0 };
+          const wn = w.week_number || 0;
+          weekNums.add(wn);
+          empMap[eid].weeks[wn] = w;
+          empMap[eid].totalPaid += w.paid_now_amount || 0;
+          empMap[eid].totalEarned += w.earned_amount || 0;
+          empMap[eid].totalBonuses += w.bonuses_amount || 0;
+          empMap[eid].totalDeductions += w.deductions_amount || 0;
+          empMap[eid].totalDays += w.approved_days || 0;
+          empMap[eid].lastRemaining = w.remaining_after_payment || 0;
+        });
+        const employees = Object.values(empMap).sort((a, b) => (b.totalPaid - a.totalPaid) || a.last_name?.localeCompare(b.last_name || ""));
+        const sortedWeeks = [...weekNums].sort((a, b) => a - b);
+        const grandPaid = employees.reduce((s, e) => s + e.totalPaid, 0);
+        const grandEarned = employees.reduce((s, e) => s + e.totalEarned, 0);
+        const grandBonuses = employees.reduce((s, e) => s + e.totalBonuses, 0);
+        const grandDeductions = employees.reduce((s, e) => s + e.totalDeductions, 0);
+        const grandRemaining = employees.reduce((s, e) => s + e.lastRemaining, 0);
+
+        return (
+        <>
+          {/* Month picker */}
+          <div className="flex items-center gap-3 mb-4">
+            <Input type="month" value={monthYear} onChange={e => setMonthYear(e.target.value)} className="h-9 text-xs w-[160px]" />
+            <span className="text-xs text-muted-foreground">{employees.length} служители | {sortedWeeks.length} седмици</span>
+          </div>
+
+          {/* Summary bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4" data-testid="monthly-summary">
+            <div className="rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-lg font-bold font-mono">{employees.length}</p>
+              <p className="text-[8px] text-muted-foreground">Хора</p>
+            </div>
+            <div className="rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-lg font-bold font-mono text-primary">{grandEarned.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className="text-[8px] text-muted-foreground">Изработено</p>
+            </div>
+            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
+              <p className="text-lg font-bold font-mono text-emerald-400">{grandPaid.toFixed(0)}<span className="text-xs text-emerald-400/60"> EUR</span></p>
+              <p className="text-[8px] text-emerald-400/70">Платено</p>
+            </div>
+            <div className="rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-lg font-bold font-mono">{grandBonuses.toFixed(0)} / <span className="text-red-400">{grandDeductions.toFixed(0)}</span></p>
+              <p className="text-[8px] text-muted-foreground">Бонуси / Удръжки</p>
+            </div>
+            <div className={`rounded-lg p-2 text-center ${grandRemaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : "bg-card border border-border"}`}>
+              <p className={`text-lg font-bold font-mono ${grandRemaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{grandRemaining.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className="text-[8px] text-muted-foreground">Остатък</p>
+            </div>
+          </div>
+
+          {employees.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма данни за {monthYear}</div>
+          ) : (
+          <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="monthly-table">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead className="text-[10px] min-w-[140px] sticky left-0 bg-card z-10">Служител</TableHead>
+                  {sortedWeeks.map(wn => <TableHead key={wn} className="text-[10px] text-center min-w-[70px]">Сед. {wn}</TableHead>)}
+                  <TableHead className="text-[10px] text-center bg-muted/20 min-w-[60px]">Общо</TableHead>
+                  <TableHead className="text-[10px] text-center bg-muted/20 min-w-[40px]">Дни</TableHead>
+                  <TableHead className="text-[10px] text-center min-w-[50px]">Бонус</TableHead>
+                  <TableHead className="text-[10px] text-center min-w-[50px]">Удръж.</TableHead>
+                  <TableHead className="text-[10px] text-center bg-primary/5 min-w-[60px]">Остатък</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {employees.map(emp => (
+                    <TableRow key={emp.employee_id} className="hover:bg-muted/10">
+                      <TableCell className="sticky left-0 bg-card z-10">
+                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setMonthDetail(emp)}>
+                          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(emp.first_name?.[0] || "")}{(emp.last_name?.[0] || "")}</div>
+                          <div><p className="text-xs font-medium hover:text-primary">{emp.first_name} {emp.last_name}</p><p className="text-[8px] text-muted-foreground">{emp.position || "—"}</p></div>
+                        </div>
+                      </TableCell>
+                      {sortedWeeks.map(wn => {
+                        const w = emp.weeks[wn];
+                        if (!w) return <TableCell key={wn} className="text-center text-[10px] text-muted-foreground/30">—</TableCell>;
+                        const isPaid = w.run_status === "paid";
+                        const hasRemain = w.remaining_after_payment > 0;
+                        return (
+                          <TableCell key={wn} className={`text-center p-1 cursor-pointer transition-colors ${isPaid ? "bg-emerald-500/5" : hasRemain ? "bg-amber-500/5" : ""}`} onClick={() => w.pay_run_id && loadDetail(w.pay_run_id)}>
+                            <span className="text-xs font-mono font-bold">{w.paid_now_amount?.toFixed(0)}</span>
+                            <div className="mt-0.5">
+                              {isPaid ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" /> : hasRemain ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" /> : <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-400" />}
+                            </div>
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="text-center text-xs font-mono font-bold bg-muted/10 text-emerald-400">{emp.totalPaid.toFixed(0)}</TableCell>
+                      <TableCell className="text-center text-xs font-mono bg-muted/10">{emp.totalDays}</TableCell>
+                      <TableCell className="text-center text-xs font-mono text-emerald-400">{emp.totalBonuses > 0 ? emp.totalBonuses.toFixed(0) : "—"}</TableCell>
+                      <TableCell className="text-center text-xs font-mono text-red-400">{emp.totalDeductions > 0 ? emp.totalDeductions.toFixed(0) : "—"}</TableCell>
+                      <TableCell className={`text-center text-xs font-mono font-bold bg-primary/5 ${emp.lastRemaining > 0 ? "text-amber-400" : emp.lastRemaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{emp.lastRemaining.toFixed(0)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {/* Totals */}
+                  <TableRow className="border-t-2 border-border font-bold bg-muted/10">
+                    <TableCell className="sticky left-0 bg-muted/10 z-10 text-xs">ОБЩО</TableCell>
+                    {sortedWeeks.map(wn => {
+                      const weekTotal = employees.reduce((s, e) => s + (e.weeks[wn]?.paid_now_amount || 0), 0);
+                      return <TableCell key={wn} className="text-center text-xs font-mono">{weekTotal > 0 ? weekTotal.toFixed(0) : "—"}</TableCell>;
+                    })}
+                    <TableCell className="text-center text-xs font-mono text-emerald-400">{grandPaid.toFixed(0)}</TableCell>
+                    <TableCell className="text-center text-xs font-mono">{employees.reduce((s, e) => s + e.totalDays, 0)}</TableCell>
+                    <TableCell className="text-center text-xs font-mono text-emerald-400">{grandBonuses > 0 ? grandBonuses.toFixed(0) : "—"}</TableCell>
+                    <TableCell className="text-center text-xs font-mono text-red-400">{grandDeductions > 0 ? grandDeductions.toFixed(0) : "—"}</TableCell>
+                    <TableCell className="text-center text-xs font-mono font-bold text-primary">{grandRemaining.toFixed(0)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          )}
+
+          {/* Employee month detail modal */}
+          {monthDetail && (
+            <Dialog open={!!monthDetail} onOpenChange={() => setMonthDetail(null)}>
+              <DialogContent className="max-w-lg" data-testid="month-detail-modal">
+                <DialogHeader><DialogTitle>{monthDetail.first_name} {monthDetail.last_name} — {monthYear}</DialogTitle></DialogHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-muted/30 p-2 text-center"><p className="text-sm font-bold font-mono text-primary">{monthDetail.totalEarned.toFixed(0)}</p><p className="text-[8px] text-muted-foreground">Изработено</p></div>
+                    <div className="rounded-lg bg-emerald-500/10 p-2 text-center"><p className="text-sm font-bold font-mono text-emerald-400">{monthDetail.totalPaid.toFixed(0)}</p><p className="text-[8px] text-emerald-400/70">Платено</p></div>
+                    <div className={`rounded-lg p-2 text-center ${monthDetail.lastRemaining > 0 ? "bg-amber-500/10" : "bg-muted/30"}`}><p className={`text-sm font-bold font-mono ${monthDetail.lastRemaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{monthDetail.lastRemaining.toFixed(0)}</p><p className="text-[8px] text-muted-foreground">Остатък</p></div>
+                  </div>
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead className="text-[10px]">Седмица</TableHead>
+                      <TableHead className="text-[10px]">Период</TableHead>
+                      <TableHead className="text-[10px] text-center">Дни</TableHead>
+                      <TableHead className="text-[10px] text-center">Платено</TableHead>
+                      <TableHead className="text-[10px] text-center">Остатък</TableHead>
+                      <TableHead className="text-[10px]">Статус</TableHead>
+                      <TableHead className="text-[10px]">Фиш</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {sortedWeeks.filter(wn => monthDetail.weeks[wn]).map(wn => {
+                        const w = monthDetail.weeks[wn];
+                        return (
+                          <TableRow key={wn} className="hover:bg-muted/10">
+                            <TableCell className="text-xs font-mono font-bold">{wn}</TableCell>
+                            <TableCell className="text-xs font-mono">{w.period_start}→{w.period_end}</TableCell>
+                            <TableCell className="text-center text-xs font-mono">{w.approved_days}</TableCell>
+                            <TableCell className="text-center text-xs font-mono text-emerald-400">{w.paid_now_amount?.toFixed(0)}</TableCell>
+                            <TableCell className={`text-center text-xs font-mono ${w.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{w.remaining_after_payment?.toFixed(0)}</TableCell>
+                            <TableCell><Badge variant="outline" className={`text-[8px] ${w.run_status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-violet-500/15 text-violet-400 border-violet-500/30"}`}>{w.run_status === "paid" ? "Платен" : "Потвърден"}</Badge></TableCell>
+                            <TableCell>{w.slip_number ? <Badge variant="outline" className="text-[8px] cursor-pointer" onClick={() => { if (w.slip_id) API.get(`/payment-slips/${w.slip_id}`).then(r => setDetailSlip(r.data)).catch(()=>{}); }}>{w.slip_number}</Badge> : "—"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" className="text-xs" onClick={() => { setMonthDetail(null); navigate(`/employees/${monthDetail.employee_id}?tab=payroll-weeks`); }}>Досие</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </>
+        );
+      })()}
 
       {/* ═══ HISTORY ═══ */}
       {tab === "history" && (

@@ -1058,7 +1058,15 @@ async def get_payroll_weeks(
             if employee_id and er.get("employee_id") != employee_id:
                 continue
             if month:
-                if not run.get("period_start", "").startswith(month):
+                ps = run.get("period_start", "")
+                pe = run.get("period_end", "")
+                month_start = month + "-01"
+                # Last day of month
+                y, m = int(month[:4]), int(month[5:7])
+                import calendar as cal_mod
+                month_end = f"{month}-{cal_mod.monthrange(y, m)[1]:02d}"
+                # Check overlap: period overlaps month
+                if pe < month_start or ps > month_end:
                     continue
 
             row = {

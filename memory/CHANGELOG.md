@@ -1,3 +1,25 @@
+## Apr 12, 2026 — Step 6: Monthly Payment Calendar
+
+### New tab "Месечен" in Разплащане
+- Month picker: YYYY-MM selector
+- Summary bar: 5 cards (Хора, Изработено, Платено, Бонуси/Удръжки, Остатък)
+- Matrix: Служител | Сед.X | Сед.Y | ... | Общо | Дни | Бонус | Удръж. | Остатък
+- Weekly cells: paid amount + status dot (green=paid, amber=partial, violet=confirmed)
+- Click cell → opens pay run detail
+- ОБЩО row at bottom
+
+### Employee month detail modal:
+- 3 summary cards: Изработено / Платено / Остатък
+- Weekly table: Седмица | Период | Дни | Платено | Остатък | Статус | Фиш
+- "Досие" button → navigate to employee detail
+
+### Backend fix: payroll-weeks month filter now checks period overlap (not just startswith)
+
+### Files:
+- backend/app/routes/pay_runs.py — month overlap filter fix
+- frontend/src/pages/PayRunsPage.js — monthly tab + detail modal
+
+
 ## Apr 12, 2026 — Step 5: Print / Mass Payment / Individual Sheets
 
 ### Print variants:
