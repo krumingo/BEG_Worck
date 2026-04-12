@@ -1,3 +1,26 @@
+## Apr 12, 2026 — Step 5: Print / Mass Payment / Individual Sheets
+
+### Print variants:
+1. **Групов лист** — table with all employees: №, Име, Длъжност, Брутно, Корекции, Нетно, Реално платено, Остатък, Подпис + totals + footer
+2. **Индивидуален лист** — per person: daily rows (Ден, Дата, Часове, Обект, Сума), adjustments, calculation (Изработено → Бонуси → Удръжки → РЕАЛНО ПЛАТЕНО → Остатък), signatures
+3. **Печат избрани** — individual sheets with page-break per person for checkbox-selected employees
+
+### UI actions in pay run detail:
+- "Групов лист" button → opens group print popup
+- Per-row printer icon → opens individual print popup
+- Checkbox per row → enables "Печат избрани (N)" button
+- "Select all" checkbox in header
+
+### New file: frontend/src/components/PayRunPrintView.js
+- openGroupPrint(run, employees, allocData)
+- openIndividualPrint(run, empRow, allocEmp)
+- openSelectedPrint(run, selectedRows, allocData)
+
+### Files:
+- frontend/src/components/PayRunPrintView.js — NEW
+- frontend/src/pages/PayRunsPage.js — print buttons, checkboxes, Printer icon import
+
+
 ## Apr 12, 2026 — Definitive Allocation Rule (Finalized)
 
 ### Rule:

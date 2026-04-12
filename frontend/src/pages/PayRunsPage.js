@@ -14,9 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle, Clock,
+  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle, Clock, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
+import { openGroupPrint, openIndividualPrint, openSelectedPrint } from "@/components/PayRunPrintView";
 
 const STATUS_CFG = {
   draft:     { label: "Чернова",   cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -366,6 +367,7 @@ export default function PayRunsPage() {
 
   const [historyData, setHistoryData] = useState(null);
   const [allocData, setAllocData] = useState(null);
+  const [printSelected, setPrintSelected] = useState(new Set());
   const loadHistory = async (runId) => {
     try { const res = await API.get(`/pay-runs/${runId}/history`); setHistoryData(res.data); }
     catch { setHistoryData(null); }
@@ -854,6 +856,7 @@ export default function PayRunsPage() {
               <div className="rounded-lg border border-border overflow-hidden">
                 <Table>
                   <TableHeader><TableRow>
+                    <TableHead className="text-[10px] w-[25px]"><input type="checkbox" checked={printSelected.size === (detailRun.employee_rows || []).length} onChange={e => { if (e.target.checked) setPrintSelected(new Set((detailRun.employee_rows || []).map(r => r.employee_id))); else setPrintSelected(new Set()); }} className="rounded" /></TableHead>
                     <TableHead className="text-[10px]">Човек</TableHead>
                     <TableHead className="text-[10px] text-center">Часове</TableHead>
                     <TableHead className="text-[10px] text-center">Изработено</TableHead>
@@ -861,6 +864,7 @@ export default function PayRunsPage() {
                     <TableHead className="text-[10px] text-center">Платено</TableHead>
                     <TableHead className="text-[10px] text-center bg-primary/5">Остатък</TableHead>
                     <TableHead className="text-[10px]">Статус</TableHead>
+                    <TableHead className="text-[10px] w-[30px]" />
                   </TableRow></TableHeader>
                   <TableBody>
                     {detailRun.employee_rows?.map(r => {
@@ -868,6 +872,7 @@ export default function PayRunsPage() {
                       const isPartial = r.paid_now_amount > 0 && r.remaining_after_payment > 0;
                       return (
                       <TableRow key={r.employee_id}>
+                        <TableCell><input type="checkbox" checked={printSelected.has(r.employee_id)} onChange={() => { const s = new Set(printSelected); if (s.has(r.employee_id)) s.delete(r.employee_id); else s.add(r.employee_id); setPrintSelected(s); }} className="rounded" /></TableCell>
                         <TableCell className="text-xs font-medium">{r.first_name} {r.last_name}</TableCell>
                         <TableCell className="text-center text-xs font-mono">{r.approved_hours}</TableCell>
                         <TableCell className="text-center text-xs font-mono text-primary">{r.earned_amount?.toFixed(0)}</TableCell>
@@ -884,6 +889,11 @@ export default function PayRunsPage() {
                           : r.paid_now_amount === 0 ? <Badge variant="outline" className="text-[8px] bg-gray-500/15 text-gray-400 border-gray-500/30">Неплатен</Badge>
                           : null}
                         </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openIndividualPrint(detailRun, r, (allocData?.employees || []).find(e => e.employee_id === r.employee_id))}>
+                            <Printer className="w-3 h-3" />
+                          </Button>
+                        </TableCell>
                       </TableRow>);
                     })}
                   </TableBody>
@@ -891,11 +901,15 @@ export default function PayRunsPage() {
               </div>
               {/* Actions */}
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {(detailRun.status === "confirmed" || detailRun.status === "draft") && (
                     <Button variant="outline" size="sm" onClick={() => handleReopen(detailRun.id)} className="gap-1 text-xs" data-testid="reopen-all-btn">Отвори за редакция</Button>
                   )}
                   <Button variant="ghost" size="sm" onClick={() => loadHistory(detailRun.id)} className="gap-1 text-xs" data-testid="view-history-btn"><Clock className="w-3 h-3" /> История</Button>
+                  <Button variant="outline" size="sm" onClick={() => openGroupPrint(detailRun, detailRun.employee_rows, allocData)} className="gap-1 text-xs" data-testid="print-all-btn"><Printer className="w-3 h-3" /> Групов лист</Button>
+                  {printSelected.size > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => openSelectedPrint(detailRun, detailRun.employee_rows.filter(r => printSelected.has(r.employee_id)), allocData)} className="gap-1 text-xs"><Printer className="w-3 h-3" /> Печат избрани ({printSelected.size})</Button>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   {detailRun.status === "confirmed" && (
