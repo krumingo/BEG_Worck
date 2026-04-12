@@ -195,6 +195,23 @@ async def generate_pay_run(
         remaining = round(e["earned"] - prev_paid, 2)
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
 
+        # Per-day breakdown
+        by_day = {}
+        for ln in emp_lines:
+            d = ln["date"]
+            if d not in by_day:
+                by_day[d] = {"date": d, "hours": 0, "sites": []}
+            by_day[d]["hours"] += ln["hours"]
+            site_name = proj_map.get(ln["project_id"], "")
+            if site_name and site_name not in by_day[d]["sites"]:
+                by_day[d]["sites"].append(site_name)
+        # Compute day values using rate
+        day_cells = []
+        for d in sorted(by_day.keys()):
+            dd = by_day[d]
+            day_val = round(dd["hours"] * e["hourly_rate"], 2)
+            day_cells.append({"date": d, "hours": round(dd["hours"], 1), "value": day_val, "sites": dd["sites"]})
+
         rows.append({
             "employee_id": wid,
             "first_name": emp.get("first_name", ""),
@@ -219,13 +236,23 @@ async def generate_pay_run(
             "paid_now_amount": 0,
             "remaining_after_payment": remaining,
             "sites": sites,
+            "day_cells": day_cells,
         })
 
     rows.sort(key=lambda r: (0 if r["earned_amount"] > 0 else 1, r["last_name"]))
 
+    # Build full date range
+    all_dates = []
+    d = datetime.strptime(period_start, "%Y-%m-%d")
+    end = datetime.strptime(period_end, "%Y-%m-%d")
+    while d <= end:
+        all_dates.append(d.strftime("%Y-%m-%d"))
+        d += timedelta(days=1)
+
     return {
         "period_start": period_start,
         "period_end": period_end,
+        "dates": all_dates,
         "rows": rows,
         "totals": {
             "employees": len(rows),

@@ -49,6 +49,10 @@ export default function PayRunsPage() {
   const [overrides, setOverrides] = useState({});
   const [creating, setCreating] = useState(false);
 
+  // Selection state: which employees and which days are selected
+  const [selectedEmps, setSelectedEmps] = useState(new Set());  // employee_ids
+  const [selectedDays, setSelectedDays] = useState({});  // { employee_id: Set<date> }
+
   const [runs, setRuns] = useState([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [detailRun, setDetailRun] = useState(null);
@@ -73,6 +77,17 @@ export default function PayRunsPage() {
       const res = await API.get(`/pay-runs/generate?period_start=${periodStart}&period_end=${periodEnd}`);
       setPreview(res.data);
       setOverrides({});
+      // Auto-select all employees with data and all their days
+      const emps = new Set();
+      const days = {};
+      for (const r of (res.data.rows || [])) {
+        if (r.earned_amount > 0) {
+          emps.add(r.employee_id);
+          days[r.employee_id] = new Set((r.day_cells || []).map(d => d.date));
+        }
+      }
+      setSelectedEmps(emps);
+      setSelectedDays(days);
     } catch { setPreview(null); }
     finally { setLoadingPreview(false); }
   }, [periodStart, periodEnd]);
@@ -137,17 +152,72 @@ export default function PayRunsPage() {
 
   const buildRows = () => {
     if (!preview) return [];
-    return preview.rows.map(r => {
+    return preview.rows.filter(r => selectedEmps.has(r.employee_id)).map(r => {
       const ovr = getOvr(r.employee_id);
-      const calc = getRowCalc(r);
+      const empDays = selectedDays[r.employee_id] || new Set();
+      // Sum only selected days
+      const selCells = (r.day_cells || []).filter(d => empDays.has(d.date));
+      const paidAmount = selCells.reduce((s, d) => s + d.value, 0);
       return {
         employee_id: r.employee_id,
-        paid_now_amount: calc.paid,
+        paid_now_amount: paidAmount,
         adjustments: (ovr.adjustments || []).map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
         notes: ovr.notes || "",
       };
     });
   };
+
+  const toggleEmp = (eid) => {
+    setSelectedEmps(prev => {
+      const next = new Set(prev);
+      if (next.has(eid)) next.delete(eid); else next.add(eid);
+      return next;
+    });
+  };
+
+  const toggleDay = (eid, date) => {
+    setSelectedDays(prev => {
+      const empDays = new Set(prev[eid] || []);
+      if (empDays.has(date)) empDays.delete(date); else empDays.add(date);
+      return { ...prev, [eid]: empDays };
+    });
+  };
+
+  const selectAllEmps = () => {
+    const emps = new Set();
+    const days = {};
+    for (const r of (preview?.rows || [])) {
+      if (r.earned_amount > 0) {
+        emps.add(r.employee_id);
+        days[r.employee_id] = new Set((r.day_cells || []).map(d => d.date));
+      }
+    }
+    setSelectedEmps(emps);
+    setSelectedDays(days);
+  };
+
+  const clearAllEmps = () => { setSelectedEmps(new Set()); setSelectedDays({}); };
+
+  const selectAllDaysForEmp = (eid, dayCells) => {
+    setSelectedDays(prev => ({ ...prev, [eid]: new Set(dayCells.map(d => d.date)) }));
+    setSelectedEmps(prev => new Set([...prev, eid]));
+  };
+
+  const clearAllDaysForEmp = (eid) => {
+    setSelectedDays(prev => ({ ...prev, [eid]: new Set() }));
+  };
+
+  const getEmpPayAmount = (row) => {
+    const empDays = selectedDays[row.employee_id] || new Set();
+    return (row.day_cells || []).filter(d => empDays.has(d.date)).reduce((s, d) => s + d.value, 0);
+  };
+
+  const totalSelectedPay = (preview?.rows || [])
+    .filter(r => selectedEmps.has(r.employee_id))
+    .reduce((s, r) => s + getEmpPayAmount(r), 0);
+
+  const totalSelectedEmps = selectedEmps.size;
+  const totalSelectedDays = Object.values(selectedDays).reduce((s, ds) => s + ds.size, 0);
 
   const handleSaveDraft = async () => {
     if (!preview) return;
@@ -220,7 +290,7 @@ export default function PayRunsPage() {
         ))}
       </div>
 
-      {/* ═══ GENERATE ═══ */}
+      {/* ═══ GENERATE — Weekly Grid ═══ */}
       {tab === "generate" && (
         <>
           <div className="flex items-center gap-3 mb-4 flex-wrap" data-testid="period-picker">
@@ -231,67 +301,95 @@ export default function PayRunsPage() {
 
           {loadingPreview ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
           : !preview?.rows?.length ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма одобрени отчети за периода</div>
-          : (
+          : (() => {
+            const dates = preview.dates || [];
+            const BG_D = ["Нд","Пон","Вт","Ср","Чет","Пет","Съб"];
+            return (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4" data-testid="generate-summary">
-                <SumCard label="Служители" value={totals.employees} />
-                <SumCard label="Часове" value={`${totals.hours}ч`} />
-                <SumCard label="Изработено" value={`${totals.earned?.toFixed(0)} EUR`} color="text-primary" />
-                <SumCard label="Остатък" value={`${totals.remaining?.toFixed(0)} EUR`} color="text-amber-400" border="border-amber-500/20" bg="bg-amber-500/5" />
+              {/* Header summary */}
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>Избрани: <strong className="text-foreground">{totalSelectedEmps}</strong> хора</span>
+                  <span>Дни: <strong className="text-foreground">{totalSelectedDays}</strong></span>
+                  <span>За плащане: <strong className="text-primary font-mono text-sm">{totalSelectedPay.toFixed(0)} EUR</strong></span>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={selectAllEmps}>Избери всички</Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={clearAllEmps}>Изчисти</Button>
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border bg-card overflow-hidden mb-4" data-testid="generate-table">
+              {/* Weekly grid */}
+              <div className="rounded-xl border border-border bg-card overflow-hidden mb-4" data-testid="weekly-grid">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-[10px] min-w-[150px]">Човек</TableHead>
-                        <TableHead className="text-[10px] text-center">Дни</TableHead>
-                        <TableHead className="text-[10px] text-center">Часове</TableHead>
-                        <TableHead className="text-[10px] text-center">Изработено</TableHead>
-                        <TableHead className="text-[10px] text-center">Корекции</TableHead>
-                        <TableHead className="text-[10px] text-center min-w-[90px]">Плащане</TableHead>
-                        <TableHead className="text-[10px] text-center bg-primary/5">Остатък</TableHead>
-                        <TableHead className="text-[10px] w-[40px]" />
+                        <TableHead className="text-[10px] w-[30px] text-center"><input type="checkbox" checked={totalSelectedEmps === preview.rows.filter(r => r.earned_amount > 0).length} onChange={e => e.target.checked ? selectAllEmps() : clearAllEmps()} className="rounded" /></TableHead>
+                        <TableHead className="text-[10px] min-w-[140px] sticky left-0 bg-card z-10">Служител</TableHead>
+                        {dates.map(d => {
+                          const dt = new Date(d + "T12:00:00");
+                          const wd = dt.getDay();
+                          const isWeekend = wd === 0 || wd === 6;
+                          return (
+                            <TableHead key={d} className={`text-[10px] text-center min-w-[68px] ${isWeekend ? "bg-muted/20" : ""}`}>
+                              <div>{BG_D[wd]}</div>
+                              <div className="text-[8px] text-muted-foreground font-normal">{dt.getDate()}.{String(dt.getMonth()+1).padStart(2,"0")}</div>
+                            </TableHead>
+                          );
+                        })}
+                        <TableHead className="text-[10px] text-center bg-primary/10 min-w-[75px]">За плащане</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {preview.rows.filter(r => r.earned_amount > 0).map(row => {
-                        const calc = getRowCalc(row);
-                        const ovr = getOvr(row.employee_id);
-                        const adjs = ovr.adjustments || [];
+                        const eid = row.employee_id;
+                        const isSelected = selectedEmps.has(eid);
+                        const empDays = selectedDays[eid] || new Set();
+                        const payAmount = getEmpPayAmount(row);
+                        const dayCellMap = {};
+                        (row.day_cells || []).forEach(dc => { dayCellMap[dc.date] = dc; });
+
                         return (
-                          <TableRow key={row.employee_id} data-testid={`gen-row-${row.employee_id}`}>
-                            <TableCell>
-                              <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${row.employee_id}?tab=payroll-weeks`)}>
-                                {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" /> : <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
-                                <div>
-                                  <p className="text-xs font-medium hover:text-primary">{row.first_name} {row.last_name}</p>
-                                  <p className="text-[9px] text-muted-foreground">{row.position || row.pay_type || "—"} {row.rate_type && `(${row.rate_type})`}</p>
+                          <TableRow key={eid} className={`${isSelected ? "" : "opacity-40"}`} data-testid={`grid-row-${eid}`}>
+                            <TableCell className="text-center"><input type="checkbox" checked={isSelected} onChange={() => toggleEmp(eid)} className="rounded" /></TableCell>
+                            <TableCell className="sticky left-0 bg-card z-10">
+                              <div className="flex items-center gap-2">
+                                {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate max-w-[100px]">{row.first_name} {row.last_name}</p>
+                                  <div className="flex items-center gap-1">
+                                    <p className="text-[8px] text-muted-foreground">{row.position || row.pay_type || "—"}</p>
+                                    <button onClick={() => isSelected ? clearAllDaysForEmp(eid) : selectAllDaysForEmp(eid, row.day_cells || [])} className="text-[7px] text-primary hover:underline">{empDays.size > 0 ? "×" : "✓"}</button>
+                                  </div>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-center text-xs font-mono">{row.approved_days}</TableCell>
-                            <TableCell className="text-center text-xs font-mono font-bold">{row.approved_hours}</TableCell>
-                            <TableCell className="text-center text-xs font-mono text-primary">{row.earned_amount.toFixed(0)}</TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex flex-col items-center gap-0.5">
-                                {adjs.map((a, i) => (
-                                  <div key={i} className="flex items-center gap-1 text-[9px]">
-                                    <span className={a.type === "bonus" ? "text-emerald-400" : "text-red-400"}>{a.type === "bonus" ? "+" : "-"}{a.amount}</span>
-                                    <button onClick={() => removeAdj(row.employee_id, i)} className="text-muted-foreground hover:text-red-400"><X className="w-2.5 h-2.5" /></button>
+
+                            {dates.map(d => {
+                              const dc = dayCellMap[d];
+                              const dt = new Date(d + "T12:00:00");
+                              const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+                              const isDaySelected = empDays.has(d);
+
+                              if (!dc) {
+                                return <TableCell key={d} className={`text-center p-1 ${isWeekend ? "bg-muted/10" : ""}`}><span className="text-[10px] text-muted-foreground/20">—</span></TableCell>;
+                              }
+
+                              return (
+                                <TableCell key={d} className={`text-center p-1 cursor-pointer transition-colors ${isWeekend ? "bg-muted/10" : ""} ${isDaySelected && isSelected ? "bg-primary/15 border border-primary/30" : "hover:bg-muted/20"}`}
+                                  onClick={() => isSelected && toggleDay(eid, d)}>
+                                  <div className="flex flex-col items-center">
+                                    <span className={`text-[11px] font-mono font-bold ${isDaySelected && isSelected ? "text-primary" : "text-foreground/60"}`}>{dc.hours}ч</span>
+                                    <span className={`text-[9px] font-mono ${isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground"}`}>{dc.value.toFixed(0)}</span>
+                                    {dc.sites?.length > 0 && <span className="text-[7px] text-muted-foreground truncate max-w-[60px]">{dc.sites[0]}{dc.sites.length > 1 ? ` +${dc.sites.length - 1}` : ""}</span>}
                                   </div>
-                                ))}
-                                {calc.bonuses > 0 && <span className="text-[8px] text-emerald-400">+{calc.bonuses}</span>}
-                                {calc.deductions > 0 && <span className="text-[8px] text-red-400">-{calc.deductions}</span>}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center"><Input type="number" value={ovr.paid ?? row.remaining_after_payment.toFixed(0)} onChange={e => setOvr(row.employee_id, "paid", e.target.value)} className="h-7 w-20 text-xs font-mono text-center text-primary mx-auto font-bold" /></TableCell>
-                            <TableCell className={`text-center text-xs font-mono font-bold bg-primary/5 ${calc.remaining < 0 ? "text-red-400" : calc.remaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{calc.remaining.toFixed(0)}</TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setAdjDialog(row); setAdjType("deduction"); setAdjTitle(""); setAdjAmount(""); setAdjNote(""); }}>
-                                <Plus className="w-3.5 h-3.5" />
-                              </Button>
+                                </TableCell>
+                              );
+                            })}
+
+                            <TableCell className={`text-center bg-primary/5 ${isSelected && payAmount > 0 ? "" : "opacity-30"}`}>
+                              <span className="text-sm font-mono font-bold text-primary">{payAmount > 0 ? payAmount.toFixed(0) : "—"}</span>
                             </TableCell>
                           </TableRow>
                         );
@@ -301,25 +399,20 @@ export default function PayRunsPage() {
                 </div>
               </div>
 
-              {/* Guardrails */}
-              {preview.rows.filter(r => r.earned_amount > 0).some(r => getRowCalc(r).remaining < 0) && (
-                <div className="flex items-center gap-2 text-xs text-amber-400 mb-2">
-                  <AlertTriangle className="w-3.5 h-3.5" /> Внимание: Има служители с надплащане (остатък &lt; 0). Проверете сумите.
-                </div>
-              )}
-
+              {/* Actions */}
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={handleSaveDraft} disabled={creating} className="gap-1.5" data-testid="save-draft-btn">
+                <Button variant="outline" onClick={handleSaveDraft} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="save-draft-btn">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                   Запази чернова
                 </Button>
-                <Button onClick={handleCreate} disabled={creating} className="gap-1.5" data-testid="create-payrun-btn">
+                <Button onClick={handleCreate} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="create-payrun-btn">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Потвърди
+                  Потвърди ({totalSelectedPay.toFixed(0)} EUR)
                 </Button>
               </div>
             </>
-          )}
+            );
+          })()}
         </>
       )}
 

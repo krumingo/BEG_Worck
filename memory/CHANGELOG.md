@@ -1,3 +1,34 @@
+## Apr 12, 2026 — Weekly Selection Grid for "Ново разплащане"
+
+### Selection Model:
+- `selectedEmps`: Set<employee_id> — which people are in current batch
+- `selectedDays`: { employee_id: Set<date> } — which days per person
+- Both update live — header totals recalculate instantly
+
+### Day Cell Content:
+- Hours (bold), Value (EUR), Site name (compact, +N if multiple)
+- Source: /api/pay-runs/generate returns `day_cells[]` per employee
+- Each cell: { date, hours, value, sites[] }
+
+### Save Draft / Reopen:
+- "Запази чернова" → sends only selected employees + their selected day amounts
+- "Потвърди (X EUR)" → sends selected + confirms + generates slips
+- Selection state lives in React state, preserved across tab switches
+
+### Bulk Actions:
+- "Избери всички" — selects all employees + all their days
+- "Изчисти" — deselects all
+- Per-row: ✓ (select all days) / × (clear all days) mini button
+
+### Backend: /api/pay-runs/generate enhanced
+- Returns `dates[]` (full date range) + `day_cells[]` per employee row
+- day_cells: { date, hours, value, sites[] }
+
+### Files:
+- backend/app/routes/pay_runs.py — day_cells + dates in generate response
+- frontend/src/pages/PayRunsPage.js — weekly grid with selection model
+
+
 ## Apr 12, 2026 — Editable Workflow: Draft/Reopen/Version History
 
 ### Batch Status Model:
