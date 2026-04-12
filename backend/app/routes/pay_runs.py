@@ -104,6 +104,12 @@ class PayRunCreateInput(BaseModel):
     week_number: Optional[int] = None
     rows: List[PayRunRowInput] = []
     note: str = ""
+    status: str = "draft"  # draft | confirmed
+
+
+class PayRunReopenInput(BaseModel):
+    employee_ids: List[str] = []  # empty = reopen all
+    reason: str = ""
 
 
 # ── Generate Pay Run (preview) ─────────────────────────────────────
@@ -282,6 +288,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
 
         frozen_row = {
             "employee_id": eid,
+            "row_status": "included",
             "first_name": row["first_name"],
             "last_name": row["last_name"],
             "position": row.get("position", ""),
@@ -356,7 +363,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
         "period_start": data.period_start,
         "period_end": data.period_end,
         "week_number": week_num,
-        "status": "confirmed",
+        "status": data.status if data.status in ("draft", "confirmed") else "draft",
+        "version": 1,
         "employee_rows": employee_rows,
         "totals": {
             "employees": len(employee_rows),
@@ -370,12 +378,25 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
         "note": data.note,
         "created_by": user["id"],
         "created_at": now,
-        "confirmed_at": now,
+        "confirmed_at": now if data.status == "confirmed" else None,
         "paid_at": None,
+        "history": [{
+            "version": 1,
+            "action": "created" if data.status == "draft" else "created_confirmed",
+            "changed_by": user["id"],
+            "changed_at": now,
+            "reason": "",
+            "totals_snapshot": {
+                "earned": round(grand["earned"], 2),
+                "paid": round(grand["paid"], 2),
+                "remaining": round(grand["remaining"], 2),
+            },
+        }],
     }
 
     await db.pay_runs.insert_one(pay_run)
-    if slips:
+    # Only generate slips for confirmed runs
+    if data.status == "confirmed" and slips:
         await db.payment_slips.insert_many(slips)
 
     return {k: v for k, v in pay_run.items() if k != "_id"}
@@ -434,6 +455,216 @@ async def mark_pay_run_paid(run_id: str, user: dict = Depends(get_current_user))
         {"$set": {"status": "paid", "paid_at": now}},
     )
     return {"ok": True, "status": "paid"}
+
+
+# ── Update Draft ───────────────────────────────────────────────────
+
+@router.patch("/pay-runs/{run_id}")
+async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depends(get_current_user)):
+    """Update a draft or reopened pay run. Increments version."""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner")
+    org_id = user["org_id"]
+    run = await db.pay_runs.find_one({"id": run_id, "org_id": org_id})
+    if not run:
+        raise HTTPException(status_code=404, detail="Not found")
+    if run.get("status") not in ("draft", "reopened"):
+        raise HTTPException(status_code=400, detail="Can only edit draft or reopened pay runs")
+
+    now = datetime.now(timezone.utc).isoformat()
+    preview = await generate_pay_run(user, period_start=data.period_start, period_end=data.period_end)
+    override_map = {r.employee_id: r for r in data.rows}
+
+    employee_rows = []
+    grand = {"earned": 0, "bonuses": 0, "deductions": 0, "paid": 0, "remaining": 0}
+
+    for row in preview["rows"]:
+        eid = row["employee_id"]
+        ovr = override_map.get(eid)
+        adj_list, total_bonuses, total_deductions = [], 0, 0
+        if ovr:
+            for a in ovr.adjustments:
+                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note})
+                if a.type == "bonus":
+                    total_bonuses += a.amount
+                else:
+                    total_deductions += a.amount
+        paid_now = ovr.paid_now_amount if ovr else row["remaining_after_payment"]
+        remaining = round(row["earned_amount"] + total_bonuses - total_deductions - row["previously_paid"] - paid_now, 2)
+
+        employee_rows.append({
+            "employee_id": eid, "row_status": "included",
+            "first_name": row["first_name"], "last_name": row["last_name"],
+            "position": row.get("position", ""), "pay_type": row.get("pay_type", ""),
+            "payment_schedule": row.get("payment_schedule", ""),
+            "rate_type": row.get("rate_type", ""),
+            "frozen_hourly_rate": row["hourly_rate"],
+            "frozen_daily_rate": row.get("daily_rate", 0),
+            "approved_days": row["approved_days"], "approved_hours": row["approved_hours"],
+            "normal_hours": row.get("normal_hours", 0), "overtime_hours": row.get("overtime_hours", 0),
+            "earned_amount": row["earned_amount"],
+            "adjustments": adj_list,
+            "bonuses_amount": round(total_bonuses, 2),
+            "deductions_amount": round(total_deductions, 2),
+            "previously_paid": row["previously_paid"],
+            "paid_now_amount": round(paid_now, 2),
+            "remaining_after_payment": remaining,
+            "sites": row.get("sites", []), "notes": ovr.notes if ovr else "",
+        })
+        grand["earned"] += row["earned_amount"]
+        grand["bonuses"] += total_bonuses
+        grand["deductions"] += total_deductions
+        grand["paid"] += paid_now
+        grand["remaining"] += remaining
+
+    new_version = (run.get("version") or 1) + 1
+    history_entry = {
+        "version": new_version,
+        "action": "updated",
+        "changed_by": user["id"],
+        "changed_at": now,
+        "reason": data.note or "",
+        "totals_snapshot": {
+            "earned": round(grand["earned"], 2),
+            "paid": round(grand["paid"], 2),
+            "remaining": round(grand["remaining"], 2),
+        },
+    }
+
+    await db.pay_runs.update_one({"id": run_id}, {
+        "$set": {
+            "employee_rows": employee_rows,
+            "version": new_version,
+            "status": data.status if data.status in ("draft", "confirmed") else run["status"],
+            "confirmed_at": now if data.status == "confirmed" else run.get("confirmed_at"),
+            "totals": {
+                "employees": len(employee_rows),
+                "hours": round(sum(r["approved_hours"] for r in employee_rows), 1),
+                "earned": round(grand["earned"], 2),
+                "bonuses": round(grand["bonuses"], 2),
+                "deductions": round(grand["deductions"], 2),
+                "paid": round(grand["paid"], 2),
+                "remaining": round(grand["remaining"], 2),
+            },
+            "note": data.note,
+            "updated_at": now,
+        },
+        "$push": {"history": history_entry},
+    })
+
+    # Generate slips if confirming
+    if data.status == "confirmed":
+        # Delete old slips for this run
+        await db.payment_slips.delete_many({"pay_run_id": run_id, "org_id": org_id})
+        slip_counter = await db.payment_slips.count_documents({"org_id": org_id})
+        slips = []
+        week_num = run.get("week_number", 0)
+        for er in employee_rows:
+            slip_counter += 1
+            slips.append({
+                "id": str(uuid.uuid4()), "org_id": org_id,
+                "slip_number": f"SL-{slip_counter:05d}",
+                "pay_run_id": run_id, "pay_run_number": run.get("number", ""),
+                "employee_id": er["employee_id"],
+                "first_name": er["first_name"], "last_name": er["last_name"],
+                "position": er.get("position", ""), "pay_type": er.get("pay_type", ""),
+                "payment_schedule": er.get("payment_schedule", ""),
+                "period_start": data.period_start, "period_end": data.period_end,
+                "week_number": week_num,
+                "approved_days": er["approved_days"], "approved_hours": er["approved_hours"],
+                "normal_hours": er.get("normal_hours", 0), "overtime_hours": er.get("overtime_hours", 0),
+                "frozen_hourly_rate": er["frozen_hourly_rate"],
+                "earned_amount": er["earned_amount"],
+                "adjustments": er.get("adjustments", []),
+                "bonuses_amount": er.get("bonuses_amount", 0),
+                "deductions_amount": er.get("deductions_amount", 0),
+                "previously_paid": er.get("previously_paid", 0),
+                "paid_now_amount": er["paid_now_amount"],
+                "remaining_after_payment": er["remaining_after_payment"],
+                "sites": er.get("sites", []),
+                "status": "confirmed", "paid_at": None, "created_at": now,
+            })
+        if slips:
+            await db.payment_slips.insert_many(slips)
+
+    updated = await db.pay_runs.find_one({"id": run_id}, {"_id": 0})
+    return updated
+
+
+# ── Reopen ─────────────────────────────────────────────────────────
+
+@router.post("/pay-runs/{run_id}/reopen")
+async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depends(get_current_user)):
+    """Reopen entire batch or specific employee rows."""
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner")
+    org_id = user["org_id"]
+    run = await db.pay_runs.find_one({"id": run_id, "org_id": org_id})
+    if not run:
+        raise HTTPException(status_code=404, detail="Not found")
+    if run.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Cannot reopen paid batch")
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_version = (run.get("version") or 1) + 1
+    reopen_all = len(data.employee_ids) == 0
+
+    employee_rows = run.get("employee_rows", [])
+    reopened_count = 0
+    for er in employee_rows:
+        if reopen_all or er["employee_id"] in data.employee_ids:
+            er["row_status"] = "reopened"
+            reopened_count += 1
+
+    history_entry = {
+        "version": new_version,
+        "action": "reopened_all" if reopen_all else "reopened_rows",
+        "changed_by": user["id"],
+        "changed_at": now,
+        "reason": data.reason,
+        "reopened_employees": data.employee_ids if not reopen_all else ["ALL"],
+        "totals_snapshot": run.get("totals", {}),
+    }
+
+    new_status = "reopened" if reopen_all else run.get("status", "confirmed")
+
+    await db.pay_runs.update_one({"id": run_id}, {
+        "$set": {
+            "status": new_status,
+            "version": new_version,
+            "employee_rows": employee_rows,
+            "updated_at": now,
+        },
+        "$push": {"history": history_entry},
+    })
+
+    # Mark affected slips as superseded
+    if reopen_all:
+        await db.payment_slips.update_many(
+            {"pay_run_id": run_id, "org_id": org_id},
+            {"$set": {"status": "superseded"}},
+        )
+    elif data.employee_ids:
+        await db.payment_slips.update_many(
+            {"pay_run_id": run_id, "org_id": org_id, "employee_id": {"$in": data.employee_ids}},
+            {"$set": {"status": "superseded"}},
+        )
+
+    return {"ok": True, "status": new_status, "reopened_count": reopened_count, "version": new_version}
+
+
+# ── History ────────────────────────────────────────────────────────
+
+@router.get("/pay-runs/{run_id}/history")
+async def get_pay_run_history(run_id: str, user: dict = Depends(get_current_user)):
+    run = await db.pay_runs.find_one(
+        {"id": run_id, "org_id": user["org_id"]},
+        {"_id": 0, "id": 1, "number": 1, "version": 1, "status": 1, "history": 1},
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"id": run["id"], "number": run.get("number"), "version": run.get("version", 1),
+            "status": run.get("status"), "history": run.get("history", [])}
 
 
 # ── Payment Slips ──────────────────────────────────────────────────

@@ -1,3 +1,34 @@
+## Apr 12, 2026 — Editable Workflow: Draft/Reopen/Version History
+
+### Batch Status Model:
+draft → confirmed → paid (normal flow)
+draft → reopened → draft (edit cycle)
+confirmed → reopened → confirmed (fix after confirm)
+
+### Row-level Status: included | excluded | reopened | removed
+
+### New Endpoints:
+- POST /pay-runs (status: "draft" | "confirmed") — Save Draft or Confirm
+- PATCH /pay-runs/{id} — Update draft/reopened, increment version, generate slips on confirm
+- POST /pay-runs/{id}/reopen — Reopen whole batch or specific employee rows
+- GET /pay-runs/{id}/history — Version history with action/reason/totals snapshots
+
+### Version History (stored in pay_run.history[]):
+{version, action, changed_by, changed_at, reason, totals_snapshot, reopened_employees}
+
+### UI Actions:
+- "Запази чернова" — saves as draft status
+- "Потвърди" — confirms + generates slips
+- "Отвори за редакция" — reopens batch/rows
+- "История" — shows version timeline
+
+### Backward Compatible: old pay_runs without version/history field default to v1
+
+### Files:
+- backend/app/routes/pay_runs.py — PATCH, reopen, history endpoints + row_status
+- frontend/src/pages/PayRunsPage.js — draft/reopen/history UI + new status badges
+
+
 ## Apr 12, 2026 — Stage 6 Final: All Employee Tabs Unified at 100%
 
 ### Tabs fixed to use period-aware sources:

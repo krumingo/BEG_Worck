@@ -14,13 +14,16 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle,
+  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_CFG = {
+  draft:     { label: "Чернова",   cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
   confirmed: { label: "Потвърден", cls: "bg-violet-500/15 text-violet-400 border-violet-500/30" },
   paid:      { label: "Платен",    cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  reopened:  { label: "Отворен",   cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+  cancelled: { label: "Отменен",   cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
 const ADJ_TYPES = [
@@ -132,22 +135,37 @@ export default function PayRunsPage() {
     return { bonuses, deductions, paid, remaining };
   };
 
+  const buildRows = () => {
+    if (!preview) return [];
+    return preview.rows.map(r => {
+      const ovr = getOvr(r.employee_id);
+      const calc = getRowCalc(r);
+      return {
+        employee_id: r.employee_id,
+        paid_now_amount: calc.paid,
+        adjustments: (ovr.adjustments || []).map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
+        notes: ovr.notes || "",
+      };
+    });
+  };
+
+  const handleSaveDraft = async () => {
+    if (!preview) return;
+    setCreating(true);
+    try {
+      await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "draft" });
+      toast.success("Чернова записана");
+      setTab("history");
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    finally { setCreating(false); }
+  };
+
   const handleCreate = async () => {
     if (!preview) return;
     setCreating(true);
     try {
-      const rows = preview.rows.map(r => {
-        const ovr = getOvr(r.employee_id);
-        const calc = getRowCalc(r);
-        return {
-          employee_id: r.employee_id,
-          paid_now_amount: calc.paid,
-          adjustments: (ovr.adjustments || []).map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
-          notes: ovr.notes || "",
-        };
-      });
-      await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows });
-      toast.success("Pay Run създаден + фишове генерирани");
+      await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "confirmed" });
+      toast.success("Pay Run потвърден + фишове генерирани");
       setTab("history");
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
     finally { setCreating(false); }
@@ -159,6 +177,20 @@ export default function PayRunsPage() {
       toast.success("Маркиран като платен");
       loadRuns(); setDetailRun(null);
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+  };
+
+  const handleReopen = async (runId, employeeIds = [], reason = "") => {
+    try {
+      await API.post(`/pay-runs/${runId}/reopen`, { employee_ids: employeeIds, reason });
+      toast.success(employeeIds.length > 0 ? `Отворени ${employeeIds.length} реда` : "Batch отворен за редакция");
+      loadRuns(); setDetailRun(null);
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+  };
+
+  const [historyData, setHistoryData] = useState(null);
+  const loadHistory = async (runId) => {
+    try { const res = await API.get(`/pay-runs/${runId}/history`); setHistoryData(res.data); }
+    catch { setHistoryData(null); }
   };
 
   const loadDetail = async (runId) => {
@@ -276,10 +308,14 @@ export default function PayRunsPage() {
                 </div>
               )}
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={handleSaveDraft} disabled={creating} className="gap-1.5" data-testid="save-draft-btn">
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  Запази чернова
+                </Button>
                 <Button onClick={handleCreate} disabled={creating} className="gap-1.5" data-testid="create-payrun-btn">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Потвърди и запази
+                  Потвърди
                 </Button>
               </div>
             </>
@@ -500,10 +536,24 @@ export default function PayRunsPage() {
                   </TableBody>
                 </Table>
               </div>
-              {detailRun.status === "confirmed" && (
-                <div className="flex justify-end">
-                  <Button onClick={() => handleMarkPaid(detailRun.id)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="mark-paid-btn"><Check className="w-4 h-4" /> Маркирай платен</Button>
+              {/* Actions */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex gap-2">
+                  {(detailRun.status === "confirmed" || detailRun.status === "draft") && (
+                    <Button variant="outline" size="sm" onClick={() => handleReopen(detailRun.id)} className="gap-1 text-xs" data-testid="reopen-all-btn">Отвори за редакция</Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => loadHistory(detailRun.id)} className="gap-1 text-xs" data-testid="view-history-btn"><Clock className="w-3 h-3" /> История</Button>
                 </div>
+                <div className="flex gap-2">
+                  {detailRun.status === "confirmed" && (
+                    <Button onClick={() => handleMarkPaid(detailRun.id)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="mark-paid-btn"><Check className="w-4 h-4" /> Маркирай платен</Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Version badge */}
+              {detailRun.version > 1 && (
+                <p className="text-[9px] text-muted-foreground">Версия {detailRun.version}</p>
               )}
             </div>
           )}
@@ -558,6 +608,39 @@ export default function PayRunsPage() {
               <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5" onClick={() => window.open(`${process.env.REACT_APP_BACKEND_URL}/api/payment-slips/${detailSlip.id}/pdf`, "_blank")} data-testid="slip-pdf-btn">
                 <FileText className="w-3.5 h-3.5" /> PDF / Печат
               </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* History Dialog */}
+      <Dialog open={!!historyData} onOpenChange={() => setHistoryData(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" data-testid="history-dialog">
+          <DialogHeader><DialogTitle>История: {historyData?.number}</DialogTitle></DialogHeader>
+          {historyData && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>Текуща версия: <strong className="text-foreground">{historyData.version}</strong></span>
+                <Badge variant="outline" className={(STATUS_CFG[historyData.status] || {}).cls}>{(STATUS_CFG[historyData.status] || {}).label}</Badge>
+              </div>
+              {(historyData.history || []).slice().reverse().map((h, i) => (
+                <div key={i} className="rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <Badge variant="outline" className="text-[9px]">v{h.version}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{h.changed_at?.slice(0, 19)}</span>
+                  </div>
+                  <p className="text-xs font-medium">{h.action === "created" ? "Създаден (чернова)" : h.action === "created_confirmed" ? "Създаден и потвърден" : h.action === "updated" ? "Обновен" : h.action === "reopened_all" ? "Отворен за редакция" : h.action === "reopened_rows" ? "Отворени редове" : h.action}</p>
+                  {h.reason && <p className="text-[10px] text-muted-foreground">Причина: {h.reason}</p>}
+                  {h.totals_snapshot && (
+                    <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground">
+                      <span>Earned: {h.totals_snapshot.earned}</span>
+                      <span>Paid: {h.totals_snapshot.paid}</span>
+                      <span>Remain: {h.totals_snapshot.remaining}</span>
+                    </div>
+                  )}
+                  {h.reopened_employees && <p className="text-[9px] text-amber-400 mt-1">Отворени: {h.reopened_employees.join(", ")}</p>}
+                </div>
+              ))}
             </div>
           )}
         </DialogContent>
