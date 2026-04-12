@@ -1,3 +1,37 @@
+## Apr 12, 2026 — Pay Runs v2: Multi-type Earned Engine + Adjustments + Payment Slips
+
+### Payment Profile (from employee_profiles):
+- pay_type: Hourly / Daily / Monthly / Akord (piecework) / mixed
+- payment_schedule: weekly / Monthly / manual (from pay_schedule field)
+
+### Earned Calculation Engine (calc_earned):
+- hourly: approved_hours × hourly_rate
+- daily: approved_hours × (daily_rate / hours_per_day)
+- monthly: approved_hours × (monthly_salary / working_days / hours_per_day)
+- piecework (Akord): approved_hours × hourly_rate (if set)
+- mixed: fallback to monthly formula
+
+### Adjustment Types:
+- bonus, advance, loan_repayment, deduction, manual_correction
+- Each stored as {type, title, amount, note} in employee_rows
+
+### Payment Slips (payment_slips collection):
+- Generated automatically at Pay Run confirm
+- slip_number: SL-00001, SL-00002...
+- Contains: all frozen employee fields + adjustments + earned/paid/remaining
+- Status syncs with Pay Run (confirmed → paid)
+- Detail shows: КОРЕКЦИИ section + full calculation breakdown
+
+### New: 3 tabs in /pay-runs page
+- "Ново разплащане" (generate + adjustments + confirm)
+- "История" (pay run list + detail)
+- "Фишове" (slip list + detail modal)
+
+### Files:
+- backend/app/routes/pay_runs.py — rewritten with calc_earned engine + slips
+- frontend/src/pages/PayRunsPage.js — rewritten with adj dialog + slips tab
+
+
 ## Apr 12, 2026 — Pay Runs (Разплащане) — Stage 5 Core
 
 ### New Data Model: pay_runs collection
