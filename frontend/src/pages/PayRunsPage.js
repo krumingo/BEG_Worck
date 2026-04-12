@@ -49,9 +49,20 @@ export default function PayRunsPage() {
   const [overrides, setOverrides] = useState({});
   const [creating, setCreating] = useState(false);
 
-  // Selection state: which employees and which days are selected
-  const [selectedEmps, setSelectedEmps] = useState(new Set());  // employee_ids
-  const [selectedDays, setSelectedDays] = useState({});  // { employee_id: Set<date> }
+  const [selectedEmps, setSelectedEmps] = useState(new Set());
+  const [selectedDays, setSelectedDays] = useState({});
+
+  // Step: "grid" or "adjustments"
+  const [step, setStep] = useState("grid");
+  // Day overrides: { `${eid}_${date}`: { hours, value, reason } }
+  const [dayOverrides, setDayOverrides] = useState({});
+  // Adjustment rows per employee
+  const [adjustments, setAdjustments] = useState({});
+  // Day edit dialog
+  const [dayEditDialog, setDayEditDialog] = useState(null);
+  const [dayEditHours, setDayEditHours] = useState("");
+  const [dayEditValue, setDayEditValue] = useState("");
+  const [dayEditReason, setDayEditReason] = useState("");
 
   const [runs, setRuns] = useState([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
@@ -77,6 +88,9 @@ export default function PayRunsPage() {
       const res = await API.get(`/pay-runs/generate?period_start=${periodStart}&period_end=${periodEnd}`);
       setPreview(res.data);
       setOverrides({});
+      setDayOverrides({});
+      setAdjustments({});
+      setStep("grid");
       // Auto-select all employees with data and all their days
       const emps = new Set();
       const days = {};
@@ -120,26 +134,6 @@ export default function PayRunsPage() {
   useEffect(() => { if (tab === "slips") loadSlips(); }, [tab, loadSlips]);
   useEffect(() => { if (tab === "weeks") loadWeeks(); }, [tab, loadWeeks]);
 
-  const getOvr = (eid) => overrides[eid] || { paid: null, adjustments: [] };
-  const setOvr = (eid, field, value) => {
-    setOverrides(prev => ({ ...prev, [eid]: { ...getOvr(eid), ...prev[eid], [field]: value } }));
-  };
-
-  const addAdj = () => {
-    if (!adjDialog || !adjAmount) return;
-    const eid = adjDialog.employee_id;
-    const cur = getOvr(eid);
-    const adjs = [...(cur.adjustments || []), { type: adjType, title: adjTitle || ADJ_TYPES.find(t => t.value === adjType)?.label || adjType, amount: parseFloat(adjAmount) || 0, note: adjNote }];
-    setOverrides(prev => ({ ...prev, [eid]: { ...cur, ...prev[eid], adjustments: adjs } }));
-    setAdjDialog(null); setAdjTitle(""); setAdjAmount(""); setAdjNote("");
-  };
-
-  const removeAdj = (eid, idx) => {
-    const cur = getOvr(eid);
-    const adjs = (cur.adjustments || []).filter((_, i) => i !== idx);
-    setOverrides(prev => ({ ...prev, [eid]: { ...cur, ...prev[eid], adjustments: adjs } }));
-  };
-
   const getRowCalc = (row) => {
     const ovr = getOvr(row.employee_id);
     const adjs = ovr.adjustments || [];
@@ -153,16 +147,15 @@ export default function PayRunsPage() {
   const buildRows = () => {
     if (!preview) return [];
     return preview.rows.filter(r => selectedEmps.has(r.employee_id)).map(r => {
-      const ovr = getOvr(r.employee_id);
       const empDays = selectedDays[r.employee_id] || new Set();
-      // Sum only selected days
       const selCells = (r.day_cells || []).filter(d => empDays.has(d.date));
-      const paidAmount = selCells.reduce((s, d) => s + d.value, 0);
+      const paidAmount = selCells.reduce((s, d) => s + getDayValue(r.employee_id, d), 0);
+      const empAdj = getEmpAdj(r.employee_id);
       return {
         employee_id: r.employee_id,
-        paid_now_amount: paidAmount,
-        adjustments: (ovr.adjustments || []).map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
-        notes: ovr.notes || "",
+        paid_now_amount: getEmpNet(r),
+        adjustments: empAdj.map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
+        notes: "",
       };
     });
   };
@@ -207,14 +200,36 @@ export default function PayRunsPage() {
     setSelectedDays(prev => ({ ...prev, [eid]: new Set() }));
   };
 
+  const getDayValue = (eid, dc) => {
+    const key = `${eid}_${dc.date}`;
+    const ovr = dayOverrides[key];
+    return ovr ? ovr.value : dc.value;
+  };
+
+  const getDayHours = (eid, dc) => {
+    const key = `${eid}_${dc.date}`;
+    const ovr = dayOverrides[key];
+    return ovr ? ovr.hours : dc.hours;
+  };
+
   const getEmpPayAmount = (row) => {
     const empDays = selectedDays[row.employee_id] || new Set();
-    return (row.day_cells || []).filter(d => empDays.has(d.date)).reduce((s, d) => s + d.value, 0);
+    return (row.day_cells || []).filter(d => empDays.has(d.date)).reduce((s, d) => s + getDayValue(row.employee_id, d), 0);
+  };
+
+  const getEmpAdj = (eid) => adjustments[eid] || [];
+  const getEmpBonuses = (eid) => getEmpAdj(eid).filter(a => a.type === "bonus").reduce((s, a) => s + a.amount, 0);
+  const getEmpDeductions = (eid) => getEmpAdj(eid).filter(a => a.type !== "bonus").reduce((s, a) => s + a.amount, 0);
+  const getEmpNet = (row) => {
+    const gross = getEmpPayAmount(row);
+    const bonuses = getEmpBonuses(row.employee_id);
+    const deductions = getEmpDeductions(row.employee_id);
+    return Math.round((gross + bonuses - deductions) * 100) / 100;
   };
 
   const totalSelectedPay = (preview?.rows || [])
     .filter(r => selectedEmps.has(r.employee_id))
-    .reduce((s, r) => s + getEmpPayAmount(r), 0);
+    .reduce((s, r) => s + getEmpNet(r), 0);
 
   const totalSelectedEmps = selectedEmps.size;
   const totalSelectedDays = Object.values(selectedDays).reduce((s, ds) => s + ds.size, 0);
@@ -235,10 +250,50 @@ export default function PayRunsPage() {
     setCreating(true);
     try {
       await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "confirmed" });
-      toast.success("Pay Run потвърден + фишове генерирани");
+      toast.success("Pay Run потвърден");
       setTab("history");
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
     finally { setCreating(false); }
+  };
+
+  // Day edit
+  const openDayEdit = (eid, dc, row) => {
+    const key = `${eid}_${dc.date}`;
+    const ovr = dayOverrides[key];
+    setDayEditHours(String(ovr?.hours ?? dc.hours));
+    setDayEditValue(String(ovr?.value ?? dc.value));
+    setDayEditReason(ovr?.reason || "");
+    setDayEditDialog({ eid, date: dc.date, cell: dc, row });
+  };
+
+  const saveDayEdit = () => {
+    if (!dayEditDialog) return;
+    const key = `${dayEditDialog.eid}_${dayEditDialog.date}`;
+    setDayOverrides(prev => ({
+      ...prev,
+      [key]: {
+        hours: parseFloat(dayEditHours) || 0,
+        value: parseFloat(dayEditValue) || 0,
+        reason: dayEditReason,
+        source_hours: dayEditDialog.cell.hours,
+        source_value: dayEditDialog.cell.value,
+      },
+    }));
+    setDayEditDialog(null);
+  };
+
+  // Adjustments
+  const addAdj = (eid) => {
+    if (!adjAmount) return;
+    setAdjustments(prev => ({
+      ...prev,
+      [eid]: [...(prev[eid] || []), { type: adjType, title: adjTitle || ADJ_TYPES.find(t => t.value === adjType)?.label, amount: parseFloat(adjAmount) || 0, note: adjNote }],
+    }));
+    setAdjDialog(null); setAdjTitle(""); setAdjAmount(""); setAdjNote("");
+  };
+
+  const removeAdj = (eid, idx) => {
+    setAdjustments(prev => ({ ...prev, [eid]: (prev[eid] || []).filter((_, i) => i !== idx) }));
   };
 
   const handleMarkPaid = async (runId) => {
@@ -302,24 +357,39 @@ export default function PayRunsPage() {
           {loadingPreview ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
           : !preview?.rows?.length ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма одобрени отчети за периода</div>
           : (() => {
-            const dates = preview.dates || [];
+            // Sort dates: Sat→Fri (6,0,1,2,3,4,5)
+            const rawDates = preview.dates || [];
+            const satFriOrder = [6,0,1,2,3,4,5];
+            const dates = [...rawDates].sort((a, b) => {
+              const da = new Date(a + "T12:00:00").getDay();
+              const db = new Date(b + "T12:00:00").getDay();
+              return satFriOrder.indexOf(da) - satFriOrder.indexOf(db);
+            });
             const BG_D = ["Нд","Пон","Вт","Ср","Чет","Пет","Съб"];
             return (
             <>
-              {/* Header summary */}
+              {/* Step tabs */}
+              <div className="flex items-center gap-2 mb-3">
+                <button onClick={() => setStep("grid")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "grid" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>1. Избор на дни</button>
+                <span className="text-muted-foreground">→</span>
+                <button onClick={() => setStep("adjustments")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "adjustments" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>2. Корекции</button>
+              </div>
+
+              {/* Header */}
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <span>Избрани: <strong className="text-foreground">{totalSelectedEmps}</strong> хора</span>
                   <span>Дни: <strong className="text-foreground">{totalSelectedDays}</strong></span>
-                  <span>За плащане: <strong className="text-primary font-mono text-sm">{totalSelectedPay.toFixed(0)} EUR</strong></span>
+                  <span>Нетно: <strong className="text-primary font-mono text-sm">{totalSelectedPay.toFixed(0)} EUR</strong></span>
                 </div>
-                <div className="flex gap-1">
+                {step === "grid" && <div className="flex gap-1">
                   <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={selectAllEmps}>Избери всички</Button>
                   <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={clearAllEmps}>Изчисти</Button>
-                </div>
+                </div>}
               </div>
 
-              {/* Weekly grid */}
+              {/* Weekly grid — Step 1 */}
+              {step === "grid" && (
               <div className="rounded-xl border border-border bg-card overflow-hidden mb-4" data-testid="weekly-grid">
                 <div className="overflow-x-auto">
                   <Table>
@@ -377,12 +447,14 @@ export default function PayRunsPage() {
                               }
 
                               return (
-                                <TableCell key={d} className={`text-center p-1 cursor-pointer transition-colors ${isWeekend ? "bg-muted/10" : ""} ${isDaySelected && isSelected ? "bg-primary/15 border border-primary/30" : "hover:bg-muted/20"}`}
-                                  onClick={() => isSelected && toggleDay(eid, d)}>
+                                <TableCell key={d} className={`text-center p-1 cursor-pointer transition-colors ${isWeekend ? "bg-muted/10" : ""} ${isDaySelected && isSelected ? "bg-primary/15 border border-primary/30" : "hover:bg-muted/20"} ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
+                                  onClick={() => isSelected && toggleDay(eid, d)}
+                                  onDoubleClick={(e) => { e.stopPropagation(); openDayEdit(eid, dc, row); }}>
                                   <div className="flex flex-col items-center">
-                                    <span className={`text-[11px] font-mono font-bold ${isDaySelected && isSelected ? "text-primary" : "text-foreground/60"}`}>{dc.hours}ч</span>
-                                    <span className={`text-[9px] font-mono ${isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground"}`}>{dc.value.toFixed(0)}</span>
+                                    <span className={`text-[11px] font-mono font-bold ${isDaySelected && isSelected ? "text-primary" : "text-foreground/60"}`}>{getDayHours(eid, dc)}ч</span>
+                                    <span className={`text-[9px] font-mono ${isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground"}`}>{getDayValue(eid, dc).toFixed(0)}</span>
                                     {dc.sites?.length > 0 && <span className="text-[7px] text-muted-foreground truncate max-w-[60px]">{dc.sites[0]}{dc.sites.length > 1 ? ` +${dc.sites.length - 1}` : ""}</span>}
+                                    {dayOverrides[`${eid}_${d}`] && <span className="text-[6px] text-amber-400">ред.</span>}
                                   </div>
                                 </TableCell>
                               );
@@ -398,17 +470,75 @@ export default function PayRunsPage() {
                   </Table>
                 </div>
               </div>
+              )}
+
+              {/* Step 2: Adjustments */}
+              {step === "adjustments" && (
+              <div className="rounded-xl border border-border bg-card overflow-hidden mb-4" data-testid="adjustments-table">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead className="text-[10px] min-w-[140px]">Служител</TableHead>
+                      <TableHead className="text-[10px] text-center">Брутно</TableHead>
+                      <TableHead className="text-[10px] text-center min-w-[55px]">Аванс</TableHead>
+                      <TableHead className="text-[10px] text-center min-w-[55px]">Заем</TableHead>
+                      <TableHead className="text-[10px] text-center min-w-[55px]">Удръжки</TableHead>
+                      <TableHead className="text-[10px] text-center min-w-[55px]">Бонус</TableHead>
+                      <TableHead className="text-[10px] text-center min-w-[55px]">Други</TableHead>
+                      <TableHead className="text-[10px] text-center bg-primary/5 min-w-[70px]">Нетно</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {preview.rows.filter(r => selectedEmps.has(r.employee_id) && getEmpPayAmount(r) > 0).map(row => {
+                        const eid = row.employee_id;
+                        const gross = getEmpPayAmount(row);
+                        const adjs = getEmpAdj(eid);
+                        const net = getEmpNet(row);
+                        const byType = (t) => adjs.filter(a => a.type === t).reduce((s, a) => s + a.amount, 0);
+                        return (
+                          <TableRow key={eid}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" /> : <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
+                                <div><p className="text-xs font-medium">{row.first_name} {row.last_name}</p><p className="text-[8px] text-muted-foreground">{row.position || "—"}</p></div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center text-xs font-mono text-primary font-bold">{gross.toFixed(0)}</TableCell>
+                            {["advance","loan_repayment","deduction","bonus","manual_correction"].map(t => {
+                              const v = byType(t);
+                              const isPos = t === "bonus";
+                              return <TableCell key={t} className="text-center p-1 cursor-pointer hover:bg-muted/20" onClick={() => { setAdjDialog(row); setAdjType(t); setAdjTitle(""); setAdjAmount(""); setAdjNote(""); }}>
+                                {v > 0 ? <span className={`text-xs font-mono ${isPos ? "text-emerald-400" : "text-red-400"}`}>{isPos ? "+" : "-"}{v}</span> : <span className="text-[10px] text-muted-foreground/30">+</span>}
+                              </TableCell>;
+                            })}
+                            <TableCell className={`text-center text-sm font-mono font-bold bg-primary/5 ${net < 0 ? "text-red-400" : "text-primary"}`}>{net.toFixed(0)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="p-2 border-t border-border text-[9px] text-muted-foreground">
+                  Нетно = Брутно + Бонуси - Удръжки - Аванс - Заем ± Ръчна корекция
+                </div>
+              </div>
+              )}
 
               {/* Actions */}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={handleSaveDraft} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="save-draft-btn">
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                  Запази чернова
-                </Button>
-                <Button onClick={handleCreate} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="create-payrun-btn">
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Потвърди ({totalSelectedPay.toFixed(0)} EUR)
-                </Button>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  {step === "adjustments" && <Button variant="ghost" size="sm" onClick={() => setStep("grid")} className="text-xs">← Назад към дни</Button>}
+                </div>
+                <div className="flex gap-2">
+                  {step === "grid" && <Button variant="outline" onClick={() => setStep("adjustments")} disabled={totalSelectedPay === 0} className="gap-1.5">Напред → Корекции</Button>}
+                  <Button variant="outline" onClick={handleSaveDraft} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="save-draft-btn">
+                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    Чернова
+                  </Button>
+                  <Button onClick={handleCreate} disabled={creating || totalSelectedPay === 0} className="gap-1.5" data-testid="create-payrun-btn">
+                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Потвърди ({totalSelectedPay.toFixed(0)} EUR)
+                  </Button>
+                </div>
               </div>
             </>
             );
@@ -703,6 +833,63 @@ export default function PayRunsPage() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Day Edit Dialog */}
+      <Dialog open={!!dayEditDialog} onOpenChange={() => setDayEditDialog(null)}>
+        <DialogContent className="max-w-sm" data-testid="day-edit-dialog">
+          <DialogHeader><DialogTitle>Редакция на ден</DialogTitle></DialogHeader>
+          {dayEditDialog && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">
+                <strong>{dayEditDialog.row?.first_name} {dayEditDialog.row?.last_name}</strong> — {dayEditDialog.date}
+                {dayEditDialog.cell?.sites?.length > 0 && <span className="text-primary"> | {dayEditDialog.cell.sites.join(", ")}</span>}
+              </div>
+              <div className="rounded-lg bg-muted/20 p-2 text-[10px] text-muted-foreground">
+                Оригинал: {dayEditDialog.cell?.hours}ч / {dayEditDialog.cell?.value?.toFixed(2)} EUR
+              </div>
+              <div><label className="text-[10px] text-muted-foreground">Часове</label><Input type="number" value={dayEditHours} onChange={e => setDayEditHours(e.target.value)} className="h-9" /></div>
+              <div><label className="text-[10px] text-muted-foreground">Сума EUR</label><Input type="number" value={dayEditValue} onChange={e => setDayEditValue(e.target.value)} className="h-9" /></div>
+              <div><label className="text-[10px] text-muted-foreground">Причина</label><Input value={dayEditReason} onChange={e => setDayEditReason(e.target.value)} placeholder="Причина за промяната..." className="h-9" /></div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setDayEditDialog(null)} className="flex-1">Откажи</Button>
+                <Button onClick={saveDayEdit} className="flex-1">Запази</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjustment Dialog */}
+      <Dialog open={!!adjDialog} onOpenChange={() => setAdjDialog(null)}>
+        <DialogContent className="max-w-sm" data-testid="adj-dialog">
+          <DialogHeader><DialogTitle>{ADJ_TYPES.find(t => t.value === adjType)?.label || adjType}: {adjDialog?.first_name} {adjDialog?.last_name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {/* Show existing adjustments for this type */}
+            {adjDialog && (getEmpAdj(adjDialog.employee_id) || []).filter(a => a.type === adjType).length > 0 && (
+              <div className="rounded-lg bg-muted/20 p-2 space-y-1">
+                <p className="text-[9px] text-muted-foreground uppercase">Съществуващи:</p>
+                {getEmpAdj(adjDialog.employee_id).filter(a => a.type === adjType).map((a, i) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span>{a.title} {a.note && `(${a.note})`}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono">{a.amount} EUR</span>
+                      <button onClick={() => { const idx = getEmpAdj(adjDialog.employee_id).indexOf(a); removeAdj(adjDialog.employee_id, idx); }} className="text-red-400 text-[9px]">×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Select value={adjType} onValueChange={setAdjType}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>{ADJ_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Input value={adjTitle} onChange={e => setAdjTitle(e.target.value)} placeholder="Заглавие" className="h-9" />
+            <Input type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="Сума EUR" className="h-9" />
+            <Input value={adjNote} onChange={e => setAdjNote(e.target.value)} placeholder="Бележка..." className="h-9" />
+            <Button onClick={() => adjDialog && addAdj(adjDialog.employee_id)} disabled={!adjAmount} className="w-full">Добави</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

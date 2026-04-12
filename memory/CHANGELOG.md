@@ -1,3 +1,32 @@
+## Apr 12, 2026 — Editable Day Cells + Step 2 Adjustments
+
+### Day ordering: Sat→Fri (frontend sort by getDay)
+### Day Edit Dialog (double-click):
+- Shows: date, employee, site, original hours/value
+- Editable: hours, value, reason
+- Override layer: stored in dayOverrides[`${eid}_${date}`], source values preserved
+
+### Step 2: Adjustments table
+- Columns: Служител | Брутно | Аванс | Заем | Удръжки | Бонус | Други | Нетно
+- Each cell clickable → opens type-specific dialog
+- Formula: Нетно = Брутно + Бонуси - Удръжки - Аванс - Заем ± Ръчна корекция
+
+### Adjustment dialog:
+- Type selector: Аванс / Заем / Удръжка / Бонус / Ръчна корекция
+- Fields: title, amount, note
+- Shows existing adjustments for same type
+- Can remove individual adjustments
+
+### Flow: 1. Избор на дни → 2. Корекции → Чернова / Потвърди
+- "Напред → Корекции" button
+- "← Назад към дни" button
+- State preserved between steps
+
+### Files:
+- frontend/src/pages/PayRunsPage.js — step state, dayOverrides, adjustments, dialogs
+- backend/app/routes/pay_runs.py — dates in generate response (already done)
+
+
 ## Apr 12, 2026 — Weekly Selection Grid for "Ново разплащане"
 
 ### Selection Model:
