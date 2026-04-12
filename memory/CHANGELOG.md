@@ -1,3 +1,29 @@
+## Apr 12, 2026 — Stage 5 Final: PDF Slip + Guardrails + Quick Filters
+
+### PDF Payment Slip
+- `GET /api/payment-slips/{id}/pdf` — generates printable A4 PDF
+- Content: фирма, служител, период, седмица №, тип, дни, часове, ставка
+- Calculation: изработено → корекции → удръжки → вече платено → платено сега → остатък
+- Footer: формула + подписи (работодател / служител)
+- Cyrillic: DejaVu font
+
+### Guardrails
+- Warning при remaining < 0 (надплащане) в slip detail + generate tab
+- Formula explanation: "Остатък = Изработено + Бонуси - Удръжки - Вече платено - Платено сега"
+- Color coding: зелено (=0), amber (>0 остатък), червено (<0 надплащане)
+
+### Quick Filters (Седмици tab)
+- Всички | Неплатени | Частично | Надплатени | С фиш | Без фиш
+
+### Reconciliation
+- Payroll Weeks, Slips, Employee Заплати, Employee Фишове all use same pay_runs source
+- All frozen at confirm time — no drift from profile changes
+
+### Files:
+- backend/app/routes/pay_runs.py — PDF endpoint + lint fix
+- frontend/src/pages/PayRunsPage.js — quick filters + PDF button + guardrails
+
+
 ## Apr 12, 2026 — Payroll Weeks View + Earned Engine Fix + Employee Integration
 
 ### Earned Engine Corrections:

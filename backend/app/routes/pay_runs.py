@@ -469,6 +469,141 @@ async def get_payment_slip(slip_id: str, user: dict = Depends(get_current_user))
     return slip
 
 
+@router.get("/payment-slips/{slip_id}/pdf")
+async def export_slip_pdf(slip_id: str, user: dict = Depends(get_current_user)):
+    """Generate printable PDF payment slip."""
+    from fastapi.responses import StreamingResponse
+    import io
+
+    org_id = user["org_id"]
+    slip = await db.payment_slips.find_one({"id": slip_id, "org_id": org_id}, {"_id": 0})
+    if not slip:
+        raise HTTPException(status_code=404, detail="Slip not found")
+
+    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "name": 1, "eik": 1, "address": 1, "city": 1})
+    org_name = (org or {}).get("name", "")
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        # Register Cyrillic font
+        import os
+        font_path = os.path.join(os.path.dirname(__file__), "..", "..", "artifacts", "DejaVuSans.ttf")
+        if not os.path.exists(font_path):
+            font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        if os.path.exists(font_path):
+            pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+            font_name = "DejaVu"
+        else:
+            font_name = "Helvetica"
+
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+
+        def t(x, y, text, size=10, bold=False):
+            fn = font_name
+            c.setFont(fn, size)
+            c.drawString(x * mm, (h - y * mm), str(text))
+
+        def line(y):
+            c.setStrokeColorRGB(0.3, 0.3, 0.3)
+            c.line(15 * mm, h - y * mm, (w - 15 * mm), h - y * mm)
+
+        # Header
+        t(15, 20, org_name, 14)
+        t(15, 27, f"ФИШ ЗА ЗАПЛАТА  №{slip.get('slip_number', '')}", 12)
+        t(w / mm - 60, 27, f"Дата: {(slip.get('paid_at') or slip.get('created_at', ''))[:10]}", 9)
+
+        line(32)
+
+        # Employee info
+        t(15, 40, f"Служител: {slip.get('first_name', '')} {slip.get('last_name', '')}", 11)
+        t(15, 47, f"Длъжност: {slip.get('position', '—')}", 9)
+        t(100, 40, f"Тип: {slip.get('pay_type', '')}", 9)
+        t(100, 47, f"График: {slip.get('payment_schedule', '—')}", 9)
+
+        line(52)
+
+        # Period
+        t(15, 58, f"Период: {slip.get('period_start', '')} — {slip.get('period_end', '')}", 10)
+        t(100, 58, f"Седмица №: {slip.get('week_number', '—')}", 10)
+
+        # Work summary
+        t(15, 68, f"Работни дни: {slip.get('approved_days', 0)}", 10)
+        t(70, 68, f"Часове: {slip.get('approved_hours', 0)}", 10)
+        t(120, 68, f"Ставка: {slip.get('frozen_hourly_rate', 0)} EUR/ч", 10)
+
+        line(73)
+
+        # Calculation
+        y = 82
+        t(15, y, "ИЗЧИСЛЕНИЕ:", 10)
+        y += 8
+        t(20, y, "Изработено:", 10)
+        t(120, y, f"{slip.get('earned_amount', 0):.2f} EUR", 10)
+
+        if slip.get("adjustments"):
+            for adj in slip["adjustments"]:
+                y += 7
+                prefix = "+" if adj.get("type") == "bonus" else "-"
+                t(20, y, f"  {adj.get('title', adj.get('type', ''))}: {adj.get('note', '')}", 9)
+                t(120, y, f"{prefix}{adj.get('amount', 0):.2f} EUR", 9)
+
+        if slip.get("bonuses_amount", 0) > 0:
+            y += 7
+            t(20, y, "Бонуси:", 10)
+            t(120, y, f"+{slip['bonuses_amount']:.2f} EUR", 10)
+
+        if slip.get("deductions_amount", 0) > 0:
+            y += 7
+            t(20, y, "Удръжки:", 10)
+            t(120, y, f"-{slip['deductions_amount']:.2f} EUR", 10)
+
+        if slip.get("previously_paid", 0) > 0:
+            y += 7
+            t(20, y, "Вече платено:", 10)
+            t(120, y, f"-{slip['previously_paid']:.2f} EUR", 10)
+
+        y += 3
+        line(y)
+        y += 8
+        t(20, y, "ПЛАТЕНО С ТОЗИ ФИШ:", 11)
+        t(120, y, f"{slip.get('paid_now_amount', 0):.2f} EUR", 11)
+        y += 8
+        t(20, y, "ОСТАТЪК СЛЕД ПЛАЩАНЕТО:", 10)
+        t(120, y, f"{slip.get('remaining_after_payment', 0):.2f} EUR", 10)
+
+        # Sites
+        if slip.get("sites"):
+            y += 12
+            t(15, y, f"Обекти: {', '.join(slip['sites'])}", 9)
+
+        # Signatures
+        y += 25
+        line(y)
+        y += 10
+        t(20, y, "Работодател: _______________", 10)
+        t(110, y, "Служител: _______________", 10)
+
+        y += 15
+        t(15, y, "Формула: Остатък = Изработено + Бонуси - Удръжки - Вече платено - Платено сега", 8)
+
+        c.save()
+        buf.seek(0)
+
+        filename = f"fish_{slip.get('slip_number', 'unknown')}.pdf"
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": f"inline; filename={filename}"})
+
+    except ImportError:
+        raise HTTPException(status_code=500, detail="PDF library not available")
+
+
 # ── Payroll Weeks (calendar view) ──────────────────────────────────
 
 @router.get("/payroll-weeks")

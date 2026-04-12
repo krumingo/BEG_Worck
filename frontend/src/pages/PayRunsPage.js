@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin,
+  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,7 +56,7 @@ export default function PayRunsPage() {
 
   const [weeks, setWeeks] = useState([]);
   const [loadingWeeks, setLoadingWeeks] = useState(false);
-  const [weeksOnlyUnpaid, setWeeksOnlyUnpaid] = useState(false);
+  const [weeksFilter, setWeeksFilter] = useState("all"); // all | unpaid | partial | overpaid | with_slip | no_slip
 
   const [adjDialog, setAdjDialog] = useState(null);
   const [adjType, setAdjType] = useState("deduction");
@@ -91,13 +91,11 @@ export default function PayRunsPage() {
   const loadWeeks = useCallback(async () => {
     setLoadingWeeks(true);
     try {
-      const params = new URLSearchParams();
-      if (weeksOnlyUnpaid) params.set("only_unpaid", "true");
-      const res = await API.get(`/payroll-weeks?${params}`);
+      const res = await API.get("/payroll-weeks");
       setWeeks(res.data.items || []);
     } catch { setWeeks([]); }
     finally { setLoadingWeeks(false); }
-  }, [weeksOnlyUnpaid]);
+  }, []);
 
   useEffect(() => { if (tab === "generate") loadPreview(); }, [tab, loadPreview]);
   useEffect(() => { if (tab === "history") loadRuns(); }, [tab, loadRuns]);
@@ -271,6 +269,13 @@ export default function PayRunsPage() {
                 </div>
               </div>
 
+              {/* Guardrails */}
+              {preview.rows.filter(r => r.earned_amount > 0).some(r => getRowCalc(r).remaining < 0) && (
+                <div className="flex items-center gap-2 text-xs text-amber-400 mb-2">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Внимание: Има служители с надплащане (остатък &lt; 0). Проверете сумите.
+                </div>
+              )}
+
               <div className="flex justify-end">
                 <Button onClick={handleCreate} disabled={creating} className="gap-1.5" data-testid="create-payrun-btn">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -324,16 +329,31 @@ export default function PayRunsPage() {
       )}
 
       {/* ═══ WEEKS ═══ */}
-      {tab === "weeks" && (
+      {tab === "weeks" && (() => {
+        const filteredWeeks = weeks.filter(w => {
+          if (weeksFilter === "unpaid") return w.run_status !== "paid";
+          if (weeksFilter === "partial") return w.remaining_after_payment > 0 && w.paid_now_amount > 0;
+          if (weeksFilter === "overpaid") return w.remaining_after_payment < 0;
+          if (weeksFilter === "with_slip") return !!w.slip_number;
+          if (weeksFilter === "no_slip") return !w.slip_number;
+          return true;
+        });
+        return (
         <>
-          <div className="flex items-center gap-3 mb-4">
-            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-              <input type="checkbox" checked={weeksOnlyUnpaid} onChange={e => setWeeksOnlyUnpaid(e.target.checked)} className="rounded" />
-              Само неплатени
-            </label>
+          <div className="flex items-center gap-2 mb-4 flex-wrap" data-testid="weeks-filters">
+            {[
+              { id: "all", label: "Всички" },
+              { id: "unpaid", label: "Неплатени" },
+              { id: "partial", label: "Частично" },
+              { id: "overpaid", label: "Надплатени" },
+              { id: "with_slip", label: "С фиш" },
+              { id: "no_slip", label: "Без фиш" },
+            ].map(f => (
+              <button key={f.id} onClick={() => setWeeksFilter(f.id)} className={`px-3 py-1 rounded-full text-[10px] border transition-colors ${weeksFilter === f.id ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>{f.label}</button>
+            ))}
           </div>
           {loadingWeeks ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          : weeks.length === 0 ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма данни</div>
+          : filteredWeeks.length === 0 ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма данни за избрания филтър</div>
           : <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="weeks-table">
               <Table>
                 <TableHeader><TableRow>
@@ -351,7 +371,7 @@ export default function PayRunsPage() {
                   <TableHead className="text-[10px]">Фиш</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {weeks.map((w, i) => {
+                  {filteredWeeks.map((w, i) => {
                     const isPaid = w.run_status === "paid";
                     const hasRemaining = w.remaining_after_payment > 0;
                     const adjTotal = w.bonuses_amount - w.deductions_amount;
@@ -384,7 +404,8 @@ export default function PayRunsPage() {
             </div>
           }
         </>
-      )}
+        );
+      })()}
 
       {/* ═══ SLIPS ═══ */}
       {tab === "slips" && (
@@ -530,6 +551,13 @@ export default function PayRunsPage() {
                 <div className="flex justify-between"><span>Остатък</span><span className={`font-mono font-bold ${detailSlip.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{detailSlip.remaining_after_payment?.toFixed(2)} EUR</span></div>
               </div>
               {detailSlip.paid_at && <p className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> Платено на {detailSlip.paid_at?.slice(0, 10)}</p>}
+              {detailSlip.remaining_after_payment < 0 && <p className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Внимание: Надплащане ({detailSlip.remaining_after_payment?.toFixed(2)} EUR)</p>}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[9px] text-muted-foreground">Формула: Остатък = Изработено + Бонуси - Удръжки - Вече платено - Платено сега</span>
+              </div>
+              <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5" onClick={() => window.open(`${process.env.REACT_APP_BACKEND_URL}/api/payment-slips/${detailSlip.id}/pdf`, "_blank")} data-testid="slip-pdf-btn">
+                <FileText className="w-3.5 h-3.5" /> PDF / Печат
+              </Button>
             </div>
           )}
         </DialogContent>
