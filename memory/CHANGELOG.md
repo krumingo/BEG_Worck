@@ -1,3 +1,29 @@
+## Apr 12, 2026 — Monthly Calendar Arithmetic Audit Fix
+
+### Bug found:
+- Multiple pay_runs for same employee/week caused duplicate aggregation
+- Светлин had 7 rows for week 15 (from PR-0001 to PR-0007) → sum was 827 instead of 268
+- Root cause: payroll-weeks returns ALL pay_run rows, not deduplicated
+
+### Fix: Frontend deduplication
+- Before grouping: dedup by `${employee_id}_${week_number}`, keep LATEST pay_run_number
+- Totals now sum only deduplicated rows → exact match
+
+### Separated Бонуси / Удръжки:
+- 6 separate summary cards (was 5 with ambiguous "0 / 160")
+- Each clearly labeled: Хора | Изработено | Платено | Бонуси | Удръжки | Остатък
+
+### Remaining definition:
+- `lastRemaining = sum(remaining_after_payment)` across latest weekly rows
+- Formula explanation in UI footer
+
+### Validations:
+- Employee detail: `✓ Сборовете съвпадат` (card totals = table row sums)
+- Total row = sum(employee rows)
+
+### Files: frontend/src/pages/PayRunsPage.js (dedup logic, 6 summary cards, validation, formula text)
+
+
 ## Apr 12, 2026 — Step 6: Monthly Payment Calendar
 
 ### New tab "Месечен" in Разплащане

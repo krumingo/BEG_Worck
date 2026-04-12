@@ -689,22 +689,38 @@ export default function PayRunsPage() {
       {tab === "monthly" && (() => {
         if (loadingMonth) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
         const items = monthData || [];
+
+        // Deduplicate: keep only the LATEST pay_run row per employee per week
+        // (Multiple pay runs may cover the same period — use last created)
+        const deduped = {};
+        items.forEach(w => {
+          const key = `${w.employee_id}_${w.week_number}`;
+          const existing = deduped[key];
+          if (!existing || (w.pay_run_number || "") > (existing.pay_run_number || "")) {
+            deduped[key] = w;
+          }
+        });
+        const uniqueItems = Object.values(deduped);
+
         // Group by employee → by week_number
         const empMap = {};
         const weekNums = new Set();
-        items.forEach(w => {
+        uniqueItems.forEach(w => {
           const eid = w.employee_id;
-          if (!empMap[eid]) empMap[eid] = { ...w, weeks: {}, totalPaid: 0, totalEarned: 0, totalBonuses: 0, totalDeductions: 0, totalDays: 0, lastRemaining: 0 };
           const wn = w.week_number || 0;
           weekNums.add(wn);
+          if (!empMap[eid]) empMap[eid] = { ...w, weeks: {}, totalPaid: 0, totalEarned: 0, totalBonuses: 0, totalDeductions: 0, totalDays: 0, lastRemaining: 0 };
           empMap[eid].weeks[wn] = w;
           empMap[eid].totalPaid += w.paid_now_amount || 0;
           empMap[eid].totalEarned += w.earned_amount || 0;
           empMap[eid].totalBonuses += w.bonuses_amount || 0;
           empMap[eid].totalDeductions += w.deductions_amount || 0;
           empMap[eid].totalDays += w.approved_days || 0;
-          empMap[eid].lastRemaining = w.remaining_after_payment || 0;
         });
+        // Remaining = sum of remaining across latest weeks
+        for (const emp of Object.values(empMap)) {
+          emp.lastRemaining = Object.values(emp.weeks).reduce((s, w) => s + (w.remaining_after_payment || 0), 0);
+        }
         const employees = Object.values(empMap).sort((a, b) => (b.totalPaid - a.totalPaid) || a.last_name?.localeCompare(b.last_name || ""));
         const sortedWeeks = [...weekNums].sort((a, b) => a - b);
         const grandPaid = employees.reduce((s, e) => s + e.totalPaid, 0);
@@ -722,7 +738,7 @@ export default function PayRunsPage() {
           </div>
 
           {/* Summary bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4" data-testid="monthly-summary">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" data-testid="monthly-summary">
             <div className="rounded-lg bg-card border border-border p-2 text-center">
               <p className="text-lg font-bold font-mono">{employees.length}</p>
               <p className="text-[8px] text-muted-foreground">Хора</p>
@@ -735,12 +751,16 @@ export default function PayRunsPage() {
               <p className="text-lg font-bold font-mono text-emerald-400">{grandPaid.toFixed(0)}<span className="text-xs text-emerald-400/60"> EUR</span></p>
               <p className="text-[8px] text-emerald-400/70">Платено</p>
             </div>
-            <div className="rounded-lg bg-card border border-border p-2 text-center">
-              <p className="text-lg font-bold font-mono">{grandBonuses.toFixed(0)} / <span className="text-red-400">{grandDeductions.toFixed(0)}</span></p>
-              <p className="text-[8px] text-muted-foreground">Бонуси / Удръжки</p>
+            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
+              <p className="text-lg font-bold font-mono text-emerald-400">{grandBonuses.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className="text-[8px] text-muted-foreground">Бонуси</p>
             </div>
-            <div className={`rounded-lg p-2 text-center ${grandRemaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : "bg-card border border-border"}`}>
-              <p className={`text-lg font-bold font-mono ${grandRemaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{grandRemaining.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+            <div className={`rounded-lg p-2 text-center ${grandDeductions > 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
+              <p className={`text-lg font-bold font-mono ${grandDeductions > 0 ? "text-red-400" : "text-muted-foreground"}`}>{grandDeductions.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className="text-[8px] text-muted-foreground">Удръжки</p>
+            </div>
+            <div className={`rounded-lg p-2 text-center ${grandRemaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : grandRemaining < 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
+              <p className={`text-lg font-bold font-mono ${grandRemaining > 0 ? "text-amber-400" : grandRemaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{grandRemaining.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
               <p className="text-[8px] text-muted-foreground">Остатък</p>
             </div>
           </div>
@@ -809,6 +829,11 @@ export default function PayRunsPage() {
           </div>
           )}
 
+          {/* Definitions */}
+          <p className="text-[8px] text-muted-foreground mt-2">
+            Общо = сбор реално платено по седмици | Остатък = сбор остатъци от последните потвърдени плащания | Само последният pay run за всяка седмица
+          </p>
+
           {/* Employee month detail modal */}
           {monthDetail && (
             <Dialog open={!!monthDetail} onOpenChange={() => setMonthDetail(null)}>
@@ -818,8 +843,15 @@ export default function PayRunsPage() {
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-lg bg-muted/30 p-2 text-center"><p className="text-sm font-bold font-mono text-primary">{monthDetail.totalEarned.toFixed(0)}</p><p className="text-[8px] text-muted-foreground">Изработено</p></div>
                     <div className="rounded-lg bg-emerald-500/10 p-2 text-center"><p className="text-sm font-bold font-mono text-emerald-400">{monthDetail.totalPaid.toFixed(0)}</p><p className="text-[8px] text-emerald-400/70">Платено</p></div>
-                    <div className={`rounded-lg p-2 text-center ${monthDetail.lastRemaining > 0 ? "bg-amber-500/10" : "bg-muted/30"}`}><p className={`text-sm font-bold font-mono ${monthDetail.lastRemaining > 0 ? "text-amber-400" : "text-emerald-400"}`}>{monthDetail.lastRemaining.toFixed(0)}</p><p className="text-[8px] text-muted-foreground">Остатък</p></div>
+                    <div className={`rounded-lg p-2 text-center ${monthDetail.lastRemaining > 0 ? "bg-amber-500/10" : monthDetail.lastRemaining < 0 ? "bg-red-500/10" : "bg-muted/30"}`}><p className={`text-sm font-bold font-mono ${monthDetail.lastRemaining > 0 ? "text-amber-400" : monthDetail.lastRemaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{monthDetail.lastRemaining.toFixed(0)}</p><p className="text-[8px] text-muted-foreground">Остатък</p></div>
                   </div>
+                  {/* Validation: cards must match table */}
+                  {(() => {
+                    const tblPaid = Object.values(monthDetail.weeks).reduce((s, w) => s + (w.paid_now_amount || 0), 0);
+                    const tblEarned = Object.values(monthDetail.weeks).reduce((s, w) => s + (w.earned_amount || 0), 0);
+                    const match = Math.abs(tblPaid - monthDetail.totalPaid) < 0.01 && Math.abs(tblEarned - monthDetail.totalEarned) < 0.01;
+                    return match ? <p className="text-[7px] text-emerald-400/60 text-center">✓ Сборовете съвпадат</p> : <p className="text-[7px] text-red-400 text-center">✗ Разминаване: картите ({monthDetail.totalPaid.toFixed(2)}) ≠ таблица ({tblPaid.toFixed(2)})</p>;
+                  })()}
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead className="text-[10px]">Седмица</TableHead>
