@@ -12,10 +12,9 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.services.report_normalizer import fetch_worker_day_map, NORMAL_DAY
 
 router = APIRouter(tags=["Payroll Batch"])
-
-NORMAL_DAY = 8
 
 
 def _get_payroll_week(ref_date: str) -> tuple:
@@ -110,74 +109,12 @@ async def get_eligible_entries(
     ).to_list(200)
     prof_map = {p["user_id"]: p for p in profiles}
 
-    # Approved new-style reports in period (not yet paid)
-    new_reports = await db.employee_daily_reports.find(
-        {"org_id": org_id, "worker_id": {"$exists": True},
-         "date": {"$gte": sat, "$lte": fri},
-         "status": "APPROVED",
-         "payroll_status": {"$nin": ["paid", "batched"]}},
-        {"_id": 0},
-    ).to_list(5000)
-
-    # Approved old-style reports
-    old_reports = await db.employee_daily_reports.find(
-        {"org_id": org_id, "employee_id": {"$exists": True},
-         "report_date": {"$gte": sat, "$lte": fri},
-         "approval_status": "APPROVED",
-         "payroll_status": {"$nin": ["paid", "batched"]}},
-        {"_id": 0},
-    ).to_list(5000)
-
-    # Project names
-    project_ids = set()
-    for r in new_reports:
-        if r.get("project_id"):
-            project_ids.add(r["project_id"])
-    for r in old_reports:
-        for e in r.get("day_entries", []):
-            if e.get("project_id"):
-                project_ids.add(e["project_id"])
-    proj_map = {}
-    if project_ids:
-        projects = await db.projects.find(
-            {"id": {"$in": list(project_ids)}},
-            {"_id": 0, "id": 1, "name": 1},
-        ).to_list(200)
-        proj_map = {p["id"]: p.get("name", "") for p in projects}
-
-    # Build worker → date → entries
-    wd_map = {}
-
-    for r in new_reports:
-        wid = r.get("worker_id")
-        d = r.get("date", "")
-        if wid not in wd_map:
-            wd_map[wid] = {}
-        if d not in wd_map[wid]:
-            wd_map[wid][d] = []
-        wd_map[wid][d].append({
-            "report_id": r["id"],
-            "smr": r.get("smr_type", ""),
-            "hours": float(r.get("hours") or 0),
-            "project_id": r.get("project_id", ""),
-            "project_name": proj_map.get(r.get("project_id", ""), ""),
-        })
-
-    for r in old_reports:
-        wid = r.get("employee_id")
-        d = r.get("report_date", "")
-        if wid not in wd_map:
-            wd_map[wid] = {}
-        for e in r.get("day_entries", []):
-            if d not in wd_map[wid]:
-                wd_map[wid][d] = []
-            wd_map[wid][d].append({
-                "report_id": r["id"],
-                "smr": e.get("work_description", ""),
-                "hours": float(e.get("hours_worked") or 0),
-                "project_id": e.get("project_id", ""),
-                "project_name": proj_map.get(e.get("project_id", ""), ""),
-            })
+    # ── Use unified normalizer for APPROVED + unpaid ─────────────
+    wd_map, project_ids = await fetch_worker_day_map(
+        org_id, sat, fri,
+        status_filter="APPROVED",
+        payroll_filter=["!paid", "!batched"],
+    )
 
     # Advances
     advances = await db.advances.find(

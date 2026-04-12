@@ -8,11 +8,10 @@ from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, NORMAL_DAY
+
 
 router = APIRouter(tags=["Employee Dossier"])
-
-NORMAL_DAY = 8
-
 
 def _calc_rate(profile: dict) -> float:
     pay = (profile.get("pay_type") or "Monthly").strip()
@@ -74,29 +73,16 @@ async def get_employee_dossier(
         "start_date": prof.get("start_date"),
     }
 
-    # 2) Reports (new-style)
-    new_reports = await db.employee_daily_reports.find(
-        {"org_id": org_id, "worker_id": worker_id,
-         "date": {"$gte": date_from, "$lte": date_to}},
-        {"_id": 0},
-    ).sort("date", -1).to_list(500)
-
-    # Also old-style
-    old_reports = await db.employee_daily_reports.find(
-        {"org_id": org_id, "employee_id": worker_id,
-         "report_date": {"$gte": date_from, "$lte": date_to}},
-        {"_id": 0},
-    ).sort("report_date", -1).to_list(500)
-
-    # Project names
+    # 2) Reports — via unified normalizer
+    raw_lines = await fetch_normalized_report_lines(
+        org_id=org_id, date_from=date_from, date_to=date_to, worker_id=worker_id,
+    )
+    # Enrich and sort
     pids = set()
-    for r in new_reports:
-        if r.get("project_id"):
-            pids.add(r["project_id"])
-    for r in old_reports:
-        for e in r.get("day_entries", []):
-            if e.get("project_id"):
-                pids.add(e["project_id"])
+    for rl in raw_lines:
+        enrich_hours(rl)
+        if rl["project_id"]:
+            pids.add(rl["project_id"])
     proj_map = {}
     if pids:
         projects = await db.projects.find(
@@ -104,39 +90,21 @@ async def get_employee_dossier(
         ).to_list(200)
         proj_map = {p["id"]: p.get("name", "") for p in projects}
 
-    # Flatten reports
     report_lines = []
-    for r in new_reports:
-        hours = float(r.get("hours") or 0)
+    for rl in sorted(raw_lines, key=lambda x: x["date"], reverse=True):
         report_lines.append({
-            "id": r["id"],
-            "date": r.get("date", ""),
-            "project_id": r.get("project_id", ""),
-            "project_name": proj_map.get(r.get("project_id", ""), ""),
-            "smr": r.get("smr_type", ""),
-            "hours": hours,
-            "normal": min(hours, NORMAL_DAY),
-            "overtime": max(0, hours - NORMAL_DAY),
-            "value": round(hours * rate, 2),
-            "status": (r.get("status") or "").upper(),
-            "payroll_status": r.get("payroll_status", "none"),
+            "id": rl["id"],
+            "date": rl["date"],
+            "project_id": rl["project_id"],
+            "project_name": proj_map.get(rl["project_id"], ""),
+            "smr": rl["smr_type"],
+            "hours": rl["hours"],
+            "normal": rl["normal_hours"],
+            "overtime": rl["overtime_hours"],
+            "value": round(rl["hours"] * rate, 2),
+            "status": rl["status"],
+            "payroll_status": rl["payroll_status"],
         })
-    for r in old_reports:
-        for e in r.get("day_entries", []):
-            hours = float(e.get("hours_worked") or 0)
-            report_lines.append({
-                "id": r["id"],
-                "date": r.get("report_date", ""),
-                "project_id": e.get("project_id", ""),
-                "project_name": proj_map.get(e.get("project_id", ""), ""),
-                "smr": e.get("work_description", ""),
-                "hours": hours,
-                "normal": min(hours, NORMAL_DAY),
-                "overtime": max(0, hours - NORMAL_DAY),
-                "value": round(hours * rate, 2),
-                "status": (r.get("approval_status") or "").upper(),
-                "payroll_status": r.get("payroll_status", "none"),
-            })
 
     total_hours = round(sum(r["hours"] for r in report_lines), 1)
     total_value = round(sum(r["value"] for r in report_lines), 2)

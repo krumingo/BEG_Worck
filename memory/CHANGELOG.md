@@ -1,3 +1,34 @@
+## Apr 11, 2026 — Unified Report Model Cleanup
+
+### Official Report Model: Flat normalized line
+Fields: id, date, worker_id, worker_name, project_id, smr_type, hours, status, payroll_status, notes, source_type ("new"|"old"), submitted_by, approved_by, entered_by_admin, entry_mode, created_at
+
+### New: /app/backend/app/services/report_normalizer.py
+- `fetch_normalized_report_lines()` — reads both old+new style, returns unified flat list
+- `enrich_hours()` — adds normal_hours/overtime_hours to any line
+- `fetch_worker_day_map()` — groups by worker→date→entries (for matrix/payroll)
+- Supports: date range, worker_id, project_id, smr filter, status filter, payroll filter
+
+### Legacy: Old-style (employee_id + day_entries)
+- Still readable via normalizer
+- Each line tagged with `source_type: "old"`
+- Not removed from DB, but no new creation
+
+### Consumers refactored to unified path:
+1. **All Reports** (all_reports.py) — `fetch_normalized_report_lines()` ✅
+2. **Weekly Matrix** (weekly_matrix.py) — `fetch_worker_day_map()` ✅
+3. **Payroll Batch** (payroll_batch.py eligible) — `fetch_worker_day_map()` ✅
+4. **Payslip** (payroll_batch.py payslip) — reads from batch (already normalized at batch time) ✅
+5. **Employee Dossier** (employee_dossier.py) — `fetch_normalized_report_lines()` ✅
+
+### Files changed:
+- NEW: backend/app/services/report_normalizer.py
+- REFACTORED: backend/app/routes/all_reports.py (removed inline dual-query)
+- REFACTORED: backend/app/routes/weekly_matrix.py (removed inline dual-query)
+- REFACTORED: backend/app/routes/payroll_batch.py (eligible uses normalizer)
+- REFACTORED: backend/app/routes/employee_dossier.py (removed inline dual-query)
+
+
 ## Apr 11, 2026 — Rate Freeze at Batch Creation
 
 ### Freeze Fields Added to employee_summaries:
