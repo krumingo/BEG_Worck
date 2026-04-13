@@ -1,3 +1,44 @@
+## Apr 13, 2026 — Safe Payroll Sync Adapter (v3 → v2/v1)
+
+### New: /app/backend/app/services/payroll_sync.py
+Three sync functions called from pay_runs.py:
+
+#### A. sync_on_confirm(pay_run, org_id, user_id)
+- Writes `payroll_payment_allocations` (v2 format) with `source_pay_run_id`
+- Proportional allocation by site value
+- Idempotent: checks `count_documents(source_pay_run_id)` before insert
+
+#### B. Report status sync
+- Updates `employee_daily_reports.payroll_status = "paid"` for matching dates
+- Adds `payroll_source = "pay_run:{id}"` for traceability
+
+#### C. v1 payslips mirror
+- Writes to `payslips` collection (v1 format) with `source_pay_run_id`
+- Fields: employee_id, gross_pay, deductions, bonuses, net_pay, status
+- Idempotent: checks existing before insert
+
+#### sync_on_paid(pay_run, org_id, paid_at)
+- Updates v2 allocations status to "active" + paid_at
+- Updates v1 payslips status to "Paid"
+
+#### sync_on_reopen(pay_run, org_id, employee_ids)
+- v2 allocations → status = "reversed"
+- v1 payslips → status = "Reversed"
+- Reports → payroll_status = "none", payroll_source = None
+
+### Wiring points in pay_runs.py:
+- create_pay_run (after confirm) → sync_on_confirm
+- mark_pay_run_paid → sync_on_paid
+- reopen_pay_run → sync_on_reopen
+
+### Verified:
+- v2 allocations: 2 created for PR-0010 (Светлин→Къща_Миро: 75, Малин→Къща_Миро: 5)
+- v1 payslips: 3 created (Светлин Paid, Малин Paid, System Generated)
+- Report status: 1 marked as paid
+- Finance: Къща_Миро paid_labor_expense = 274.52 (includes v3 synced data)
+- Idempotency: duplicate sync for same pay_run_id creates 0 new records
+
+
 ## Apr 13, 2026 — Hardening Audit: Payroll Module
 
 ### Scenarios tested:

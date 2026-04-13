@@ -11,6 +11,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
+from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
 
 router = APIRouter(tags=["Pay Runs"])
 
@@ -577,6 +578,10 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "allocation_summary": list(site_summary.values()),
         }})
 
+    # ── Sync to downstream v2/v1 consumers ────────────────────────
+    if data.status == "confirmed":
+        await sync_on_confirm(pay_run, org_id, user["id"])
+
     return {k: v for k, v in pay_run.items() if k != "_id"}
 
 
@@ -632,6 +637,10 @@ async def mark_pay_run_paid(run_id: str, user: dict = Depends(get_current_user))
         {"pay_run_id": run_id, "org_id": org_id},
         {"$set": {"status": "paid", "paid_at": now}},
     )
+
+    # Sync downstream
+    await sync_on_paid(run, org_id, now)
+
     return {"ok": True, "status": "paid"}
 
 
@@ -827,6 +836,9 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
             {"pay_run_id": run_id, "org_id": org_id, "employee_id": {"$in": data.employee_ids}},
             {"$set": {"status": "superseded"}},
         )
+
+    # Sync reopen downstream
+    await sync_on_reopen(run, org_id, data.employee_ids if not reopen_all else None)
 
     return {"ok": True, "status": new_status, "reopened_count": reopened_count, "version": new_version}
 
