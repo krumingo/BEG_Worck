@@ -427,6 +427,15 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     
     org_id = user["org_id"]
     
+    # Validate EIK / VAT
+    eik = (data.counterparty_eik or "").strip()
+    if eik and (len(eik) not in (9, 13) or not eik.isdigit()):
+        raise HTTPException(status_code=400, detail="Невалиден ЕИК — трябва да е 9 или 13 цифри")
+    vat = (data.counterparty_vat_no or "").strip()
+    if vat and not (vat.startswith("BG") and len(vat) >= 11 and vat[2:].isdigit()):
+        if vat and not vat.isdigit():  # allow raw number too
+            raise HTTPException(status_code=400, detail="Невалиден ДДС номер — формат: BG + 9-13 цифри")
+
     # Generate or validate invoice number
     invoice_no = data.invoice_no
     if not invoice_no or invoice_no.strip() == "":
@@ -540,8 +549,16 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         raise HTTPException(status_code=400, detail="Анулирани фактури не могат да се редактират")
     if invoice["status"] == "Paid":
         raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират. Премахнете плащанията първо.")
-    # Draft, Sent, PartiallyPaid, Overdue → allowed
-    
+
+    # Validate EIK / VAT
+    eik = (data.counterparty_eik or "").strip() if data.counterparty_eik is not None else ""
+    if eik and (len(eik) not in (9, 13) or not eik.isdigit()):
+        raise HTTPException(status_code=400, detail="Невалиден ЕИК — трябва да е 9 или 13 цифри")
+    vat = (data.counterparty_vat_no or "").strip() if data.counterparty_vat_no is not None else ""
+    if vat and not (vat.startswith("BG") and len(vat) >= 11 and vat[2:].isdigit()):
+        if vat and not vat.isdigit():
+            raise HTTPException(status_code=400, detail="Невалиден ДДС номер — формат: BG + 9-13 цифри")
+
     # Check invoice_no uniqueness if changed
     if data.invoice_no and data.invoice_no != invoice["invoice_no"]:
         existing = await db.invoices.find_one({

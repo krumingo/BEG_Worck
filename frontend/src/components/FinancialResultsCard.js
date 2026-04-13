@@ -53,7 +53,10 @@ export default function FinancialResultsCard({ projectId }) {
             <span className="text-xs font-semibold">{t("finResults.cash")}</span>
           </div>
           <div className="space-y-1 text-xs">
+            <div className="flex justify-between"><span className="text-muted-foreground">{t("finResults.invoiced")}</span><span className="font-mono">{fmt(cash.invoices?.invoiced)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">{t("finResults.cashIn")}</span><span className="font-mono text-emerald-400">+{fmt(cash.cash_in)}</span></div>
+            {cash.invoices?.unpaid > 0 && <div className="flex justify-between"><span className="text-amber-400">{t("finResults.unpaid")}</span><span className="font-mono text-amber-400">{fmt(cash.invoices.unpaid)}</span></div>}
+            {cash.invoices?.overdue > 0 && <div className="flex justify-between"><span className="text-red-400">{t("finResults.overdue")}</span><span className="font-mono text-red-400">{fmt(cash.invoices.overdue)}</span></div>}
             <div className="flex justify-between"><span className="text-muted-foreground">{t("finResults.cashOut")}</span><span className="font-mono text-red-400">-{fmt(cash.cash_out)}</span></div>
             <div className="flex justify-between pt-1 border-t border-border">
               <span className="font-semibold">{t("finResults.balance")}</span>

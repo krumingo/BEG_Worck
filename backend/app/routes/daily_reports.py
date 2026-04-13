@@ -177,8 +177,8 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
 
     # Support both old (approval_status) and new (status) naming
     current_status = report.get("approval_status") or report.get("status", "")
-    if current_status not in ["SUBMITTED", "Draft", "Submitted"]:
-        raise HTTPException(status_code=400, detail=f"Only SUBMITTED/Draft reports can be approved (current: {current_status})")
+    if current_status != "SUBMITTED":
+        raise HTTPException(status_code=400, detail=f"Само подадени (SUBMITTED) отчети могат да бъдат одобрени. Текущ статус: {current_status}")
 
     now = datetime.now(timezone.utc).isoformat()
     org_id = user["org_id"]
@@ -287,8 +287,8 @@ async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depe
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     current_status = report.get("approval_status") or report.get("status", "")
-    if current_status not in ["SUBMITTED", "Draft", "Submitted"]:
-        raise HTTPException(status_code=400, detail="Only SUBMITTED/Draft reports can be rejected")
+    if current_status != "SUBMITTED":
+        raise HTTPException(status_code=400, detail=f"Само подадени (SUBMITTED) отчети могат да бъдат отхвърлени. Текущ статус: {current_status}")
     now = datetime.now(timezone.utc).isoformat()
     await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
         "approval_status": "REJECTED", "status": "REJECTED",

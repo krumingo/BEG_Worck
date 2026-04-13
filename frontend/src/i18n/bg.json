@@ -2010,10 +2010,13 @@
   },
   "finResults": {
     "cash": "Ликвидност",
-    "cashIn": "Постъпления",
+    "cashIn": "Реално платено (касов приход)",
     "cashOut": "Плащания",
     "balance": "Баланс",
     "cashHint": "Реални пари — постъпили и платени",
+    "invoiced": "Фактурирано (начислено)",
+    "unpaid": "Неплатено",
+    "overdue": "Просрочено",
     "operating": "Оперативен резултат",
     "revenue": "Приход (фактуриран)",
     "directCost": "Директни разходи",
@@ -2219,6 +2222,12 @@
     "alertAbsent": "{{count}} самоотлъчка",
     "alertUnknown": "{{count}} без статус",
     "noReportShort": "Няма"
+  },
+  "pendingPay": {
+    "title": "Чакащи плащания",
+    "unpaid": "Неплатено",
+    "overdue": "Просрочено",
+    "invoices": "Фактури"
   },
   "allReports": {
     "pageTitle": "Отчети",

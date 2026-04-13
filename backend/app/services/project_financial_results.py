@@ -7,6 +7,7 @@ Operating = earned revenue - direct costs (no overhead)
 Fully Loaded = operating - allocated overhead - insurance burden (real profit)
 """
 from app.db import db
+from datetime import datetime as _dt, timezone as _tz
 from app.services.resource_model import (
     get_resource_config, classify_worker, compute_subcontractor_burden,
     DEFAULT_INSURANCE_RATE, DEFAULT_BURDEN_WEIGHTS,
@@ -29,6 +30,18 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         {"_id": 0, "total": 1, "paid_amount": 1, "status": 1},
     ).to_list(500)
     cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
+
+    # Invoice breakdown: invoiced vs paid vs unpaid vs overdue
+    today_str = _dt.now(_tz.utc).strftime("%Y-%m-%d")
+    total_invoiced = round(sum(i.get("total", 0) for i in invoices if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
+    total_paid = cash_in
+    total_unpaid = round(total_invoiced - total_paid, 2)
+    total_overdue = round(sum(
+        (i.get("total", 0) - (i.get("paid_amount") or 0))
+        for i in invoices
+        if i.get("status") in ["Sent", "PartiallyPaid"]
+        and (i.get("due_date") or "9999") < today_str
+    ), 2)
 
     # Cash out: actual payments made (payroll paid + supplier paid + contract paid)
     # Payroll: sum labor_cost from approved work_sessions (reported/operational)
@@ -104,6 +117,12 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "cash_in": cash_in,
         "cash_out": cash_out,
         "cash_balance": round(cash_in - cash_out, 2),
+        "invoices": {
+            "invoiced": total_invoiced,
+            "paid": total_paid,
+            "unpaid": total_unpaid,
+            "overdue": total_overdue,
+        },
         "breakdown": {
             "paid_labor": effective_cash_labor,
             "paid_materials": paid_materials,

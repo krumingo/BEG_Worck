@@ -19,6 +19,7 @@ import SitePulseCard from "@/components/SitePulseCard";
 import MorningBriefingPanel from "@/components/MorningBriefingPanel";
 import CashflowForecastPanel from "@/components/CashflowForecastPanel";
 import PersonnelTodayCard from "@/components/PersonnelTodayCard";
+import PendingPaymentsCard from "@/components/PendingPaymentsCard";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -204,6 +205,9 @@ export default function DashboardPage() {
 
       {/* PERSONNEL TODAY */}
       {isManager && <PersonnelTodayCard />}
+
+      {/* PENDING PAYMENTS */}
+      {isManager && <PendingPaymentsCard />}
 
       {/* Projects summary row */}
       <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="projects-summary">

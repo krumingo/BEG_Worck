@@ -14,6 +14,51 @@ from app.deps.modules import require_m5
 router = APIRouter(tags=["Dashboard"])
 
 
+# ── Pending Payments ──────────────────────────────────────────────
+
+@router.get("/dashboard/pending-payments")
+async def get_pending_payments(user: dict = Depends(get_current_user)):
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    invoices = await db.invoices.find(
+        {"org_id": org_id, "direction": "issued", "status": {"$in": ["Sent", "PartiallyPaid"]}},
+        {"_id": 0, "id": 1, "invoice_no": 1, "counterparty_name": 1, "total": 1,
+         "paid_amount": 1, "due_date": 1, "status": 1, "project_id": 1},
+    ).to_list(500)
+
+    unpaid = []
+    total_unpaid = 0
+    total_overdue = 0
+    for inv in invoices:
+        remaining = round((inv.get("total", 0) or 0) - (inv.get("paid_amount", 0) or 0), 2)
+        if remaining <= 0:
+            continue
+        is_overdue = (inv.get("due_date") or "9999") < today
+        unpaid.append({
+            "id": inv["id"],
+            "invoice_no": inv.get("invoice_no", ""),
+            "counterparty": inv.get("counterparty_name", ""),
+            "total": inv.get("total", 0),
+            "remaining": remaining,
+            "due_date": inv.get("due_date", ""),
+            "is_overdue": is_overdue,
+        })
+        total_unpaid += remaining
+        if is_overdue:
+            total_overdue += remaining
+
+    unpaid.sort(key=lambda x: (0 if x["is_overdue"] else 1, x.get("due_date", "")))
+
+    return {
+        "count": len(unpaid),
+        "total_unpaid": round(total_unpaid, 2),
+        "total_overdue": round(total_overdue, 2),
+        "items": unpaid[:20],
+    }
+
+
+
 # ── Personnel Today ────────────────────────────────────────────────
 
 @router.get("/dashboard/personnel-today")
