@@ -430,11 +430,11 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     # Validate EIK / VAT
     eik = (data.counterparty_eik or "").strip()
     if eik and (len(eik) not in (9, 13) or not eik.isdigit()):
-        raise HTTPException(status_code=400, detail="Невалиден ЕИК — трябва да е 9 или 13 цифри")
+        raise HTTPException(status_code=400, detail="Невалиден формат на ЕИК — трябва да е 9 или 13 цифри (форматна проверка)")
     vat = (data.counterparty_vat_no or "").strip()
     if vat and not (vat.startswith("BG") and len(vat) >= 11 and vat[2:].isdigit()):
-        if vat and not vat.isdigit():  # allow raw number too
-            raise HTTPException(status_code=400, detail="Невалиден ДДС номер — формат: BG + 9-13 цифри")
+        if vat and not vat.isdigit():
+            raise HTTPException(status_code=400, detail="Невалиден формат на ДДС номер — очакван формат: BG + 9-13 цифри (форматна проверка)")
 
     # Generate or validate invoice number
     invoice_no = data.invoice_no
@@ -553,11 +553,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     # Validate EIK / VAT
     eik = (data.counterparty_eik or "").strip() if data.counterparty_eik is not None else ""
     if eik and (len(eik) not in (9, 13) or not eik.isdigit()):
-        raise HTTPException(status_code=400, detail="Невалиден ЕИК — трябва да е 9 или 13 цифри")
+        raise HTTPException(status_code=400, detail="Невалиден формат на ЕИК — трябва да е 9 или 13 цифри (форматна проверка)")
     vat = (data.counterparty_vat_no or "").strip() if data.counterparty_vat_no is not None else ""
     if vat and not (vat.startswith("BG") and len(vat) >= 11 and vat[2:].isdigit()):
         if vat and not vat.isdigit():
-            raise HTTPException(status_code=400, detail="Невалиден ДДС номер — формат: BG + 9-13 цифри")
+            raise HTTPException(status_code=400, detail="Невалиден формат на ДДС номер — очакван формат: BG + 9-13 цифри (форматна проверка)")
 
     # Check invoice_no uniqueness if changed
     if data.invoice_no and data.invoice_no != invoice["invoice_no"]:

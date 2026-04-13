@@ -33,13 +33,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Invoice breakdown: invoiced vs paid vs unpaid vs overdue
     today_str = _dt.now(_tz.utc).strftime("%Y-%m-%d")
-    total_invoiced = round(sum(i.get("total", 0) for i in invoices if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
+    total_invoiced = round(sum(i.get("total", 0) for i in invoices if i.get("status") not in ["Draft", "Cancelled"]), 2)
     total_paid = cash_in
     total_unpaid = round(total_invoiced - total_paid, 2)
     total_overdue = round(sum(
         (i.get("total", 0) - (i.get("paid_amount") or 0))
         for i in invoices
-        if i.get("status") in ["Sent", "PartiallyPaid"]
+        if i.get("status") not in ["Draft", "Cancelled", "Paid"]
         and (i.get("due_date") or "9999") < today_str
     ), 2)
 

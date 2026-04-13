@@ -22,7 +22,7 @@ async def get_pending_payments(user: dict = Depends(get_current_user)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     invoices = await db.invoices.find(
-        {"org_id": org_id, "direction": "issued", "status": {"$in": ["Sent", "PartiallyPaid"]}},
+        {"org_id": org_id, "direction": {"$in": ["issued", "Issued"]}, "status": {"$in": ["Sent", "PartiallyPaid"]}},
         {"_id": 0, "id": 1, "invoice_no": 1, "counterparty_name": 1, "total": 1,
          "paid_amount": 1, "due_date": 1, "status": 1, "project_id": 1},
     ).to_list(500)
