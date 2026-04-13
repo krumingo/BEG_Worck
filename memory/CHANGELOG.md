@@ -1,3 +1,36 @@
+## Apr 13, 2026 — Legacy Payroll Write Freeze
+
+### Frozen WRITE routes (11 total, HTTP 410 Gone):
+**payroll_batch.py (3):**
+- POST /payroll-batch → 410
+- POST /payroll-batch/{id}/pay → 410
+- POST /payroll-batch/carry-forward → 410
+
+**hr.py (8):**
+- POST /payroll-runs → 410
+- POST /payroll-runs/{id}/generate → 410
+- POST /payroll-runs/{id}/finalize → 410
+- DELETE /payroll-runs/{id} → 410
+- POST /payslips/{id}/set-deductions → 410
+- POST /payslips/{id}/mark-paid → 410
+- POST /payroll/weekly-run → 410
+- POST /payroll/{id}/generate-weekly → 410
+
+### Deprecated GET (1, kept working):
+- GET /payroll-batch/eligible → docstring marked DEPRECATED, still returns data
+
+### READ paths preserved (all 200 OK):
+- GET /payslips, GET /payslips/{id}
+- GET /payroll-runs, GET /payroll-runs/{id}
+- GET /payroll-batch/list, GET /payroll-batch/{id}, GET /payroll-batch/{id}/allocations
+- GET /projects/{id}/paid-labor
+- GET /payroll-batch/eligible (deprecated but functional)
+
+### UI: AllReportsPage tab renamed "Заплати (стар)"
+
+### Rollback: Remove `raise HTTPException(410)` line from each handler (1 line per route)
+
+
 ## Apr 13, 2026 — Safe Cleanup: Test Payroll Data
 
 ### Criteria for test vs real:

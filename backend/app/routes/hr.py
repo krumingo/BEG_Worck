@@ -283,11 +283,12 @@ async def list_payroll_runs(user: dict = Depends(require_m4), status: Optional[s
     
     return runs
 
+_LEGACY_PAYROLL_MSG = "Deprecated: use /pay-runs instead. Frozen since 2026-04-13."
+
 
 @router.post("/payroll-runs", status_code=201)
 async def create_payroll_run(data: PayrollRunCreate, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
     
     now = datetime.now(timezone.utc).isoformat()
     run = {
@@ -331,8 +332,7 @@ async def get_payroll_run(run_id: str, user: dict = Depends(require_m4)):
 
 @router.post("/payroll-runs/{run_id}/generate")
 async def generate_payroll(run_id: str, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
     
     run = await db.payroll_runs.find_one({"id": run_id, "org_id": user["org_id"]})
     if not run:
@@ -458,8 +458,7 @@ async def generate_payroll(run_id: str, user: dict = Depends(require_m4)):
 
 @router.post("/payroll-runs/{run_id}/finalize")
 async def finalize_payroll(run_id: str, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
     
     run = await db.payroll_runs.find_one({"id": run_id, "org_id": user["org_id"]})
     if not run:
@@ -491,8 +490,7 @@ async def finalize_payroll(run_id: str, user: dict = Depends(require_m4)):
 
 @router.delete("/payroll-runs/{run_id}")
 async def delete_payroll_run(run_id: str, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
     
     run = await db.payroll_runs.find_one({"id": run_id, "org_id": user["org_id"]})
     if not run:
@@ -571,8 +569,7 @@ async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
 
 @router.post("/payslips/{payslip_id}/set-deductions")
 async def set_payslip_deductions(payslip_id: str, data: SetDeductionsRequest, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
     
     payslip = await db.payslips.find_one({"id": payslip_id, "org_id": user["org_id"]})
     if not payslip:
@@ -613,8 +610,7 @@ async def set_payslip_deductions(payslip_id: str, data: SetDeductionsRequest, us
 
 @router.post("/payslips/{payslip_id}/mark-paid")
 async def mark_payslip_paid(payslip_id: str, data: MarkPaidRequest, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
     
     payslip = await db.payslips.find_one({"id": payslip_id, "org_id": user["org_id"]})
     if not payslip:
@@ -995,8 +991,7 @@ class PayTrancheRequest(PydanticBaseModel):
 
 @router.post("/payroll/weekly-run", status_code=201)
 async def create_weekly_run(data: WeeklyRunCreate, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
 
     now = datetime.now(timezone.utc).isoformat()
     name = data.name or f"Седмичен {data.week_start} — {data.week_end}"
@@ -1019,8 +1014,7 @@ async def create_weekly_run(data: WeeklyRunCreate, user: dict = Depends(require_
 
 @router.post("/payroll/{run_id}/generate-weekly")
 async def generate_weekly_payroll(run_id: str, user: dict = Depends(require_m4)):
-    if not payroll_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    raise HTTPException(status_code=410, detail=_LEGACY_PAYROLL_MSG)
 
     run = await db.payroll_runs.find_one({"id": run_id, "org_id": user["org_id"]})
     if not run:

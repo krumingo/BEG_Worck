@@ -1,14 +1,15 @@
 """
 Routes — Payroll Batch (Sat→Fri payroll week).
-Additive layer: collects approved+unpaid entries, allows day selection,
-generates gross/deductions/net, manages payment status.
-Does NOT allocate back to projects.
+LEGACY: Write paths frozen 2026-04-13. Use /pay-runs instead.
+Read paths kept for historical access.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 import uuid
+
+LEGACY_MSG = "Deprecated: use /pay-runs instead. This endpoint is frozen since 2026-04-13."
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -72,9 +73,7 @@ async def get_eligible_entries(
     user: dict = Depends(get_current_user),
     week_of: Optional[str] = None,
 ):
-    """
-    Get approved + unpaid entries for a payroll week, grouped by worker.
-    """
+    """DEPRECATED: Use GET /pay-runs/generate instead. Kept as read-only for backward compat."""
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     ref = week_of or today
@@ -202,9 +201,8 @@ async def get_eligible_entries(
 
 @router.post("/payroll-batch")
 async def create_payroll_batch(data: BatchCreateInput, user: dict = Depends(get_current_user)):
-    """Create a new payroll batch for the specified week with selected days."""
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can create payroll batches")
+    """FROZEN: Use POST /pay-runs instead."""
+    raise HTTPException(status_code=410, detail=LEGACY_MSG)
 
     org_id = user["org_id"]
     sat, fri = _get_payroll_week(data.week_of)
@@ -365,16 +363,8 @@ async def get_payroll_batch(batch_id: str, user: dict = Depends(get_current_user
 
 @router.post("/payroll-batch/{batch_id}/pay")
 async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depends(get_current_user)):
-    """
-    Mark batch as paid AND create allocation back to projects.
-    Allocation rule:
-    - gross labor is allocated per included report lines to their projects
-    - first by value (hours × rate per line), fallback by hours proportion
-    - deductions do NOT reduce project labor expense
-    - project expense = allocated gross labor
-    """
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner")
+    """FROZEN: Use POST /pay-runs/{id}/mark-paid instead."""
+    raise HTTPException(status_code=410, detail=LEGACY_MSG)
 
     org_id = user["org_id"]
     batch = await db.payroll_batches.find_one({"id": batch_id, "org_id": org_id})
@@ -582,9 +572,8 @@ async def mark_batch_paid(batch_id: str, data: BatchPayInput, user: dict = Depen
 
 @router.post("/payroll-batch/carry-forward")
 async def carry_forward_unpaid(user: dict = Depends(get_current_user), week_of: str = ""):
-    """Mark approved but unbatched entries in a past week as carry_forward."""
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner")
+    """FROZEN: v3 pay_runs handles remaining/carry-forward."""
+    raise HTTPException(status_code=410, detail=LEGACY_MSG)
 
     org_id = user["org_id"]
     if not week_of:
