@@ -446,6 +446,14 @@ export default function PayRunsPage() {
             const BG_D = ["Нд","Пон","Вт","Ср","Чет","Пет","Съб"];
             return (
             <>
+              {/* Warnings */}
+              {preview.warnings?.length > 0 && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/5 text-xs text-amber-400">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  {preview.warnings.join(" | ")}
+                </div>
+              )}
+
               {/* Step tabs */}
               <div className="flex items-center gap-2 mb-3">
                 <button onClick={() => setStep("grid")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${step === "grid" ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground border border-transparent"}`}>1. Дни</button>

@@ -163,17 +163,27 @@ async def generate_pay_run(
         projects = await db.projects.find({"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
         proj_map = {p["id"]: p.get("name", "") for p in projects}
 
-    # Previously paid
+    # Previously paid — dedup: only count LATEST pay run per week per employee
     existing_runs = await db.pay_runs.find(
         {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
          "period_start": {"$lte": period_end}, "period_end": {"$gte": period_start}},
-        {"_id": 0, "employee_rows": 1},
-    ).to_list(100)
+        {"_id": 0, "employee_rows": 1, "week_number": 1, "number": 1},
+    ).sort("number", -1).to_list(100)
+    # Dedup: keep only latest pay_run per week_number
+    seen_weeks = set()
     already_paid = {}
     for run in existing_runs:
+        wn = run.get("week_number", 0)
+        if wn in seen_weeks:
+            continue
+        seen_weeks.add(wn)
         for row in run.get("employee_rows", []):
             eid = row.get("employee_id", "")
             already_paid[eid] = already_paid.get(eid, 0) + row.get("paid_now_amount", 0)
+    # Count overlapping runs for warning
+    overlap_count = await db.pay_runs.count_documents(
+        {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
+         "period_start": {"$lte": period_end}, "period_end": {"$gte": period_start}})
 
     period_days = (datetime.strptime(period_end, "%Y-%m-%d") - datetime.strptime(period_start, "%Y-%m-%d")).days + 1
 
@@ -260,6 +270,7 @@ async def generate_pay_run(
             "earned": round(sum(r["earned_amount"] for r in rows), 2),
             "remaining": round(sum(r["remaining_after_payment"] for r in rows), 2),
         },
+        "warnings": [f"Има {overlap_count} съществуващи плащания за този период"] if overlap_count > 0 else [],
     }
 
 

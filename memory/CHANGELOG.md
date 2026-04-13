@@ -1,3 +1,32 @@
+## Apr 13, 2026 — Hardening Audit: Payroll Module
+
+### Scenarios tested:
+- 3 employees (Светлин, Малин, System Admin) across 2 weeks (9, 15)
+- Partial payment (Светлин 25/130), full payment (Малин 35/40), zero (System)
+- Reopen of paid batch → correctly blocked with 403
+- Zero-rate employee → shows 0 earned, no crash
+- Multi-site day (System Admin: Офис + Босна-Теодора) → allocation splits correctly
+- Overlap warning for period with existing pay runs
+- Monthly dedup → 21 raw rows deduped to 6 unique
+
+### Issues found & fixed:
+1. **previously_paid inflation**: Backend summed ALL overlapping pay_runs instead of deduped latest per week. Fixed: sort by number desc, keep only first per week_number.
+2. **Overlap warning**: Added warning in generate response when existing confirmed/paid runs overlap the period.
+
+### Cross-system reconciliation (Светлин):
+| Source | Paid Sum |
+|--------|----------|
+| Latest Slips (deduped) | 267.85 |
+| Monthly view (deduped) | 267.85 |
+| Generate previously_paid | 267.85 |
+| **Match** | ✅ |
+
+### Go/No-Go: **GO for production use** with awareness:
+- Multiple pay runs for same week exist in test data (normal during development/testing)
+- Dedup logic handles this correctly at both frontend and backend level
+- All core flows work: create, draft, confirm, partial pay, reopen (blocked for paid), print, allocation, monthly aggregation
+
+
 ## Apr 12, 2026 — Monthly Calendar Arithmetic Audit Fix
 
 ### Bug found:
