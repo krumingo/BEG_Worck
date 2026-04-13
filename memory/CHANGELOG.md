@@ -1,3 +1,30 @@
+## Apr 13, 2026 — Payment Traceability Layer
+
+### Added to mark-paid flow:
+- `payment_method`: cash | bank_transfer | card | other
+- `payment_reference`: free text (bank transfer number, etc.)
+- `payment_note`: free text
+- `paid_by`: user ID who marked as paid
+
+### Stored on:
+- **Source**: pay_runs document (payment_method, payment_reference, payment_note, paid_by, paid_at)
+- **Mirror**: payment_slips (payment_method, payment_reference)
+- **History**: pay_run.history[] entry with action="marked_paid" + method + reference
+
+### Reopen behavior:
+- Payment info stays in history (audit trail preserved)
+- pay_run status reverts to "reopened"
+- No payment info deletion — immutable audit
+
+### UI:
+- "Маркирай платен" now opens dialog with method/reference/note fields
+- Paid runs show payment info in detail: "Метод: В брой | Реф: CASH-2026-04-13-001"
+
+### Files:
+- backend/app/routes/pay_runs.py — MarkPaidInput model, payment fields in update + history
+- frontend/src/pages/PayRunsPage.js — payment dialog, payment info display
+
+
 ## Apr 13, 2026 — MyPayslipsPage v3 Compatibility Fix
 
 ### Issues found & fixed:

@@ -365,10 +365,20 @@ export default function PayRunsPage() {
     setAdjustments(prev => ({ ...prev, [eid]: (prev[eid] || []).filter((_, i) => i !== idx) }));
   };
 
+  const [payDialog, setPayDialog] = useState(null); // run_id
+  const [payMethod, setPayMethod] = useState("cash");
+  const [payRef, setPayRef] = useState("");
+  const [payNote, setPayNote] = useState("");
+
   const handleMarkPaid = async (runId) => {
     try {
-      await API.post(`/pay-runs/${runId}/mark-paid`);
+      await API.post(`/pay-runs/${runId}/mark-paid`, {
+        payment_method: payMethod,
+        payment_reference: payRef,
+        payment_note: payNote,
+      });
       toast.success("Маркиран като платен");
+      setPayDialog(null); setPayMethod("cash"); setPayRef(""); setPayNote("");
       loadRuns(); setDetailRun(null);
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
   };
@@ -1143,10 +1153,19 @@ export default function PayRunsPage() {
                 </div>
                 <div className="flex gap-2">
                   {detailRun.status === "confirmed" && (
-                    <Button onClick={() => handleMarkPaid(detailRun.id)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="mark-paid-btn"><Check className="w-4 h-4" /> Маркирай платен</Button>
+                    <Button onClick={() => setPayDialog(detailRun.id)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="mark-paid-btn"><Check className="w-4 h-4" /> Маркирай платен</Button>
                   )}
                 </div>
               </div>
+
+              {/* Payment info */}
+              {detailRun.payment_method && (
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>Метод: <strong className="text-foreground">{detailRun.payment_method === "cash" ? "В брой" : detailRun.payment_method === "bank_transfer" ? "Банков превод" : detailRun.payment_method === "card" ? "Карта" : detailRun.payment_method}</strong></span>
+                  {detailRun.payment_reference && <span>Реф: <strong className="text-foreground">{detailRun.payment_reference}</strong></span>}
+                  {detailRun.payment_note && <span>Бележка: {detailRun.payment_note}</span>}
+                </div>
+              )}
 
               {/* Version badge */}
               {detailRun.version > 1 && (
@@ -1282,6 +1301,38 @@ export default function PayRunsPage() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog */}
+      <Dialog open={!!payDialog} onOpenChange={() => setPayDialog(null)}>
+        <DialogContent className="max-w-sm" data-testid="pay-dialog">
+          <DialogHeader><DialogTitle>Потвърди плащане</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] text-muted-foreground">Метод на плащане</label>
+              <Select value={payMethod} onValueChange={setPayMethod}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">В брой</SelectItem>
+                  <SelectItem value="bank_transfer">Банков превод</SelectItem>
+                  <SelectItem value="card">Карта</SelectItem>
+                  <SelectItem value="other">Друго</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Референция (опц.)</label>
+              <Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Номер на превод..." className="h-9" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Бележка (опц.)</label>
+              <Input value={payNote} onChange={e => setPayNote(e.target.value)} placeholder="Бележка..." className="h-9" />
+            </div>
+            <Button onClick={() => handleMarkPaid(payDialog)} className="w-full gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+              <Check className="w-4 h-4" /> Потвърди плащане
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

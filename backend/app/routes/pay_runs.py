@@ -617,8 +617,14 @@ async def get_pay_run(run_id: str, user: dict = Depends(get_current_user)):
 
 # ── Mark Paid + update slips ───────────────────────────────────────
 
+class MarkPaidInput(BaseModel):
+    payment_method: str = ""  # cash | bank_transfer | card | other
+    payment_reference: str = ""  # e.g. bank transfer number
+    payment_note: str = ""
+
+
 @router.post("/pay-runs/{run_id}/mark-paid")
-async def mark_pay_run_paid(run_id: str, user: dict = Depends(get_current_user)):
+async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, user: dict = Depends(get_current_user)):
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
     org_id = user["org_id"]
@@ -629,19 +635,42 @@ async def mark_pay_run_paid(run_id: str, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=400, detail="Already paid")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.pay_runs.update_one(
-        {"id": run_id}, {"$set": {"status": "paid", "paid_at": now}},
-    )
-    # Update slips
+    payment_info = {
+        "status": "paid",
+        "paid_at": now,
+        "paid_by": user["id"],
+        "payment_method": (body.payment_method if body else "") or "",
+        "payment_reference": (body.payment_reference if body else "") or "",
+        "payment_note": (body.payment_note if body else "") or "",
+    }
+    await db.pay_runs.update_one({"id": run_id}, {"$set": payment_info})
+
+    # Update v3 slips
     await db.payment_slips.update_many(
         {"pay_run_id": run_id, "org_id": org_id},
-        {"$set": {"status": "paid", "paid_at": now}},
+        {"$set": {"status": "paid", "paid_at": now,
+                  "payment_method": payment_info["payment_method"],
+                  "payment_reference": payment_info["payment_reference"]}},
     )
+
+    # Add to version history
+    await db.pay_runs.update_one({"id": run_id}, {"$push": {"history": {
+        "version": (run.get("version") or 1) + 1,
+        "action": "marked_paid",
+        "changed_by": user["id"],
+        "changed_at": now,
+        "reason": payment_info["payment_note"],
+        "payment_method": payment_info["payment_method"],
+        "payment_reference": payment_info["payment_reference"],
+        "totals_snapshot": run.get("totals", {}),
+    }}})
 
     # Sync downstream
     await sync_on_paid(run, org_id, now)
 
-    return {"ok": True, "status": "paid"}
+    return {"ok": True, "status": "paid", "paid_at": now,
+            "payment_method": payment_info["payment_method"],
+            "payment_reference": payment_info["payment_reference"]}
 
 
 # ── Update Draft ───────────────────────────────────────────────────
