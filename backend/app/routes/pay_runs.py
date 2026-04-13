@@ -595,7 +595,7 @@ async def list_pay_runs(
     page_size: int = Query(20, ge=1, le=100),
 ):
     org_id = user["org_id"]
-    q = {"org_id": org_id}
+    q = {"org_id": org_id, "archived": {"$ne": True}}
     if status:
         q["status"] = status
     total = await db.pay_runs.count_documents(q)
@@ -931,7 +931,7 @@ async def list_payment_slips(
     page_size: int = Query(20, ge=1, le=100),
 ):
     org_id = user["org_id"]
-    q = {"org_id": org_id}
+    q = {"org_id": org_id, "archived": {"$ne": True}}
     if employee_id:
         q["employee_id"] = employee_id
     if status:
@@ -1103,7 +1103,7 @@ async def get_payroll_weeks(
     """
     org_id = user["org_id"]
 
-    q = {"org_id": org_id}
+    q = {"org_id": org_id, "archived": {"$ne": True}}
     if status:
         q["status"] = status
     runs = await db.pay_runs.find(q, {"_id": 0}).sort("period_start", -1).to_list(200)

@@ -520,7 +520,7 @@ async def list_payslips(
     elif not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    query = {"org_id": user["org_id"]}
+    query = {"org_id": user["org_id"], "archived": {"$ne": True}}
     if payroll_run_id:
         query["payroll_run_id"] = payroll_run_id
     if user_id:

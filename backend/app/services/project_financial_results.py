@@ -43,7 +43,8 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # "provisional" (confirmed but not yet paid) and "reversed" are excluded.
     paid_allocs = await db.payroll_payment_allocations.find(
         {"org_id": org_id, "project_id": project_id,
-         "status": {"$in": ["active", None]}},
+         "status": {"$in": ["active", None]},
+         "archived": {"$ne": True}},
         {"_id": 0, "allocated_gross_labor": 1, "allocated_hours": 1,
          "worker_id": 1, "worker_name": 1, "week_start": 1, "week_end": 1,
          "payroll_batch_id": 1, "status": 1},

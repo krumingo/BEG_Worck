@@ -1,3 +1,32 @@
+## Apr 13, 2026 — Safe Cleanup: Test Payroll Data
+
+### Criteria for test vs real:
+- REAL: PR-0002 (wk9, first real payroll with adjustments) + PR-0008 (wk15, complete allocation+print)
+- TEST: Everything else — empty runs, E2E test runs, duplicate wk15 runs, fix/freeze/draft test notes
+
+### Archived records:
+- 12 pay_runs → `is_test=true, archived=true, archived_reason="e2e_cleanup"`
+- Related synced v2 allocations → `archived=true`
+- Related synced v1 payslips → `archived=true`
+- Related v3 payment_slips → `archived=true`
+- Related report payroll_source fields → cleared
+
+### Default filters added:
+- pay_runs list: `archived != true`
+- payment_slips list: `archived != true`
+- payroll-weeks: `archived != true`
+- hr.py /payslips: `archived != true`
+- project_financial_results.py: `archived != true`
+
+### Result:
+- 2 visible pay_runs (production)
+- 6 visible payment_slips
+- 6 visible payroll weeks
+- Finance: 129.52 (legacy only, clean)
+- Self-view: 80 legacy payslips (clean)
+- No data loss — archived records preserved with full audit trail
+
+
 ## Apr 13, 2026 — E2E Reconciliation: 3 bugs found and fixed
 
 ### Bugs found:
