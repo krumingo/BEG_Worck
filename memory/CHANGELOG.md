@@ -1,3 +1,23 @@
+## Apr 13, 2026 — MyPayslipsPage v3 Compatibility Fix
+
+### Issues found & fixed:
+1. **user_id vs employee_id**: Backend queried `user_id`, synced records had only `employee_id`. Fix: `$or` query for both fields.
+2. **Missing id**: Synced records had no `id` field. Fix: generate uuid in sync. Backfixed 6 existing records.
+3. **payroll_run_id enrichment**: Synced records have `sync_{id}`, no matching payroll_run. Fix: check if period_start already exists before lookup.
+4. **STATUS_COLORS**: Frontend had no `Generated` or `Reversed`. Fix: added both.
+5. **user_name enrichment**: Legacy used `name`, synced have `first_name`+`last_name`. Fix: try both.
+
+### Files changed:
+- backend/app/services/payroll_sync.py — added `id`, `user_id` to v1 slip mirror
+- backend/app/routes/hr.py — `/payslips` query uses `$or` for user_id/employee_id, better enrichment
+- frontend/src/pages/MyPayslipsPage.js — added Generated, Reversed status colors
+
+### Verified:
+- Technician (tech1@begwork.com) sees 82 payslips: v3 Generated + v3 Paid + legacy
+- No duplication — each source distinct by origin
+- Correct status colors: Generated (blue), Paid (green), Finalized (blue), Reversed (red)
+
+
 ## Apr 13, 2026 — Payroll Sync Semantics Fix: Confirm ≠ Paid
 
 ### Status lifecycle:

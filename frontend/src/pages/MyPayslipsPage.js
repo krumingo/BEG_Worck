@@ -27,8 +27,10 @@ import {
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  Generated: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   Finalized: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   Paid: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  Reversed: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
 export default function MyPayslipsPage() {

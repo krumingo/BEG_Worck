@@ -524,18 +524,26 @@ async def list_payslips(
     if payroll_run_id:
         query["payroll_run_id"] = payroll_run_id
     if user_id:
-        query["user_id"] = user_id
+        query["$or"] = [{"user_id": user_id}, {"employee_id": user_id}]
     
     payslips = await db.payslips.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
     # Enrich
     for ps in payslips:
-        u = await db.users.find_one({"id": ps["user_id"]}, {"_id": 0, "name": 1, "email": 1})
-        ps["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
-        run = await db.payroll_runs.find_one({"id": ps["payroll_run_id"]}, {"_id": 0, "period_start": 1, "period_end": 1})
-        if run:
-            ps["period_start"] = run["period_start"]
-            ps["period_end"] = run["period_end"]
+        uid = ps.get("user_id") or ps.get("employee_id")
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        if u:
+            ps["user_name"] = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or u.get("email", "Unknown").split("@")[0]
+        elif ps.get("employee_name"):
+            ps["user_name"] = ps["employee_name"]
+        else:
+            ps["user_name"] = "Unknown"
+        # Period: from payroll_run or from payslip directly (synced records)
+        if not ps.get("period_start"):
+            run = await db.payroll_runs.find_one({"id": ps.get("payroll_run_id")}, {"_id": 0, "period_start": 1, "period_end": 1})
+            if run:
+                ps["period_start"] = run.get("period_start")
+                ps["period_end"] = run.get("period_end")
     
     return payslips
 

@@ -98,12 +98,15 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
         {"source_pay_run_id": run_id, "org_id": org_id}
     )
     if existing_v1 == 0:
+        import uuid as _uuid
         v1_slips = []
         for er in pay_run.get("employee_rows", []):
             v1_slips.append({
+                "id": str(_uuid.uuid4()),
                 "org_id": org_id,
                 "source_pay_run_id": run_id,
                 "payroll_run_id": f"sync_{run_id}",
+                "user_id": er["employee_id"],
                 "employee_id": er["employee_id"],
                 "period_start": pay_run.get("period_start", ""),
                 "period_end": pay_run.get("period_end", ""),
