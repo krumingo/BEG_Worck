@@ -135,16 +135,38 @@ async def my_sites(user: dict = Depends(get_current_user)):
                 {"org_id": org_id, "project_id": pid, "date": today}
             )
 
+        # Daily reports for this project today
+        drafts_today = await db.employee_daily_reports.find(
+            {"org_id": org_id, "project_id": pid, "date": today, "worker_id": {"$exists": True}},
+            {"_id": 0, "worker_id": 1, "status": 1, "hours": 1},
+        ).to_list(100)
+        reported_workers = len(set(d.get("worker_id") for d in drafts_today))
+        reported_hours = round(sum(d.get("hours", 0) for d in drafts_today), 1)
+        submitted_count = sum(1 for d in drafts_today if (d.get("status") or "").upper() == "SUBMITTED")
+        approved_count = len(set(d.get("worker_id") for d in drafts_today if (d.get("status") or "").upper() == "APPROVED"))
+
+        # Roster today
+        roster = await db.site_daily_rosters.find_one(
+            {"org_id": org_id, "project_id": pid, "date": today},
+            {"_id": 0, "workers": 1},
+        )
+        roster_count = len(roster.get("workers", [])) if roster else 0
+
         result.append({
             "project_id": pid,
             "name": p.get("name", ""),
             "code": p.get("code", ""),
             "address_text": p.get("address_text", ""),
             "today_sessions": today_sessions,
-            "today_hours": round(sum(s.get("duration_hours") or 0 for s in sessions), 1),
-            "today_workers": len(set(s.get("worker_name") for s in sessions)),
+            "today_hours": reported_hours if reported_hours > 0 else round(sum(s.get("duration_hours") or 0 for s in sessions), 1),
+            "today_workers": reported_workers if reported_workers > 0 else len(set(s.get("worker_name") for s in sessions)),
+            "roster_count": roster_count,
+            "reported_workers": reported_workers,
+            "reported_hours": reported_hours,
+            "submitted_count": submitted_count,
+            "approved_count": approved_count,
             "pending_requests": pending_reqs,
-            "has_report_today": report is not None,
+            "has_report_today": reported_workers > 0,
         })
 
     return {"sites": result, "total": len(result)}

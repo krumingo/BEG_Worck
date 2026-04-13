@@ -272,7 +272,10 @@ export default function TechnicianDashboard() {
         <button key={s.project_id} onClick={() => openObject(s)} className="w-full rounded-2xl border border-border bg-card p-5 text-left hover:border-primary/40 active:scale-[0.98] transition-all" data-testid={`site-${s.project_id}`}>
           <div className="flex items-start justify-between mb-2">
             <h3 className="font-bold text-base">{s.name}</h3>
-            {s.has_report_today ? <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]"><Check className="w-3 h-3 mr-1" />{t("technician.reported")}</Badge> : <Badge className="bg-amber-500/20 text-amber-400 text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />{t("technician.noReport")}</Badge>}
+            {s.reported_workers > 0 ? (
+              s.roster_count > 0 ? <Badge className={`text-[10px] ${s.reported_workers >= s.roster_count ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}><Check className="w-3 h-3 mr-1" />{s.reported_workers}/{s.roster_count} отчета</Badge>
+              : <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]"><Check className="w-3 h-3 mr-1" />{s.reported_workers} отчета</Badge>
+            ) : <Badge className="bg-amber-500/20 text-amber-400 text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />{t("technician.noReport")}</Badge>}
           </div>
           <p className="text-xs text-muted-foreground">{s.address_text || s.code}</p>
           <div className="flex gap-4 mt-2 text-xs text-muted-foreground">

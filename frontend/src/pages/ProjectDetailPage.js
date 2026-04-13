@@ -18,7 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash,
+  ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle,
   FileText, Package, Wallet, Plus, Loader2, Eye, Shield, Clock,
   TrendingUp, Receipt, Boxes, Scale, UserPlus, BarChart3, Hammer, MapPin,
 } from "lucide-react";
@@ -38,6 +38,7 @@ import MaterialWastePanel from "@/components/MaterialWastePanel";
 import SubcontractorPerformancePanel from "@/components/SubcontractorPerformancePanel";
 import ProjectActivitiesTable from "@/components/ProjectActivitiesTable";
 import CentralizedActivitiesTable from "@/components/CentralizedActivitiesTable";
+import { toast } from "sonner";
 import CentralizedProjectView from "@/components/CentralizedProjectView";
 import FinancialResultsCard from "@/components/FinancialResultsCard";
 import ProjectPersonnelPanel from "@/components/ProjectPersonnelPanel";
@@ -73,6 +74,7 @@ export default function ProjectDetailPage() {
   const [savingWarranty, setSavingWarranty] = useState(false);
   const [showExtraWork, setShowExtraWork] = useState(false);
   const [extraWorkRefresh, setExtraWorkRefresh] = useState(0);
+  const [pendingReports, setPendingReports] = useState([]);
 
   // Tab from URL hash
   const hashTab = location.hash?.replace("#", "") || "overview";
@@ -95,6 +97,27 @@ export default function ProjectDetailPage() {
   }, [projectId, setActiveProject]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  useEffect(() => {
+    if (projectId) {
+      API.get(`/projects/${projectId}/pending-reports`).then(r => setPendingReports(r.data?.items || [])).catch(() => {});
+    }
+  }, [projectId]);
+
+  const handleApproveReport = async (reportId) => {
+    try {
+      await API.post(`/daily-reports/${reportId}/approve`);
+      setPendingReports(prev => prev.filter(r => r.id !== reportId));
+      fetchDashboard();
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка при одобрение"); }
+  };
+
+  const handleRejectReport = async (reportId) => {
+    try {
+      await API.post(`/daily-reports/${reportId}/reject`, { reason: "Отхвърлен" });
+      setPendingReports(prev => prev.filter(r => r.id !== reportId));
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка при отхвърляне"); }
+  };
 
   const handleWarrantyChange = async (value) => {
     setSavingWarranty(true);
@@ -151,6 +174,30 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: OVERVIEW ════ */}
         <TabsContent value="overview" className="space-y-4 mt-4">
+          {/* Pending Approval */}
+          {pendingReports.length > 0 && (
+            <div className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-4" data-testid="pending-approval">
+              <div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4 text-amber-400" /><h3 className="text-sm font-semibold text-amber-400">{pendingReports.length} отчета за одобрение</h3></div>
+              <div className="space-y-2">
+                {pendingReports.slice(0, 10).map(r => (
+                  <div key={r.id} className="flex items-center justify-between bg-card/50 rounded-lg px-3 py-2 border border-border/50">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(r.worker_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium">{r.worker_name}</p>
+                        <p className="text-[9px] text-muted-foreground">{r.date} | {r.smr_type || "—"} | {r.hours}ч</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10" onClick={() => handleApproveReport(r.id)}>✓</Button>
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] text-red-400 border-red-500/30 hover:bg-red-500/10" onClick={() => handleRejectReport(r.id)}>✗</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Card: Обект */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-project">
@@ -219,7 +266,13 @@ export default function ProjectDetailPage() {
             {/* Card: Екип (compact) */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-team-compact">
               <div className="flex items-center gap-2 mb-3"><Users className="w-5 h-5 text-cyan-500" /><h3 className="font-semibold text-white">Екип</h3></div>
-              <p className="text-2xl font-bold text-white">{team.count} <span className="text-sm font-normal text-gray-400">човека</span></p>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <div><p className="text-xl font-bold text-white">{team.count}</p><p className="text-[9px] text-gray-400">В екипа</p></div>
+                <div><p className="text-xl font-bold text-emerald-400">{team.reported_today || 0}</p><p className="text-[9px] text-gray-400">Отчели днес</p></div>
+                <div><p className="text-xl font-bold text-cyan-400">{team.approved_today || 0}</p><p className="text-[9px] text-gray-400">Одобрени</p></div>
+              </div>
+              {team.reported_hours > 0 && <p className="text-xs text-gray-400">{team.reported_hours}ч отчетени</p>}
+              {team.pending_approval > 0 && <p className="text-xs text-amber-400">{team.pending_approval} за одобрение</p>}
               <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={() => handleTabChange("team")}>Виж детайли →</Button>
             </div>
 

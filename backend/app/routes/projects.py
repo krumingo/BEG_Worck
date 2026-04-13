@@ -954,6 +954,28 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         "count": len(team_list),
         "total_salaries_paid": total_salaries_paid,
     }
+
+    # Reported/Approved today for this project
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    drafts_today = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": {"$exists": True}},
+        {"_id": 0, "worker_id": 1, "worker_name": 1, "hours": 1, "status": 1},
+    ).to_list(200)
+    reported_ids = set()
+    approved_ids = set()
+    for d in drafts_today:
+        reported_ids.add(d.get("worker_id"))
+        if (d.get("status") or "").upper() == "APPROVED":
+            approved_ids.add(d.get("worker_id"))
+    card_team["reported_today"] = len(reported_ids)
+    card_team["approved_today"] = len(approved_ids)
+    card_team["reported_hours"] = round(sum(d.get("hours", 0) for d in drafts_today), 1)
+
+    # Pending approval count for this project
+    pending = await db.employee_daily_reports.count_documents(
+        {"org_id": org_id, "project_id": project_id, "status": "SUBMITTED"}
+    )
+    card_team["pending_approval"] = pending
     
     # ── Card 5: Invoices ────────────────────────────────────────────────────
     # Source of truth: invoice.paid_amount, invoice.remaining_amount, invoice.total
@@ -1094,3 +1116,18 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         "balance": card_balance,
     }
 
+
+
+# ── Project pending reports (for inline approve) ──────────────────
+
+@router.get("/projects/{project_id}/pending-reports")
+async def get_project_pending_reports(project_id: str, user: dict = Depends(get_current_user)):
+    """Reports submitted for this project, awaiting approval."""
+    org_id = user["org_id"]
+    reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id,
+         "status": "SUBMITTED", "worker_id": {"$exists": True}},
+        {"_id": 0, "id": 1, "worker_id": 1, "worker_name": 1, "date": 1,
+         "hours": 1, "smr_type": 1, "notes": 1, "status": 1, "created_at": 1},
+    ).sort("date", -1).to_list(100)
+    return {"items": reports, "total": len(reports)}
