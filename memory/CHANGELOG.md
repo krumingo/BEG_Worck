@@ -1,3 +1,26 @@
+## Apr 13, 2026 — Payroll Sync Semantics Fix: Confirm ≠ Paid
+
+### Status lifecycle:
+| Event | v2 allocations | Reports payroll_status | v1 payslips | Finance sees? |
+|-------|---------------|----------------------|-------------|--------------|
+| **CONFIRM** | provisional | batched | Generated | NO |
+| **MARK-PAID** | active | paid | Paid | YES |
+| **REOPEN** | reversed | none | Reversed | NO |
+
+### Finance filter fix:
+project_financial_results.py now reads ONLY `status in ["active", null]` allocations.
+"provisional" and "reversed" are excluded.
+Legacy allocations (no status field) treated as active for backward compat.
+
+### Files changed:
+- backend/app/services/payroll_sync.py — rewritten with correct semantics
+- backend/app/services/project_financial_results.py — status filter added
+
+### Verified:
+- Confirm → allocations=provisional → finance=129.52 (unchanged)
+- Mark-paid → allocations=active → finance=209.52 (+80 from v3)
+
+
 ## Apr 13, 2026 — Safe Payroll Sync Adapter (v3 → v2/v1)
 
 ### New: /app/backend/app/services/payroll_sync.py
