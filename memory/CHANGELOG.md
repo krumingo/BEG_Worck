@@ -1,3 +1,24 @@
+## Apr 13, 2026 — E2E Reconciliation: 3 bugs found and fixed
+
+### Bugs found:
+1. **Reopen blocked for paid batches** — guard was too strict. Fix: allow reopen for paid, block only cancelled.
+2. **PATCH (re-confirm) didn't call sync** — sync_on_confirm only wired in POST. Fix: added call in PATCH handler.
+3. **sync_on_confirm failed without day_cells** — PATCH-built rows lack day_cells. Fix: fallback to sites[] list.
+
+### E2E lifecycle verified:
+| Step | Allocs | Finance | ✓ |
+|------|--------|---------|---|
+| Confirm | provisional | unchanged | ✅ |
+| Mark-paid | active | +33 | ✅ |
+| Reopen | reversed | restored | ✅ |
+| Re-confirm | new provisional | unchanged | ✅ |
+| Re-pay | new active | +44 | ✅ |
+
+### Files changed:
+- backend/app/routes/pay_runs.py — reopen guard, PATCH sync call
+- backend/app/services/payroll_sync.py — day_cells fallback to sites[]
+
+
 ## Apr 13, 2026 — Payment Traceability Layer
 
 ### Added to mark-paid flow:

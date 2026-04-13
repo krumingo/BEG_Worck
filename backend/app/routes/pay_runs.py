@@ -803,6 +803,11 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         if slips:
             await db.payment_slips.insert_many(slips)
 
+    # Sync downstream on re-confirm
+    if data.status == "confirmed":
+        updated_run = await db.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        await sync_on_confirm(updated_run, org_id, user["id"])
+
     updated = await db.pay_runs.find_one({"id": run_id}, {"_id": 0})
     return updated
 
@@ -818,8 +823,8 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
     run = await db.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
-    if run.get("status") == "paid":
-        raise HTTPException(status_code=400, detail="Cannot reopen paid batch")
+    if run.get("status") == "cancelled":
+        raise HTTPException(status_code=400, detail="Cannot reopen cancelled batch")
 
     now = datetime.now(timezone.utc).isoformat()
     new_version = (run.get("version") or 1) + 1

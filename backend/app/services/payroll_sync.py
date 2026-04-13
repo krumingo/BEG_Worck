@@ -25,11 +25,12 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
     run_id = pay_run["id"]
     now = pay_run.get("confirmed_at") or pay_run.get("created_at", "")
 
-    # ── A. Mirror allocations as PROVISIONAL ──────────────────────
-    existing = await db.payroll_payment_allocations.count_documents(
-        {"source_pay_run_id": run_id, "org_id": org_id}
+    # ── A. Mirror to payroll_payment_allocations (v2 format) ──────
+    # Idempotent: only create if no active/provisional records exist
+    existing_active = await db.payroll_payment_allocations.count_documents(
+        {"source_pay_run_id": run_id, "org_id": org_id, "status": {"$in": ["provisional", "active"]}}
     )
-    if existing == 0:
+    if existing_active == 0:
         v2_allocs = []
         for er in pay_run.get("employee_rows", []):
             eid = er["employee_id"]
@@ -38,12 +39,19 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                 continue
 
             by_project = {}
-            for dc in er.get("day_cells", []):
-                for site in dc.get("sites", [""]):
+            day_cells = er.get("day_cells", [])
+            if day_cells:
+                for dc in day_cells:
+                    for site in dc.get("sites", [""]):
+                        if site not in by_project:
+                            by_project[site] = {"hours": 0, "gross": 0}
+                        by_project[site]["hours"] += dc.get("hours", 0)
+                        by_project[site]["gross"] += dc.get("value", 0)
+            else:
+                # Fallback: use sites list from employee_row
+                for site in er.get("sites", [""]):
                     if site not in by_project:
-                        by_project[site] = {"hours": 0, "gross": 0}
-                    by_project[site]["hours"] += dc.get("hours", 0)
-                    by_project[site]["gross"] += dc.get("value", 0)
+                        by_project[site] = {"hours": er.get("approved_hours", 0) / max(len(er.get("sites", [""])), 1), "gross": er.get("earned_amount", 0) / max(len(er.get("sites", [""])), 1)}
 
             total_val = sum(p["gross"] for p in by_project.values())
 
@@ -94,10 +102,10 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
             )
 
     # ── C. v1 payslips as GENERATED (not Paid!) ──────────────────
-    existing_v1 = await db.payslips.count_documents(
-        {"source_pay_run_id": run_id, "org_id": org_id}
+    existing_v1_active = await db.payslips.count_documents(
+        {"source_pay_run_id": run_id, "org_id": org_id, "status": {"$in": ["Generated", "Paid"]}}
     )
-    if existing_v1 == 0:
+    if existing_v1_active == 0:
         import uuid as _uuid
         v1_slips = []
         for er in pay_run.get("employee_rows", []):
@@ -152,7 +160,7 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
 
     # C. v1 payslips: Generated → Paid
     await db.payslips.update_many(
-        {"source_pay_run_id": run_id, "org_id": org_id},
+        {"source_pay_run_id": run_id, "org_id": org_id, "status": "Generated"},
         {"$set": {"status": "Paid", "paid_at": paid_at}},
     )
 
