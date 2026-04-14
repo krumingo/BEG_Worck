@@ -30,7 +30,16 @@ import {
   Filter,
   ArrowRight,
   AlertTriangle,
+  DollarSign,
+  Loader2,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -59,6 +68,18 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState(statusParam);
   const [projectFilter, setProjectFilter] = useState(projectParam);
 
+  // Payment
+  const [payDialog, setPayDialog] = useState(null); // invoice object
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("BankTransfer");
+  const [payRef, setPayRef] = useState("");
+  const [payNote, setPayNote] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [payAccount, setPayAccount] = useState("");
+  // Batch
+  const [selected, setSelected] = useState(new Set());
+
   const canCreate = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
   const fetchData = useCallback(async () => {
@@ -83,6 +104,53 @@ export default function InvoicesPage() {
   }, [directionFilter, statusFilter, projectFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { API.get("/finance/accounts").then(r => setAccounts(r.data || [])).catch(() => {}); }, []);
+
+  const handleAddPayment = async () => {
+    if (!payDialog || !payAmount || parseFloat(payAmount) <= 0) return;
+    setPaying(true);
+    try {
+      const amt = parseFloat(payAmount);
+      const remaining = (payDialog.total || 0) - (payDialog.paid_amount || 0);
+      if (amt > remaining + 0.01) { toast.error("Сумата надхвърля остатъка"); setPaying(false); return; }
+      await API.post(`/finance/invoices/${payDialog.id}/payments`, {
+        amount: amt,
+        payment_date: new Date().toISOString().slice(0, 10),
+        payment_method: payMethod,
+        reference: payRef,
+        notes: payNote,
+        account_id: payAccount || undefined,
+      });
+      toast.success(`Плащане ${amt.toFixed(2)} EUR записано`);
+      setPayDialog(null); setPayAmount(""); setPayRef(""); setPayNote("");
+      fetchData();
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    finally { setPaying(false); }
+  };
+
+  const handleBatchPay = async () => {
+    const sel = invoices.filter(i => selected.has(i.id) && i.remaining_amount > 0);
+    if (sel.length === 0) return;
+    setPaying(true);
+    try {
+      let count = 0;
+      for (const inv of sel) {
+        await API.post(`/finance/invoices/${inv.id}/payments`, {
+          amount: inv.remaining_amount,
+          payment_date: new Date().toISOString().slice(0, 10),
+          payment_method: payMethod,
+          reference: payRef,
+          notes: payNote || `Групово плащане (${sel.length} фактури)`,
+          account_id: payAccount || undefined,
+        });
+        count++;
+      }
+      toast.success(`${count} фактури маркирани като платени`);
+      setSelected(new Set()); setPayRef(""); setPayNote("");
+      fetchData();
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    finally { setPaying(false); }
+  };
 
   const updateFilter = (key, value) => {
     const newParams = new URLSearchParams(searchParams);
@@ -201,6 +269,27 @@ export default function InvoicesPage() {
       </div>
 
       {/* Table */}
+      {/* Batch action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 mb-3 px-3 py-2 rounded-lg bg-primary/10 border border-primary/30">
+          <span className="text-xs">{selected.size} избрани</span>
+          <Select value={payMethod} onValueChange={setPayMethod}>
+            <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="BankTransfer">Банков превод</SelectItem>
+              <SelectItem value="Cash">В брой</SelectItem>
+              <SelectItem value="Card">Карта</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Реф." className="h-7 w-[120px] text-xs" />
+          <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 gap-1" onClick={handleBatchPay} disabled={paying}>
+            {paying ? <Loader2 className="w-3 h-3 animate-spin" /> : <DollarSign className="w-3 h-3" />}
+            Плати пълно ({selected.size})
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelected(new Set())}>Изчисти</Button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -210,6 +299,7 @@ export default function InvoicesPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[30px]"><input type="checkbox" checked={selected.size === invoices.filter(i => i.remaining_amount > 0).length && selected.size > 0} onChange={e => { if (e.target.checked) setSelected(new Set(invoices.filter(i => i.remaining_amount > 0).map(i => i.id))); else setSelected(new Set()); }} className="rounded" /></TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.invoiceNo")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.counterparty")}</TableHead>
@@ -219,6 +309,7 @@ export default function InvoicesPage() {
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.dueDate")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.total")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.remainingAmount")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right w-[100px]">Действие</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -243,6 +334,9 @@ export default function InvoicesPage() {
                     onClick={() => navigate(`/finance/invoices/${invoice.id}`)}
                     data-testid={`invoice-row-${invoice.id}`}
                   >
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {invoice.remaining_amount > 0 && <input type="checkbox" checked={selected.has(invoice.id)} onChange={() => { const s = new Set(selected); if (s.has(invoice.id)) s.delete(invoice.id); else s.add(invoice.id); setSelected(s); }} className="rounded" />}
+                    </TableCell>
                     <TableCell>
                       <p className="font-mono text-sm text-primary">{invoice.invoice_no}</p>
                     </TableCell>
@@ -282,13 +376,20 @@ export default function InvoicesPage() {
                     <TableCell className="text-right font-mono text-sm text-foreground">
                       {formatCurrency(invoice.total, invoice.currency)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                      {formatCurrency(invoice.remaining_amount, invoice.currency)}
+                    <TableCell className={`text-right font-mono text-sm ${invoice.remaining_amount > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                      {invoice.remaining_amount > 0 ? formatCurrency(invoice.remaining_amount, invoice.currency) : "✓ 0"}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/finance/invoices/${invoice.id}`); }}>
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
+                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-1 justify-end">
+                        {invoice.remaining_amount > 0 && (
+                          <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 text-emerald-400 border-emerald-500/30" onClick={() => { setPayDialog(invoice); setPayAmount(String(invoice.remaining_amount)); }}>
+                            <DollarSign className="w-3 h-3" />Плати
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => navigate(`/finance/invoices/${invoice.id}`)}>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -297,6 +398,49 @@ export default function InvoicesPage() {
           </Table>
         </div>
       )}
+
+      {/* Payment dialog */}
+      <Dialog open={!!payDialog} onOpenChange={() => setPayDialog(null)}>
+        <DialogContent className="max-w-sm" data-testid="pay-dialog">
+          <DialogHeader><DialogTitle>Плащане по {payDialog?.invoice_no}</DialogTitle></DialogHeader>
+          {payDialog && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">
+                Обща сума: <strong>{formatCurrency(payDialog.total, payDialog.currency)}</strong> | Платено: {formatCurrency(payDialog.paid_amount, payDialog.currency)} | Остава: <strong className="text-amber-400">{formatCurrency(payDialog.remaining_amount, payDialog.currency)}</strong>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Сума *</label>
+                <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="h-9" max={payDialog.remaining_amount} />
+                {parseFloat(payAmount) > payDialog.remaining_amount && <p className="text-[9px] text-red-400 mt-0.5">Сумата надхвърля остатъка</p>}
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Метод</label>
+                <Select value={payMethod} onValueChange={setPayMethod}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BankTransfer">Банков превод</SelectItem>
+                    <SelectItem value="Cash">В брой</SelectItem>
+                    <SelectItem value="Card">Карта</SelectItem>
+                    <SelectItem value="Other">Друго</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Референция</label>
+                <Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Номер на превод..." className="h-9" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Бележка</label>
+                <Input value={payNote} onChange={e => setPayNote(e.target.value)} placeholder="Бележка..." className="h-9" />
+              </div>
+              <Button onClick={handleAddPayment} disabled={paying || !payAmount || parseFloat(payAmount) <= 0 || parseFloat(payAmount) > payDialog.remaining_amount} className="w-full gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+                Запиши плащане
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
