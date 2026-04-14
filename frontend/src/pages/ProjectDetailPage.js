@@ -19,7 +19,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle, Sparkles,
+  ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle, Sparkles, Pencil,
   FileText, Package, Wallet, Plus, Loader2, Eye, Shield, Clock,
   TrendingUp, Receipt, Boxes, Scale, UserPlus, BarChart3, Hammer, MapPin,
 } from "lucide-react";
@@ -902,16 +902,26 @@ function ProjectOffersTab({ projectId, projectName }) {
           {offers.map(o => {
             const st = OFFER_STATUS[o.status] || { label: o.status, cls: "" };
             const linesCount = o.lines?.length || 0;
+            const zeroLines = (o.lines || []).filter(ln => !ln.unit_price || ln.unit_price === 0).length;
+            const isZero = (o.total || 0) === 0 && linesCount > 0;
             return (
-              <div key={o.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid={`offer-${o.id}`}>
+              <div key={o.id} className={`bg-gray-800/50 border rounded-lg p-4 ${isZero && o.status === "Draft" ? "border-amber-500/50" : "border-gray-700"}`} data-testid={`offer-${o.id}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="font-mono text-sm font-bold text-primary">{o.offer_no}</span>
                     <span className="text-sm text-white truncate">{o.title || `${linesCount} позиции`}</span>
                     <Badge variant="outline" className={`text-[10px] ${st.cls}`}>{st.label}</Badge>
                   </div>
-                  <span className="text-sm font-mono font-bold text-amber-400">{(o.total || 0).toFixed(0)} EUR</span>
+                  <span className={`text-sm font-mono font-bold ${isZero ? "text-gray-500" : "text-amber-400"}`}>{(o.total || 0).toFixed(0)} EUR</span>
                 </div>
+
+                {/* Zero-price warning */}
+                {zeroLines > 0 && o.status === "Draft" && (
+                  <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                    <span className="text-[10px] text-amber-400">{zeroLines === linesCount ? "Всички редове са без цена" : `${zeroLines} от ${linesCount} реда без цена`} — попълнете цените преди изпращане</span>
+                  </div>
+                )}
 
                 {/* Lines preview */}
                 {linesCount > 0 && (
@@ -928,14 +938,25 @@ function ProjectOffersTab({ projectId, projectName }) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-2 border-t border-gray-700/50">
-                  <Button size="sm" variant="outline" className="text-xs gap-1 h-7" onClick={() => navigate(`/offers/${o.id}`)}>
-                    <FileText className="w-3 h-3" />Отвори
+                  {o.status === "Draft" && (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7" onClick={() => navigate(`/offers/${o.id}?returnTo=/projects/${projectId}&returnTab=offers`)}>
+                      <Pencil className="w-3 h-3" />Редактирай
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" className="text-xs gap-1 h-7" onClick={() => navigate(`/offers/${o.id}`)}>
+                    <FileText className="w-3 h-3" />Преглед
                   </Button>
 
                   {o.status === "Draft" && (
-                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-blue-400 border-blue-500/30" onClick={() => handleAction(o.id, "send")}>
-                      Изпрати
-                    </Button>
+                    isZero ? (
+                      <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-gray-500 border-gray-600 cursor-not-allowed" disabled title="Попълнете цените преди изпращане">
+                        Изпрати (0 EUR)
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-blue-400 border-blue-500/30" onClick={() => handleAction(o.id, "send")}>
+                        Изпрати
+                      </Button>
+                    )
                   )}
 
                   {o.status === "Sent" && (

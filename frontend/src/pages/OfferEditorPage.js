@@ -529,8 +529,13 @@ export default function OfferEditorPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/offers")} data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
+          <Button variant="ghost" size="sm" onClick={() => {
+            const returnTo = searchParams.get("returnTo");
+            const returnTab = searchParams.get("returnTab");
+            if (returnTo) navigate(returnTo + (returnTab ? `#tab-${returnTab}` : ""));
+            else navigate("/offers");
+          }} data-testid="back-btn">
+            <ArrowLeft className="w-4 h-4 mr-1" /> {searchParams.get("returnTo") ? "Обратно към обект" : t("common.back")}
           </Button>
           <div>
             <div className="flex items-center gap-3">
@@ -583,11 +588,19 @@ export default function OfferEditorPage() {
               {t("common.save")}
             </Button>
           )}
-          {isDraft && !isNew && editMode && (
-            <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
-              <Send className="w-4 h-4 mr-1" /> {t("common.send")}
-            </Button>
-          )}
+          {isDraft && !isNew && editMode && (() => {
+            const zeroCount = lines.filter(l => !l.unit_price || l.unit_price === 0).length;
+            const totalVal = lines.reduce((s, l) => s + (l.total || (l.qty || 0) * (l.unit_price || 0)), 0);
+            return zeroCount > 0 || totalVal === 0 ? (
+              <Button onClick={() => { if (window.confirm(`Офертата има ${zeroCount} реда без цена (обща стойност: ${totalVal.toFixed(0)} EUR). Наистина ли искате да изпратите?`)) handleSend(); }} disabled={saving || lines.length === 0} className="bg-amber-600 hover:bg-amber-700" data-testid="send-btn">
+                <Send className="w-4 h-4 mr-1" /> {t("common.send")} ⚠
+              </Button>
+            ) : (
+              <Button onClick={handleSend} disabled={saving || lines.length === 0} data-testid="send-btn">
+                <Send className="w-4 h-4 mr-1" /> {t("common.send")}
+              </Button>
+            );
+          })()}
           {offer?.status === "Sent" && canAcceptReject && (
             <>
               <Button variant="outline" className="text-emerald-400 border-emerald-500/30" onClick={handleAccept} disabled={saving} data-testid="accept-btn">
@@ -739,6 +752,12 @@ export default function OfferEditorPage() {
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-primary" /> {t("offers.boqLines")} ({lines.length})
               </h2>
+              {lines.filter(l => !l.unit_price || l.unit_price === 0).length > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20">
+                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  <span className="text-[10px] text-amber-400">{lines.filter(l => !l.unit_price || l.unit_price === 0).length} реда без цена</span>
+                </div>
+              )}
               <div className="flex items-center gap-4">
                 {/* Grouping Toggle */}
                 <div className="flex items-center gap-2 text-sm">
