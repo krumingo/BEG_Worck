@@ -52,6 +52,7 @@ class ProjectCreate(BaseModel):
     contacts: Optional[dict] = None
     invoice_details: Optional[dict] = None
     object_details: Optional[dict] = None
+    parent_project_id: Optional[str] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -75,6 +76,7 @@ class ProjectUpdate(BaseModel):
     contacts: Optional[dict] = None
     invoice_details: Optional[dict] = None
     object_details: Optional[dict] = None
+    parent_project_id: Optional[str] = None
 
 class TeamMemberAdd(BaseModel):
     user_id: str
@@ -282,6 +284,10 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin)):
     project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Guard: don't delete parent with children
+    child_count = await db.projects.count_documents({"parent_project_id": project_id, "org_id": user["org_id"]})
+    if child_count > 0:
+        raise HTTPException(status_code=400, detail=f"Обектът има {child_count} под-обекта. Изтрийте или преместете ги първо.")
     await db.projects.delete_one({"id": project_id})
     await db.project_team.delete_many({"project_id": project_id})
     await db.project_phases.delete_many({"project_id": project_id})
@@ -865,7 +871,23 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         "warranty_months": project.get("warranty_months"),
         "address_text": project.get("address_text", ""),
         "notes": project.get("notes", ""),
+        "parent_project_id": project.get("parent_project_id"),
     }
+
+    # ── Sub-projects ────────────────────────────────────────────────────
+    children = await db.projects.find(
+        {"org_id": org_id, "parent_project_id": project_id},
+        {"_id": 0, "id": 1, "code": 1, "name": 1, "status": 1, "type": 1},
+    ).to_list(50)
+
+    # Parent info if this is a child
+    parent_info = None
+    if project.get("parent_project_id"):
+        parent = await db.projects.find_one(
+            {"id": project["parent_project_id"], "org_id": org_id},
+            {"_id": 0, "id": 1, "code": 1, "name": 1},
+        )
+        parent_info = parent
     
     # ── Card 2: Owner/Client Info ───────────────────────────────────────────
     card_client = {
@@ -1136,6 +1158,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         "offers": card_offers,
         "materials": card_materials,
         "balance": card_balance,
+        "sub_projects": children,
+        "parent_project": parent_info,
     }
 
 

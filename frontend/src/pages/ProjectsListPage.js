@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
@@ -69,12 +69,13 @@ const EMPTY_FORM = {
   code: "", name: "", status: "Draft", type: "Billable",
   start_date: "", end_date: "", planned_days: "",
   budget_planned: "", default_site_manager_id: "", tags: "", notes: "",
-  address_text: "", owner_type: "", owner_id: "",
+  address_text: "", owner_type: "", owner_id: "", parent_project_id: "",
 };
 
 export default function ProjectsListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,6 +107,17 @@ export default function ProjectsListPage() {
   }, [filterStatus, filterType, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-open create dialog for sub-project
+  useEffect(() => {
+    const childOf = searchParams.get("createChild");
+    const parentName = searchParams.get("parentName");
+    if (childOf) {
+      setForm({ ...EMPTY_FORM, parent_project_id: childOf, name: parentName ? `${parentName} — ` : "" });
+      setDialogOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const managers = users.filter((u) => ["Admin", "Owner", "SiteManager"].includes(u.role));
 
@@ -250,7 +262,10 @@ export default function ProjectsListPage() {
               projects.map((p) => (
                 <TableRow key={p.id} className="table-row-hover cursor-pointer" data-testid={`project-row-${p.id}`}>
                   <TableCell className="font-mono text-sm text-primary font-semibold">{p.code}</TableCell>
-                  <TableCell className="font-medium text-foreground">{p.name}</TableCell>
+                  <TableCell className="font-medium text-foreground">
+                    {p.name}
+                    {p.parent_project_id && <Badge variant="outline" className="ml-2 text-[8px] text-cyan-400 border-cyan-500/30">Под-обект</Badge>}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`text-xs ${STATUS_COLORS[p.status] || ""}`}>
                       {t(`projects.status.${getStatusKey(p.status)}`)}

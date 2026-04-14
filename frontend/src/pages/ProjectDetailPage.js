@@ -131,18 +131,21 @@ export default function ProjectDetailPage() {
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-yellow-500" /></div>;
   if (!dashboard) return <div className="p-6 text-center text-gray-400">Проектът не е намерен</div>;
 
-  const { project, client, progress, team, invoices, offers, materials, balance } = dashboard;
+  const { project, client, progress, team, invoices, offers, materials, balance, sub_projects, parent_project } = dashboard;
 
   return (
     <div className="p-4 md:p-6 space-y-4" data-testid="project-detail-page">
       {/* Header */}
       <div className="flex items-center gap-4 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/projects")} className="text-gray-400 hover:text-white">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Проекти
+        <Button variant="ghost" size="sm" onClick={() => navigate(parent_project ? `/projects/${parent_project.id}` : "/projects")} className="text-gray-400 hover:text-white">
+          <ArrowLeft className="w-4 h-4 mr-2" /> {parent_project ? parent_project.name : "Проекти"}
         </Button>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-white truncate">{project.name}</h1>
-          <p className="text-gray-400 text-sm">{project.code}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-gray-400 text-sm">{project.code}</p>
+            {parent_project && <Badge variant="outline" className="text-[9px] text-cyan-400 border-cyan-500/30">Под-обект на {parent_project.code}</Badge>}
+          </div>
         </div>
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
         <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
@@ -286,7 +289,31 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Centralized View — single source for Activities/Personnel/Finance */}
+          {/* Sub-projects section */}
+          {(sub_projects?.length > 0 || !parent_project) && (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-sub-projects">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2"><Building2 className="w-5 h-5 text-violet-500" /><h3 className="font-semibold text-white">Под-обекти</h3>{sub_projects?.length > 0 && <Badge variant="outline" className="text-[10px]">{sub_projects.length}</Badge>}</div>
+                <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => { navigate(`/projects?createChild=${projectId}&parentName=${encodeURIComponent(project.name)}`); }} data-testid="add-sub-project-btn">
+                  <Plus className="w-3 h-3" />Под-обект
+                </Button>
+              </div>
+              {sub_projects?.length > 0 ? (
+                <div className="space-y-2">
+                  {sub_projects.map(sp => (
+                    <button key={sp.id} onClick={() => navigate(`/projects/${sp.id}`)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-gray-900/50 hover:bg-gray-700/50 text-left transition-colors">
+                      <div className="min-w-0"><p className="text-sm font-medium text-white truncate">{sp.name}</p><p className="text-[10px] text-gray-400">{sp.code}</p></div>
+                      <Badge className={`text-[9px] ${STATUS_COLORS[sp.status] || ""}`}>{sp.status}</Badge>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">Няма под-обекти</p>
+              )}
+            </div>
+          )}
+
+          {/* Centralized View */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
             <CentralizedProjectView projectId={projectId} />
           </div>
