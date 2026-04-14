@@ -308,6 +308,7 @@ export default function InvoicesPage() {
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.issueDate")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.dueDate")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.total")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Платено</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.remainingAmount")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right w-[100px]">Действие</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
@@ -316,7 +317,7 @@ export default function InvoicesPage() {
             <TableBody>
               {filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                     <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p>{t("finance.noInvoices")}</p>
                     {canCreate && (
@@ -375,6 +376,9 @@ export default function InvoicesPage() {
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm text-foreground">
                       {formatCurrency(invoice.total, invoice.currency)}
+                    </TableCell>
+                    <TableCell className={`text-right font-mono text-sm ${(invoice.paid_amount || 0) > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>
+                      {(invoice.paid_amount || 0) > 0 ? formatCurrency(invoice.paid_amount, invoice.currency) : "—"}
                     </TableCell>
                     <TableCell className={`text-right font-mono text-sm ${invoice.remaining_amount > 0 ? "text-amber-400" : "text-emerald-400"}`}>
                       {invoice.remaining_amount > 0 ? formatCurrency(invoice.remaining_amount, invoice.currency) : "✓ 0"}

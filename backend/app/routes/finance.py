@@ -785,17 +785,34 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     
     account_id = data.get("account_id")
     if not account_id:
-        raise HTTPException(status_code=400, detail="Сметката е задължителна")
+        # Auto-use or create default account
+        default = await db.financial_accounts.find_one({"org_id": org_id, "is_default": True})
+        if not default:
+            default = await db.financial_accounts.find_one({"org_id": org_id})
+        if not default:
+            # Create a default account
+            default = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "name": "Основна сметка",
+                "type": "Bank",
+                "currency": "EUR",
+                "balance": 0,
+                "is_default": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.financial_accounts.insert_one(default)
+        account_id = default["id"]
     
     account = await db.financial_accounts.find_one({"id": account_id, "org_id": org_id})
     if not account:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     
     payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
-    payment_date = data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    method = data.get("method", "BankTransfer")
-    reference = data.get("reference", "")
-    note = data.get("note", "")
+    payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    method = data.get("method") or data.get("payment_method", "BankTransfer")
+    reference = data.get("reference") or data.get("payment_reference", "")
+    note = data.get("note") or data.get("notes", "")
     
     now = datetime.now(timezone.utc).isoformat()
     
