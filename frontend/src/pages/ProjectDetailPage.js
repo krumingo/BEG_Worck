@@ -6,6 +6,7 @@ import API from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -18,7 +19,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle,
+  ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle, Sparkles,
   FileText, Package, Wallet, Plus, Loader2, Eye, Shield, Clock,
   TrendingUp, Receipt, Boxes, Scale, UserPlus, BarChart3, Hammer, MapPin,
 } from "lucide-react";
@@ -76,6 +77,8 @@ export default function ProjectDetailPage() {
   const [extraWorkRefresh, setExtraWorkRefresh] = useState(0);
   const [pendingReports, setPendingReports] = useState([]);
   const [aggregate, setAggregate] = useState(null);
+  const [showAddSMR, setShowAddSMR] = useState(false);
+  const [showImportSMR, setShowImportSMR] = useState(false);
 
   // Tab from URL hash
   const hashTab = location.hash?.replace("#", "") || "overview";
@@ -355,6 +358,32 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: SMR ════ */}
         <TabsContent value="smr" className="space-y-4 mt-4">
+          {/* SMR Entry Points */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">СМР — {project.name}</h3>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowAddSMR(!showAddSMR)} data-testid="add-smr-toggle">
+                <Plus className="w-3 h-3" />{showAddSMR ? "Скрий" : "+ Ново СМР"}
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowImportSMR(!showImportSMR)} data-testid="import-smr-toggle">
+                <FileText className="w-3 h-3" />Импорт
+              </Button>
+              <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black text-xs gap-1">
+                <Sparkles className="w-3 h-3" />Ново СМР + AI
+              </Button>
+            </div>
+          </div>
+
+          {/* Inline Add SMR Form */}
+          {showAddSMR && (
+            <InlineAddSMR projectId={projectId} onDone={() => { setShowAddSMR(false); fetchDashboard(); }} />
+          )}
+
+          {/* Import SMR */}
+          {showImportSMR && (
+            <InlineImportSMR projectId={projectId} onDone={() => { setShowImportSMR(false); fetchDashboard(); }} />
+          )}
+
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRGroupsPanel projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRLocationMap projectId={projectId} /></div>
@@ -565,5 +594,154 @@ function AggRow({ label, own, children, total, suffix = "", color = "" }) {
       <td className="text-right py-1.5 px-2 font-mono text-gray-400">{children || 0}{suffix}</td>
       <td className={`text-right py-1.5 px-2 font-mono font-bold ${color || "text-white"}`}>{total || 0}{suffix}</td>
     </tr>
+  );
+}
+
+
+function InlineAddSMR({ projectId, onDone }) {
+  const [title, setTitle] = useState("");
+  const [qty, setQty] = useState("1");
+  const [unit, setUnit] = useState("m2");
+  const [location, setLocation] = useState("");
+  const [note, setNote] = useState("");
+  const [isExtra, setIsExtra] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [rows, setRows] = useState([]);
+
+  const UNITS = [
+    { v: "m2", l: "м²" }, { v: "m", l: "м" }, { v: "pcs", l: "бр" },
+    { v: "hours", l: "часа" }, { v: "lot", l: "к-т" }, { v: "kg", l: "кг" },
+  ];
+
+  const addRow = () => {
+    if (!title.trim()) return;
+    setRows(prev => [...prev, { title: title.trim(), qty: parseFloat(qty) || 1, unit, location, note, isExtra }]);
+    setTitle(""); setQty("1"); setNote("");
+  };
+
+  const handleSave = async () => {
+    const toSave = rows.length > 0 ? rows : (title.trim() ? [{ title: title.trim(), qty: parseFloat(qty) || 1, unit, location, note, isExtra }] : []);
+    if (toSave.length === 0) return;
+    setSaving(true);
+    try {
+      for (const r of toSave) {
+        await API.post("/extra-works", {
+          project_id: projectId,
+          title: r.title,
+          qty: r.qty,
+          unit: r.unit,
+          location_room: r.location,
+          notes: r.note,
+        });
+      }
+      toast.success(`${toSave.length} СМР добавени`);
+      onDone();
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-3" data-testid="inline-add-smr">
+      <p className="text-xs font-semibold text-gray-400">Бързо добавяне на СМР</p>
+      <div className="grid grid-cols-12 gap-2">
+        <div className="col-span-4"><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Наименование *" className="bg-background h-9 text-xs" onKeyDown={e => e.key === "Enter" && addRow()} /></div>
+        <div className="col-span-1"><Input type="number" value={qty} onChange={e => setQty(e.target.value)} className="bg-background h-9 text-xs text-center" /></div>
+        <div className="col-span-1">
+          <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs">
+            {UNITS.map(u => <option key={u.v} value={u.v}>{u.l}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2"><Input value={location} onChange={e => setLocation(e.target.value)} placeholder="Локация" className="bg-background h-9 text-xs" /></div>
+        <div className="col-span-2"><Input value={note} onChange={e => setNote(e.target.value)} placeholder="Бележка" className="bg-background h-9 text-xs" /></div>
+        <div className="col-span-2 flex gap-1">
+          <Button size="sm" variant="outline" onClick={addRow} disabled={!title.trim()} className="h-9 text-xs">+Ред</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving || (!title.trim() && rows.length === 0)} className="h-9 text-xs">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Запази"}
+          </Button>
+        </div>
+      </div>
+      {rows.length > 0 && (
+        <div className="space-y-1">
+          {rows.map((r, i) => (
+            <div key={i} className="flex items-center justify-between text-xs bg-gray-900/50 rounded px-3 py-1">
+              <span>{r.title} — {r.qty} {UNITS.find(u => u.v === r.unit)?.l} {r.location && `@ ${r.location}`}</span>
+              <button onClick={() => setRows(prev => prev.filter((_, j) => j !== i))} className="text-red-400 text-xs">×</button>
+            </div>
+          ))}
+          <p className="text-[9px] text-gray-500">{rows.length} реда за запис</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineImportSMR({ projectId, onDone }) {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("project_id", projectId);
+      const res = await API.post("/excel-import/preview", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setPreview(res.data);
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка при преглед"); }
+    finally { setLoading(false); }
+  };
+
+  const handleImport = async () => {
+    if (!preview?.rows) return;
+    setImporting(true);
+    try {
+      let count = 0;
+      for (const row of preview.rows) {
+        await API.post("/extra-works", {
+          project_id: projectId,
+          title: row.title || row.description || row.name || `Ред ${count + 1}`,
+          qty: parseFloat(row.qty || row.quantity || 1),
+          unit: row.unit || "m2",
+          location_room: row.location || row.room || "",
+          notes: row.notes || row.note || "",
+        });
+        count++;
+      }
+      toast.success(`${count} СМР импортирани`);
+      onDone();
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка при импорт"); }
+    finally { setImporting(false); }
+  };
+
+  return (
+    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-3" data-testid="inline-import-smr">
+      <p className="text-xs font-semibold text-gray-400">Импорт на СМР от Excel</p>
+      <div className="flex items-center gap-3">
+        <input type="file" accept=".xlsx,.xls,.csv" onChange={e => setFile(e.target.files?.[0])} className="text-xs" />
+        <Button size="sm" onClick={handlePreview} disabled={!file || loading} className="text-xs">
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Преглед"}
+        </Button>
+      </div>
+      {preview?.rows && (
+        <div>
+          <p className="text-xs text-gray-400 mb-1">{preview.rows.length} реда за импорт:</p>
+          <div className="max-h-[200px] overflow-y-auto space-y-1">
+            {preview.rows.slice(0, 20).map((r, i) => (
+              <div key={i} className="text-[10px] bg-gray-900/50 rounded px-2 py-1">
+                {r.title || r.description || r.name} — {r.qty || r.quantity || 1} {r.unit || "m2"} {r.location && `@ ${r.location}`}
+              </div>
+            ))}
+            {preview.rows.length > 20 && <p className="text-[9px] text-gray-500">... и още {preview.rows.length - 20}</p>}
+          </div>
+          <Button size="sm" onClick={handleImport} disabled={importing} className="mt-2 text-xs bg-emerald-600 hover:bg-emerald-700">
+            {importing ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+            Импортирай {preview.rows.length} реда
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
