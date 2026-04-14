@@ -644,3 +644,190 @@ async def save_hourly_rates(data: dict, user: dict = Depends(require_m2)):
         upsert=True,
     )
     return {"ok": True, "source": "organization", "rates": rates}
+
+
+# ── Aggregated SMR view (grouped, deduplicated) ─────────────────────
+
+@router.get("/projects/{project_id}/smr-aggregated")
+async def get_smr_aggregated(project_id: str, user: dict = Depends(get_current_user)):
+    """
+    Aggregated SMR rows for a project: groups similar items by title+unit+location.
+    Merges from both extra_work_drafts and missing_smr.
+    """
+    org_id = user["org_id"]
+
+    # Fetch from both sources
+    drafts = await db.extra_work_drafts.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "id": 1, "title": 1, "qty": 1, "unit": 1,
+         "location_room": 1, "location_floor": 1, "location_zone": 1,
+         "status": 1, "target_offer_id": 1, "notes": 1,
+         "normalized_activity_type": 1},
+    ).to_list(500)
+
+    missing = await db.missing_smr.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "id": 1, "smr_type": 1, "activity_type": 1,
+         "qty": 1, "unit": 1, "room": 1, "floor": 1, "zone": 1,
+         "status": 1, "linked_offer_id": 1, "notes": 1},
+    ).to_list(500)
+
+    # Normalize to flat rows
+    rows = []
+    for d in drafts:
+        rows.append({
+            "id": d["id"],
+            "source": "draft",
+            "title": d.get("title") or d.get("normalized_activity_type") or "—",
+            "qty": float(d.get("qty") or 0),
+            "unit": d.get("unit", ""),
+            "location": d.get("location_room") or d.get("location_floor") or d.get("location_zone") or "",
+            "status": d.get("status", "draft"),
+            "offer_id": d.get("target_offer_id"),
+            "notes": d.get("notes", ""),
+        })
+    for m in missing:
+        rows.append({
+            "id": m["id"],
+            "source": "missing",
+            "title": m.get("smr_type") or m.get("activity_type") or "—",
+            "qty": float(m.get("qty") or 0),
+            "unit": m.get("unit", ""),
+            "location": m.get("room") or m.get("floor") or m.get("zone") or "",
+            "status": m.get("status", "open"),
+            "offer_id": m.get("linked_offer_id"),
+            "notes": m.get("notes", ""),
+        })
+
+    # Group by normalized key: title_lower + unit + location
+    groups = {}
+    for r in rows:
+        key = f"{r['title'].lower().strip()}|{r['unit']}|{r['location'].lower().strip()}"
+        if key not in groups:
+            groups[key] = {
+                "title": r["title"],
+                "unit": r["unit"],
+                "location": r["location"],
+                "total_qty": 0,
+                "source_count": 0,
+                "sources": [],
+                "has_offer": False,
+                "all_statuses": set(),
+            }
+        g = groups[key]
+        g["total_qty"] += r["qty"]
+        g["source_count"] += 1
+        g["sources"].append({"id": r["id"], "source": r["source"], "qty": r["qty"], "status": r["status"]})
+        if r["offer_id"]:
+            g["has_offer"] = True
+        g["all_statuses"].add(r["status"])
+
+    # Convert to list
+    result = []
+    for g in groups.values():
+        result.append({
+            "title": g["title"],
+            "unit": g["unit"],
+            "location": g["location"],
+            "total_qty": round(g["total_qty"], 2),
+            "source_count": g["source_count"],
+            "source_ids": [s["id"] for s in g["sources"]],
+            "has_offer": g["has_offer"],
+            "status": "in_offer" if g["has_offer"] else ("open" if "open" in g["all_statuses"] or "draft" in g["all_statuses"] else "closed"),
+            "sources": g["sources"],
+        })
+
+    result.sort(key=lambda x: (0 if x["status"] == "open" else 1, x["title"]))
+
+    return {"items": result, "total": len(result), "source_rows": len(rows)}
+
+
+@router.post("/projects/{project_id}/smr-to-offer")
+async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depends(get_current_user)):
+    """Create an offer from selected SMR rows."""
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    org_id = user["org_id"]
+    source_ids = data.get("source_ids", [])
+    if not source_ids:
+        raise HTTPException(status_code=400, detail="Изберете поне 1 СМР ред")
+
+    project = await db.projects.find_one(
+        {"id": project_id, "org_id": org_id},
+        {"_id": 0, "id": 1, "name": 1, "code": 1, "owner_id": 1},
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Gather selected rows from both collections
+    lines = []
+    drafts = await db.extra_work_drafts.find(
+        {"org_id": org_id, "id": {"$in": source_ids}}, {"_id": 0}
+    ).to_list(500)
+    for d in drafts:
+        lines.append({
+            "description": d.get("title", ""),
+            "qty": float(d.get("qty") or 1),
+            "unit": d.get("unit", "m2"),
+            "unit_price": float(d.get("ai_total_price_per_unit") or 0),
+        })
+
+    missing_rows = await db.missing_smr.find(
+        {"org_id": org_id, "id": {"$in": source_ids}}, {"_id": 0}
+    ).to_list(500)
+    for m in missing_rows:
+        lines.append({
+            "description": m.get("smr_type") or m.get("activity_type") or "—",
+            "qty": float(m.get("qty") or 1),
+            "unit": m.get("unit", "m2"),
+            "unit_price": 0,
+        })
+
+    if not lines:
+        raise HTTPException(status_code=400, detail="Не са намерени валидни СМР редове")
+
+    # Compute totals
+    for ln in lines:
+        ln["total"] = round(ln["qty"] * ln["unit_price"], 2)
+
+    # Create offer
+    import uuid
+    now = datetime.now(timezone.utc).isoformat()
+    offer_count = await db.offers.count_documents({"org_id": org_id})
+    offer_id = str(uuid.uuid4())
+
+    offer = {
+        "id": offer_id,
+        "org_id": org_id,
+        "offer_no": f"OFF-{offer_count + 1:04d}",
+        "project_id": project_id,
+        "project_name": project.get("name", ""),
+        "project_code": project.get("code", ""),
+        "status": "Draft",
+        "lines": lines,
+        "subtotal": round(sum(ln["total"] for ln in lines), 2),
+        "total": round(sum(ln["total"] for ln in lines), 2),
+        "notes": f"Създадена от {len(source_ids)} СМР реда",
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.offers.insert_one(offer)
+
+    # Mark source rows as linked to this offer
+    await db.extra_work_drafts.update_many(
+        {"id": {"$in": source_ids}, "org_id": org_id},
+        {"$set": {"target_offer_id": offer_id, "status": "in_offer"}},
+    )
+    await db.missing_smr.update_many(
+        {"id": {"$in": source_ids}, "org_id": org_id},
+        {"$set": {"linked_offer_id": offer_id, "status": "in_offer"}},
+    )
+
+    return {
+        "offer_id": offer_id,
+        "offer_no": offer["offer_no"],
+        "lines_count": len(lines),
+        "subtotal": offer["subtotal"],
+    }

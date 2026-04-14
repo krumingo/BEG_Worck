@@ -387,6 +387,9 @@ export default function ProjectDetailPage() {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRGroupsPanel projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRLocationMap projectId={projectId} /></div>
+          {/* Aggregated SMR with to-offer flow */}
+          <AggregatedSMRPanel projectId={projectId} />
+
           <ExtraWorksDraftPanel projectId={projectId} refreshKey={extraWorkRefresh} />
         </TabsContent>
 
@@ -604,7 +607,6 @@ function InlineAddSMR({ projectId, onDone }) {
   const [unit, setUnit] = useState("m2");
   const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
-  const [isExtra, setIsExtra] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState([]);
 
@@ -745,3 +747,89 @@ function InlineImportSMR({ projectId, onDone }) {
     </div>
   );
 }
+
+function AggregatedSMRPanel({ projectId }) {
+  const [data, setData] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [creating, setCreating] = useState(false);
+  const [result, setResult] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    API.get(`/projects/${projectId}/smr-aggregated`).then(r => setData(r.data)).catch(() => {});
+  }, [projectId]);
+
+  if (!data || data.total === 0) return null;
+
+  const toggleItem = (ids) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const id of ids) { if (next.has(id)) next.delete(id); else next.add(id); }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    const ids = new Set();
+    data.items.filter(i => i.status === "open").forEach(i => i.source_ids.forEach(id => ids.add(id)));
+    setSelected(ids);
+  };
+
+  const handleCreateOffer = async () => {
+    setCreating(true);
+    try {
+      const res = await API.post(`/projects/${projectId}/smr-to-offer`, { source_ids: Array.from(selected) });
+      setResult(res.data);
+      toast.success(`Оферта ${res.data.offer_no} създадена`);
+      setSelected(new Set());
+      API.get(`/projects/${projectId}/smr-aggregated`).then(r => setData(r.data)).catch(() => {});
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    finally { setCreating(false); }
+  };
+
+  return (
+    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="smr-aggregated">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-white">СМР за оферта</h3>
+          <Badge variant="outline" className="text-[10px]">{data.total} групи / {data.source_rows} реда</Badge>
+        </div>
+        <div className="flex gap-2">
+          {data.items.some(i => i.status === "open") && <Button size="sm" variant="ghost" className="text-xs" onClick={selectAll}>Избери всички</Button>}
+          {selected.size > 0 && (
+            <Button size="sm" onClick={handleCreateOffer} disabled={creating} className="text-xs bg-amber-500 hover:bg-amber-600 text-black gap-1">
+              {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              Създай оферта ({selected.size} реда)
+            </Button>
+          )}
+        </div>
+      </div>
+      {result && (
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3 mb-3 flex items-center justify-between">
+          <span className="text-xs text-emerald-400">Оферта {result.offer_no} ({result.lines_count} реда, {result.subtotal} EUR)</span>
+          <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate(`/offers/${result.offer_id}`)}>Отвори →</Button>
+        </div>
+      )}
+      <div className="space-y-1 max-h-[300px] overflow-y-auto">
+        {data.items.map((item, i) => {
+          const isSelected = item.source_ids.some(id => selected.has(id));
+          const isOpen = item.status === "open";
+          return (
+            <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs ${isOpen ? (isSelected ? "bg-amber-500/10 border border-amber-500/30" : "hover:bg-gray-700/30 border border-transparent") : "opacity-50 border border-transparent"}`}>
+              {isOpen && <input type="checkbox" checked={isSelected} onChange={() => toggleItem(item.source_ids)} className="rounded" />}
+              {!isOpen && <span className="w-4 text-center text-emerald-400 text-[10px]">✓</span>}
+              <div className="flex-1 min-w-0">
+                <span className="font-medium text-white">{item.title}</span>
+                {item.location && <span className="text-gray-400 ml-2">@ {item.location}</span>}
+              </div>
+              <span className="font-mono text-gray-300">{item.total_qty} {item.unit}</span>
+              {item.source_count > 1 && <Badge variant="outline" className="text-[8px] text-gray-400">{item.source_count} реда</Badge>}
+              {item.has_offer && <Badge variant="outline" className="text-[8px] text-emerald-400 border-emerald-500/30">В оферта</Badge>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
