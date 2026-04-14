@@ -174,6 +174,7 @@ export default function ProjectDetailPage() {
         <TabsList className="w-full justify-start overflow-x-auto flex-nowrap bg-gray-800/50 border border-gray-700 h-auto p-1" data-testid="project-tabs">
           <TabsTrigger value="overview" data-testid="tab-overview">{t("projectDetail.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="smr" data-testid="tab-smr">{t("projectDetail.tabs.smr")}</TabsTrigger>
+          <TabsTrigger value="offers" data-testid="tab-offers">Оферти</TabsTrigger>
           <TabsTrigger value="locations" data-testid="tab-locations">{t("projectDetail.tabs.locations")}</TabsTrigger>
           <TabsTrigger value="finance" data-testid="tab-finance">{t("projectDetail.tabs.finance")}</TabsTrigger>
           <TabsTrigger value="info" data-testid="tab-info">{t("projectDetail.tabs.info")}</TabsTrigger>
@@ -394,6 +395,11 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         {/* ════ TAB: LOCATIONS ════ */}
+        {/* TAB: Оферти */}
+        <TabsContent value="offers" className="space-y-4 mt-4">
+          <ProjectOffersTab projectId={projectId} projectName={project.name} />
+        </TabsContent>
+
         <TabsContent value="locations" className="space-y-4 mt-4">
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><LocationTreePanel projectId={projectId} /></div>
         </TabsContent>
@@ -829,6 +835,131 @@ function AggregatedSMRPanel({ projectId }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+
+const OFFER_STATUS = {
+  Draft: { label: "Чернова", cls: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+  Sent: { label: "Изпратена", cls: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  Accepted: { label: "Одобрена", cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  Rejected: { label: "Отхвърлена", cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+  NeedsRevision: { label: "За преработка", cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+};
+
+function ProjectOffersTab({ projectId, projectName }) {
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const loadOffers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await API.get(`/offers?project_id=${projectId}`);
+      setOffers(res.data?.items || res.data || []);
+    } catch { setOffers([]); }
+    finally { setLoading(false); }
+  }, [projectId]);
+
+  useEffect(() => { loadOffers(); }, [loadOffers]);
+
+  const handleAction = async (offerId, action) => {
+    try {
+      await API.post(`/offers/${offerId}/${action}`);
+      toast.success(action === "send" ? "Изпратена" : action === "accept" ? "Одобрена" : "Отхвърлена");
+      loadOffers();
+    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+  };
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+
+  const byStatus = {};
+  offers.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
+  const totalValue = offers.reduce((s, o) => s + (o.total || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-white">Оферти — {projectName}</h3>
+          <Badge variant="outline" className="text-[10px]">{offers.length}</Badge>
+          {Object.entries(byStatus).map(([s, c]) => {
+            const cfg = OFFER_STATUS[s] || {};
+            return <Badge key={s} variant="outline" className={`text-[9px] ${cfg.cls || ""}`}>{cfg.label || s}: {c}</Badge>;
+          })}
+        </div>
+        <span className="text-xs font-mono text-primary">{totalValue.toFixed(0)} EUR</span>
+      </div>
+
+      {offers.length === 0 ? (
+        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-8 text-center text-gray-500">
+          Няма оферти. Създайте от таб СМР → "Създай оферта от избраните".
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {offers.map(o => {
+            const st = OFFER_STATUS[o.status] || { label: o.status, cls: "" };
+            const linesCount = o.lines?.length || 0;
+            return (
+              <div key={o.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid={`offer-${o.id}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-sm font-bold text-primary">{o.offer_no}</span>
+                    <span className="text-sm text-white truncate">{o.title || `${linesCount} позиции`}</span>
+                    <Badge variant="outline" className={`text-[10px] ${st.cls}`}>{st.label}</Badge>
+                  </div>
+                  <span className="text-sm font-mono font-bold text-amber-400">{(o.total || 0).toFixed(0)} EUR</span>
+                </div>
+
+                {/* Lines preview */}
+                {linesCount > 0 && (
+                  <div className="mb-2 space-y-0.5">
+                    {o.lines.slice(0, 4).map((ln, i) => (
+                      <div key={i} className="flex items-center justify-between text-[10px] text-gray-400 px-2">
+                        <span className="truncate max-w-[300px]">{ln.description}</span>
+                        <span className="font-mono">{ln.qty} {ln.unit} × {ln.unit_price} = {(ln.total || 0).toFixed(0)}</span>
+                      </div>
+                    ))}
+                    {linesCount > 4 && <p className="text-[9px] text-gray-500 px-2">... и още {linesCount - 4}</p>}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-2 border-t border-gray-700/50">
+                  <Button size="sm" variant="outline" className="text-xs gap-1 h-7" onClick={() => navigate(`/offers/${o.id}`)}>
+                    <FileText className="w-3 h-3" />Отвори
+                  </Button>
+
+                  {o.status === "Draft" && (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-blue-400 border-blue-500/30" onClick={() => handleAction(o.id, "send")}>
+                      Изпрати
+                    </Button>
+                  )}
+
+                  {o.status === "Sent" && (
+                    <>
+                      <Button size="sm" className="text-xs gap-1 h-7 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction(o.id, "accept")}>
+                        ✓ Одобри
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-red-400 border-red-500/30" onClick={() => handleAction(o.id, "reject")}>
+                        ✗ Отхвърли
+                      </Button>
+                    </>
+                  )}
+
+                  <Button size="sm" variant="ghost" className="text-xs gap-1 h-7 ml-auto" onClick={() => window.open(`${process.env.REACT_APP_BACKEND_URL}/api/offers/${o.id}/pdf`, "_blank")}>
+                    PDF
+                  </Button>
+
+                  {o.notes && <span className="text-[9px] text-gray-500 ml-2">{o.notes.slice(0, 40)}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
