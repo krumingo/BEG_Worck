@@ -75,6 +75,7 @@ export default function ProjectDetailPage() {
   const [showExtraWork, setShowExtraWork] = useState(false);
   const [extraWorkRefresh, setExtraWorkRefresh] = useState(0);
   const [pendingReports, setPendingReports] = useState([]);
+  const [aggregate, setAggregate] = useState(null);
 
   // Tab from URL hash
   const hashTab = location.hash?.replace("#", "") || "overview";
@@ -101,6 +102,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (projectId) {
       API.get(`/projects/${projectId}/pending-reports`).then(r => setPendingReports(r.data?.items || [])).catch(() => {});
+      API.get(`/projects/${projectId}/aggregate`).then(r => setAggregate(r.data?.has_children ? r.data : null)).catch(() => {});
     }
   }, [projectId]);
 
@@ -313,6 +315,38 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
+          {/* Parent aggregate (only for parents with children) */}
+          {aggregate && (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 col-span-full" data-testid="parent-aggregate">
+              <div className="flex items-center gap-2 mb-3"><Building2 className="w-5 h-5 text-violet-500" /><h3 className="font-semibold text-white">Обобщение (родител + под-обекти)</h3></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-700">
+                      <th className="text-left py-1 pr-4"></th>
+                      <th className="text-right py-1 px-2">Собствени</th>
+                      <th className="text-right py-1 px-2">Под-обекти</th>
+                      <th className="text-right py-1 px-2 text-primary font-bold">Общо</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <AggRow label="Хора в екип" own={aggregate.team.own.count} children={aggregate.team.children.count} total={aggregate.team.total.count} />
+                    <AggRow label="Отчели днес" own={aggregate.team.own.reported} children={aggregate.team.children.reported} total={aggregate.team.total.reported} />
+                    <AggRow label="Часове днес" own={aggregate.team.own.hours} children={aggregate.team.children.hours} total={aggregate.team.total.hours} suffix="ч" />
+                    <AggRow label="Всички отчети" own={aggregate.reports.own.count} children={aggregate.reports.children.count} total={aggregate.reports.total.count} />
+                    <AggRow label="Общо часове" own={aggregate.reports.own.hours} children={aggregate.reports.children.hours} total={aggregate.reports.total.hours} suffix="ч" />
+                    <AggRow label="Оферти" own={aggregate.offers.own.count} children={aggregate.offers.children.count} total={aggregate.offers.total.count} />
+                    <AggRow label="Фактури" own={aggregate.invoices.own.count} children={aggregate.invoices.children.count} total={aggregate.invoices.total.count} />
+                    <AggRow label="Фактурирано" own={aggregate.invoices.own.invoiced} children={aggregate.invoices.children.invoiced} total={aggregate.invoices.total.invoiced} suffix=" EUR" color="text-primary" />
+                    <AggRow label="Реално платено" own={aggregate.invoices.own.paid} children={aggregate.invoices.children.paid} total={aggregate.invoices.total.paid} suffix=" EUR" color="text-emerald-400" />
+                    <AggRow label="Неплатено" own={aggregate.invoices.own.unpaid} children={aggregate.invoices.children.unpaid} total={aggregate.invoices.total.unpaid} suffix=" EUR" color="text-amber-400" />
+                    {(aggregate.invoices.total.overdue || 0) > 0 && <AggRow label="Просрочено" own={aggregate.invoices.own.overdue} children={aggregate.invoices.children.overdue} total={aggregate.invoices.total.overdue} suffix=" EUR" color="text-red-400" />}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Centralized View */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
             <CentralizedProjectView projectId={projectId} />
@@ -519,5 +553,17 @@ function PersonnelUnified({ projectId, team }) {
       {tab === "today" && <ProjectPersonnelCard projectId={projectId} />}
       {tab === "report" && <ObjectDailyReportTab projectId={projectId} />}
     </div>
+  );
+}
+
+
+function AggRow({ label, own, children, total, suffix = "", color = "" }) {
+  return (
+    <tr className="border-b border-gray-800/50">
+      <td className="py-1.5 pr-4 text-gray-400">{label}</td>
+      <td className="text-right py-1.5 px-2 font-mono text-gray-300">{own || 0}{suffix}</td>
+      <td className="text-right py-1.5 px-2 font-mono text-gray-400">{children || 0}{suffix}</td>
+      <td className={`text-right py-1.5 px-2 font-mono font-bold ${color || "text-white"}`}>{total || 0}{suffix}</td>
+    </tr>
   );
 }

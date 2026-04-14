@@ -1177,3 +1177,117 @@ async def get_project_pending_reports(project_id: str, user: dict = Depends(get_
          "hours": 1, "smr_type": 1, "notes": 1, "status": 1, "created_at": 1},
     ).sort("date", -1).to_list(100)
     return {"items": reports, "total": len(reports)}
+
+
+# ── Parent aggregate (own + children, read-only) ──────────────────
+
+@router.get("/projects/{project_id}/aggregate")
+async def get_project_aggregate(project_id: str, user: dict = Depends(get_current_user)):
+    """Read-only aggregate: own data + all direct children data."""
+    org_id = user["org_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Get all project IDs (parent + children)
+    children = await db.projects.find(
+        {"org_id": org_id, "parent_project_id": project_id},
+        {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1},
+    ).to_list(50)
+    child_ids = [c["id"] for c in children]
+
+    if not child_ids:
+        return {"has_children": False}
+
+    # ── Team ──
+    async def count_team(pid):
+        return await db.project_team.count_documents({"org_id": org_id, "project_id": pid})
+
+    async def count_reported(pid):
+        reps = await db.employee_daily_reports.find(
+            {"org_id": org_id, "project_id": pid, "date": today, "worker_id": {"$exists": True}},
+            {"_id": 0, "worker_id": 1, "status": 1, "hours": 1},
+        ).to_list(200)
+        reported = len(set(r.get("worker_id") for r in reps))
+        approved = len(set(r.get("worker_id") for r in reps if (r.get("status") or "").upper() == "APPROVED"))
+        hours = round(sum(r.get("hours", 0) for r in reps), 1)
+        return {"reported": reported, "approved": approved, "hours": hours}
+
+    own_team = await count_team(project_id)
+    own_rpt = await count_reported(project_id)
+    child_team = 0
+    child_rpt = {"reported": 0, "approved": 0, "hours": 0}
+    for cid in child_ids:
+        child_team += await count_team(cid)
+        cr = await count_reported(cid)
+        child_rpt["reported"] += cr["reported"]
+        child_rpt["approved"] += cr["approved"]
+        child_rpt["hours"] += cr["hours"]
+
+    # ── Invoices ──
+    async def count_invoices(pids):
+        invs = await db.invoices.find(
+            {"org_id": org_id, "project_id": {"$in": pids}},
+            {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1},
+        ).to_list(500)
+        count = len(invs)
+        invoiced = round(sum(i.get("total", 0) for i in invs if i.get("status") not in ["Draft", "Cancelled"]), 2)
+        paid = round(sum(i.get("paid_amount", 0) or 0 for i in invs), 2)
+        unpaid = round(invoiced - paid, 2)
+        overdue = round(sum(
+            (i.get("total", 0) - (i.get("paid_amount") or 0))
+            for i in invs
+            if i.get("status") not in ["Draft", "Cancelled", "Paid"]
+            and (i.get("due_date") or "9999") < today
+        ), 2)
+        return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue}
+
+    own_inv = await count_invoices([project_id])
+    child_inv = await count_invoices(child_ids) if child_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0}
+
+    # ── Offers ──
+    async def count_offers(pids):
+        count = await db.offers.count_documents({"org_id": org_id, "project_id": {"$in": pids}})
+        approved = await db.offers.count_documents({"org_id": org_id, "project_id": {"$in": pids}, "status": "Approved"})
+        return {"count": count, "approved": approved}
+
+    own_off = await count_offers([project_id])
+    child_off = await count_offers(child_ids) if child_ids else {"count": 0, "approved": 0}
+
+    # ── Reports total (all time) ──
+    async def count_report_hours(pids):
+        reps = await db.employee_daily_reports.find(
+            {"org_id": org_id, "project_id": {"$in": pids}, "worker_id": {"$exists": True}},
+            {"_id": 0, "hours": 1},
+        ).to_list(5000)
+        return {"count": len(reps), "hours": round(sum(r.get("hours", 0) for r in reps), 1)}
+
+    own_reps = await count_report_hours([project_id])
+    child_reps = await count_report_hours(child_ids) if child_ids else {"count": 0, "hours": 0}
+
+    def merge(own, children):
+        return {k: round((own.get(k, 0) or 0) + (children.get(k, 0) or 0), 2) for k in set(list(own.keys()) + list(children.keys()))}
+
+    return {
+        "has_children": True,
+        "children_count": len(children),
+        "children": [{"id": c["id"], "code": c.get("code", ""), "name": c["name"], "status": c.get("status", "")} for c in children],
+        "team": {
+            "own": {"count": own_team, **own_rpt},
+            "children": {"count": child_team, **child_rpt},
+            "total": {"count": own_team + child_team, "reported": own_rpt["reported"] + child_rpt["reported"], "approved": own_rpt["approved"] + child_rpt["approved"], "hours": round(own_rpt["hours"] + child_rpt["hours"], 1)},
+        },
+        "invoices": {
+            "own": own_inv,
+            "children": child_inv,
+            "total": merge(own_inv, child_inv),
+        },
+        "offers": {
+            "own": own_off,
+            "children": child_off,
+            "total": merge(own_off, child_off),
+        },
+        "reports": {
+            "own": own_reps,
+            "children": child_reps,
+            "total": merge(own_reps, child_reps),
+        },
+    }
