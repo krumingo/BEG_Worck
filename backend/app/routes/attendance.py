@@ -324,6 +324,8 @@ async def run_reminder_jobs():
 
 @router.post("/attendance/mark", status_code=201)
 async def mark_attendance_self(data: AttendanceMarkSelf, user: dict = Depends(get_current_user)):
+    from app.services.project_guards import check_project_writable
+    await check_project_writable(data.project_id, user["org_id"], "присъствия")
     date = today_str()
     entry = await create_attendance_entry(
         user["org_id"], date, data.project_id, user["id"],

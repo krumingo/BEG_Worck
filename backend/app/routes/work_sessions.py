@@ -121,9 +121,12 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
     now_iso = now.isoformat()
 
     # Validate site
-    project = await db.projects.find_one({"id": data.site_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1})
+    project = await db.projects.find_one({"id": data.site_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "status": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Site/project not found")
+
+    from app.services.project_guards import check_project_writable
+    await check_project_writable(data.site_id, org_id, "работни сесии")
 
     # Auto-close existing open session
     open_session = await db.work_sessions.find_one(

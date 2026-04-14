@@ -21,7 +21,7 @@ from app.utils.audit import log_audit
 router = APIRouter(tags=["projects"])
 
 # Constants
-PROJECT_STATUSES = ["Draft", "Active", "Paused", "Completed", "Cancelled", "Finished", "Archived"]
+PROJECT_STATUSES = ["Draft", "Active", "Paused", "Stopped", "Completed", "Cancelled", "Overhead", "Archived", "Finished"]
 PROJECT_TYPES = ["Billable", "Overhead", "Warranty"]
 PROJECT_TEAM_ROLES = ["SiteManager", "Technician", "Viewer"]
 OWNER_TYPES = ["person", "company"]
@@ -235,6 +235,28 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     if "status" in update and update["status"] not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
+    
+    # Enforce status transitions
+    if "status" in update:
+        TRANSITIONS = {
+            "Draft": ["Active", "Cancelled"],
+            "Active": ["Paused", "Stopped", "Completed"],
+            "Paused": ["Active", "Stopped", "Cancelled"],
+            "Stopped": ["Active", "Cancelled"],
+            "Completed": ["Archived"],
+            "Cancelled": ["Archived"],
+            "Overhead": ["Active", "Archived"],
+            "Archived": [],
+        }
+        current_status = project.get("status", "Draft")
+        new_status = update["status"]
+        if current_status != new_status:
+            allowed = TRANSITIONS.get(current_status, [])
+            if new_status not in allowed:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Не е позволен преход от {current_status} към {new_status}. Позволени: {', '.join(allowed) if allowed else 'няма'}",
+                )
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
     # Auto-generate address_text from structured_address

@@ -672,11 +672,8 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     )
 
     # Check project status — block if Completed/Cancelled/Archived
-    project = await db.projects.find_one(
-        {"id": data.project_id, "org_id": org_id}, {"_id": 0, "status": 1, "name": 1}
-    )
-    if project and project.get("status") in ("Completed", "Cancelled", "Archived"):
-        raise HTTPException(status_code=400, detail=f"Обектът е {project['status']}. Не могат да се добавят нови отчети.")
+    from app.services.project_guards import check_project_writable
+    await check_project_writable(data.project_id, org_id, "отчети")
 
     roster_ids = set()
     if roster:

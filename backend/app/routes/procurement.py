@@ -81,6 +81,9 @@ async def create_material_request(data: MaterialRequestCreate, user: dict = Depe
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
+    from app.services.project_guards import check_project_writable
+    await check_project_writable(data.project_id, user["org_id"], "заявки за материали")
+
     project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -572,6 +575,9 @@ async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
+    from app.services.project_guards import check_project_writable
+    await check_project_writable(project_id, org_id, "складови изписвания")
+
     lines_input = data.get("lines", [])
     if not lines_input:
         raise HTTPException(status_code=400, detail="No lines to issue")

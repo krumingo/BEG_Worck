@@ -162,6 +162,9 @@ async def create_extra_work(data: ExtraWorkCreate, user: dict = Depends(require_
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
+    from app.services.project_guards import check_project_writable
+    await check_project_writable(data.project_id, user["org_id"], "допълнителни работи")
+
     project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
