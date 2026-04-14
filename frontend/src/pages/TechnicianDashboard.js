@@ -522,7 +522,7 @@ export default function TechnicianDashboard() {
               {availableTasks.length > 0 ? (
                 <Select value={ln.smr || "none"} onValueChange={v => setLine(e.id, li, "smr", v === "none" ? "" : v)}>
                   <SelectTrigger className="h-11"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
-                  <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.smr_type}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}{tk.source_label ? ` (${tk.source_label})` : ""}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
                 </Select>
               ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" />}
               {ln.smr === "__other" && <Input value="" onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" autoFocus />}
@@ -543,7 +543,7 @@ export default function TechnicianDashboard() {
           {availableTasks.length > 0 ? (
             <Select value={groupSmr || "none"} onValueChange={v => setGroupSmr(v === "none" ? "" : v)}>
               <SelectTrigger className="h-11"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
-              <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.smr_type}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}</SelectItem>)}</SelectContent>
             </Select>
           ) : <Input value={groupSmr} onChange={e => setGroupSmr(e.target.value)} placeholder={t("technician.smrType")} className="h-11" />}
           <Input type="number" value={groupHours} onChange={e => setGroupHours(e.target.value)} placeholder={t("technician.hours")} className="h-11" />

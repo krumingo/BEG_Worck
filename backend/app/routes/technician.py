@@ -255,7 +255,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
 
     # Priority order: 1=budget, 2=offer, 3=analysis, 4=missing_smr, 5=history
-    SOURCE_PRIORITY = {"budget": 1, "offer": 2, "analysis": 3, "missing_smr": 4, "history": 5}
+    SOURCE_PRIORITY = {"budget": 1, "offer_approved": 2, "offer": 3, "analysis": 4, "missing_smr": 5, "extra_draft": 6, "history": 7}
 
     # Dev/test noise patterns (case-insensitive prefix check)
     NOISE_PREFIXES = ("test_", "тест_", "dummy", "sample", "todo", "tmp_")
@@ -300,16 +300,20 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
     for b in budgets:
         _add(b["type"], b.get("subtype", ""), source="budget")
 
-    # 2. Offer lines
+    # 2. Offer lines — prioritize Accepted, then Sent, then Draft
     offers = await db.offers.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["Accepted", "Sent", "Draft"]}},
-        {"_id": 0, "lines": 1},
+        {"_id": 0, "lines": 1, "status": 1, "offer_no": 1},
     ).to_list(50)
+    # Sort: Accepted first
+    offers.sort(key=lambda o: 0 if o.get("status") == "Accepted" else (1 if o.get("status") == "Sent" else 2))
     for o in offers:
+        offer_status = o.get("status", "Draft")
         for ln in o.get("lines", []):
-            t = ln.get("activity_type") or ln.get("activity_name", "")
+            t = ln.get("activity_type") or ln.get("activity_name") or ln.get("description", "")
             if t:
-                _add(t, ln.get("activity_subtype", ""), ln.get("unit", "m2"), ln.get("qty", 0), "offer")
+                source = "offer_approved" if offer_status == "Accepted" else "offer"
+                _add(t, ln.get("activity_subtype", ""), ln.get("unit", "m2"), ln.get("qty", 0), source)
 
     # 3. SMR analysis lines
     analyses = await db.smr_analyses.find(
@@ -331,6 +335,16 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
         if t:
             _add(t, "", m.get("unit", "m2"), m.get("qty", 0), "missing_smr")
 
+    # 4b. Extra work drafts (user-created SMR entries)
+    extra_drafts = await db.extra_work_drafts.find(
+        {"org_id": org_id, "project_id": project_id, "status": {"$nin": ["in_offer", "closed"]}},
+        {"_id": 0, "title": 1, "unit": 1, "qty": 1},
+    ).to_list(100)
+    for ed in extra_drafts:
+        t = ed.get("title", "")
+        if t:
+            _add(t, "", ed.get("unit", "m2"), ed.get("qty", 0), "extra_draft")
+
     primary_count = len(seen)
 
     # 5. History (only if primary sources yielded < 3 tasks)
@@ -343,7 +357,14 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
                 _add(t, source="history")
 
     # Sort: by source priority, then alphabetically
+    SOURCE_LABELS = {
+        "budget": "Бюджет", "offer_approved": "Одобрена оферта", "offer": "Оферта",
+        "analysis": "Анализ", "missing_smr": "Липсващо СМР", "extra_draft": "Допълнително",
+        "history": "История",
+    }
     tasks = sorted(seen.values(), key=lambda x: (SOURCE_PRIORITY.get(x["source"], 9), x["smr_type"]))
+    for t in tasks:
+        t["source_label"] = SOURCE_LABELS.get(t["source"], t["source"])
 
     return {"tasks": tasks, "total": len(tasks)}
 

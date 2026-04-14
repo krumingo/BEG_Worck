@@ -289,9 +289,13 @@ export default function ProjectDetailPage() {
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-offers-compact">
               <div className="flex items-center gap-2 mb-3"><FileText className="w-5 h-5 text-amber-500" /><h3 className="font-semibold text-white">Оферти</h3></div>
               <div className="space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-gray-400">Одобрени:</span><span className="text-white">{offers.approved_count}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Общо:</span><span className="text-white">{offers.approved_count}</span></div>
+                {offers.accepted_count > 0 && (
+                  <div className="flex justify-between"><span className="text-emerald-400">Одобрени:</span><span className="text-emerald-400 font-bold">{offers.accepted_count} ({offers.accepted_lines} позиции)</span></div>
+                )}
                 <div className="flex justify-between"><span className="text-gray-400">С ДДС:</span><span className="text-yellow-500 font-mono">{formatCurrency(offers.total_inc_vat, "BGN")}</span></div>
               </div>
+              <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={() => handleTabChange("offers")}>Виж оферти →</Button>
             </div>
           </div>
 

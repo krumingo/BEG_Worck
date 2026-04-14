@@ -1093,9 +1093,13 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     ).sort("created_at", -1).to_list(100)
     
     extra_offers = [o for o in all_offers if o.get("offer_type") == "extra"]
+    accepted_offers = [o for o in all_offers if o.get("status") == "Accepted"]
+    accepted_lines = sum(len(o.get("lines", [])) for o in accepted_offers)
     
     card_offers = {
         "approved_count": len(offers),
+        "accepted_count": len(accepted_offers),
+        "accepted_lines": accepted_lines,
         "total_ex_vat": offers_ex_vat,
         "total_vat": offers_vat,
         "total_inc_vat": offers_inc_vat,
