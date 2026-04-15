@@ -1,0 +1,110 @@
+{
+  "summary": "Cyrillic sub-project creation feature fully tested. All 13 features verified: Backend APIs (create-sub-project first/subsequent calls, Cyrillic letter codes PARENT-А/Б/В, data migration, aggregate endpoint, child inheritance) and Frontend UI (letter badges, Обобщено/Поотделно toggle, summary/individual views, +Под-обект dialog with first-split explanation, child detail page with parent badge).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Sub-projects aggregate table",
+        "issues": ["Console warnings about HTML nesting: '<th> cannot be child of <span>', '<td> cannot be child of <span>'. This is a React hydration warning but doesn't affect functionality."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sub_projects.py",
+    "/app/test_reports/pytest/test_sub_projects_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: HTML table structure in SubProjectsSummaryView and AggRowMulti components causes React hydration warnings. The dynamic rendering wraps <th> and <td> elements in <span> tags which is invalid HTML. Consider using React.Fragment or restructuring the table rendering."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sub_projects.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all UI features verified)"
+  },
+  "test_credentials": "admin@begwork.com / AdminTest123!Secure",
+  "seed_data_creation": "Created 1 test sub-project during testing (TEST_Нов под-обект за тест) which was cleaned up",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Cyrillic sub-project feature fully tested. Key findings: 1) POST /api/projects/{id}/create-sub-project - first call creates А (with data migration) and Б (empty), subsequent calls create В, Г, Д... 2) Child codes follow pattern PARENT-А, PARENT-Б, PARENT-В using CYRILLIC_LETTERS='АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЪЬЮЯ'. 3) GET /api/projects/{id}/aggregate returns per-child breakdowns with team, invoices, offers, reports data. 4) Test project da29f0e4-532c-48b7-b12a-e5109bba51fc has 4 children (А, Б, В, Г after test). 5) Original project c3529276-8c03-49b3-92de-51216aab25da has NO sub-projects - can be used for first-split testing. 6) Frontend shows: letter badges (А, Б, В), Обобщено/Поотделно toggle, summary view with per-child stats cards and aggregate table, individual view with clickable list and chevrons, +Под-обект dialog with first-split migration explanation, child detail page shows 'Под-обект на PARENT' badge.",
+  "features_tested": {
+    "backend_api": {
+      "POST /api/projects/{id}/create-sub-project": [
+        "First call creates child А (with data migration) and child Б (empty)",
+        "Subsequent calls create В, Г, Д... with next Cyrillic letter",
+        "Returns parent_id and children_created array",
+        "Each child has id, code, name, letter fields",
+        "Validates nested sub-projects not allowed (400 error)"
+      ],
+      "GET /api/projects/{id}/aggregate": [
+        "Returns has_children=true for parent with children",
+        "Returns has_children=false for project without children",
+        "Contains children array with per-child breakdowns",
+        "Each child has team, invoices, offers, reports data",
+        "Contains total aggregations across all children"
+      ],
+      "child_code_pattern": [
+        "Codes follow PARENT-А, PARENT-Б, PARENT-В pattern",
+        "Uses Cyrillic letters АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЪЬЮЯ",
+        "Letter index matches child count (0=А, 1=Б, 2=В...)"
+      ],
+      "child_inheritance": [
+        "Child dashboard shows parent_project reference",
+        "Child inherits client/owner data from parent (effective_project logic)"
+      ]
+    },
+    "frontend_ui": {
+      "sub_projects_section": [
+        "data-testid='card-sub-projects' present",
+        "Shows letter badges (А, Б, В) with violet background",
+        "Shows Cyrillic codes (TEST-SUB-А, TEST-SUB-Б, TEST-SUB-В)",
+        "Shows status badges (Active, Draft)"
+      ],
+      "toggle_views": [
+        "data-testid='agg-view-summary' - Обобщено button",
+        "data-testid='agg-view-individual' - Поотделно button",
+        "Toggle switches between summary and individual views"
+      ],
+      "summary_view": [
+        "data-testid='sub-projects-summary' present",
+        "Per-child stats cards with team count, invoices, paid amounts",
+        "data-testid='parent-aggregate' table with columns for each child + Общо",
+        "Rows: Хора, Часове днес, Фактури, Фактурирано, Платено, Неплатено, Оферти, Отчети, Общо часове"
+      ],
+      "individual_view": [
+        "data-testid='sub-projects-individual' present",
+        "Clickable list items with chevrons",
+        "Each item shows letter badge, name, code, status"
+      ],
+      "add_sub_project_dialog": [
+        "data-testid='add-sub-project-btn' opens dialog (not navigates)",
+        "Dialog title: 'Нов под-обект (PARENT-...)' for subsequent",
+        "Dialog title: 'Разделяне на PROJECT_NAME' for first split",
+        "First-split explanation: 'При първо разделяне:' with 3 steps",
+        "Mentions PRJ-001-А (data migration) and PRJ-001-Б (new empty)",
+        "data-testid='sub-project-name-input' for name entry",
+        "data-testid='create-sub-project-confirm' button"
+      ],
+      "child_detail_page": [
+        "Shows 'Под-обект на PARENT' badge",
+        "Back button navigates to parent project",
+        "Header shows child code (TEST-SUB-А)"
+      ]
+    },
+    "i18n_bulgarian": [
+      "Под-обекти (Sub-projects)",
+      "Обобщено / Поотделно (Summary / Individual)",
+      "+Под-обект (Add sub-project)",
+      "При първо разделяне (On first split)",
+      "Раздели и създай (Split and create)",
+      "Под-обект на (Sub-project of)"
+    ]
+  }
+}

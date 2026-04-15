@@ -878,7 +878,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     children = await db.projects.find(
         {"org_id": org_id, "parent_project_id": project_id},
         {"_id": 0, "id": 1, "code": 1, "name": 1, "status": 1, "type": 1},
-    ).to_list(50)
+    ).sort("code", 1).to_list(50)
 
     # Parent info if this is a child
     parent_info = None
@@ -890,14 +890,28 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         parent_info = parent
     
     # ── Card 2: Owner/Client Info ───────────────────────────────────────────
+    # For child projects, inherit shared data from parent
+    effective_project = project
+    if project.get("parent_project_id"):
+        parent_full = await db.projects.find_one(
+            {"id": project["parent_project_id"], "org_id": org_id},
+            {"_id": 0, "owner_type": 1, "owner_id": 1, "address_text": 1,
+             "structured_address": 1, "contacts": 1, "invoice_details": 1},
+        )
+        if parent_full:
+            effective_project = {**project}
+            for field in ["owner_type", "owner_id", "address_text", "structured_address", "contacts", "invoice_details"]:
+                if not effective_project.get(field) and parent_full.get(field):
+                    effective_project[field] = parent_full[field]
+
     card_client = {
-        "owner_type": project.get("owner_type"),
-        "owner_id": project.get("owner_id"),
+        "owner_type": effective_project.get("owner_type"),
+        "owner_id": effective_project.get("owner_id"),
         "owner_data": None,
     }
     
-    if project.get("owner_type") == "person" and project.get("owner_id"):
-        person = await db.persons.find_one({"id": project["owner_id"], "org_id": org_id}, {"_id": 0})
+    if effective_project.get("owner_type") == "person" and effective_project.get("owner_id"):
+        person = await db.persons.find_one({"id": effective_project["owner_id"], "org_id": org_id}, {"_id": 0})
         if person:
             card_client["owner_data"] = {
                 "type": "person",
@@ -907,8 +921,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 "email": person.get("email", ""),
                 "notes": person.get("notes", ""),
             }
-    elif project.get("owner_type") == "company" and project.get("owner_id"):
-        company = await db.companies.find_one({"id": project["owner_id"], "org_id": org_id}, {"_id": 0})
+    elif effective_project.get("owner_type") == "company" and effective_project.get("owner_id"):
+        company = await db.companies.find_one({"id": effective_project["owner_id"], "org_id": org_id}, {"_id": 0})
         if company:
             card_client["owner_data"] = {
                 "type": "company",
@@ -1232,6 +1246,213 @@ async def get_project_pending_reports(project_id: str, user: dict = Depends(get_
     return {"items": reports, "total": len(reports)}
 
 
+
+# ── Cyrillic auto-letter sub-project creation ─────────────────────
+CYRILLIC_LETTERS = "АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЪЬЮЯ"
+
+
+class CreateSubProjectRequest(BaseModel):
+    name: str  # Name for the NEW sub-project (Б, В, Г...)
+
+
+@router.post("/projects/{project_id}/create-sub-project", status_code=201)
+async def create_sub_project(project_id: str, data: CreateSubProjectRequest, user: dict = Depends(get_current_user)):
+    """
+    Auto-letter sub-project creation with Cyrillic suffixes.
+    First call: original → child А (migrates data), new empty child Б.
+    Subsequent calls: new child В, Г, Д...
+    """
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    org_id = user["org_id"]
+    parent = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    if not parent:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Don't allow nested sub-projects (a child can't have children)
+    if parent.get("parent_project_id"):
+        raise HTTPException(status_code=400, detail="Под-обект не може да има собствени под-обекти")
+
+    now = datetime.now(timezone.utc).isoformat()
+    existing_children = await db.projects.find(
+        {"org_id": org_id, "parent_project_id": project_id},
+        {"_id": 0, "id": 1, "code": 1},
+    ).to_list(50)
+
+    parent_code = parent.get("code", "")
+    results = {"parent_id": project_id, "children_created": []}
+
+    if len(existing_children) == 0:
+        # ══ FIRST TIME: Migrate original → child А, create child Б ══
+
+        # --- Child А: clone of original with all operational data ---
+        child_a_id = str(uuid.uuid4())
+        child_a_code = f"{parent_code}-А"
+        child_a = {
+            "id": child_a_id,
+            "org_id": org_id,
+            "code": child_a_code,
+            "name": parent.get("name", ""),
+            "status": parent.get("status", "Active"),
+            "type": parent.get("type", "Billable"),
+            "start_date": parent.get("start_date"),
+            "end_date": parent.get("end_date"),
+            "planned_days": parent.get("planned_days"),
+            "budget_planned": parent.get("budget_planned"),
+            "default_site_manager_id": parent.get("default_site_manager_id"),
+            "tags": parent.get("tags", []),
+            "notes": parent.get("notes", ""),
+            "warranty_months": parent.get("warranty_months"),
+            "object_type": parent.get("object_type"),
+            # Shared data inherited from parent (not stored on child)
+            "parent_project_id": project_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.projects.insert_one(child_a)
+
+        # --- Migrate operational data from parent → child А ---
+        collections_to_migrate = [
+            ("invoices", "project_id"),
+            ("offers", "project_id"),
+            ("employee_daily_reports", "project_id"),
+            ("extra_works", "project_id"),
+            ("payroll_payment_allocations", "project_id"),
+            ("warehouse_transactions", "project_id"),
+            ("subcontractor_payments", "project_id"),
+        ]
+        migration_log = {}
+        for coll_name, field in collections_to_migrate:
+            coll = db[coll_name]
+            result = await coll.update_many(
+                {field: project_id, "org_id": org_id},
+                {"$set": {field: child_a_id, "updated_at": now}},
+            )
+            if result.modified_count > 0:
+                migration_log[coll_name] = result.modified_count
+
+        # Work sessions use site_id instead of project_id
+        ws_result = await db.work_sessions.update_many(
+            {"site_id": project_id, "org_id": org_id},
+            {"$set": {"site_id": child_a_id, "updated_at": now}},
+        )
+        if ws_result.modified_count > 0:
+            migration_log["work_sessions"] = ws_result.modified_count
+
+        # Contract payments also use site_id
+        cp_result = await db.contract_payments.update_many(
+            {"site_id": project_id, "org_id": org_id},
+            {"$set": {"site_id": child_a_id, "updated_at": now}},
+        )
+        if cp_result.modified_count > 0:
+            migration_log["contract_payments"] = cp_result.modified_count
+
+        # Project team: clone (not move) so parent can still display
+        team_members = await db.project_team.find(
+            {"project_id": project_id, "org_id": org_id},
+            {"_id": 0},
+        ).to_list(100)
+        for tm in team_members:
+            await db.project_team.insert_one({
+                **tm,
+                "_id": None,
+                "id": str(uuid.uuid4()),
+                "project_id": child_a_id,
+            })
+        if team_members:
+            migration_log["project_team_cloned"] = len(team_members)
+
+        results["children_created"].append({
+            "id": child_a_id, "code": child_a_code,
+            "name": child_a.get("name"), "letter": "А",
+            "migration": migration_log,
+        })
+
+        # --- Child Б: new empty sub-project ---
+        child_b_id = str(uuid.uuid4())
+        child_b_code = f"{parent_code}-Б"
+        child_b = {
+            "id": child_b_id,
+            "org_id": org_id,
+            "code": child_b_code,
+            "name": data.name,
+            "status": "Draft",
+            "type": parent.get("type", "Billable"),
+            "start_date": None,
+            "end_date": None,
+            "planned_days": None,
+            "budget_planned": None,
+            "default_site_manager_id": None,
+            "tags": [],
+            "notes": "",
+            "warranty_months": parent.get("warranty_months"),
+            "object_type": parent.get("object_type"),
+            "parent_project_id": project_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.projects.insert_one(child_b)
+        results["children_created"].append({
+            "id": child_b_id, "code": child_b_code,
+            "name": data.name, "letter": "Б",
+        })
+
+        # Mark parent as wrapper (clear operational budget, keep shared data)
+        await db.projects.update_one(
+            {"id": project_id},
+            {"$set": {"updated_at": now, "is_parent": True}},
+        )
+
+        await log_audit(org_id, user["id"], user["email"], "split_to_subprojects", "project", project_id,
+                        {"child_a": child_a_code, "child_b": child_b_code, "migration": migration_log})
+
+    else:
+        # ══ SUBSEQUENT: Just add next letter ══
+        next_idx = len(existing_children)
+        if next_idx >= len(CYRILLIC_LETTERS):
+            raise HTTPException(status_code=400, detail="Максимален брой под-обекти достигнат")
+
+        letter = CYRILLIC_LETTERS[next_idx]
+        new_child_id = str(uuid.uuid4())
+        new_child_code = f"{parent_code}-{letter}"
+
+        # Check code uniqueness
+        if await db.projects.find_one({"org_id": org_id, "code": new_child_code}):
+            raise HTTPException(status_code=400, detail=f"Код {new_child_code} вече съществува")
+
+        new_child = {
+            "id": new_child_id,
+            "org_id": org_id,
+            "code": new_child_code,
+            "name": data.name,
+            "status": "Draft",
+            "type": parent.get("type", "Billable"),
+            "start_date": None,
+            "end_date": None,
+            "planned_days": None,
+            "budget_planned": None,
+            "default_site_manager_id": None,
+            "tags": [],
+            "notes": "",
+            "warranty_months": parent.get("warranty_months"),
+            "object_type": parent.get("object_type"),
+            "parent_project_id": project_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.projects.insert_one(new_child)
+        results["children_created"].append({
+            "id": new_child_id, "code": new_child_code,
+            "name": data.name, "letter": letter,
+        })
+
+        await log_audit(org_id, user["id"], user["email"], "created_subproject", "project", project_id,
+                        {"child": new_child_code, "letter": letter})
+
+    return results
+
+
 # ── Parent aggregate (own + children, read-only) ──────────────────
 
 @router.get("/projects/{project_id}/aggregate")
@@ -1268,12 +1489,16 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     own_rpt = await count_reported(project_id)
     child_team = 0
     child_rpt = {"reported": 0, "approved": 0, "hours": 0}
-    for cid in child_ids:
-        child_team += await count_team(cid)
+    per_child = {}
+    for c in children:
+        cid = c["id"]
+        ct = await count_team(cid)
         cr = await count_reported(cid)
+        child_team += ct
         child_rpt["reported"] += cr["reported"]
         child_rpt["approved"] += cr["approved"]
         child_rpt["hours"] += cr["hours"]
+        per_child[cid] = {"team": {"count": ct, **cr}}
 
     # ── Invoices ──
     async def count_invoices(pids):
@@ -1295,6 +1520,8 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     own_inv = await count_invoices([project_id])
     child_inv = await count_invoices(child_ids) if child_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0}
+    for c in children:
+        per_child[c["id"]]["invoices"] = await count_invoices([c["id"]])
 
     # ── Offers ──
     async def count_offers(pids):
@@ -1304,6 +1531,8 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     own_off = await count_offers([project_id])
     child_off = await count_offers(child_ids) if child_ids else {"count": 0, "approved": 0}
+    for c in children:
+        per_child[c["id"]]["offers"] = await count_offers([c["id"]])
 
     # ── Reports total (all time) ──
     async def count_report_hours(pids):
@@ -1315,6 +1544,8 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     own_reps = await count_report_hours([project_id])
     child_reps = await count_report_hours(child_ids) if child_ids else {"count": 0, "hours": 0}
+    for c in children:
+        per_child[c["id"]]["reports"] = await count_report_hours([c["id"]])
 
     def merge(own, children):
         return {k: round((own.get(k, 0) or 0) + (children.get(k, 0) or 0), 2) for k in set(list(own.keys()) + list(children.keys()))}
@@ -1322,7 +1553,13 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     return {
         "has_children": True,
         "children_count": len(children),
-        "children": [{"id": c["id"], "code": c.get("code", ""), "name": c["name"], "status": c.get("status", "")} for c in children],
+        "children": [
+            {
+                "id": c["id"], "code": c.get("code", ""), "name": c["name"], "status": c.get("status", ""),
+                **(per_child.get(c["id"], {})),
+            }
+            for c in children
+        ],
         "team": {
             "own": {"count": own_team, **own_rpt},
             "children": {"count": child_team, **child_rpt},

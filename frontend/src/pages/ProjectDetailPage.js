@@ -80,6 +80,10 @@ export default function ProjectDetailPage() {
   const [aggregate, setAggregate] = useState(null);
   const [showAddSMR, setShowAddSMR] = useState(false);
   const [showImportSMR, setShowImportSMR] = useState(false);
+  const [showSubProjectDialog, setShowSubProjectDialog] = useState(false);
+  const [newSubName, setNewSubName] = useState("");
+  const [creatingSub, setCreatingSub] = useState(false);
+  const [aggView, setAggView] = useState("summary"); // "summary" | "individual"
 
   // Tab from URL hash
   const hashTab = location.hash?.replace("#", "") || "overview";
@@ -132,6 +136,27 @@ export default function ProjectDetailPage() {
       setDashboard(prev => ({ ...prev, project: { ...prev.project, warranty_months: parseInt(value) } }));
     } catch { /* */ }
     finally { setSavingWarranty(false); }
+  };
+
+  const handleCreateSubProject = async () => {
+    if (!newSubName.trim()) return;
+    setCreatingSub(true);
+    try {
+      const res = await API.post(`/projects/${projectId}/create-sub-project`, { name: newSubName.trim() });
+      const created = res.data?.children_created || [];
+      if (created.length === 2) {
+        toast.success(`Създадени под-обекти ${created[0].code} и ${created[1].code}`);
+      } else if (created.length === 1) {
+        toast.success(`Създаден под-обект ${created[0].code}`);
+      }
+      setShowSubProjectDialog(false);
+      setNewSubName("");
+      fetchDashboard();
+      // Refresh aggregate
+      API.get(`/projects/${projectId}/aggregate`).then(r => setAggregate(r.data?.has_children ? r.data : null)).catch(() => {});
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Грешка при създаване");
+    } finally { setCreatingSub(false); }
   };
 
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-yellow-500" /></div>;
@@ -304,57 +329,95 @@ export default function ProjectDetailPage() {
           {(sub_projects?.length > 0 || !parent_project) && (
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-sub-projects">
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2"><Building2 className="w-5 h-5 text-violet-500" /><h3 className="font-semibold text-white">Под-обекти</h3>{sub_projects?.length > 0 && <Badge variant="outline" className="text-[10px]">{sub_projects.length}</Badge>}</div>
-                <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => { navigate(`/projects?createChild=${projectId}&parentName=${encodeURIComponent(project.name)}`); }} data-testid="add-sub-project-btn">
-                  <Plus className="w-3 h-3" />Под-обект
-                </Button>
-              </div>
-              {sub_projects?.length > 0 ? (
-                <div className="space-y-2">
-                  {sub_projects.map(sp => (
-                    <button key={sp.id} onClick={() => navigate(`/projects/${sp.id}`)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-gray-900/50 hover:bg-gray-700/50 text-left transition-colors">
-                      <div className="min-w-0"><p className="text-sm font-medium text-white truncate">{sp.name}</p><p className="text-[10px] text-gray-400">{sp.code}</p></div>
-                      <Badge className={`text-[9px] ${STATUS_COLORS[sp.status] || ""}`}>{sp.status}</Badge>
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-violet-500" />
+                  <h3 className="font-semibold text-white">Под-обекти</h3>
+                  {sub_projects?.length > 0 && <Badge variant="outline" className="text-[10px]">{sub_projects.length}</Badge>}
                 </div>
+                <div className="flex items-center gap-2">
+                  {sub_projects?.length > 0 && (
+                    <div className="flex rounded-md border border-gray-600 overflow-hidden">
+                      <button onClick={() => setAggView("summary")} className={`px-2.5 py-1 text-[10px] ${aggView === "summary" ? "bg-violet-500/30 text-violet-300" : "bg-gray-800 text-gray-400"}`} data-testid="agg-view-summary">Обобщено</button>
+                      <button onClick={() => setAggView("individual")} className={`px-2.5 py-1 text-[10px] border-l border-gray-600 ${aggView === "individual" ? "bg-violet-500/30 text-violet-300" : "bg-gray-800 text-gray-400"}`} data-testid="agg-view-individual">Поотделно</button>
+                    </div>
+                  )}
+                  <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowSubProjectDialog(true)} data-testid="add-sub-project-btn">
+                    <Plus className="w-3 h-3" />Под-обект
+                  </Button>
+                </div>
+              </div>
+
+              {sub_projects?.length > 0 ? (
+                aggView === "individual" ? (
+                  <div className="space-y-2" data-testid="sub-projects-individual">
+                    {sub_projects.map(sp => {
+                      const letter = sp.code?.split("-").pop() || "";
+                      return (
+                        <button key={sp.id} onClick={() => navigate(`/projects/${sp.id}`)} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-900/50 hover:bg-gray-700/50 text-left transition-colors border border-gray-700/50 hover:border-violet-500/30" data-testid={`sub-project-${sp.id}`}>
+                          <div className="w-9 h-9 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-bold text-sm flex-shrink-0">{letter}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{sp.name}</p>
+                            <p className="text-[10px] text-gray-400 font-mono">{sp.code}</p>
+                          </div>
+                          <Badge className={`text-[9px] ${STATUS_COLORS[sp.status] || ""}`}>{sp.status}</Badge>
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Summary / aggregate view */
+                  <SubProjectsSummaryView sub_projects={sub_projects} aggregate={aggregate} navigate={navigate} />
+                )
               ) : (
-                <p className="text-xs text-gray-500">Няма под-обекти</p>
+                <p className="text-xs text-gray-500">Няма под-обекти. Натиснете "+Под-обект" за да разделите обекта.</p>
               )}
             </div>
           )}
 
-          {/* Parent aggregate (only for parents with children) */}
-          {aggregate && (
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 col-span-full" data-testid="parent-aggregate">
-              <div className="flex items-center gap-2 mb-3"><Building2 className="w-5 h-5 text-violet-500" /><h3 className="font-semibold text-white">Обобщение (родител + под-обекти)</h3></div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-gray-400 border-b border-gray-700">
-                      <th className="text-left py-1 pr-4"></th>
-                      <th className="text-right py-1 px-2">Собствени</th>
-                      <th className="text-right py-1 px-2">Под-обекти</th>
-                      <th className="text-right py-1 px-2 text-primary font-bold">Общо</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <AggRow label="Хора в екип" own={aggregate.team.own.count} children={aggregate.team.children.count} total={aggregate.team.total.count} />
-                    <AggRow label="Отчели днес" own={aggregate.team.own.reported} children={aggregate.team.children.reported} total={aggregate.team.total.reported} />
-                    <AggRow label="Часове днес" own={aggregate.team.own.hours} children={aggregate.team.children.hours} total={aggregate.team.total.hours} suffix="ч" />
-                    <AggRow label="Всички отчети" own={aggregate.reports.own.count} children={aggregate.reports.children.count} total={aggregate.reports.total.count} />
-                    <AggRow label="Общо часове" own={aggregate.reports.own.hours} children={aggregate.reports.children.hours} total={aggregate.reports.total.hours} suffix="ч" />
-                    <AggRow label="Оферти" own={aggregate.offers.own.count} children={aggregate.offers.children.count} total={aggregate.offers.total.count} />
-                    <AggRow label="Фактури" own={aggregate.invoices.own.count} children={aggregate.invoices.children.count} total={aggregate.invoices.total.count} />
-                    <AggRow label="Фактурирано" own={aggregate.invoices.own.invoiced} children={aggregate.invoices.children.invoiced} total={aggregate.invoices.total.invoiced} suffix=" EUR" color="text-primary" />
-                    <AggRow label="Реално платено" own={aggregate.invoices.own.paid} children={aggregate.invoices.children.paid} total={aggregate.invoices.total.paid} suffix=" EUR" color="text-emerald-400" />
-                    <AggRow label="Неплатено" own={aggregate.invoices.own.unpaid} children={aggregate.invoices.children.unpaid} total={aggregate.invoices.total.unpaid} suffix=" EUR" color="text-amber-400" />
-                    {(aggregate.invoices.total.overdue || 0) > 0 && <AggRow label="Просрочено" own={aggregate.invoices.own.overdue} children={aggregate.invoices.children.overdue} total={aggregate.invoices.total.overdue} suffix=" EUR" color="text-red-400" />}
-                  </tbody>
-                </table>
+          {/* Sub-project creation dialog */}
+          <Dialog open={showSubProjectDialog} onOpenChange={setShowSubProjectDialog}>
+            <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+              <DialogHeader>
+                <DialogTitle>
+                  {sub_projects?.length > 0
+                    ? `Нов под-обект (${project.code}-...)`
+                    : `Разделяне на ${project.name}`
+                  }
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {!sub_projects?.length && (
+                  <div className="rounded-lg bg-violet-500/10 border border-violet-500/30 p-3 text-xs text-violet-300 space-y-1">
+                    <p className="font-semibold">При първо разделяне:</p>
+                    <p>1. Текущият обект става родител (wrapper)</p>
+                    <p>2. Всички данни мигрират в под-обект <span className="font-bold">{project.code}-А</span></p>
+                    <p>3. Създава се нов празен под-обект <span className="font-bold">{project.code}-Б</span></p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Име на {!sub_projects?.length ? "новия под-обект (Б)" : "под-обекта"}
+                  </label>
+                  <Input
+                    value={newSubName}
+                    onChange={e => setNewSubName(e.target.value)}
+                    placeholder="напр. Етаж 2, Корпус Б..."
+                    className="bg-gray-800 border-gray-600"
+                    onKeyDown={e => e.key === "Enter" && handleCreateSubProject()}
+                    data-testid="sub-project-name-input"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setShowSubProjectDialog(false)}>Отказ</Button>
+                  <Button size="sm" onClick={handleCreateSubProject} disabled={!newSubName.trim() || creatingSub} className="bg-violet-600 hover:bg-violet-700" data-testid="create-sub-project-confirm">
+                    {creatingSub ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+                    {!sub_projects?.length ? "Раздели и създай" : "Създай"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            </DialogContent>
+          </Dialog>
 
           {/* Centralized View */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
@@ -686,6 +749,91 @@ function AggRow({ label, own, children, total, suffix = "", color = "" }) {
     </tr>
   );
 }
+
+
+function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
+  const agg = aggregate;
+  const childrenData = agg?.children || [];
+  const fmt = (n) => n == null ? "—" : typeof n === "number" ? n.toLocaleString("bg-BG", { maximumFractionDigits: 0 }) : n;
+
+  return (
+    <div className="space-y-3" data-testid="sub-projects-summary">
+      {/* Per-child summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        {sub_projects.map(sp => {
+          const letter = sp.code?.split("-").pop() || "";
+          const cd = childrenData.find(c => c.id === sp.id);
+          return (
+            <button key={sp.id} onClick={() => navigate(`/projects/${sp.id}`)} className="text-left p-3 rounded-lg bg-gray-900/60 border border-gray-700/50 hover:border-violet-500/30 transition-colors" data-testid={`sub-summary-${sp.id}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-md bg-violet-500/20 flex items-center justify-center text-violet-300 font-bold text-xs">{letter}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{sp.name}</p>
+                  <p className="text-[9px] text-gray-500 font-mono">{sp.code}</p>
+                </div>
+                <Badge className={`text-[8px] ${STATUS_COLORS[sp.status] || ""}`}>{sp.status}</Badge>
+              </div>
+              {cd && (
+                <div className="grid grid-cols-3 gap-1 text-[10px]">
+                  <div><span className="text-gray-500">Хора: </span><span className="text-white font-mono">{cd.team?.count || 0}</span></div>
+                  <div><span className="text-gray-500">Фактури: </span><span className="text-white font-mono">{cd.invoices?.count || 0}</span></div>
+                  <div><span className="text-gray-500">Платено: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.paid || 0)}</span></div>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Aggregate table */}
+      {agg && (
+        <div className="overflow-x-auto rounded-lg border border-gray-700/50 p-3" data-testid="parent-aggregate">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-700">
+                <th className="text-left py-1.5 pr-4"></th>
+                {childrenData.map(c => {
+                  const letter = c.code?.split("-").pop() || "";
+                  return <th key={c.id} className="text-right py-1.5 px-2 text-violet-300 font-mono text-[10px]">{letter}</th>;
+                })}
+                <th className="text-right py-1.5 px-2 text-primary font-bold">Общо</th>
+              </tr>
+            </thead>
+            <tbody>
+              <AggRowMulti label="Хора" childrenData={childrenData} field={c => c?.team?.count} total={agg.team?.total?.count} />
+              <AggRowMulti label="Часове днес" childrenData={childrenData} field={c => c?.team?.hours} total={agg.team?.total?.hours} suffix="ч" />
+              <AggRowMulti label="Фактури" childrenData={childrenData} field={c => c?.invoices?.count} total={agg.invoices?.total?.count} />
+              <AggRowMulti label="Фактурирано" childrenData={childrenData} field={c => c?.invoices?.invoiced} total={agg.invoices?.total?.invoiced} suffix=" лв." color="text-primary" />
+              <AggRowMulti label="Платено" childrenData={childrenData} field={c => c?.invoices?.paid} total={agg.invoices?.total?.paid} suffix=" лв." color="text-emerald-400" />
+              <AggRowMulti label="Неплатено" childrenData={childrenData} field={c => c?.invoices?.unpaid} total={agg.invoices?.total?.unpaid} suffix=" лв." color="text-amber-400" />
+              {(agg.invoices?.total?.overdue || 0) > 0 && (
+                <AggRowMulti label="Просрочено" childrenData={childrenData} field={c => c?.invoices?.overdue} total={agg.invoices?.total?.overdue} suffix=" лв." color="text-red-400" />
+              )}
+              <AggRowMulti label="Оферти" childrenData={childrenData} field={c => c?.offers?.count} total={agg.offers?.total?.count} />
+              <AggRowMulti label="Отчети" childrenData={childrenData} field={c => c?.reports?.count} total={agg.reports?.total?.count} />
+              <AggRowMulti label="Общо часове" childrenData={childrenData} field={c => c?.reports?.hours} total={agg.reports?.total?.hours} suffix="ч" />
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AggRowMulti({ label, childrenData, field, total, suffix = "", color = "" }) {
+  const fmt = (n) => n == null || n === 0 ? "0" : typeof n === "number" ? n.toLocaleString("bg-BG", { maximumFractionDigits: 1 }) : n;
+
+  return (
+    <tr className="border-b border-gray-800/50">
+      <td className="py-1.5 pr-4 text-gray-400">{label}</td>
+      {childrenData.map(c => (
+        <td key={c.id} className="text-right py-1.5 px-2 font-mono text-gray-300">{fmt(field(c))}{suffix}</td>
+      ))}
+      <td className={`text-right py-1.5 px-2 font-mono font-bold ${color || "text-white"}`}>{fmt(total)}{suffix}</td>
+    </tr>
+  );
+}
+
 
 
 function InlineAddSMR({ projectId, onDone }) {
