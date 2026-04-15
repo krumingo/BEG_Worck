@@ -101,6 +101,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Summary row: Без ДДС, ДДС, С ДДС, Платено, Чакащо
   - Invoice totals now include subtotal and vat breakdown
   - Verified: 100% backend + 100% frontend
+- **Cyrillic Auto-Letter Sub-Projects (А, Б, В...)** — Apr 15, 2026
+  - New `POST /projects/{id}/create-sub-project` endpoint with auto-migration
+  - First split: original → parent wrapper, data migrates to child А, new child Б created
+  - Subsequent: creates В, Г, Д... using `CYRILLIC_LETTERS` sequence
+  - Per-child aggregation in `/aggregate` endpoint (team, invoices, offers, reports per child)
+  - Frontend: Summary/Individual toggle, letter badge cards, inline dialog (no navigate-away)
+  - Child inherits shared parent data (client, address, contacts)
+  - Nested sub-projects blocked (child can't have children)
+  - Verified: 100% backend (12/12) + 100% frontend
 
 
 ### UPCOMING PRIORITY BLOCKS:
