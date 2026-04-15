@@ -72,6 +72,67 @@ def validate_report(data: DailyReportCreate):
             raise HTTPException(status_code=400, detail="Leave requires leave_from and leave_to")
 
 
+async def check_employee_hours(org_id: str, employee_id: str, report_date: str, exclude_report_id: str = None):
+    """Check total hours for employee on a given date across ALL reports/projects.
+    Returns warnings dict with total_hours, level, projects list."""
+    query = {"org_id": org_id, "employee_id": employee_id, "report_date": report_date}
+    reports = await db.employee_daily_reports.find(query, {"_id": 0}).to_list(50)
+
+    total_hours = 0
+    projects_worked = set()
+    for r in reports:
+        if exclude_report_id and r.get("id") == exclude_report_id:
+            continue
+        for e in r.get("day_entries", []):
+            total_hours += float(e.get("hours_worked", 0))
+            if e.get("project_id"):
+                projects_worked.add(e["project_id"])
+        # Old-style reports
+        if r.get("hours"):
+            total_hours += float(r["hours"])
+        if r.get("project_id"):
+            projects_worked.add(r["project_id"])
+
+    # Check attendance conflict
+    attendance = await db.attendance_entries.find_one(
+        {"org_id": org_id, "user_id": employee_id, "date": report_date},
+        {"_id": 0, "status": 1},
+    )
+    absence_conflict = False
+    absence_status = None
+    if attendance and attendance.get("status") in ["SickLeave", "Leave", "Excused", "Holiday"]:
+        absence_conflict = True
+        absence_status = attendance["status"]
+
+    warnings = []
+    level = "ok"
+    if total_hours > 12:
+        level = "critical"
+        warnings.append(f"Служителят има общо {total_hours:.1f} часа за деня. Проверете дали това е грешка.")
+    elif total_hours > 8:
+        level = "warning"
+        warnings.append(f"Служителят има общо {total_hours:.1f} часа за деня. Проверете дали е извънреден труд.")
+    if len(projects_worked) > 1:
+        warnings.append(f"Работил е на {len(projects_worked)} обекта в същия ден.")
+    if absence_conflict:
+        warnings.append(f"Конфликт: служителят е отбелязан като {absence_status} за деня.")
+
+    return {
+        "total_hours": round(total_hours, 2),
+        "level": level,
+        "warnings": warnings,
+        "projects_count": len(projects_worked),
+        "absence_conflict": absence_conflict,
+        "absence_status": absence_status,
+    }
+
+
+@router.get("/daily-reports/hours-check")
+async def get_hours_check(employee_id: str, date: str, exclude_report_id: str = "", user: dict = Depends(require_m4)):
+    """Check total hours for an employee on a date. Returns warnings."""
+    return await check_employee_hours(user["org_id"], employee_id, date, exclude_report_id or None)
+
+
 # ── CRUD ───────────────────────────────────────────────────────────
 
 @router.post("/daily-reports", status_code=201)
@@ -119,7 +180,12 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
         "updated_at": now,
     }
     await db.employee_daily_reports.insert_one(report)
-    return {k: v for k, v in report.items() if k != "_id"}
+    clean = {k: v for k, v in report.items() if k != "_id"}
+
+    # Hours check — add warnings to response (non-blocking)
+    hours_info = await check_employee_hours(org_id, data.employee_id, data.report_date)
+    clean["hours_warnings"] = hours_info
+    return clean
 
 
 @router.put("/daily-reports/{report_id}")
@@ -276,7 +342,15 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
         "sessions_created": sessions_created,
     }
     await db.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
-    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+    result = await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+
+    # E) Hours check at approval — return warnings to UI
+    emp_id = report.get("employee_id") or worker_id
+    r_date = report.get("report_date") or report.get("date", now[:10])
+    if emp_id and r_date:
+        result["hours_warnings"] = await check_employee_hours(org_id, emp_id, r_date)
+
+    return result
 
 
 @router.post("/daily-reports/{report_id}/reject")

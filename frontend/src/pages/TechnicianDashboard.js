@@ -210,6 +210,19 @@ export default function TechnicianDashboard() {
     setSubmitting(true);
     try {
       const res = await API.post("/technician/daily-report", { project_id: selectedSite.project_id, entries: payload, general_notes: generalNotes || undefined });
+
+      // Check for hours warnings per worker
+      const warnings = res.data?.hours_warnings || [];
+      if (warnings.length > 0) {
+        for (const w of warnings) {
+          if (w.level === "critical") {
+            toast.error(`${w.worker_name}: ${w.total_hours}ч за деня! Проверете.`, { duration: 8000 });
+          } else if (w.level === "warning") {
+            toast.warning(`${w.worker_name}: ${w.total_hours}ч за деня. Извънреден труд?`, { duration: 6000 });
+          }
+        }
+      }
+
       toast.success(`${t("technician.reportSubmitted")}: ${res.data.total_hours}ч`);
       setScreen("myDay");
       setSelectedSite(null);

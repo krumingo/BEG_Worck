@@ -132,6 +132,20 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - SiteAttendance backend: includes reported workers even if not in project_team
   - Empty-state messages improved with clear guidance
   - Verified: visual audit screenshots
+- **Теренен портал = Въвеждане, Отчети = Преглед/Контрол** — Apr 15, 2026
+  - Sidebar "Отчети" restructured: Присъствие → Преглед отчети → Всички отчети → Липсващи СМР → Промени (removed "Дневен отчет" as separate create flow)
+  - DailyLogsPage: hides create tab when in project context (review-only mode)
+  - "На обекта днес" source of truth: attendance_entries (Present/Late) from Теренен портал → Хора, fallback to reported workers
+  - Hours control: new `check_employee_hours()` function checks total hours per person per day across all projects
+    - >8h = warning, >12h = critical warning requiring reason
+    - Cross-project detection, absence conflict detection (sick/leave + work report)
+  - New endpoint: `GET /daily-reports/hours-check?employee_id=X&date=Y`
+  - Hours warnings returned on report creation (technician portal) and approval
+  - Approval endpoint re-checks hours and returns warnings to UI
+  - HoursWarningBanner.js component for visual warnings
+  - TechnicianDashboard shows toast warnings per worker on submit
+  - DailyReportDialog shows alert on approval with hour check results
+  - Verified: API + visual audit screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

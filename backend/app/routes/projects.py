@@ -1052,9 +1052,16 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     card_team["approved_today"] = len(approved_ids)
     card_team["reported_hours"] = round(total_hours, 1)
 
-    # "На обекта" = team members + any reported workers (union)
-    all_on_site = set(user_ids) | reported_ids
-    card_team["on_site_today"] = len(all_on_site)
+    # "На обекта днес" = attendance_entries for today (source of truth from Теренен портал → Хора)
+    attendance_today = await db.attendance_entries.find(
+        {"org_id": org_id, "project_id": project_id, "date": today,
+         "status": {"$in": ["Present", "Late"]}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(200)
+    on_site_ids = set(a["user_id"] for a in attendance_today)
+    # Also count reported workers as "on site" (fallback for projects without formal attendance)
+    on_site_ids |= reported_ids
+    card_team["on_site_today"] = len(on_site_ids)
 
     # Pending approval count for this project
     pending = await db.employee_daily_reports.count_documents(

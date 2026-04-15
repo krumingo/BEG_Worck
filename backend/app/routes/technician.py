@@ -834,12 +834,29 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     else:
         await db.work_reports.insert_one(report)
 
+    # Hours warnings per unique worker
+    hours_warnings = []
+    try:
+        from app.routes.daily_reports import check_employee_hours
+        seen_workers = set()
+        for entry in data.entries:
+            wid = entry.worker_id or user["id"]
+            if wid not in seen_workers:
+                seen_workers.add(wid)
+                hw = await check_employee_hours(org_id, wid, today)
+                if hw["level"] != "ok":
+                    hw["worker_name"] = entry.worker_name or wid
+                    hours_warnings.append(hw)
+    except Exception:
+        pass
+
     return {
         "report_id": report["id"],
         "draft_report_ids": draft_ids,
         "roster_id": roster["id"] if roster else None,
         "missing_smr_created": missing_smr_created,
         "total_hours": total_hours,
+        "hours_warnings": hours_warnings,
     }
 
 

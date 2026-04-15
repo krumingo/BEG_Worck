@@ -64,6 +64,8 @@ const QUICK_HOURS = [1, 2, 4, 6, 8, 10, 12];
 
 export default function DailyLogsPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const isProjectContext = !!searchParams.get("returnTo");
   const [activeTab, setActiveTab] = useState("list");
   
   // Form state
@@ -71,7 +73,6 @@ export default function DailyLogsPage() {
   const [workTypes, setWorkTypes] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const { activeProject } = useActiveProject();
-  const [searchParams] = useSearchParams();
   const initSite = searchParams.get("project") || "";
   
   const [selectedSite, setSelectedSite] = useState(initSite);
@@ -248,15 +249,17 @@ export default function DailyLogsPage() {
       
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className={`grid w-full ${isProjectContext ? "grid-cols-1" : "grid-cols-2"}`}>
           <TabsTrigger value="list" data-testid="tab-list">
             <FileText className="w-4 h-4 mr-2" />
-            Моите отчети
+            {isProjectContext ? "Отчети по обекта" : "Моите отчети"}
           </TabsTrigger>
-          <TabsTrigger value="new" data-testid="tab-new">
-            <Plus className="w-4 h-4 mr-2" />
-            Нов отчет
-          </TabsTrigger>
+          {!isProjectContext && (
+            <TabsTrigger value="new" data-testid="tab-new">
+              <Plus className="w-4 h-4 mr-2" />
+              Нов отчет
+            </TabsTrigger>
+          )}
         </TabsList>
         
         {/* New Log Form */}

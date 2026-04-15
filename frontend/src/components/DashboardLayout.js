@@ -46,12 +46,11 @@ const NAV_GROUPS = [
   {
     id: "worklogs", icon: ClipboardPen, labelKey: "nav.reports",
     children: [
-      { to: "/all-reports", icon: FileText, labelKey: "nav.allReports" },
       { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
-      { to: "/daily-logs", icon: ClipboardPen, labelKey: "nav.dailyLogs" },
-      { to: "/change-orders", icon: FilePlus2, labelKey: "nav.changeOrders" },
-      { to: "/missing-smr", icon: AlertTriangle, labelKey: "nav.missingSMR" },
       { to: "/reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
+      { to: "/all-reports", icon: FileText, labelKey: "nav.allReports" },
+      { to: "/missing-smr", icon: AlertTriangle, labelKey: "nav.missingSMR" },
+      { to: "/change-orders", icon: FilePlus2, labelKey: "nav.changeOrders" },
     ],
   },
   {

@@ -137,8 +137,15 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
     if (!reportId) return;
     setSaving(true);
     try {
-      await API.post(`/daily-reports/${reportId}/approve`);
+      const res = await API.post(`/daily-reports/${reportId}/approve`);
       setApprovalStatus("APPROVED");
+      // Show hours warnings from approval
+      const hw = res.data?.hours_warnings;
+      if (hw && hw.level === "critical") {
+        alert(`ВНИМАНИЕ: ${hw.total_hours}ч общо за деня!\n${(hw.warnings || []).join("\n")}`);
+      } else if (hw && hw.level === "warning") {
+        alert(`Забележка: ${hw.total_hours}ч общо за деня.\n${(hw.warnings || []).join("\n")}`);
+      }
       onSaved?.();
     } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
     finally { setSaving(false); }
