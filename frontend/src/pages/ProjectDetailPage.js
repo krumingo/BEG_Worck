@@ -514,13 +514,17 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: TEAM ════ */}
         <TabsContent value="team" className="space-y-4 mt-4">
-          {/* Quick links: Присъствие + Отчети */}
+          {/* Quick links: Присъствие + Отчети + Одобрение */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => navigate(`/site-attendance?project=${projectId}`)} data-testid="team-attendance-btn">
+            <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => navigate(`/site-attendance?project=${projectId}&returnTo=/projects/${projectId}&returnTab=team&projectName=${encodeURIComponent(project.name)}`)} data-testid="team-attendance-btn">
               <ClipboardList className="w-3 h-3" />Присъствие
             </Button>
-            <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => navigate(`/daily-logs?project=${projectId}`)} data-testid="team-reports-btn">
+            <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => navigate(`/daily-logs?project=${projectId}&returnTo=/projects/${projectId}&returnTab=team&projectName=${encodeURIComponent(project.name)}`)} data-testid="team-reports-btn">
               <FileText className="w-3 h-3" />Отчети
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs gap-1 text-amber-400 border-amber-500/30" onClick={() => navigate(`/reports?project=${projectId}&returnTo=/projects/${projectId}&returnTab=team&projectName=${encodeURIComponent(project.name)}`)} data-testid="team-approval-btn">
+              <Shield className="w-3 h-3" />Одобрение
+              {pendingReports.length > 0 && <Badge variant="outline" className="text-[9px] bg-amber-500/20 text-amber-400 ml-1">{pendingReports.length}</Badge>}
             </Button>
           </div>
 

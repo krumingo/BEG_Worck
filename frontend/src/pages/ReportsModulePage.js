@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import ProjectContextBar from "@/components/ProjectContextBar";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -27,6 +29,8 @@ const DAYS_BG = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
 export default function ReportsModulePage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const urlProject = searchParams.get("project") || "";
   const [tab, setTab] = useState("table");
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState([]);
@@ -37,13 +41,13 @@ export default function ReportsModulePage() {
   const [filters, setFilters] = useState({
     date_from: new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0],
     date_to: new Date().toISOString().split("T")[0],
-    project_id: "", employee_id: "", approval_status: "", day_status: "",
+    project_id: urlProject, employee_id: "", approval_status: "", day_status: "",
   });
 
   // Calendar state
   const [calMonth, setCalMonth] = useState(new Date().toISOString().slice(0, 7));
   const [calDays, setCalDays] = useState([]);
-  const [calFilters, setCalFilters] = useState({ project_id: "", employee_id: "" });
+  const [calFilters, setCalFilters] = useState({ project_id: urlProject, employee_id: "" });
 
   // Report detail dialog
   const [detailOpen, setDetailOpen] = useState(false);
@@ -112,6 +116,7 @@ export default function ReportsModulePage() {
 
   return (
     <div className="p-6 max-w-[1400px]" data-testid="reports-module-page">
+      <ProjectContextBar pageTitle="Одобрение" />
       <h1 className="text-2xl font-bold text-foreground mb-6">Отчети</h1>
 
       <Tabs value={tab} onValueChange={setTab}>

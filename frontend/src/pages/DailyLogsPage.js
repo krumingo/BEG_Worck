@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProjectContextBar from "@/components/ProjectContextBar";
 import {
   Select,
   SelectContent,
@@ -231,6 +232,7 @@ export default function DailyLogsPage() {
   
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto" data-testid="daily-logs-page">
+      <ProjectContextBar pageTitle="Отчети" />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

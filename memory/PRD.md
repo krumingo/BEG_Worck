@@ -117,6 +117,13 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Sidebar: "Дневник СМР" renamed to "Отчети", Присъствие moved under Отчети submenu
   - Overview pending-approval is now compact link to Team tab
   - Verified: visual audit screenshots
+- **Team Tab Context Navigation (Присъствие/Отчети/Одобрение)** — Apr 15, 2026
+  - Buttons pass project context (returnTo, returnTab, projectName) via URL params
+  - Target pages (SiteAttendance, DailyLogs, ReportsModule) show ProjectContextBar with "← Назад | Page — ProjectName"
+  - Back button returns to exact project + Team tab (not browser back)
+  - All 3 pages auto-filter by project_id from URL
+  - New reusable component: ProjectContextBar.js
+  - Verified: visual audit screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

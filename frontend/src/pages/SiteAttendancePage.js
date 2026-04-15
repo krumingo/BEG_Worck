@@ -7,6 +7,7 @@ import { formatDate, formatTime } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import ProjectContextBar from "@/components/ProjectContextBar";
 import {
   Dialog,
   DialogContent,
@@ -124,6 +125,7 @@ export default function SiteAttendancePage() {
 
   return (
     <div className="p-8 max-w-[1200px]" data-testid="site-attendance-page">
+      <ProjectContextBar pageTitle="Присъствие" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t("attendance.siteAttendance")}</h1>
