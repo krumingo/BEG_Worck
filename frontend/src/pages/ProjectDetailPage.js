@@ -272,12 +272,13 @@ export default function ProjectDetailPage() {
             {/* Card: Екип (compact) */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-team-compact">
               <div className="flex items-center gap-2 mb-3"><Users className="w-5 h-5 text-cyan-500" /><h3 className="font-semibold text-white">Екип</h3></div>
-              <div className="grid grid-cols-3 gap-2 mb-2">
-                <div><p className="text-xl font-bold text-white">{team.count}</p><p className="text-[9px] text-gray-400">В екипа</p></div>
-                <div><p className="text-xl font-bold text-emerald-400">{team.reported_today || 0}</p><p className="text-[9px] text-gray-400">Отчели днес</p></div>
-                <div><p className="text-xl font-bold text-cyan-400">{team.approved_today || 0}</p><p className="text-[9px] text-gray-400">Одобрени</p></div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                <div><p className="text-xl font-bold text-white">{team.on_site_today || team.count || 0}</p><p className="text-[9px] text-gray-400">На обекта днес</p></div>
+                <div><p className="text-xl font-bold text-emerald-400">{team.reported_today || 0}</p><p className="text-[9px] text-gray-400">Отчетили днес</p></div>
+                <div><p className="text-xl font-bold text-cyan-400">{team.approved_today || 0}</p><p className="text-[9px] text-gray-400">Одобрени днес</p></div>
+                <div><p className="text-xl font-bold text-amber-400">{team.reported_hours || 0}<span className="text-sm">ч</span></p><p className="text-[9px] text-gray-400">Часове днес</p></div>
               </div>
-              {team.reported_hours > 0 && <p className="text-xs text-gray-400">{team.reported_hours}ч отчетени</p>}
+              {team.count > 0 && <p className="text-[10px] text-gray-500">{team.count} в екипа общо</p>}
               {team.pending_approval > 0 && <p className="text-xs text-amber-400">{team.pending_approval} за одобрение</p>}
               <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={() => handleTabChange("team")}>Виж детайли →</Button>
             </div>

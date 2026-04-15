@@ -124,6 +124,14 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - All 3 pages auto-filter by project_id from URL
   - New reusable component: ProjectContextBar.js
   - Verified: visual audit screenshots
+- **Team/Attendance/Reports Label & Logic Cleanup** — Apr 15, 2026
+  - PersonnelPanel labels: "Общо" → "В екипа", "Днес" → "На обекта днес", "С чернови" → "Отчетили днес", "С одобрени" → "Одобрени днес"
+  - Overview team card: 4-column grid (На обекта днес, Отчетили днес, Одобрени днес, Часове днес)
+  - Dashboard backend: new `on_site_today` field = union of project_team + reported workers
+  - Dashboard backend: now checks both old-style and new-style daily reports
+  - SiteAttendance backend: includes reported workers even if not in project_team
+  - Empty-state messages improved with clear guidance
+  - Verified: visual audit screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

@@ -1013,21 +1013,48 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         "total_salaries_paid": total_salaries_paid,
     }
 
-    # Reported/Approved today for this project
+    # Reported/Approved today for this project (from employee_daily_reports)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     drafts_today = await db.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": {"$exists": True}},
         {"_id": 0, "worker_id": 1, "worker_name": 1, "hours": 1, "status": 1},
     ).to_list(200)
+
+    # Also check new-style daily reports (day_entries with project_id)
+    new_style_reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "report_date": today, "day_entries.project_id": project_id},
+        {"_id": 0, "employee_id": 1, "day_entries": 1, "approval_status": 1},
+    ).to_list(200)
+
     reported_ids = set()
     approved_ids = set()
+    total_hours = 0
+
+    # Old-style reports
     for d in drafts_today:
         reported_ids.add(d.get("worker_id"))
+        total_hours += d.get("hours", 0)
         if (d.get("status") or "").upper() == "APPROVED":
             approved_ids.add(d.get("worker_id"))
+
+    # New-style reports
+    for r in new_style_reports:
+        emp_id = r.get("employee_id")
+        if emp_id:
+            reported_ids.add(emp_id)
+            if (r.get("approval_status") or "").upper() == "APPROVED":
+                approved_ids.add(emp_id)
+            for entry in r.get("day_entries", []):
+                if entry.get("project_id") == project_id:
+                    total_hours += float(entry.get("hours_worked", 0))
+
     card_team["reported_today"] = len(reported_ids)
     card_team["approved_today"] = len(approved_ids)
-    card_team["reported_hours"] = round(sum(d.get("hours", 0) for d in drafts_today), 1)
+    card_team["reported_hours"] = round(total_hours, 1)
+
+    # "На обекта" = team members + any reported workers (union)
+    all_on_site = set(user_ids) | reported_ids
+    card_team["on_site_today"] = len(all_on_site)
 
     # Pending approval count for this project
     pending = await db.employee_daily_reports.count_documents(
