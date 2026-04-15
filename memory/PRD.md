@@ -110,6 +110,13 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Child inherits shared parent data (client, address, contacts)
   - Nested sub-projects blocked (child can't have children)
   - Verified: 100% backend (12/12) + 100% frontend
+- **Navigation Cleanup (Project Detail + Sidebar)** — Apr 15, 2026
+  - Removed from project header: Присъствие, Отчети, Липсващи СМР, +Ново СМР buttons
+  - Moved Присъствие + Отчети → Team tab (with pending approval section)
+  - Moved +Ново СМР, Импорт, AI, Липсващи СМР → SMR tab action bar
+  - Sidebar: "Дневник СМР" renamed to "Отчети", Присъствие moved under Отчети submenu
+  - Overview pending-approval is now compact link to Team tab
+  - Verified: visual audit screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

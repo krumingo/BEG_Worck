@@ -22,7 +22,7 @@ import {
   ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle, Sparkles, Pencil,
   FileText, Package, Wallet, Plus, Loader2, Eye, Shield, Clock,
   TrendingUp, Receipt, Boxes, Scale, UserPlus, BarChart3, Hammer, MapPin,
-  ChevronDown, ChevronRight, CreditCard,
+  ChevronDown, ChevronRight, CreditCard, ClipboardList,
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
@@ -179,20 +179,6 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
-        <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black" data-testid="new-extra-work-btn">
-          <Plus className="w-4 h-4 mr-1" /> Ново СМР
-        </Button>
-      </div>
-
-      {/* Quick nav with context */}
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { to: `/site-attendance?project=${projectId}`, label: t("projectContext.attendance") },
-          { to: `/daily-logs?project=${projectId}`, label: t("projectContext.reports") },
-          { to: `/missing-smr?project=${projectId}`, label: t("projectContext.requests") },
-        ].map(({ to, label }) => (
-          <Button key={to} variant="outline" size="sm" onClick={() => navigate(to)} className="text-xs h-7">{label}</Button>
-        ))}
       </div>
 
       {/* Tabs */}
@@ -209,28 +195,13 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: OVERVIEW ════ */}
         <TabsContent value="overview" className="space-y-4 mt-4">
-          {/* Pending Approval */}
+          {/* Pending Approval - compact with link to Team tab */}
           {pendingReports.length > 0 && (
-            <div className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-4" data-testid="pending-approval">
-              <div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4 text-amber-400" /><h3 className="text-sm font-semibold text-amber-400">{pendingReports.length} отчета за одобрение</h3></div>
-              <div className="space-y-2">
-                {pendingReports.slice(0, 10).map(r => (
-                  <div key={r.id} className="flex items-center justify-between bg-card/50 rounded-lg px-3 py-2 border border-border/50">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(r.worker_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium">{r.worker_name}</p>
-                        <p className="text-[9px] text-muted-foreground">{r.date} | {r.smr_type || "—"} | {r.hours}ч</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10" onClick={() => handleApproveReport(r.id)}>✓</Button>
-                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] text-red-400 border-red-500/30 hover:bg-red-500/10" onClick={() => handleRejectReport(r.id)}>✗</Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <button onClick={() => handleTabChange("team")} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-amber-500/5 border border-amber-500/30 hover:bg-amber-500/10 transition-colors text-left" data-testid="pending-approval">
+              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span className="text-sm text-amber-400 font-medium">{pendingReports.length} отчета за одобрение</span>
+              <ChevronRight className="w-4 h-4 text-amber-400 ml-auto" />
+            </button>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -428,17 +399,20 @@ export default function ProjectDetailPage() {
         {/* ════ TAB: SMR ════ */}
         <TabsContent value="smr" className="space-y-4 mt-4">
           {/* SMR Entry Points */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-sm font-semibold text-white">СМР — {project.name}</h3>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowAddSMR(!showAddSMR)} data-testid="add-smr-toggle">
                 <Plus className="w-3 h-3" />{showAddSMR ? "Скрий" : "+ Ново СМР"}
               </Button>
               <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowImportSMR(!showImportSMR)} data-testid="import-smr-toggle">
                 <FileText className="w-3 h-3" />Импорт
               </Button>
-              <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black text-xs gap-1">
+              <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black text-xs gap-1" data-testid="new-extra-work-btn">
                 <Sparkles className="w-3 h-3" />Ново СМР + AI
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs gap-1 text-amber-400 border-amber-500/30" onClick={() => navigate(`/missing-smr?project=${projectId}`)} data-testid="missing-smr-btn">
+                <AlertTriangle className="w-3 h-3" />Липсващи СМР
               </Button>
             </div>
           </div>
@@ -540,6 +514,40 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: TEAM ════ */}
         <TabsContent value="team" className="space-y-4 mt-4">
+          {/* Quick links: Присъствие + Отчети */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => navigate(`/site-attendance?project=${projectId}`)} data-testid="team-attendance-btn">
+              <ClipboardList className="w-3 h-3" />Присъствие
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => navigate(`/daily-logs?project=${projectId}`)} data-testid="team-reports-btn">
+              <FileText className="w-3 h-3" />Отчети
+            </Button>
+          </div>
+
+          {/* Pending Approval (moved here from overview for team context) */}
+          {pendingReports.length > 0 && (
+            <div className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-4" data-testid="team-pending-approval">
+              <div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4 text-amber-400" /><h3 className="text-sm font-semibold text-amber-400">{pendingReports.length} отчета за одобрение</h3></div>
+              <div className="space-y-2">
+                {pendingReports.slice(0, 10).map(r => (
+                  <div key={r.id} className="flex items-center justify-between bg-card/50 rounded-lg px-3 py-2 border border-border/50">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(r.worker_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium">{r.worker_name}</p>
+                        <p className="text-[9px] text-muted-foreground">{r.date} | {r.smr_type || "—"} | {r.hours}ч</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10" onClick={() => handleApproveReport(r.id)}>✓</Button>
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] text-red-400 border-red-500/30 hover:bg-red-500/10" onClick={() => handleRejectReport(r.id)}>✗</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <ProjectPersonnelPanel projectId={projectId} />
           </div>
