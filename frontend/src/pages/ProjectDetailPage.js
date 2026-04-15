@@ -22,6 +22,7 @@ import {
   ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle, Sparkles, Pencil,
   FileText, Package, Wallet, Plus, Loader2, Eye, Shield, Clock,
   TrendingUp, Receipt, Boxes, Scale, UserPlus, BarChart3, Hammer, MapPin,
+  ChevronDown, ChevronRight, CreditCard,
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
@@ -261,9 +262,9 @@ export default function ProjectDetailPage() {
 
             {/* Card: Баланс */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-balance">
-              <div className="flex items-center gap-2 mb-3"><Scale className="w-5 h-5 text-green-500" /><h3 className="font-semibold text-white">Баланс</h3></div>
+              <div className="flex items-center gap-2 mb-3"><Scale className="w-5 h-5 text-green-500" /><h3 className="font-semibold text-white">Баланс (касов)</h3></div>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-gray-400">Приходи:</span><span className="text-green-400 font-mono">{formatCurrency(balance.revenue, "BGN")}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Платено от клиент:</span><span className="text-green-400 font-mono">{formatCurrency(balance.income, "BGN")}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Разходи:</span><span className="text-red-400 font-mono">{formatCurrency(balance.expenses, "BGN")}</span></div>
                 <div className="flex justify-between pt-2 border-t border-gray-700">
                   <span className="text-gray-400">Баланс:</span>
@@ -426,7 +427,7 @@ export default function ProjectDetailPage() {
           {/* Subcontractor Performance */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SubcontractorPerformancePanel projectId={projectId} /></div>
 
-          {/* Invoices */}
+          {/* Invoices with expandable payment history */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-invoices">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2"><Receipt className="w-5 h-5 text-pink-500" /><h3 className="font-semibold text-white">Фактури ({invoices.count})</h3></div>
@@ -434,34 +435,16 @@ export default function ProjectDetailPage() {
             </div>
             {invoices.invoices.length > 0 ? (
               <>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader><TableRow className="border-gray-700">
-                      <TableHead className="text-gray-400">№</TableHead><TableHead className="text-gray-400">Клиент</TableHead>
-                      <TableHead className="text-gray-400">Дата</TableHead><TableHead className="text-gray-400">Падеж</TableHead>
-                      <TableHead className="text-gray-400">Статус</TableHead><TableHead className="text-gray-400 text-right">Общо</TableHead>
-                      <TableHead className="text-gray-400 text-right">Платено</TableHead><TableHead className="text-gray-400 text-right">Остатък</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>
-                      {invoices.invoices.map(inv => (
-                        <TableRow key={inv.id} className="border-gray-700 cursor-pointer hover:bg-gray-800/50" onClick={() => navigate(`/finance/invoices/${inv.id}`)}>
-                          <TableCell className="text-yellow-400 font-mono text-sm">{inv.invoice_number}</TableCell>
-                          <TableCell className="text-white text-sm">{inv.counterparty_name || "—"}</TableCell>
-                          <TableCell className="text-gray-400 text-sm">{formatDate(inv.issue_date)}</TableCell>
-                          <TableCell className="text-gray-400 text-sm">{formatDate(inv.due_date)}</TableCell>
-                          <TableCell><Badge variant="outline" className="text-xs">{inv.status}</Badge></TableCell>
-                          <TableCell className="text-right text-white font-mono">{formatCurrency(inv.total, inv.currency)}</TableCell>
-                          <TableCell className="text-right text-green-400 font-mono">{formatCurrency(inv.paid_amount, inv.currency)}</TableCell>
-                          <TableCell className="text-right text-red-400 font-mono">{formatCurrency(inv.remaining_amount, inv.currency)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-700 grid grid-cols-3 gap-4 text-sm">
-                  <div className="text-center"><p className="text-gray-400">Общо</p><p className="text-white font-bold">{formatCurrency(invoices.totals.total, "BGN")}</p></div>
-                  <div className="text-center"><p className="text-gray-400">Платено</p><p className="text-green-400 font-bold">{formatCurrency(invoices.totals.paid, "BGN")}</p></div>
-                  <div className="text-center"><p className="text-gray-400">Неплатено</p><p className="text-red-400 font-bold">{formatCurrency(invoices.totals.unpaid, "BGN")}</p></div>
+                <InvoiceListWithPayments invoices={invoices.invoices} navigate={navigate} />
+                {/* Summary totals */}
+                <div className="mt-4 pt-4 border-t border-gray-700 space-y-2" data-testid="invoices-summary">
+                  <div className="grid grid-cols-5 gap-3 text-sm">
+                    <div className="text-center"><p className="text-gray-400 text-xs">Без ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.subtotal, "BGN")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.vat, "BGN")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">С ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.total, "BGN")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">Платено</p><p className="text-green-400 font-bold font-mono">{formatCurrency(invoices.totals.paid, "BGN")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">Чакащо</p><p className="text-amber-400 font-bold font-mono">{formatCurrency(invoices.totals.unpaid, "BGN")}</p></div>
+                  </div>
                 </div>
               </>
             ) : <p className="text-gray-500 text-sm">Няма издадени фактури</p>}
@@ -532,6 +515,100 @@ export default function ProjectDetailPage() {
       </Dialog>
       <ClientPickerModal projectId={projectId} open={showClientPicker} onOpenChange={setShowClientPicker} onClientSelected={fetchDashboard} />
       <ExtraWorkModal projectId={projectId} open={showExtraWork} onOpenChange={setShowExtraWork} onCreated={() => setExtraWorkRefresh(prev => prev + 1)} />
+    </div>
+  );
+}
+
+
+// ── Payment method translation ──
+const PAYMENT_METHODS = {
+  BankTransfer: "Банков превод",
+  Cash: "В брой",
+  Card: "Карта",
+  Check: "Чек",
+  Other: "Друго",
+};
+
+// ── Invoice status labels ──
+const INV_STATUS = {
+  Draft: { label: "Чернова", cls: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+  Sent: { label: "Изпратена", cls: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  Paid: { label: "Платена", cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  PartiallyPaid: { label: "Частично платена", cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  Overdue: { label: "Просрочена", cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+  Cancelled: { label: "Анулирана", cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+};
+
+function InvoiceListWithPayments({ invoices, navigate }) {
+  const [expanded, setExpanded] = useState({});
+  const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  return (
+    <div className="space-y-2" data-testid="invoice-list-payments">
+      {invoices.map(inv => {
+        const isOpen = expanded[inv.id];
+        const st = INV_STATUS[inv.status] || { label: inv.status, cls: "" };
+        const hasPayments = inv.payments && inv.payments.length > 0;
+        return (
+          <div key={inv.id} className="rounded-lg border border-gray-700 overflow-hidden" data-testid={`invoice-row-${inv.id}`}>
+            {/* Invoice header row */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-800/60 hover:bg-gray-700/50 transition-colors">
+              <button onClick={() => toggle(inv.id)} className="flex-shrink-0 text-gray-400 hover:text-white p-0.5" data-testid={`invoice-toggle-${inv.id}`}>
+                {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/finance/invoices/${inv.id}`)}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-mono text-sm font-bold text-yellow-400">{inv.invoice_no || "—"}</span>
+                  <span className="text-sm text-white truncate">{inv.client_name || "—"}</span>
+                  <Badge variant="outline" className={`text-[10px] ${st.cls}`}>{st.label}</Badge>
+                </div>
+                <div className="flex items-center gap-4 mt-1 text-[11px] text-gray-400">
+                  <span>Без ДДС: <span className="font-mono text-gray-300">{formatCurrency(inv.subtotal, inv.currency)}</span></span>
+                  <span>ДДС: <span className="font-mono text-gray-300">{formatCurrency(inv.vat_amount, inv.currency)}</span></span>
+                  <span>С ДДС: <span className="font-mono text-white font-medium">{formatCurrency(inv.total, inv.currency)}</span></span>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-green-400 font-mono">Платено: {formatCurrency(inv.paid_amount, inv.currency)}</span>
+                  {inv.remaining_amount > 0 && <span className="text-amber-400 font-mono">Чака: {formatCurrency(inv.remaining_amount, inv.currency)}</span>}
+                </div>
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  {inv.issue_date && <span>{formatDate(inv.issue_date)}</span>}
+                  {inv.due_date && <span className="ml-2">Падеж: {formatDate(inv.due_date)}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Expanded payment history */}
+            {isOpen && (
+              <div className="border-t border-gray-700/50 bg-gray-900/40 px-4 py-3" data-testid={`invoice-payments-${inv.id}`}>
+                {hasPayments ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-2">История на плащанията</p>
+                    {inv.payments.map((p, i) => (
+                      <div key={p.id || i} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-gray-800/50 text-xs" data-testid={`payment-row-${p.id || i}`}>
+                        <div className="flex items-center gap-3">
+                          <CreditCard className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          <span className="text-gray-300">{p.date ? formatDate(p.date) : "—"}</span>
+                          <span className="font-mono font-bold text-emerald-400">{formatCurrency(p.amount, inv.currency)}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-gray-400">
+                          <span>{PAYMENT_METHODS[p.method] || p.method || "—"}</span>
+                          {p.reference && <span className="font-mono text-[10px] text-gray-500">{p.reference}</span>}
+                          {p.note && <span className="text-[10px] text-gray-500 truncate max-w-[150px]">{p.note}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">Няма регистрирани плащания</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

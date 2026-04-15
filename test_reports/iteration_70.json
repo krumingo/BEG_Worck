@@ -1,0 +1,81 @@
+{
+  "summary": "Finance Revenue Split & Invoice Payment History feature fully tested. All 8 features verified: Backend APIs return correct data structure (earned_revenue cash basis, invoiced_revenue accrual, revenue_mode='cash', invoices with payments[] array, totals with subtotal/vat/total/paid/unpaid). Frontend Finance tab displays all Bulgarian labels correctly, chevron toggle expands payment history, summary row shows all 5 totals.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_finance_revenue_split.py",
+    "/app/test_reports/pytest/test_finance_revenue_split_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_finance_revenue_split.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all UI features verified)"
+  },
+  "test_credentials": "admin@begwork.com / AdminTest123!Secure",
+  "seed_data_creation": "None - used existing project c3529276-8c03-49b3-92de-51216aab25da with invoice INV-1007 (total=30000, paid=10000) and 1 payment allocation of 10000 BGN via BankTransfer",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Finance Revenue Split feature fully tested. Key findings: 1) GET /api/projects/{projectId}/financial-results returns operating.earned_revenue (cash only - actual paid amounts), operating.invoiced_revenue (accrual - total invoiced), and revenue_mode='cash'. 2) GET /api/projects/{projectId}/dashboard returns invoices with payments[] array containing {id, amount, date, method, reference, note}, and totals with {subtotal, vat, total, paid, unpaid}. 3) Frontend Finance tab shows FinancialResultsCard with 3 cards (Ликвидност/Cash, Оперативен резултат/Operating, Реален резултат/Fully Loaded). Operating card shows 'Фактурирано (начислено)' for invoiced_revenue and 'Реално платено (касов приход)' in green for earned_revenue. 4) Invoice list (data-testid='invoice-list-payments') shows invoice rows with chevron toggle (data-testid='invoice-toggle-{id}'). 5) Expanded payment history (data-testid='invoice-payments-{id}') shows date, amount, method in Bulgarian (Банков превод), reference. 6) Summary row (data-testid='invoices-summary') shows 5 columns: Без ДДС, ДДС, С ДДС, Платено (green), Чакащо (amber). 7) Overview tab Balance card shows 'Платено от клиент' (income) correctly using only paid amounts, not inflated by unpaid invoices.",
+  "features_tested": {
+    "backend_api": {
+      "GET /api/projects/{projectId}/financial-results": [
+        "Returns 200 for valid project",
+        "Contains operating section with earned_revenue (cash basis)",
+        "Contains operating section with invoiced_revenue (accrual basis)",
+        "Contains revenue_mode='cash'",
+        "earned_revenue <= invoiced_revenue (logical validation)",
+        "Contains cash section",
+        "Contains fully_loaded section"
+      ],
+      "GET /api/projects/{projectId}/dashboard": [
+        "Returns 200 for valid project",
+        "Contains invoices section with invoices list",
+        "Contains invoices.totals with subtotal, vat, total, paid, unpaid",
+        "Each invoice has payments[] array",
+        "Each invoice has subtotal, vat_amount, total, paid_amount, remaining_amount",
+        "Payment allocations have amount, date, method, reference",
+        "Balance section income equals invoices.totals.paid (cash basis)"
+      ],
+      "specific_project_data": [
+        "Project c3529276-8c03-49b3-92de-51216aab25da has invoice INV-1007",
+        "INV-1007 has payment allocation of 10000 BGN",
+        "Payment method is BankTransfer"
+      ]
+    },
+    "frontend_ui": {
+      "finance_tab": [
+        "FinancialResultsCard (data-testid='financial-results-card') present",
+        "Operating card shows 'Фактурирано (начислено)' for invoiced_revenue",
+        "Operating card shows 'Реално платено (касов приход)' for earned_revenue in green",
+        "Invoice list (data-testid='invoice-list-payments') present",
+        "Invoice rows show invoice_no, client_name, status badge",
+        "Invoice rows show Без ДДС/ДДС/С ДДС breakdown",
+        "Chevron toggle (data-testid='invoice-toggle-{id}') expands/collapses payment history",
+        "Expanded payment history shows date, amount, method (Bulgarian), reference",
+        "Summary row (data-testid='invoices-summary') shows 5 totals",
+        "Summary labels: Без ДДС, ДДС, С ДДС, Платено (green), Чакащо (amber)"
+      ],
+      "overview_tab": [
+        "Balance card (data-testid='card-balance') present",
+        "Shows 'Платено от клиент' (income) - not inflated by unpaid invoices"
+      ]
+    },
+    "i18n_bulgarian": [
+      "finResults.invoiced = 'Фактурирано (начислено)'",
+      "finResults.cashIn = 'Реално платено (касов приход)'",
+      "Summary labels: Без ДДС, ДДС, С ДДС, Платено, Чакащо",
+      "Payment method: Банков превод (BankTransfer)"
+    ]
+  }
+}

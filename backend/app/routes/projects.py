@@ -1031,9 +1031,46 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_list = []
     totals_paid = 0
     totals_unpaid = 0
+    totals_subtotal = 0
+    totals_vat = 0
+    totals_total = 0
+    
+    # Batch-fetch all payment allocations for this project's invoices
+    invoice_ids = [inv.get("id") for inv in invoices if inv.get("id")]
+    all_allocations = []
+    if invoice_ids:
+        all_allocations = await db.payment_allocations.find(
+            {"invoice_id": {"$in": invoice_ids}},
+            {"_id": 0}
+        ).sort("allocated_at", -1).to_list(2000)
+    
+    # Batch-fetch all related finance_payments
+    payment_ids = list(set(a.get("payment_id") for a in all_allocations if a.get("payment_id")))
+    payments_map = {}
+    if payment_ids:
+        fp_list = await db.finance_payments.find(
+            {"id": {"$in": payment_ids}},
+            {"_id": 0, "id": 1, "date": 1, "method": 1, "reference": 1, "note": 1}
+        ).to_list(2000)
+        payments_map = {fp["id"]: fp for fp in fp_list}
+    
+    # Group allocations by invoice_id
+    alloc_by_invoice = {}
+    for a in all_allocations:
+        inv_id = a.get("invoice_id")
+        if inv_id not in alloc_by_invoice:
+            alloc_by_invoice[inv_id] = []
+        fp = payments_map.get(a.get("payment_id"), {})
+        alloc_by_invoice[inv_id].append({
+            "id": a.get("id"),
+            "amount": a.get("amount_allocated", 0),
+            "date": fp.get("date"),
+            "method": fp.get("method"),
+            "reference": fp.get("reference"),
+            "note": fp.get("note"),
+        })
     
     for inv in invoices:
-        # Use actual invoice fields (subtotal, vat_amount, total, paid_amount, remaining_amount)
         subtotal = inv.get("subtotal", 0) or 0
         vat_amount = inv.get("vat_amount", 0) or 0
         total = inv.get("total", 0) or 0
@@ -1044,9 +1081,13 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         if inv.get("status") != "Cancelled":
             totals_paid += paid_amount
             totals_unpaid += remaining_amount
+            totals_subtotal += subtotal
+            totals_vat += vat_amount
+            totals_total += total
         
+        inv_id = inv.get("id")
         invoice_list.append({
-            "id": inv.get("id"),
+            "id": inv_id,
             "invoice_no": inv.get("invoice_no", ""),
             "direction": inv.get("direction", "Issued"),
             "lines_count": len(inv.get("lines", [])),
@@ -1062,15 +1103,18 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             "paid_amount": paid_amount,
             "remaining_amount": remaining_amount,
             "status": inv.get("status", "Draft"),
+            "payments": alloc_by_invoice.get(inv_id, []),
         })
     
     card_invoices = {
         "invoices": invoice_list,
         "count": len(invoice_list),
         "totals": {
+            "subtotal": round(totals_subtotal, 2),
+            "vat": round(totals_vat, 2),
+            "total": round(totals_total, 2),
             "paid": round(totals_paid, 2),
             "unpaid": round(totals_unpaid, 2),
-            "total": round(totals_paid + totals_unpaid, 2),
         },
     }
     

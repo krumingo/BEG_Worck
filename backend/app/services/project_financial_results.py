@@ -151,16 +151,20 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # B) OPERATING RESULT
     # ══════════════════════════════════════════════════════════════
 
-    # Earned revenue: invoiced (not just advances/payments)
-    earned_revenue = round(sum(
+    # Invoiced revenue (accrual): total of all non-draft/cancelled invoices
+    invoiced_revenue = round(sum(
         i.get("total", 0) for i in invoices
         if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
     ), 2)
-    revenue_mode = "invoiced"
-    if earned_revenue == 0 and cash_in > 0:
-        earned_revenue = cash_in
-        revenue_mode = "cash"
-        warnings.append("Няма фактурирани суми — използва се cash basis")
+
+    # Earned revenue (cash basis): only actual paid amounts
+    earned_revenue = round(sum(
+        (i.get("paid_amount") or 0) for i in invoices
+        if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
+    ), 2)
+    revenue_mode = "cash"
+    if earned_revenue == 0 and invoiced_revenue > 0:
+        warnings.append("Има фактурирани суми, но няма реални плащания — оперативен приход = 0")
 
     # Direct labor: clean labor (hours × rate) from approved sessions
     # Resolve rates for workers with 0 stored rate
@@ -196,6 +200,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     operating_result = {
         "earned_revenue": earned_revenue,
+        "invoiced_revenue": invoiced_revenue,
         "revenue_mode": revenue_mode,
         "direct_labor": direct_labor,
         "materials": paid_materials,
