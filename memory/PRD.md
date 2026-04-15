@@ -90,6 +90,18 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Single route /employees/:id with ?tab= deep links (7 tabs total)
   - All entry points navigate to same dossier (Personnel, Reports, Dashboard, Payroll)
   - Verified: 100% frontend
+- **Revenue Split: Invoiced vs Paid (Cash Basis)** — Apr 15, 2026
+  - `project_financial_results.py`: `earned_revenue` now uses ONLY `paid_amount` (cash basis). New `invoiced_revenue` field for accrual total.
+  - `FinancialResultsCard.js`: Operating card shows both Фактурирано and Реално платено
+  - Balance card uses income from paid amounts only (no inflation from unpaid invoices)
+  - Verified: 100% backend (20/20) + 100% frontend
+- **Inline Payment History in Project Finance Tab** — Apr 15, 2026
+  - Dashboard endpoint now returns `payments[]` array per invoice (batch-fetched from payment_allocations + finance_payments)
+  - Expandable invoice rows with chevron toggle showing full payment history (date, amount, method in Bulgarian, reference)
+  - Summary row: Без ДДС, ДДС, С ДДС, Платено, Чакащо
+  - Invoice totals now include subtotal and vat breakdown
+  - Verified: 100% backend + 100% frontend
+
 
 ### UPCOMING PRIORITY BLOCKS:
 
