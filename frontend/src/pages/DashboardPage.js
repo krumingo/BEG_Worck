@@ -20,6 +20,7 @@ import MorningBriefingPanel from "@/components/MorningBriefingPanel";
 import CashflowForecastPanel from "@/components/CashflowForecastPanel";
 import PersonnelTodayCard from "@/components/PersonnelTodayCard";
 import PendingPaymentsCard from "@/components/PendingPaymentsCard";
+import UnclearStatusCard from "@/components/UnclearStatusCard";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -202,6 +203,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* UNCLEAR STATUS */}
+      {isManager && <UnclearStatusCard />}
 
       {/* PERSONNEL TODAY */}
       {isManager && <PersonnelTodayCard />}

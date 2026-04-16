@@ -294,6 +294,8 @@ async def run_reminder_jobs():
         local_now = get_local_now(policy["timezone"])
         date = local_now.strftime("%Y-%m-%d")
         current_time = local_now.strftime("%H:%M")
+        current_hour = int(current_time.split(":")[0])
+
         if current_time >= policy["attendance_deadline"]:
             missing_att = await compute_missing_attendance(org_id, date)
             for m in missing_att:
@@ -302,6 +304,49 @@ async def run_reminder_jobs():
             missing_rep = await compute_missing_work_reports(org_id, date)
             for m in missing_rep:
                 await send_reminder_for_user(org_id, "MissingWorkReport", date, m["user_id"], m["project_id"], policy)
+
+        # Unclear status reminders at 09:00, 12:00, 17:00
+        if current_hour in (9, 12, 17):
+            reminder_type = f"UnclearStatus_{current_hour:02d}"
+            existing = await db.reminder_logs.find_one(
+                {"org_id": org_id, "type": reminder_type, "date": date}
+            )
+            if not existing:
+                # Count unclear workers
+                profiles = await db.employee_profiles.find(
+                    {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
+                ).to_list(500)
+                active_ids = [p["user_id"] for p in profiles]
+                if active_ids:
+                    att = await db.attendance_entries.find(
+                        {"org_id": org_id, "date": date, "user_id": {"$in": active_ids}},
+                        {"_id": 0, "user_id": 1}
+                    ).to_list(500)
+                    marked_ids = set(e["user_id"] for e in att)
+                    unclear_count = len([uid for uid in active_ids if uid not in marked_ids])
+                    if unclear_count > 0:
+                        level = "info" if current_hour == 9 else "warning" if current_hour == 12 else "critical"
+                        msg = {9: "Присъствието не е попълнено", 12: f"{unclear_count} неясни по статут", 17: f"ФИНАЛНО: {unclear_count} без статус за деня"}[current_hour]
+                        # Create notification for admins
+                        admins = await db.users.find(
+                            {"org_id": org_id, "role": {"$in": ["Admin", "Owner"]}},
+                            {"_id": 0, "id": 1}
+                        ).to_list(20)
+                        for admin in admins:
+                            await db.notifications.insert_one({
+                                "id": str(uuid.uuid4()), "org_id": org_id, "user_id": admin["id"],
+                                "type": "UnclearStatus", "level": level,
+                                "title": f"Неясни по статут ({current_hour}:00)",
+                                "message": msg, "is_read": False,
+                                "created_at": datetime.now(timezone.utc).isoformat(),
+                            })
+                        await db.reminder_logs.insert_one({
+                            "id": str(uuid.uuid4()), "org_id": org_id,
+                            "type": reminder_type, "date": date,
+                            "unclear_count": unclear_count, "level": level,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        })
+
         open_reminders = await db.reminder_logs.find(
             {"org_id": org_id, "date": date, "status": {"$in": ["Open", "Reminded"]}}, {"_id": 0}
         ).to_list(1000)
@@ -814,3 +859,106 @@ async def mark_notifications_read(user: dict = Depends(get_current_user)):
         {"$set": {"is_read": True}}
     )
     return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════
+# UNCLEAR STATUS (Неясни по статут)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/attendance/unclear-status")
+async def get_unclear_status(user: dict = Depends(get_current_user), project_id: str = ""):
+    """Get workers with unclear daily status — not Present, not Leave, not SickLeave, no report elsewhere."""
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Manager access required")
+
+    org_id = user["org_id"]
+    date = today_str()
+
+    # Get all active employees from profiles
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
+    ).to_list(500)
+    all_active_ids = [p["user_id"] for p in profiles]
+
+    # If no profiles, fallback to all users with Technician role
+    if not all_active_ids:
+        techs = await db.users.find(
+            {"org_id": org_id, "role": {"$in": ["Technician", "SiteManager"]}},
+            {"_id": 0, "id": 1}
+        ).to_list(500)
+        all_active_ids = [t["id"] for t in techs]
+
+    if not all_active_ids:
+        return {"unclear": [], "total": 0, "date": date}
+
+    # If project_id filter, only check workers assigned to that project
+    if project_id:
+        team = await db.project_team.find(
+            {"project_id": project_id, "active": True}, {"_id": 0, "user_id": 1}
+        ).to_list(200)
+        team_ids = set(t["user_id"] for t in team)
+        # Also include workers from today's roster
+        roster = await db.site_daily_rosters.find_one(
+            {"org_id": org_id, "project_id": project_id, "date": date}, {"_id": 0, "workers": 1}
+        )
+        if roster:
+            team_ids |= set(w.get("worker_id") for w in roster.get("workers", []))
+        all_active_ids = [uid for uid in all_active_ids if uid in team_ids]
+
+    # Get attendance entries for today
+    att_entries = await db.attendance_entries.find(
+        {"org_id": org_id, "date": date, "user_id": {"$in": all_active_ids}},
+        {"_id": 0, "user_id": 1, "status": 1, "project_id": 1},
+    ).to_list(500)
+    att_map = {e["user_id"]: e for e in att_entries}
+
+    # Get workers with reports today (on any project)
+    reports_today = await db.employee_daily_reports.find(
+        {"org_id": org_id, "date": date, "worker_id": {"$in": all_active_ids}},
+        {"_id": 0, "worker_id": 1},
+    ).to_list(500)
+    reported_ids = set(r["worker_id"] for r in reports_today)
+
+    # Get worker_calendar entries (admin leave/sick)
+    cal_entries = await db.worker_calendar.find(
+        {"org_id": org_id, "date": date, "worker_id": {"$in": all_active_ids},
+         "status": {"$in": ["leave", "sick", "vacation"]}},
+        {"_id": 0, "worker_id": 1, "status": 1},
+    ).to_list(500)
+    cal_map = {c["worker_id"]: c["status"] for c in cal_entries}
+
+    # Determine unclear
+    unclear = []
+    clear_ids = set()
+    for uid in all_active_ids:
+        att = att_map.get(uid)
+        cal = cal_map.get(uid)
+
+        # Clear if: Present/Late, or SickLeave/Leave, or in calendar as leave/sick
+        if att and att.get("status") in ("Present", "Late"):
+            clear_ids.add(uid)
+            continue
+        if att and att.get("status") in ("SickLeave", "Leave", "Vacation", "Excused", "Holiday"):
+            clear_ids.add(uid)
+            continue
+        if cal:
+            clear_ids.add(uid)
+            continue
+        # Clear if has report on any project today (implies working)
+        if uid in reported_ids:
+            clear_ids.add(uid)
+            continue
+        # Otherwise: unclear
+        unclear.append({"user_id": uid, "reason": "no_status"})
+
+    # Enrich with names
+    if unclear:
+        uids = [u["user_id"] for u in unclear]
+        users = await db.users.find(
+            {"id": {"$in": uids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}
+        ).to_list(300)
+        umap = {u["id"]: f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users}
+        for u in unclear:
+            u["worker_name"] = umap.get(u["user_id"], "")
+
+    return {"unclear": unclear, "total": len(unclear), "date": date, "checked": len(all_active_ids), "clear": len(clear_ids)}

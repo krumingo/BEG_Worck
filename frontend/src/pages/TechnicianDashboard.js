@@ -532,7 +532,10 @@ export default function TechnicianDashboard() {
             {enrichedRoster.map(w => {
               const state = getWorkerState(w);
               const badge = STATE_BADGE[state];
-              const borderCls = STATUS_BORDER[w.status] || "border-border";
+              const isAdminLocked = w.status === "SickLeave" || w.status === "Leave" || w.status === "Vacation";
+              const isPresent = w.status === "Present" || w.status === "Late";
+              const borderCls = isAdminLocked ? "border-red-500/30 bg-red-500/5" : isPresent ? "border-emerald-500/40" : "border-dashed border-gray-600";
+              const ADMIN_LABEL = { SickLeave: "Болен", Leave: "Отпуск", Vacation: "Отпуск" };
 
               return (
                 <div key={w.worker_id} className={`flex items-center gap-3 p-3 rounded-2xl border-2 bg-card transition-colors ${borderCls}`} data-testid={`worker-row-${w.worker_id}`}>
@@ -542,24 +545,24 @@ export default function TechnicianDashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="font-medium text-sm truncate">{w.worker_name}</p>
-                      <Badge variant="outline" className={`text-[8px] ${badge.cls}`}>{badge.label}</Badge>
+                      {!isAdminLocked && <Badge variant="outline" className={`text-[8px] ${badge.cls}`}>{badge.label}</Badge>}
                     </div>
                     <p className="text-[10px] text-muted-foreground">{w.position || "Работник"}</p>
                   </div>
-                  <select
-                    value={w.status}
-                    onChange={e => setEnrichedRoster(prev => prev.map(r => r.worker_id === w.worker_id ? { ...r, status: e.target.value } : r))}
-                    className={`h-8 rounded-lg border px-2 text-xs ${!w.status ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-border bg-background"}`}
-                    data-testid={`status-${w.worker_id}`}
-                  >
-                    {!w.status && <option value="">-- Избери --</option>}
-                    <option value="Present">На работа</option>
-                    <option value="Leave">Отпуск</option>
-                    <option value="SickLeave">Болен</option>
-                    <option value="Absent">Самоотлъчка</option>
-                    <option value="Other">Друго</option>
-                  </select>
-                  <Button variant="ghost" size="sm" onClick={() => handleRemove(w.worker_id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+                  {isAdminLocked ? (
+                    <Badge className="text-[10px] bg-red-500/20 text-red-400 border-red-500/30">{ADMIN_LABEL[w.status] || w.status}</Badge>
+                  ) : (
+                    <button
+                      onClick={() => setEnrichedRoster(prev => prev.map(r => r.worker_id === w.worker_id ? { ...r, status: isPresent ? "" : "Present" } : r))}
+                      className={`h-9 px-4 rounded-xl text-xs font-semibold transition-colors ${isPresent ? "bg-emerald-500 text-white" : "bg-gray-700 text-gray-400 border border-gray-600"}`}
+                      data-testid={`toggle-${w.worker_id}`}
+                    >
+                      {isPresent ? "На работа" : "Потвърди"}
+                    </button>
+                  )}
+                  {!isAdminLocked && (
+                    <Button variant="ghost" size="sm" onClick={() => handleRemove(w.worker_id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+                  )}
                 </div>
               );
             })}
@@ -570,11 +573,11 @@ export default function TechnicianDashboard() {
         {enrichedRoster.length > 0 && (
           <Button
             onClick={handleSave}
-            disabled={!hasUnsavedChanges && !hasUnsetStatus}
-            className={`w-full h-12 rounded-xl text-base ${hasUnsavedChanges ? "bg-amber-500 hover:bg-amber-600 text-black" : hasUnsetStatus ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600/50 cursor-default"}`}
+            disabled={!hasUnsavedChanges}
+            className={`w-full h-12 rounded-xl text-base ${hasUnsavedChanges ? "bg-amber-500 hover:bg-amber-600 text-black" : "bg-emerald-600/50 cursor-default"}`}
             data-testid="save-attendance-btn"
           >
-            {hasUnsetStatus ? "Изберете статус за новите" : hasUnsavedChanges ? "Запази промените" : "Записано"}
+            {hasUnsavedChanges ? "Запази промените" : "Записано"}
           </Button>
         )}
 

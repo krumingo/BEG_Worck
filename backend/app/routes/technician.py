@@ -820,6 +820,25 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     from app.services.project_guards import check_project_writable
     await check_project_writable(data.project_id, org_id, "отчети")
 
+    # Validate attendance: each worker must be Present/Late or have no blocking status
+    attendance_warnings = []
+    for entry in data.entries:
+        wid = entry.worker_id or user["id"]
+        att = await db.attendance_entries.find_one(
+            {"org_id": org_id, "date": today, "user_id": wid},
+            {"_id": 0, "status": 1},
+        )
+        cal = await db.worker_calendar.find_one(
+            {"org_id": org_id, "date": today, "worker_id": wid, "status": {"$in": ["leave", "sick", "vacation"]}},
+            {"_id": 0, "status": 1},
+        )
+        if cal:
+            raise HTTPException(status_code=400, detail=f"Работникът {entry.worker_name or wid} е в {cal['status']}. Не може да бъде отчетен.")
+        if att and att.get("status") in ("SickLeave", "Leave", "Vacation", "Excused"):
+            raise HTTPException(status_code=400, detail=f"Работникът {entry.worker_name or wid} е {att['status']}. Не може да бъде отчетен.")
+        if not att or att.get("status") not in ("Present", "Late"):
+            attendance_warnings.append({"worker_id": wid, "worker_name": entry.worker_name or "", "reason": "no_present_status"})
+
     roster_ids = set()
     if roster:
         roster_ids = {w.get("worker_id") for w in roster.get("workers", [])}
@@ -981,6 +1000,7 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
         "missing_smr_created": missing_smr_created,
         "total_hours": total_hours,
         "hours_warnings": hours_warnings,
+        "attendance_warnings": attendance_warnings,
     }
 
 

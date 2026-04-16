@@ -193,6 +193,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Shortlist preserves avatar_url on workers
   - Clear visual separation: shortlist below save button with `border-t` separator
   - Verified: visual screenshots
+- **Attendance: Toggle-only + Unclear Status + Report Validation** — Apr 16, 2026
+  - "Хора" screen: dropdown replaced with toggle button ("На работа" / "Потвърди")
+  - Admin statuses (Болен/Отпуск) shown as locked red badges — technician cannot change
+  - No Самоотлъчка as morning choice (it's a post-review outcome)
+  - New endpoint `GET /attendance/unclear-status` — returns workers without clear daily status
+  - Reminder system enhanced: UnclearStatus notifications at 09:00/12:00/17:00 for admins
+  - Dashboard: "Неясни по статут" card with count + click-to-details
+  - Daily report validation: blocks if worker is SickLeave/Leave; warns if no Present attendance
+  - Verified: API + visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:
