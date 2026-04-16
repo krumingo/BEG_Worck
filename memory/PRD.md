@@ -174,6 +174,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - TechPortal "Хора" shows shortlist below current roster for quick "+ Днес" adding
   - Shortlist filters: only active workers not already in today's roster
   - Verified: API test + visual screenshots
+- **People Screen UX: Saved/Changed/New States** — Apr 16, 2026
+  - Track `savedRosterState` snapshot on load for change detection
+  - Per-worker state badges: "Записан" (green), "Променено" (amber), "Нов" (blue)
+  - Unsaved changes banner with quick "Запази" button
+  - Safe exit: confirm dialog when Back pressed with unsaved changes
+  - Header: full date, site name, counters (На работа / Общо / Записани)
+  - Status-colored borders: green=Present, red=SickLeave, blue=Leave, orange=Absent
+  - Save button dynamic: "Записано" (green) vs "Запази промените" (amber)
+  - Verified: visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:
