@@ -165,6 +165,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Detail view: shows full day breakdown with warnings panel
   - Technician enriched roster: cross-project total hours per worker per day
   - Verified: API test + visual screenshots
+- **Site Workers Shortlist (filtered extraction)** — Apr 16, 2026
+  - New endpoint `GET /projects/{id}/site-workers` — aggregates from reports + attendance + work_sessions per worker
+  - Returns: name, avatar, position, is_active, first_date, days_count, report_count, total_hours, total_earned
+  - No new table/collection — pure filtered extraction from existing data
+  - New component `SiteWorkersPanel.js` — shows historical table in Project > Team tab
+  - Inactive workers shown with "Неактивен" badge (historical visibility)
+  - TechPortal "Хора" shows shortlist below current roster for quick "+ Днес" adding
+  - Shortlist filters: only active workers not already in today's roster
+  - Verified: API test + visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

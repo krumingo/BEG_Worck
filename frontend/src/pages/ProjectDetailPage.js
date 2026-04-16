@@ -44,6 +44,7 @@ import { toast } from "sonner";
 import CentralizedProjectView from "@/components/CentralizedProjectView";
 import FinancialResultsCard from "@/components/FinancialResultsCard";
 import ProjectPersonnelPanel from "@/components/ProjectPersonnelPanel";
+import SiteWorkersPanel from "@/components/SiteWorkersPanel";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -555,6 +556,9 @@ export default function ProjectDetailPage() {
 
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <ProjectPersonnelPanel projectId={projectId} />
+          </div>
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <SiteWorkersPanel projectId={projectId} />
           </div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <PersonnelUnified projectId={projectId} team={team} />

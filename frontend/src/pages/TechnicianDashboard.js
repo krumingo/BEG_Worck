@@ -137,17 +137,21 @@ export default function TechnicianDashboard() {
   };
 
   // ── People Management ───────────────────────────────────────
+  const [siteWorkers, setSiteWorkers] = useState([]);
+
   const openPeople = async () => {
     setScreen("people");
     setShowAddPeople(false);
     try {
-      const [enrichedRes, availRes] = await Promise.all([
+      const [enrichedRes, shortlistRes, availRes] = await Promise.all([
         API.get(`/technician/site/${selectedSite.project_id}/roster/enriched`),
+        API.get(`/projects/${selectedSite.project_id}/site-workers`),
         API.get(`/technician/site/${selectedSite.project_id}/roster/available`),
       ]);
       setEnrichedRoster(enrichedRes.data.workers || []);
+      setSiteWorkers(shortlistRes.data.workers || []);
       setAvailablePeople(availRes.data.available || []);
-    } catch { setEnrichedRoster([]); setAvailablePeople([]); }
+    } catch { setEnrichedRoster([]); setSiteWorkers([]); setAvailablePeople([]); }
   };
 
   const removeWorker = async (workerId) => {
@@ -458,6 +462,31 @@ export default function TechnicianDashboard() {
           >
             Запази присъствие
           </Button>
+
+          {/* Shortlist: workers who have worked on this site before (active only, not in today's roster) */}
+          {(() => {
+            const rosterIds = new Set(enrichedRoster.map(w => w.worker_id));
+            const shortlistWorkers = siteWorkers.filter(w => w.is_active && !rosterIds.has(w.worker_id));
+            if (shortlistWorkers.length === 0) return null;
+            return (
+              <div className="space-y-2" data-testid="site-shortlist">
+                <p className="text-xs text-muted-foreground font-semibold">Работили преди на обекта ({shortlistWorkers.length})</p>
+                {shortlistWorkers.slice(0, 8).map(w => (
+                  <div key={w.worker_id} className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-border bg-card/50">
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{w.worker_name}</p>
+                      <p className="text-[9px] text-muted-foreground">{w.position || "—"} · {w.days_count}д · {w.total_hours}ч</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => {
+                      setEnrichedRoster(prev => [...prev, { worker_id: w.worker_id, worker_name: w.worker_name, position: w.position, status: "Present" }]);
+                    }}>+ Днес</Button>
+                  </div>
+                ))}
+                {shortlistWorkers.length > 8 && <p className="text-[9px] text-muted-foreground text-center">и още {shortlistWorkers.length - 8}</p>}
+              </div>
+            );
+          })()}
         </>
       )}
 

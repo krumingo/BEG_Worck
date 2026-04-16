@@ -1487,6 +1487,152 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
     return results
 
 
+
+# ── Site Workers (filtered shortlist, no new table) ────────────────
+
+@router.get("/projects/{project_id}/site-workers")
+async def get_site_workers(project_id: str, user: dict = Depends(get_current_user)):
+    """
+    Historical shortlist of workers who have been on this site.
+    Source: employee_daily_reports + attendance_entries + work_sessions.
+    No new table — pure filtered extraction.
+    """
+    org_id = user["org_id"]
+    from collections import defaultdict
+
+    worker_data = defaultdict(lambda: {
+        "first_date": "9999-99-99", "last_date": "0000-00-00",
+        "days": set(), "report_count": 0, "total_hours": 0,
+        "total_earned": 0, "name": "",
+    })
+
+    # A) From employee_daily_reports (new-style flat)
+    reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "worker_id": {"$exists": True}},
+        {"_id": 0, "worker_id": 1, "worker_name": 1, "date": 1, "hours": 1},
+    ).to_list(5000)
+    for r in reports:
+        wid = r.get("worker_id", "")
+        if not wid:
+            continue
+        d = r.get("date", "")
+        h = float(r.get("hours", 0))
+        wd = worker_data[wid]
+        if d:
+            wd["days"].add(d)
+            if d < wd["first_date"]:
+                wd["first_date"] = d
+            if d > wd["last_date"]:
+                wd["last_date"] = d
+        wd["report_count"] += 1
+        wd["total_hours"] += h
+        if r.get("worker_name"):
+            wd["name"] = r["worker_name"]
+
+    # B) From old-style daily reports (day_entries with project_id)
+    old_reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "day_entries.project_id": project_id, "employee_id": {"$exists": True}},
+        {"_id": 0, "employee_id": 1, "report_date": 1, "day_entries": 1},
+    ).to_list(2000)
+    for r in old_reports:
+        wid = r.get("employee_id", "")
+        if not wid:
+            continue
+        d = r.get("report_date", "")
+        wd = worker_data[wid]
+        if d:
+            wd["days"].add(d)
+            if d < wd["first_date"]:
+                wd["first_date"] = d
+            if d > wd["last_date"]:
+                wd["last_date"] = d
+        for entry in r.get("day_entries", []):
+            if entry.get("project_id") == project_id:
+                wd["total_hours"] += float(entry.get("hours_worked", 0))
+                wd["report_count"] += 1
+
+    # C) From work_sessions (approved labor)
+    sessions = await db.work_sessions.find(
+        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
+        {"_id": 0, "worker_id": 1, "worker_name": 1, "started_at": 1,
+         "duration_hours": 1, "labor_cost": 1},
+    ).to_list(5000)
+    for s in sessions:
+        wid = s.get("worker_id", "")
+        if not wid:
+            continue
+        wd = worker_data[wid]
+        wd["total_earned"] += float(s.get("labor_cost", 0))
+        d = (s.get("started_at") or "")[:10]
+        if d:
+            wd["days"].add(d)
+            if d < wd["first_date"]:
+                wd["first_date"] = d
+            if d > wd["last_date"]:
+                wd["last_date"] = d
+        if s.get("worker_name"):
+            wd["name"] = s["worker_name"]
+
+    # D) From attendance_entries
+    att_entries = await db.attendance_entries.find(
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "user_id": 1, "date": 1},
+    ).to_list(5000)
+    for a in att_entries:
+        wid = a.get("user_id", "")
+        if not wid:
+            continue
+        d = a.get("date", "")
+        wd = worker_data[wid]
+        if d:
+            wd["days"].add(d)
+            if d < wd["first_date"]:
+                wd["first_date"] = d
+            if d > wd["last_date"]:
+                wd["last_date"] = d
+
+    if not worker_data:
+        return {"workers": [], "total": 0}
+
+    # Enrich with user info + active status
+    all_wids = list(worker_data.keys())
+    users = await db.users.find(
+        {"id": {"$in": all_wids}},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1, "role": 1},
+    ).to_list(300)
+    user_map = {u["id"]: u for u in users}
+
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "user_id": {"$in": all_wids}},
+        {"_id": 0, "user_id": 1, "position": 1, "active": 1},
+    ).to_list(300)
+    prof_map = {p["user_id"]: p for p in profiles}
+
+    result = []
+    for wid, wd in worker_data.items():
+        u = user_map.get(wid, {})
+        prof = prof_map.get(wid, {})
+        name = wd["name"] or f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+        is_active = prof.get("active", True) if prof else True
+
+        result.append({
+            "worker_id": wid,
+            "worker_name": name,
+            "avatar_url": u.get("avatar_url"),
+            "position": prof.get("position", ""),
+            "is_active": is_active,
+            "first_date": wd["first_date"] if wd["first_date"] != "9999-99-99" else None,
+            "last_date": wd["last_date"] if wd["last_date"] != "0000-00-00" else None,
+            "days_count": len(wd["days"]),
+            "report_count": wd["report_count"],
+            "total_hours": round(wd["total_hours"], 1),
+            "total_earned": round(wd["total_earned"], 2),
+        })
+
+    result.sort(key=lambda x: x["days_count"], reverse=True)
+    return {"workers": result, "total": len(result)}
+
+
 # ── Parent aggregate (own + children, read-only) ──────────────────
 
 @router.get("/projects/{project_id}/aggregate")
