@@ -406,16 +406,20 @@ export default function TechnicianDashboard() {
   // PEOPLE MANAGEMENT
   // ════════════════════════════════════════════════════════════
   if (screen === "people") {
-    // Change detection helpers
+    // Change detection
     const savedMap = Object.fromEntries(savedRosterState.map(w => [w.worker_id, w.status]));
+    const savedIds = new Set(savedRosterState.map(w => w.worker_id));
+    const currentIds = new Set(enrichedRoster.map(w => w.worker_id));
+
     const getWorkerState = (w) => {
-      const savedStatus = savedMap[w.worker_id];
-      if (savedStatus === undefined) return "new"; // not in saved state = newly added
-      if ((w.status || "Present") !== savedStatus) return "changed"; // status differs
-      return "saved"; // matches saved state
+      if (!savedIds.has(w.worker_id)) return "new";
+      if (w.status !== savedMap[w.worker_id]) return "changed";
+      return "saved";
     };
-    const hasUnsavedChanges = enrichedRoster.some(w => getWorkerState(w) !== "saved")
-      || enrichedRoster.length !== savedRosterState.length;
+
+    const removedWorkers = savedRosterState.filter(w => !currentIds.has(w.worker_id));
+    const hasUnsavedChanges = enrichedRoster.some(w => getWorkerState(w) !== "saved") || removedWorkers.length > 0;
+    const hasUnsetStatus = enrichedRoster.some(w => !w.status);
 
     const handleBack = () => {
       if (hasUnsavedChanges) {
@@ -425,20 +429,64 @@ export default function TechnicianDashboard() {
     };
 
     const handleSave = async () => {
+      if (hasUnsetStatus) {
+        toast.error("Изберете статус за всички нови хора преди запис.");
+        return;
+      }
       try {
-        const workers = enrichedRoster.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name, status: w.status || "Present" }));
+        const workers = enrichedRoster.map(w => ({
+          worker_id: w.worker_id,
+          worker_name: w.worker_name,
+          status: w.status,
+        }));
         const res = await API.post(`/technician/site/${selectedSite.project_id}/attendance`, { workers });
-        toast.success(`Записано: ${res.data.present} на обекта от ${res.data.total}`);
-        // Update saved state to current
-        setSavedRosterState(enrichedRoster.map(w => ({ worker_id: w.worker_id, status: w.status || "Present" })));
-        // Refresh detail
-        const detailRes = await API.get(`/technician/site/${selectedSite.project_id}/detail`);
-        setSiteDetail(detailRes.data);
+        toast.success(`Записано: ${res.data.present} на работа от ${res.data.total}`);
+        // Sync saved state
+        setSavedRosterState(enrichedRoster.map(w => ({ worker_id: w.worker_id, status: w.status })));
+        // Refresh counters
+        try {
+          const detailRes = await API.get(`/technician/site/${selectedSite.project_id}/detail`);
+          setSiteDetail(detailRes.data);
+        } catch {}
       } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
     };
 
-    const savedCount = savedRosterState.length;
-    const presentCount = enrichedRoster.filter(w => (w.status || "Present") === "Present" || w.status === "Late").length;
+    const handleAddFromShortlist = (w) => {
+      if (enrichedRoster.some(r => r.worker_id === w.worker_id)) return;
+      setEnrichedRoster(prev => [...prev, {
+        worker_id: w.worker_id,
+        worker_name: w.worker_name,
+        avatar_url: w.avatar_url || null,
+        position: w.position || "",
+        status: "", // EMPTY — must choose
+      }]);
+    };
+
+    const handleAddFromPicker = () => {
+      if (!selectedToAdd.length) return;
+      const existing = new Set(enrichedRoster.map(r => r.worker_id));
+      const toAdd = selectedToAdd.filter(wid => !existing.has(wid)).map(wid => {
+        const p = availablePeople.find(a => a.worker_id === wid);
+        return {
+          worker_id: wid,
+          worker_name: p?.worker_name || "",
+          avatar_url: p?.avatar_url || null,
+          position: p?.position || "",
+          status: "", // EMPTY — must choose
+        };
+      });
+      setEnrichedRoster(prev => [...prev, ...toAdd]);
+      setSelectedToAdd([]);
+      setShowAddPeople(false);
+      toast.success(`${toAdd.length} добавени. Изберете статус и запазете.`);
+    };
+
+    const handleRemove = (workerId) => {
+      setEnrichedRoster(prev => prev.filter(r => r.worker_id !== workerId));
+    };
+
+    // Counters
+    const presentCount = enrichedRoster.filter(w => w.status === "Present" || w.status === "Late").length;
     const todayStr = new Date().toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
     const STATE_BADGE = {
@@ -446,13 +494,11 @@ export default function TechnicianDashboard() {
       changed: { label: "Променено", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
       new: { label: "Нов", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
     };
-
-    const STATUS_COLORS = {
-      Present: "border-emerald-500/40",
-      Leave: "border-blue-500/40",
-      SickLeave: "border-red-500/40",
-      Absent: "border-orange-500/40",
-      Other: "border-gray-500/40",
+    const STATUS_BORDER = {
+      Present: "border-emerald-500/40", Late: "border-emerald-500/40",
+      Leave: "border-blue-500/40", SickLeave: "border-red-500/40",
+      Absent: "border-orange-500/40", Other: "border-gray-500/40",
+      "": "border-dashed border-gray-600",
     };
 
     return (
@@ -467,43 +513,31 @@ export default function TechnicianDashboard() {
           <Button size="sm" onClick={() => { setSelectedToAdd([]); setPickerSearch(""); setPickerFilter("all"); setShowAddPeople(true); }} data-testid="add-people-btn"><Plus className="w-4 h-4 mr-1" />{t("technician.add")}</Button>
         </div>
 
-        {/* Date + stats bar */}
-        <div className="rounded-xl border border-border bg-card/50 p-3 flex items-center justify-between" data-testid="people-header-stats">
-          <div>
-            <p className="text-xs font-semibold text-white">{todayStr}</p>
-            <p className="text-[10px] text-muted-foreground">{selectedSite?.name}</p>
-          </div>
-          <div className="flex items-center gap-3 text-center">
-            <div><p className="text-lg font-bold text-emerald-400">{presentCount}</p><p className="text-[9px] text-muted-foreground">На работа</p></div>
-            <div><p className="text-lg font-bold">{enrichedRoster.length}</p><p className="text-[9px] text-muted-foreground">Общо</p></div>
-            {savedCount > 0 && <div><p className="text-lg font-bold text-cyan-400">{savedCount}</p><p className="text-[9px] text-muted-foreground">Записани</p></div>}
+        {/* Date + stats */}
+        <div className="rounded-xl border border-border bg-card/50 p-3" data-testid="people-header-stats">
+          <p className="text-xs font-semibold text-white mb-2">{todayStr}</p>
+          <div className="flex items-center gap-4">
+            <div className="text-center"><p className="text-lg font-bold text-emerald-400">{presentCount}</p><p className="text-[9px] text-muted-foreground">На работа</p></div>
+            <div className="text-center"><p className="text-lg font-bold">{enrichedRoster.length}</p><p className="text-[9px] text-muted-foreground">В списъка</p></div>
+            <div className="text-center"><p className="text-lg font-bold text-cyan-400">{savedRosterState.length}</p><p className="text-[9px] text-muted-foreground">Записани</p></div>
+            {removedWorkers.length > 0 && <div className="text-center"><p className="text-lg font-bold text-red-400">{removedWorkers.length}</p><p className="text-[9px] text-muted-foreground">За премахване</p></div>}
           </div>
         </div>
-
-        {/* Unsaved changes banner */}
-        {hasUnsavedChanges && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 flex items-center gap-2" data-testid="unsaved-banner">
-            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <p className="text-xs text-amber-400 flex-1">Има незапазени промени</p>
-            <Button size="sm" className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-black" onClick={handleSave} data-testid="save-quick-btn">Запази</Button>
-          </div>
-        )}
 
         {/* Worker list */}
         {enrichedRoster.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground text-sm">{t("technician.noPeopleYet")}</p>
         ) : (
-          <>
+          <div className="space-y-2">
             {enrichedRoster.map(w => {
-              const st = w.status || "Present";
               const state = getWorkerState(w);
               const badge = STATE_BADGE[state];
-              const borderCls = STATUS_COLORS[st] || "border-border";
+              const borderCls = STATUS_BORDER[w.status] || "border-border";
 
               return (
                 <div key={w.worker_id} className={`flex items-center gap-3 p-3 rounded-2xl border-2 bg-card transition-colors ${borderCls}`} data-testid={`worker-row-${w.worker_id}`}>
-                  {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-11 h-11 rounded-full object-cover" alt="" /> : (
-                    <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                  {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : (
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -513,123 +547,117 @@ export default function TechnicianDashboard() {
                     <p className="text-[10px] text-muted-foreground">{w.position || "Работник"}</p>
                   </div>
                   <select
-                    value={st}
+                    value={w.status}
                     onChange={e => setEnrichedRoster(prev => prev.map(r => r.worker_id === w.worker_id ? { ...r, status: e.target.value } : r))}
-                    className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
+                    className={`h-8 rounded-lg border px-2 text-xs ${!w.status ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-border bg-background"}`}
                     data-testid={`status-${w.worker_id}`}
                   >
+                    {!w.status && <option value="">-- Избери --</option>}
                     <option value="Present">На работа</option>
                     <option value="Leave">Отпуск</option>
                     <option value="SickLeave">Болен</option>
                     <option value="Absent">Самоотлъчка</option>
                     <option value="Other">Друго</option>
                   </select>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    setEnrichedRoster(prev => prev.filter(r => r.worker_id !== w.worker_id));
-                  }}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleRemove(w.worker_id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
                 </div>
               );
             })}
-
-            {/* Save button */}
-            <Button
-              onClick={handleSave}
-              className={`w-full h-12 rounded-xl text-base ${hasUnsavedChanges ? "bg-amber-500 hover:bg-amber-600 text-black" : "bg-emerald-600 hover:bg-emerald-700"}`}
-              data-testid="save-attendance-btn"
-            >
-              {hasUnsavedChanges ? "Запази промените" : "Записано"}
-            </Button>
-
-            {/* Shortlist: workers who have worked on this site before (active only, not in today's roster) */}
-            {(() => {
-              const rosterIds = new Set(enrichedRoster.map(w => w.worker_id));
-              const shortlistWorkers = siteWorkers.filter(w => w.is_active && !rosterIds.has(w.worker_id));
-              if (shortlistWorkers.length === 0) return null;
-              return (
-                <div className="space-y-2" data-testid="site-shortlist">
-                  <p className="text-xs text-muted-foreground font-semibold">Работили преди на обекта ({shortlistWorkers.length})</p>
-                  {shortlistWorkers.slice(0, 8).map(w => (
-                    <div key={w.worker_id} className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-border bg-card/50">
-                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{w.worker_name}</p>
-                        <p className="text-[9px] text-muted-foreground">{w.position || "—"} · {w.days_count}д · {w.total_hours}ч</p>
-                      </div>
-                      <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => {
-                        setEnrichedRoster(prev => [...prev, { worker_id: w.worker_id, worker_name: w.worker_name, position: w.position, status: "Present" }]);
-                      }}>+ Днес</Button>
-                    </div>
-                  ))}
-                  {shortlistWorkers.length > 8 && <p className="text-[9px] text-muted-foreground text-center">и още {shortlistWorkers.length - 8}</p>}
-                </div>
-              );
-            })()}
-          </>
+          </div>
         )}
 
-      {/* Add People Modal */}
-      {showAddPeople && (() => {
-        const filtered = availablePeople.filter(p => {
-          if (pickerSearch) {
-            const q = pickerSearch.toLowerCase();
-            if (!((p.worker_name || "").toLowerCase().includes(q) || (p.position || "").toLowerCase().includes(q))) return false;
-          }
-          if (pickerFilter && pickerFilter !== "all") {
-            if ((p.position || "").toLowerCase() !== pickerFilter.toLowerCase()) return false;
-          }
-          return true;
-        });
-        const positions = [...new Set(availablePeople.map(p => p.position).filter(Boolean))].sort();
+        {/* SINGLE save button */}
+        {enrichedRoster.length > 0 && (
+          <Button
+            onClick={handleSave}
+            disabled={!hasUnsavedChanges && !hasUnsetStatus}
+            className={`w-full h-12 rounded-xl text-base ${hasUnsavedChanges ? "bg-amber-500 hover:bg-amber-600 text-black" : hasUnsetStatus ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600/50 cursor-default"}`}
+            data-testid="save-attendance-btn"
+          >
+            {hasUnsetStatus ? "Изберете статус за новите" : hasUnsavedChanges ? "Запази промените" : "Записано"}
+          </Button>
+        )}
 
-        return (
-          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end justify-center">
-            <div className="w-full max-w-lg bg-card border-t border-border rounded-t-2xl p-4 max-h-[85vh] flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold">{t("technician.addPeople")}</h3>
-                <Button variant="ghost" size="sm" onClick={() => setShowAddPeople(false)}>✕</Button>
-              </div>
-
-              {/* Search */}
-              <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder={t("technician.searchPeople")} className="h-11 mb-2" />
-
-              {/* Position filter chips */}
-              {positions.length > 0 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 flex-shrink-0">
-                  <button onClick={() => setPickerFilter("all")} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${!pickerFilter || pickerFilter === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{t("common.all")}</button>
-                  {positions.map(pos => (
-                    <button key={pos} onClick={() => setPickerFilter(pos)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${pickerFilter === pos ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{pos}</button>
-                  ))}
+        {/* Shortlist: previous workers — clearly separated */}
+        {(() => {
+          const rosterIds = new Set(enrichedRoster.map(w => w.worker_id));
+          const shortlistWorkers = siteWorkers.filter(w => w.is_active && !rosterIds.has(w.worker_id));
+          if (shortlistWorkers.length === 0) return null;
+          return (
+            <div className="mt-6 pt-4 border-t border-border/50 space-y-2" data-testid="site-shortlist">
+              <p className="text-xs text-muted-foreground font-semibold">Работили преди на обекта ({shortlistWorkers.length})</p>
+              {shortlistWorkers.slice(0, 8).map(w => (
+                <div key={w.worker_id} className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-border bg-card/30">
+                  {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : (
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{w.worker_name}</p>
+                    <p className="text-[9px] text-muted-foreground">{w.position || "—"} · {w.days_count}д</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleAddFromShortlist(w)}>+ Днес</Button>
                 </div>
-              )}
+              ))}
+              {shortlistWorkers.length > 8 && <p className="text-[9px] text-muted-foreground text-center">и още {shortlistWorkers.length - 8}</p>}
+            </div>
+          );
+        })()}
 
-              {/* List */}
-              <div className="flex-1 overflow-y-auto space-y-2">
-                {filtered.length === 0 ? <p className="text-center py-8 text-muted-foreground text-sm">{pickerSearch ? t("technician.noSearchResults") : t("technician.allOnSite")}</p> : (
-                  filtered.map(p => (
-                    <label key={p.worker_id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer active:scale-[0.98] transition-transform ${selectedToAdd.includes(p.worker_id) ? "border-primary bg-primary/5" : "border-border"}`}>
-                      <Checkbox checked={selectedToAdd.includes(p.worker_id)} onCheckedChange={c => setSelectedToAdd(prev => c ? [...prev, p.worker_id] : prev.filter(id => id !== p.worker_id))} />
-                      {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" /> : (
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(p.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{p.worker_name}</p>
-                        <p className="text-[10px] text-muted-foreground">{p.position || "—"}</p>
-                      </div>
-                      {p.recent_on_site && <Badge variant="outline" className="text-[8px] text-cyan-400 border-cyan-400/30 flex-shrink-0">{t("technician.recent")}</Badge>}
-                    </label>
-                  ))
+        {/* Add People Modal */}
+        {showAddPeople && (() => {
+          const filtered = availablePeople.filter(p => {
+            if (pickerSearch) {
+              const q = pickerSearch.toLowerCase();
+              if (!((p.worker_name || "").toLowerCase().includes(q) || (p.position || "").toLowerCase().includes(q))) return false;
+            }
+            if (pickerFilter && pickerFilter !== "all") {
+              if ((p.position || "").toLowerCase() !== pickerFilter.toLowerCase()) return false;
+            }
+            return true;
+          });
+          const positions = [...new Set(availablePeople.map(p => p.position).filter(Boolean))].sort();
+
+          return (
+            <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end justify-center">
+              <div className="w-full max-w-lg bg-card border-t border-border rounded-t-2xl p-4 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold">{t("technician.addPeople")}</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setShowAddPeople(false)}>✕</Button>
+                </div>
+                <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder={t("technician.searchPeople")} className="h-11 mb-2" />
+                {positions.length > 0 && (
+                  <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 flex-shrink-0">
+                    <button onClick={() => setPickerFilter("all")} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${!pickerFilter || pickerFilter === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{t("common.all")}</button>
+                    {positions.map(pos => (
+                      <button key={pos} onClick={() => setPickerFilter(pos)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${pickerFilter === pos ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{pos}</button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex-1 overflow-y-auto space-y-2">
+                  {filtered.length === 0 ? <p className="text-center py-8 text-muted-foreground text-sm">{pickerSearch ? t("technician.noSearchResults") : t("technician.allOnSite")}</p> : (
+                    filtered.map(p => (
+                      <label key={p.worker_id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer active:scale-[0.98] transition-transform ${selectedToAdd.includes(p.worker_id) ? "border-primary bg-primary/5" : "border-border"}`}>
+                        <Checkbox checked={selectedToAdd.includes(p.worker_id)} onCheckedChange={c => setSelectedToAdd(prev => c ? [...prev, p.worker_id] : prev.filter(id => id !== p.worker_id))} />
+                        {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" /> : (
+                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(p.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{p.worker_name}</p>
+                          <p className="text-[10px] text-muted-foreground">{p.position || "—"}</p>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {selectedToAdd.length > 0 && (
+                  <Button onClick={handleAddFromPicker} className="w-full h-14 text-lg rounded-2xl mt-3 flex-shrink-0"><Plus className="w-5 h-5 mr-2" />{t("technician.addSelected")} ({selectedToAdd.length})</Button>
                 )}
               </div>
-
-              {selectedToAdd.length > 0 && (
-                <Button onClick={addSelectedWorkers} className="w-full h-14 text-lg rounded-2xl mt-3 flex-shrink-0"><Plus className="w-5 h-5 mr-2" />{t("technician.addSelected")} ({selectedToAdd.length})</Button>
-              )}
             </div>
-          </div>
-        );
-      })()}
-    </div>
-  );
+          );
+        })()}
+      </div>
+    );
   } // end screen === "people"
 
   // ════════════════════════════════════════════════════════════

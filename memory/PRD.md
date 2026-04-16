@@ -183,6 +183,16 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Status-colored borders: green=Present, red=SickLeave, blue=Leave, orange=Absent
   - Save button dynamic: "Записано" (green) vs "Запази промените" (amber)
   - Verified: visual screenshots
+- **People Screen State/Add/Remove/Save Logic Fix** — Apr 16, 2026
+  - New workers from "+Добави" or "+Днес" enter with status="" (must choose before save)
+  - Save blocks with "Изберете статус за новите" if any worker has unset status
+  - Remove (trash) is local-only until Save; backend deletes attendance_entries for removed workers on Save
+  - Single save button (removed duplicate banner save)
+  - Enriched roster endpoint now returns `status` from attendance_entries
+  - Backend attendance save: handles removal by comparing prev roster vs new list
+  - Shortlist preserves avatar_url on workers
+  - Clear visual separation: shortlist below save button with `border-t` separator
+  - Verified: visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

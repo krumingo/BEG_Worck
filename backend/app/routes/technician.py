@@ -427,13 +427,17 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
     now = datetime.now(timezone.utc).isoformat()
 
     workers = []
+    submitted_ids = set()
     for w in data.workers:
         wid = w.get("worker_id") or w.get("id", "")
         if not wid:
             continue
         wname = w.get("worker_name") or w.get("name", "")
-        status = w.get("status", "Present")
+        status = w.get("status") or "Present"
+        if not status:
+            status = "Present"
         workers.append({"worker_id": wid, "worker_name": wname, "status": status})
+        submitted_ids.add(wid)
 
         # Upsert attendance_entry (source of truth)
         existing_att = await db.attendance_entries.find_one(
@@ -457,6 +461,16 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
                 "marked_by_user_id": user["id"],
                 "source": "TechPortal",
             })
+
+    # Remove attendance_entries for workers who were in previous roster but not in the new list
+    prev_roster = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    if prev_roster:
+        prev_ids = set(w.get("worker_id") for w in prev_roster.get("workers", []))
+        removed_ids = prev_ids - submitted_ids
+        if removed_ids:
+            await db.attendance_entries.delete_many(
+                {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}}
+            )
 
     # Also save/update roster
     existing_roster = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
@@ -611,6 +625,16 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
     )
     workers_raw = doc.get("workers", []) if doc else []
 
+    # Get attendance status for all workers
+    raw_ids = [w.get("worker_id", "") for w in workers_raw if w.get("worker_id")]
+    att_map = {}
+    if raw_ids:
+        att_entries = await db.attendance_entries.find(
+            {"org_id": org_id, "date": today, "user_id": {"$in": raw_ids}},
+            {"_id": 0, "user_id": 1, "status": 1},
+        ).to_list(200)
+        att_map = {e["user_id"]: e["status"] for e in att_entries}
+
     workers = []
     for w in workers_raw:
         wid = w.get("worker_id", "")
@@ -640,6 +664,7 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
             "worker_name": w.get("worker_name", ""),
             "avatar_url": avatar,
             "position": (profile or {}).get("position") or (profile or {}).get("role", ""),
+            "status": att_map.get(wid) or w.get("status", "Present"),
             "total_hours": day_total,
             "this_project_hours": this_project_hours,
             "normal_hours": normal_hours,
