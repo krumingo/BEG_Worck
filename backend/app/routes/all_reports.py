@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, NORMAL_DAY
+from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours_batch, NORMAL_DAY
 
 router = APIRouter(tags=["All Reports"])
 
@@ -46,9 +46,8 @@ async def get_all_reports(
         status_filter=report_status,
     )
 
-    # Enrich hours
-    for r in rows:
-        enrich_hours(r)
+    # Enrich hours by worker+date (not per-line)
+    enrich_hours_batch(rows)
 
     # Filter overtime
     if only_overtime:

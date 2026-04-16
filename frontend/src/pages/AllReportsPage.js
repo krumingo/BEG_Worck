@@ -297,9 +297,18 @@ export default function AllReportsPage() {
                       ) : <span className="text-[10px] text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="text-xs truncate max-w-[120px]">{r.smr_type || "—"}</TableCell>
-                    <TableCell className="text-xs font-mono font-bold">{r.hours}</TableCell>
+                    <TableCell className="text-xs font-mono font-bold">
+                      {r.hours}
+                      {r.day_warning_level === "critical" && <span className="ml-1 text-red-400" title={r.day_warnings?.join("; ")}>!</span>}
+                      {r.day_warning_level === "warning" && <span className="ml-1 text-amber-400" title={r.day_warnings?.join("; ")}>*</span>}
+                    </TableCell>
                     <TableCell className="text-xs font-mono text-emerald-400">{r.normal_hours}</TableCell>
-                    <TableCell className={`text-xs font-mono ${r.overtime_hours > 0 ? "text-amber-400 font-bold" : "text-muted-foreground"}`}>{r.overtime_hours > 0 ? `+${r.overtime_hours}` : "—"}</TableCell>
+                    <TableCell className={`text-xs font-mono ${r.overtime_hours > 0 ? "text-amber-400 font-bold" : "text-muted-foreground"}`}>
+                      {r.overtime_hours > 0 ? `+${r.overtime_hours}` : "—"}
+                      {r.day_total_hours > 0 && r.day_total_hours !== r.hours && (
+                        <span className="text-[9px] text-muted-foreground ml-1">({r.day_total_hours}ч/ден)</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-[10px] font-mono text-muted-foreground">{r.hourly_rate > 0 ? `${r.hourly_rate}` : "—"}</TableCell>
                     <TableCell className="text-xs font-mono text-primary">{r.labor_value > 0 ? r.labor_value.toFixed(0) : "—"}</TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${stCfg.cls}`}>{stCfg.label}</Badge></TableCell>
@@ -362,6 +371,14 @@ export default function AllReportsPage() {
                 <DetailRow label={t("allReports.colHours")} value={`${detail.hours}ч`} bold />
                 <DetailRow label={t("allReports.colNormal")} value={`${detail.normal_hours}ч`} color="text-emerald-400" />
                 <DetailRow label={t("allReports.colOvertime")} value={detail.overtime_hours > 0 ? `+${detail.overtime_hours}ч` : "—"} color={detail.overtime_hours > 0 ? "text-amber-400" : ""} />
+                {detail.day_total_hours > 0 && detail.day_total_hours !== detail.hours && (
+                  <DetailRow label="Общо за деня" value={`${detail.day_total_hours}ч (${detail.day_normal_hours}ч норм. + ${detail.day_overtime_hours}ч извънр.)`} color={detail.day_warning_level === "critical" ? "text-red-400" : detail.day_warning_level === "warning" ? "text-amber-400" : ""} />
+                )}
+                {detail.day_warnings?.length > 0 && (
+                  <div className="col-span-2 mt-1 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    {detail.day_warnings.map((w, i) => <p key={i} className="text-[11px] text-amber-400">{w}</p>)}
+                  </div>
+                )}
                 <DetailRow label={t("allReports.colRate")} value={detail.hourly_rate > 0 ? `${detail.hourly_rate} EUR/ч` : "—"} />
                 <DetailRow label={t("allReports.colValue")} value={detail.labor_value > 0 ? `${detail.labor_value.toFixed(2)} EUR` : "—"} color="text-primary" bold />
               </div>

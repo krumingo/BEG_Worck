@@ -624,24 +624,28 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
             {"id": wid}, {"_id": 0, "avatar_url": 1}
         )
         avatar = (user_doc or {}).get("avatar_url") or (profile or {}).get("avatar_url")
-        # Get today's hours from drafts
-        today_reports = await db.employee_daily_reports.find(
-            {"org_id": org_id, "project_id": project_id, "worker_id": wid, "date": today},
-            {"_id": 0, "hours": 1},
-        ).to_list(20)
-        total_hours = round(sum(r.get("hours", 0) for r in today_reports), 2)
-        normal_hours = min(total_hours, 8)
-        overtime_hours = round(max(total_hours - 8, 0), 2)
+        # Get today's hours: ALL projects for this worker (cross-project total)
+        all_today = await db.employee_daily_reports.find(
+            {"org_id": org_id, "worker_id": wid, "date": today},
+            {"_id": 0, "hours": 1, "project_id": 1},
+        ).to_list(50)
+        day_total = round(sum(r.get("hours", 0) for r in all_today), 2)
+        this_project_hours = round(sum(r.get("hours", 0) for r in all_today if r.get("project_id") == project_id), 2)
+        normal_hours = min(day_total, 8)
+        overtime_hours = round(max(day_total - 8, 0), 2)
+        multi_project = len(set(r.get("project_id") for r in all_today if r.get("project_id"))) > 1
 
         workers.append({
             "worker_id": wid,
             "worker_name": w.get("worker_name", ""),
             "avatar_url": avatar,
             "position": (profile or {}).get("position") or (profile or {}).get("role", ""),
-            "total_hours": total_hours,
+            "total_hours": day_total,
+            "this_project_hours": this_project_hours,
             "normal_hours": normal_hours,
             "overtime_hours": overtime_hours,
             "has_overtime": overtime_hours > 0,
+            "multi_project": multi_project,
         })
 
     return {"workers": workers, "total": len(workers), "date": today}

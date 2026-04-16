@@ -156,6 +156,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - SiteAttendance page: includes workers from `attendance_entries` (not just project_team)
   - Dashboard `on_site_today`: reads from `attendance_entries` (with fallback to reported workers)
   - Verified: API mini-audit + visual screenshots
+- **Normal/Overtime Hours by Worker+Date (not per-line)** — Apr 16, 2026
+  - New `enrich_hours_batch()` in report_normalizer.py: groups lines by worker_id+date, computes day_total, distributes 8h normal proportionally
+  - `enrich_hours()` kept as fallback for single-line scenarios
+  - All Reports (`/all-reports`) now uses batch enrichment: correct normal/overtime even for multi-line days
+  - Per-line: shows day_total_hours, day_normal_hours, day_overtime_hours, day_warnings, day_warning_level
+  - Frontend: AllReportsPage shows "!" for critical (>12h), "*" for warning (>8h), "(Xч/ден)" day-total annotation
+  - Detail view: shows full day breakdown with warnings panel
+  - Technician enriched roster: cross-project total hours per worker per day
+  - Verified: API test + visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:
