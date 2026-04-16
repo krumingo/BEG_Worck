@@ -401,27 +401,65 @@ export default function TechnicianDashboard() {
     <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-people">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>
-        <div className="flex-1"><h2 className="font-bold">{t("technician.people")}</h2><p className="text-xs text-muted-foreground">{selectedSite?.name} — {t("technician.todayRoster")}</p></div>
+        <div className="flex-1">
+          <h2 className="font-bold">{t("technician.people")}</h2>
+          <p className="text-xs text-muted-foreground">{selectedSite?.name} — {new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long" })}</p>
+        </div>
         <Button size="sm" onClick={() => { setSelectedToAdd([]); setPickerSearch(""); setPickerFilter("all"); setShowAddPeople(true); }}><Plus className="w-4 h-4 mr-1" />{t("technician.add")}</Button>
       </div>
 
-      {/* Current roster */}
+      {/* Current roster with status */}
       {enrichedRoster.length === 0 ? (
         <p className="text-center py-8 text-muted-foreground text-sm">{t("technician.noPeopleYet")}</p>
-      ) : enrichedRoster.map(w => (
-        <div key={w.worker_id} className="flex items-center gap-3 p-3 rounded-2xl border border-border bg-card">
-          {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-11 h-11 rounded-full object-cover" alt="" /> : (
-            <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{w.worker_name}</p>
-            <p className="text-[10px] text-muted-foreground">{w.position || "Работник"}</p>
-            {w.total_hours > 0 && <p className="text-[10px] font-mono">{w.normal_hours}ч{w.has_overtime && <span className="text-orange-400 ml-1">+{w.overtime_hours}ч OT</span>}</p>}
-          </div>
-          {w.has_overtime && <Badge className="bg-orange-500/20 text-orange-400 text-[9px]">{t("technician.overtime")}</Badge>}
-          <Button variant="ghost" size="sm" onClick={() => removeWorker(w.worker_id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
-        </div>
-      ))}
+      ) : (
+        <>
+          {enrichedRoster.map(w => {
+            const st = w.status || "Present";
+            return (
+              <div key={w.worker_id} className="flex items-center gap-3 p-3 rounded-2xl border border-border bg-card">
+                {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-11 h-11 rounded-full object-cover" alt="" /> : (
+                  <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{w.worker_name}</p>
+                  <p className="text-[10px] text-muted-foreground">{w.position || "Работник"}</p>
+                </div>
+                <select
+                  value={st}
+                  onChange={e => setEnrichedRoster(prev => prev.map(r => r.worker_id === w.worker_id ? { ...r, status: e.target.value } : r))}
+                  className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
+                  data-testid={`status-${w.worker_id}`}
+                >
+                  <option value="Present">На работа</option>
+                  <option value="Leave">Отпуск</option>
+                  <option value="SickLeave">Болен</option>
+                  <option value="Absent">Самоотлъчка</option>
+                  <option value="Other">Друго</option>
+                </select>
+                <Button variant="ghost" size="sm" onClick={() => removeWorker(w.worker_id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+              </div>
+            );
+          })}
+
+          {/* Save attendance button */}
+          <Button
+            onClick={async () => {
+              try {
+                const workers = enrichedRoster.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name, status: w.status || "Present" }));
+                const res = await API.post(`/technician/site/${selectedSite.project_id}/attendance`, { workers });
+                toast.success(`Записано: ${res.data.present} на обекта от ${res.data.total}`);
+                // Refresh detail
+                const detailRes = await API.get(`/technician/site/${selectedSite.project_id}/detail`);
+                setSiteDetail(detailRes.data);
+              } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+            }}
+            className="w-full h-12 rounded-xl text-base"
+            data-testid="save-attendance-btn"
+          >
+            Запази присъствие
+          </Button>
+        </>
+      )}
 
       {/* Add People Modal */}
       {showAddPeople && (() => {

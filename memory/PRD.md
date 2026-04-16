@@ -146,6 +146,16 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - TechnicianDashboard shows toast warnings per worker on submit
   - DailyReportDialog shows alert on approval with hour check results
   - Verified: API + visual audit screenshots
+- **Daily Attendance Source of Truth (TechPortal → Хора)** — Apr 16, 2026
+  - New endpoint: `POST /technician/site/{id}/attendance` — saves per-worker status (Present/Leave/SickLeave/Absent/Other)
+  - Creates/updates `attendance_entries` per worker (source of truth for daily presence)
+  - Also saves to `site_daily_rosters` with status per worker
+  - TechPortal "Хора" screen enhanced: per-worker status dropdown + "Запази присъствие" button
+  - Roster GET enriched with attendance status from `attendance_entries`
+  - Site detail counters use `attendance_entries` (Present/Late only) for "На обекта"
+  - SiteAttendance page: includes workers from `attendance_entries` (not just project_team)
+  - Dashboard `on_site_today`: reads from `attendance_entries` (with fallback to reported workers)
+  - Verified: API mini-audit + visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

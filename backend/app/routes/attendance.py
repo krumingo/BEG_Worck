@@ -400,7 +400,17 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
                 raise HTTPException(status_code=403, detail="Not managing this project")
         members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
 
-        # Also include workers who reported on this project today (not just team members)
+        # Include workers with attendance_entries for this project today (source of truth from TechPortal → Хора)
+        att_entries = await db.attendance_entries.find(
+            {"org_id": org_id, "project_id": project_id, "date": date},
+            {"_id": 0, "user_id": 1},
+        ).to_list(200)
+        for ae in att_entries:
+            uid = ae.get("user_id")
+            if uid and not any(m.get("user_id") == uid for m in members):
+                members.append({"user_id": uid})
+
+        # Also include workers who reported on this project today
         old_reports = await db.employee_daily_reports.find(
             {"org_id": org_id, "project_id": project_id, "date": date, "worker_id": {"$exists": True}},
             {"_id": 0, "worker_id": 1},
@@ -411,9 +421,8 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
         ).to_list(200)
         reported_ids = set(r["worker_id"] for r in old_reports if r.get("worker_id"))
         reported_ids |= set(r["employee_id"] for r in new_reports if r.get("employee_id"))
-        # Add reported workers as pseudo-members
         for rid in reported_ids:
-            if not any(m["user_id"] == rid for m in members):
+            if not any(m.get("user_id") == rid for m in members):
                 members.append({"user_id": rid})
     else:
         if user["role"] == "SiteManager":

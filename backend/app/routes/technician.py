@@ -194,10 +194,21 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
     od = project.get("object_details") or {}
 
     # Counters
+    # "На обекта" from attendance_entries (source of truth)
+    att_today = await db.attendance_entries.find(
+        {"org_id": org_id, "project_id": project_id, "date": today,
+         "status": {"$in": ["Present", "Late"]}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(200)
+    on_site_count = len(att_today)
+
+    # Fallback to roster if no attendance_entries yet
     roster = await db.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0, "workers": 1}
     )
     roster_count = len(roster.get("workers", [])) if roster else 0
+    if on_site_count == 0 and roster_count > 0:
+        on_site_count = roster_count
 
     drafts_today = await db.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today,
@@ -240,7 +251,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
             "access_notes": od.get("access_notes", ""),
         },
         "counters": {
-            "roster_count": roster_count,
+            "roster_count": on_site_count,
             "reported_workers": reported_workers,
             "reported_hours": reported_hours,
         },
@@ -373,7 +384,13 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
 
 class RosterSubmit(BaseModel):
     date: Optional[str] = None
-    workers: list  # [{worker_id, worker_name}]
+    workers: list  # [{worker_id, worker_name, status?}]
+
+
+class AttendanceRosterSubmit(BaseModel):
+    date: Optional[str] = None
+    workers: list  # [{worker_id, worker_name, status}]
+    # status: Present, Leave, SickLeave, Absent, Other
 
 
 @router.get("/technician/site/{project_id}/roster")
@@ -385,7 +402,85 @@ async def get_roster(project_id: str, date: Optional[str] = None, user: dict = D
     )
     if not doc:
         return {"project_id": project_id, "date": d, "workers": [], "id": None}
+
+    # Enrich with attendance status from attendance_entries
+    worker_ids = [w.get("worker_id") for w in doc.get("workers", []) if w.get("worker_id")]
+    att_entries = {}
+    if worker_ids:
+        entries = await db.attendance_entries.find(
+            {"org_id": org_id, "date": d, "user_id": {"$in": worker_ids}},
+            {"_id": 0, "user_id": 1, "status": 1},
+        ).to_list(200)
+        att_entries = {e["user_id"]: e["status"] for e in entries}
+
+    for w in doc.get("workers", []):
+        w["status"] = att_entries.get(w.get("worker_id"), w.get("status", "Present"))
+
     return doc
+
+
+@router.post("/technician/site/{project_id}/attendance", status_code=200)
+async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, user: dict = Depends(get_current_user)):
+    """Save daily attendance for workers on a site. Creates attendance_entries (source of truth)."""
+    org_id = user["org_id"]
+    d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).isoformat()
+
+    workers = []
+    for w in data.workers:
+        wid = w.get("worker_id") or w.get("id", "")
+        if not wid:
+            continue
+        wname = w.get("worker_name") or w.get("name", "")
+        status = w.get("status", "Present")
+        workers.append({"worker_id": wid, "worker_name": wname, "status": status})
+
+        # Upsert attendance_entry (source of truth)
+        existing_att = await db.attendance_entries.find_one(
+            {"org_id": org_id, "date": d, "user_id": wid}
+        )
+        if existing_att:
+            await db.attendance_entries.update_one(
+                {"id": existing_att["id"]},
+                {"$set": {"status": status, "project_id": project_id, "updated_at": now, "note": ""}}
+            )
+        else:
+            await db.attendance_entries.insert_one({
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "date": d,
+                "project_id": project_id,
+                "user_id": wid,
+                "status": status,
+                "note": "",
+                "marked_at": now,
+                "marked_by_user_id": user["id"],
+                "source": "TechPortal",
+            })
+
+    # Also save/update roster
+    existing_roster = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    if existing_roster:
+        await db.site_daily_rosters.update_one({"id": existing_roster["id"]}, {"$set": {
+            "workers": workers, "updated_at": now,
+        }})
+    else:
+        await db.site_daily_rosters.insert_one({
+            "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
+            "date": d, "workers": workers,
+            "created_by": user["id"], "created_at": now, "updated_at": now,
+        })
+
+    # Count present (Present/Late only)
+    present_count = sum(1 for w in workers if w["status"] in ("Present", "Late"))
+
+    return {
+        "project_id": project_id,
+        "date": d,
+        "total": len(workers),
+        "present": present_count,
+        "workers": workers,
+    }
 
 
 @router.post("/technician/site/{project_id}/roster")
