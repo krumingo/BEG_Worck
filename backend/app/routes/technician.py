@@ -1206,6 +1206,88 @@ class DraftLineUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+
+@router.post("/technician/site/{project_id}/check-remove-worker")
+async def check_remove_worker(project_id: str, data: dict, user: dict = Depends(get_current_user)):
+    """Check if worker has reports for this project+date before removal."""
+    org_id = user["org_id"]
+    worker_id = data.get("worker_id", "")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    drafts = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "status": {"$in": ["Draft"]}},
+        {"_id": 0, "id": 1, "smr_type": 1, "hours": 1},
+    ).to_list(50)
+
+    submitted = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "status": {"$in": ["Submitted", "SUBMITTED"]}},
+        {"_id": 0, "id": 1},
+    ).to_list(50)
+
+    approved = await db.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "status": {"$in": ["Approved", "APPROVED"]}},
+        {"_id": 0, "id": 1},
+    ).to_list(50)
+
+    return {
+        "worker_id": worker_id,
+        "has_reports": len(drafts) + len(submitted) + len(approved) > 0,
+        "draft_count": len(drafts),
+        "submitted_count": len(submitted),
+        "approved_count": len(approved),
+        "can_auto_remove": len(submitted) == 0 and len(approved) == 0,
+    }
+
+
+@router.post("/technician/site/{project_id}/remove-worker-with-drafts")
+async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = Depends(get_current_user)):
+    """Remove worker from attendance AND delete their Draft reports for today."""
+    org_id = user["org_id"]
+    worker_id = data.get("worker_id", "")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Check no submitted/approved reports
+    blocking = await db.employee_daily_reports.count_documents(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "status": {"$in": ["Submitted", "SUBMITTED", "Approved", "APPROVED"]}}
+    )
+    if blocking > 0:
+        raise HTTPException(status_code=400, detail="Работникът има подаден или одобрен отчет. Първо коригирайте отчета.")
+
+    # Delete Draft reports
+    del_result = await db.employee_daily_reports.delete_many(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "status": {"$in": ["Draft"]}}
+    )
+
+    # Remove from attendance_entries
+    await db.attendance_entries.delete_many(
+        {"org_id": org_id, "project_id": project_id, "date": today, "user_id": worker_id}
+    )
+
+    # Remove from roster
+    roster = await db.site_daily_rosters.find_one(
+        {"org_id": org_id, "project_id": project_id, "date": today}
+    )
+    if roster:
+        new_workers = [w for w in roster.get("workers", []) if w.get("worker_id") != worker_id]
+        await db.site_daily_rosters.update_one(
+            {"id": roster["id"]},
+            {"$set": {"workers": new_workers, "updated_at": now}}
+        )
+
+    return {
+        "removed": True,
+        "drafts_deleted": del_result.deleted_count,
+        "worker_id": worker_id,
+    }
+
+
+
 @router.get("/technician/site/{project_id}/my-drafts")
 async def get_my_drafts(project_id: str, user: dict = Depends(get_current_user)):
     """Get current user's draft report entries for a project today."""

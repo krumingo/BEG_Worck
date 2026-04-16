@@ -202,6 +202,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Dashboard: "Неясни по статут" card with count + click-to-details
   - Daily report validation: blocks if worker is SickLeave/Leave; warns if no Present attendance
   - Verified: API + visual screenshots
+- **Remove Worker Conflict Resolution (Drafts/Reports)** — Apr 16, 2026
+  - New endpoint `POST /technician/site/{id}/check-remove-worker` — checks draft/submitted/approved count
+  - New endpoint `POST /technician/site/{id}/remove-worker-with-drafts` — atomically deletes drafts + attendance + roster entry
+  - Frontend: smart handleRemove checks for reports before removing:
+    - No reports → local remove (saved on Save)
+    - Draft reports → confirm dialog "Изтрий черновите и махни?" → deletes drafts + removes attendance
+    - Submitted/Approved → blocks with error toast "Първо коригирайте отчета"
+  - After remove+draft delete: refreshes detail counters + drafts list + saved state
+  - Verified: API + visual screenshots
 
 
 ### UPCOMING PRIORITY BLOCKS:

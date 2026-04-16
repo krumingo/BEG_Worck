@@ -481,8 +481,50 @@ export default function TechnicianDashboard() {
       toast.success(`${toAdd.length} добавени. Изберете статус и запазете.`);
     };
 
-    const handleRemove = (workerId) => {
-      setEnrichedRoster(prev => prev.filter(r => r.worker_id !== workerId));
+    const handleRemove = async (workerId) => {
+      const worker = enrichedRoster.find(r => r.worker_id === workerId);
+      const wName = worker?.worker_name || workerId;
+
+      // Check if worker has reports for this project+day
+      try {
+        const check = await API.post(`/technician/site/${selectedSite.project_id}/check-remove-worker`, { worker_id: workerId });
+        const d = check.data;
+
+        if (d.approved_count > 0 || d.submitted_count > 0) {
+          toast.error(`${wName} има подаден или одобрен отчет за днес. Първо коригирайте отчета.`);
+          return;
+        }
+
+        if (d.draft_count > 0) {
+          const choice = window.confirm(
+            `${wName} има ${d.draft_count} чернови за днес на този обект.\n\nИзтрий черновите и махни човека?`
+          );
+          if (!choice) return;
+
+          // Delete drafts + remove from attendance
+          await API.post(`/technician/site/${selectedSite.project_id}/remove-worker-with-drafts`, { worker_id: workerId });
+          toast.success(`${wName} премахнат. ${d.draft_count} чернови изтрити.`);
+
+          // Refresh everything
+          setEnrichedRoster(prev => prev.filter(r => r.worker_id !== workerId));
+          setSavedRosterState(prev => prev.filter(w => w.worker_id !== workerId));
+          try {
+            const [detailRes, draftsRes] = await Promise.all([
+              API.get(`/technician/site/${selectedSite.project_id}/detail`),
+              API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
+            ]);
+            setSiteDetail(detailRes.data);
+            setExistingDrafts(draftsRes.data.items || []);
+          } catch {}
+          return;
+        }
+
+        // No reports — just remove locally (will be saved on Save)
+        setEnrichedRoster(prev => prev.filter(r => r.worker_id !== workerId));
+      } catch (err) {
+        // API error — fall back to local-only remove
+        setEnrichedRoster(prev => prev.filter(r => r.worker_id !== workerId));
+      }
     };
 
     // Counters
