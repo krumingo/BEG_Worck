@@ -822,28 +822,170 @@ export default function TechnicianDashboard() {
         );
       })}
 
-      {/* MODE B: Group */}
-      {reportMode === "group" && (
-        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-          {availableTasks.length > 0 ? (
-            <Select value={groupSmr || "none"} onValueChange={v => setGroupSmr(v === "none" ? "" : v)}>
-              <SelectTrigger className="h-11"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
-              <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}</SelectItem>)}</SelectContent>
-            </Select>
-          ) : <Input value={groupSmr} onChange={e => setGroupSmr(e.target.value)} placeholder={t("technician.smrType")} className="h-11" />}
-          <Input type="number" value={groupHours} onChange={e => setGroupHours(e.target.value)} placeholder={t("technician.hours")} className="h-11" />
-          <p className="text-xs text-muted-foreground">{t("technician.selectWorkers")}:</p>
-          {roster.map(w => (
-            <label key={w.worker_id} className="flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer hover:bg-muted/20">
-              <Checkbox checked={groupWorkers.includes(w.worker_id)} onCheckedChange={(checked) => setGroupWorkers(prev => checked ? [...prev, w.worker_id] : prev.filter(id => id !== w.worker_id))} />
-              <span>{w.worker_name}</span>
-            </label>
-          ))}
-        </div>
-      )}
+      {/* MODE B: Group — accumulating day builder */}
+      {reportMode === "group" && (() => {
+        // Compute per-worker day totals from existing drafts
+        const draftsByWorker = {};
+        for (const dd of existingDrafts) {
+          const wid = dd.worker_id;
+          if (!draftsByWorker[wid]) draftsByWorker[wid] = { name: dd.worker_name, hours: 0, entries: [] };
+          draftsByWorker[wid].hours += dd.hours || 0;
+          draftsByWorker[wid].entries.push(dd);
+        }
 
-      <Textarea value={generalNotes} onChange={e => setGeneralNotes(e.target.value)} placeholder={t("technician.generalNotes")} className="min-h-[60px] border-slate-600/30" />
-      <Button onClick={() => setScreen("review")} className="w-full h-14 text-lg rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg"><Eye className="w-5 h-5 mr-2" />{t("technician.reviewReport")}</Button>
+        return (
+          <div className="space-y-4">
+            {/* Натрупано за деня */}
+            {Object.keys(draftsByWorker).length > 0 && (
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="px-4 py-2.5 bg-muted/20 border-b border-border/50 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-cyan-400" />
+                  <span className="text-sm font-semibold">Натрупано за деня</span>
+                </div>
+                <div className="p-3 space-y-1">
+                  {roster.map(w => {
+                    const wd = draftsByWorker[w.worker_id];
+                    const dayH = workerDayHours[w.worker_id];
+                    const savedH = wd ? wd.hours : 0;
+                    const crossH = dayH ? dayH.total_hours : savedH;
+                    const remain = Math.max(0, 8 - crossH);
+                    const hCls = crossH > 12 ? "text-red-400" : crossH > 8 ? "text-amber-400" : crossH > 0 ? "text-emerald-400" : "text-muted-foreground";
+                    return (
+                      <div key={w.worker_id} className="flex items-center gap-2 py-1 px-2 rounded-lg text-xs">
+                        <span className="flex-1 truncate">{w.worker_name}</span>
+                        <span className={`font-mono font-bold ${hCls}`}>{crossH > 0 ? `${crossH}ч` : "—"}</span>
+                        {crossH > 0 && crossH <= 8 && <span className="text-[9px] text-muted-foreground">ост. {remain}ч</span>}
+                        {crossH > 8 && <Badge variant="outline" className="text-[8px] text-amber-400 border-amber-500/30">+{(crossH - 8).toFixed(1)}ч OT</Badge>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Group form — add to day */}
+            <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground">Нов групов ред</p>
+              {availableTasks.length > 0 ? (
+                <Select value={groupSmr || "none"} onValueChange={v => setGroupSmr(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-11 border-blue-500/20"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
+                  <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}</SelectItem>)}</SelectContent>
+                </Select>
+              ) : <Input value={groupSmr} onChange={e => setGroupSmr(e.target.value)} placeholder={t("technician.smrType")} className="h-11 border-blue-500/20" />}
+              <div className="relative">
+                <Input type="number" value={groupHours} onChange={e => setGroupHours(e.target.value)} placeholder="Часове" className="h-11 border-amber-500/20 pl-8" min="0" max="24" step="0.5" />
+                <Clock className="w-3.5 h-3.5 absolute left-2.5 top-3.5 text-amber-500/40" />
+              </div>
+              <Input value={generalNotes} onChange={e => setGeneralNotes(e.target.value)} placeholder="Бележка (по желание)" className="h-11 border-slate-600/30" />
+              <p className="text-[10px] text-muted-foreground">{t("technician.selectWorkers")}:</p>
+              <div className="space-y-1.5">
+                {roster.map(w => {
+                  const isSelected = groupWorkers.includes(w.worker_id);
+                  const dayH = workerDayHours[w.worker_id];
+                  const currentH = dayH ? dayH.total_hours : 0;
+                  const newH = parseFloat(groupHours) || 0;
+                  const afterH = currentH + (isSelected ? newH : 0);
+                  const warnCls = isSelected && afterH > 12 ? "border-red-500/40 bg-red-500/5" : isSelected && afterH > 8 ? "border-amber-500/40 bg-amber-500/5" : isSelected ? "border-emerald-500/30 bg-emerald-500/5" : "border-border";
+                  return (
+                    <label key={w.worker_id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer hover:bg-muted/10 ${warnCls}`}>
+                      <Checkbox checked={isSelected} onCheckedChange={(checked) => setGroupWorkers(prev => checked ? [...prev, w.worker_id] : prev.filter(id => id !== w.worker_id))} />
+                      <span className="text-sm flex-1">{w.worker_name}</span>
+                      {currentH > 0 && <span className="text-[10px] font-mono text-muted-foreground">{currentH}ч</span>}
+                      {isSelected && afterH > 8 && <Badge variant="outline" className="text-[8px] text-amber-400 border-amber-500/30">{afterH}ч!</Badge>}
+                    </label>
+                  );
+                })}
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!groupSmr || !groupHours || !groupWorkers.length) {
+                    toast.error("Изберете дейност, часове и поне 1 човек");
+                    return;
+                  }
+                  const payload = groupWorkers.map(wid => {
+                    const w = roster.find(r => r.worker_id === wid);
+                    return { worker_id: wid, worker_name: w?.worker_name || "", smr_type: groupSmr, hours: parseFloat(groupHours) || 0, notes: generalNotes || undefined };
+                  });
+                  try {
+                    await API.post("/technician/daily-report", { project_id: selectedSite.project_id, entries: payload });
+                    toast.success(`Добавено: ${groupSmr} × ${groupWorkers.length} човека`);
+                    // Refresh drafts + day hours
+                    const [draftsRes, hoursRes] = await Promise.all([
+                      API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
+                      API.get(`/technician/worker-day-hours?worker_ids=${roster.map(w => w.worker_id).join(",")}`),
+                    ]);
+                    setExistingDrafts(draftsRes.data.items || []);
+                    setWorkerDayHours(hoursRes.data.workers || {});
+                    setGroupSmr(""); setGroupHours("8"); setGroupWorkers([]); setGeneralNotes("");
+                  } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+                }}
+                className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700"
+              ><Plus className="w-4 h-4 mr-2" />Добави към деня</Button>
+            </div>
+
+            {/* Чернови за деня — with edit + delete */}
+            {existingDrafts.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="px-4 py-2.5 bg-muted/20 border-b border-border/50 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-semibold">Чернови за деня ({existingDrafts.length})</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  {existingDrafts.map(dd => (
+                    <div key={dd.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/10 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{dd.smr_type || "—"}</p>
+                        <p className="text-[10px] text-muted-foreground">{dd.worker_name} · {dd.hours}ч{dd.notes ? ` · ${dd.notes}` : ""}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={() => {
+                        const newSmr = prompt("Дейност:", dd.smr_type);
+                        if (newSmr === null) return;
+                        const newHours = prompt("Часове:", String(dd.hours));
+                        if (newHours === null) return;
+                        const newNotes = prompt("Бележка:", dd.notes || "");
+                        API.put(`/technician/draft/${dd.id}`, {
+                          smr_type: newSmr || dd.smr_type,
+                          hours: parseFloat(newHours) || dd.hours,
+                          notes: newNotes !== null ? newNotes : dd.notes,
+                        }).then(async () => {
+                          toast.success("Черновата е обновена");
+                          const [draftsRes, hoursRes] = await Promise.all([
+                            API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
+                            API.get(`/technician/worker-day-hours?worker_ids=${roster.map(w => w.worker_id).join(",")}`),
+                          ]);
+                          setExistingDrafts(draftsRes.data.items || []);
+                          setWorkerDayHours(hoursRes.data.workers || {});
+                        }).catch(err => toast.error(err.response?.data?.detail || "Грешка"));
+                      }}><Pencil className="w-3 h-3" /></Button>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={async () => {
+                        if (!window.confirm(`Изтрий: ${dd.worker_name} — ${dd.smr_type} — ${dd.hours}ч?`)) return;
+                        try {
+                          await API.delete(`/technician/draft/${dd.id}`);
+                          toast.success("Изтрито");
+                          const [draftsRes, hoursRes] = await Promise.all([
+                            API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
+                            API.get(`/technician/worker-day-hours?worker_ids=${roster.map(w => w.worker_id).join(",")}`),
+                          ]);
+                          setExistingDrafts(draftsRes.data.items || []);
+                          setWorkerDayHours(hoursRes.data.workers || {});
+                        } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+                      }}><Trash2 className="w-3 h-3 text-red-400" /></Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Notes + CTA only for individual mode */}
+      {reportMode === "person" && (
+        <>
+          <Textarea value={generalNotes} onChange={e => setGeneralNotes(e.target.value)} placeholder={t("technician.generalNotes")} className="min-h-[60px] border-slate-600/30" />
+          <Button onClick={() => setScreen("review")} className="w-full h-14 text-lg rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg"><Eye className="w-5 h-5 mr-2" />{t("technician.reviewReport")}</Button>
+        </>
+      )}
     </div>
   );
 
