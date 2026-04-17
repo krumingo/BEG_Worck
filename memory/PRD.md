@@ -214,6 +214,16 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - SickLeave/Leave/Vacation/Excused → block with specific status message
   - Worker calendar leave/sick → block
   - Verified: API test — block without attendance, pass with attendance
+- **People Screen: Single Commit Point Architecture** — Apr 17, 2026
+  - Complete rewrite of people screen logic following old app's model
+  - ALL actions (add, remove, toggle) are LOCAL STATE ONLY until Save
+  - Removed: old removeWorker() and addSelectedWorkers() that made immediate backend calls
+  - Save = единствен commit point: attendance_entries + roster + draft cleanup for removed workers
+  - Conflict check on Save: submitted/approved → block; drafts → confirm dialog
+  - No duplicates: daily list / shortlist / + Добави are mutually exclusive sets
+  - Title: "Хора на обекта днес" — clear single-purpose daily staging list
+  - Workers enter with status="Present" directly (no empty selection needed)
+  - Verified: visual screenshots + API tests
 - **Remove Worker Conflict Resolution (Drafts/Reports)** — Apr 16, 2026
   - New endpoint `POST /technician/site/{id}/check-remove-worker` — checks draft/submitted/approved count
   - New endpoint `POST /technician/site/{id}/remove-worker-with-drafts` — atomically deletes drafts + attendance + roster entry
