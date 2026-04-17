@@ -224,6 +224,14 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - Title: "Хора на обекта днес" — clear single-purpose daily staging list
   - Workers enter with status="Present" directly (no empty selection needed)
   - Verified: visual screenshots + API tests
+- **UX Polish: Step 1/2 + Day Hours + Draft Delete** — Apr 17, 2026
+  - Step 1 simplified: "Стъпка 1: Кой е на обекта?" — compact selected list + toggle available + dominant "Запази и продължи" CTA
+  - Step 2 cleaner: distinct worker cards (border-2, bg header), initials avatar, clear visual separation
+  - Day total hours per worker across ALL projects shown in Step 2 header: "Днес: Xч +Yч = Zч"
+  - Color coding: normal (gray), >8h (amber), >12h (red) — visible BEFORE submit
+  - New endpoint: `GET /technician/worker-day-hours?worker_ids=X,Y`
+  - Draft delete: trash button in "Чернови за днес" section with confirm + refresh counters/drafts
+  - Verified: visual screenshots
 - **Remove Worker Conflict Resolution (Drafts/Reports)** — Apr 16, 2026
   - New endpoint `POST /technician/site/{id}/check-remove-worker` — checks draft/submitted/approved count
   - New endpoint `POST /technician/site/{id}/remove-worker-with-drafts` — atomically deletes drafts + attendance + roster entry

@@ -61,6 +61,7 @@ export default function TechnicianDashboard() {
 
   // Draft editing
   const [existingDrafts, setExistingDrafts] = useState([]);
+  const [workerDayHours, setWorkerDayHours] = useState({}); // {worker_id: {total_hours, projects_count}}
 
   // Object detail
   const [siteDetail, setSiteDetail] = useState(null);
@@ -121,9 +122,14 @@ export default function TechnicianDashboard() {
     setRosterSaving(true);
     try {
       await API.post(`/technician/site/${selectedSite.project_id}/roster`, { workers: roster });
-      // Pre-fill entries from roster
       setEntries(roster.map(w => ({ id: Date.now() + Math.random(), worker_id: w.worker_id, worker_name: w.worker_name, lines: [{ smr: "", hours: "8", notes: "" }] })));
       setGroupWorkers([]);
+      // Fetch day hours for all workers
+      try {
+        const ids = roster.map(w => w.worker_id).join(",");
+        const hRes = await API.get(`/technician/worker-day-hours?worker_ids=${ids}`);
+        setWorkerDayHours(hRes.data.workers || {});
+      } catch { setWorkerDayHours({}); }
       setScreen("report");
     } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
     finally { setRosterSaving(false); }
@@ -364,11 +370,28 @@ export default function TechnicianDashboard() {
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-20 rounded-2xl flex-col text-sm"><Camera className="w-6 h-6 mb-1 text-blue-400" />{t("technician.photoInvoice")}</Button>
         </div>
 
-        {/* Existing Drafts */}
+        {/* Existing Drafts — with delete */}
         {existingDrafts.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="text-xs font-semibold text-amber-400 mb-2">{t("technician.existingDrafts")} ({existingDrafts.length})</p>
-            {existingDrafts.slice(0, 5).map(dd => <p key={dd.id} className="text-xs text-muted-foreground">{dd.worker_name} — {dd.smr_type} — {dd.hours}ч</p>)}
+            {existingDrafts.slice(0, 10).map(dd => (
+              <div key={dd.id} className="flex items-center justify-between py-1">
+                <p className="text-xs text-muted-foreground">{dd.worker_name} — {dd.smr_type} — {dd.hours}ч</p>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={async () => {
+                  if (!window.confirm(`Изтрий чернова: ${dd.worker_name} — ${dd.smr_type} — ${dd.hours}ч?`)) return;
+                  try {
+                    await API.delete(`/technician/draft/${dd.id}`);
+                    toast.success("Черновата е изтрита");
+                    const [draftsRes, detailRes] = await Promise.all([
+                      API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
+                      API.get(`/technician/site/${selectedSite.project_id}/detail`),
+                    ]);
+                    setExistingDrafts(draftsRes.data.items || []);
+                    setSiteDetail(detailRes.data);
+                  } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+                }}><Trash2 className="w-3 h-3 text-red-400" /></Button>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -643,22 +666,44 @@ export default function TechnicianDashboard() {
   // ROSTER
   // ════════════════════════════════════════════════════════════
   if (screen === "roster") return (
-    <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-roster">
+    <div className="p-4 max-w-lg mx-auto space-y-3" data-testid="tech-roster">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>
-        <div className="flex-1"><h2 className="font-bold">{t("technician.step1Roster")}</h2><p className="text-xs text-muted-foreground">{selectedSite?.name}</p></div>
-        <Button size="sm" variant="outline" onClick={copyYesterday}><Copy className="w-3.5 h-3.5 mr-1" />{t("technician.copyYesterday")}</Button>
+        <div className="flex-1">
+          <h2 className="font-bold text-base">Стъпка 1: Кой е на обекта?</h2>
+          <p className="text-xs text-muted-foreground">{selectedSite?.name} — {new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long" })}</p>
+        </div>
+        <Button size="sm" variant="ghost" className="text-xs" onClick={copyYesterday}><Copy className="w-3.5 h-3.5 mr-1" />{t("technician.copyYesterday")}</Button>
       </div>
-      {roster.length > 0 && <div className="space-y-1"><p className="text-xs text-muted-foreground">{t("technician.selected")} ({roster.length})</p>{roster.map(w => <div key={w.worker_id} className="flex items-center justify-between p-3 rounded-xl border border-primary/30 bg-primary/5"><span className="font-medium">{w.worker_name}</span><Button variant="ghost" size="sm" onClick={() => toggleWorker(w)}><Trash2 className="w-4 h-4 text-red-400" /></Button></div>)}</div>}
-      <div className="flex items-center justify-between"><p className="text-xs text-muted-foreground">{showAll ? t("technician.allEmployees") : t("technician.recentWorkers")}</p><Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAll(!showAll)}><UserPlus className="w-3 h-3 mr-1" />{showAll ? t("technician.showRecent") : t("technician.showAll")}</Button></div>
-      {allSugg.length === 0 ? <p className="text-xs text-muted-foreground py-2">{t("technician.noSuggestions")}</p> : allSugg.map(w => (
-        <button key={w.worker_id} onClick={() => toggleWorker(w)} className={`w-full flex items-center justify-between p-3 rounded-xl border text-left ${isInRoster(w.worker_id) ? "border-primary/30 bg-primary/5" : "border-border hover:bg-muted/20"}`}>
-          <span>{w.worker_name}</span>
-          <div className="flex items-center gap-2">{w.source === "recent" && <Badge variant="outline" className="text-[9px]">{t("technician.recent")}</Badge>}{isInRoster(w.worker_id) && <Check className="w-4 h-4 text-primary" />}</div>
-        </button>
-      ))}
-      <Button onClick={saveRosterAndContinue} disabled={rosterSaving || !roster.length} className="w-full h-14 text-lg rounded-2xl" data-testid="save-roster-btn">
-        {rosterSaving ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Users className="w-5 h-5 mr-2" />}{t("technician.saveAndContinue")} ({roster.length})
+
+      {/* Selected workers — compact */}
+      {roster.length > 0 && (
+        <div className="space-y-1">
+          {roster.map(w => (
+            <div key={w.worker_id} className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+              <span className="text-sm font-medium">{w.worker_name}</span>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleWorker(w)}><Trash2 className="w-3.5 h-3.5 text-red-400" /></Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Available workers — compact toggle list */}
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{showAll ? t("technician.allEmployees") : t("technician.recentWorkers")} <button onClick={() => setShowAll(!showAll)} className="text-primary ml-1">{showAll ? "↩ Скорошни" : "Виж всички →"}</button></p>
+      <div className="space-y-1">
+        {allSugg.filter(w => !isInRoster(w.worker_id)).slice(0, 15).map(w => (
+          <button key={w.worker_id} onClick={() => toggleWorker(w)} className="w-full flex items-center justify-between p-2.5 rounded-xl border border-border text-left hover:bg-muted/20 text-sm">
+            <span>{w.worker_name}</span>
+            <Plus className="w-4 h-4 text-muted-foreground" />
+          </button>
+        ))}
+        {allSugg.filter(w => !isInRoster(w.worker_id)).length === 0 && <p className="text-xs text-muted-foreground py-2">{t("technician.noSuggestions")}</p>}
+      </div>
+
+      {/* CTA — dominant */}
+      <Button onClick={saveRosterAndContinue} disabled={rosterSaving || !roster.length} className="w-full h-14 text-lg rounded-2xl bg-emerald-600 hover:bg-emerald-700" data-testid="save-roster-btn">
+        {rosterSaving ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Check className="w-5 h-5 mr-2" />}
+        Запази и продължи ({roster.length})
       </Button>
     </div>
   );
@@ -670,37 +715,70 @@ export default function TechnicianDashboard() {
     <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-report">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => setScreen("roster")}><ArrowLeft className="w-4 h-4" /></Button>
-        <div className="flex-1"><h2 className="font-bold">{t("technician.step2Report")}</h2><p className="text-xs text-muted-foreground">{selectedSite?.name}</p></div>
+        <div className="flex-1">
+          <h2 className="font-bold text-base">Стъпка 2: Дневен отчет</h2>
+          <p className="text-xs text-muted-foreground">{selectedSite?.name} — {new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long" })}</p>
+        </div>
       </div>
+
       {/* Mode toggle */}
       <div className="flex gap-2">
         <Button variant={reportMode === "person" ? "default" : "outline"} size="sm" onClick={() => setReportMode("person")} className="flex-1 rounded-xl">{t("technician.byPerson")}</Button>
         <Button variant={reportMode === "group" ? "default" : "outline"} size="sm" onClick={() => setReportMode("group")} className="flex-1 rounded-xl">{t("technician.byGroup")}</Button>
       </div>
 
-      {/* MODE A: Per person */}
-      {reportMode === "person" && entries.map(e => (
-        <div key={e.id} className="rounded-2xl border border-border bg-card p-4 space-y-3">
-          <p className="font-semibold text-sm">{e.worker_name}</p>
-          {e.lines.map((ln, li) => (
-            <div key={li} className="space-y-2 pl-3 border-l-2 border-primary/20">
-              {availableTasks.length > 0 ? (
-                <Select value={ln.smr || "none"} onValueChange={v => setLine(e.id, li, "smr", v === "none" ? "" : v)}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
-                  <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}{tk.source_label ? ` (${tk.source_label})` : ""}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
-                </Select>
-              ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" />}
-              {ln.smr === "__other" && <Input value="" onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" autoFocus />}
-              <div className="flex gap-2">
-                <Input type="number" value={ln.hours} onChange={ev => setLine(e.id, li, "hours", ev.target.value)} placeholder={t("technician.hours")} className="h-11 flex-1" min="0" max="24" step="0.5" />
-                <Input value={ln.notes} onChange={ev => setLine(e.id, li, "notes", ev.target.value)} placeholder={t("technician.notes")} className="h-11 flex-1" />
-                {e.lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(e.id, li)} className="h-11"><Trash2 className="w-4 h-4 text-red-400" /></Button>}
+      {/* MODE A: Per person — cleaner cards */}
+      {reportMode === "person" && entries.map(e => {
+        const dayH = workerDayHours[e.worker_id];
+        const dayTotal = dayH ? dayH.total_hours : 0;
+        const entryHours = e.lines.reduce((s, ln) => s + (parseFloat(ln.hours) || 0), 0);
+        const projected = dayTotal + entryHours;
+        const hoursCls = projected > 12 ? "text-red-400" : projected > 8 ? "text-amber-400" : "text-muted-foreground";
+
+        return (
+          <div key={e.id} className="rounded-2xl border-2 border-border bg-card overflow-hidden" style={{ marginTop: "12px" }}>
+            {/* Worker header — distinct */}
+            <div className="px-4 py-3 bg-muted/20 border-b border-border flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                {(e.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}
               </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{e.worker_name}</p>
+              </div>
+              {dayTotal > 0 && (
+                <span className={`text-[10px] font-mono ${hoursCls}`}>
+                  Днес: {dayTotal}ч{entryHours > 0 ? ` +${entryHours}ч = ${projected}ч` : ""}
+                </span>
+              )}
+              {dayTotal === 0 && entryHours > 0 && (
+                <span className={`text-[10px] font-mono ${entryHours > 12 ? "text-red-400" : entryHours > 8 ? "text-amber-400" : "text-muted-foreground"}`}>
+                  {entryHours}ч
+                </span>
+              )}
             </div>
-          ))}
-          <Button variant="outline" size="sm" onClick={() => addLine(e.id)} className="w-full rounded-xl"><Plus className="w-4 h-4 mr-1" />{t("technician.addActivity")}</Button>
-        </div>
-      ))}
+            {/* Lines */}
+            <div className="p-4 space-y-3">
+              {e.lines.map((ln, li) => (
+                <div key={li} className="space-y-2 pl-3 border-l-2 border-primary/20">
+                  {availableTasks.length > 0 ? (
+                    <Select value={ln.smr || "none"} onValueChange={v => setLine(e.id, li, "smr", v === "none" ? "" : v)}>
+                      <SelectTrigger className="h-11"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
+                      <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}{tk.source_label ? ` (${tk.source_label})` : ""}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
+                    </Select>
+                  ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" />}
+                  {ln.smr === "__other" && <Input value="" onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" autoFocus />}
+                  <div className="flex gap-2">
+                    <Input type="number" value={ln.hours} onChange={ev => setLine(e.id, li, "hours", ev.target.value)} placeholder={t("technician.hours")} className="h-11 flex-1" min="0" max="24" step="0.5" />
+                    <Input value={ln.notes} onChange={ev => setLine(e.id, li, "notes", ev.target.value)} placeholder={t("technician.notes")} className="h-11 flex-1" />
+                    {e.lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(e.id, li)} className="h-11"><Trash2 className="w-4 h-4 text-red-400" /></Button>}
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => addLine(e.id)} className="w-full rounded-xl"><Plus className="w-4 h-4 mr-1" />{t("technician.addActivity")}</Button>
+            </div>
+          </div>
+        );
+      })}
 
       {/* MODE B: Group */}
       {reportMode === "group" && (

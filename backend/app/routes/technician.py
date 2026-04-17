@@ -1341,3 +1341,28 @@ async def delete_draft(draft_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Can only delete Draft entries")
     await db.employee_daily_reports.delete_one({"id": draft_id})
     return {"ok": True}
+
+
+
+@router.get("/technician/worker-day-hours")
+async def get_worker_day_hours(worker_ids: str, date: str = "", user: dict = Depends(get_current_user)):
+    """Get total hours per worker across ALL projects for a given date."""
+    org_id = user["org_id"]
+    d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    ids = [wid.strip() for wid in worker_ids.split(",") if wid.strip()]
+    if not ids:
+        return {"workers": {}, "date": d}
+
+    reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "date": d, "worker_id": {"$in": ids}},
+        {"_id": 0, "worker_id": 1, "hours": 1, "project_id": 1},
+    ).to_list(500)
+
+    result = {}
+    for wid in ids:
+        worker_reports = [r for r in reports if r.get("worker_id") == wid]
+        total = round(sum(r.get("hours", 0) for r in worker_reports), 2)
+        projects = len(set(r.get("project_id") for r in worker_reports if r.get("project_id")))
+        result[wid] = {"total_hours": total, "projects_count": projects}
+
+    return {"workers": result, "date": d}
