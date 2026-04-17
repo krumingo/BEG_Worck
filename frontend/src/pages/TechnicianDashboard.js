@@ -61,7 +61,9 @@ export default function TechnicianDashboard() {
 
   // Draft editing
   const [existingDrafts, setExistingDrafts] = useState([]);
-  const [workerDayHours, setWorkerDayHours] = useState({}); // {worker_id: {total_hours, projects_count}}
+  const [workerDayHours, setWorkerDayHours] = useState({});
+  const [editDraft, setEditDraft] = useState(null); // {id, smr_type, hours, notes}
+  const [editSaving, setEditSaving] = useState(false);
 
   // Object detail
   const [siteDetail, setSiteDetail] = useState(null);
@@ -399,13 +401,17 @@ export default function TechnicianDashboard() {
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
         </div>
 
-        {/* Чернови за днес — with delete */}
+        {/* Чернови за днес — with edit + delete */}
         {existingDrafts.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
             <p className="text-xs font-semibold text-amber-400 mb-2">Чернови за днес ({existingDrafts.length})</p>
             {existingDrafts.slice(0, 10).map(dd => (
-              <div key={dd.id} className="flex items-center justify-between py-1">
-                <p className="text-xs text-muted-foreground">{dd.worker_name} — {dd.smr_type} — {dd.hours}ч</p>
+              <div key={dd.id} className="flex items-center gap-2 py-1.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground truncate">{dd.smr_type || "—"}</p>
+                  <p className="text-[10px] text-muted-foreground">{dd.worker_name} · {dd.hours}ч{dd.notes ? ` · ${dd.notes}` : ""}</p>
+                </div>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditDraft({ id: dd.id, smr_type: dd.smr_type || "", hours: dd.hours || 0, notes: dd.notes || "" })}><Pencil className="w-3 h-3" /></Button>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={async () => {
                   if (!window.confirm(`Изтрий чернова: ${dd.worker_name} — ${dd.smr_type} — ${dd.hours}ч?`)) return;
                   try {
@@ -421,6 +427,53 @@ export default function TechnicianDashboard() {
                 }}><Trash2 className="w-3 h-3 text-red-400" /></Button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Edit Draft Modal */}
+        {editDraft && (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end justify-center" onClick={() => !editSaving && setEditDraft(null)}>
+            <div className="w-full max-w-lg bg-card border-t border-border rounded-t-2xl p-4 space-y-4" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-base">Редакция на чернова</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Дейност</label>
+                  <Input value={editDraft.smr_type} onChange={e => setEditDraft(prev => ({ ...prev, smr_type: e.target.value }))} className="h-11" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Часове</label>
+                  <Input type="number" value={editDraft.hours} onChange={e => setEditDraft(prev => ({ ...prev, hours: e.target.value }))} className="h-11" min="0" max="24" step="0.5" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Бележка</label>
+                  <Input value={editDraft.notes} onChange={e => setEditDraft(prev => ({ ...prev, notes: e.target.value }))} className="h-11" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setEditDraft(null)} disabled={editSaving} className="flex-1 h-12 rounded-xl">Отказ</Button>
+                <Button onClick={async () => {
+                  setEditSaving(true);
+                  try {
+                    await API.put(`/technician/draft/${editDraft.id}`, {
+                      smr_type: editDraft.smr_type,
+                      hours: parseFloat(editDraft.hours) || 0,
+                      notes: editDraft.notes,
+                    });
+                    toast.success("Черновата е обновена");
+                    setEditDraft(null);
+                    const [draftsRes, detailRes] = await Promise.all([
+                      API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
+                      API.get(`/technician/site/${selectedSite.project_id}/detail`),
+                    ]);
+                    setExistingDrafts(draftsRes.data.items || []);
+                    setSiteDetail(detailRes.data);
+                  } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+                  finally { setEditSaving(false); }
+                }} disabled={editSaving} className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700">
+                  {editSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}Запази
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -922,59 +975,6 @@ export default function TechnicianDashboard() {
                 className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700"
               ><Plus className="w-4 h-4 mr-2" />Добави към деня</Button>
             </div>
-
-            {/* Чернови за деня — with edit + delete */}
-            {existingDrafts.length > 0 && (
-              <div className="rounded-2xl border border-border bg-card overflow-hidden">
-                <div className="px-4 py-2.5 bg-muted/20 border-b border-border/50 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-semibold">Чернови за деня ({existingDrafts.length})</span>
-                </div>
-                <div className="p-3 space-y-2">
-                  {existingDrafts.map(dd => (
-                    <div key={dd.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/10 text-xs">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{dd.smr_type || "—"}</p>
-                        <p className="text-[10px] text-muted-foreground">{dd.worker_name} · {dd.hours}ч{dd.notes ? ` · ${dd.notes}` : ""}</p>
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={() => {
-                        const newSmr = prompt("Дейност:", dd.smr_type);
-                        if (newSmr === null) return;
-                        const newHours = prompt("Часове:", String(dd.hours));
-                        if (newHours === null) return;
-                        const newNotes = prompt("Бележка:", dd.notes || "");
-                        API.put(`/technician/draft/${dd.id}`, {
-                          smr_type: newSmr || dd.smr_type,
-                          hours: parseFloat(newHours) || dd.hours,
-                          notes: newNotes !== null ? newNotes : dd.notes,
-                        }).then(async () => {
-                          toast.success("Черновата е обновена");
-                          const [draftsRes, hoursRes] = await Promise.all([
-                            API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
-                            API.get(`/technician/worker-day-hours?worker_ids=${roster.map(w => w.worker_id).join(",")}`),
-                          ]);
-                          setExistingDrafts(draftsRes.data.items || []);
-                          setWorkerDayHours(hoursRes.data.workers || {});
-                        }).catch(err => toast.error(err.response?.data?.detail || "Грешка"));
-                      }}><Pencil className="w-3 h-3" /></Button>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={async () => {
-                        if (!window.confirm(`Изтрий: ${dd.worker_name} — ${dd.smr_type} — ${dd.hours}ч?`)) return;
-                        try {
-                          await API.delete(`/technician/draft/${dd.id}`);
-                          toast.success("Изтрито");
-                          const [draftsRes, hoursRes] = await Promise.all([
-                            API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
-                            API.get(`/technician/worker-day-hours?worker_ids=${roster.map(w => w.worker_id).join(",")}`),
-                          ]);
-                          setExistingDrafts(draftsRes.data.items || []);
-                          setWorkerDayHours(hoursRes.data.workers || {});
-                        } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
-                      }}><Trash2 className="w-3 h-3 text-red-400" /></Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         );
       })()}
