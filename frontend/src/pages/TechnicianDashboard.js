@@ -759,17 +759,14 @@ export default function TechnicianDashboard() {
       {/* MODE A: Per person — styled cards */}
       {reportMode === "person" && entries.map(e => {
         const dayH = workerDayHours[e.worker_id];
-        const dayTotal = dayH ? dayH.total_hours : 0;
+        const savedTotal = dayH ? dayH.total_hours : 0; // saved hours across all projects
         const otherProjects = dayH ? dayH.projects_count : 0;
-        const entryHours = e.lines.reduce((s, ln) => s + (parseFloat(ln.hours) || 0), 0);
-        const projected = dayTotal + entryHours;
 
-        // Color logic
-        const isCritical = projected > 12;
-        const isWarning = projected > 8;
+        // Color logic based on SAVED hours only (not form defaults)
+        const isCritical = savedTotal > 12;
+        const isWarning = savedTotal > 8;
         const accentCls = isCritical ? "border-l-red-500" : isWarning ? "border-l-amber-500" : "border-l-slate-600";
         const headerBg = isCritical ? "bg-red-500/8" : isWarning ? "bg-amber-500/8" : "bg-slate-800/60";
-        const pillCls = isCritical ? "bg-red-500/20 text-red-400 border-red-500/30" : isWarning ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-slate-700/50 text-slate-300 border-slate-600/50";
 
         return (
           <div key={e.id} className={`rounded-2xl border border-border bg-card overflow-hidden border-l-4 ${accentCls}`} style={{ marginTop: "16px" }}>
@@ -782,17 +779,14 @@ export default function TechnicianDashboard() {
                 <p className="font-semibold text-sm truncate">{e.worker_name}</p>
                 {otherProjects > 1 && <p className="text-[9px] text-muted-foreground">{otherProjects} обекта днес</p>}
               </div>
-              {/* Hours badge / pill */}
-              <div className={`px-2.5 py-1 rounded-lg border text-right ${pillCls}`}>
-                <p className="text-[11px] font-mono font-bold leading-tight">
-                  {projected > 0 ? `${projected}ч` : "0ч"}
-                </p>
-                {dayTotal > 0 && entryHours > 0 && (
-                  <p className="text-[8px] leading-tight opacity-70">
-                    Тук: {entryHours}ч · Други: {dayTotal}ч
-                  </p>
-                )}
-              </div>
+              {/* Saved hours badge — only real data */}
+              {savedTotal > 0 ? (
+                <div className={`px-2.5 py-1 rounded-lg border text-right ${isCritical ? "bg-red-500/20 text-red-400 border-red-500/30" : isWarning ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"}`}>
+                  <p className="text-[11px] font-mono font-bold leading-tight">Записано: {savedTotal}ч</p>
+                </div>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">Няма отчет</span>
+              )}
             </div>
 
             {/* Activity lines */}
