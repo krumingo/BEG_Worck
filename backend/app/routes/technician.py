@@ -820,7 +820,7 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     from app.services.project_guards import check_project_writable
     await check_project_writable(data.project_id, org_id, "отчети")
 
-    # Validate attendance: each worker must be Present/Late or have no blocking status
+    # Validate attendance: each worker must be Present/Late — HARD BLOCK
     attendance_warnings = []
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
@@ -837,7 +837,10 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
         if att and att.get("status") in ("SickLeave", "Leave", "Vacation", "Excused"):
             raise HTTPException(status_code=400, detail=f"Работникът {entry.worker_name or wid} е {att['status']}. Не може да бъде отчетен.")
         if not att or att.get("status") not in ("Present", "Late"):
-            attendance_warnings.append({"worker_id": wid, "worker_name": entry.worker_name or "", "reason": "no_present_status"})
+            raise HTTPException(
+                status_code=400,
+                detail=f"Работникът {entry.worker_name or wid} не е отбелязан като присъстващ за този обект и дата. Първо потвърдете присъствието в Хора."
+            )
 
     roster_ids = set()
     if roster:
