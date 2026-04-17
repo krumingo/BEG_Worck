@@ -756,54 +756,73 @@ export default function TechnicianDashboard() {
         <Button variant={reportMode === "group" ? "default" : "outline"} size="sm" onClick={() => setReportMode("group")} className="flex-1 rounded-xl">{t("technician.byGroup")}</Button>
       </div>
 
-      {/* MODE A: Per person — cleaner cards */}
+      {/* MODE A: Per person — styled cards */}
       {reportMode === "person" && entries.map(e => {
         const dayH = workerDayHours[e.worker_id];
         const dayTotal = dayH ? dayH.total_hours : 0;
+        const otherProjects = dayH ? dayH.projects_count : 0;
         const entryHours = e.lines.reduce((s, ln) => s + (parseFloat(ln.hours) || 0), 0);
         const projected = dayTotal + entryHours;
-        const hoursCls = projected > 12 ? "text-red-400" : projected > 8 ? "text-amber-400" : "text-muted-foreground";
+
+        // Color logic
+        const isCritical = projected > 12;
+        const isWarning = projected > 8;
+        const accentCls = isCritical ? "border-l-red-500" : isWarning ? "border-l-amber-500" : "border-l-slate-600";
+        const headerBg = isCritical ? "bg-red-500/8" : isWarning ? "bg-amber-500/8" : "bg-slate-800/60";
+        const pillCls = isCritical ? "bg-red-500/20 text-red-400 border-red-500/30" : isWarning ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-slate-700/50 text-slate-300 border-slate-600/50";
 
         return (
-          <div key={e.id} className="rounded-2xl border-2 border-border bg-card overflow-hidden" style={{ marginTop: "12px" }}>
-            {/* Worker header — distinct */}
-            <div className="px-4 py-3 bg-muted/20 border-b border-border flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+          <div key={e.id} className={`rounded-2xl border border-border bg-card overflow-hidden border-l-4 ${accentCls}`} style={{ marginTop: "16px" }}>
+            {/* Worker header */}
+            <div className={`px-4 py-3 ${headerBg} border-b border-border/50 flex items-center gap-3`}>
+              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-primary flex-shrink-0">
                 {(e.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{e.worker_name}</p>
+                {otherProjects > 1 && <p className="text-[9px] text-muted-foreground">{otherProjects} обекта днес</p>}
               </div>
-              {dayTotal > 0 && (
-                <span className={`text-[10px] font-mono ${hoursCls}`}>
-                  Днес: {dayTotal}ч{entryHours > 0 ? ` +${entryHours}ч = ${projected}ч` : ""}
-                </span>
-              )}
-              {dayTotal === 0 && entryHours > 0 && (
-                <span className={`text-[10px] font-mono ${entryHours > 12 ? "text-red-400" : entryHours > 8 ? "text-amber-400" : "text-muted-foreground"}`}>
-                  {entryHours}ч
-                </span>
-              )}
+              {/* Hours badge / pill */}
+              <div className={`px-2.5 py-1 rounded-lg border text-right ${pillCls}`}>
+                <p className="text-[11px] font-mono font-bold leading-tight">
+                  {projected > 0 ? `${projected}ч` : "0ч"}
+                </p>
+                {dayTotal > 0 && entryHours > 0 && (
+                  <p className="text-[8px] leading-tight opacity-70">
+                    Тук: {entryHours}ч · Други: {dayTotal}ч
+                  </p>
+                )}
+              </div>
             </div>
-            {/* Lines */}
-            <div className="p-4 space-y-3">
+
+            {/* Activity lines */}
+            <div className="p-4 space-y-4">
               {e.lines.map((ln, li) => (
-                <div key={li} className="space-y-2 pl-3 border-l-2 border-primary/20">
+                <div key={li} className="space-y-2">
+                  {/* Activity select — subtle blue accent */}
                   {availableTasks.length > 0 ? (
                     <Select value={ln.smr || "none"} onValueChange={v => setLine(e.id, li, "smr", v === "none" ? "" : v)}>
-                      <SelectTrigger className="h-11"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
+                      <SelectTrigger className="h-11 border-blue-500/20 focus:border-blue-500/40"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
                       <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}{tk.source_label ? ` (${tk.source_label})` : ""}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
                     </Select>
-                  ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" />}
+                  ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11 border-blue-500/20 focus:border-blue-500/40" />}
                   {ln.smr === "__other" && <Input value="" onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" autoFocus />}
+
+                  {/* Hours + Notes row */}
                   <div className="flex gap-2">
-                    <Input type="number" value={ln.hours} onChange={ev => setLine(e.id, li, "hours", ev.target.value)} placeholder={t("technician.hours")} className="h-11 flex-1" min="0" max="24" step="0.5" />
-                    <Input value={ln.notes} onChange={ev => setLine(e.id, li, "notes", ev.target.value)} placeholder={t("technician.notes")} className="h-11 flex-1" />
-                    {e.lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(e.id, li)} className="h-11"><Trash2 className="w-4 h-4 text-red-400" /></Button>}
+                    <div className="flex-1 relative">
+                      <Input type="number" value={ln.hours} onChange={ev => setLine(e.id, li, "hours", ev.target.value)} placeholder="Часове" className="h-11 border-amber-500/20 focus:border-amber-500/40 pl-8" min="0" max="24" step="0.5" />
+                      <Clock className="w-3.5 h-3.5 absolute left-2.5 top-3.5 text-amber-500/40" />
+                    </div>
+                    <div className="flex-1">
+                      <Input value={ln.notes} onChange={ev => setLine(e.id, li, "notes", ev.target.value)} placeholder="Бележки" className="h-11 border-slate-600/30" />
+                    </div>
+                    {e.lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(e.id, li)} className="h-11 hover:bg-red-500/10"><Trash2 className="w-4 h-4 text-red-400" /></Button>}
                   </div>
                 </div>
               ))}
-              <Button variant="outline" size="sm" onClick={() => addLine(e.id)} className="w-full rounded-xl"><Plus className="w-4 h-4 mr-1" />{t("technician.addActivity")}</Button>
+              {/* Add activity — secondary */}
+              <Button variant="outline" size="sm" onClick={() => addLine(e.id)} className="w-full rounded-xl border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/30"><Plus className="w-4 h-4 mr-1" />{t("technician.addActivity")}</Button>
             </div>
           </div>
         );
@@ -829,8 +848,8 @@ export default function TechnicianDashboard() {
         </div>
       )}
 
-      <Textarea value={generalNotes} onChange={e => setGeneralNotes(e.target.value)} placeholder={t("technician.generalNotes")} className="min-h-[60px]" />
-      <Button onClick={() => setScreen("review")} className="w-full h-14 text-lg rounded-2xl"><Eye className="w-5 h-5 mr-2" />{t("technician.reviewReport")}</Button>
+      <Textarea value={generalNotes} onChange={e => setGeneralNotes(e.target.value)} placeholder={t("technician.generalNotes")} className="min-h-[60px] border-slate-600/30" />
+      <Button onClick={() => setScreen("review")} className="w-full h-14 text-lg rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg"><Eye className="w-5 h-5 mr-2" />{t("technician.reviewReport")}</Button>
     </div>
   );
 
