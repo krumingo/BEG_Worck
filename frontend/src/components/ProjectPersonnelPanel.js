@@ -4,6 +4,7 @@
  * Shows: today status, draft/approved counts, amounts, links to reports.
  */
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ const TODAY_STATUS = {
 
 export default function ProjectPersonnelPanel({ projectId }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [drillWorker, setDrillWorker] = useState(null);
@@ -77,18 +79,18 @@ export default function ProjectPersonnelPanel({ projectId }) {
           <p className="text-lg font-bold text-emerald-400">{present}</p>
           <p className="text-muted-foreground">{t("personnelPanel.today")}</p>
         </div>
-        <div className="rounded-lg border border-border p-2">
+        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&report_status=DRAFT&returnTo=/projects/${projectId}&returnTab=team`)} className="rounded-lg border border-blue-500/30 p-2 hover:bg-blue-500/10 transition-colors" data-testid="link-drafts">
           <p className="text-lg font-bold text-blue-400">{withDrafts}</p>
           <p className="text-muted-foreground">{t("personnelPanel.withDrafts")}</p>
-        </div>
-        <div className="rounded-lg border border-border p-2">
+        </button>
+        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&report_status=APPROVED&returnTo=/projects/${projectId}&returnTab=team`)} className="rounded-lg border border-emerald-500/30 p-2 hover:bg-emerald-500/10 transition-colors" data-testid="link-approved">
           <p className="text-lg font-bold text-emerald-400">{withApproved}</p>
           <p className="text-muted-foreground">{t("personnelPanel.withApproved")}</p>
-        </div>
-        <div className="rounded-lg border border-border p-2">
+        </button>
+        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&returnTo=/projects/${projectId}&returnTab=team`)} className="rounded-lg border border-border p-2 hover:bg-primary/10 transition-colors" data-testid="link-clean">
           <p className="text-lg font-bold font-mono">{fmt(totalClean)}</p>
           <p className="text-muted-foreground">{t("personnelPanel.cleanLabor")}</p>
-        </div>
+        </button>
         <div className="rounded-lg border border-border p-2">
           <p className="text-lg font-bold font-mono">{fmt(totalLoaded)}</p>
           <p className="text-muted-foreground">{t("personnelPanel.loadedLabor")}</p>
@@ -142,8 +144,16 @@ export default function ProjectPersonnelPanel({ projectId }) {
                         {st.label}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono text-blue-400">{p.draft_reports_count || "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-emerald-400">{p.approved_reports_count || "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-blue-400">
+                      {p.draft_reports_count > 0 ? (
+                        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&report_status=DRAFT&worker_id=${p.worker_id}&returnTo=/projects/${projectId}&returnTab=team`)} className="hover:underline">{p.draft_reports_count}</button>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-emerald-400">
+                      {p.approved_reports_count > 0 ? (
+                        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&report_status=APPROVED&worker_id=${p.worker_id}&returnTo=/projects/${projectId}&returnTab=team`)} className="hover:underline">{p.approved_reports_count}</button>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-right font-mono">{p.total_hours > 0 ? p.total_hours.toFixed(0) : "—"}</TableCell>
                     <TableCell className="text-right font-mono">{fmt(p.clean_amount)}</TableCell>
                     <TableCell className="text-right font-mono font-bold">{fmt(p.total_amount)}</TableCell>

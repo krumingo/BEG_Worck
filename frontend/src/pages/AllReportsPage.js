@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import ProjectContextBar from "@/components/ProjectContextBar";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -51,18 +52,24 @@ export default function AllReportsPage() {
   const [sortDir, setSortDir] = useState("desc");
   const [detail, setDetail] = useState(null);
 
+  // URL params for deep-linking from PersonnelPanel
+  const [searchParams] = useSearchParams();
+  const urlProject = searchParams.get("project_id") || "";
+  const urlStatus = searchParams.get("report_status") || "";
+  const urlWorker = searchParams.get("worker_id") || "";
+
   // Filters
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30);
     return d.toISOString().slice(0, 10);
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [fWorker, setFWorker] = useState("");
-  const [fProject, setFProject] = useState("");
+  const [fWorker, setFWorker] = useState(urlWorker);
+  const [fProject, setFProject] = useState(urlProject);
   const [fSmr, setFSmr] = useState("");
-  const [fStatus, setFStatus] = useState("all");
+  const [fStatus, setFStatus] = useState(urlStatus || "all");
   const [fOvertime, setFOvertime] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(!!(urlProject || urlStatus || urlWorker));
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -114,6 +121,7 @@ export default function AllReportsPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px]" data-testid="all-reports-page">
+      <ProjectContextBar pageTitle="Отчети" />
       {/* Header + Tabs */}
       <div className="flex items-center justify-between mb-4">
         <div>
