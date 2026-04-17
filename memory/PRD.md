@@ -232,6 +232,15 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
   - New endpoint: `GET /technician/worker-day-hours?worker_ids=X,Y`
   - Draft delete: trash button in "Чернови за днес" section with confirm + refresh counters/drafts
   - Verified: visual screenshots
+- **Central Operational Screen: Хора днес inline + No Step 1** — Apr 17, 2026
+  - Object screen redesigned: KPI → "Хора днес" inline panel → 3 action buttons → Drafts
+  - "Хора днес" shows permanently: green dot (present), hours per worker, checkmark (reported), admin badges
+  - "Редактирай" button opens full people management screen
+  - Step 1 (roster selection) removed from "Отчет за деня" — goes directly to report entry
+  - If no roster → redirects to People with toast message
+  - Report screen back button → goes to Object (not Roster)
+  - openObject() now also loads enrichedRoster for inline display
+  - Verified: visual screenshots
 - **Remove Worker Conflict Resolution (Drafts/Reports)** — Apr 16, 2026
   - New endpoint `POST /technician/site/{id}/check-remove-worker` — checks draft/submitted/approved count
   - New endpoint `POST /technician/site/{id}/remove-worker-with-drafts` — atomically deletes drafts + attendance + roster entry

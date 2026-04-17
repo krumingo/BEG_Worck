@@ -85,15 +85,17 @@ export default function TechnicianDashboard() {
     setScreen("object");
     setSiteDetail(null);
     try {
-      const [tasksRes, detailRes, draftsRes] = await Promise.all([
+      const [tasksRes, detailRes, draftsRes, rosterRes] = await Promise.all([
         API.get(`/technician/site/${site.project_id}/tasks`),
         API.get(`/technician/site/${site.project_id}/detail`),
         API.get(`/technician/site/${site.project_id}/my-drafts`),
+        API.get(`/technician/site/${site.project_id}/roster/enriched`),
       ]);
       setAvailableTasks(tasksRes.data.tasks || []);
       setSiteDetail(detailRes.data);
       setExistingDrafts(draftsRes.data.items || []);
-    } catch { setAvailableTasks([]); setSiteDetail(null); setExistingDrafts([]); }
+      setEnrichedRoster(rosterRes.data.workers || []);
+    } catch { setAvailableTasks([]); setSiteDetail(null); setExistingDrafts([]); setEnrichedRoster([]); }
   };
 
   // ── Open Roster ─────────────────────────────────────────────
@@ -288,92 +290,119 @@ export default function TechnicianDashboard() {
   );
 
   // ════════════════════════════════════════════════════════════
-  // OBJECT SCREEN
+  // OBJECT SCREEN — Централен дневен operational екран
   // ════════════════════════════════════════════════════════════
   if (screen === "object" && selectedSite) {
     const d = siteDetail;
-    const co = d?.contact_owner || {};
-    const cr = d?.contact_responsible || {};
-    const od = d?.object_details || {};
     const ct = d?.counters || {};
-    const addr = d?.address || {};
-    const fullAddr = d?.address_text || [addr.city && `гр. ${addr.city}`, addr.district, addr.street, addr.block && `бл. ${addr.block}`, addr.floor && `ет. ${addr.floor}`].filter(Boolean).join(", ");
+    const fullAddr = d?.address_text || "";
+
+    // Enriched roster data for "Хора днес" inline display
+    const rosterWorkers = enrichedRoster.length > 0 ? enrichedRoster : [];
+    const hasRoster = rosterWorkers.length > 0 || (ct.roster_count || 0) > 0;
+
+    // Start report flow: skip Step 1 if roster exists
+    const startReport = () => {
+      if (!hasRoster) {
+        toast.error("Първо запишете кои хора са на обекта днес.");
+        openPeople();
+        return;
+      }
+      // Skip Step 1 — go directly to Step 2
+      const rosterForReport = rosterWorkers.length > 0
+        ? rosterWorkers.filter(w => w.status === "Present" || w.status === "Late")
+        : roster;
+      if (rosterForReport.length === 0) {
+        toast.error("Няма потвърдени присъстващи. Маркирайте хора в секция Хора.");
+        openPeople();
+        return;
+      }
+      // Set roster + entries from enriched data, then go to report
+      setRoster(rosterForReport.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name })));
+      setEntries(rosterForReport.map(w => ({ id: Date.now() + Math.random(), worker_id: w.worker_id, worker_name: w.worker_name, lines: [{ smr: "", hours: "8", notes: "" }] })));
+      setGroupWorkers([]);
+      // Fetch day hours
+      const ids = rosterForReport.map(w => w.worker_id).join(",");
+      API.get(`/technician/worker-day-hours?worker_ids=${ids}`).then(r => setWorkerDayHours(r.data.workers || {})).catch(() => setWorkerDayHours({}));
+      // Fetch tasks
+      API.get(`/technician/site/${selectedSite.project_id}/tasks`).then(r => setAvailableTasks(r.data.tasks || [])).catch(() => setAvailableTasks([]));
+      setScreen("report");
+    };
 
     return (
-      <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-object">
-        <Button variant="ghost" size="sm" onClick={() => { setScreen("myDay"); setSelectedSite(null); }}><ArrowLeft className="w-4 h-4 mr-1" /> {t("technician.back")}</Button>
-
-        {/* Object Info Card */}
-        <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
-          <h2 className="text-lg font-bold">{selectedSite.name}</h2>
-          {fullAddr && <p className="text-sm text-muted-foreground flex items-start gap-2"><MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />{fullAddr}</p>}
-          {od.access_notes && <p className="text-xs text-muted-foreground bg-muted/20 rounded-lg p-2">{od.access_notes}</p>}
-
-          {/* Contacts */}
-          <div className="flex gap-3">
-            {(co.name || co.phone) && (
-              <div className="flex-1 text-xs">
-                <p className="text-muted-foreground mb-0.5">{t("technician.owner")}</p>
-                <p className="font-medium">{co.name}</p>
-                {co.phone && <a href={`tel:${co.phone}`} className="flex items-center gap-1 text-primary hover:underline mt-0.5"><Phone className="w-3 h-3" />{co.phone}</a>}
-              </div>
-            )}
-            {(cr.name || cr.phone) && (
-              <div className="flex-1 text-xs">
-                <p className="text-muted-foreground mb-0.5">{t("technician.responsible")}</p>
-                <p className="font-medium">{cr.name}</p>
-                {cr.phone && <a href={`tel:${cr.phone}`} className="flex items-center gap-1 text-primary hover:underline mt-0.5"><Phone className="w-3 h-3" />{cr.phone}</a>}
-              </div>
-            )}
-          </div>
-
-          {/* Object badges */}
-          <div className="flex gap-2 flex-wrap">
-            {d?.object_type && <Badge variant="outline" className="text-[10px]">{d.object_type}</Badge>}
-            {od.is_inhabited && <Badge variant="outline" className="text-[10px] text-amber-400">Обитаем</Badge>}
-            {od.parking_available && <Badge variant="outline" className="text-[10px]">Паркинг</Badge>}
-            {od.elevator_available && <Badge variant="outline" className="text-[10px]">Асансьор</Badge>}
+      <div className="p-4 max-w-lg mx-auto space-y-3" data-testid="tech-object">
+        {/* Header — compact */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => { setScreen("myDay"); setSelectedSite(null); }}><ArrowLeft className="w-4 h-4" /></Button>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold truncate">{selectedSite.name}</h2>
+            {fullAddr && <p className="text-[10px] text-muted-foreground truncate">{fullAddr}</p>}
           </div>
         </div>
 
-        {/* Guidance Photos */}
-        {d?.guidance_photos?.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {d.guidance_photos.map(p => <img key={p.id} src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-20 h-20 rounded-xl object-cover border border-border flex-shrink-0" />)}
+        {/* KPI Counters */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl border border-border bg-card p-2.5 text-center">
+            <p className="text-xl font-bold text-cyan-400">{ct.roster_count || 0}</p>
+            <p className="text-[9px] text-muted-foreground">На обекта</p>
           </div>
-        )}
+          <div className="rounded-xl border border-border bg-card p-2.5 text-center">
+            <p className="text-xl font-bold text-emerald-400">{ct.reported_workers || 0}</p>
+            <p className="text-[9px] text-muted-foreground">Отчетено</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-2.5 text-center">
+            <p className="text-xl font-bold text-primary">{ct.reported_hours || 0}<span className="text-sm">ч</span></p>
+            <p className="text-[9px] text-muted-foreground">Часове днес</p>
+          </div>
+        </div>
 
-        {/* Counters */}
+        {/* ══ ХОРА ДНЕС — постоянен контролен блок ══ */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="px-4 py-2.5 bg-muted/20 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-semibold">Хора днес</span>
+              {rosterWorkers.length > 0 && <Badge variant="outline" className="text-[9px]">{rosterWorkers.length}</Badge>}
+            </div>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={openPeople}>Редактирай</Button>
+          </div>
+          <div className="p-3 space-y-1.5">
+            {rosterWorkers.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground mb-2">Няма записани хора за днес</p>
+                <Button size="sm" onClick={openPeople}><Plus className="w-4 h-4 mr-1" />Добави хора</Button>
+              </div>
+            ) : rosterWorkers.map(w => {
+              const isPresent = w.status === "Present" || w.status === "Late";
+              const isAdmin = w.status === "SickLeave" || w.status === "Leave" || w.status === "Vacation";
+              const dayH = w.total_hours || 0;
+              const hCls = dayH > 12 ? "text-red-400" : dayH > 8 ? "text-amber-400" : dayH > 0 ? "text-emerald-400" : "text-muted-foreground";
+              const hasReport = dayH > 0;
+              return (
+                <div key={w.worker_id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/10">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isPresent ? "bg-emerald-500" : isAdmin ? "bg-red-500" : "bg-gray-500"}`} />
+                  <span className="text-sm flex-1 truncate">{w.worker_name}</span>
+                  {isAdmin && <Badge className="text-[8px] bg-red-500/15 text-red-400">{{ SickLeave: "Болен", Leave: "Отпуск", Vacation: "Отпуск" }[w.status]}</Badge>}
+                  {hasReport && <span className={`text-[10px] font-mono ${hCls}`}>{dayH}ч</span>}
+                  {!hasReport && isPresent && <span className="text-[9px] text-muted-foreground">—</span>}
+                  {hasReport ? <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /> : isPresent ? <Clock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" /> : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action Buttons — 3 columns (Отчет, СМР, Фактура) */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-border bg-card p-3 text-center">
-            <Users className="w-5 h-5 mx-auto mb-1 text-cyan-400" />
-            <p className="text-xl font-bold">{ct.roster_count || 0}</p>
-            <p className="text-[10px] text-muted-foreground">{t("technician.onSite")}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-3 text-center">
-            <FileText className="w-5 h-5 mx-auto mb-1 text-emerald-400" />
-            <p className="text-xl font-bold">{ct.reported_workers || 0}</p>
-            <p className="text-[10px] text-muted-foreground">{t("technician.reported")}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-3 text-center">
-            <Clock className="w-5 h-5 mx-auto mb-1 text-primary" />
-            <p className="text-xl font-bold">{ct.reported_hours || 0}</p>
-            <p className="text-[10px] text-muted-foreground">{t("technician.hoursToday")}</p>
-          </div>
+          <Button onClick={startReport} className="h-16 rounded-2xl flex-col text-xs font-semibold"><FileText className="w-5 h-5 mb-1" />Отчет за деня</Button>
+          <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-16 rounded-2xl flex-col text-xs"><AlertTriangle className="w-5 h-5 mb-1 text-orange-400" />Ново СМР</Button>
+          <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button onClick={openRoster} className="h-20 rounded-2xl flex-col text-sm font-semibold"><FileText className="w-6 h-6 mb-1" />{t("technician.dailyReport")}</Button>
-          <Button variant="outline" onClick={openPeople} className="h-20 rounded-2xl flex-col text-sm"><Users className="w-6 h-6 mb-1 text-cyan-400" />{t("technician.people")}</Button>
-          <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-20 rounded-2xl flex-col text-sm"><AlertTriangle className="w-6 h-6 mb-1 text-orange-400" />{t("technician.newSMR")}</Button>
-          <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-20 rounded-2xl flex-col text-sm"><Camera className="w-6 h-6 mb-1 text-blue-400" />{t("technician.photoInvoice")}</Button>
-        </div>
-
-        {/* Existing Drafts — with delete */}
+        {/* Чернови за днес — with delete */}
         {existingDrafts.length > 0 && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
-            <p className="text-xs font-semibold text-amber-400 mb-2">{t("technician.existingDrafts")} ({existingDrafts.length})</p>
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="text-xs font-semibold text-amber-400 mb-2">Чернови за днес ({existingDrafts.length})</p>
             {existingDrafts.slice(0, 10).map(dd => (
               <div key={dd.id} className="flex items-center justify-between py-1">
                 <p className="text-xs text-muted-foreground">{dd.worker_name} — {dd.smr_type} — {dd.hours}ч</p>
@@ -714,9 +743,9 @@ export default function TechnicianDashboard() {
   if (screen === "report") return (
     <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-report">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => setScreen("roster")}><ArrowLeft className="w-4 h-4" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1">
-          <h2 className="font-bold text-base">Стъпка 2: Дневен отчет</h2>
+          <h2 className="font-bold text-base">Дневен отчет</h2>
           <p className="text-xs text-muted-foreground">{selectedSite?.name} — {new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long" })}</p>
         </div>
       </div>
