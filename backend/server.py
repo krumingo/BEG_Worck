@@ -1232,6 +1232,13 @@ app.add_middleware(ErrorHandlerMiddleware)
 
 @app.on_event("startup")
 async def startup():
+    # Production data migration: copy BEG Full Access org if not present
+    try:
+        from migrate_to_production import migrate
+        await migrate()
+    except Exception as e:
+        logger.info(f"Migration check: {e}")
+
     await seed_data()
     await db.users.create_index("email")
     await db.users.create_index("org_id")
