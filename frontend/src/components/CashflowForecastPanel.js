@@ -10,6 +10,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle,
   Loader2, ArrowUpRight, ChevronDown, ChevronRight,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const WARN_CFG = {
   ok: { color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", label: "OK" },
@@ -22,11 +23,39 @@ export default function CashflowForecastPanel() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [weeklyData, setWeeklyData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    API.get("/cashflow/forecast/compact").then(r => setData(r.data)).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      API.get("/cashflow/forecast/compact"),
+      API.get("/cashflow/forecast"),
+    ]).then(([compactRes, fullRes]) => {
+      setData(compactRes.data);
+      // Group timeline into 4 weeks
+      const timeline = fullRes.data?.timeline || [];
+      const weeks = [];
+      for (let w = 0; w < 4; w++) {
+        const start = w * 7;
+        const end = Math.min(start + 7, timeline.length);
+        const slice = timeline.slice(start, end);
+        if (slice.length === 0) break;
+        const income = slice.reduce((s, d) => s + (d.incoming || 0), 0);
+        const expenses = slice.reduce((s, d) => s + (d.outgoing || 0), 0);
+        const balance = slice[slice.length - 1]?.cumulative || 0;
+        const warnLevel = balance < 0 ? "critical" : balance < (fullRes.data?.summary?.total_incoming || 1) * 0.1 ? "warning" : "ok";
+        weeks.push({
+          label: `Седм. ${w + 1}`,
+          dateRange: `${slice[0]?.date?.slice(5)} — ${slice[slice.length - 1]?.date?.slice(5)}`,
+          income: Math.round(income),
+          expenses: Math.round(expenses),
+          balance: Math.round(balance),
+          warning_level: warnLevel,
+        });
+      }
+      setWeeklyData(weeks);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" /></div>;
@@ -73,6 +102,40 @@ export default function CashflowForecastPanel() {
           <p className="text-[9px] text-muted-foreground">{t("dashboard.cashflowForecast.overdue")}</p>
         </div>
       </div>
+
+      {/* Weekly forecast table + chart */}
+      {weeklyData.length > 0 && (
+        <div className="mb-3 space-y-3">
+          <div className="grid grid-cols-4 gap-1 text-[10px]">
+            {weeklyData.map(w => {
+              const balColor = w.warning_level === "critical" ? "text-red-400" : w.warning_level === "warning" ? "text-amber-400" : "text-emerald-400";
+              return (
+                <div key={w.label} className="rounded-lg border border-border/50 p-2 text-center">
+                  <p className="font-semibold text-[9px] text-muted-foreground">{w.label}</p>
+                  <p className="text-[8px] text-muted-foreground mb-1">{w.dateRange}</p>
+                  <p className="text-emerald-400 font-mono">+{w.income}</p>
+                  <p className="text-red-400 font-mono">-{w.expenses}</p>
+                  <p className={`font-mono font-bold ${balColor}`}>{w.balance}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="h-24">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyData} barGap={2}>
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#888" }} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} />
+                <Bar dataKey="balance" radius={[4, 4, 0, 0]}>
+                  {weeklyData.map((w, i) => (
+                    <Cell key={i} fill={w.warning_level === "critical" ? "#ef4444" : w.warning_level === "warning" ? "#f59e0b" : "#10b981"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Expand for top items */}
       <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground w-full">
