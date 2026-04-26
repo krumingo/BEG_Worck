@@ -8,6 +8,9 @@ Phase 5: Profit Integration (extends revenue_expense)
 """
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid
@@ -79,7 +82,7 @@ async def _get_next_pkg_no(org_id):
     n = 1
     if last and last.get("package_no"):
         try: n = int(last["package_no"].split("-")[1]) + 1
-        except: pass
+        except Exception as e: logger.warning(f"subcontractors.py error: {e}")
     return f"SP-{n:04d}"
 
 
@@ -313,7 +316,7 @@ async def _get_next_act_no(org_id):
     n = 1
     if last and last.get("act_no"):
         try: n = int(last["act_no"].split("-")[1]) + 1
-        except: pass
+        except Exception as e: logger.warning(f"subcontractors.py error: {e}")
     return f"SA-{n:04d}"
 
 
@@ -433,7 +436,7 @@ async def _get_next_pay_no(org_id):
     n = 1
     if last and last.get("payment_no"):
         try: n = int(last["payment_no"].split("-")[1]) + 1
-        except: pass
+        except Exception as e: logger.warning(f"subcontractors.py error: {e}")
     return f"SPAY-{n:04d}"
 
 

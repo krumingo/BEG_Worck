@@ -7,6 +7,9 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user, can_access_project, can_manage_project, get_user_project_ids
@@ -32,7 +35,8 @@ async def get_next_offer_no(org_id: str) -> str:
     if last and last.get("offer_no"):
         try:
             num = int(last["offer_no"].split("-")[1]) + 1
-        except:
+        except (ValueError, TypeError) as e:
+            logger.warning(f"offers.py parse error: {e}")
             num = 1
     else:
         num = 1
@@ -819,7 +823,7 @@ async def import_offer_preview(file: UploadFile = File(...), user: dict = Depend
         
         def safe_float(val):
             try: return float(val) if val else 0
-            except: return 0
+            except (ValueError, TypeError): return 0
         
         qty = safe_float(row[col_map["qty"]] if "qty" in col_map and col_map["qty"] < len(row) else 0)
         mat_price = safe_float(row[col_map["material_price"]] if "material_price" in col_map and col_map["material_price"] < len(row) else 0)

@@ -8,6 +8,9 @@ from typing import Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid, io
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -137,7 +140,7 @@ async def historical_import_preview(file: UploadFile = File(...), user: dict = D
     
     def sf(val):
         try: return float(val) if val else 0
-        except: return 0
+        except (ValueError, TypeError): return 0
     
     lines = []
     warnings = []

@@ -7,6 +7,9 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user, get_user_project_ids
@@ -164,8 +167,8 @@ async def get_safe_starting_number(org_id: str, direction: str, requested_start:
         try:
             parts = highest["invoice_no"].split("-")
             max_existing = int(parts[-1])
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"finance.py calc error: {e}")
     
     return max(requested_start, max_existing + 1)
 

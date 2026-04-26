@@ -7,6 +7,9 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid, os, shutil
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -72,7 +75,7 @@ async def get_next_request_number(org_id: str) -> str:
     num = 1
     if last and last.get("request_number"):
         try: num = int(last["request_number"].split("-")[1]) + 1
-        except: pass
+        except Exception as e: logger.warning(f"procurement.py error: {e}")
     return f"MR-{num:04d}"
 
 
@@ -556,7 +559,7 @@ async def get_next_issue_number(org_id: str) -> str:
     num = 1
     if last and last.get("issue_number"):
         try: num = int(last["issue_number"].split("-")[1]) + 1
-        except: pass
+        except Exception as e: logger.warning(f"procurement.py error: {e}")
     return f"WI-{num:04d}"
 
 

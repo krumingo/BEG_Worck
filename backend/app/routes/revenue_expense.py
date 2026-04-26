@@ -8,6 +8,9 @@ Phase 4: Project Profit Summary
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
 from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 import uuid
 
@@ -48,7 +51,7 @@ async def get_next_act_number(org_id: str) -> str:
     num = 1
     if last and last.get("act_number"):
         try: num = int(last["act_number"].split("-")[1]) + 1
-        except: pass
+        except Exception as e: logger.warning(f"revenue_expense.py error: {e}")
     return f"ACT-{num:04d}"
 
 

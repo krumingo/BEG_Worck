@@ -9,6 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 import uuid
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import (
@@ -958,8 +961,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 days_elapsed = min(max((today - start).days, 0), days_total)
                 days_remaining = max(days_total - days_elapsed, 0)
                 progress_percent = round((days_elapsed / days_total) * 100, 1)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"projects.py calc error: {e}")
     
     card_progress = {
         "start_date": start_date,
@@ -1004,8 +1007,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             {"_id": 0, "net_pay": 1}
         ).to_list(1000)
         total_salaries_paid = sum(e.get("net_pay", 0) for e in payroll_entries)
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"projects.py calc error: {e}")
     
     card_team = {
         "members": team_list,
@@ -1219,8 +1222,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         materials_ex_vat = sum(t.get("total_ex_vat", 0) or 0 for t in warehouse_txns)
         materials_vat = sum(t.get("total_vat", 0) or 0 for t in warehouse_txns)
         materials_inc_vat = sum(t.get("total_inc_vat", 0) or 0 for t in warehouse_txns)
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"projects.py calc error: {e}")
     
     card_materials = {
         "total_ex_vat": materials_ex_vat,
@@ -1239,8 +1242,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             {"_id": 0, "amount": 1}
         ).to_list(1000)
         income += sum(p.get("amount", 0) or 0 for p in payments)
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"projects.py calc error: {e}")
     
     # Expenses = salaries + materials
     expenses = total_salaries_paid + materials_inc_vat
