@@ -16,11 +16,15 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Users, Plus, Loader2, Search, UserPlus,
+  Users, Plus, Loader2, Search, UserPlus, Camera,
 } from "lucide-react";
+import ImageCropDialog from "@/components/ImageCropDialog";
+import { toast } from "sonner";
 
 const PAY_TYPES = [
   { value: "Monthly", label: "Месечно" },
+  { value: "Daily", label: "Надница" },
+  { value: "Hourly", label: "Часово" },
   { value: "Akord", label: "Акорд" },
 ];
 
@@ -55,6 +59,9 @@ export default function EmployeesPage() {
     working_days: 22, hours_day: 8, akord_note: "",
   });
   const [saving, setSaving] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null); // File object for upload
+  const [avatarPreview, setAvatarPreview] = useState(null); // data URL preview
+  const [cropSrc, setCropSrc] = useState(null); // for ImageCropDialog
 
   const fetchData = useCallback(async () => {
     try {
@@ -84,12 +91,12 @@ export default function EmployeesPage() {
 
   const handleCreate = async () => {
     if (!createForm.first_name || !createForm.last_name || !createForm.email || !createForm.password) {
-      alert("Попълнете задължителните полета (име, фамилия, имейл, парола)");
+      toast.error("Попълнете задължителните полета (име, фамилия, имейл, парола)");
       return;
     }
     setSaving(true);
     try {
-      // Create user - correct endpoint is /users
+      // 1. Create user
       const userRes = await API.post("/users", {
         first_name: createForm.first_name,
         last_name: createForm.last_name,
@@ -100,7 +107,7 @@ export default function EmployeesPage() {
       });
       const newUserId = userRes.data.id;
 
-      // Create profile
+      // 2. Create employee profile
       await API.post("/employees", {
         user_id: newUserId,
         pay_type: createForm.pay_type,
@@ -114,10 +121,28 @@ export default function EmployeesPage() {
         active: true,
       });
 
+      // 3. Upload avatar if selected
+      if (avatarFile) {
+        try {
+          const fd = new FormData();
+          fd.append("file", avatarFile);
+          fd.append("context_type", "avatar");
+          fd.append("context_id", newUserId);
+          const uploadRes = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+          const url = uploadRes.data.url || uploadRes.data.file_url;
+          if (url) {
+            await API.put(`/users/${newUserId}`, { avatar_url: url });
+          }
+        } catch { /* avatar upload is optional */ }
+      }
+
       setCreateOpen(false);
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      toast.success("Служителят е създаден");
       navigate(`/employees/${newUserId}`);
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка при създаване");
+      toast.error(err.response?.data?.detail || "Грешка при създаване");
     } finally { setSaving(false); }
   };
 
@@ -198,9 +223,38 @@ export default function EmployeesPage() {
         <DialogContent className="sm:max-w-[600px] bg-card border-border max-h-[85vh] overflow-y-auto" data-testid="create-employee-dialog">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Нов служител</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Photo + Basic info */}
+            <div className="flex gap-4">
+              {/* Avatar */}
+              <div className="flex-shrink-0">
+                <div className="relative w-20 h-20">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-primary/30" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xl font-bold">
+                      {((createForm.first_name?.[0] || "") + (createForm.last_name?.[0] || "")).toUpperCase() || "?"}
+                    </div>
+                  )}
+                  <label className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer hover:bg-primary/90">
+                    <Camera className="w-3.5 h-3.5" />
+                    <input type="file" accept="image/*" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setCropSrc(reader.result);
+                      reader.readAsDataURL(file);
+                      e.target.value = "";
+                    }} />
+                  </label>
+                </div>
+              </div>
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Име *</Label><Input value={createForm.first_name} onChange={e => setCreateForm({...createForm, first_name: e.target.value})} className="bg-background" data-testid="create-first-name" /></div>
+                <div className="space-y-1"><Label className="text-xs">Фамилия *</Label><Input value={createForm.last_name} onChange={e => setCreateForm({...createForm, last_name: e.target.value})} className="bg-background" data-testid="create-last-name" /></div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Име *</Label><Input value={createForm.first_name} onChange={e => setCreateForm({...createForm, first_name: e.target.value})} className="bg-background" data-testid="create-first-name" /></div>
-              <div className="space-y-1"><Label className="text-xs">Фамилия *</Label><Input value={createForm.last_name} onChange={e => setCreateForm({...createForm, last_name: e.target.value})} className="bg-background" data-testid="create-last-name" /></div>
               <div className="space-y-1"><Label className="text-xs">Имейл *</Label><Input type="email" value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} className="bg-background" data-testid="create-email" /></div>
               <div className="space-y-1"><Label className="text-xs">Парола *</Label><Input type="password" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} className="bg-background" data-testid="create-password" /></div>
               <div className="space-y-1"><Label className="text-xs">Телефон</Label><Input value={createForm.phone} onChange={e => setCreateForm({...createForm, phone: e.target.value})} placeholder="+359..." className="bg-background" /></div>
@@ -221,6 +275,7 @@ export default function EmployeesPage() {
               <div className="space-y-1"><Label className="text-xs">Длъжност</Label><Input value={createForm.position} onChange={e => setCreateForm({...createForm, position: e.target.value})} placeholder="Бояджия, Майстор..." className="bg-background" data-testid="create-position" /></div>
             </div>
 
+            {/* Pay section */}
             <div className="border-t border-border pt-3">
               <Label className="text-xs text-muted-foreground mb-2 block">Заплащане (EUR)</Label>
               <div className="grid grid-cols-3 gap-3">
@@ -231,18 +286,24 @@ export default function EmployeesPage() {
                     <SelectContent>{PAY_TYPES.map(pt => <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Месечна (EUR)</Label>
-                  <Input type="number" step="0.01" value={createForm.monthly_salary} onChange={e => updateCreatePay("monthly_salary", parseFloat(e.target.value) || 0)} disabled={createForm.pay_type !== "Monthly"} className="bg-background font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Дневна (EUR)</Label>
-                  <Input type="number" step="0.01" value={createForm.daily_rate} onChange={e => updateCreatePay("daily_rate", parseFloat(e.target.value) || 0)} disabled={createForm.pay_type === "Monthly"} className={`bg-background font-mono ${createForm.pay_type === "Monthly" ? "text-emerald-400" : ""}`} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Часова (EUR)</Label>
-                  <Input type="number" step="0.01" value={createForm.hourly_rate} onChange={e => updateCreatePay("hourly_rate", parseFloat(e.target.value) || 0)} disabled={createForm.pay_type !== "Hourly"} className={`bg-background font-mono ${createForm.pay_type !== "Hourly" ? "text-emerald-400" : ""}`} />
-                </div>
+                {createForm.pay_type === "Monthly" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Месечна заплата</Label>
+                    <Input type="number" step="0.01" value={createForm.monthly_salary} onChange={e => updateCreatePay("monthly_salary", parseFloat(e.target.value) || 0)} className="bg-background font-mono" />
+                  </div>
+                )}
+                {createForm.pay_type === "Daily" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Дневна ставка</Label>
+                    <Input type="number" step="0.01" value={createForm.daily_rate} onChange={e => updateCreatePay("daily_rate", parseFloat(e.target.value) || 0)} className="bg-background font-mono" />
+                  </div>
+                )}
+                {(createForm.pay_type === "Hourly" || createForm.pay_type === "Akord") && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Часова ставка</Label>
+                    <Input type="number" step="0.01" value={createForm.hourly_rate} onChange={e => updateCreatePay("hourly_rate", parseFloat(e.target.value) || 0)} className="bg-background font-mono" />
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label className="text-xs">Дни/мес</Label>
                   <Input type="number" value={createForm.working_days} onChange={e => updateCreatePay("working_days", parseFloat(e.target.value) || 22)} className="bg-background font-mono" />
@@ -252,14 +313,35 @@ export default function EmployeesPage() {
                   <Input type="number" value={createForm.hours_day} onChange={e => updateCreatePay("hours_day", parseFloat(e.target.value) || 8)} className="bg-background font-mono" />
                 </div>
               </div>
+              {/* Auto-calc preview */}
               {createForm.pay_type === "Monthly" && createForm.monthly_salary > 0 && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  {createForm.monthly_salary} EUR / {createForm.working_days} = <span className="text-emerald-400 font-mono">{createForm.daily_rate} EUR/ден</span>
+                  {createForm.monthly_salary} EUR / {createForm.working_days}д = <span className="text-emerald-400 font-mono">{createForm.daily_rate} EUR/ден</span>
                   {" → "}<span className="text-emerald-400 font-mono">{createForm.hourly_rate} EUR/ч</span>
+                </p>
+              )}
+              {createForm.pay_type === "Daily" && createForm.daily_rate > 0 && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {createForm.daily_rate} EUR/ден ÷ {createForm.hours_day}ч = <span className="text-emerald-400 font-mono">{createForm.hourly_rate} EUR/ч</span>
                 </p>
               )}
             </div>
           </div>
+
+          {/* Image Crop Dialog */}
+          {cropSrc && (
+            <ImageCropDialog
+              open={!!cropSrc}
+              onOpenChange={() => setCropSrc(null)}
+              imageSrc={cropSrc}
+              onCropComplete={(blob) => {
+                const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+                setAvatarFile(file);
+                setAvatarPreview(URL.createObjectURL(blob));
+                setCropSrc(null);
+              }}
+            />
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Затвори</Button>
             <Button onClick={handleCreate} disabled={saving} data-testid="confirm-create-btn">
