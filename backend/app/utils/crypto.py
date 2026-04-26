@@ -5,9 +5,21 @@ from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timezone, timedelta
 import os
+import sys
 
 # JWT Config
-JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-key')
+JWT_SECRET = os.environ.get('JWT_SECRET', '')
+
+# In production, JWT_SECRET must be set via environment variable
+if not JWT_SECRET:
+    if os.environ.get('ENV', 'development') == 'production':
+        print("FATAL: JWT_SECRET environment variable is required in production!", file=sys.stderr)
+        sys.exit(1)
+    else:
+        JWT_SECRET = 'dev-secret-key-NOT-FOR-PRODUCTION'
+        import logging
+        logging.getLogger(__name__).warning("Using development JWT secret. Set JWT_SECRET env var for production.")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
