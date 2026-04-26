@@ -904,6 +904,24 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
         await db.employee_daily_reports.insert_one(draft)
         draft_ids.append(draft["id"])
 
+        # Auto-create attendance_entry if not exists (report = present)
+        existing_att = await db.attendance_entries.find_one(
+            {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}
+        )
+        if not existing_att:
+            await db.attendance_entries.insert_one({
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "date": today,
+                "project_id": data.project_id,
+                "user_id": wid,
+                "status": "Present",
+                "note": "Автоматично от дневен отчет",
+                "marked_at": now,
+                "marked_by_user_id": user["id"],
+                "source": "DailyReport",
+            })
+
         # Check if SMR type is unknown → create missing_smr
         if smr_source == "manual":
             ms = {

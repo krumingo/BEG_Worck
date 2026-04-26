@@ -881,13 +881,13 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
             p = await db.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
             att["project_code"] = p["code"] if p else ""
     
-    work_reports = await db.work_reports.find(
-        {"org_id": org_id, "user_id": user_id, "date": {"$gte": date_from, "$lt": date_to}},
-        {"_id": 0, "date": 1, "project_id": 1, "lines": 1, "status": 1}
-    ).to_list(31)
+    work_reports = await db.employee_daily_reports.find(
+        {"org_id": org_id, "worker_id": user_id, "date": {"$gte": date_from, "$lt": date_to}},
+        {"_id": 0, "date": 1, "project_id": 1, "hours": 1, "smr_type": 1, "status": 1}
+    ).to_list(62)
     
     for wr in work_reports:
-        wr["total_hours"] = sum(l.get("hours", 0) for l in wr.get("lines", []))
+        wr["total_hours"] = float(wr.get("hours") or 0)
         if wr.get("project_id"):
             p = await db.projects.find_one({"id": wr["project_id"]}, {"_id": 0, "code": 1})
             wr["project_code"] = p["code"] if p else ""
