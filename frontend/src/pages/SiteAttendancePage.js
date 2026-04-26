@@ -207,6 +207,10 @@ export default function SiteAttendancePage() {
                               {t(`attendance.statusLabels.${entry.status.toLowerCase()}`, entry.status)}
                             </Badge>
                           </div>
+                        ) : row.has_report ? (
+                          <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-400 border-blue-500/30">
+                            Отчетен
+                          </Badge>
                         ) : (
                           <Badge variant="outline" className="text-xs bg-gray-500/10 text-gray-400 border-gray-500/30">
                             {t("attendance.notMarked")}

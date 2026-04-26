@@ -498,10 +498,17 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
         if not u:
             continue
         entry = entries_map.get(uid)
+        # Check for daily reports (for workers without attendance but with reports)
+        report_check = await db.employee_daily_reports.find_one(
+            {"org_id": org_id, "date": date, "worker_id": uid,
+             **({"project_id": project_id} if project_id else {})},
+            {"_id": 0, "id": 1},
+        )
         result.append({
             "user_id": uid, "user_name": f"{u['first_name']} {u['last_name']}",
             "user_email": u["email"], "user_role": u["role"],
             "attendance": entry, "marked": entry is not None,
+            "has_report": report_check is not None,
         })
     missing_count = sum(1 for r in result if not r["marked"])
     return {"users": result, "missing_count": missing_count, "date": date}

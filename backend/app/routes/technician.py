@@ -197,6 +197,16 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
     if on_site_count == 0 and roster_count > 0:
         on_site_count = roster_count
 
+    # Fallback 2: from daily reports if neither attendance nor roster
+    if on_site_count == 0:
+        report_workers = await db.employee_daily_reports.find(
+            {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": {"$exists": True}},
+            {"_id": 0, "worker_id": 1},
+        ).to_list(200)
+        reported_ids = set(r["worker_id"] for r in report_workers if r.get("worker_id"))
+        if reported_ids:
+            on_site_count = len(reported_ids)
+
     drafts_today = await db.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today,
          "status": {"$in": ["Draft", "Submitted", "SUBMITTED", "APPROVED"]}},
