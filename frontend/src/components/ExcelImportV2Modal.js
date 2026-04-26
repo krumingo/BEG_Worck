@@ -32,10 +32,11 @@ export default function ExcelImportV2Modal({ open, onOpenChange, projectId, onIm
   const [importing, setImporting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [previewPage, setPreviewPage] = useState(0);
 
   useEffect(() => {
     if (open) {
-      setStep(1); setFile(null); setPreview(null); setSelectedTemplate("");
+      setStep(1); setFile(null); setPreview(null); setSelectedTemplate(""); setPreviewPage(0);
       API.get("/excel-import/templates").then(r => setTemplates(r.data.items || [])).catch(() => {});
     }
   }, [open]);
@@ -144,70 +145,114 @@ export default function ExcelImportV2Modal({ open, onOpenChange, projectId, onIm
         )}
 
         {/* Step 2: Preview */}
-        {step === 2 && preview && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <Badge variant="outline" className="text-xs">{preview.total_rows} {t("excelImportV2.rows")}</Badge>
-              <Badge variant="outline" className="text-xs">{preview.selected_sheet}</Badge>
-              <span className={`text-xs font-mono ${confColor}`}>{t("excelImportV2.confidence")}: {Math.round(conf * 100)}%</span>
-            </div>
+        {step === 2 && preview && (() => {
+          const rows = preview.preview_rows || [];
+          const PAGE_SIZE = 20;
+          const totalPages = Math.ceil(rows.length / PAGE_SIZE);
 
-            {preview.warnings?.length > 0 && (
-              <div className="space-y-1">
-                {preview.warnings.map((w, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-amber-400"><AlertTriangle className="w-3 h-3" />{w}</div>
-                ))}
+          // Validate rows
+          const validated = rows.map((r, i) => {
+            const errors = [];
+            if (!r.smr_type?.trim()) errors.push("Липсва описание");
+            if (r.qty != null && (isNaN(Number(r.qty)) || Number(r.qty) <= 0)) errors.push("Невалидно количество");
+            if (r.total_price != null && isNaN(Number(r.total_price))) errors.push("Невалидна цена");
+            return { ...r, _idx: i, _errors: errors, _valid: errors.length === 0 };
+          });
+          const validCount = validated.filter(r => r._valid).length;
+          const errorCount = validated.filter(r => !r._valid).length;
+          const pageRows = validated.slice(previewPage * PAGE_SIZE, (previewPage + 1) * PAGE_SIZE);
+
+          // Subtotals
+          const subTotal = validated.filter(r => r._valid).reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0);
+          const subMat = validated.filter(r => r._valid).reduce((s, r) => s + (parseFloat(r.material_price) || 0), 0);
+          const subLab = validated.filter(r => r._valid).reduce((s, r) => s + (parseFloat(r.labor_price) || 0), 0);
+
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Badge variant="outline" className="text-xs">{preview.total_rows} {t("excelImportV2.rows")}</Badge>
+                <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-500/30">{validCount} валидни</Badge>
+                {errorCount > 0 && <Badge variant="outline" className="text-xs text-red-400 border-red-500/30">{errorCount} с грешки</Badge>}
+                <Badge variant="outline" className="text-xs">{preview.selected_sheet}</Badge>
+                <span className={`text-xs font-mono ${confColor}`}>{t("excelImportV2.confidence")}: {Math.round(conf * 100)}%</span>
               </div>
-            )}
 
-            {/* Detected columns */}
-            <div className="text-xs space-y-1">
-              <p className="font-semibold text-muted-foreground">{t("excelImportV2.detectedColumns")}:</p>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(preview.detected_columns || {}).map(([field, col]) => (
-                  <Badge key={field} variant="outline" className="text-[10px]">{field}: {col}</Badge>
-                ))}
+              {preview.warnings?.length > 0 && (
+                <div className="space-y-1">
+                  {preview.warnings.map((w, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-amber-400"><AlertTriangle className="w-3 h-3" />{w}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Detected columns */}
+              <div className="text-xs space-y-1">
+                <p className="font-semibold text-muted-foreground">{t("excelImportV2.detectedColumns")}:</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(preview.detected_columns || {}).map(([field, col]) => (
+                    <Badge key={field} variant="outline" className="text-[10px]">{field}: {col}</Badge>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Preview table */}
-            {preview.preview_rows?.length > 0 && (
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">СМР</TableHead>
-                      <TableHead className="text-xs">Ед.</TableHead>
-                      <TableHead className="text-xs text-right">Кол.</TableHead>
-                      <TableHead className="text-xs text-right">Мат.</TableHead>
-                      <TableHead className="text-xs text-right">Труд</TableHead>
-                      <TableHead className="text-xs text-right">Общо</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {preview.preview_rows.map((r, i) => (
-                      <TableRow key={i} className="text-xs">
-                        <TableCell className="truncate max-w-[200px]">{r.smr_type}</TableCell>
-                        <TableCell>{r.unit}</TableCell>
-                        <TableCell className="text-right font-mono">{r.qty}</TableCell>
-                        <TableCell className="text-right font-mono">{r.material_price || "-"}</TableCell>
-                        <TableCell className="text-right font-mono">{r.labor_price || "-"}</TableCell>
-                        <TableCell className="text-right font-mono">{r.total_price || "-"}</TableCell>
+              {/* Preview table with validation */}
+              {pageRows.length > 0 && (
+                <div className="overflow-x-auto border border-border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs w-8">#</TableHead>
+                        <TableHead className="text-xs">СМР</TableHead>
+                        <TableHead className="text-xs">Ед.</TableHead>
+                        <TableHead className="text-xs text-right">Кол.</TableHead>
+                        <TableHead className="text-xs text-right">Мат.</TableHead>
+                        <TableHead className="text-xs text-right">Труд</TableHead>
+                        <TableHead className="text-xs text-right">Общо</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+                    </TableHeader>
+                    <TableBody>
+                      {pageRows.map(r => (
+                        <TableRow key={r._idx} className={`text-xs ${!r._valid ? "bg-red-500/5" : ""}`} title={r._errors.join("; ")}>
+                          <TableCell className="text-muted-foreground">{r._idx + 1}</TableCell>
+                          <TableCell className={`truncate max-w-[200px] ${!r.smr_type?.trim() ? "text-red-400" : ""}`}>{r.smr_type || <span className="text-red-400 italic">Празно</span>}</TableCell>
+                          <TableCell>{r.unit}</TableCell>
+                          <TableCell className={`text-right font-mono ${r.qty != null && isNaN(Number(r.qty)) ? "text-amber-400" : ""}`}>{r.qty}</TableCell>
+                          <TableCell className="text-right font-mono">{r.material_price || "—"}</TableCell>
+                          <TableCell className="text-right font-mono">{r.labor_price || "—"}</TableCell>
+                          <TableCell className={`text-right font-mono ${r.total_price != null && isNaN(Number(r.total_price)) ? "text-amber-400" : ""}`}>{r.total_price || "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                      {/* Footer subtotals */}
+                      <TableRow className="text-xs font-semibold border-t-2 border-border">
+                        <TableCell colSpan={4} className="text-right text-muted-foreground">Общо ({validCount} валидни):</TableCell>
+                        <TableCell className="text-right font-mono">{subMat.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono">{subLab.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono text-primary">{subTotal.toFixed(2)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
 
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(1)}>{t("common.back")}</Button>
-              <Button onClick={() => setStep(3)} className="flex-1" data-testid="confirm-mapping-btn">
-                <Check className="w-4 h-4 mr-2" /> {t("excelImportV2.confirmMapping")}
-              </Button>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 text-xs">
+                  <Button variant="outline" size="sm" disabled={previewPage === 0} onClick={() => setPreviewPage(p => p - 1)} className="h-7 text-xs">←</Button>
+                  <span className="text-muted-foreground">{previewPage + 1} / {totalPages}</span>
+                  <Button variant="outline" size="sm" disabled={previewPage >= totalPages - 1} onClick={() => setPreviewPage(p => p + 1)} className="h-7 text-xs">→</Button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep(1)}>{t("common.back")}</Button>
+                <Button onClick={() => setStep(3)} className="flex-1" data-testid="confirm-mapping-btn">
+                  <Check className="w-4 h-4 mr-2" />
+                  {errorCount > 0 ? `Продължи (${validCount} валидни, ${errorCount} ще бъдат прескочени)` : t("excelImportV2.confirmMapping")}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Step 3: Confirm & Import */}
         {step === 3 && (
