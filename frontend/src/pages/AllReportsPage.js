@@ -396,13 +396,22 @@ export default function AllReportsPage() {
                 )}
                 <DetailRow label={t("allReports.colRate")} value={detail.hourly_rate > 0 ? `${detail.hourly_rate} EUR/ч` : "—"} />
                 <DetailRow label={t("allReports.colValue")} value={detail.labor_value > 0 ? `${detail.labor_value.toFixed(2)} EUR` : "—"} color="text-primary" bold />
-                {detail.earned_formula && (
-                  <div className="col-span-2 mt-1 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Как е изчислена сумата</p>
-                    <p className="text-xs font-mono text-primary">{detail.earned_formula}</p>
-                    {detail.pay_type && <p className="text-[10px] text-muted-foreground mt-0.5">Тип: {detail.pay_type}</p>}
-                  </div>
-                )}
+                {detail.earned_formula && (() => {
+                  const payTypeLabels = {Hourly: "Часово", Daily: "Надница", Monthly: "Месечно", Akord: "Акорд", mixed: "Смесено"};
+                  const payTypeLabel = payTypeLabels[detail.pay_type || detail.rate_type] || detail.pay_type || "—";
+                  return (
+                    <div className="col-span-2 mt-1 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+                      <p className="text-[10px] text-muted-foreground mb-1">Как е изчислена сумата</p>
+                      <p className="text-xs font-mono text-primary mb-2">{detail.earned_formula}</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div><span className="text-muted-foreground">Тип: </span>{payTypeLabel}</div>
+                        <div><span className="text-muted-foreground">Ставка: </span>{detail.hourly_rate || detail.hourly_rate_at_date || "—"} EUR/ч</div>
+                        <div><span className="text-muted-foreground">Обект: </span>{detail.site_name || detail.project_name || "—"}</div>
+                        <div><span className="text-muted-foreground">Дата: </span>{detail.date || "—"}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Status row */}
