@@ -19,21 +19,8 @@ router = APIRouter(tags=["Employee Daily Reports"])
 
 async def _get_hourly_rate_for_approval(org_id: str, worker_id: str) -> float:
     """Get hourly rate from employee profile for work_session creation."""
-    profile = await db.employee_profiles.find_one(
-        {"org_id": org_id, "user_id": worker_id}, {"_id": 0}
-    )
-    if not profile:
-        return 0
-    pay = (profile.get("pay_type") or "Monthly").strip()
-    if pay == "Hourly":
-        return float(profile.get("hourly_rate") or 0)
-    elif pay == "Daily":
-        return round(float(profile.get("daily_rate") or profile.get("base_salary") or 0) / 8, 2)
-    else:
-        ms = float(profile.get("monthly_salary") or profile.get("base_salary") or 0)
-        days = int(profile.get("working_days_per_month") or 22)
-        hours = int(profile.get("standard_hours_per_day") or 8)
-        return round(ms / max(days * hours, 1), 2)
+    from app.services.resolve_hourly_rate import resolve_worker_hourly_rate
+    return await resolve_worker_hourly_rate(org_id, worker_id)
 
 
 # ── Models ─────────────────────────────────────────────────────────
