@@ -138,7 +138,24 @@ export default function CentralizedActivitiesTable({ projectId }) {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right"><span className={`font-mono font-bold ${burnColor}`}>{a.burn_pct_total > 0 ? `${a.burn_pct_total.toFixed(0)}%` : "—"}</span></TableCell>
+                  <TableCell className="text-right min-w-[100px]">
+                    {a.planned_hours > 0 ? (() => {
+                      const consumed = a.total_reported_hours || 0;
+                      const planned = a.planned_hours;
+                      const burnPct = (consumed / planned) * 100;
+                      const barColor = burnPct > 100 ? "bg-red-500" : burnPct > 80 ? "bg-amber-500" : "bg-emerald-500";
+                      const txtColor = burnPct > 100 ? "text-red-400" : burnPct > 80 ? "text-amber-400" : "text-emerald-400";
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(burnPct, 100)}%` }} />
+                          </div>
+                          <span className={`text-[9px] font-mono ${txtColor}`}>{consumed.toFixed(0)}/{planned.toFixed(0)}</span>
+                          {burnPct > 100 && <Badge className="text-[7px] bg-red-500/20 text-red-400 px-1">+{(consumed - planned).toFixed(0)}</Badge>}
+                        </div>
+                      );
+                    })() : <span className="font-mono text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell>
                     {a.is_extra && <Badge variant="outline" className="text-[8px] bg-amber-500/10 text-amber-400">{t("actTable.extraLabel")}</Badge>}
                     {!a.planned_hours && !a.is_extra && <Badge variant="outline" className="text-[8px] text-muted-foreground">{t("actTable.noBudget")}</Badge>}

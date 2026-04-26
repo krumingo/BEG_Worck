@@ -1317,9 +1317,23 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
     existing_children = await db.projects.find(
         {"org_id": org_id, "parent_project_id": project_id},
         {"_id": 0, "id": 1, "code": 1},
-    ).to_list(50)
+    ).sort("created_at", 1).to_list(50)
 
     parent_code = parent.get("code", "")
+
+    # Auto-rename legacy children that don't have Cyrillic letter codes
+    for idx, child in enumerate(existing_children):
+        child_code = child.get("code", "")
+        last_part = child_code.split("-")[-1] if "-" in child_code else ""
+        if last_part not in CYRILLIC_LETTERS:
+            new_letter = CYRILLIC_LETTERS[idx] if idx < len(CYRILLIC_LETTERS) else f"_{idx+1}"
+            new_code = f"{parent_code}-{new_letter}"
+            await db.projects.update_one(
+                {"id": child["id"]},
+                {"$set": {"code": new_code, "updated_at": now}}
+            )
+            child["code"] = new_code
+
     results = {"parent_id": project_id, "children_created": []}
 
     if len(existing_children) == 0:
