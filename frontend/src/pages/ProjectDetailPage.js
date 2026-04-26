@@ -23,7 +23,7 @@ import {
   ArrowLeft, Users, CalendarDays, Building2, User, Phone, Mail, Hash, AlertTriangle, Sparkles, Pencil,
   FileText, Package, Wallet, Plus, Loader2, Eye, Shield, Clock,
   TrendingUp, Receipt, Boxes, Scale, UserPlus, BarChart3, Hammer, MapPin,
-  ChevronDown, ChevronRight, CreditCard, ClipboardList,
+  ChevronDown, ChevronRight, CreditCard, ClipboardList, Upload,
 } from "lucide-react";
 import ClientSelector from "@/components/ClientSelector";
 import ClientPickerModal from "@/components/ClientPickerModal";
@@ -46,6 +46,7 @@ import CentralizedProjectView from "@/components/CentralizedProjectView";
 import FinancialResultsCard from "@/components/FinancialResultsCard";
 import ProjectPersonnelPanel from "@/components/ProjectPersonnelPanel";
 import SiteWorkersPanel from "@/components/SiteWorkersPanel";
+import ExcelImportV2Modal from "@/components/ExcelImportV2Modal";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -82,6 +83,7 @@ export default function ProjectDetailPage() {
   const [aggregate, setAggregate] = useState(null);
   const [showAddSMR, setShowAddSMR] = useState(false);
   const [showImportSMR, setShowImportSMR] = useState(false);
+  const [showExcelImport, setShowExcelImport] = useState(false);
   const [showSubProjectDialog, setShowSubProjectDialog] = useState(false);
   const [newSubName, setNewSubName] = useState("");
   const [creatingSub, setCreatingSub] = useState(false);
@@ -440,6 +442,9 @@ export default function ProjectDetailPage() {
               <Button size="sm" variant="outline" className="text-xs gap-1 text-amber-400 border-amber-500/30" onClick={() => navigate(`/missing-smr?project=${projectId}`)} data-testid="missing-smr-btn">
                 <AlertTriangle className="w-3 h-3" />Липсващи СМР
               </Button>
+              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowExcelImport(true)} data-testid="excel-import-btn">
+                <Upload className="w-3.5 h-3.5" />Импорт Excel
+              </Button>
             </div>
           </div>
 
@@ -452,6 +457,13 @@ export default function ProjectDetailPage() {
           {showImportSMR && (
             <InlineImportSMR projectId={projectId} onDone={() => { setShowImportSMR(false); fetchDashboard(); }} />
           )}
+
+          <ExcelImportV2Modal
+            open={showExcelImport}
+            onOpenChange={setShowExcelImport}
+            projectId={projectId}
+            onImported={() => { setShowExcelImport(false); fetchDashboard(); toast.success("КСС импортиран успешно"); }}
+          />
 
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRGroupsPanel projectId={projectId} /></div>
