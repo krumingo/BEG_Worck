@@ -5,6 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -202,6 +206,15 @@ async def delete_scan_doc(doc_id: str, user: dict = Depends(get_current_user)):
     
     await db.scan_docs.delete_one({"id": doc_id})
     
-    # TODO: Also delete the actual file from storage
+    # Delete the physical file from storage
+    file_path = doc.get("file_path") or doc.get("url") or doc.get("storage_path")
+    if file_path:
+        try:
+            full_path = os.path.join("uploads", file_path) if not os.path.isabs(file_path) else file_path
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                logger.info(f"Deleted file: {full_path}")
+        except OSError as e:
+            logger.warning(f"Could not delete file {file_path}: {e}")
     
     return {"ok": True}
