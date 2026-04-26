@@ -1187,7 +1187,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     
     extra_offers = [o for o in all_offers if o.get("offer_type") == "extra"]
     accepted_offers = [o for o in all_offers if o.get("status") == "Accepted"]
-    accepted_lines = sum(len(o.get("lines", [])) for o in accepted_offers)
+    accepted_lines = sum(len(o.get("lines", o.get("offer_lines", o.get("items", [])))) for o in accepted_offers)
+    accepted_value = round(sum(float(o.get("subtotal", 0) or 0) for o in accepted_offers), 2)
     
     # Strip lines from the list response to save bandwidth
     for o in all_offers:
@@ -1197,6 +1198,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         "approved_count": len(offers),
         "accepted_count": len(accepted_offers),
         "accepted_lines": accepted_lines,
+        "accepted_value": accepted_value,
         "total_ex_vat": offers_ex_vat,
         "total_vat": offers_vat,
         "total_inc_vat": offers_inc_vat,
