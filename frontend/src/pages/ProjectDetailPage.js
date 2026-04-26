@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -203,6 +204,29 @@ export default function ProjectDetailPage() {
               <span className="text-sm text-amber-400 font-medium">{pendingReports.length} отчета за одобрение</span>
               <ChevronRight className="w-4 h-4 text-amber-400 ml-auto" />
             </button>
+          )}
+
+          {/* Aggregate KPI for parent projects */}
+          {sub_projects?.length > 0 && aggregate && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2" data-testid="aggregate-kpi">
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                <p className="text-[10px] text-gray-400">Общо часове</p>
+                <p className="text-lg font-bold text-white">{aggregate.work?.total?.hours || 0}</p>
+                <p className="text-[9px] text-gray-500">Собствени: {aggregate.work?.own?.hours || 0} | Под-обекти: {aggregate.work?.children?.hours || 0}</p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                <p className="text-[10px] text-gray-400">Приходи (платени)</p>
+                <p className="text-lg font-bold text-emerald-400">{(aggregate.pnl?.revenue || 0).toFixed(0)} EUR</p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                <p className="text-[10px] text-gray-400">Разходи</p>
+                <p className="text-lg font-bold text-red-400">{(aggregate.pnl?.expenses || 0).toFixed(0)} EUR</p>
+              </div>
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                <p className="text-[10px] text-gray-400">Печалба</p>
+                <p className={`text-lg font-bold ${(aggregate.pnl?.profit || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>{(aggregate.pnl?.profit || 0).toFixed(0)} EUR</p>
+              </div>
+            </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -792,9 +816,9 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               </div>
               {cd && (
                 <div className="grid grid-cols-3 gap-1 text-[10px]">
-                  <div><span className="text-gray-500">Хора: </span><span className="text-white font-mono">{cd.team?.count || 0}</span></div>
-                  <div><span className="text-gray-500">Фактури: </span><span className="text-white font-mono">{cd.invoices?.count || 0}</span></div>
-                  <div><span className="text-gray-500">Платено: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.paid || 0)}</span></div>
+                  <div><span className="text-gray-500">Часове: </span><span className="text-white font-mono">{cd.work?.hours || cd.team?.count || 0}</span></div>
+                  <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.paid || 0)}</span></div>
+                  <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.paid_labor?.gross_labor || 0)}</span></div>
                 </div>
               )}
             </button>
@@ -829,8 +853,33 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               <AggRowMulti label="Оферти" childrenData={childrenData} field={c => c?.offers?.count} total={agg.offers?.total?.count} />
               <AggRowMulti label="Отчети" childrenData={childrenData} field={c => c?.reports?.count} total={agg.reports?.total?.count} />
               <AggRowMulti label="Общо часове" childrenData={childrenData} field={c => c?.reports?.hours} total={agg.reports?.total?.hours} suffix="ч" />
+              <AggRowMulti label="Труд (одобрен)" childrenData={childrenData} field={c => c?.work?.labor_cost} total={agg.work?.total?.labor_cost} suffix=" EUR" color="text-blue-400" />
+              <AggRowMulti label="Материали" childrenData={childrenData} field={c => c?.materials?.ex_vat} total={agg.materials?.total?.ex_vat} suffix=" EUR" color="text-cyan-400" />
+              <AggRowMulti label="Платен труд" childrenData={childrenData} field={c => c?.paid_labor?.gross_labor} total={agg.paid_labor?.total?.gross_labor} suffix=" EUR" color="text-orange-400" />
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Revenue vs Expenses comparison chart */}
+      {childrenData.length > 1 && (
+        <div className="rounded-lg border border-gray-700/50 p-3" data-testid="sub-chart">
+          <p className="text-[10px] text-gray-400 mb-2 font-semibold">Приходи / Разходи по под-обекти</p>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={childrenData.map(c => ({
+                name: c.code?.split("-").pop() || c.name,
+                Приходи: c.invoices?.paid || 0,
+                Разходи: (c.paid_labor?.gross_labor || 0) + (c.materials?.ex_vat || 0),
+              }))} barGap={2}>
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#666" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} />
+                <Bar dataKey="Приходи" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Разходи" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </div>
