@@ -115,6 +115,63 @@ function calcTotals(lines) {
 }
 function r2(n) { return Math.round(n * 100) / 100; }
 
+function MaterialCostCell({ ln, isLocked, analysisId, onUpdate }) {
+  const [expanded, setExpanded] = useState(false);
+  const mats = ln.materials || [];
+  const cost = (ln.material_cost_per_unit || 0).toFixed(2);
+
+  if (mats.length === 0) return <span className="text-muted-foreground">{cost}</span>;
+
+  const updateMat = async (matIdx, field, value) => {
+    const newMats = mats.map((m, i) => i === matIdx ? { ...m, [field]: value } : m);
+    try {
+      const res = await API.put(`/smr-analyses/${analysisId}/lines/${ln.line_id}`, { materials: newMats });
+      onUpdate(res.data);
+    } catch {}
+  };
+
+  const addMat = async () => {
+    const newMats = [...mats, { name: "Нов материал", unit_price: 0, qty_per_unit: 1, waste_pct: 5, unit: "бр", source: "manual" }];
+    try {
+      const res = await API.put(`/smr-analyses/${analysisId}/lines/${ln.line_id}`, { materials: newMats });
+      onUpdate(res.data);
+    } catch {}
+  };
+
+  const removeMat = async (idx) => {
+    const newMats = mats.filter((_, i) => i !== idx);
+    try {
+      const res = await API.put(`/smr-analyses/${analysisId}/lines/${ln.line_id}`, { materials: newMats });
+      onUpdate(res.data);
+    } catch {}
+  };
+
+  return (
+    <div>
+      <button onClick={() => setExpanded(!expanded)} className="hover:text-primary transition-colors" title="Покажи материали">
+        {cost} <span className="text-[9px] text-muted-foreground">({mats.length})</span>
+      </button>
+      {expanded && (
+        <div className="absolute z-20 mt-1 right-0 w-[420px] bg-card border border-border rounded-xl shadow-2xl p-3 space-y-2">
+          <p className="text-[10px] font-semibold text-muted-foreground">Материали за: {ln.smr_type}</p>
+          {mats.map((m, i) => (
+            <div key={i} className="grid grid-cols-[1fr_60px_60px_50px_30px] gap-1 items-center text-[10px]">
+              <EditCell value={m.name} onChange={v => updateMat(i, "name", v)} disabled={isLocked} className="truncate" />
+              <EditCell value={m.qty_per_unit} onChange={v => updateMat(i, "qty_per_unit", v)} disabled={isLocked} />
+              <EditCell value={m.unit_price} onChange={v => updateMat(i, "unit_price", v)} disabled={isLocked} />
+              <span className="text-muted-foreground text-right">{((m.unit_price || 0) * (m.qty_per_unit || 0)).toFixed(2)}</span>
+              {!isLocked && <button onClick={() => removeMat(i)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>}
+            </div>
+          ))}
+          {!isLocked && (
+            <button onClick={addMat} className="text-[10px] text-primary hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Добави материал</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SMRAnalysisPage() {
   const { projectId, analysisId } = useParams();
   const navigate = useNavigate();
@@ -331,7 +388,9 @@ export default function SMRAnalysisPage() {
                     <EditCell value={ln.qty} onChange={v => updateLineField(ln.line_id, "qty", v)} disabled={isLocked} />
                   </TableCell>
                   <TableCell className="text-center text-muted-foreground">{ln.unit}</TableCell>
-                  <TableCell className="text-right">{(ln.material_cost_per_unit || 0).toFixed(2)}</TableCell>
+                  <TableCell className="text-right">
+                    <MaterialCostCell ln={ln} isLocked={isLocked} analysisId={analysisId} onUpdate={setAnalysis} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <EditCell value={ln.logistics_pct} onChange={v => updateLineField(ln.line_id, "logistics_pct", v)} disabled={isLocked} suffix="%" />
                   </TableCell>
