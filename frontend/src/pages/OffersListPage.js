@@ -65,6 +65,11 @@ export default function OffersListPage() {
 
   const canCreate = ["Admin", "Owner", "SiteManager"].includes(user?.role);
 
+  // New offer dialog
+  const [newOfferOpen, setNewOfferOpen] = useState(false);
+  const [newOfferType, setNewOfferType] = useState("main");
+  const [newOfferNotes, setNewOfferNotes] = useState("");
+
   // Import state
   const [importOpen, setImportOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -157,7 +162,7 @@ export default function OffersListPage() {
             <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="import-offer-btn">
               <Upload className="w-4 h-4 mr-1" /> Импорт
             </Button>
-            <Button onClick={() => navigate("/offers/new")} data-testid="create-offer-btn">
+            <Button onClick={() => { setNewOfferType("main"); setNewOfferNotes(""); setNewOfferOpen(true); }} data-testid="create-offer-btn">
               <Plus className="w-4 h-4 mr-2" /> {t("offers.newOffer")}
             </Button>
           </div>
@@ -248,7 +253,7 @@ export default function OffersListPage() {
                 filteredOffers.map((offer) => (
                   <TableRow 
                     key={offer.id} 
-                    className="table-row-hover cursor-pointer"
+                    className={`table-row-hover cursor-pointer ${offer.offer_type === "extra" ? "border-l-2 border-l-amber-500/50" : ""}`}
                     onClick={() => navigate(`/offers/${offer.id}`)}
                     data-testid={`offer-row-${offer.id}`}
                   >
@@ -365,6 +370,41 @@ export default function OffersListPage() {
                 Създай оферта ({importPreview.parsed_lines} реда)
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Offer Type Dialog */}
+      <Dialog open={newOfferOpen} onOpenChange={setNewOfferOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-card border-border">
+          <DialogHeader><DialogTitle>Нова оферта</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs">Тип оферта</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setNewOfferType("main")} className={`p-3 rounded-xl border text-center text-sm ${newOfferType === "main" ? "border-blue-500 bg-blue-500/10 text-blue-400" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                  <FileText className="w-5 h-5 mx-auto mb-1" />Основна
+                </button>
+                <button onClick={() => setNewOfferType("extra")} className={`p-3 rounded-xl border text-center text-sm ${newOfferType === "extra" ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                  <Plus className="w-5 h-5 mx-auto mb-1" />Допълнителна
+                </button>
+              </div>
+            </div>
+            {newOfferType === "extra" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Причина / описание</Label>
+                <Input value={newOfferNotes} onChange={e => setNewOfferNotes(e.target.value)} placeholder="Допълнителни дейности по..." className="bg-background" />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewOfferOpen(false)}>Отказ</Button>
+            <Button onClick={() => {
+              const params = new URLSearchParams({ offer_type: newOfferType });
+              if (newOfferType === "extra" && newOfferNotes) params.set("notes", newOfferNotes);
+              navigate(`/offers/new?${params.toString()}`);
+              setNewOfferOpen(false);
+            }}>Продължи</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
