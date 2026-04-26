@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, FolderKanban, Users, Loader2, Eye } from "lucide-react";
+import { Plus, Search, FolderKanban, Users, Loader2, Eye, ChevronDown, ChevronRight } from "lucide-react";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -86,6 +86,7 @@ export default function ProjectsListPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [search, setSearch] = useState("");
+  const [expandedParents, setExpandedParents] = useState({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -107,6 +108,27 @@ export default function ProjectsListPage() {
   }, [filterStatus, filterType, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Tree structure: parents + children grouped
+  const parents = projects.filter(p => !p.parent_project_id);
+  const childrenMap = {};
+  projects.filter(p => p.parent_project_id).forEach(p => {
+    if (!childrenMap[p.parent_project_id]) childrenMap[p.parent_project_id] = [];
+    childrenMap[p.parent_project_id].push(p);
+  });
+  // Sort children by code
+  Object.values(childrenMap).forEach(arr => arr.sort((a, b) => (a.code || "").localeCompare(b.code || "")));
+
+  // Default expand all parents with children
+  useEffect(() => {
+    const exp = {};
+    projects.filter(p => !p.parent_project_id).forEach(p => {
+      if (childrenMap[p.id]?.length) exp[p.id] = true;
+    });
+    setExpandedParents(exp);
+  }, [projects.length]); // eslint-disable-line
+
+  const toggleParent = (id) => setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
 
   // Auto-open create dialog for sub-project
   useEffect(() => {
@@ -259,44 +281,69 @@ export default function ProjectsListPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              projects.map((p) => (
-                <TableRow key={p.id} className="table-row-hover cursor-pointer" data-testid={`project-row-${p.id}`}>
-                  <TableCell className="font-mono text-sm text-primary font-semibold">{p.code}</TableCell>
-                  <TableCell className="font-medium text-foreground">
-                    {p.name}
-                    {p.parent_project_id && <Badge variant="outline" className="ml-2 text-[8px] text-cyan-400 border-cyan-500/30">Под-обект</Badge>}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`text-xs ${STATUS_COLORS[p.status] || ""}`}>
-                      {t(`projects.status.${getStatusKey(p.status)}`)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`text-xs ${TYPE_COLORS[p.type] || ""}`}>
-                      {t(`projects.type.${getTypeKey(p.type)}`)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{p.site_manager_name || "-"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {p.start_date ? formatDate(p.start_date) : "?"} - {p.end_date ? formatDate(p.end_date) : "?"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Users className="w-3.5 h-3.5" /> {p.team_count}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${p.id}`)} data-testid={`view-project-${p.id}`}>
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(p); }} data-testid={`edit-project-${p.id}`}>
-                        {t("common.edit")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              parents.map((p) => {
+                const children = childrenMap[p.id] || [];
+                const hasChildren = children.length > 0;
+                const isExpanded = expandedParents[p.id];
+                return (
+                  <React.Fragment key={p.id}>
+                    {/* Parent row */}
+                    <TableRow className="table-row-hover cursor-pointer" data-testid={`project-row-${p.id}`}>
+                      <TableCell className="font-mono text-sm text-primary font-semibold">
+                        <div className="flex items-center gap-1">
+                          {hasChildren && (
+                            <button onClick={(e) => { e.stopPropagation(); toggleParent(p.id); }} className="p-0.5 hover:bg-muted rounded">
+                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+                            </button>
+                          )}
+                          {p.code}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">
+                        {p.name}
+                        {hasChildren && <Badge variant="outline" className="ml-2 text-[9px] bg-violet-500/15 text-violet-300 border-violet-500/30">{children.length} под-обекта</Badge>}
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className={`text-xs ${STATUS_COLORS[p.status] || ""}`}>{t(`projects.status.${getStatusKey(p.status)}`)}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className={`text-xs ${TYPE_COLORS[p.type] || ""}`}>{t(`projects.type.${getTypeKey(p.type)}`)}</Badge></TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.site_manager_name || "-"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.start_date ? formatDate(p.start_date) : "?"} - {p.end_date ? formatDate(p.end_date) : "?"}</TableCell>
+                      <TableCell><div className="flex items-center gap-1 text-sm text-muted-foreground"><Users className="w-3.5 h-3.5" /> {p.team_count}</div></TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${p.id}`)}><Eye className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(p); }}>{t("common.edit")}</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {/* Children rows (indented, with letter badge) */}
+                    {isExpanded && children.map((child) => {
+                      const letter = child.code?.split("-").pop() || "";
+                      return (
+                        <TableRow key={child.id} className="table-row-hover cursor-pointer border-l-2 border-l-violet-500/30" data-testid={`project-row-${child.id}`}>
+                          <TableCell className="font-mono text-sm text-muted-foreground pl-10">{child.code}</TableCell>
+                          <TableCell className="pl-10">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-500/20 text-violet-300 text-xs font-bold flex-shrink-0">{letter}</span>
+                              <span className="font-medium text-foreground">{child.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell><Badge variant="outline" className={`text-xs ${STATUS_COLORS[child.status] || ""}`}>{t(`projects.status.${getStatusKey(child.status)}`)}</Badge></TableCell>
+                          <TableCell><Badge variant="outline" className={`text-xs ${TYPE_COLORS[child.type] || ""}`}>{t(`projects.type.${getTypeKey(child.type)}`)}</Badge></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{child.site_manager_name || "-"}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{child.start_date ? formatDate(child.start_date) : "?"} - {child.end_date ? formatDate(child.end_date) : "?"}</TableCell>
+                          <TableCell><div className="flex items-center gap-1 text-sm text-muted-foreground"><Users className="w-3.5 h-3.5" /> {child.team_count}</div></TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${child.id}`)}><Eye className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(child); }}>{t("common.edit")}</Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>
