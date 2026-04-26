@@ -607,6 +607,66 @@ async def list_pay_runs(
     return {"items": runs, "total": total, "page": page, "page_size": page_size}
 
 
+# ── Payroll Audit Check (must be before /{run_id} parametric route) ──
+
+@router.get("/pay-runs/audit-check")
+async def audit_check(user: dict = Depends(get_current_user)):
+    """Automated payroll data integrity check."""
+    org_id = user["org_id"]
+    issues = []
+
+    profiles = await db.employee_profiles.find(
+        {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1}
+    ).to_list(500)
+    users_map = {}
+    if profiles:
+        uids = [p["user_id"] for p in profiles]
+        users_list = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(500)
+        users_map = {u["id"]: f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users_list}
+
+    for p in profiles:
+        if not p.get("hourly_rate") and not p.get("daily_rate") and not p.get("monthly_salary"):
+            name = users_map.get(p["user_id"], p["user_id"][:8])
+            issues.append({"type": "missing_rate", "severity": "critical",
+                "message": f"{name} няма зададена ставка/заплата"})
+
+    recent_runs = await db.pay_runs.find(
+        {"org_id": org_id}, {"_id": 0, "id": 1, "number": 1, "employee_rows": 1, "status": 1}
+    ).sort("created_at", -1).to_list(5)
+    for run in recent_runs:
+        for row in run.get("employee_rows", []):
+            if (row.get("approved_hours", 0) or 0) > 0 and (row.get("earned_amount", 0) or 0) == 0:
+                issues.append({"type": "zero_earned", "severity": "warning",
+                    "message": f"{row.get('first_name','')} {row.get('last_name','')}: {row['approved_hours']}ч но заработка=0 в {run.get('number','?')}"})
+
+    for run in recent_runs:
+        allocs = await db.pay_run_allocations.find(
+            {"pay_run_id": run["id"]}, {"_id": 0, "validation": 1, "employee_id": 1}
+        ).to_list(200)
+        for alloc in allocs:
+            if not alloc.get("validation", {}).get("match", True):
+                ename = users_map.get(alloc.get("employee_id", ""), "?")
+                issues.append({"type": "allocation_mismatch", "severity": "critical",
+                    "message": f"Разминаване в {run.get('number','?')} за {ename}"})
+
+    confirmed = await db.pay_runs.find(
+        {"org_id": org_id, "status": "confirmed"}, {"_id": 0, "id": 1, "number": 1}
+    ).to_list(50)
+    for run in confirmed:
+        sync_count = await db.payroll_payment_allocations.count_documents(
+            {"source_pay_run_id": run["id"], "status": {"$in": ["provisional", "active"]}})
+        if sync_count == 0:
+            issues.append({"type": "sync_missing", "severity": "critical",
+                "message": f"{run.get('number','?')} е потвърден, но няма sync allocations"})
+
+    return {
+        "issues": issues, "total": len(issues),
+        "critical": len([i for i in issues if i["severity"] == "critical"]),
+        "warnings": len([i for i in issues if i["severity"] == "warning"]),
+        "status": "pass" if len(issues) == 0 else "fail",
+    }
+
+
 @router.get("/pay-runs/{run_id}")
 async def get_pay_run(run_id: str, user: dict = Depends(get_current_user)):
     run = await db.pay_runs.find_one({"id": run_id, "org_id": user["org_id"]}, {"_id": 0})

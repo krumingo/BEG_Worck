@@ -68,6 +68,19 @@ export default function PayRunsPage() {
   const [dayEditValue, setDayEditValue] = useState("");
   const [dayEditReason, setDayEditReason] = useState("");
 
+  // Audit check
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditData, setAuditData] = useState(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const runAudit = async () => {
+    setAuditLoading(true); setAuditOpen(true); setAuditData(null);
+    try {
+      const res = await API.get("/pay-runs/audit-check");
+      setAuditData(res.data);
+    } catch { toast.error("Грешка при одит проверка"); }
+    finally { setAuditLoading(false); }
+  };
+
   const [runs, setRuns] = useState([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [detailRun, setDetailRun] = useState(null);
@@ -431,6 +444,11 @@ export default function PayRunsPage() {
             <t.icon className="w-3.5 h-3.5" />{t.label}
           </button>
         ))}
+        <div className="ml-auto">
+          <Button variant="outline" size="sm" onClick={runAudit} className="text-xs gap-1" data-testid="audit-btn">
+            <AlertTriangle className="w-3.5 h-3.5" />Одит проверка
+          </Button>
+        </div>
       </div>
 
       {/* ═══ GENERATE — Weekly Grid ═══ */}
@@ -1423,6 +1441,50 @@ export default function PayRunsPage() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Audit Check Modal */}
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="max-w-lg max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />Payroll одит проверка
+            </DialogTitle>
+          </DialogHeader>
+          {auditLoading ? (
+            <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+          ) : auditData ? (
+            <div className="space-y-3">
+              {auditData.status === "pass" ? (
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <Check className="w-6 h-6 text-emerald-400" />
+                  <div>
+                    <p className="font-semibold text-emerald-400">Всичко е наред</p>
+                    <p className="text-xs text-muted-foreground">Няма открити проблеми</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-3">
+                    {auditData.critical > 0 && <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{auditData.critical} критични</Badge>}
+                    {auditData.warnings > 0 && <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">{auditData.warnings} предупреждения</Badge>}
+                  </div>
+                  <div className="space-y-2">
+                    {auditData.issues.map((issue, i) => (
+                      <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg text-xs ${issue.severity === "critical" ? "bg-red-500/10 border border-red-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}>
+                        <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${issue.severity === "critical" ? "text-red-400" : "text-amber-400"}`} />
+                        <div>
+                          <Badge variant="outline" className={`text-[8px] mb-1 ${issue.severity === "critical" ? "text-red-400 border-red-500/30" : "text-amber-400 border-amber-500/30"}`}>{issue.type}</Badge>
+                          <p>{issue.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
