@@ -112,6 +112,20 @@ async def get_all_reports(
         rate = _calc_rate(wid)
         r["hourly_rate"] = rate
         r["labor_value"] = round(r["hours"] * rate, 2)
+        # Build earned formula for transparency
+        hours = r["hours"]
+        pay_type = (prof.get("pay_type") or "Monthly").strip()
+        if pay_type == "Hourly":
+            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч"
+        elif pay_type == "Daily":
+            dr = float(prof.get("daily_rate") or 0)
+            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч (дн. {dr})"
+        elif pay_type == "Akord":
+            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч (акорд)"
+        else:
+            ms = float(prof.get("monthly_salary") or 0)
+            wd = int(prof.get("working_days_per_month") or 22)
+            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч (мес. {ms}/{wd}д)"
         r["submitted_by_name"] = _user_name(r["submitted_by"]) if r["submitted_by"] else ""
         r["approved_by_name"] = _user_name(r["approved_by"]) if r["approved_by"] else ""
 

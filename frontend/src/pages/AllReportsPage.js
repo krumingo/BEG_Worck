@@ -318,7 +318,14 @@ export default function AllReportsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-[10px] font-mono text-muted-foreground">{r.hourly_rate > 0 ? `${r.hourly_rate}` : "—"}</TableCell>
-                    <TableCell className="text-xs font-mono text-primary">{r.labor_value > 0 ? r.labor_value.toFixed(0) : "—"}</TableCell>
+                    <TableCell>
+                      {r.labor_value > 0 ? (
+                        <div>
+                          <span title={r.earned_formula || ""} className="text-xs font-mono text-primary cursor-help border-b border-dotted border-muted-foreground">{r.labor_value.toFixed(0)}</span>
+                          {r.earned_formula && <div className="text-[9px] text-muted-foreground mt-0.5">{r.earned_formula}</div>}
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${stCfg.cls}`}>{stCfg.label}</Badge></TableCell>
                     <TableCell>{payCfg.label !== "—" ? <Badge variant="outline" className={`text-[9px] ${payCfg.cls}`}>{payCfg.label}</Badge> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
                     <TableCell>
@@ -389,6 +396,13 @@ export default function AllReportsPage() {
                 )}
                 <DetailRow label={t("allReports.colRate")} value={detail.hourly_rate > 0 ? `${detail.hourly_rate} EUR/ч` : "—"} />
                 <DetailRow label={t("allReports.colValue")} value={detail.labor_value > 0 ? `${detail.labor_value.toFixed(2)} EUR` : "—"} color="text-primary" bold />
+                {detail.earned_formula && (
+                  <div className="col-span-2 mt-1 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Как е изчислена сумата</p>
+                    <p className="text-xs font-mono text-primary">{detail.earned_formula}</p>
+                    {detail.pay_type && <p className="text-[10px] text-muted-foreground mt-0.5">Тип: {detail.pay_type}</p>}
+                  </div>
+                )}
               </div>
 
               {/* Status row */}
