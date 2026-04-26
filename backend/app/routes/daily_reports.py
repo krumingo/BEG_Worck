@@ -312,7 +312,27 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
             await db.work_sessions.insert_one(session)
             sessions_created = 1
 
-        # C) Update worker_calendar
+        # C2) Update activity budget consumed hours/quantity
+        if smr_type and project_id:
+            budget = await db.activity_budgets.find_one({
+                "org_id": org_id,
+                "project_id": project_id,
+                "smr_type_id": smr_type,
+            })
+            if budget:
+                new_consumed = round((budget.get("consumed_hours", 0) or 0) + hours, 2)
+                planned = budget.get("planned_hours", 0) or 1
+                burn_pct = round((new_consumed / planned) * 100, 1)
+                await db.activity_budgets.update_one(
+                    {"id": budget["id"]},
+                    {"$set": {
+                        "consumed_hours": new_consumed,
+                        "burn_percent": burn_pct,
+                        "last_updated": now,
+                    }}
+                )
+
+        # C3) Update worker_calendar
         cal_existing = await db.worker_calendar.find_one(
             {"org_id": org_id, "worker_id": worker_id, "date": report_date}
         )
@@ -402,6 +422,29 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
         {"approved_report_id": report_id, "org_id": user["org_id"]},
         {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
     )
+
+    # Reverse budget consumed on void
+    if report.get("smr_type") or report.get("activity_type"):
+        smr_type = report.get("smr_type") or report.get("activity_type", "")
+        hours = report.get("hours") or report.get("hours_worked", 0)
+        if smr_type and report.get("project_id") and hours:
+            budget = await db.activity_budgets.find_one({
+                "org_id": user["org_id"],
+                "project_id": report["project_id"],
+                "smr_type_id": smr_type,
+            })
+            if budget:
+                new_consumed = max(0, round((budget.get("consumed_hours", 0) or 0) - hours, 2))
+                planned = budget.get("planned_hours", 0) or 1
+                burn_pct = round((new_consumed / planned) * 100, 1)
+                await db.activity_budgets.update_one(
+                    {"id": budget["id"]},
+                    {"$set": {
+                        "consumed_hours": new_consumed,
+                        "burn_percent": burn_pct,
+                        "last_updated": now,
+                    }}
+                )
 
     # Reset report
     await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
