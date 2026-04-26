@@ -1732,6 +1732,51 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     for c in children:
         per_child[c["id"]]["reports"] = await count_report_hours([c["id"]])
 
+    # ── Work Sessions (часове + labor cost) ──
+    async def count_work(pids):
+        sessions = await db.work_sessions.find(
+            {"org_id": org_id, "site_id": {"$in": pids}},
+            {"_id": 0, "duration_hours": 1, "labor_cost": 1},
+        ).to_list(5000)
+        hours = round(sum(s.get("duration_hours", 0) for s in sessions), 1)
+        cost = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
+        return {"hours": hours, "labor_cost": cost, "sessions": len(sessions)}
+
+    own_work = await count_work([project_id])
+    child_work = await count_work(child_ids) if child_ids else {"hours": 0, "labor_cost": 0, "sessions": 0}
+    for c in children:
+        per_child[c["id"]]["work"] = await count_work([c["id"]])
+
+    # ── Materials (от warehouse transactions) ──
+    async def count_materials(pids):
+        txns = await db.warehouse_transactions.find(
+            {"org_id": org_id, "project_id": {"$in": pids}},
+            {"_id": 0, "total_ex_vat": 1, "total_inc_vat": 1},
+        ).to_list(5000)
+        ex_vat = round(sum(t.get("total_ex_vat", 0) or 0 for t in txns), 2)
+        inc_vat = round(sum(t.get("total_inc_vat", 0) or 0 for t in txns), 2)
+        return {"ex_vat": ex_vat, "inc_vat": inc_vat, "count": len(txns)}
+
+    own_mat = await count_materials([project_id])
+    child_mat = await count_materials(child_ids) if child_ids else {"ex_vat": 0, "inc_vat": 0, "count": 0}
+    for c in children:
+        per_child[c["id"]]["materials"] = await count_materials([c["id"]])
+
+    # ── Paid Labor (от payroll allocations — само active) ──
+    async def count_paid_labor(pids):
+        allocs = await db.payroll_payment_allocations.find(
+            {"org_id": org_id, "project_id": {"$in": pids}, "status": "active"},
+            {"_id": 0, "allocated_gross_labor": 1, "allocated_hours": 1},
+        ).to_list(5000)
+        gross = round(sum(a.get("allocated_gross_labor", 0) for a in allocs), 2)
+        hours = round(sum(a.get("allocated_hours", 0) for a in allocs), 1)
+        return {"gross_labor": gross, "paid_hours": hours}
+
+    own_paid = await count_paid_labor([project_id])
+    child_paid = await count_paid_labor(child_ids) if child_ids else {"gross_labor": 0, "paid_hours": 0}
+    for c in children:
+        per_child[c["id"]]["paid_labor"] = await count_paid_labor([c["id"]])
+
     def merge(own, children):
         return {k: round((own.get(k, 0) or 0) + (children.get(k, 0) or 0), 2) for k in set(list(own.keys()) + list(children.keys()))}
 
@@ -1764,5 +1809,27 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
             "own": own_reps,
             "children": child_reps,
             "total": merge(own_reps, child_reps),
+        },
+        "work": {
+            "own": own_work, "children": child_work,
+            "total": {"hours": round(own_work["hours"] + child_work["hours"], 1), "labor_cost": round(own_work["labor_cost"] + child_work["labor_cost"], 2)},
+        },
+        "materials": {
+            "own": own_mat, "children": child_mat,
+            "total": {"ex_vat": round(own_mat["ex_vat"] + child_mat["ex_vat"], 2)},
+        },
+        "paid_labor": {
+            "own": own_paid, "children": child_paid,
+            "total": {"gross_labor": round(own_paid["gross_labor"] + child_paid["gross_labor"], 2)},
+        },
+        "pnl": {
+            "revenue": round(own_inv["paid"] + child_inv["paid"], 2),
+            "expenses": round(
+                own_paid["gross_labor"] + child_paid["gross_labor"] +
+                own_mat["ex_vat"] + child_mat["ex_vat"], 2),
+            "profit": round(
+                (own_inv["paid"] + child_inv["paid"]) -
+                (own_paid["gross_labor"] + child_paid["gross_labor"] +
+                 own_mat["ex_vat"] + child_mat["ex_vat"]), 2),
         },
     }
