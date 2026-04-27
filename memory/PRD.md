@@ -1196,3 +1196,10 @@ Invoice lines were using offer/КСС-like structure with `cost_category` field 
 | /api/finance/next-invoice-number | GET | Preview next invoice number |
 | /api/finance/invoices/{id}/payments | GET/POST | List/add direct payments to invoice |
 | /api/finance/invoices/{id}/payments/{alloc_id} | DELETE | Remove payment from invoice |
+
+## M15: FIFO Warehouse with Batch Tracking — Apr 27, 2026
+- New `fifo_service.py`: add_batch, consume_fifo (FIFO order), get_current_stock (weighted avg), get_stock_value
+- New `warehouse_batches.py` routes: CRUD, stock-summary, consume, block/unblock, warehouse value
+- Migration `m15_fifo_migration.py`: opening_balance batches for existing items
+- 12/12 tests pass. Backward compatible — old warehouse_transactions untouched.
+
