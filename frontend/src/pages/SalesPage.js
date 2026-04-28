@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { ShoppingCart, Plus, Loader2 } from "lucide-react";
 import SalesWindow from "@/components/sales/SalesWindow";
+import SalesHistoryTable from "@/components/sales/SalesHistoryTable";
 
 export default function SalesPage() {
   const [sales, setSales] = useState([]);
@@ -44,11 +45,7 @@ export default function SalesPage() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
-        <ShoppingCart className="w-10 h-10 mx-auto mb-3 opacity-30" />
-        <p>Историята на продажбите ще се показва тук</p>
-        <p className="text-xs mt-1">Натиснете "Нова продажба" за да започнете</p>
-      </div>
+      <SalesHistoryTable />
 
       <SalesWindow
         open={showSale}

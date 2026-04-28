@@ -15,6 +15,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -160,10 +161,14 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Артикул *</Label>
-                <Select value={itemId || "none"} onValueChange={v => { setItemId(v === "none" ? "" : v); setPreview(null); }}>
-                  <SelectTrigger><SelectValue placeholder="Изберете..." /></SelectTrigger>
-                  <SelectContent>{items.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
-                </Select>
+                <SmartAutocomplete
+                  items={items}
+                  searchFields={["name"]}
+                  displayField="name"
+                  value={items.find(i => i.id === itemId)?.name || ""}
+                  onSelect={(item) => { setItemId(item?.id || ""); setPreview(null); }}
+                  placeholder="Търси артикул..."
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Склад *</Label>
