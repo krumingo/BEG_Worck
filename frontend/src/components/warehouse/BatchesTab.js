@@ -17,9 +17,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Plus, Loader2, Package, Lock, Unlock, Eye, Trash2, Search, AlertTriangle,
+  Plus, Loader2, Package, Lock, Unlock, Eye, Trash2, Search, AlertTriangle, ShoppingCart,
 } from "lucide-react";
 import { toast } from "sonner";
+import SalesWindow from "@/components/sales/SalesWindow";
 
 const STATUS_CFG = {
   active: { label: "Активна", cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
@@ -42,6 +43,9 @@ export default function BatchesTab() {
   const [traceOpen, setTraceOpen] = useState(false);
   const [traceBatch, setTraceBatch] = useState(null);
   const [items, setItems] = useState([]);
+  const [saleOpen, setSaleOpen] = useState(false);
+  const [saleItemId, setSaleItemId] = useState("");
+  const [saleWhId, setSaleWhId] = useState("");
 
   // New batch form
   const [form, setForm] = useState({
@@ -196,6 +200,9 @@ export default function BatchesTab() {
                     <TableCell>
                       <div className="flex gap-0.5">
                         <button onClick={() => openTrace(b)} className="p-1 hover:text-primary" title="Детайли"><Eye className="w-3.5 h-3.5" /></button>
+                        {b.status === "active" && b.remaining_qty > 0 && (
+                          <button onClick={() => { setSaleItemId(b.item_id); setSaleWhId(b.warehouse_id); setSaleOpen(true); }} className="p-1 hover:text-emerald-400" title="Продажба"><ShoppingCart className="w-3.5 h-3.5" /></button>
+                        )}
                         <button onClick={() => handleBlock(b)} className="p-1 hover:text-amber-400" title={b.status === "blocked" ? "Разблокирай" : "Блокирай"}>
                           {b.status === "blocked" ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                         </button>
@@ -289,6 +296,8 @@ export default function BatchesTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      <SalesWindow open={saleOpen} onOpenChange={(v) => { setSaleOpen(v); if (!v) load(); }} presetItemId={saleItemId} prefillWarehouseId={saleWhId} />
     </div>
   );
 }

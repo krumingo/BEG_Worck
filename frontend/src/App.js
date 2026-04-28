@@ -47,6 +47,7 @@ import OverheadSnapshotDetailPage from "@/pages/OverheadSnapshotDetailPage";
 import WarehousesPage from "@/pages/WarehousesPage";
 import CounterpartiesPage from "@/pages/CounterpartiesPage";
 import ItemsPage from "@/pages/ItemsPage";
+import SalesPage from "@/pages/SalesPage";
 import PricesPage from "@/pages/PricesPage";
 import TurnoverPage from "@/pages/TurnoverPage";
 import ClientsPage from "@/pages/ClientsPage";
@@ -219,6 +220,7 @@ function AppRoutes() {
       <Route path="/data/warehouses" element={<AdminRoute><WarehousesPage /></AdminRoute>} />
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
       <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
+      <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />
       <Route path="/data/prices" element={<AdminRoute><PricesPage /></AdminRoute>} />
       <Route path="/data/turnover" element={<AdminRoute><TurnoverPage /></AdminRoute>} />
       <Route path="/data/clients" element={<AdminRoute><ClientsPage /></AdminRoute>} />

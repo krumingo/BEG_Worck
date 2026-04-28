@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function SalesWindow({ open, onOpenChange, presetItemId }) {
+export default function SalesWindow({ open, onOpenChange, presetItemId, prefillWarehouseId }) {
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [margins, setMargins] = useState({ low: 20, medium: 30, high: 50, minimum: 15 });
@@ -64,7 +64,8 @@ export default function SalesWindow({ open, onOpenChange, presetItemId }) {
       setMargins(mRes.data || { low: 20, medium: 30, high: 50, minimum: 15 });
     }).catch(() => {});
     if (presetItemId) setItemId(presetItemId);
-  }, [open, presetItemId]);
+    if (prefillWarehouseId) setWarehouseId(prefillWarehouseId);
+  }, [open, presetItemId, prefillWarehouseId]);
 
   // Debounced FIFO preview
   const triggerPreview = useCallback(() => {
