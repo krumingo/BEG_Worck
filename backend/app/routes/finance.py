@@ -117,29 +117,67 @@ async def get_invoice_settings(org_id: str) -> dict:
 
 
 async def get_next_invoice_no(org_id: str, direction: str) -> str:
-    """Generate sequential invoice number with atomic increment"""
+    """Generate sequential invoice number with atomic increment + conflict check."""
     settings = await get_invoice_settings(org_id)
     
     if direction == "Issued":
         if not settings.get("issued_auto_numbering", True):
-            return ""  # Manual numbering
+            return ""
         prefix = settings.get("issued_prefix", "INV")
         number_field = "issued_next_number"
     else:
         if not settings.get("received_auto_numbering", False):
-            return ""  # Manual numbering for bills
+            return ""
         prefix = settings.get("received_prefix", "BILL")
         number_field = "received_next_number"
     
-    # Atomic increment to prevent race conditions
-    result = await db.invoice_settings.find_one_and_update(
-        {"org_id": org_id},
-        {"$inc": {number_field: 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
-        return_document=False  # Return the document BEFORE update
-    )
+    # Sync counter with existing invoices first (handles imports)
+    await _sync_counter_if_needed(org_id, prefix, number_field)
     
-    current_number = result.get(number_field, 1)
-    return f"{prefix}-{current_number:04d}"
+    # Retry loop: atomic increment + uniqueness check
+    for _ in range(10):
+        result = await db.invoice_settings.find_one_and_update(
+            {"org_id": org_id},
+            {"$inc": {number_field: 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+            return_document=False,
+        )
+        current_number = result.get(number_field, 1) if result else 1
+        candidate = f"{prefix}-{current_number:04d}"
+        
+        existing = await db.invoices.find_one({"org_id": org_id, "invoice_no": candidate})
+        if not existing:
+            return candidate
+        # Conflict from import — loop continues with next number
+    
+    # Fallback: use timestamp-based
+    ts = int(datetime.now(timezone.utc).timestamp())
+    return f"{prefix}-{ts}"
+
+
+async def _sync_counter_if_needed(org_id: str, prefix: str, number_field: str):
+    """Sync counter with highest existing invoice number to avoid conflicts."""
+    # Find highest existing number with this prefix
+    pattern = f"^{prefix}-"
+    pipeline = [
+        {"$match": {"org_id": org_id, "invoice_no": {"$regex": pattern}}},
+        {"$project": {"num_str": {"$arrayElemAt": [{"$split": ["$invoice_no", "-"]}, 1]}}},
+        {"$addFields": {"num": {"$toInt": {"$ifNull": ["$num_str", "0"]}}}},
+        {"$sort": {"num": -1}},
+        {"$limit": 1},
+    ]
+    try:
+        results = await db.invoices.aggregate(pipeline).to_list(1)
+        if results:
+            max_existing = results[0].get("num", 0)
+            settings = await db.invoice_settings.find_one({"org_id": org_id})
+            current = settings.get(number_field, 1) if settings else 1
+            if max_existing >= current:
+                await db.invoice_settings.update_one(
+                    {"org_id": org_id},
+                    {"$set": {number_field: max_existing + 1}},
+                )
+    except Exception:
+        pass  # aggregation may fail on non-numeric invoice numbers
 
 
 async def validate_invoice_no_unique(org_id: str, invoice_no: str, exclude_id: str = None) -> bool:

@@ -11,12 +11,24 @@ from app.db import db
 from app.services.excel_import import COLUMN_KEYWORDS, parse_float
 
 
+import unicodedata
+
+def _normalize(s: str) -> str:
+    """Normalize text for comparison: lowercase, strip, remove dots/dashes."""
+    s = unicodedata.normalize("NFKD", s.lower().strip())
+    s = s.replace(".", "").replace("-", "").replace("_", " ").replace("/", " ")
+    return " ".join(s.split())  # collapse whitespace
+
+
 def _match_header(val: str) -> str:
     """Match a header cell value to a known field."""
-    v = val.lower().strip()
+    v = _normalize(val)
+    if not v:
+        return ""
     for field, keywords in COLUMN_KEYWORDS.items():
         for kw in keywords:
-            if kw in v:
+            nkw = _normalize(kw)
+            if nkw == v or nkw in v or v in nkw:
                 return field
     return ""
 
