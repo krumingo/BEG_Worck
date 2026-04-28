@@ -33,13 +33,16 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Warehouse, Database } from "lucide-react";
+import { Plus, Pencil, Trash2, Warehouse, Database, Package } from "lucide-react";
 import { toast } from "sonner";
+import BatchesTab from "@/components/warehouse/BatchesTab";
+import StockValueCard from "@/components/warehouse/StockValueCard";
 
 const WAREHOUSE_TYPES = ["central", "project", "vehicle", "person"];
 
 export default function WarehousesPage() {
   const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState("warehouses");
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -145,14 +148,33 @@ export default function WarehousesPage() {
             <p className="text-sm text-muted-foreground">{t("data.warehousesDesc")}</p>
           </div>
         </div>
-        <Button onClick={handleCreate} data-testid="create-warehouse-btn">
-          <Plus className="w-4 h-4 mr-2" />
-          {t("common.create")}
-        </Button>
+        {activeTab === "warehouses" && (
+          <Button onClick={handleCreate} data-testid="create-warehouse-btn">
+            <Plus className="w-4 h-4 mr-2" />
+            {t("common.create")}
+          </Button>
+        )}
       </div>
 
-      {/* Data Table */}
-      <DataTable
+      {/* Stock Value Card */}
+      <StockValueCard />
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-border">
+        {[
+          { id: "warehouses", icon: Warehouse, label: "Складове" },
+          { id: "batches", icon: Package, label: "Партиди" },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+            <tab.icon className="w-3.5 h-3.5" />{tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Складове */}
+      {activeTab === "warehouses" && (
+        <>
+          <DataTable
         columns={columns}
         fetchData={fetchData}
         refreshKey={refreshKey}
@@ -194,6 +216,11 @@ export default function WarehousesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </>
+      )}
+
+      {/* Tab: Партиди */}
+      {activeTab === "batches" && <BatchesTab />}
     </div>
   );
 }
