@@ -1016,6 +1016,8 @@ from app.routes.warehouses import router as warehouses_router
 api_router.include_router(warehouses_router)
 from app.routes.warehouse_batches import router as warehouse_batches_router
 api_router.include_router(warehouse_batches_router)
+from app.routes.sales import router as sales_router
+api_router.include_router(sales_router)
 
 # Import scan docs router
 from app.routes.scan_docs import router as scan_docs_router

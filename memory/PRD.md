@@ -1203,3 +1203,14 @@ Invoice lines were using offer/КСС-like structure with `cost_category` field 
 - Migration `m15_fifo_migration.py`: opening_balance batches for existing items
 - 12/12 tests pass. Backward compatible — old warehouse_transactions untouched.
 
+## M16: Sales Window with FIFO Consumption — Apr 28, 2026
+- Backend `sales.py`: 4 endpoints (fifo-preview, historical-context, commit, sales-margins)
+- Lazy FIFO: preview is read-only, commit re-checks snapshot_token before consuming
+- 3-level margin protection: ok (green), below minimum (yellow+ack), below cost (red+ack+reason)
+- Snapshot token = md5 of batch states for race condition detection (409 on mismatch)
+- Historical context: min/max/avg/median/trend from past 12 months of sales
+- Frontend `SalesWindow.js`: 3-section modal (item+qty, FIFO breakdown, price+margins)
+- Debounced preview (400ms), margin preset buttons, live profit/margin calc
+- 14/14 backend tests pass
+
+
