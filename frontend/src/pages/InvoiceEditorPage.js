@@ -45,6 +45,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -90,6 +91,7 @@ export default function InvoiceEditorPage() {
   const [projects, setProjects] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [invoicePayments, setInvoicePayments] = useState([]);
+  const [allClients, setAllClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -155,12 +157,14 @@ export default function InvoiceEditorPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [projectsRes, accountsRes] = await Promise.all([
+      const [projectsRes, accountsRes, clientsRes] = await Promise.all([
         API.get("/projects"),
         API.get("/finance/accounts"),
+        API.get("/clients?page_size=500"),
       ]);
       setProjects(projectsRes.data);
       setAccounts(accountsRes.data);
+      setAllClients((clientsRes.data?.items || clientsRes.data || []).map(c => ({ id: c.id, name: c.companyName || c.fullName || c.name || "", eik: c.eik || "" })));
 
       if (!isNew) {
         const invoiceRes = await API.get(`/finance/invoices/${invoiceId}`);
@@ -570,9 +574,24 @@ export default function InvoiceEditorPage() {
               </div>
               <div className="space-y-2">
                 <Label>{direction === "Issued" ? t("finance.customer") : t("finance.supplier")}</Label>
-                <Input value={counterpartyName} onChange={(e) => setCounterpartyName(e.target.value)}
-                  placeholder={clientType === "person" ? "Име и фамилия" : t("finance.companyName")}
-                  disabled={!canEdit} className="bg-background" data-testid="counterparty-input" />
+                {canEdit ? (
+                  <SmartAutocomplete
+                    items={allClients}
+                    searchFields={["name", "eik"]}
+                    displayField="name"
+                    value={counterpartyName}
+                    onChange={(v) => setCounterpartyName(v)}
+                    onSelect={(client) => {
+                      if (client) {
+                        setCounterpartyName(client.name);
+                        if (client.eik) setCounterpartyEik(client.eik);
+                      }
+                    }}
+                    placeholder={clientType === "person" ? "Търси по име..." : "Търси клиент/контрагент..."}
+                  />
+                ) : (
+                  <Input value={counterpartyName} disabled className="bg-background" data-testid="counterparty-input" />
+                )}
               </div>
               {clientType !== "person" && (
                 <>

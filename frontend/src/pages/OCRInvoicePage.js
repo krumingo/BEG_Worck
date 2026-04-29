@@ -23,6 +23,7 @@ import {
   ScanLine, Upload, Loader2, Search, Eye, Check, X, FileText, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 
 const STATUS_CFG = {
   uploaded: { label: "Качен", color: "bg-slate-100 text-slate-700" },
@@ -38,6 +39,7 @@ export default function OCRInvoicePage() {
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allClients, setAllClients] = useState([]);
   const [fStatus, setFStatus] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProject, setUploadProject] = useState("");
@@ -51,6 +53,7 @@ export default function OCRInvoicePage() {
 
   useEffect(() => {
     API.get("/projects").then(r => setProjects(r.data.items || r.data || [])).catch(() => {});
+    API.get("/clients?page_size=500").then(r => setAllClients((r.data?.items || r.data || []).map(c => ({ id: c.id, name: c.companyName || c.fullName || c.name || "", eik: c.eik || "" })))).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -203,7 +206,7 @@ export default function OCRInvoicePage() {
               <Badge className={`${STATUS_CFG[selected.status]?.color || ""}`} variant="outline">{STATUS_CFG[selected.status]?.label}</Badge>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label className="text-xs">{t("ocrInvoice.supplierName")}</Label><Input value={reviewForm.supplier_name} onChange={e => setReviewForm(f => ({ ...f, supplier_name: e.target.value }))} /></div>
+                <div className="space-y-1"><Label className="text-xs">{t("ocrInvoice.supplierName")}</Label><SmartAutocomplete items={allClients} searchFields={["name","eik"]} displayField="name" value={reviewForm.supplier_name} onChange={v => setReviewForm(f => ({ ...f, supplier_name: v }))} onSelect={c => { if (c) setReviewForm(f => ({ ...f, supplier_name: c.name })); }} placeholder="Търси доставчик..." /></div>
                 <div className="space-y-1"><Label className="text-xs">{t("ocrInvoice.invoiceNumber")}</Label><Input value={reviewForm.invoice_number} onChange={e => setReviewForm(f => ({ ...f, invoice_number: e.target.value }))} /></div>
                 <div className="space-y-1"><Label className="text-xs">{t("ocrInvoice.invoiceDate")}</Label><Input value={reviewForm.invoice_date} onChange={e => setReviewForm(f => ({ ...f, invoice_date: e.target.value }))} /></div>
                 <div className="space-y-1"><Label className="text-xs">{t("ocrInvoice.totalAmount")}</Label><Input type="number" value={reviewForm.total_amount} onChange={e => setReviewForm(f => ({ ...f, total_amount: e.target.value }))} /></div>

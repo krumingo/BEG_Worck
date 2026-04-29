@@ -43,6 +43,7 @@ import {
   Link2,
   Trash2,
 } from "lucide-react";
+import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 
 const PAYMENT_METHODS = ["Cash", "BankTransfer", "Card", "Check", "Other"];
 
@@ -60,6 +61,7 @@ export default function PaymentsPage() {
   const [accounts, setAccounts] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allClients, setAllClients] = useState([]);
   const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -92,14 +94,16 @@ export default function PaymentsPage() {
       if (directionFilter) params.append("direction", directionFilter);
       if (accountFilter) params.append("account_id", accountFilter);
 
-      const [paymentsRes, accountsRes, invoicesRes] = await Promise.all([
+      const [paymentsRes, accountsRes, invoicesRes, clientsRes] = await Promise.all([
         API.get(`/finance/payments?${params.toString()}`),
         API.get("/finance/accounts"),
         API.get("/finance/invoices"),
+        API.get("/clients?page_size=500"),
       ]);
       setPayments(paymentsRes.data);
       setAccounts(accountsRes.data);
       setInvoices(invoicesRes.data);
+      setAllClients((clientsRes.data?.items || clientsRes.data || []).map(c => ({ id: c.id, name: c.companyName || c.fullName || c.name || "", eik: c.eik || "" })));
 
       if (invoiceParam) {
         const inv = invoicesRes.data.find(i => i.id === invoiceParam);
@@ -514,11 +518,14 @@ export default function PaymentsPage() {
             </div>
             <div className="space-y-2">
               <Label>{t("finance.counterparty")}</Label>
-              <Input
+              <SmartAutocomplete
+                items={allClients}
+                searchFields={["name", "eik"]}
+                displayField="name"
                 value={formData.counterparty_name}
-                onChange={(e) => setFormData({ ...formData, counterparty_name: e.target.value })}
+                onChange={(v) => setFormData({ ...formData, counterparty_name: v })}
+                onSelect={(c) => { if (c) setFormData({ ...formData, counterparty_name: c.name }); }}
                 placeholder={t("finance.companyName")}
-                className="bg-background"
               />
             </div>
             <div className="space-y-2">

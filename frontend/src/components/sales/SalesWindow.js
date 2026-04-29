@@ -28,6 +28,7 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [margins, setMargins] = useState({ low: 20, medium: 30, high: 50, minimum: 15 });
+  const [clients, setClients] = useState([]);
 
   // Form
   const [itemId, setItemId] = useState(presetItemId || "");
@@ -59,10 +60,12 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
       API.get("/items?page_size=500"),
       API.get("/warehouses"),
       API.get("/settings/sales-margins"),
-    ]).then(([iRes, wRes, mRes]) => {
+      API.get("/clients?page_size=500"),
+    ]).then(([iRes, wRes, mRes, cRes]) => {
       setItems(iRes.data?.items || iRes.data || []);
       setWarehouses(wRes.data?.items || wRes.data || []);
       setMargins(mRes.data || { low: 20, medium: 30, high: 50, minimum: 15 });
+      setClients((cRes.data?.items || cRes.data || []).map(c => ({ id: c.id, name: c.companyName || c.fullName || c.name || "", eik: c.eik || "" })));
     }).catch(() => {});
     if (presetItemId) setItemId(presetItemId);
     if (prefillWarehouseId) setWarehouseId(prefillWarehouseId);
@@ -180,6 +183,17 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
               <div className="space-y-1">
                 <Label className="text-xs">Количество *</Label>
                 <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} min="0.01" step="0.01" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Клиент</Label>
+                <SmartAutocomplete
+                  items={clients}
+                  searchFields={["name", "eik"]}
+                  displayField="name"
+                  value={clients.find(c => c.id === clientId)?.name || ""}
+                  onSelect={(c) => setClientId(c?.id || "")}
+                  placeholder="Търси клиент..."
+                />
               </div>
             </div>
 
