@@ -39,10 +39,10 @@ def detect_excel_structure(file_bytes: bytes, sheet_name: str = None) -> dict:
     sheet_names = wb.sheetnames
     ws = wb[sheet_name] if sheet_name and sheet_name in sheet_names else wb.active
 
-    # Find header row
+    # Find header row — scan first 15 rows for best match
     best_row = 1
     best_score = 0
-    for row_num in range(1, 8):
+    for row_num in range(1, min(16, ws.max_row + 1)):
         score = 0
         for row in ws.iter_rows(min_row=row_num, max_row=row_num, values_only=True):
             for val in row:

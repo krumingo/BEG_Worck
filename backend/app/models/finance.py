@@ -61,7 +61,7 @@ class InvoiceLineInput(BaseModel):
 
 class InvoiceCreate(BaseModel):
     direction: str
-    invoice_no: str
+    invoice_no: Optional[str] = None  # Auto-generated if empty
     project_id: Optional[str] = None
     counterparty_name: Optional[str] = None
     counterparty_eik: Optional[str] = None  # Bulgarian company ID (ЕИК)

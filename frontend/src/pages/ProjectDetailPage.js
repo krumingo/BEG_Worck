@@ -179,7 +179,7 @@ export default function ProjectDetailPage() {
           <h1 className="text-2xl font-bold text-white truncate">{project.name}</h1>
           <div className="flex items-center gap-2">
             <p className="text-gray-400 text-sm">{project.code}</p>
-            {parent_project && <Badge variant="outline" className="text-[9px] text-cyan-400 border-cyan-500/30">Под-обект на {parent_project.code}</Badge>}
+            {parent_project && <Badge variant="outline" className="text-[9px] text-cyan-400 border-cyan-500/30">Обект</Badge>}
           </div>
         </div>
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
@@ -206,29 +206,6 @@ export default function ProjectDetailPage() {
               <span className="text-sm text-amber-400 font-medium">{pendingReports.length} отчета за одобрение</span>
               <ChevronRight className="w-4 h-4 text-amber-400 ml-auto" />
             </button>
-          )}
-
-          {/* Aggregate KPI for parent projects */}
-          {sub_projects?.length > 0 && aggregate && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2" data-testid="aggregate-kpi">
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-[10px] text-gray-400">Общо часове</p>
-                <p className="text-lg font-bold text-white">{aggregate.work?.total?.hours || 0}</p>
-                <p className="text-[9px] text-gray-500">Собствени: {aggregate.work?.own?.hours || 0} | Под-обекти: {aggregate.work?.children?.hours || 0}</p>
-              </div>
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-[10px] text-gray-400">Приходи (платени)</p>
-                <p className="text-lg font-bold text-emerald-400">{(aggregate.pnl?.revenue || 0).toFixed(0)} EUR</p>
-              </div>
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-[10px] text-gray-400">Разходи</p>
-                <p className="text-lg font-bold text-red-400">{(aggregate.pnl?.expenses || 0).toFixed(0)} EUR</p>
-              </div>
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-[10px] text-gray-400">Печалба</p>
-                <p className={`text-lg font-bold ${(aggregate.pnl?.profit || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>{(aggregate.pnl?.profit || 0).toFixed(0)} EUR</p>
-              </div>
-            </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -325,99 +302,6 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Sub-projects section */}
-          {(sub_projects?.length > 0 || !parent_project) && (
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-sub-projects">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-violet-500" />
-                  <h3 className="font-semibold text-white">Под-обекти</h3>
-                  {sub_projects?.length > 0 && <Badge variant="outline" className="text-[10px]">{sub_projects.length}</Badge>}
-                </div>
-                <div className="flex items-center gap-2">
-                  {sub_projects?.length > 0 && (
-                    <div className="flex rounded-md border border-gray-600 overflow-hidden">
-                      <button onClick={() => setAggView("summary")} className={`px-2.5 py-1 text-[10px] ${aggView === "summary" ? "bg-violet-500/30 text-violet-300" : "bg-gray-800 text-gray-400"}`} data-testid="agg-view-summary">Обобщено</button>
-                      <button onClick={() => setAggView("individual")} className={`px-2.5 py-1 text-[10px] border-l border-gray-600 ${aggView === "individual" ? "bg-violet-500/30 text-violet-300" : "bg-gray-800 text-gray-400"}`} data-testid="agg-view-individual">Поотделно</button>
-                    </div>
-                  )}
-                  <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowSubProjectDialog(true)} data-testid="add-sub-project-btn">
-                    <Plus className="w-3 h-3" />Под-обект
-                  </Button>
-                </div>
-              </div>
-
-              {sub_projects?.length > 0 ? (
-                aggView === "individual" ? (
-                  <div className="space-y-2" data-testid="sub-projects-individual">
-                    {sub_projects.map(sp => {
-                      const letter = sp.code?.split("-").pop() || "";
-                      return (
-                        <button key={sp.id} onClick={() => navigate(`/projects/${sp.id}`)} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-900/50 hover:bg-gray-700/50 text-left transition-colors border border-gray-700/50 hover:border-violet-500/30" data-testid={`sub-project-${sp.id}`}>
-                          <div className="w-9 h-9 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-bold text-sm flex-shrink-0">{letter}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">{sp.name}</p>
-                            <p className="text-[10px] text-gray-400 font-mono">{sp.code}</p>
-                          </div>
-                          <Badge className={`text-[9px] ${STATUS_COLORS[sp.status] || ""}`}>{sp.status}</Badge>
-                          <ChevronRight className="w-4 h-4 text-gray-500" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* Summary / aggregate view */
-                  <SubProjectsSummaryView sub_projects={sub_projects} aggregate={aggregate} navigate={navigate} />
-                )
-              ) : (
-                <p className="text-xs text-gray-500">Няма под-обекти. Натиснете "+Под-обект" за да разделите обекта.</p>
-              )}
-            </div>
-          )}
-
-          {/* Sub-project creation dialog */}
-          <Dialog open={showSubProjectDialog} onOpenChange={setShowSubProjectDialog}>
-            <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  {sub_projects?.length > 0
-                    ? `Нов под-обект (${project.code}-...)`
-                    : `Разделяне на ${project.name}`
-                  }
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                {!sub_projects?.length && (
-                  <div className="rounded-lg bg-violet-500/10 border border-violet-500/30 p-3 text-xs text-violet-300 space-y-1">
-                    <p className="font-semibold">При първо разделяне:</p>
-                    <p>1. Текущият обект става родител (wrapper)</p>
-                    <p>2. Всички данни мигрират в под-обект <span className="font-bold">{project.code}-А</span></p>
-                    <p>3. Създава се нов празен под-обект <span className="font-bold">{project.code}-Б</span></p>
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Име на {!sub_projects?.length ? "новия под-обект (Б)" : "под-обекта"}
-                  </label>
-                  <Input
-                    value={newSubName}
-                    onChange={e => setNewSubName(e.target.value)}
-                    placeholder="напр. Етаж 2, Корпус Б..."
-                    className="bg-gray-800 border-gray-600"
-                    onKeyDown={e => e.key === "Enter" && handleCreateSubProject()}
-                    data-testid="sub-project-name-input"
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setShowSubProjectDialog(false)}>Отказ</Button>
-                  <Button size="sm" onClick={handleCreateSubProject} disabled={!newSubName.trim() || creatingSub} className="bg-violet-600 hover:bg-violet-700" data-testid="create-sub-project-confirm">
-                    {creatingSub ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
-                    {!sub_projects?.length ? "Раздели и създай" : "Създай"}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
           {/* Centralized View */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
             <CentralizedProjectView projectId={projectId} />
@@ -426,24 +310,18 @@ export default function ProjectDetailPage() {
 
         {/* ════ TAB: SMR ════ */}
         <TabsContent value="smr" className="space-y-4 mt-4">
-          {/* SMR Entry Points */}
+          {/* SMR Entry Points — 3 clear options */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-sm font-semibold text-white">СМР — {project.name}</h3>
             <div className="flex gap-2 flex-wrap">
-              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowAddSMR(!showAddSMR)} data-testid="add-smr-toggle">
-                <Plus className="w-3 h-3" />{showAddSMR ? "Скрий" : "+ Ново СМР"}
+              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowAddSMR(!showAddSMR)} data-testid="add-smr-toggle" title="Ръчно добавяне на единична СМР">
+                <Plus className="w-3 h-3" />{showAddSMR ? "Скрий" : "+ Нова СМР"}
               </Button>
-              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowImportSMR(!showImportSMR)} data-testid="import-smr-toggle">
-                <FileText className="w-3 h-3" />Импорт
+              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowExcelImport(true)} data-testid="excel-import-btn" title="Качи Excel/CSV файл с много СМР наведнъж">
+                <Upload className="w-3.5 h-3.5" />Импорт от Excel
               </Button>
-              <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black text-xs gap-1" data-testid="new-extra-work-btn">
-                <Sparkles className="w-3 h-3" />Ново СМР + AI
-              </Button>
-              <Button size="sm" variant="outline" className="text-xs gap-1 text-amber-400 border-amber-500/30" onClick={() => navigate(`/missing-smr?project=${projectId}`)} data-testid="missing-smr-btn">
-                <AlertTriangle className="w-3 h-3" />Липсващи СМР
-              </Button>
-              <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setShowExcelImport(true)} data-testid="excel-import-btn">
-                <Upload className="w-3.5 h-3.5" />Импорт Excel
+              <Button size="sm" onClick={() => navigate(`/projects/${projectId}/novo-smr`)} className="bg-amber-500 hover:bg-amber-600 text-black text-xs gap-1" data-testid="new-extra-work-btn" title="AI анализ от свободен текст или документ">
+                <Sparkles className="w-3 h-3" />AI разбивка
               </Button>
             </div>
           </div>
