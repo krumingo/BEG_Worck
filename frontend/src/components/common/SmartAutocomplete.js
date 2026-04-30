@@ -39,6 +39,7 @@ export default function SmartAutocomplete({
   const [query, setQuery] = useState(value || "");
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const ref = useRef(null);
 
   useEffect(() => { setQuery(value || ""); }, [value]);
@@ -81,9 +82,24 @@ export default function SmartAutocomplete({
             setQuery(e.target.value);
             onChange?.(e.target.value);
             setOpen(true);
+            setActiveIdx(-1);
           }}
           onFocus={() => { setFocused(true); setOpen(true); }}
           onBlur={() => setTimeout(() => setFocused(false), 200)}
+          onKeyDown={e => {
+            if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, results.length - 1)); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+            else if (e.key === "Enter" && activeIdx >= 0 && results[activeIdx]) {
+              e.preventDefault();
+              const item = results[activeIdx].item;
+              setQuery(item[displayField] || "");
+              onChange?.(item[displayField] || "");
+              onSelect?.(item);
+              setOpen(false);
+              setActiveIdx(-1);
+            }
+            else if (e.key === "Escape") { setOpen(false); setActiveIdx(-1); }
+          }}
           placeholder={placeholder}
           className="pl-8 pr-8 h-9 text-sm"
         />
@@ -95,7 +111,7 @@ export default function SmartAutocomplete({
       </div>
       {results.length > 0 && (
         <div className="absolute z-50 w-full mt-1 rounded-lg border border-border bg-card shadow-xl max-h-[240px] overflow-y-auto">
-          {results.map(({ item, score }) => (
+          {results.map(({ item, score }, idx) => (
             <button
               key={item.id || item[displayField]}
               onMouseDown={() => {
@@ -103,8 +119,9 @@ export default function SmartAutocomplete({
                 onChange?.(item[displayField] || "");
                 onSelect?.(item);
                 setOpen(false);
+                setActiveIdx(-1);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/30 flex items-center gap-2"
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/30 flex items-center gap-2 ${idx === activeIdx ? "bg-muted/40" : ""}`}
             >
               <span>{highlight(item[displayField] || "", query)}</span>
               {item.code && <span className="text-[10px] text-muted-foreground font-mono">{item.code}</span>}

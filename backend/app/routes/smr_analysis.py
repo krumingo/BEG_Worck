@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid
 import copy
+import os
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -917,3 +918,125 @@ async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
     }
     await db.smr_analyses.insert_one(analysis)
     return {k: v for k, v in analysis.items() if k != "_id"}
+
+
+# ── AI Material/Labor Breakdown ──
+
+@router.post("/smr-analyses/{analysis_id}/ai-breakdown")
+async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user)):
+    """AI breakdown of mixed-price lines into material + labor components."""
+    org_id = user["org_id"]
+    analysis = await db.smr_analyses.find_one({"id": analysis_id, "org_id": org_id}, {"_id": 0})
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    lines = analysis.get("lines", [])
+    if not lines:
+        return {"processed": 0, "message": "No lines to process"}
+
+    # Check for cached results
+    cache_key = f"ai_breakdown_{analysis_id}"
+    cached = await db.ai_cache.find_one({"key": cache_key})
+    if cached and cached.get("results"):
+        # Apply cached results
+        for result in cached["results"]:
+            for ln in lines:
+                if ln.get("line_id") == result.get("line_id") and not ln.get("manual_override"):
+                    ln["material_cena_per_unit"] = result.get("material_cena", 0)
+                    ln["trud_cena_per_unit"] = result.get("trud_cena", 0)
+                    ln["ai_uverenost"] = result.get("uverenost", 0)
+                    ln["ai_beleshka"] = result.get("beleshka", "")
+                    ln["ai_processed_at"] = cached.get("created_at")
+        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines}})
+        return {"processed": len(cached["results"]), "source": "cache"}
+
+    # Build prompt for AI
+    lines_for_ai = []
+    for ln in lines:
+        if ln.get("manual_override"):
+            continue
+        ed_cena = ln.get("unit_price", 0) or ln.get("total_per_unit", 0) or 0
+        if ed_cena <= 0:
+            continue
+        lines_for_ai.append({
+            "line_id": ln.get("line_id"),
+            "opisanie": ln.get("smr_type", ""),
+            "edinica": ln.get("unit", ""),
+            "ed_cena": ed_cena,
+        })
+
+    if not lines_for_ai:
+        return {"processed": 0, "message": "No lines need breakdown"}
+
+    # Call AI (Claude via emergent integrations)
+    try:
+        from emergentintegrations.llm.chat import chat, UserMessage
+        prompt = f"""Дадени са СМР редове от строителна оферта. За всеки ред предложи разбивка на единичната цена на МАТЕРИАЛ и ТРУД.
+Базирай се на пазарни цени за България 2026.
+Върни JSON масив с полета: line_id, material_cena, trud_cena, uverenost (0-100), beleshka.
+material_cena + trud_cena трябва да = ed_cena.
+
+Редове:
+{str(lines_for_ai[:30])}"""  # Limit to 30 lines per call
+
+        response = await chat(
+            api_key=os.environ.get("EMERGENT_API_KEY", ""),
+            model="claude-sonnet-4-20250514",
+            messages=[UserMessage(content=prompt)],
+            max_tokens=2000,
+        )
+
+        # Parse AI response
+        import json as json_mod
+        text = response.content if hasattr(response, 'content') else str(response)
+        # Extract JSON from response
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start >= 0 and end > start:
+            results = json_mod.loads(text[start:end])
+        else:
+            results = []
+
+        # Apply results
+        now = datetime.now(timezone.utc).isoformat()
+        processed = 0
+        for result in results:
+            lid = result.get("line_id")
+            for ln in lines:
+                if ln.get("line_id") == lid and not ln.get("manual_override"):
+                    ln["material_cena_per_unit"] = round(float(result.get("material_cena", 0)), 2)
+                    ln["trud_cena_per_unit"] = round(float(result.get("trud_cena", 0)), 2)
+                    ln["ai_uverenost"] = int(result.get("uverenost", 50))
+                    ln["ai_beleshka"] = result.get("beleshka", "")
+                    ln["ai_processed_at"] = now
+                    processed += 1
+
+        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
+
+        # Cache results
+        await db.ai_cache.update_one(
+            {"key": cache_key},
+            {"$set": {"results": results, "created_at": now}},
+            upsert=True,
+        )
+
+        return {"processed": processed, "total_lines": len(lines_for_ai), "source": "ai"}
+    except Exception as e:
+        # Fallback: simple 60/40 split
+        now = datetime.now(timezone.utc).isoformat()
+        processed = 0
+        for ln in lines:
+            if ln.get("manual_override"):
+                continue
+            ed_cena = ln.get("unit_price", 0) or ln.get("total_per_unit", 0) or 0
+            if ed_cena > 0:
+                ln["material_cena_per_unit"] = round(ed_cena * 0.6, 2)
+                ln["trud_cena_per_unit"] = round(ed_cena * 0.4, 2)
+                ln["ai_uverenost"] = 30
+                ln["ai_beleshka"] = "Приблизителна разбивка 60/40 (AI недостъпен)"
+                ln["ai_processed_at"] = now
+                processed += 1
+
+        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
+        return {"processed": processed, "source": "fallback", "error": str(e)}
+

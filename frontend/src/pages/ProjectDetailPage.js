@@ -1035,15 +1035,20 @@ const OFFER_STATUS = {
 
 function ProjectOffersTab({ projectId, projectName }) {
   const [offers, setOffers] = useState([]);
+  const [analyses, setAnalyses] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   const loadOffers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await API.get(`/offers?project_id=${projectId}`);
-      setOffers(res.data?.items || res.data || []);
-    } catch { setOffers([]); }
+      const [offersRes, analysesRes] = await Promise.all([
+        API.get(`/offers?project_id=${projectId}`),
+        API.get(`/smr-analyses?project_id=${projectId}`).catch(() => ({ data: [] })),
+      ]);
+      setOffers(offersRes.data?.items || offersRes.data || []);
+      setAnalyses(analysesRes.data?.items || analysesRes.data || []);
+    } catch { setOffers([]); setAnalyses([]); }
     finally { setLoading(false); }
   }, [projectId]);
 
@@ -1164,6 +1169,23 @@ function ProjectOffersTab({ projectId, projectName }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* SMR Analyses linked to this project */}
+      {analyses.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-700/50 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground">Анализи на СМР ({analyses.length})</p>
+          {analyses.map(a => (
+            <div key={a.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{a.title || a.name || `Анализ от ${(a.created_at || "").slice(0, 10)}`}</p>
+                <p className="text-[10px] text-muted-foreground">{a.lines_count || 0} позиции · {(a.created_at || "").slice(0, 10)}</p>
+              </div>
+              <Badge variant="outline" className="text-[9px]">{a.status || "draft"}</Badge>
+              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => navigate(`/smr-analyses/${a.id}`)}>Преглед</Button>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -164,7 +164,16 @@ export default function InvoiceEditorPage() {
       ]);
       setProjects(projectsRes.data);
       setAccounts(accountsRes.data);
-      setAllClients((clientsRes.data?.items || clientsRes.data || []).map(c => ({ id: c.id, name: c.companyName || c.fullName || c.name || "", eik: c.eik || "" })));
+      setAllClients((clientsRes.data?.items || clientsRes.data || []).map(c => ({
+        id: c.id,
+        name: c.company_name || c.companyName || `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.fullName || c.name || "",
+        eik: c.eik || c.tax_id || "",
+        vat: c.vat_number || "",
+        address: c.address || "",
+        mol: c.mol || "",
+        email: c.email || "",
+        phone: c.phone || "",
+      })));
 
       if (!isNew) {
         const invoiceRes = await API.get(`/finance/invoices/${invoiceId}`);
@@ -585,6 +594,11 @@ export default function InvoiceEditorPage() {
                       if (client) {
                         setCounterpartyName(client.name);
                         if (client.eik) setCounterpartyEik(client.eik);
+                        if (client.vat) setCounterpartyVatNo(client.vat);
+                        if (client.address) setCounterpartyAddress(client.address);
+                        if (client.mol) setCounterpartyMol(client.mol);
+                        if (client.email) setCounterpartyEmail(client.email);
+                        if (client.phone) setCounterpartyPhone(client.phone);
                       }
                     }}
                     placeholder={clientType === "person" ? "Търси по име..." : "Търси клиент/контрагент..."}
