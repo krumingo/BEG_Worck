@@ -480,6 +480,33 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
             active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
             pids = [p["id"] for p in active_projs]
             members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+
+        # Also include workers from attendance_entries + daily reports (both schemas)
+        att_all = await db.attendance_entries.find(
+            {"org_id": org_id, "date": date}, {"_id": 0, "user_id": 1}
+        ).to_list(500)
+        for ae in att_all:
+            uid = ae.get("user_id")
+            if uid and not any(m.get("user_id") == uid for m in members):
+                members.append({"user_id": uid})
+
+        old_reps = await db.employee_daily_reports.find(
+            {"org_id": org_id, "date": date, "worker_id": {"$exists": True, "$ne": None}},
+            {"_id": 0, "worker_id": 1}
+        ).to_list(500)
+        for r in old_reps:
+            uid = r.get("worker_id")
+            if uid and not any(m.get("user_id") == uid for m in members):
+                members.append({"user_id": uid})
+
+        new_reps = await db.employee_daily_reports.find(
+            {"org_id": org_id, "report_date": date, "employee_id": {"$exists": True, "$ne": None}},
+            {"_id": 0, "employee_id": 1}
+        ).to_list(500)
+        for r in new_reps:
+            uid = r.get("employee_id")
+            if uid and not any(m.get("user_id") == uid for m in members):
+                members.append({"user_id": uid})
     seen = set()
     unique_user_ids = []
     for m in members:

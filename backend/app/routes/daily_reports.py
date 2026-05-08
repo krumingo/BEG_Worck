@@ -457,49 +457,92 @@ async def get_reports_table(
     approval_status: Optional[str] = None, day_status: Optional[str] = None,
     user: dict = Depends(require_m4),
 ):
-    """Central reports table with cost estimate"""
+    """Central reports table with cost estimate — supports BOTH old and new schema"""
     org_id = user["org_id"]
     q = {"org_id": org_id}
+
+    # Date filter: match both report_date (new) and date (old)
     if date_from or date_to:
-        q["report_date"] = {}
-        if date_from: q["report_date"]["$gte"] = date_from
-        if date_to: q["report_date"]["$lte"] = date_to
-    if project_id: q["day_entries.project_id"] = project_id
-    if employee_id: q["employee_id"] = employee_id
-    if approval_status: q["approval_status"] = approval_status
-    if day_status: q["day_status"] = day_status
+        date_q_new = {}
+        date_q_old = {}
+        if date_from:
+            date_q_new["$gte"] = date_from
+            date_q_old["$gte"] = date_from
+        if date_to:
+            date_q_new["$lte"] = date_to
+            date_q_old["$lte"] = date_to
+        q["$or"] = [{"report_date": date_q_new}, {"date": date_q_old}]
 
-    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort("report_date", -1).to_list(500)
+    # Project filter: match both day_entries.project_id (new) and project_id (old)
+    if project_id:
+        proj_or = [{"day_entries.project_id": project_id}, {"project_id": project_id}]
+        if "$or" in q:
+            q = {"$and": [{"org_id": org_id}, {"$or": q["$or"]}, {"$or": proj_or}]}
+        else:
+            q["$or"] = proj_or
 
-    # Load employee names + profiles
-    emp_ids = list(set(r["employee_id"] for r in reports))
+    # Employee filter: match both employee_id (new) and worker_id (old)
+    if employee_id:
+        emp_or = [{"employee_id": employee_id}, {"worker_id": employee_id}]
+        if "$and" in q:
+            q["$and"].append({"$or": emp_or})
+        elif "$or" in q:
+            q = {"$and": [{"org_id": org_id}, {"$or": q.pop("$or")}, {"$or": emp_or}]}
+        else:
+            q["$or"] = emp_or
+
+    if approval_status:
+        if "$and" in q:
+            q["$and"].append({"approval_status": approval_status})
+        else:
+            q["approval_status"] = approval_status
+    if day_status:
+        if "$and" in q:
+            q["$and"].append({"day_status": day_status})
+        else:
+            q["day_status"] = day_status
+
+    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort([("report_date", -1), ("date", -1)]).to_list(500)
+
+    # Normalize: extract emp_id from either schema
+    emp_ids = list(set(r.get("employee_id") or r.get("worker_id", "") for r in reports if r.get("employee_id") or r.get("worker_id")))
     users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
 
     profiles = await db.employee_profiles.find({"user_id": {"$in": emp_ids}}, {"_id": 0, "user_id": 1, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
     profile_map = {p["user_id"]: p for p in profiles}
 
-    # Load project codes
+    # Load project codes from both schemas
     proj_ids = set()
     for r in reports:
         for e in r.get("day_entries", []):
-            if e.get("project_id"): proj_ids.add(e["project_id"])
+            if e.get("project_id"):
+                proj_ids.add(e["project_id"])
+        if r.get("project_id"):
+            proj_ids.add(r["project_id"])
     projects = await db.projects.find({"id": {"$in": list(proj_ids)}}, {"_id": 0, "id": 1, "code": 1}).to_list(100)
     proj_map = {p["id"]: p["code"] for p in projects}
 
     rows = []
     for r in reports:
-        emp_id = r["employee_id"]
+        # Normalize fields from either schema
+        emp_id = r.get("employee_id") or r.get("worker_id", "")
+        if not emp_id:
+            continue
+        rep_date = r.get("report_date") or r.get("date", "")
+        total_hours = r.get("total_hours") if r.get("total_hours") is not None else float(r.get("hours", 0) or 0)
+        day_entries = r.get("day_entries", [])
+        if not day_entries and r.get("project_id"):
+            day_entries = [{"project_id": r["project_id"], "smr_type": r.get("smr_type", ""), "hours_worked": total_hours}]
+        day_status_val = r.get("day_status", "WORKING" if total_hours > 0 else "")
+        approval_status_val = r.get("approval_status") or r.get("status", "Draft")
+
         prof = profile_map.get(emp_id, {})
         pay_type = prof.get("pay_type", "Monthly")
-
-        # Compute hourly rate
         hr_rate = prof.get("hourly_rate") or 0
         if not hr_rate and prof.get("monthly_salary") and prof.get("working_days_per_month") and prof.get("standard_hours_per_day"):
             hr_rate = round(prof["monthly_salary"] / prof["working_days_per_month"] / prof["standard_hours_per_day"], 2)
 
-        total_hours = r.get("total_hours", 0)
-        
         if pay_type == "Akord":
             cost_estimate = None
             cost_basis = "akord"
@@ -510,23 +553,22 @@ async def get_reports_table(
             cost_estimate = None
             cost_basis = "unavailable"
 
-        # Project codes for this report
-        pcodes = list(set(proj_map.get(e.get("project_id", ""), "") for e in r.get("day_entries", []) if e.get("project_id")))
+        pcodes = list(set(proj_map.get(e.get("project_id", ""), "") for e in day_entries if e.get("project_id")))
 
         rows.append({
             "id": r["id"],
-            "report_date": r["report_date"],
+            "report_date": rep_date,
             "employee_id": emp_id,
-            "employee_name": name_map.get(emp_id, ""),
-            "day_status": r["day_status"],
-            "approval_status": r["approval_status"],
+            "employee_name": name_map.get(emp_id, r.get("worker_name", "")),
+            "day_status": day_status_val,
+            "approval_status": approval_status_val,
             "project_codes": pcodes,
             "pay_type": pay_type,
             "total_hours": total_hours,
             "cost_estimate": cost_estimate,
             "hourly_rate": hr_rate,
             "cost_basis": cost_basis,
-            "entries_count": len(r.get("day_entries", [])),
+            "entries_count": len(day_entries),
         })
 
     return {"rows": rows, "total": len(rows), "currency": "EUR"}
