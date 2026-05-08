@@ -1,0 +1,1042 @@
+"""
+Routes - SMR Analysis (Анализ на СМР).
+Full cost analysis with materials, labor, logistics, markup, risk.
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional, List
+from datetime import datetime, timezone
+from pydantic import BaseModel
+import uuid
+import copy
+import os
+
+from app.db import db
+from app.deps.auth import get_current_user
+from app.deps.modules import require_m2
+from app.services.ai_proposal import rule_based_proposal, get_ai_proposal
+
+router = APIRouter(tags=["SMR Analysis"])
+
+
+# ── Pydantic Models ────────────────────────────────────────────────
+
+class AnalysisCreate(BaseModel):
+    project_id: str
+    name: str
+    created_from: Optional[str] = None
+    created_from_type: Optional[str] = None  # missing_smr | offer
+
+
+class AnalysisUpdate(BaseModel):
+    name: Optional[str] = None
+
+
+class LineCreate(BaseModel):
+    smr_type: str
+    smr_subtype: Optional[str] = None
+    unit: str = "m2"
+    qty: float = 1
+    materials: Optional[list] = None
+    labor_price_per_unit: float = 0
+    logistics_pct: float = 10
+    markup_pct: float = 15
+    risk_pct: float = 5
+
+
+class LineUpdate(BaseModel):
+    smr_type: Optional[str] = None
+    smr_subtype: Optional[str] = None
+    unit: Optional[str] = None
+    qty: Optional[float] = None
+    materials: Optional[list] = None
+    labor_price_per_unit: Optional[float] = None
+    logistics_pct: Optional[float] = None
+    markup_pct: Optional[float] = None
+    risk_pct: Optional[float] = None
+
+
+class AISuggestRequest(BaseModel):
+    line_id: str
+    city: Optional[str] = None
+
+
+# ── Calculation Logic ──────────────────────────────────────────────
+
+def calc_material_cost(materials: list) -> float:
+    """Σ(unit_price × qty_per_unit × (1 + waste%) × (1 + logistics%))"""
+    total = 0
+    for m in (materials or []):
+        up = m.get("unit_price", 0) or 0
+        qpu = m.get("qty_per_unit", 0) or 0
+        waste = m.get("waste_pct", 0) or 0
+        raw = up * qpu * (1 + waste / 100)
+        total += raw
+    return round(total, 4)
+
+
+def calc_line(line: dict) -> dict:
+    """Recalculate all derived fields for a single line."""
+    materials = line.get("materials", [])
+    qty = line.get("qty", 1) or 1
+    logistics_pct = line.get("logistics_pct", 10) or 0
+    markup_pct = line.get("markup_pct", 15) or 0
+    risk_pct = line.get("risk_pct", 5) or 0
+    labor = line.get("labor_price_per_unit", 0) or 0
+
+    mat_raw = calc_material_cost(materials)
+    mat_with_logistics = round(mat_raw * (1 + logistics_pct / 100), 4)
+
+    total_cost = round(mat_with_logistics + labor, 4)
+    final_price = round(total_cost * (1 + markup_pct / 100) * (1 + risk_pct / 100), 2)
+    final_total = round(final_price * qty, 2)
+
+    line["material_cost_per_unit"] = round(mat_raw, 2)
+    line["total_cost_per_unit"] = round(total_cost, 2)
+    line["final_price_per_unit"] = final_price
+    line["final_total"] = final_total
+    return line
+
+
+def calc_totals(lines: list) -> dict:
+    """Compute analysis-level totals from all ACTIVE lines."""
+    material_total = 0
+    labor_total = 0
+    logistics_total = 0
+    cost_total = 0
+    markup_total = 0
+    risk_total = 0
+    grand_total = 0
+
+    for ln in lines:
+        if not ln.get("is_active", True):
+            continue
+        qty = ln.get("qty", 1) or 1
+        mat_raw = ln.get("material_cost_per_unit", 0) or 0
+        labor = ln.get("labor_price_per_unit", 0) or 0
+        logistics_pct = ln.get("logistics_pct", 10) or 0
+        markup_pct = ln.get("markup_pct", 15) or 0
+        risk_pct = ln.get("risk_pct", 5) or 0
+
+        mat_total_line = mat_raw * qty
+        lab_total_line = labor * qty
+        logistics_line = mat_raw * (logistics_pct / 100) * qty
+        cost_line = (mat_raw * (1 + logistics_pct / 100) + labor) * qty
+        cost_with_markup = cost_line * (1 + markup_pct / 100)
+        cost_full = cost_with_markup * (1 + risk_pct / 100)
+
+        material_total += mat_total_line
+        labor_total += lab_total_line
+        logistics_total += logistics_line
+        cost_total += cost_line
+        markup_total += cost_with_markup - cost_line
+        risk_total += cost_full - cost_with_markup
+        grand_total += cost_full
+
+    return {
+        "material_total": round(material_total, 2),
+        "labor_total": round(labor_total, 2),
+        "logistics_total": round(logistics_total, 2),
+        "cost_total": round(cost_total, 2),
+        "markup_total": round(markup_total, 2),
+        "risk_total": round(risk_total, 2),
+        "grand_total": round(grand_total, 2),
+    }
+
+
+# ── CRUD ───────────────────────────────────────────────────────────
+
+@router.post("/smr-analyses", status_code=201)
+async def create_analysis(data: AnalysisCreate, user: dict = Depends(require_m2)):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Auto-increment version within project
+    last = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": data.project_id},
+        {"_id": 0, "version": 1},
+        sort=[("version", -1)],
+    )
+    version = (last["version"] + 1) if last else 1
+
+    now = datetime.now(timezone.utc).isoformat()
+    analysis = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": data.project_id,
+        "project_name": project.get("name", ""),
+        "name": data.name,
+        "version": version,
+        "status": "draft",
+        "lines": [],
+        "totals": calc_totals([]),
+        "created_from": data.created_from,
+        "created_from_type": data.created_from_type,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+        "approved_by": None,
+        "approved_at": None,
+    }
+
+    # Pre-populate lines from source
+    if data.created_from and data.created_from_type == "missing_smr":
+        src = await db.missing_smr.find_one({"id": data.created_from, "org_id": user["org_id"]}, {"_id": 0})
+        if src:
+            line = {
+                "line_id": str(uuid.uuid4()),
+                "smr_type": src.get("smr_type") or src.get("activity_type") or "",
+                "smr_subtype": src.get("activity_subtype") or "",
+                "unit": src.get("unit", "m2"),
+                "qty": src.get("qty", 1),
+                "materials": [],
+                "material_cost_per_unit": 0,
+                "labor_price_per_unit": 0,
+                "logistics_pct": 10,
+                "markup_pct": 15,
+                "risk_pct": 5,
+                "total_cost_per_unit": 0,
+                "final_price_per_unit": 0,
+                "final_total": 0,
+            }
+            analysis["lines"] = [calc_line(line)]
+            analysis["totals"] = calc_totals(analysis["lines"])
+
+    await db.smr_analyses.insert_one(analysis)
+    return {k: v for k, v in analysis.items() if k != "_id"}
+
+
+@router.get("/smr-analyses")
+async def list_analyses(
+    project_id: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    user: dict = Depends(require_m2),
+):
+    from app.utils.pagination import paginate_query
+    query = {"org_id": user["org_id"]}
+    if project_id:
+        query["project_id"] = project_id
+    if status:
+        query["status"] = status
+    return await paginate_query(db.smr_analyses, query, page, page_size, "created_at", -1)
+
+
+@router.get("/smr-analyses/{analysis_id}")
+async def get_analysis(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return doc
+
+
+@router.put("/smr-analyses/{analysis_id}")
+async def update_analysis(analysis_id: str, data: AnalysisUpdate, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+    update = {}
+    if data.name is not None:
+        update["name"] = data.name
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one({"id": analysis_id}, {"$set": update})
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+# ── Line Management ────────────────────────────────────────────────
+
+@router.post("/smr-analyses/{analysis_id}/lines")
+async def add_line(analysis_id: str, data: LineCreate, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    line = {
+        "line_id": str(uuid.uuid4()),
+        "smr_type": data.smr_type,
+        "smr_subtype": data.smr_subtype or "",
+        "unit": data.unit,
+        "qty": data.qty,
+        "materials": data.materials or [],
+        "material_cost_per_unit": 0,
+        "labor_price_per_unit": data.labor_price_per_unit,
+        "logistics_pct": data.logistics_pct,
+        "markup_pct": data.markup_pct,
+        "risk_pct": data.risk_pct,
+        "total_cost_per_unit": 0,
+        "final_price_per_unit": 0,
+        "final_total": 0,
+    }
+    line = calc_line(line)
+    lines = doc.get("lines", []) + [line]
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+@router.put("/smr-analyses/{analysis_id}/lines/{line_id}")
+async def update_line(analysis_id: str, line_id: str, data: LineUpdate, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = doc.get("lines", [])
+    found = False
+    for ln in lines:
+        if ln["line_id"] == line_id:
+            for k, v in data.model_dump().items():
+                if v is not None:
+                    ln[k] = v
+            calc_line(ln)
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Line not found")
+
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+@router.delete("/smr-analyses/{analysis_id}/lines/{line_id}")
+async def delete_line(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = [ln for ln in doc.get("lines", []) if ln["line_id"] != line_id]
+    if len(lines) == len(doc.get("lines", [])):
+        raise HTTPException(status_code=404, detail="Line not found")
+
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+# ── Recalculate ────────────────────────────────────────────────────
+
+@router.post("/smr-analyses/{analysis_id}/recalculate")
+async def recalculate(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    lines = doc.get("lines", [])
+    for ln in lines:
+        calc_line(ln)
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+# ── AI Suggest ─────────────────────────────────────────────────────
+
+@router.post("/smr-analyses/{analysis_id}/ai-suggest")
+async def ai_suggest(analysis_id: str, data: AISuggestRequest, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = doc.get("lines", [])
+    target = None
+    for ln in lines:
+        if ln["line_id"] == data.line_id:
+            target = ln
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="Line not found")
+
+    title = target["smr_type"]
+    unit = target.get("unit", "m2")
+    qty = target.get("qty", 1)
+
+    proposal = await get_ai_proposal(title, unit, qty, data.city, user["org_id"])
+
+    # Map AI materials to analysis format
+    ai_materials = []
+    for mat in proposal.get("materials", []):
+        ai_materials.append({
+            "name": mat.get("name", ""),
+            "unit": mat.get("unit", ""),
+            "qty_per_unit": mat.get("qty_per_unit") or mat.get("estimated_qty", 0) / max(qty, 1) if mat.get("estimated_qty") else 0,
+            "unit_price": 0,
+            "waste_pct": 5,
+            "source": "ai",
+        })
+
+    target["materials"] = ai_materials
+    target["labor_price_per_unit"] = proposal["pricing"]["labor_price_per_unit"]
+    # Set material unit prices from AI total
+    if ai_materials:
+        mat_per_unit = proposal["pricing"]["material_price_per_unit"]
+        # Distribute across materials proportionally
+        for m in ai_materials:
+            if m["qty_per_unit"] > 0:
+                m["unit_price"] = round(mat_per_unit / len(ai_materials), 2)
+
+    calc_line(target)
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    updated = await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return {"analysis": updated, "proposal": proposal}
+
+
+# ── Approve / Lock ─────────────────────────────────────────────────
+
+@router.post("/smr-analyses/{analysis_id}/approve")
+async def approve_analysis(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] not in ["draft"]:
+        raise HTTPException(status_code=400, detail="Only draft analyses can be approved")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {
+            "status": "approved",
+            "approved_by": user["id"],
+            "approved_by_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+            "approved_at": now,
+            "updated_at": now,
+        }},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+@router.post("/smr-analyses/{analysis_id}/lock")
+async def lock_analysis(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] not in ["draft", "approved"]:
+        raise HTTPException(status_code=400, detail="Cannot lock from current status")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"status": "locked", "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+# ── Snapshot (version+1 copy) ──────────────────────────────────────
+
+@router.post("/smr-analyses/{analysis_id}/snapshot")
+async def snapshot_analysis(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    last = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": doc["project_id"]},
+        {"_id": 0, "version": 1},
+        sort=[("version", -1)],
+    )
+    new_version = (last["version"] + 1) if last else 1
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_doc = copy.deepcopy(doc)
+    new_doc["id"] = str(uuid.uuid4())
+    new_doc["version"] = new_version
+    new_doc["status"] = "draft"
+    new_doc["name"] = f"{doc['name']} (v{new_version})"
+    new_doc["created_at"] = now
+    new_doc["updated_at"] = now
+    new_doc["created_by"] = user["id"]
+    new_doc["approved_by"] = None
+    new_doc["approved_at"] = None
+    # Give new line_ids
+    for ln in new_doc.get("lines", []):
+        ln["line_id"] = str(uuid.uuid4())
+
+    await db.smr_analyses.insert_one(new_doc)
+    return {k: v for k, v in new_doc.items() if k != "_id"}
+
+
+# ── Compare Versions ───────────────────────────────────────────────
+
+@router.get("/smr-analyses/{analysis_id}/compare/{version}")
+async def compare_versions(analysis_id: str, version: int, user: dict = Depends(require_m2)):
+    current = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not current:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    other = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": current["project_id"], "version": version},
+        {"_id": 0},
+    )
+    if not other:
+        raise HTTPException(status_code=404, detail=f"Version {version} not found")
+
+    return {
+        "current": current,
+        "compare": other,
+        "diff": {
+            "grand_total_diff": round(
+                (current.get("totals", {}).get("grand_total", 0) or 0)
+                - (other.get("totals", {}).get("grand_total", 0) or 0), 2
+            ),
+            "lines_current": len(current.get("lines", [])),
+            "lines_compare": len(other.get("lines", [])),
+        },
+    }
+
+
+# ── To Offer Bridge ───────────────────────────────────────────────
+
+@router.post("/smr-analyses/{analysis_id}/to-offer")
+async def to_offer(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    project = await db.projects.find_one(
+        {"id": doc["project_id"], "org_id": user["org_id"]},
+        {"_id": 0, "code": 1, "name": 1},
+    )
+    last_offer = await db.offers.find_one(
+        {"org_id": user["org_id"]}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)]
+    )
+    num = 1
+    if last_offer and last_offer.get("offer_no"):
+        try:
+            num = int(last_offer["offer_no"].split("-")[1]) + 1
+        except Exception:
+            pass
+    offer_no = f"OFF-{num:04d}"
+
+    now = datetime.now(timezone.utc).isoformat()
+    offer_lines = []
+    for i, ln in enumerate(doc.get("lines", [])):
+        offer_lines.append({
+            "id": str(uuid.uuid4()),
+            "activity_code": None,
+            "activity_name": ln.get("smr_type", ""),
+            "unit": ln.get("unit", "m2"),
+            "qty": ln.get("qty", 1),
+            "material_unit_cost": ln.get("material_cost_per_unit", 0),
+            "labor_unit_cost": ln.get("labor_price_per_unit", 0),
+            "labor_hours_per_unit": None,
+            "line_material_cost": round((ln.get("material_cost_per_unit", 0) or 0) * (ln.get("qty", 1) or 1), 2),
+            "line_labor_cost": round((ln.get("labor_price_per_unit", 0) or 0) * (ln.get("qty", 1) or 1), 2),
+            "line_total": ln.get("final_total", 0),
+            "note": f"Markup {ln.get('markup_pct', 15)}%, Risk {ln.get('risk_pct', 5)}%",
+            "sort_order": i,
+            "activity_type": ln.get("smr_type", "Общо"),
+            "activity_subtype": ln.get("smr_subtype", ""),
+        })
+
+    subtotal = sum(l["line_total"] for l in offer_lines)
+    vat = round(subtotal * 0.2, 2)
+
+    offer = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": doc["project_id"],
+        "offer_no": offer_no,
+        "title": f"От анализ: {doc['name']}",
+        "offer_type": "smr_analysis",
+        "status": "Draft",
+        "version": 1,
+        "parent_offer_id": None,
+        "currency": "EUR",
+        "vat_percent": 20.0,
+        "lines": offer_lines,
+        "notes": f"Генерирана от Анализ на СМР v{doc['version']}",
+        "subtotal": round(subtotal, 2),
+        "vat_amount": vat,
+        "total": round(subtotal + vat, 2),
+        "created_at": now,
+        "updated_at": now,
+        "sent_at": None,
+        "accepted_at": None,
+        "source_analysis_id": analysis_id,
+    }
+    await db.offers.insert_one(offer)
+
+    return {"ok": True, "offer_id": offer["id"], "offer_no": offer_no}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# KSS EXTENSIONS: Excel Import/Export, Toggle, Bulk, Diff
+# ═══════════════════════════════════════════════════════════════════
+
+from fastapi import UploadFile, File, Form
+from fastapi.responses import Response
+from app.services.excel_import import import_kss_from_excel, export_kss_to_excel
+
+
+class BulkUpdateRequest(BaseModel):
+    action: str  # adjust_price | adjust_qty | toggle
+    filter: Optional[dict] = None
+    adjustment: Optional[dict] = None
+    active: Optional[bool] = None
+
+
+# ── Import Excel ───────────────────────────────────────────────────
+
+@router.post("/smr-analyses/import-excel", status_code=201)
+async def import_excel(
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    name: str = Form(""),
+    user: dict = Depends(require_m2),
+):
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    content = await file.read()
+    result = await import_kss_from_excel(content, user["org_id"], project_id, user["id"], project.get("name", ""))
+
+    if not result["lines"]:
+        raise HTTPException(status_code=400, detail="No valid lines found in Excel file")
+
+    # Recalculate lines
+    for ln in result["lines"]:
+        calc_line(ln)
+
+    now = datetime.now(timezone.utc).isoformat()
+    last = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": project_id},
+        {"_id": 0, "version": 1}, sort=[("version", -1)],
+    )
+    version = (last["version"] + 1) if last else 1
+
+    analysis = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": project_id,
+        "project_name": project.get("name", ""),
+        "name": name or f"КСС Import - {file.filename}",
+        "version": version,
+        "status": "draft",
+        "analysis_type": "kss",
+        "is_kss": True,
+        "imported_from": "excel",
+        "import_filename": file.filename,
+        "lines": result["lines"],
+        "totals": calc_totals(result["lines"]),
+        "created_from": None,
+        "created_from_type": None,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+        "approved_by": None,
+        "approved_at": None,
+    }
+    await db.smr_analyses.insert_one(analysis)
+
+    return {
+        "analysis_id": analysis["id"],
+        "lines_imported": result["lines_count"],
+        "skipped": result["skipped_count"],
+        "warnings": result["warnings"],
+    }
+
+
+# ── Export Excel ───────────────────────────────────────────────────
+
+@router.get("/smr-analyses/{analysis_id}/export-excel")
+async def export_excel(analysis_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    xlsx_bytes = export_kss_to_excel(doc)
+    safe_name = "".join(c if c.isascii() and c.isalnum() or c in "-_." else "_" for c in doc.get("name", "export"))
+    filename = f"KSS_{safe_name}.xlsx"
+
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ── Toggle Line Active/Inactive ────────────────────────────────────
+
+@router.put("/smr-analyses/{analysis_id}/lines/{line_id}/toggle")
+async def toggle_line(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = doc.get("lines", [])
+    found = False
+    for ln in lines:
+        if ln["line_id"] == line_id:
+            ln["is_active"] = not ln.get("is_active", True)
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Line not found")
+
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+
+
+# ── Bulk Update ────────────────────────────────────────────────────
+
+@router.put("/smr-analyses/{analysis_id}/bulk-update")
+async def bulk_update(analysis_id: str, data: BulkUpdateRequest, user: dict = Depends(require_m2)):
+    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if doc["status"] == "locked":
+        raise HTTPException(status_code=400, detail="Analysis is locked")
+
+    lines = doc.get("lines", [])
+    filt = data.filter or {}
+    smr_filter = filt.get("smr_type", "").lower() if filt.get("smr_type") else None
+    affected = 0
+
+    for ln in lines:
+        # Apply filter
+        if smr_filter and smr_filter not in (ln.get("smr_type") or "").lower():
+            continue
+
+        if data.action == "toggle":
+            ln["is_active"] = data.active if data.active is not None else not ln.get("is_active", True)
+            affected += 1
+
+        elif data.action == "adjust_price" and data.adjustment:
+            adj = data.adjustment
+            if "markup_pct" in adj:
+                val = str(adj["markup_pct"])
+                if val.startswith("+"):
+                    ln["markup_pct"] = (ln.get("markup_pct") or 0) + float(val[1:])
+                elif val.startswith("-"):
+                    ln["markup_pct"] = max((ln.get("markup_pct") or 0) - float(val[1:]), 0)
+                else:
+                    ln["markup_pct"] = float(val)
+            if "labor_price_per_unit" in adj:
+                val = str(adj["labor_price_per_unit"])
+                if val.startswith("*"):
+                    ln["labor_price_per_unit"] = round((ln.get("labor_price_per_unit") or 0) * float(val[1:]), 2)
+                else:
+                    ln["labor_price_per_unit"] = float(val)
+            calc_line(ln)
+            affected += 1
+
+        elif data.action == "adjust_qty" and data.adjustment:
+            adj = data.adjustment
+            val = str(adj.get("qty", "1"))
+            if val.startswith("*"):
+                ln["qty"] = round((ln.get("qty") or 1) * float(val[1:]), 2)
+            elif val.startswith("+"):
+                ln["qty"] = round((ln.get("qty") or 1) + float(val[1:]), 2)
+            else:
+                ln["qty"] = float(val)
+            calc_line(ln)
+            affected += 1
+
+    totals = calc_totals(lines)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.smr_analyses.update_one(
+        {"id": analysis_id},
+        {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
+    )
+    updated = await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return {"ok": True, "affected": affected, "analysis": updated}
+
+
+# ── Extended Diff ──────────────────────────────────────────────────
+
+@router.get("/smr-analyses/{analysis_id}/diff/{version}")
+async def diff_versions(analysis_id: str, version: int, user: dict = Depends(require_m2)):
+    current = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not current:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    other = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": current["project_id"], "version": version},
+        {"_id": 0},
+    )
+    if not other:
+        raise HTTPException(status_code=404, detail=f"Version {version} not found")
+
+    # Build line maps by smr_type for comparison
+    cur_lines = {ln.get("smr_type", ""): ln for ln in current.get("lines", [])}
+    oth_lines = {ln.get("smr_type", ""): ln for ln in other.get("lines", [])}
+
+    added = []
+    removed = []
+    changed = []
+
+    for key, ln in cur_lines.items():
+        if key not in oth_lines:
+            added.append({"smr_type": key, "qty": ln.get("qty"), "final_total": ln.get("final_total")})
+        else:
+            oln = oth_lines[key]
+            diffs = []
+            for field in ["qty", "labor_price_per_unit", "material_cost_per_unit", "markup_pct", "risk_pct", "final_total"]:
+                ov = oln.get(field, 0) or 0
+                nv = ln.get(field, 0) or 0
+                if abs(ov - nv) > 0.01:
+                    diffs.append({"field": field, "old": ov, "new": nv})
+            if diffs:
+                changed.append({"smr_type": key, "changes": diffs})
+
+    for key in oth_lines:
+        if key not in cur_lines:
+            oln = oth_lines[key]
+            removed.append({"smr_type": key, "qty": oln.get("qty"), "final_total": oln.get("final_total")})
+
+    old_total = other.get("totals", {}).get("grand_total", 0)
+    new_total = current.get("totals", {}).get("grand_total", 0)
+    change_pct = round((new_total - old_total) / old_total * 100, 1) if old_total > 0 else 0
+
+    return {
+        "added_lines": added,
+        "removed_lines": removed,
+        "changed_lines": changed,
+        "total_diff": {
+            "old_total": old_total,
+            "new_total": new_total,
+            "change_amount": round(new_total - old_total, 2),
+            "change_pct": change_pct,
+        },
+    }
+
+
+# ── Create KSS from Offer ─────────────────────────────────────────
+
+@router.post("/smr-analyses/from-offer/{offer_id}", status_code=201)
+async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
+    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+
+    project_id = offer["project_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
+
+    now = datetime.now(timezone.utc).isoformat()
+    last = await db.smr_analyses.find_one(
+        {"org_id": user["org_id"], "project_id": project_id},
+        {"_id": 0, "version": 1}, sort=[("version", -1)],
+    )
+    version = (last["version"] + 1) if last else 1
+
+    lines = []
+    for i, oln in enumerate(offer.get("lines", [])):
+        mat = oln.get("material_unit_cost", 0) or 0
+        lab = oln.get("labor_unit_cost", 0) or 0
+        qty = oln.get("qty", 1) or 1
+        total_per = round(mat + lab, 2)
+        line = {
+            "line_id": str(uuid.uuid4()),
+            "smr_type": oln.get("activity_name", ""),
+            "smr_subtype": oln.get("activity_subtype", ""),
+            "unit": oln.get("unit", "m2"),
+            "qty": qty,
+            "materials": [],
+            "material_cost_per_unit": mat,
+            "labor_price_per_unit": lab,
+            "logistics_pct": 0,
+            "markup_pct": 0,
+            "risk_pct": 0,
+            "total_cost_per_unit": total_per,
+            "final_price_per_unit": total_per,
+            "final_total": round(total_per * qty, 2),
+            "is_active": True,
+            "original_qty": qty,
+            "original_price": total_per,
+            "line_order": i,
+        }
+        lines.append(line)
+
+    analysis = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": project_id,
+        "project_name": project.get("name", "") if project else "",
+        "name": f"КСС от {offer.get('offer_no', offer_id[:8])}",
+        "version": version,
+        "status": "draft",
+        "analysis_type": "kss",
+        "is_kss": True,
+        "imported_from": "offer",
+        "lines": lines,
+        "totals": calc_totals(lines),
+        "created_from": offer_id,
+        "created_from_type": "offer",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+        "approved_by": None,
+        "approved_at": None,
+    }
+    await db.smr_analyses.insert_one(analysis)
+    return {k: v for k, v in analysis.items() if k != "_id"}
+
+
+# ── AI Material/Labor Breakdown ──
+
+@router.post("/smr-analyses/{analysis_id}/ai-breakdown")
+async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user)):
+    """AI breakdown of mixed-price lines into material + labor components."""
+    org_id = user["org_id"]
+    analysis = await db.smr_analyses.find_one({"id": analysis_id, "org_id": org_id}, {"_id": 0})
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    lines = analysis.get("lines", [])
+    if not lines:
+        return {"processed": 0, "message": "No lines to process"}
+
+    # Check for cached results
+    cache_key = f"ai_breakdown_{analysis_id}"
+    cached = await db.ai_cache.find_one({"key": cache_key})
+    if cached and cached.get("results"):
+        # Apply cached results
+        for result in cached["results"]:
+            for ln in lines:
+                if ln.get("line_id") == result.get("line_id") and not ln.get("manual_override"):
+                    ln["material_cena_per_unit"] = result.get("material_cena", 0)
+                    ln["trud_cena_per_unit"] = result.get("trud_cena", 0)
+                    ln["ai_uverenost"] = result.get("uverenost", 0)
+                    ln["ai_beleshka"] = result.get("beleshka", "")
+                    ln["ai_processed_at"] = cached.get("created_at")
+        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines}})
+        return {"processed": len(cached["results"]), "source": "cache"}
+
+    # Build prompt for AI
+    lines_for_ai = []
+    for ln in lines:
+        if ln.get("manual_override"):
+            continue
+        ed_cena = ln.get("unit_price", 0) or ln.get("total_per_unit", 0) or 0
+        if ed_cena <= 0:
+            continue
+        lines_for_ai.append({
+            "line_id": ln.get("line_id"),
+            "opisanie": ln.get("smr_type", ""),
+            "edinica": ln.get("unit", ""),
+            "ed_cena": ed_cena,
+        })
+
+    if not lines_for_ai:
+        return {"processed": 0, "message": "No lines need breakdown"}
+
+    # Call AI (Claude via emergent integrations)
+    try:
+        from emergentintegrations.llm.chat import chat, UserMessage
+        prompt = f"""Дадени са СМР редове от строителна оферта. За всеки ред предложи разбивка на единичната цена на МАТЕРИАЛ и ТРУД.
+Базирай се на пазарни цени за България 2026.
+Върни JSON масив с полета: line_id, material_cena, trud_cena, uverenost (0-100), beleshka.
+material_cena + trud_cena трябва да = ed_cena.
+
+Редове:
+{str(lines_for_ai[:30])}"""  # Limit to 30 lines per call
+
+        response = await chat(
+            api_key=os.environ.get("EMERGENT_API_KEY", ""),
+            model="claude-sonnet-4-20250514",
+            messages=[UserMessage(content=prompt)],
+            max_tokens=2000,
+        )
+
+        # Parse AI response
+        import json as json_mod
+        text = response.content if hasattr(response, 'content') else str(response)
+        # Extract JSON from response
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start >= 0 and end > start:
+            results = json_mod.loads(text[start:end])
+        else:
+            results = []
+
+        # Apply results
+        now = datetime.now(timezone.utc).isoformat()
+        processed = 0
+        for result in results:
+            lid = result.get("line_id")
+            for ln in lines:
+                if ln.get("line_id") == lid and not ln.get("manual_override"):
+                    ln["material_cena_per_unit"] = round(float(result.get("material_cena", 0)), 2)
+                    ln["trud_cena_per_unit"] = round(float(result.get("trud_cena", 0)), 2)
+                    ln["ai_uverenost"] = int(result.get("uverenost", 50))
+                    ln["ai_beleshka"] = result.get("beleshka", "")
+                    ln["ai_processed_at"] = now
+                    processed += 1
+
+        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
+
+        # Cache results
+        await db.ai_cache.update_one(
+            {"key": cache_key},
+            {"$set": {"results": results, "created_at": now}},
+            upsert=True,
+        )
+
+        return {"processed": processed, "total_lines": len(lines_for_ai), "source": "ai"}
+    except Exception as e:
+        # Fallback: simple 60/40 split
+        now = datetime.now(timezone.utc).isoformat()
+        processed = 0
+        for ln in lines:
+            if ln.get("manual_override"):
+                continue
+            ed_cena = ln.get("unit_price", 0) or ln.get("total_per_unit", 0) or 0
+            if ed_cena > 0:
+                ln["material_cena_per_unit"] = round(ed_cena * 0.6, 2)
+                ln["trud_cena_per_unit"] = round(ed_cena * 0.4, 2)
+                ln["ai_uverenost"] = 30
+                ln["ai_beleshka"] = "Приблизителна разбивка 60/40 (AI недостъпен)"
+                ln["ai_processed_at"] = now
+                processed += 1
+
+        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
+        return {"processed": processed, "source": "fallback", "error": str(e)}
+

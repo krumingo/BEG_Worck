@@ -1,0 +1,89 @@
+{
+  "summary": "Complete frontend testing of Additional Offer Detail Screen changes. All 9 features verified: no sidebar for extra offers (full width), horizontal summary strip with source badge, Location column, full SMR text, grouping default OFF, main offers retain sidebar, unified header badges. Bulgarian language throughout.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_34.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Line 635-651: Summary strip correctly renders only for offer.offer_type === 'extra' with 'Източник: Допълнителни СМР' badge",
+    "Line 653-655: Conditional grid layout: full width for extra offers, 3/4+1/4 for main offers",
+    "Line 766: Location column header conditionally rendered for extra offers",
+    "Lines 883-886 and 984-987: Location extraction using line.note?.split('Локация:')[1]?.split(';')[0]?.trim()",
+    "Lines 106-109 and 129-131: Grouping defaults to OFF for extra offers via offer.offer_type === 'extra' check",
+    "Lines 1069-1108: Right sidebar with totals card only rendered when offer.offer_type !== 'extra'",
+    "Lines 536-546: Unified header with offer_no + type badge (amber for extra, blue for main) + status badge"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "None needed - used existing offers OFF-0103 (extra) and OFF-0104 (main)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Extra offer detail screen fully tested. Key testids: offer-editor-page, summary-strip, grouping-toggle, totals-card, lines-table. OFF-0103 is extra offer with 3 lines showing Location column. OFF-0104 is main offer with sidebar. All features working as expected.",
+  "features_tested": {
+    "Extra offer shows NO right sidebar (full width for table)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "totals-card not present for extra offers, table uses full width"
+    },
+    "Extra offer has horizontal summary strip above KSS table with subtotal/VAT/total": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "summary-strip shows BGN 425.38 subtotal, BGN 85.08 VAT, BGN 510.46 total"
+    },
+    "Summary strip shows 'Източник: Допълнителни СМР' badge": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Badge visible with 'Създадена от 3 допълнителни СМР' text"
+    },
+    "KSS table has Location column for extra offers": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "ЛОКАЦИЯ column header present in table headers"
+    },
+    "Location column extracts location from line notes": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Shows 'Ет.1, Баня' and 'Ет.1, Спалня, Родителска' extracted from line.note"
+    },
+    "Full SMR text visible (not clipped to short fragments)": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Full text visible: 'Направа на Отвор за вентилатор с тухлен комин', 'Демонтаж на декоративни корнизи', etc."
+    },
+    "Grouping toggle defaults to OFF for extra offers": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "grouping-toggle has aria-checked=false, data-state=unchecked for extra offers"
+    },
+    "Main offers (offer_type!=extra) still have right sidebar": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "OFF-0104 shows 'Обобщение' sidebar with subtotal, VAT, total"
+    },
+    "Header shows offer_no + type badge + status badge unified": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "OFF-0103: 'Допълнителна' (amber) + 'Изпратена'; OFF-0104: 'Основна' (blue) + 'Чернова'"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs",
+    "has_mocked_apis": false
+  }
+}

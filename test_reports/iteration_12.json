@@ -1,0 +1,98 @@
+{
+  "summary": "M10 SaaS Billing & Self-Onboarding System testing completed. Backend: 15/15 tests passed (100%). Frontend: All billing pages working with Bulgarian i18n. Mock Stripe checkout working correctly. Key flows tested: public signup with trial, plan selection, mock upgrade to Pro, billing settings display.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": {
+    "backend": [
+      "GET /api/billing/plans - returns 3 plans (free, pro, enterprise) with correct structure",
+      "GET /api/billing/config - returns stripe_mock_mode and configuration status",
+      "POST /api/billing/signup - creates org, user, subscription with 14-day trial",
+      "POST /api/billing/signup - rejects duplicate email (400)",
+      "GET /api/billing/subscription - returns plan details, trial_active, trial_days_remaining",
+      "POST /api/billing/create-checkout-session - mock mode upgrades subscription directly",
+      "POST /api/billing/create-checkout-session - rejects free plan checkout (400)",
+      "POST /api/billing/create-checkout-session - rejects invalid plan (400)",
+      "GET /api/billing/check-module/{code} - M0 always allowed",
+      "GET /api/billing/check-module/{code} - module access based on current plan",
+      "POST /api/billing/create-portal-session - mock mode returns portal_url=null with message",
+      "POST /api/billing/webhook - accepts and processes webhook payload"
+    ],
+    "frontend": [
+      "Signup page (/signup) - all form fields present with data-testid attributes",
+      "Signup page - Bulgarian translations working (Създаване на акаунт, 14-дневен)",
+      "Signup flow - creates account and auto-redirects to dashboard",
+      "Plan selection page (/plans) - shows Free/Pro/Enterprise plans with pricing",
+      "Plan selection page - mock mode warning displayed",
+      "Plan selection page - Popular badge on Pro plan, module lists, limits",
+      "Plan selection page - Bulgarian translations (Изберете план, Популярен)",
+      "Billing settings page (/billing) - shows current plan with status",
+      "Billing settings page - shows included modules as badges (M0, M1, etc)",
+      "Billing settings page - shows plan limits (Users, Projects, Storage)",
+      "Billing settings page - mock mode warning with env vars listed",
+      "Mock checkout - clicking Pro plan upgrades and redirects to success page",
+      "Success page - shows payment success message in Bulgarian",
+      "Sidebar navigation - Фактуриране link navigates to /billing"
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_m10_billing.py",
+    "/app/test_reports/pytest/m10_billing_results.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all flows working)"
+  },
+
+  "test_credentials": {
+    "admin": "admin@begwork.com / admin123",
+    "new_signup": "Created during test with random email"
+  },
+
+  "seed_data_used": {
+    "organizations": "BEG_Work Demo (admin org), Test Company BG (signup test), Trial Test Corp (trial test)",
+    "subscriptions": "Admin org upgraded to Pro via mock checkout during testing"
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "M10 Billing & SaaS Self-Onboarding is fully functional. Stripe is in MOCK MODE - no real payments. Signup creates org with 14-day free trial. Mock checkout directly upgrades subscription. All pages have Bulgarian translations. Module gating via /api/billing/check-module/{code} works based on plan. Admin org was upgraded to Pro during testing.",
+
+  "mocked_apis": {
+    "stripe_checkout": "MOCK MODE - upgrades subscription directly without payment",
+    "stripe_portal": "MOCK MODE - returns portal_url=null",
+    "stripe_webhook": "Development mode - accepts without signature verification"
+  },
+
+  "verification_data": {
+    "signup_response_example": {
+      "token": "JWT token for auto-login",
+      "user": { "role": "Owner", "org_id": "uuid" },
+      "subscription": { "plan_id": "free", "status": "trialing", "days_remaining": 14 }
+    },
+    "plans": {
+      "free": { "price": 0, "modules": ["M0", "M1", "M3"], "trial_days": 14 },
+      "pro": { "price": 49, "modules": ["M0", "M1", "M2", "M3", "M4", "M5", "M9"] },
+      "enterprise": { "price": 149, "modules": "All modules" }
+    }
+  }
+}

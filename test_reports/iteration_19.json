@@ -1,0 +1,136 @@
+{
+  "summary": "Completed comprehensive testing of Real LLM Integration for AI Offers (Hybrid Mode). All 14 backend tests passed (100%). Frontend testing of ExtraWorkModal with city field, provider badge, explanation, city factor display all working correctly. LLM provider (GPT-4.1-mini via emergentintegrations) is being used successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_hybrid_ai_proposal.py",
+    "/app/test_reports/pytest/test_hybrid_ai_proposal_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Hybrid AI provider architecture is well-implemented with LLM primary and rule-based fallback",
+    "CITY_PRICE_FACTORS correctly applied: София=1.15, Пловдив=1.00, Варна=1.05, Бургас=1.02",
+    "Data capture fields (ai_provider_used, ai_confidence, ai_raw_response_summary) properly stored in drafts",
+    "Materials have reason field for each item as requested",
+    "Explanation text returned in AI proposals"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_hybrid_ai_proposal.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Created TEST_ prefixed drafts during backend testing (all cleaned up automatically)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Hybrid AI Proposal (LLM + Rule-based) fully tested. LLM uses OpenAI GPT-4.1-mini via emergentintegrations library with EMERGENT_LLM_KEY. Test file at /app/backend/tests/test_hybrid_ai_proposal.py covers: LLM provider detection, city-aware pricing (София=1.15, Пловдив=1.00, Варна=1.05, Бургас=1.02), data capture fields, materials with reason, explanation text. Frontend ExtraWorkModal accessible from ProjectDetailPage via 'Допълнително СМР' button (data-testid='new-extra-work-btn').",
+  "features_tested": {
+    "backend_ai_proposal_llm_provider": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "POST /api/extra-works/ai-proposal returns provider='llm' when LLM succeeds"
+    },
+    "backend_city_factor_sofia": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "city=София correctly returns city_factor=1.15"
+    },
+    "backend_city_factor_plovdiv": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "city=Пловдив returns city_factor=1.00 (null in response since no adjustment)"
+    },
+    "backend_city_factor_varna": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "city=Варна returns city_factor=1.05"
+    },
+    "backend_city_factor_burgas": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "city=Бургас returns city_factor=1.02"
+    },
+    "backend_explanation_field": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "AI proposal returns explanation text field with meaningful content"
+    },
+    "backend_materials_have_reason": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "All materials in AI proposal have reason field explaining their purpose"
+    },
+    "backend_unknown_text_llm_handling": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Unknown construction terms (e.g., 'Монтаж на PVC дограма') handled by LLM with reasonable confidence"
+    },
+    "backend_apply_ai_stores_provider_used": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "POST /api/extra-works/{id}/apply-ai stores ai_provider_used field ('llm' or 'rule-based')"
+    },
+    "backend_apply_ai_stores_confidence": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "apply-ai stores ai_confidence field (0-1 range)"
+    },
+    "backend_apply_ai_stores_raw_response_summary": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "apply-ai stores ai_raw_response_summary field with explanation text"
+    },
+    "frontend_extra_work_modal_city_field": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Extra Work Modal shows 'Град (за ценови ориентир)' input field with 'София' as default"
+    },
+    "frontend_ai_proposal_provider_badge": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "AI proposal shows 'AI (LLM)' badge in green when LLM provider used"
+    },
+    "frontend_ai_proposal_explanation_italics": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "AI proposal shows explanation text in italics below recognition section"
+    },
+    "frontend_ai_proposal_city_factor_display": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "AI proposal shows 'Град: София (коеф. 1.15)' when city factor applicable"
+    },
+    "frontend_ai_proposal_materials_section": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Materials section expandable, shows count 'Материали (5)'"
+    },
+    "frontend_ai_proposal_related_smr": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Свързани СМР' section shows related construction activities as badges"
+    },
+    "frontend_ai_proposal_pricing_breakdown": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Pricing breakdown shows Материал/ед, Труд/ед, Общо/ед, Прогноза общо"
+    }
+  },
+  "mocked_apis": {
+    "note": "NO MOCKED APIS - Real LLM integration active using OpenAI GPT-4.1-mini via emergentintegrations library",
+    "provider": "llm",
+    "fallback": "rule-based when LLM fails"
+  }
+}

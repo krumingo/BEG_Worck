@@ -1,0 +1,119 @@
+{
+  "summary": "BG Mode Sweep completed for i18n PATCH. All 8 updated pages (AdvancesPage, PayrollRunsPage, PayrollDetailPage, ModuleTogglesPage, CompanySettingsPage, AuditLogPage, ActivityCatalogPage, SiteAttendancePage) have been verified - ZERO English UI strings found. All labels, buttons, headers, table columns, status badges, filter options, and dialog content are correctly translated to Bulgarian. Language switcher works correctly.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "i18n_issues": []
+  },
+
+  "passed_tests": [
+    "AdvancesPage - Title 'Аванси и заеми', subtitle, button 'Нов аванс' in Bulgarian",
+    "AdvancesPage - Table headers: СЛУЖИТЕЛ, ТИП, ДАТА, СУМА, ОСТАТЪК, СТАТУС, БЕЛЕЖКА",
+    "AdvancesPage - Filter dropdowns: 'Отворен', 'Всички служители'",
+    "AdvancesPage - Type badge: 'Аванс', Status badge: 'Отворен'",
+    "AdvancesPage - Create dialog: 'Нов аванс / Заем', 'Служител', 'Тип', 'Сума', 'Дата на издаване', 'Бележка', 'Отказ', 'Създай'",
+    
+    "PayrollRunsPage - Title 'Ведомости', subtitle 'Генериране и управление на ведомости'",
+    "PayrollRunsPage - Button 'Нова ведомост', Filter 'Всички статуси'",
+    "PayrollRunsPage - Table headers: ПЕРИОД, ТИП, СТАТУС, ФИШОВЕ, ПЛАТЕНО, СЪЗДАДЕН НА, ДЕЙСТВИЯ",
+    "PayrollRunsPage - Period type: 'Месечно', Status badges: 'Финализирана', 'Чернова'",
+    "PayrollRunsPage - Create dialog: 'Нова ведомост', 'Тип период', 'Начало на период', 'Край на период'",
+    
+    "PayrollDetailPage - Back button 'Назад', Title 'Заплати: [period]'",
+    "PayrollDetailPage - Summary cards: 'Общо служители', 'Платено', 'Общо нето'",
+    "PayrollDetailPage - Table headers: СЛУЖИТЕЛ, ТИП ЗАПЛАЩАНЕ, ОСНОВА, УДРЪЖКИ, ПРИСПАДНАТИ АВАНСИ, НЕТО, СТАТУС, ДЕЙСТВИЯ",
+    "PayrollDetailPage - Pay types: 'Дневно', 'Почасово', with Bulgarian '(0 дни)', '(0час)'",
+    "PayrollDetailPage - Status badges: 'Платен', 'Финализиран', Action: 'Отбележи платено'",
+    
+    "ModuleTogglesPage - Title 'Модули', subtitle 'Активиране/деактивиране на функционалности'",
+    "ModuleTogglesPage - Status labels: 'Активиран', 'Деактивиран'",
+    "ModuleTogglesPage - (Note: Module names/descriptions from backend are expected in English)",
+    
+    "CompanySettingsPage - Title 'Настройки на фирмата', subtitle 'Конфигуриране на организацията'",
+    "CompanySettingsPage - Form labels: 'Име на фирма', 'Имейл', 'Телефон', 'Локация'",
+    "CompanySettingsPage - Button 'Запази промените'",
+    "CompanySettingsPage - Attendance section: 'Прозорец за присъствие', 'Начало', 'Закъснял'",
+    "CompanySettingsPage - Subscription labels: 'Статус', 'Тип', 'Падеж', 'Валута'",
+    
+    "AuditLogPage - Title 'Одит лог', Total counter 'X Общо'",
+    "AuditLogPage - Table headers: ВРЕМЕ, ПОТРЕБИТЕЛ, ДЕЙСТВИЕ, ОБЕКТ, ДЕТАЙЛИ",
+    "AuditLogPage - Action badge: 'Вход' for login actions",
+    
+    "ActivityCatalogPage - Title 'Каталог дейности', subtitle in Bulgarian",
+    "ActivityCatalogPage - Button 'Нова дейност', Filter 'Всички проекти', Toggle 'Покажи неактивни'",
+    "ActivityCatalogPage - Table headers: КОД, ИМЕ, ПРОЕКТ, МЯРКА, МАТЕРИАЛ, ТРУД, СТАТУС, ДЕЙСТВИЯ",
+    "ActivityCatalogPage - Status badge: 'Активен'",
+    
+    "SiteAttendancePage - Title 'Присъствие на обект' (not 'Site Attendance')",
+    "SiteAttendancePage - Filter dropdown: 'Всички активни проекти' (was 'All Active Projects' - FIXED)",
+    "SiteAttendancePage - Table headers: ПОТРЕБИТЕЛ, РОЛЯ, СТАТУС, ОТБЕЛЯЗАНО В (was 'Marked At' - FIXED), БЕЛЕЖКА, ДЕЙСТВИЯ",
+    "SiteAttendancePage - Role: 'Техник', Status: 'Присъства'",
+    
+    "Language Switcher - Works correctly, can toggle between BG and EN",
+    "Language Switcher - localStorage persists language choice",
+    "Login Page - BG: 'Имейл', 'Парола', 'Влез', 'Демо' | EN: 'Email', 'Password', 'Sign In', 'Demo'"
+  ],
+
+  "expected_english_content": [
+    "Module names/descriptions on ModuleTogglesPage (from backend database): 'Core / SaaS', 'Projects', etc.",
+    "Activity names in ActivityCatalogPage (user-generated): 'Electrical Wiring'",
+    "Notes in AdvancesPage (user-generated): 'February advance', 'TEST_advance'",
+    "Notes in SiteAttendancePage (user-generated): 'Arrived'",
+    "Subscription badges: 'Enterprise', 'Active' (backend subscription data)",
+    "Entity types in AuditLog: 'Auth' (backend data)"
+  ],
+
+  "test_report_links": [
+    "/app/test_reports/iteration_10.json"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "All 8 pages have been successfully updated with t() function calls for i18n",
+    "Both translation files (bg.json, en.json) contain all required keys",
+    "Language switching via LanguageSwitcher component works correctly"
+  ],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "N/A - Frontend only test",
+    "frontend": "100% - All UI strings on tested pages are correctly translated to Bulgarian"
+  },
+
+  "test_credentials": {
+    "admin": "admin@begwork.com / admin123"
+  },
+
+  "seed_data_creation": "None",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "BG Mode Sweep for i18n PATCH completed successfully. All 8 pages (AdvancesPage, PayrollRunsPage, PayrollDetailPage, ModuleTogglesPage, CompanySettingsPage, AuditLogPage, ActivityCatalogPage, SiteAttendancePage) verified - ZERO English UI strings found. The specific issues mentioned in the request ('All Active Projects' and 'Marked At' columns on SiteAttendancePage) have been fixed and now show 'Всички активни проекти' and 'ОТБЕЛЯЗАНО В' respectively. Module names/descriptions from backend database are expected to remain in English as per requirements.",
+
+  "screenshots_taken": [
+    ".screenshots/bg_dashboard.png",
+    ".screenshots/bg_advances_page.png",
+    ".screenshots/bg_payroll_runs_page.png",
+    ".screenshots/bg_payroll_detail_page.png",
+    ".screenshots/bg_modules_page.png",
+    ".screenshots/bg_company_settings_page.png",
+    ".screenshots/bg_audit_log_page.png",
+    ".screenshots/bg_activity_catalog_page.png",
+    ".screenshots/bg_site_attendance_page.png",
+    ".screenshots/bg_advance_dialog.png",
+    ".screenshots/bg_payroll_dialog.png",
+    ".screenshots/lang_test_bg.png",
+    ".screenshots/lang_test_en.png"
+  ]
+}

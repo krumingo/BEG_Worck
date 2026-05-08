@@ -1,0 +1,150 @@
+{
+  "summary": "Completed testing of Warehouse Stock, Issue, Consumption, Return, and Project Material Ledger features. All 16 backend tests passed (100%). Frontend verified: ProjectDetailPage shows 'Материална справка' section with ledger table, action buttons (Отпусни от склад, Отчети разход, Върни в склад), warnings with AlertTriangle icons, and green badges for items with remaining > 0.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "DialogContent",
+        "issues": ["Minor: Missing 'Description' or 'aria-describedby' warning in dialogs - accessibility improvement suggested (same as iteration 23)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_warehouse_material_ledger.py",
+    "/app/test_reports/pytest/test_warehouse_material_ledger_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/warehouse-stock correctly returns current stock levels with material_name, unit, qty, value",
+    "POST /api/warehouse-issue creates issue transaction, correctly validates insufficient stock (returns 400)",
+    "POST /api/warehouse-issue correctly reduces warehouse stock after issue",
+    "POST /api/project-consumption records consumption, validates against project remaining (returns 400 if exceeded)",
+    "POST /api/warehouse-return returns material to warehouse, validates against project remaining",
+    "GET /api/project-material-ledger/{id} returns full ledger with requested/purchased/issued/consumed/returned/remaining",
+    "Material ledger warnings correctly generated: under_purchased, not_consumed, high_remaining",
+    "Stock correctly computed: intake + returns - issues",
+    "Project remaining correctly computed: issued - consumed - returned",
+    "Frontend: 'Материална справка' section displays in ProjectDetailPage with correct table columns",
+    "Frontend: 'Отпусни от склад' button opens issue dialog showing available stock",
+    "Frontend: 'Отчети разход' button opens consumption dialog pre-filled with items having remaining > 0",
+    "Frontend: 'Върни в склад' button opens return dialog pre-filled with items having remaining > 0",
+    "Frontend: Warnings displayed above table with AlertTriangle icons in amber color",
+    "Frontend: Remaining column shows green badge with '!' for items with remaining_on_project > 0"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_warehouse_material_ledger.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "admin@begwork.com",
+    "password": "AdminTest123!Secure"
+  },
+  "seed_data_creation": "Used existing test materials and project PRJ-001 (c3529276-8c03-49b3-92de-51216aab25da). Created small issue/consumption/return operations during tests to verify workflows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Warehouse and Material Ledger module fully tested. Key endpoints: GET /api/warehouse-stock (current stock), POST /api/warehouse-issue (issue to project), POST /api/project-consumption (record consumption), POST /api/warehouse-return (return to warehouse), GET /api/project-material-ledger/{project_id} (full ledger with warnings). Stock = intake + returns - issues. Project remaining = issued - consumed - returned. Frontend: ProjectDetailPage integrates ProjectMaterialLedger component showing table with all columns (Поискано/Купено/Отпуснато/Вложено/Върнато/Остатък) and action buttons. Dialogs have data-testid: issue-dialog, consume-dialog, return-dialog. Buttons have data-testid: issue-btn, consume-btn, return-btn. Existing project: PRJ-001 with materials including Гипсова мазилка Knauf, Грундуниверсален, TEST_Posting_Material_1.",
+  "features_tested": {
+    "GET /api/warehouse-stock": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns list of items with material_name, unit, qty, value. Only shows items with qty > 0"
+    },
+    "POST /api/warehouse-issue success": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Creates issue transaction with issue_number WI-XXXX, reduces warehouse stock"
+    },
+    "POST /api/warehouse-issue insufficient stock": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns 400 with Bulgarian error message: 'Недостатъчна наличност'"
+    },
+    "POST /api/warehouse-issue validation": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns 400 if project_id missing or lines empty"
+    },
+    "POST /api/project-consumption success": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Records consumption with type='consumption', stores lines with qty_consumed"
+    },
+    "POST /api/project-consumption validation": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns 400 with 'Недостатъчно по обекта' if consumption exceeds remaining"
+    },
+    "POST /api/warehouse-return success": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Creates return transaction with type='return', increases warehouse stock"
+    },
+    "POST /api/warehouse-return validation": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns 400 if return qty exceeds remaining on project"
+    },
+    "GET /api/project-material-ledger/{id}": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Returns {ledger: [...], warnings: [...]} with all required fields"
+    },
+    "Material ledger warnings": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Generates warnings for under_purchased, not_consumed, high_remaining types"
+    },
+    "Remaining calculation": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "remaining_on_project = issued_to_project - consumed - returned (verified mathematically)"
+    },
+    "Stock computation": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Stock decreases correctly after issue (intake + returns - issues)"
+    },
+    "Frontend: Material ledger section": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Материална справка' section with data-testid='material-ledger' displays correctly"
+    },
+    "Frontend: Issue button and dialog": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Отпусни от склад' button opens dialog showing available stock"
+    },
+    "Frontend: Consume button and dialog": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Отчети разход' button opens dialog pre-filled with items having remaining > 0"
+    },
+    "Frontend: Return button and dialog": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "'Върни в склад' button opens dialog pre-filled with items having remaining > 0"
+    },
+    "Frontend: Warnings with AlertTriangle icons": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Warnings displayed in amber color with AlertTriangle icons above table"
+    },
+    "Frontend: Green badge for remaining > 0": {
+      "tested": true,
+      "result": "PASS",
+      "notes": "Remaining column shows emerald green text with badge for items with remaining > 0"
+    }
+  },
+  "mocked_apis": {
+    "note": "No mocked APIs - all endpoints tested against real backend",
+    "has_mocked_apis": false
+  }
+}

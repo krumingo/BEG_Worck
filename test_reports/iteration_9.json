@@ -1,0 +1,148 @@
+{
+  "summary": "BG Mode Sweep test completed. Identified multiple i18n issues where English strings are visible in Bulgarian mode. Most pages are correctly translated, but UsersPage.js has hardcoded English and several translation keys are missing.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "i18n_issues": [
+      {
+        "page": "UsersPage.js",
+        "file": "/app/frontend/src/pages/UsersPage.js",
+        "issues": [
+          "Line 121: Hardcoded 'Users & Roles' - should use t('users.title')",
+          "Line 122: Hardcoded 'users in organization' - should use translation",
+          "Line 125: Hardcoded 'Add User' - should use t('users.newUser')",
+          "Lines 133-137: Table headers hardcoded 'User', 'Email', 'Role', 'Status', 'Actions'",
+          "Line 153: Role badge displays raw role without translation",
+          "Line 157: Status 'Active'/'Disabled' hardcoded in English",
+          "Line 180: Dialog title 'Edit User'/'Create User' hardcoded",
+          "Lines 185-242: All form labels hardcoded in English",
+          "Line 253: Button text 'Update User'/'Create User' hardcoded"
+        ],
+        "priority": "HIGH"
+      },
+      {
+        "page": "OffersListPage.js",
+        "file": "/app/frontend/src/pages/OffersListPage.js",
+        "issues": [
+          "Line 154: Uses t('offers.offer') but key doesn't exist in bg.json - shows 'OFFERS.OFFER' in UI",
+          "Should use t('offers.offerNo') which translates to 'Оферта №'"
+        ],
+        "priority": "MEDIUM"
+      },
+      {
+        "page": "bg.json translation file",
+        "file": "/app/frontend/src/i18n/bg.json",
+        "issues": [
+          "Missing users.roles.viewer translation (shows 'Viewer' instead of 'Наблюдател')",
+          "Missing users.roles.warehousekeeper translation",
+          "Missing users.roles.driver translation",
+          "Role key casing mismatch: JSON uses 'siteManager' but backend returns 'SiteManager'"
+        ],
+        "priority": "MEDIUM"
+      },
+      {
+        "page": "SiteAttendancePage.js",
+        "file": "/app/frontend/src/pages/SiteAttendancePage.js",
+        "issues": [
+          "Note column shows 'Arrived' in English (user data from backend) - acceptable as user data"
+        ],
+        "priority": "LOW"
+      },
+      {
+        "page": "WorkReportReviewPage (observed)",
+        "issues": [
+          "Hours column uses 'h' suffix (6h, 3h) instead of Bulgarian 'ч' (6ч, 3ч)"
+        ],
+        "priority": "LOW"
+      }
+    ]
+  },
+
+  "passed_tests": [
+    "Login Page - All labels, placeholders, buttons in Bulgarian: Имейл, Парола, Влез, Демо",
+    "Dashboard - All card titles in Bulgarian: Активни проекти, Днес присъстващи, Завършени, Общо потребители",
+    "Dashboard - Navigation sidebar fully translated: Табло, Проекти, Оферти, etc.",
+    "Dashboard - Projects overview in Bulgarian: Преглед проекти, Чернова, Активен, Паузирани, Завършени",
+    "Dashboard - Missing alerts in Bulgarian: Липсващо присъствие, Липсващи отчети",
+    "Projects List - Table headers in Bulgarian: Код проект, Име, Статус, Тип, Управител обект, etc.",
+    "Projects List - Status badges: Активен, Чернова, Паузиран",
+    "Projects List - Type badges: Фактурируем, Режийни",
+    "Projects List - Filters: Всички статуси, Всички типове",
+    "Site Attendance - Title and subtitle in Bulgarian",
+    "Site Attendance - Table headers: Потребител, Роля, Статус, Отбелязано в, Бележка, Действия",
+    "Site Attendance - Status badges: Присъства",
+    "Site Attendance - Roles: Техник",
+    "Work Reports Review - Title: Преглед отчети",
+    "Work Reports Review - Status badges: Одобрен, Чернова",
+    "Reminders - Title: Напомняния и сигнали",
+    "Reminders - Tabs: Липсващо присъствие, Липсващи отчети, Лог напомняния",
+    "Reminders - Cards: Липсващо присъствие, Липсващи отчети, Изпратени напомняния",
+    "Offers List - Title: Оферти и КСС",
+    "Offers List - Status badges: Приета, Чернова",
+    "Employees - Title: Служители и заплащане",
+    "Employees - Table headers: Служител, Роля, Тип заплащане, Ставка, График, Статус, Действия",
+    "Employees - Pay types: Дневно, Почасово",
+    "Finance Overview - Title: Финанси",
+    "Finance Overview - Cards: Вземания, Задължения, Каса, Банка",
+    "Finance Overview - Sections: Финансови сметки, Фактури, Плащания"
+  ],
+
+  "test_report_links": [
+    "/app/frontend/src/pages/UsersPage.js",
+    "/app/frontend/src/pages/OffersListPage.js",
+    "/app/frontend/src/i18n/bg.json"
+  ],
+
+  "action_items": [
+    "HIGH: Add translations to UsersPage.js - replace all hardcoded English strings with t() function calls",
+    "MEDIUM: Fix OffersListPage.js line 154 - change t('offers.offer') to t('offers.offerNo')",
+    "MEDIUM: Add missing role translations to bg.json: viewer -> Наблюдател, warehousekeeper -> Складовник, driver -> Шофьор",
+    "MEDIUM: Fix role key casing in bg.json or handle case-insensitive lookup in components",
+    "LOW: Consider translating hour suffix 'h' to Bulgarian 'ч' in work reports"
+  ],
+
+  "critical_code_review_comments": [
+    "UsersPage.js is completely missing i18n implementation - all text is hardcoded in English",
+    "Missing translation key 'offers.offer' in bg.json causes raw key to display in UI",
+    "Role translations have casing mismatch between JSON keys (camelCase) and backend values (PascalCase)"
+  ],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "N/A - Frontend only test",
+    "frontend": "85% - Most pages correctly translated, UsersPage.js and a few translation keys need fixes"
+  },
+
+  "test_credentials": {
+    "admin": "admin@begwork.com / admin123"
+  },
+
+  "seed_data_creation": "None",
+
+  "retest_needed": true,
+
+  "should_main_agent_self_test": true,
+
+  "context_for_next_testing_agent": "BG Mode Sweep identified i18n issues. Main issues: 1) UsersPage.js has all text hardcoded in English - needs full i18n implementation. 2) OffersListPage.js uses non-existent translation key 'offers.offer'. 3) bg.json missing translations for 'viewer', 'warehousekeeper', 'driver' roles. Most other pages (Login, Dashboard, Projects, Attendance, Reports, Reminders, Employees, Finance) are correctly translated.",
+
+  "screenshots_taken": [
+    ".screenshots/bg_login_page.png",
+    ".screenshots/bg_dashboard_page.png",
+    ".screenshots/bg_projects_list.png",
+    ".screenshots/bg_site_attendance.png",
+    ".screenshots/bg_review_reports.png",
+    ".screenshots/bg_reminders.png",
+    ".screenshots/bg_offers.png",
+    ".screenshots/bg_employees.png",
+    ".screenshots/bg_users.png",
+    ".screenshots/bg_finance.png"
+  ]
+}

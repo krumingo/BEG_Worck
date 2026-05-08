@@ -1,0 +1,40 @@
+# MongoDB Collections Extract
+# Source: server.py (db.* usage patterns)
+# Generated: 2026-02-18
+
+## Total: 31 collections
+
+### Core Business Collections (15)
+1. organizations        - Tenant/company data
+2. users               - User accounts with roles
+3. subscriptions       - Billing subscriptions
+4. projects            - Project records
+5. project_team        - Project team assignments
+6. project_phases      - Project phases
+7. offers              - BOQ/Estimates
+8. activity_catalog    - Activity definitions
+9. attendance_entries  - Attendance records
+10. work_reports       - Daily work reports
+11. employee_profiles  - HR employee data
+12. payroll_runs       - Payroll periods
+13. payslips           - Payslip records
+14. invoices           - Finance invoices
+15. financial_accounts - Cash/Bank accounts
+
+### Supporting Collections (16)
+16. feature_flags              - Module toggles
+17. audit_logs                 - Action history
+18. advances                   - Employee advances/loans
+19. finance_payments           - Payment records
+20. payment_allocations        - Payment-to-invoice links
+21. payroll_payments           - Payroll payment records
+22. notifications              - User notifications
+23. reminder_logs              - Reminder history
+24. overhead_categories        - Overhead cost categories
+25. overhead_costs             - Overhead cost records
+26. overhead_assets            - Amortizable assets
+27. overhead_snapshots         - Overhead period snapshots
+28. project_overhead_allocations - Overhead per project
+29. org_mobile_settings        - Mobile module settings
+30. mobile_view_configs        - Mobile view configurations
+31. media_files                - Uploaded media metadata

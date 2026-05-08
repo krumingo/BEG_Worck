@@ -1,0 +1,409 @@
+import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import API from "@/lib/api";
+import { formatDate, formatTime } from "@/lib/i18nUtils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ThermometerSun,
+  Palmtree,
+  AlertTriangle,
+  Loader2,
+  CalendarDays,
+  FileText,
+  ArrowRight,
+  Play,
+  Square,
+  Timer,
+} from "lucide-react";
+
+const STATUS_CONFIG = {
+  Present: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20 border-emerald-500/40 hover:bg-emerald-500/30", labelKey: "myDay.imAtWork" },
+  Absent: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/20 border-red-500/40 hover:bg-red-500/30", labelKey: "attendance.absent" },
+  Late: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/20 border-amber-500/40", labelKey: "attendance.late" },
+  SickLeave: { icon: ThermometerSun, color: "text-orange-400", bg: "bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30", labelKey: "myDay.sickLeave" },
+  Vacation: { icon: Palmtree, color: "text-cyan-400", bg: "bg-cyan-500/20 border-cyan-500/40 hover:bg-cyan-500/30", labelKey: "myDay.vacation" },
+};
+
+const REPORT_STATUS_COLORS = {
+  Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  Submitted: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  Approved: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  Rejected: "bg-red-500/20 text-red-400 border-red-500/30",
+};
+
+export default function MyDayPage() {
+  const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [data, setData] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [marking, setMarking] = useState(false);
+  const [note, setNote] = useState("");
+  const [selectedProject, setSelectedProject] = useState("");
+  // Work sessions
+  const [sessions, setSessions] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [showStartSession, setShowStartSession] = useState(false);
+  const [sessionSite, setSessionSite] = useState("");
+
+  const fetchToday = useCallback(async () => {
+    try {
+      const [attRes, repRes] = await Promise.all([
+        API.get("/attendance/my-today"),
+        API.get("/work-reports/my-today"),
+      ]);
+      setData(attRes.data);
+      setReports(repRes.data);
+      if (attRes.data.active_projects?.length === 1) {
+        setSelectedProject(attRes.data.active_projects[0].id);
+      }
+      // Fetch work sessions
+      try {
+        const sessRes = await API.get("/work-sessions/my-today");
+        setSessions(sessRes.data);
+      } catch { /* work sessions optional */ }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchToday(); }, [fetchToday]);
+
+  const handleMark = async (status) => {
+    setMarking(true);
+    try {
+      await API.post("/attendance/mark", {
+        project_id: selectedProject || null,
+        status,
+        note,
+        source: "Web",
+      });
+      await fetchToday();
+      setNote("");
+    } catch (err) {
+      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const alreadyMarked = data?.entry != null;
+  const pastDeadline = data?.past_deadline;
+  const needsReport = alreadyMarked && ["Present", "Late"].includes(data?.entry?.status);
+  const activeProjects = data?.active_projects || [];
+
+  // Reports that exist for today
+  const reportMap = {};
+  reports.forEach((r) => { reportMap[r.project_id] = r; });
+
+  return (
+    <div className="p-6 max-w-[480px] mx-auto" data-testid="my-day-page">
+      {/* Date header */}
+      <div className="text-center mb-8">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <CalendarDays className="w-5 h-5 text-primary" />
+          <h1 className="text-xl font-bold text-foreground">{t("attendance.myDay")}</h1>
+        </div>
+        <p className="text-lg text-muted-foreground">{formatDate(new Date(), i18n.language, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {user?.first_name} {user?.last_name} &middot; {user?.role ? t(`users.roles.${user.role.toLowerCase()}`, user.role) : ""}
+        </p>
+      </div>
+
+      {/* Late Warning */}
+      {pastDeadline && !alreadyMarked && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 mb-6" data-testid="late-warning">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-400">{t("myDay.pastDeadline")} ({data?.deadline})</p>
+            <p className="text-xs text-muted-foreground">{t("myDay.markedAsLate")}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Already Marked */}
+      {alreadyMarked ? (
+        <div className="rounded-xl border border-border bg-card p-6 text-center mb-6" data-testid="attendance-already-marked">
+          {(() => {
+            const cfg = STATUS_CONFIG[data.entry.status] || STATUS_CONFIG.Present;
+            const Icon = cfg.icon;
+            return (
+              <>
+                <div className={`w-16 h-16 rounded-full ${cfg.bg} border flex items-center justify-center mx-auto mb-4`}>
+                  <Icon className={`w-8 h-8 ${cfg.color}`} />
+                </div>
+                <h2 className="text-lg font-bold text-foreground mb-1">{t("myDay.attendanceRecorded")}</h2>
+                <Badge variant="outline" className={`text-sm mb-2 ${cfg.bg} ${cfg.color}`}>{t(`attendance.statusLabels.${data.entry.status.toLowerCase()}`, data.entry.status)}</Badge>
+                <p className="text-xs text-muted-foreground">
+                  {t("myDay.markedAt")} {formatTime(data.entry.marked_at, i18n.language)}
+                </p>
+                {data.entry.note && (
+                  <p className="text-sm text-muted-foreground mt-3 italic">"{data.entry.note}"</p>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      ) : (
+        <>
+          {/* Project Selection */}
+          {activeProjects.length > 0 && (
+            <div className="mb-6">
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">{t("myDay.activeProject")}</label>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
+                <SelectTrigger className="bg-card border-border h-12 text-base" data-testid="project-select">
+                  <SelectValue placeholder={t("workReports.selectProject")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Main Action — Present */}
+          <Button
+            className="w-full h-20 text-xl font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white mb-4 transition-all duration-200 active:scale-[0.98]"
+            onClick={() => handleMark("Present")}
+            disabled={marking}
+            data-testid="mark-present-button"
+          >
+            {marking ? <Loader2 className="w-6 h-6 animate-spin mr-3" /> : <CheckCircle2 className="w-7 h-7 mr-3" />}
+            {pastDeadline ? t("myDay.imAtWorkLate") : t("myDay.imAtWork")}
+          </Button>
+
+          {/* Secondary Actions */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {["Absent", "SickLeave", "Vacation"].map((s) => {
+              const cfg = STATUS_CONFIG[s];
+              const Icon = cfg.icon;
+              return (
+                <button
+                  key={s}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${cfg.bg} transition-all duration-200 active:scale-95 disabled:opacity-50`}
+                  onClick={() => handleMark(s)}
+                  disabled={marking}
+                  data-testid={`mark-${s.toLowerCase()}-button`}
+                >
+                  <Icon className={`w-6 h-6 ${cfg.color}`} />
+                  <span className="text-xs font-medium text-foreground">{t(cfg.labelKey)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Note */}
+          <div className="mb-4">
+            <Textarea
+              placeholder={t("myDay.addNote")}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="bg-card border-border min-h-[60px] text-sm"
+              data-testid="attendance-note"
+            />
+          </div>
+        </>
+      )}
+
+      {/* Work Report CTA */}
+      {needsReport && (
+        <div className="space-y-3" data-testid="work-report-section">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" /> {t("workReports.endOfDayReports")}
+          </h3>
+
+          {activeProjects.length === 0 && reports.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <Button
+                onClick={() => navigate("/work-reports/new")}
+                className="w-full h-14 text-base rounded-xl bg-primary hover:bg-primary/90"
+                data-testid="fill-report-button"
+              >
+                <FileText className="w-5 h-5 mr-2" /> {t("workReports.fillReport")}
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              {activeProjects.map((proj) => {
+                const rep = reportMap[proj.id];
+                return (
+                  <div key={proj.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between" data-testid={`report-cta-${proj.id}`}>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{proj.code} - {proj.name}</p>
+                      {rep ? (
+                        <Badge variant="outline" className={`text-xs mt-1 ${REPORT_STATUS_COLORS[rep.status] || ""}`}>
+                          {t(`workReports.status.${rep.status.toLowerCase()}`)} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
+                        </Badge>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">{t("myDay.noReportYet")}</p>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={rep ? "outline" : "default"}
+                      onClick={() => rep ? navigate(`/work-reports/${rep.id}`) : navigate(`/work-reports/new?projectId=${proj.id}`)}
+                      data-testid={`report-action-${proj.id}`}
+                    >
+                      {rep && rep.status === "Draft" ? t("myDay.continue") : rep ? t("common.view") : t("workReports.fillReport")}
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+                );
+              })}
+              {/* For reports on projects not in active list */}
+              {reports.filter((r) => !activeProjects.find((p) => p.id === r.project_id)).map((rep) => (
+                <div key={rep.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{rep.project_code || t("offers.project")}</p>
+                    <Badge variant="outline" className={`text-xs mt-1 ${REPORT_STATUS_COLORS[rep.status] || ""}`}>
+                      {t(`workReports.status.${rep.status.toLowerCase()}`)} {rep.total_hours > 0 ? `(${rep.total_hours}h)` : ""}
+                    </Badge>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/work-reports/${rep.id}`)}>
+                    {t("common.view")} <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+      {/* Work Sessions Timeline */}
+      {sessions && (
+        <div className="mt-6 space-y-3" data-testid="work-sessions-section">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Timer className="w-4 h-4 text-cyan-400" /> {t("workSessions.todaySessions")}
+            </h3>
+            {!sessions.has_open_session ? (
+              <Button size="sm" onClick={() => { setSessionSite(""); setShowStartSession(true); }} data-testid="start-session-btn">
+                <Play className="w-3.5 h-3.5 mr-1" /> {t("workSessions.start")}
+              </Button>
+            ) : (
+              <Button size="sm" variant="destructive" onClick={async () => {
+                setSessionLoading(true);
+                try { await API.post("/work-sessions/end", {}); await fetchToday(); } catch (e) { alert(e.response?.data?.detail || "Error"); }
+                finally { setSessionLoading(false); }
+              }} disabled={sessionLoading} data-testid="end-session-btn">
+                <Square className="w-3.5 h-3.5 mr-1" /> {t("workSessions.end")}
+              </Button>
+            )}
+          </div>
+
+          {/* Summary bar */}
+          <div className="flex gap-3 text-xs">
+            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-muted-foreground">{t("workSessions.totalHours")}</p>
+              <p className={`font-mono font-bold ${sessions.is_overtime ? "text-orange-400" : "text-foreground"}`}>
+                {sessions.total_hours.toFixed(1)}ч
+                {sessions.is_overtime && <span className="ml-1 text-[9px]">OT</span>}
+              </p>
+            </div>
+            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-muted-foreground">{t("workSessions.totalCost")}</p>
+              <p className="font-mono font-bold text-foreground">{sessions.total_cost.toFixed(2)} EUR</p>
+            </div>
+            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
+              <p className="text-muted-foreground">{t("workSessions.sessions")}</p>
+              <p className="font-mono font-bold text-foreground">{sessions.total_sessions}</p>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          {sessions.items.length > 0 && (
+            <div className="space-y-1">
+              {sessions.items.map((s) => {
+                const isOpen = !s.ended_at;
+                const startTime = new Date(s.started_at).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" });
+                const endTime = s.ended_at ? new Date(s.ended_at).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" }) : null;
+                const hours = s.duration_hours ?? s.elapsed_hours ?? 0;
+                return (
+                  <div key={s.id} className={`flex items-center gap-3 p-2.5 rounded-lg border text-sm ${isOpen ? "border-cyan-500/30 bg-cyan-500/5" : "border-border bg-card"}`} data-testid={`session-${s.id}`}>
+                    <div className="w-24 font-mono text-xs text-muted-foreground flex-shrink-0">
+                      {isOpen ? <span className="text-cyan-400 font-bold">{startTime} →</span> : `${startTime}-${endTime}`}
+                    </div>
+                    <div className="flex-1 min-w-0 truncate">{s.site_name}</div>
+                    <div className="font-mono text-xs flex-shrink-0">{hours.toFixed(1)}ч</div>
+                    {s.labor_cost > 0 && <div className="font-mono text-xs text-muted-foreground flex-shrink-0">{s.labor_cost.toFixed(0)}лв</div>}
+                    {s.is_overtime && <Badge variant="outline" className="text-[9px] text-orange-400 border-orange-400/30">OT</Badge>}
+                    {s.is_flagged && <Badge variant="outline" className="text-[9px] text-red-400 border-red-400/30">{s.flag_reason}</Badge>}
+                    {isOpen && <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0" />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Start Session Dialog */}
+      <Dialog open={showStartSession} onOpenChange={setShowStartSession}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("workSessions.startSession")}</DialogTitle>
+            <DialogDescription>{t("workSessions.selectSite")}</DialogDescription>
+          </DialogHeader>
+          <Select value={sessionSite || "none"} onValueChange={v => setSessionSite(v === "none" ? "" : v)}>
+            <SelectTrigger data-testid="session-site-select"><SelectValue placeholder={t("workSessions.selectSite")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("workSessions.selectSite")}</SelectItem>
+              {activeProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStartSession(false)}>{t("common.cancel")}</Button>
+            <Button onClick={async () => {
+              if (!sessionSite) return;
+              setSessionLoading(true);
+              try {
+                await API.post("/work-sessions/start", { site_id: sessionSite });
+                setShowStartSession(false);
+                await fetchToday();
+              } catch (e) { alert(e.response?.data?.detail || "Error"); }
+              finally { setSessionLoading(false); }
+            }} disabled={sessionLoading || !sessionSite} data-testid="confirm-start-session">
+              {sessionLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+              {t("workSessions.start")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

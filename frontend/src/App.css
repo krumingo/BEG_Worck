@@ -1,0 +1,46 @@
+/* BEG_Work custom styles */
+
+.sidebar-link {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200;
+}
+.sidebar-link:hover {
+  @apply bg-accent text-accent-foreground;
+}
+.sidebar-link.active {
+  @apply bg-primary/15 text-primary;
+}
+
+.stat-card {
+  @apply relative overflow-hidden rounded-xl border border-border bg-card p-5 transition-all duration-300;
+}
+.stat-card:hover {
+  @apply border-primary/30;
+}
+.stat-card::after {
+  content: '';
+  @apply absolute top-0 right-0 w-24 h-24 opacity-5;
+  background: radial-gradient(circle, hsl(var(--primary)) 0%, transparent 70%);
+}
+
+.table-row-hover:hover {
+  @apply bg-accent/50;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.module-card {
+  @apply relative rounded-xl border border-border bg-card p-5 transition-all duration-300;
+}
+.module-card.enabled {
+  @apply border-primary/40 bg-primary/5;
+}
+.module-card.locked {
+  @apply border-primary/60 bg-primary/10;
+}
