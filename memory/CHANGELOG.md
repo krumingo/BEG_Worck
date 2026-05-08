@@ -1,3 +1,15 @@
+## [M19.3-fix] - 2026-05-08 — Follow-up fixes
+
+### Fixed
+- ProjectDetailPage.js: removed duplicate unconditional bulk.clear() that broke override modal selection
+- OvertimeOverrideModal.js: all hardcoded BG strings replaced with useTranslation() t() calls
+
+### Added
+- i18n keys "overtimeOverride.*" in bg.json (18 keys) and en.json (18 keys)
+
+---
+
+
 ## [M19.3] - 2026-05-08 — Overtime Override модал
 
 ### Added

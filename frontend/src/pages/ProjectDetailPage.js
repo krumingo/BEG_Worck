@@ -475,7 +475,6 @@ export default function ProjectDetailPage() {
                         }
                         if (d.failed?.length) toast.error(`${d.failed.length} неуспешни`);
                         if (!d.blocked_for_override?.length) bulk.clear();
-                        bulk.clear();
                         fetchDashboard();
                       } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
                       finally { setBulkLoading(false); }
