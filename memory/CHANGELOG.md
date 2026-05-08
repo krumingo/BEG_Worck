@@ -1,3 +1,18 @@
+## [M19.3] - 2026-05-08 — Overtime Override модал
+
+### Added
+- OvertimeOverrideModal.js — per-report split (regular/overtime), coefficient (1.5×/2.0×/custom), mandatory reason
+- Wired into AllReportsPage.js and ProjectDetailPage.js bulk approve flows
+- Backend validation: split_mismatch, negative_split_value, coefficient_must_be_gt_1, reason_required
+- blocked_for_override enriched with date, project_id, project_name
+
+### Fixed (incidental)
+- AllReportsPage.js: missing `import { toast } from "sonner"` (BUG A)
+- AllReportsPage.js: `load()` → `fetchData()` (BUG B — undefined function)
+
+---
+
+
 ## [M16.8] - 2026-05-06 — Refactor на server.py (1400 → 511 реда)
 
 ### Removed (dead code от server.py)

@@ -930,20 +930,53 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
         day_total = await get_worker_hours_for_day(org_id, worker_id, date)
 
         if day_total > 8 and rid not in overrides:
+            proj_name = ""
+            pid = report.get("project_id", "")
+            if pid:
+                proj_doc = await db.projects.find_one({"id": pid}, {"_id": 0, "name": 1})
+                if proj_doc:
+                    proj_name = proj_doc.get("name", "")
             blocked.append({
                 "id": rid,
                 "worker_name": report.get("worker_name", ""),
                 "worker_id": worker_id,
                 "current_hours": day_total,
                 "report_hours": hours,
+                "date": date,
+                "project_id": pid,
+                "project_name": proj_name,
             })
             continue
 
-        # Build overtime metadata
+        # Build overtime metadata with validation
         override = overrides.get(rid, {})
         is_overtime = day_total > 8
-        regular_hours = override.get("regular_hours", min(hours, 8)) if is_overtime else hours
-        overtime_hours = override.get("overtime_hours", max(0, hours - 8)) if is_overtime else 0
+        if is_overtime and rid in overrides:
+            # Validate override fields
+            o_reg = float(override.get("regular_hours", 0))
+            o_ot = float(override.get("overtime_hours", 0))
+            o_coef = float(override.get("overtime_coefficient", 0))
+            o_reason = (override.get("reason") or "").strip()
+            if abs(o_reg + o_ot - hours) > 0.01:
+                failed.append({"id": rid, "reason": "split_mismatch"})
+                continue
+            if o_reg < 0 or o_ot < 0:
+                failed.append({"id": rid, "reason": "negative_split_value"})
+                continue
+            if o_coef <= 1:
+                failed.append({"id": rid, "reason": "coefficient_must_be_gt_1"})
+                continue
+            if not o_reason:
+                failed.append({"id": rid, "reason": "reason_required"})
+                continue
+            regular_hours = o_reg
+            overtime_hours = o_ot
+        elif is_overtime:
+            regular_hours = min(hours, 8)
+            overtime_hours = max(0, hours - 8)
+        else:
+            regular_hours = hours
+            overtime_hours = 0
 
         # Approve the report (reuse existing approve logic inline)
         try:

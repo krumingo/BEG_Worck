@@ -49,6 +49,7 @@ import SiteWorkersPanel from "@/components/SiteWorkersPanel";
 import ExcelImportV2Modal from "@/components/ExcelImportV2Modal";
 import ProjectFinanceCard from "@/components/ProjectFinanceCard";
 import useBulkSelection from "@/hooks/useBulkSelection";
+import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 
@@ -88,6 +89,8 @@ export default function ProjectDetailPage() {
   const [showExcelImport, setShowExcelImport] = useState(false);
   const bulk = useBulkSelection();
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideBlocked, setOverrideBlocked] = useState([]);
   const [showSubProjectDialog, setShowSubProjectDialog] = useState(false);
   const [newSubName, setNewSubName] = useState("");
   const [creatingSub, setCreatingSub] = useState(false);
@@ -466,8 +469,12 @@ export default function ProjectDetailPage() {
                         const res = await API.post("/daily-reports/bulk-approve", { report_ids: [...bulk.selectedIds] });
                         const d = res.data;
                         if (d.succeeded?.length) toast.success(`${d.succeeded.length} одобрени`);
-                        if (d.blocked_for_override?.length) toast.warning(`${d.blocked_for_override.length} изискват admin override`);
+                        if (d.blocked_for_override?.length) {
+                          setOverrideBlocked(d.blocked_for_override);
+                          setOverrideOpen(true);
+                        }
                         if (d.failed?.length) toast.error(`${d.failed.length} неуспешни`);
+                        if (!d.blocked_for_override?.length) bulk.clear();
                         bulk.clear();
                         fetchDashboard();
                       } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
@@ -524,6 +531,20 @@ export default function ProjectDetailPage() {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <PersonnelUnified projectId={projectId} team={team} />
           </div>
+
+          <OvertimeOverrideModal
+            open={overrideOpen}
+            onOpenChange={setOverrideOpen}
+            blocked={overrideBlocked}
+            onSubmit={async (overrides) => {
+              const ids = Object.keys(overrides);
+              const res = await API.post("/daily-reports/bulk-approve", { report_ids: ids, overrides });
+              const d = res.data;
+              if (d.succeeded?.length) toast.success(`${d.succeeded.length} одобрени с override`);
+              if (d.failed?.length) toast.error(`${d.failed.length} неуспешни`);
+              setOverrideOpen(false); setOverrideBlocked([]); bulk.clear(); fetchDashboard();
+            }}
+          />
         </TabsContent>
       </Tabs>
 

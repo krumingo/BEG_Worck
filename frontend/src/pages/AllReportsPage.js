@@ -24,6 +24,8 @@ import WeeklyMatrixSection from "@/components/WeeklyMatrixSection";
 import PayrollBatchSection from "@/components/PayrollBatchSection";
 import EmployeeDossierSection from "@/components/EmployeeDossierSection";
 import useBulkSelection from "@/hooks/useBulkSelection";
+import { toast } from "sonner";
+import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -54,6 +56,8 @@ export default function AllReportsPage() {
   const [detail, setDetail] = useState(null);
   const bulk = useBulkSelection();
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideBlocked, setOverrideBlocked] = useState([]);
 
   // URL params for deep-linking from PersonnelPanel
   const [searchParams] = useSearchParams();
@@ -267,9 +271,12 @@ export default function AllReportsPage() {
               const res = await API.post("/daily-reports/bulk-approve", { report_ids: [...bulk.selectedIds] });
               const d = res.data;
               if (d.succeeded?.length) toast.success(`${d.succeeded.length} одобрени`);
-              if (d.blocked_for_override?.length) toast.warning(`${d.blocked_for_override.length} изискват admin override`);
+              if (d.blocked_for_override?.length) {
+                setOverrideBlocked(d.blocked_for_override);
+                setOverrideOpen(true);
+              }
               if (d.failed?.length) toast.error(`${d.failed.length} неуспешни`);
-              bulk.clear(); load();
+              if (!d.blocked_for_override?.length) bulk.clear();
             } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
             finally { setBulkLoading(false); }
           }}>Одобри ({bulk.count})</Button>
@@ -280,7 +287,7 @@ export default function AllReportsPage() {
             try {
               const res = await API.post("/daily-reports/bulk-reject", { report_ids: [...bulk.selectedIds], reason });
               toast.success(`${res.data.succeeded?.length || 0} отхвърлени`);
-              bulk.clear(); load();
+              bulk.clear(); fetchData();
             } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
             finally { setBulkLoading(false); }
           }}>Отхвърли ({bulk.count})</Button>
@@ -501,6 +508,23 @@ export default function AllReportsPage() {
       </Dialog>
       </>
       )}
+
+      <OvertimeOverrideModal
+        open={overrideOpen}
+        onOpenChange={setOverrideOpen}
+        blocked={overrideBlocked}
+        onSubmit={async (overrides) => {
+          const ids = Object.keys(overrides);
+          const res = await API.post("/daily-reports/bulk-approve", { report_ids: ids, overrides });
+          const d = res.data;
+          if (d.succeeded?.length) toast.success(`${d.succeeded.length} одобрени с override`);
+          if (d.failed?.length) toast.error(`${d.failed.length} неуспешни: ${d.failed.map(f=>f.reason).join(", ")}`);
+          setOverrideOpen(false);
+          setOverrideBlocked([]);
+          bulk.clear();
+          fetchData();
+        }}
+      />
     </div>
   );
 }
