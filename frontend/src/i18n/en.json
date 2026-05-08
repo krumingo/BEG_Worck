@@ -2183,5 +2183,11 @@
     "errReason": "Reason is required",
     "cancel": "Cancel",
     "submit": "Approve with override ({{count}})"
+  },
+  "hoursCheck": {
+    "warnTitle": "Overtime: total {{total}}h for the day.",
+    "criticalTitle": "Warning: total {{total}}h — verify for errors.",
+    "otherReports": "Other reports ({{hours}}h)",
+    "absenceConflictRow": "Conflict: marked as {{status}} for the day."
   }
 }

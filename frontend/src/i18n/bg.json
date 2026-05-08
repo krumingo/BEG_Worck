@@ -2375,5 +2375,11 @@
     "errReason": "Причината е задължителна",
     "cancel": "Отказ",
     "submit": "Одобри с override ({{count}})"
+  },
+  "hoursCheck": {
+    "warnTitle": "Извънреден труд: общо {{total}}ч за деня.",
+    "criticalTitle": "Внимание: общо {{total}}ч за деня — проверете за грешка.",
+    "otherReports": "Други отчети ({{hours}}ч)",
+    "absenceConflictRow": "Конфликт: служителят е отбелязан като {{status}} за деня."
   }
 }

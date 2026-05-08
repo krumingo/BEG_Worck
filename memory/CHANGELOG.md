@@ -1,3 +1,18 @@
+## [M19.1] - 2026-05-08 — SOFT WARNING при въвеждане на дневни отчети
+
+### Added
+- check_employee_hours() now returns projects_breakdown[] with project names/codes/hours
+- Dual schema support ($or query) for both old (worker_id/date) and new (employee_id/report_date) schemas
+- i18n keys: hoursCheck.warnTitle, criticalTitle, otherReports, absenceConflictRow
+
+### Fixed (incidental)
+- BUG C: hours_validator.py get_worker_hours_for_day() now queries BOTH schemas (fixes M19.3 hard block bypass)
+- BUG D: Removed dead code check_hours_validation() from hours_validator.py
+- BUG E: check_employee_hours() now filters out REJECTED reports (was counting them in total)
+
+---
+
+
 ## [M19.3-fix] - 2026-05-08 — Follow-up fixes
 
 ### Fixed

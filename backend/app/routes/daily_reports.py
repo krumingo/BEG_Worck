@@ -64,24 +64,55 @@ def validate_report(data: DailyReportCreate):
 
 async def check_employee_hours(org_id: str, employee_id: str, report_date: str, exclude_report_id: str = None):
     """Check total hours for employee on a given date across ALL reports/projects.
-    Returns warnings dict with total_hours, level, projects list."""
-    query = {"org_id": org_id, "employee_id": employee_id, "report_date": report_date}
-    reports = await db.employee_daily_reports.find(query, {"_id": 0}).to_list(50)
+    Supports BOTH old schema (worker_id/date/hours) and new schema (employee_id/report_date/day_entries)."""
+    query = {
+        "org_id": org_id,
+        "$or": [
+            {"employee_id": employee_id, "report_date": report_date},
+            {"worker_id": employee_id, "date": report_date},
+        ],
+        "approval_status": {"$nin": ["REJECTED"]},
+    }
+    reports = await db.employee_daily_reports.find(query, {"_id": 0}).to_list(200)
 
     total_hours = 0
-    projects_worked = set()
+    project_hours = {}  # pid -> hours
     for r in reports:
         if exclude_report_id and r.get("id") == exclude_report_id:
             continue
-        for e in r.get("day_entries", []):
-            total_hours += float(e.get("hours_worked", 0))
-            if e.get("project_id"):
-                projects_worked.add(e["project_id"])
-        # Old-style reports
-        if r.get("hours"):
-            total_hours += float(r["hours"])
-        if r.get("project_id"):
-            projects_worked.add(r["project_id"])
+        entries = r.get("day_entries") or []
+        if entries:
+            for e in entries:
+                h = float(e.get("hours_worked", 0) or 0)
+                total_hours += h
+                pid = e.get("project_id")
+                if pid:
+                    project_hours[pid] = project_hours.get(pid, 0) + h
+        else:
+            h = float(r.get("hours") or r.get("hours_worked") or 0)
+            if h:
+                total_hours += h
+                pid = r.get("project_id")
+                if pid:
+                    project_hours[pid] = project_hours.get(pid, 0) + h
+
+    # Build projects_breakdown with names
+    projects_breakdown = []
+    if project_hours:
+        proj_docs = await db.projects.find(
+            {"id": {"$in": list(project_hours.keys())}, "org_id": org_id},
+            {"_id": 0, "id": 1, "name": 1, "code": 1},
+        ).to_list(50)
+        proj_by_id = {p["id"]: p for p in proj_docs}
+        for pid, h in project_hours.items():
+            p = proj_by_id.get(pid, {})
+            projects_breakdown.append({
+                "project_id": pid,
+                "project_name": p.get("name", ""),
+                "project_code": p.get("code", ""),
+                "hours": round(h, 2),
+            })
+        projects_breakdown.sort(key=lambda x: x["hours"], reverse=True)
 
     # Check attendance conflict
     attendance = await db.attendance_entries.find_one(
@@ -102,8 +133,8 @@ async def check_employee_hours(org_id: str, employee_id: str, report_date: str, 
     elif total_hours > 8:
         level = "warning"
         warnings.append(f"Служителят има общо {total_hours:.1f} часа за деня. Проверете дали е извънреден труд.")
-    if len(projects_worked) > 1:
-        warnings.append(f"Работил е на {len(projects_worked)} обекта в същия ден.")
+    if len(project_hours) > 1:
+        warnings.append(f"Работил е на {len(project_hours)} обекта в същия ден.")
     if absence_conflict:
         warnings.append(f"Конфликт: служителят е отбелязан като {absence_status} за деня.")
 
@@ -111,7 +142,8 @@ async def check_employee_hours(org_id: str, employee_id: str, report_date: str, 
         "total_hours": round(total_hours, 2),
         "level": level,
         "warnings": warnings,
-        "projects_count": len(projects_worked),
+        "projects_count": len(project_hours),
+        "projects_breakdown": projects_breakdown,
         "absence_conflict": absence_conflict,
         "absence_status": absence_status,
     }
