@@ -62,6 +62,7 @@ export default function TechnicianDashboard() {
   // Draft editing
   const [existingDrafts, setExistingDrafts] = useState([]);
   const [workerDayHours, setWorkerDayHours] = useState({});
+  const [crossReportSnapshots, setCrossReportSnapshots] = useState({});
   const [editDraft, setEditDraft] = useState(null); // {id, smr_type, hours, notes}
   const [editSaving, setEditSaving] = useState(false);
 
@@ -80,6 +81,28 @@ export default function TechnicianDashboard() {
   }, []);
 
   useEffect(() => { loadSites(); }, [loadSites]);
+
+  // M19.1 — Cross-report hours check when entering review
+  useEffect(() => {
+    if (screen !== "review" || !entries.length) {
+      if (Object.keys(crossReportSnapshots).length) setCrossReportSnapshots({});
+      return;
+    }
+    const today = new Date().toISOString().split("T")[0];
+    const uniqueWorkerIds = [...new Set(entries.map(e => e.worker_id).filter(Boolean))];
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      await Promise.all(uniqueWorkerIds.map(async (wid) => {
+        try {
+          const res = await API.get(`/daily-reports/hours-check?employee_id=${wid}&date=${today}`);
+          next[wid] = res.data;
+        } catch { /* silent */ }
+      }));
+      if (!cancelled) setCrossReportSnapshots(next);
+    })();
+    return () => { cancelled = true; };
+  }, [screen, entries.length]); // eslint-disable-line
 
   // ── Open Object ─────────────────────────────────────────────
   const openObject = async (site) => {
@@ -936,7 +959,7 @@ export default function TechnicianDashboard() {
     // Group payload by worker
     const workerMap = {};
     for (const p of payload) {
-      if (!workerMap[p.worker_id]) workerMap[p.worker_id] = { name: p.worker_name, lines: [], total: 0 };
+      if (!workerMap[p.worker_id]) workerMap[p.worker_id] = { worker_id: p.worker_id, name: p.worker_name, lines: [], total: 0 };
       workerMap[p.worker_id].lines.push(p);
       workerMap[p.worker_id].total += p.hours;
     }
@@ -1011,6 +1034,26 @@ export default function TechnicianDashboard() {
                   {overtime > 0 && <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px]">{t("technician.overtime")}</Badge>}
                 </div>
               </div>
+
+              {/* M19.1 — Cross-report warning */}
+              {(() => {
+                const snap = crossReportSnapshots[w.worker_id];
+                const otherH = snap?.total_hours || 0;
+                const wouldBe = otherH + w.total;
+                if (otherH <= 0 || wouldBe <= NORMAL_DAY) return null;
+                const isCrit = wouldBe > 12;
+                const bd = snap?.projects_breakdown || [];
+                return (
+                  <div className={`mx-4 mb-2 rounded-lg border p-2 text-[11px] ${isCrit ? "bg-red-500/10 border-red-500/30 text-red-300" : "bg-amber-500/10 border-amber-500/30 text-amber-300"}`} data-testid={`review-cross-warn-${wi}`}>
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                      <span>Общо {wouldBe.toFixed(1)}ч за деня (с други отчети)</span>
+                    </div>
+                    {bd.length > 0 && <p className="mt-0.5 opacity-90">Други ({otherH.toFixed(1)}ч): {bd.map(p => `${p.hours}ч ${p.project_name || p.project_code || "—"}`).join(" · ")}</p>}
+                  </div>
+                );
+              })()}
+
               {/* Hours bar */}
               <div className="px-4 pb-2 flex gap-3 text-[10px]">
                 <span className="text-emerald-400">{t("technician.normalHours")}: {normal}ч</span>

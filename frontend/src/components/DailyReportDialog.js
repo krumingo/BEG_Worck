@@ -50,6 +50,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
   const [leaveTo, setLeaveTo] = useState("");
   const [notes, setNotes] = useState("");
   const [entries, setEntries] = useState([]);
+  const [hoursSnapshot, setHoursSnapshot] = useState(null);
   const [reportId, setReportId] = useState(existingReportId || null);
 
   const fetchData = useCallback(async () => {
@@ -88,6 +89,24 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
   useEffect(() => { if (open) { setLoading(true); fetchData(); } }, [open, fetchData]);
   useEffect(() => { setSelEmployee(employeeId || ""); }, [employeeId]);
   useEffect(() => { setDate(reportDate || new Date().toISOString().split("T")[0]); }, [reportDate]);
+
+  // M19.1 — debounced hours-check for cross-project warning
+  const totalHoursForCheck = entries.reduce((s, e) => s + (parseFloat(e.hours_worked) || 0), 0);
+  useEffect(() => {
+    if (!open || !selEmployee || !date || dayStatus !== "WORKING") {
+      setHoursSnapshot(null);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ employee_id: selEmployee, date });
+        if (reportId) params.set("exclude_report_id", reportId);
+        const res = await API.get(`/daily-reports/hours-check?${params.toString()}`);
+        setHoursSnapshot(res.data);
+      } catch { setHoursSnapshot(null); }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [open, selEmployee, date, dayStatus, reportId, totalHoursForCheck]); // eslint-disable-line
 
   // Load SMR when project selected
   const loadSmr = async (projectId) => {
@@ -266,6 +285,31 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
                   <Label className="text-sm font-medium">Работни записи ({entries.length}) • {totalHours.toFixed(1)}ч</Label>
                   <Button size="sm" variant="outline" onClick={addEntry}><Plus className="w-3 h-3 mr-1" /> Добави запис</Button>
                 </div>
+
+                {/* M19.1 — Hours warning panel */}
+                {hoursSnapshot && (() => {
+                  const otherHours = hoursSnapshot.total_hours || 0;
+                  const wouldBeTotal = otherHours + totalHours;
+                  if (wouldBeTotal <= 8) return null;
+                  const isCritical = wouldBeTotal > 12;
+                  const cls = isCritical ? "bg-red-500/10 border-red-500/30 text-red-300" : "bg-amber-500/10 border-amber-500/30 text-amber-300";
+                  const breakdown = hoursSnapshot.projects_breakdown || [];
+                  return (
+                    <div className={`rounded-lg border p-3 text-xs ${cls}`} data-testid="hours-warning-panel">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{isCritical ? `Внимание: общо ${wouldBeTotal.toFixed(1)}ч за деня — проверете за грешка.` : `Извънреден труд: общо ${wouldBeTotal.toFixed(1)}ч за деня.`}</span>
+                      </div>
+                      {breakdown.length > 0 && (
+                        <p className="mt-1 text-[11px] opacity-90">Други отчети ({otherHours.toFixed(1)}ч): {breakdown.map(p => `${p.hours.toFixed(1)}ч ${p.project_name || p.project_code || "—"}`).join(" · ")}</p>
+                      )}
+                      {hoursSnapshot.absence_conflict && (
+                        <p className="mt-1 text-[11px] text-red-400">Конфликт: служителят е отбелязан като {hoursSnapshot.absence_status} за деня.</p>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {entries.map((entry, i) => (
                   <div key={entry.id || i} className="p-3 rounded-lg border border-border space-y-2" data-testid={`entry-${i}`}>
                     <div className="flex items-center gap-2">

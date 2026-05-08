@@ -1,3 +1,12 @@
+## [M19.1-frontend] - 2026-05-08 — Frontend wire-up на /hours-check
+
+### Added
+- DailyReportDialog: debounced (400ms) hours-check fetch + warning panel (yellow ≤12h, red >12h) with projects breakdown
+- TechnicianDashboard Step 3: parallel cross-report fetch per worker + inline warning banner in per-worker cards
+
+---
+
+
 ## [M19.1] - 2026-05-08 — SOFT WARNING при въвеждане на дневни отчети
 
 ### Added
