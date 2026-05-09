@@ -34,7 +34,7 @@ async def list_employees(user: dict = Depends(require_m4)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     users = await db.users.find(
-        {"org_id": user["org_id"], "role": {"$ne": "Admin"}},
+        {"org_id": user["org_id"]},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "name": 1, "email": 1, "role": 1, "phone": 1, "avatar_url": 1}
     ).to_list(500)
     

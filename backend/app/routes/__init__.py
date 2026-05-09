@@ -12,7 +12,7 @@ Future structure:
 - offers.py: /api/offers/*, /api/activity-catalog/*
 - attendance.py: /api/attendance/*
 - work_reports.py: /api/work-reports/*
-- hr.py: /api/employees/*, /api/advances/*, /api/payroll-runs/*, /api/payslips/*
+- hr.py: /api/employees/*, /api/advances/*, /api/payslips/*, /api/contract-payments/*
 - finance.py: /api/finance/*
 - overhead.py: /api/overhead/*
 - billing.py: /api/billing/*

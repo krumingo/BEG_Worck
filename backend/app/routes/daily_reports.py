@@ -534,7 +534,7 @@ async def get_reports_table(
         else:
             q["day_status"] = day_status
 
-    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort([("report_date", -1), ("date", -1)]).to_list(500)
+    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort([("report_date", -1), ("date", -1), ("created_at", -1)]).to_list(500)
 
     # Normalize: extract emp_id from either schema
     emp_ids = list(set(r.get("employee_id") or r.get("worker_id", "") for r in reports if r.get("employee_id") or r.get("worker_id")))

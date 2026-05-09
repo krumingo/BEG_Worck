@@ -1,3 +1,13 @@
+## [M20.5b] - 2026-05-09 — Small backend improvements
+
+### Changed
+- reports-table sort: added created_at as 3rd tiebreaker
+- /employees: removed role!=Admin filter (admin/owner work on sites too)
+- routes/__init__.py: stale /payroll-runs comment updated
+
+---
+
+
 ## [M20.5a] - 2026-05-09 — Regression fix: orphan db.payroll_runs refs
 
 ### Fixed
