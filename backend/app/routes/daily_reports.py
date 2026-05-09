@@ -428,14 +428,14 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     # Check payroll not finalized for this period
     report_date = report.get("date", "")
     if report_date:
-        finalized = await db.payroll_runs.find_one({
+        finalized = await db.pay_runs.find_one({
             "org_id": user["org_id"],
-            "status": {"$in": ["Finalized", "Paid"]},
+            "status": "paid",
             "period_start": {"$lte": report_date},
             "period_end": {"$gte": report_date},
         })
         if finalized:
-            raise HTTPException(status_code=400, detail="Cannot reset: payroll for this period is finalized")
+            raise HTTPException(status_code=400, detail="Cannot reset: payroll for this period is paid")
 
     now = datetime.now(timezone.utc).isoformat()
 

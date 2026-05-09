@@ -293,12 +293,14 @@ async def list_payslips(
             ps["user_name"] = ps["employee_name"]
         else:
             ps["user_name"] = "Unknown"
-        # Period: from payroll_run or from payslip directly (synced records)
+        # Period: from v3 pay_runs (via source_pay_run_id) or from payslip directly
         if not ps.get("period_start"):
-            run = await db.payroll_runs.find_one({"id": ps.get("payroll_run_id")}, {"_id": 0, "period_start": 1, "period_end": 1})
-            if run:
-                ps["period_start"] = run.get("period_start")
-                ps["period_end"] = run.get("period_end")
+            src_id = ps.get("source_pay_run_id") or ps.get("payroll_run_id")
+            if src_id:
+                run = await db.pay_runs.find_one({"id": src_id}, {"_id": 0, "period_start": 1, "period_end": 1})
+                if run:
+                    ps["period_start"] = run.get("period_start")
+                    ps["period_end"] = run.get("period_end")
     
     return payslips
 
@@ -318,7 +320,8 @@ async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
     payslip["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
     payslip["user_email"] = u.get("email", "") if u else ""
     
-    run = await db.payroll_runs.find_one({"id": payslip["payroll_run_id"]}, {"_id": 0})
+    src_id = payslip.get("source_pay_run_id") or payslip.get("payroll_run_id")
+    run = await db.pay_runs.find_one({"id": src_id}, {"_id": 0}) if src_id else None
     payslip["payroll_run"] = run
     
     return payslip
@@ -455,20 +458,22 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     combined_hours = month_hours + daily_hours
     combined_days = month_att + daily_days
     
-    # Recent payslips - enrich with period info from payroll_run
+    # Recent payslips — enrich with period info from v3 pay_runs
     payslips_raw = await db.payslips.find(
         {"org_id": org_id, "user_id": user_id},
-        {"_id": 0, "id": 1, "payroll_run_id": 1, "base_amount": 1, "net_pay": 1, "status": 1}
+        {"_id": 0, "id": 1, "payroll_run_id": 1, "source_pay_run_id": 1, "base_amount": 1, "net_pay": 1, "status": 1}
     ).sort("created_at", -1).limit(5).to_list(5)
     
     payslips = []
     for ps in payslips_raw:
-        run = await db.payroll_runs.find_one({"id": ps["payroll_run_id"]}, {"_id": 0, "period_start": 1, "period_end": 1})
+        src_id = ps.get("source_pay_run_id") or ps.get("payroll_run_id")
+        run = await db.pay_runs.find_one({"id": src_id}, {"_id": 0, "period_start": 1, "period_end": 1}) if src_id else None
         ps["period_start"] = run.get("period_start") if run else None
         ps["period_end"] = run.get("period_end") if run else None
         ps["gross_pay"] = ps.get("base_amount", 0)
-        del ps["payroll_run_id"]
-        del ps["base_amount"]
+        ps.pop("payroll_run_id", None)
+        ps.pop("source_pay_run_id", None)
+        ps.pop("base_amount", None)
         payslips.append(ps)
     
     return {

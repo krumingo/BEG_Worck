@@ -1,3 +1,12 @@
+## [M20.5a] - 2026-05-09 — Regression fix: orphan db.payroll_runs refs
+
+### Fixed
+- hr.py: 3 reads → db.pay_runs via source_pay_run_id (payslips list, detail, employee dashboard)
+- daily_reports.py: reset-approval safety check → db.pay_runs status="paid"
+
+---
+
+
 ## [M20.4] - 2026-05-09 — Approval UX fixes
 
 ### Fixed
