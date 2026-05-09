@@ -1,3 +1,15 @@
+## [M20.2] - 2026-05-09 — Pay Runs → payroll_payments sync
+
+### Added
+- payroll_sync.py: D. mirror — mark-paid inserts per-employee records in payroll_payments. Reopen deletes them.
+- Idempotent (skip if existing) and reversible (per-employee or full run).
+
+### Effect
+- Finance Dashboard / Reports now see paid labor as expense.
+
+---
+
+
 ## [M20.1] - 2026-05-09 — Cleanup: премахната legacy Payroll Batch (v2)
 
 ### Removed

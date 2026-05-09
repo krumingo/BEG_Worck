@@ -3,16 +3,18 @@ Payroll Sync Service — Safe adapter between v3 pay_runs and downstream v2/v1 c
 
 Source of truth: v3 pay_runs, payment_slips, pay_run_allocations
 Downstream mirrors:
-  A. payroll_payment_allocations (v2) — feeds project_financial_results.py
+  A. payroll_payment_allocations (v2) — feeds project_financial_results.py (per-project)
   B. employee_daily_reports.payroll_status — marks reports as batched/paid
   C. payslips (v1) — feeds MyPayslipsPage worker self-view
+  D. payroll_payments (v1) — feeds dashboard.py / reports.py finance views (per-employee)
 
 STATUS LIFECYCLE:
-  CONFIRM:  allocations=provisional, reports=batched, payslips=Generated
-  MARK-PAID: allocations=active, reports=paid, payslips=Paid
-  REOPEN:   allocations=reversed, reports=none, payslips=Reversed
+  CONFIRM:   allocations=provisional, reports=batched, payslips=Generated
+  MARK-PAID: allocations=active, reports=paid, payslips=Paid, payments=inserted
+  REOPEN:    allocations=reversed, reports=none, payslips=Reversed, payments=deleted
 
-Finance reads ONLY allocations with status="active" (= real paid labor).
+Finance Dashboard / Reports read ONLY payroll_payments (= real paid labor).
+Project P&L reads payroll_payment_allocations with status="active".
 """
 from app.db import db
 
@@ -164,6 +166,38 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
         {"$set": {"status": "Paid", "paid_at": paid_at}},
     )
 
+    # D. payroll_payments mirror — feeds finance Dashboard / Reports
+    import uuid as _uuid
+    existing_payments = await db.payroll_payments.count_documents(
+        {"source_pay_run_id": run_id, "org_id": org_id}
+    )
+    if existing_payments == 0:
+        payments = []
+        payment_date = (paid_at or "")[:10]
+        for er in pay_run.get("employee_rows", []):
+            paid_amount = er.get("paid_now_amount", 0)
+            if paid_amount == 0:
+                continue
+            payments.append({
+                "id": str(_uuid.uuid4()),
+                "org_id": org_id,
+                "source_pay_run_id": run_id,
+                "user_id": er["employee_id"],
+                "employee_id": er["employee_id"],
+                "employee_name": f"{er.get('first_name', '')} {er.get('last_name', '')}".strip(),
+                "net_salary": round(paid_amount, 2),
+                "gross_salary": round(er.get("earned_amount", 0), 2),
+                "deductions": round(er.get("deductions_amount", 0), 2),
+                "bonuses": round(er.get("bonuses_amount", 0), 2),
+                "payment_date": payment_date,
+                "paid_at": paid_at,
+                "period_start": pay_run.get("period_start", ""),
+                "period_end": pay_run.get("period_end", ""),
+                "synced_from": "v3_pay_runs",
+            })
+        if payments:
+            await db.payroll_payments.insert_many(payments)
+
 
 async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
     """
@@ -182,6 +216,10 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
             {"source_pay_run_id": run_id, "org_id": org_id},
             {"$set": {"status": "Reversed"}},
         )
+        # D. payroll_payments mirror — delete (run is no longer paid)
+        await db.payroll_payments.delete_many(
+            {"source_pay_run_id": run_id, "org_id": org_id}
+        )
         for er in pay_run.get("employee_rows", []):
             dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
             if dates:
@@ -199,6 +237,10 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
             await db.payslips.update_many(
                 {"source_pay_run_id": run_id, "org_id": org_id, "employee_id": eid},
                 {"$set": {"status": "Reversed"}},
+            )
+            # D. payroll_payments mirror — delete only this employee's record
+            await db.payroll_payments.delete_many(
+                {"source_pay_run_id": run_id, "org_id": org_id, "user_id": eid}
             )
             er = next((r for r in pay_run.get("employee_rows", []) if r["employee_id"] == eid), None)
             if er:
