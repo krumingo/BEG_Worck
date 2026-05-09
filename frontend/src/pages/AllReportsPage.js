@@ -29,7 +29,7 @@ import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
   SUBMITTED: { label: "Подаден",  cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
-  APPROVED:  { label: "Одобрен",  cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  APPROVED:  { label: "Одобрен",  cls: "bg-green-700/30 text-green-300 border-green-600/40", icon: Check },
   REJECTED:  { label: "Отхвърлен", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
@@ -266,6 +266,7 @@ export default function AllReportsPage() {
               }
               if (d.failed?.length) toast.error(`${d.failed.length} неуспешни`);
               if (!d.blocked_for_override?.length) bulk.clear();
+              fetchData();
             } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
             finally { setBulkLoading(false); }
           }}>Одобри ({bulk.count})</Button>
@@ -358,7 +359,7 @@ export default function AllReportsPage() {
                         </div>
                       ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell><Badge variant="outline" className={`text-[9px] ${stCfg.cls}`}>{stCfg.label}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={`text-[9px] ${stCfg.cls}`}>{stCfg.icon && <stCfg.icon className="w-2.5 h-2.5 mr-0.5" />}{stCfg.label}</Badge></TableCell>
                     <TableCell>{payCfg.label !== "—" ? <Badge variant="outline" className={`text-[9px] ${payCfg.cls}`}>{payCfg.label}</Badge> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setDetail(r)} data-testid={`detail-btn-${r.id}`}>
@@ -450,9 +451,16 @@ export default function AllReportsPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">{t("allReports.colStatus")}</p>
-                  <Badge variant="outline" className={`text-[10px] ${(STATUS_BADGE[detail.report_status] || {}).cls || ""}`}>
-                    {(STATUS_BADGE[detail.report_status] || {}).label || detail.report_status}
-                  </Badge>
+                  {(() => {
+                    const cfg = STATUS_BADGE[detail.report_status] || {};
+                    const Icon = cfg.icon;
+                    return (
+                      <Badge variant="outline" className={`text-[10px] ${cfg.cls || ""}`}>
+                        {Icon && <Icon className="w-2.5 h-2.5 mr-0.5" />}
+                        {cfg.label || detail.report_status}
+                      </Badge>
+                    );
+                  })()}
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">{t("allReports.colPayroll")}</p>

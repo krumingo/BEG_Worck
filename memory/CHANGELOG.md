@@ -1,3 +1,15 @@
+## [M20.4] - 2026-05-09 — Approval UX fixes
+
+### Fixed
+- AllReportsPage bulk-approve: added fetchData() refresh after success
+
+### Changed
+- "Одобрен" badge: emerald → dark green + ✓ icon (distinct from "Платен")
+- Synced style between AllReportsPage and ProjectPersonnelPanel
+
+---
+
+
 ## [M20.3] - 2026-05-09 — Nav reorganize: financial tools under Финанси
 
 ### Changed

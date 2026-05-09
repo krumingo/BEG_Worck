@@ -20,7 +20,7 @@ import ActivityReportsList from "@/components/ActivityReportsList";
 function fmt(n) { return n == null || n === 0 ? "—" : n.toLocaleString("bg-BG", { maximumFractionDigits: 0 }); }
 
 const TODAY_STATUS = {
-  has_approved: { label: "Одобрен", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-500" },
+  has_approved: { label: "Одобрен", color: "bg-green-700/30 text-green-300 border-green-600/40", dot: "bg-green-500", icon: Check },
   has_draft: { label: "Чернова", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", dot: "bg-blue-500" },
   present_no_report: { label: "Без отчет", color: "bg-amber-500/20 text-amber-400 border-amber-500/30", dot: "bg-amber-500" },
   not_present: { label: "Отсъства", color: "bg-zinc-500/20 text-zinc-400", dot: "bg-zinc-600" },
@@ -140,7 +140,7 @@ export default function ProjectPersonnelPanel({ projectId }) {
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className={`text-[9px] ${st.color}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${st.dot} inline-block mr-1`} />
+                        {st.icon ? <st.icon className="w-2.5 h-2.5 mr-0.5" /> : <span className={`w-1.5 h-1.5 rounded-full ${st.dot} inline-block mr-1`} />}
                         {st.label}
                       </Badge>
                     </TableCell>
