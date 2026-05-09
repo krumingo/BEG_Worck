@@ -31,9 +31,7 @@ import OfferEditorPage from "@/pages/OfferEditorPage";
 import ActivityCatalogPage from "@/pages/ActivityCatalogPage";
 import EmployeesPage from "@/pages/EmployeesPage";
 import AdvancesPage from "@/pages/AdvancesPage";
-import PayrollRunsPage from "@/pages/PayrollRunsPage";
 import PayRunsPage from "@/pages/PayRunsPage";
-import PayrollDetailPage from "@/pages/PayrollDetailPage";
 import MyPayslipsPage from "@/pages/MyPayslipsPage";
 import FinanceOverviewPage from "@/pages/FinanceOverviewPage";
 import FinancialAccountsPage from "@/pages/FinancialAccountsPage";
@@ -204,8 +202,6 @@ function AppRoutes() {
       <Route path="/projects/:projectId/progress" element={<AdminRoute><ProjectProgressPage /></AdminRoute>} />
       <Route path="/projects/:projectId/operations" element={<AdminRoute><ProjectOperationsPage /></AdminRoute>} />
       <Route path="/advances" element={<AdminRoute><AdvancesPage /></AdminRoute>} />
-      <Route path="/payroll" element={<AdminRoute><PayrollRunsPage /></AdminRoute>} />
-      <Route path="/payroll/:runId" element={<AdminRoute><PayrollDetailPage /></AdminRoute>} />
       <Route path="/pay-runs" element={<AdminRoute><PayRunsPage /></AdminRoute>} />
       <Route path="/finance" element={<AdminRoute><FinanceOverviewPage /></AdminRoute>} />
       <Route path="/finance/accounts" element={<AdminRoute><FinancialAccountsPage /></AdminRoute>} />

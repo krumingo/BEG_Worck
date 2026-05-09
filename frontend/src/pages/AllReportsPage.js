@@ -18,10 +18,9 @@ import {
 import {
   Clock, Users, FileText, AlertTriangle, Filter, ChevronLeft,
   ChevronRight, ArrowUpDown, MapPin, User, Check, X as XIcon,
-  Briefcase, Eye, CalendarDays, List, DollarSign,
+  Briefcase, Eye, CalendarDays, List,
 } from "lucide-react";
 import WeeklyMatrixSection from "@/components/WeeklyMatrixSection";
-import PayrollBatchSection from "@/components/PayrollBatchSection";
 import EmployeeDossierSection from "@/components/EmployeeDossierSection";
 import useBulkSelection from "@/hooks/useBulkSelection";
 import { toast } from "sonner";
@@ -154,13 +153,6 @@ export default function AllReportsPage() {
           <CalendarDays className="w-3.5 h-3.5" />{t("allReports.tabWeekly")}
         </button>
         <button
-          onClick={() => setActiveTab("payroll")}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "payroll" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-          data-testid="tab-payroll"
-        >
-          <DollarSign className="w-3.5 h-3.5" />{t("allReports.tabPayroll")}
-        </button>
-        <button
           onClick={() => setActiveTab("dossier")}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "dossier" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
           data-testid="tab-dossier"
@@ -171,9 +163,6 @@ export default function AllReportsPage() {
 
       {/* Weekly Matrix Tab */}
       {activeTab === "weekly" && <WeeklyMatrixSection />}
-
-      {/* Payroll Batch Tab */}
-      {activeTab === "payroll" && <PayrollBatchSection />}
 
       {/* Dossier Tab */}
       {activeTab === "dossier" && <EmployeeDossierSection />}

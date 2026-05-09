@@ -1,3 +1,19 @@
+## [M20.1] - 2026-05-09 — Cleanup: премахната legacy Payroll Batch (v2)
+
+### Removed
+- backend/app/routes/payroll_batch.py + server.py registration
+- frontend PayrollRunsPage.js, PayrollDetailPage.js, PayrollBatchSection.js
+- Routes /payroll and /payroll/:runId from App.js
+- Tab "Заплати (стар)" from AllReportsPage.js
+- Dead endpoints in hr.py: /payroll-runs (6), /payslips/set-deductions+mark-paid (2), Weekly Payroll (3)
+- 6 dead test files
+
+### Changed
+- employee_dossier.py reads from v3 pay_runs (was v2 payroll_batches)
+
+---
+
+
 ## [M19.7-fix] - 2026-05-09 — Follow-up fixes за UX restructure
 
 ### Fixed

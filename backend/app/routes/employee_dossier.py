@@ -109,32 +109,39 @@ async def get_employee_dossier(
     total_hours = round(sum(r["hours"] for r in report_lines), 1)
     total_value = round(sum(r["value"] for r in report_lines), 2)
 
-    # 3) Payroll batches containing this worker
-    batches = await db.payroll_batches.find(
-        {"org_id": org_id, "employee_summaries.worker_id": worker_id},
+    # 3) Pay runs containing this worker (v3 — source of truth)
+    pay_runs = await db.pay_runs.find(
+        {"org_id": org_id, "employee_rows.employee_id": worker_id},
         {"_id": 0},
-    ).sort("week_start", -1).to_list(100)
+    ).sort("period_start", -1).to_list(100)
 
     payroll_weeks = []
-    for b in batches:
-        ws = next((s for s in b.get("employee_summaries", []) if s.get("worker_id") == worker_id), None)
-        if ws:
-            payroll_weeks.append({
-                "batch_id": b["id"],
-                "week_start": b.get("week_start", ""),
-                "week_end": b.get("week_end", ""),
-                "status": b.get("status", ""),
-                "paid_at": b.get("paid_at"),
-                "days": ws.get("included_days", 0),
-                "hours": ws.get("total_hours", 0),
-                "normal": ws.get("normal_hours", 0),
-                "overtime": ws.get("overtime_hours", 0),
-                "gross": ws.get("gross", 0),
-                "bonuses": ws.get("bonuses", 0),
-                "deductions": ws.get("deductions", 0),
-                "net": ws.get("net", 0),
-                "adjustments": ws.get("adjustments", []),
-            })
+    for pr in pay_runs:
+        er = next((e for e in pr.get("employee_rows", []) if e.get("employee_id") == worker_id), None)
+        if not er:
+            continue
+        if er.get("paid_now_amount", 0) == 0 and er.get("earned_amount", 0) == 0:
+            continue
+        day_cells = er.get("day_cells", [])
+        normal_h = sum(dc.get("hours", 0) for dc in day_cells if not dc.get("is_overtime"))
+        overtime_h = sum(dc.get("hours", 0) for dc in day_cells if dc.get("is_overtime"))
+        total_h = er.get("approved_hours", normal_h + overtime_h)
+        payroll_weeks.append({
+            "batch_id": pr["id"],
+            "week_start": pr.get("period_start", ""),
+            "week_end": pr.get("period_end", ""),
+            "status": pr.get("status", ""),
+            "paid_at": pr.get("paid_at"),
+            "days": len(day_cells),
+            "hours": round(total_h, 2),
+            "normal": round(normal_h, 2),
+            "overtime": round(overtime_h, 2),
+            "gross": round(er.get("earned_amount", 0), 2),
+            "bonuses": round(er.get("bonuses_amount", 0), 2),
+            "deductions": round(er.get("deductions_amount", 0), 2),
+            "net": round(er.get("paid_now_amount", 0), 2),
+            "adjustments": er.get("adjustments", []),
+        })
 
     total_gross = round(sum(w["gross"] for w in payroll_weeks), 2)
     total_net = round(sum(w["net"] for w in payroll_weeks), 2)

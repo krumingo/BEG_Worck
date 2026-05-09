@@ -320,8 +320,7 @@ api_router.include_router(all_reports_router)
 from app.routes.weekly_matrix import router as weekly_matrix_router
 api_router.include_router(weekly_matrix_router)
 
-from app.routes.payroll_batch import router as payroll_batch_router
-api_router.include_router(payroll_batch_router)
+
 
 from app.routes.employee_dossier import router as employee_dossier_router
 api_router.include_router(employee_dossier_router)
