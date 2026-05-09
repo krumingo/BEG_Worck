@@ -197,6 +197,8 @@ export default function PayRunsPage() {
   };
 
   const toggleEmp = (eid) => {
+    const row = (preview?.rows || []).find(r => r.employee_id === eid);
+    if (row && (row.previously_paid || 0) > 0 && (row.remaining_after_payment || 0) <= 0) return;
     setSelectedEmps(prev => {
       const next = new Set(prev);
       if (next.has(eid)) next.delete(eid); else next.add(eid);
@@ -216,7 +218,8 @@ export default function PayRunsPage() {
     const emps = new Set();
     const days = {};
     for (const r of (preview?.rows || [])) {
-      if (r.earned_amount > 0) {
+      const isFullyPaid = (r.previously_paid || 0) > 0 && (r.remaining_after_payment || 0) <= 0;
+      if (r.earned_amount > 0 && !isFullyPaid) {
         emps.add(r.employee_id);
         days[r.employee_id] = new Set((r.day_cells || []).map(d => d.date));
       }
@@ -533,17 +536,26 @@ export default function PayRunsPage() {
                         const isSelected = selectedEmps.has(eid);
                         const empDays = selectedDays[eid] || new Set();
                         const payAmount = getEmpPayAmount(row);
+                        const isFullyPaid = (row.previously_paid || 0) > 0 && (row.remaining_after_payment || 0) <= 0;
                         const dayCellMap = {};
                         (row.day_cells || []).forEach(dc => { dayCellMap[dc.date] = dc; });
 
                         return (
-                          <TableRow key={eid} className={`${isSelected ? "" : "opacity-40"}`} data-testid={`grid-row-${eid}`}>
-                            <TableCell className="text-center"><input type="checkbox" checked={isSelected} onChange={() => toggleEmp(eid)} className="rounded" /></TableCell>
+                          <TableRow key={eid} className={`${isSelected ? "" : "opacity-40"} ${isFullyPaid ? "opacity-60" : ""}`} data-testid={`grid-row-${eid}`}>
+                            <TableCell className="text-center"><input type="checkbox" checked={isSelected} disabled={isFullyPaid} onChange={() => toggleEmp(eid)} className="rounded" /></TableCell>
                             <TableCell className="sticky left-0 bg-card z-10">
                               <div className="flex items-center gap-2">
                                 {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
                                 <div className="min-w-0">
-                                  <p className="text-xs font-medium truncate max-w-[100px]">{row.first_name} {row.last_name}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-medium truncate max-w-[100px]">{row.first_name} {row.last_name}</p>
+                                    {row.previously_paid > 0 && row.remaining_after_payment <= 0 && (
+                                      <Badge variant="outline" className="text-[7px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 px-1 py-0 h-3.5">Платено</Badge>
+                                    )}
+                                    {row.previously_paid > 0 && row.remaining_after_payment > 0 && (
+                                      <Badge variant="outline" className="text-[7px] bg-amber-500/15 text-amber-400 border-amber-500/30 px-1 py-0 h-3.5">Частично</Badge>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-1">
                                     <p className="text-[8px] text-muted-foreground">{row.position || row.pay_type || "—"}</p>
                                     <button onClick={() => isSelected ? clearAllDaysForEmp(eid) : selectAllDaysForEmp(eid, row.day_cells || [])} className="text-[7px] text-primary hover:underline">{empDays.size > 0 ? "×" : "✓"}</button>
