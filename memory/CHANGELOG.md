@@ -1,3 +1,13 @@
+## [M20.3] - 2026-05-09 — Nav reorganize: financial tools under Финанси
+
+### Changed
+- Pay Runs / Advances / Contract Payments moved from "Персонал" to "Финанси"
+- "Разплащане"/"Pay Runs" → "Заплати"/"Salaries"
+- Personnel group now: Служители + Календар only
+
+---
+
+
 ## [M20.2] - 2026-05-09 — Pay Runs → payroll_payments sync
 
 ### Added

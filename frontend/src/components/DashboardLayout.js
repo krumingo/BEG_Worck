@@ -57,16 +57,16 @@ const NAV_GROUPS = [
     id: "personnel", icon: UserCog, labelKey: "nav.personnel",
     children: [
       { to: "/employees", icon: UserCog, labelKey: "nav.employees" },
-      { to: "/pay-runs", icon: Receipt, labelKey: "nav.payRuns" },
       { to: "/worker-calendar", icon: CalendarDays, labelKey: "nav.workerCalendar" },
-      { to: "/advances", icon: Wallet, labelKey: "nav.advances" },
-      { to: "/contract-payments", icon: Briefcase, labelKey: "nav.contractPayments" },
     ],
   },
   {
     id: "finances", icon: Landmark, labelKey: "nav.finances",
     children: [
       { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
+      { to: "/pay-runs", icon: Receipt, labelKey: "nav.payRuns" },
+      { to: "/advances", icon: Wallet, labelKey: "nav.advances" },
+      { to: "/contract-payments", icon: Briefcase, labelKey: "nav.contractPayments" },
       { to: "/overhead", icon: Calculator, labelKey: "nav.overhead" },
       { to: "/ocr-invoices", icon: ScanLine, labelKey: "nav.ocrInvoices" },
       { to: "/reports/finance-details", icon: BarChart3, labelKey: "nav.financeDetails" },
