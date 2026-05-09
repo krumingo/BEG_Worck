@@ -65,6 +65,7 @@ export default function TechnicianDashboard() {
   const [crossReportSnapshots, setCrossReportSnapshots] = useState({});
   const [editDraft, setEditDraft] = useState(null); // {id, smr_type, hours, notes}
   const [editSaving, setEditSaving] = useState(false);
+  const [editingWorkerIds, setEditingWorkerIds] = useState(new Set());
 
   // Object detail
   const [siteDetail, setSiteDetail] = useState(null);
@@ -151,6 +152,7 @@ export default function TechnicianDashboard() {
       await API.post(`/technician/site/${selectedSite.project_id}/roster`, { workers: roster });
       setEntries(roster.map(w => ({ id: Date.now() + Math.random(), worker_id: w.worker_id, worker_name: w.worker_name, lines: [{ smr: "", hours: "8", notes: "" }] })));
       setGroupWorkers([]);
+      setEditingWorkerIds(new Set());
       // Fetch day hours for all workers
       try {
         const ids = roster.map(w => w.worker_id).join(",");
@@ -223,6 +225,11 @@ export default function TechnicianDashboard() {
     if (!payload.length) { toast.error(t("technician.fillEntries")); return; }
     setSubmitting(true);
     try {
+      // M19.7: Delete old drafts when editing existing reports
+      if (reportMode === "person" && editingWorkerIds.size > 0) {
+        const toDelete = existingDrafts.filter(d => editingWorkerIds.has(d.worker_id));
+        await Promise.all(toDelete.map(d => API.delete(`/technician/draft/${d.id}`).catch(() => null)));
+      }
       const res = await API.post("/technician/daily-report", { project_id: selectedSite.project_id, entries: payload, general_notes: generalNotes || undefined });
 
       // Check for hours warnings per worker
@@ -772,70 +779,125 @@ export default function TechnicianDashboard() {
       </div>
 
       {/* MODE A: Per person — styled cards */}
-      {reportMode === "person" && entries.map(e => {
-        const dayH = workerDayHours[e.worker_id];
-        const savedTotal = dayH ? dayH.total_hours : 0; // saved hours across all projects
-        const otherProjects = dayH ? dayH.projects_count : 0;
+      {reportMode === "person" && (() => {
+        // Split into reported vs to-report
+        const draftsByWorker = {};
+        for (const dd of existingDrafts) {
+          if (!draftsByWorker[dd.worker_id]) draftsByWorker[dd.worker_id] = [];
+          draftsByWorker[dd.worker_id].push(dd);
+        }
+        const reportedWorkers = [];
+        const toReportEntries = [];
+        for (const e of entries) {
+          const hasDraft = (draftsByWorker[e.worker_id] || []).length > 0;
+          if (hasDraft && !editingWorkerIds.has(e.worker_id)) {
+            reportedWorkers.push({ entry: e, drafts: draftsByWorker[e.worker_id] });
+          } else {
+            toReportEntries.push({ entry: e, isEditing: editingWorkerIds.has(e.worker_id) });
+          }
+        }
 
-        // Color logic based on SAVED hours only (not form defaults)
-        const isCritical = savedTotal > 12;
-        const isWarning = savedTotal > 8;
-        const accentCls = isCritical ? "border-l-red-500" : isWarning ? "border-l-amber-500" : "border-l-slate-600";
-        const headerBg = isCritical ? "bg-red-500/8" : isWarning ? "bg-amber-500/8" : "bg-slate-800/60";
+        const renderCard = (e, isEditing) => {
+          const dayH = workerDayHours[e.worker_id];
+          const savedTotal = dayH ? dayH.total_hours : 0;
+          const isCritical = savedTotal > 12;
+          const isWarning = savedTotal > 8;
+          const accentCls = isEditing ? "border-l-orange-500" : isCritical ? "border-l-red-500" : isWarning ? "border-l-amber-500" : "border-l-slate-600";
+          const headerBg = isEditing ? "bg-orange-500/10" : isCritical ? "bg-red-500/8" : isWarning ? "bg-amber-500/8" : "bg-slate-800/60";
+
+          return (
+            <div key={e.id} className={`rounded-2xl border border-border bg-card overflow-hidden border-l-4 ${accentCls}`} style={{ marginTop: "12px" }}>
+              <div className={`px-4 py-3 ${headerBg} border-b border-border/50 flex items-center gap-3`}>
+                <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-primary flex-shrink-0">
+                  {(e.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{e.worker_name}</p>
+                  {isEditing && <p className="text-[9px] text-orange-400">Редактираш съществуващ отчет</p>}
+                </div>
+                {isEditing && (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setEditingWorkerIds(prev => { const n = new Set(prev); n.delete(e.worker_id); return n; })}>Отказ</Button>
+                )}
+                {savedTotal > 0 && (
+                  <span className={`text-[10px] font-mono ${isCritical ? "text-red-400" : isWarning ? "text-amber-400" : "text-emerald-400"}`}>
+                    Другаде: {savedTotal}ч
+                  </span>
+                )}
+                {savedTotal === 0 && <span className="text-[10px] text-muted-foreground">Няма отчет</span>}
+              </div>
+              <div className="p-4 space-y-4">
+                {e.lines.map((ln, li) => (
+                  <div key={li} className="space-y-2">
+                    {availableTasks.length > 0 ? (
+                      <Select value={ln.smr || "none"} onValueChange={v => setLine(e.id, li, "smr", v === "none" ? "" : v)}>
+                        <SelectTrigger className="h-11 border-blue-500/20 focus:border-blue-500/40"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
+                        <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}{tk.source_label ? ` (${tk.source_label})` : ""}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
+                      </Select>
+                    ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11 border-blue-500/20 focus:border-blue-500/40" />}
+                    {ln.smr === "__other" && <Input value="" onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" autoFocus />}
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Input type="number" value={ln.hours} onChange={ev => setLine(e.id, li, "hours", ev.target.value)} placeholder="Часове" className="h-11 border-amber-500/20 focus:border-amber-500/40 pl-8" min="0" max="24" step="0.5" />
+                        <Clock className="w-3.5 h-3.5 absolute left-2.5 top-3.5 text-amber-500/40" />
+                      </div>
+                      <Input value={ln.notes} onChange={ev => setLine(e.id, li, "notes", ev.target.value)} placeholder="Бележки" className="h-11 flex-1 border-slate-600/30" />
+                      {e.lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(e.id, li)} className="h-11 hover:bg-red-500/10"><Trash2 className="w-4 h-4 text-red-400" /></Button>}
+                    </div>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={() => addLine(e.id)} className="w-full rounded-xl border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/30"><Plus className="w-4 h-4 mr-1" />{t("technician.addActivity")}</Button>
+              </div>
+            </div>
+          );
+        };
 
         return (
-          <div key={e.id} className={`rounded-2xl border border-border bg-card overflow-hidden border-l-4 ${accentCls}`} style={{ marginTop: "16px" }}>
-            {/* Worker header */}
-            <div className={`px-4 py-3 ${headerBg} border-b border-border/50 flex items-center gap-3`}>
-              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-primary flex-shrink-0">
-                {(e.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{e.worker_name}</p>
-                {otherProjects > 1 && <p className="text-[9px] text-muted-foreground">{otherProjects} обекта днес</p>}
-              </div>
-              {/* Saved hours badge — only real data */}
-              {savedTotal > 0 ? (
-                <div className={`px-2.5 py-1 rounded-lg border text-right ${isCritical ? "bg-red-500/20 text-red-400 border-red-500/30" : isWarning ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"}`}>
-                  <p className="text-[11px] font-mono font-bold leading-tight">Записано: {savedTotal}ч</p>
+          <>
+            {/* Section 1: To report */}
+            {toReportEntries.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-1 mt-2">
+                  <Pencil className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-semibold text-amber-400">За отчитане ({toReportEntries.length})</span>
                 </div>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">Няма отчет</span>
-              )}
-            </div>
+                {toReportEntries.map(({ entry, isEditing }) => renderCard(entry, isEditing))}
+              </div>
+            )}
 
-            {/* Activity lines */}
-            <div className="p-4 space-y-4">
-              {e.lines.map((ln, li) => (
-                <div key={li} className="space-y-2">
-                  {/* Activity select — subtle blue accent */}
-                  {availableTasks.length > 0 ? (
-                    <Select value={ln.smr || "none"} onValueChange={v => setLine(e.id, li, "smr", v === "none" ? "" : v)}>
-                      <SelectTrigger className="h-11 border-blue-500/20 focus:border-blue-500/40"><SelectValue placeholder={t("technician.selectSmr")} /></SelectTrigger>
-                      <SelectContent><SelectItem value="none" disabled>{t("technician.selectSmr")}</SelectItem>{availableTasks.map((tk, ti) => <SelectItem key={ti} value={tk.smr_type}>{tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}{tk.source_label ? ` (${tk.source_label})` : ""}</SelectItem>)}<SelectItem value="__other">{t("technician.otherSmr")}</SelectItem></SelectContent>
-                    </Select>
-                  ) : <Input value={ln.smr} onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11 border-blue-500/20 focus:border-blue-500/40" />}
-                  {ln.smr === "__other" && <Input value="" onChange={ev => setLine(e.id, li, "smr", ev.target.value)} placeholder={t("technician.smrType")} className="h-11" autoFocus />}
-
-                  {/* Hours + Notes row */}
-                  <div className="flex gap-2">
-                    <div className="flex-1 relative">
-                      <Input type="number" value={ln.hours} onChange={ev => setLine(e.id, li, "hours", ev.target.value)} placeholder="Часове" className="h-11 border-amber-500/20 focus:border-amber-500/40 pl-8" min="0" max="24" step="0.5" />
-                      <Clock className="w-3.5 h-3.5 absolute left-2.5 top-3.5 text-amber-500/40" />
-                    </div>
-                    <div className="flex-1">
-                      <Input value={ln.notes} onChange={ev => setLine(e.id, li, "notes", ev.target.value)} placeholder="Бележки" className="h-11 border-slate-600/30" />
-                    </div>
-                    {e.lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeLine(e.id, li)} className="h-11 hover:bg-red-500/10"><Trash2 className="w-4 h-4 text-red-400" /></Button>}
-                  </div>
+            {/* Section 2: Already reported */}
+            {reportedWorkers.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-xs font-semibold text-emerald-400">Вече отчетени ({reportedWorkers.length})</span>
                 </div>
-              ))}
-              {/* Add activity — secondary */}
-              <Button variant="outline" size="sm" onClick={() => addLine(e.id)} className="w-full rounded-xl border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/30"><Plus className="w-4 h-4 mr-1" />{t("technician.addActivity")}</Button>
-            </div>
-          </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 divide-y divide-border/30 overflow-hidden">
+                  {reportedWorkers.map(({ entry: e, drafts }) => {
+                    const totalH = drafts.reduce((s, d) => s + (d.hours || 0), 0);
+                    return (
+                      <div key={e.worker_id} className="flex items-center gap-3 px-4 py-3">
+                        <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{e.worker_name}</p>
+                          <p className="text-[10px] text-muted-foreground">{drafts.length === 1 ? (drafts[0].smr_type || "—") : `${drafts.length} дейности`}</p>
+                        </div>
+                        <span className="text-sm font-mono font-bold text-emerald-400">{totalH}ч</span>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => {
+                          setEditingWorkerIds(prev => new Set(prev).add(e.worker_id));
+                          setEntries(prev => prev.map(en => en.worker_id !== e.worker_id ? en : {
+                            ...en,
+                            lines: drafts.map(d => ({ smr: d.smr_type || "", hours: String(d.hours || ""), notes: d.notes || "", draft_id: d.id })),
+                          }));
+                        }}><Pencil className="w-3 h-3" />Редактирай</Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         );
-      })}
+      })()}
 
       {/* MODE B: Group — accumulating day builder */}
       {reportMode === "group" && (() => {

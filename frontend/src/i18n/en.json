@@ -1709,7 +1709,13 @@
     "overtimeWarning": "Overtime reported for {{count}} worker(s)",
     "overtimeNote": "Hours above 8h/day count as overtime",
     "withOvertime": "with overtime",
-    "workerActivities": "activities"
+    "workerActivities": "activities",
+    "toReportSection": "To report",
+    "alreadyReportedSection": "Already reported",
+    "editingExisting": "Editing existing report",
+    "elsewhereLabel": "Elsewhere",
+    "editReport": "Edit",
+    "activityCount": "{{n}} activities"
   },
   "projectContext": {
     "active": "Site",

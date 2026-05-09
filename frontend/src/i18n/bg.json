@@ -1892,7 +1892,13 @@
     "overtimeWarning": "Има наднормено време за {{count}} човека",
     "overtimeNote": "Часове над 8ч/ден се считат за наднормени",
     "withOvertime": "с наднормено",
-    "workerActivities": "дейности"
+    "workerActivities": "дейности",
+    "toReportSection": "За отчитане",
+    "alreadyReportedSection": "Вече отчетени",
+    "editingExisting": "Редактираш съществуващ отчет",
+    "elsewhereLabel": "Другаде",
+    "editReport": "Редактирай",
+    "activityCount": "{{n}} дейности"
   },
   "projectContext": {
     "active": "Обект",

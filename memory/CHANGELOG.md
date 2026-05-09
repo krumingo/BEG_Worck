@@ -1,3 +1,13 @@
+## [M19.7] - 2026-05-09 — UX restructure на Technician report screen
+
+### Changed
+- TechnicianDashboard Step 2 person mode: split в 2 секции — "За отчитане" (active forms) и "Вече отчетени" (collapsed rows with Edit)
+- Cross-project badge renamed "Записано" → "Другаде" for clarity
+- Edit existing draft: orange accent border, "Редактираш" label, Cancel button. Old drafts deleted on submit.
+
+---
+
+
 ## [M19.1-frontend] - 2026-05-08 — Frontend wire-up на /hours-check
 
 ### Added
