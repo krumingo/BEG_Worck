@@ -1,3 +1,12 @@
+## [M19.7-fix] - 2026-05-09 — Follow-up fixes за UX restructure
+
+### Fixed
+- copyYesterday flow now resets editingWorkerIds (symmetry with saveRoster)
+- M19.7 render: all 7 hardcoded BG strings replaced with t() calls
+
+---
+
+
 ## [M19.7] - 2026-05-09 — UX restructure на Technician report screen
 
 ### Changed

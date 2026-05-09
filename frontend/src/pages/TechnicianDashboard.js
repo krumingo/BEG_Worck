@@ -352,6 +352,7 @@ export default function TechnicianDashboard() {
       // Set roster + entries from enriched data, then go to report
       setRoster(rosterForReport.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name })));
       setEntries(rosterForReport.map(w => ({ id: Date.now() + Math.random(), worker_id: w.worker_id, worker_name: w.worker_name, lines: [{ smr: "", hours: "8", notes: "" }] })));
+      setEditingWorkerIds(new Set());
       setGroupWorkers([]);
       // Fetch day hours
       const ids = rosterForReport.map(w => w.worker_id).join(",");
@@ -813,14 +814,14 @@ export default function TechnicianDashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{e.worker_name}</p>
-                  {isEditing && <p className="text-[9px] text-orange-400">Редактираш съществуващ отчет</p>}
+                  {isEditing && <p className="text-[9px] text-orange-400">{t("technician.editingExisting")}</p>}
                 </div>
                 {isEditing && (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setEditingWorkerIds(prev => { const n = new Set(prev); n.delete(e.worker_id); return n; })}>Отказ</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setEditingWorkerIds(prev => { const n = new Set(prev); n.delete(e.worker_id); return n; })}>{t("common.cancel")}</Button>
                 )}
                 {savedTotal > 0 && (
                   <span className={`text-[10px] font-mono ${isCritical ? "text-red-400" : isWarning ? "text-amber-400" : "text-emerald-400"}`}>
-                    Другаде: {savedTotal}ч
+                    {t("technician.elsewhereLabel")}: {savedTotal}ч
                   </span>
                 )}
                 {savedTotal === 0 && <span className="text-[10px] text-muted-foreground">Няма отчет</span>}
@@ -858,7 +859,7 @@ export default function TechnicianDashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-1 mt-2">
                   <Pencil className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-xs font-semibold text-amber-400">За отчитане ({toReportEntries.length})</span>
+                  <span className="text-xs font-semibold text-amber-400">{t("technician.toReportSection")} ({toReportEntries.length})</span>
                 </div>
                 {toReportEntries.map(({ entry, isEditing }) => renderCard(entry, isEditing))}
               </div>
@@ -869,7 +870,7 @@ export default function TechnicianDashboard() {
               <div className="mt-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-xs font-semibold text-emerald-400">Вече отчетени ({reportedWorkers.length})</span>
+                  <span className="text-xs font-semibold text-emerald-400">{t("technician.alreadyReportedSection")} ({reportedWorkers.length})</span>
                 </div>
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 divide-y divide-border/30 overflow-hidden">
                   {reportedWorkers.map(({ entry: e, drafts }) => {
@@ -879,7 +880,7 @@ export default function TechnicianDashboard() {
                         <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{e.worker_name}</p>
-                          <p className="text-[10px] text-muted-foreground">{drafts.length === 1 ? (drafts[0].smr_type || "—") : `${drafts.length} дейности`}</p>
+                          <p className="text-[10px] text-muted-foreground">{drafts.length === 1 ? (drafts[0].smr_type || "—") : t("technician.activityCount", { n: drafts.length })}</p>
                         </div>
                         <span className="text-sm font-mono font-bold text-emerald-400">{totalH}ч</span>
                         <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => {
@@ -888,7 +889,7 @@ export default function TechnicianDashboard() {
                             ...en,
                             lines: drafts.map(d => ({ smr: d.smr_type || "", hours: String(d.hours || ""), notes: d.notes || "", draft_id: d.id })),
                           }));
-                        }}><Pencil className="w-3 h-3" />Редактирай</Button>
+                        }}><Pencil className="w-3 h-3" />{t("technician.editReport")}</Button>
                       </div>
                     );
                   })}
