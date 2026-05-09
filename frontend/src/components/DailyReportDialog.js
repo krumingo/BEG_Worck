@@ -52,6 +52,8 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
   const [entries, setEntries] = useState([]);
   const [hoursSnapshot, setHoursSnapshot] = useState(null);
   const [reportId, setReportId] = useState(existingReportId || null);
+  // Map employee_id → hours already reported on selected date (for dropdown grouping)
+  const [employeeHoursMap, setEmployeeHoursMap] = useState({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -89,6 +91,21 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
   useEffect(() => { if (open) { setLoading(true); fetchData(); } }, [open, fetchData]);
   useEffect(() => { setSelEmployee(employeeId || ""); }, [employeeId]);
   useEffect(() => { setDate(reportDate || new Date().toISOString().split("T")[0]); }, [reportDate]);
+
+  // Fetch per-employee hours for the selected date (used to split dropdown
+  // into "С отчет днес" / "Без отчет" groups with hours hint).
+  useEffect(() => {
+    if (!open || !date || employees.length === 0) {
+      setEmployeeHoursMap({});
+      return;
+    }
+    let cancelled = false;
+    const ids = employees.map(e => e.id).join(",");
+    API.get(`/technician/worker-day-hours?worker_ids=${ids}&date=${date}`)
+      .then(r => { if (!cancelled) setEmployeeHoursMap(r.data?.workers || {}); })
+      .catch(() => { if (!cancelled) setEmployeeHoursMap({}); });
+    return () => { cancelled = true; };
+  }, [open, date, employees]);
 
   // M19.1 — debounced hours-check for cross-project warning
   const totalHoursForCheck = entries.reduce((s, e) => s + (parseFloat(e.hours_worked) || 0), 0);
@@ -240,7 +257,45 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
                 <Select value={selEmployee} onValueChange={setSelEmployee} disabled={!!employeeId}>
                   <SelectTrigger className="bg-background"><SelectValue placeholder="Избери" /></SelectTrigger>
                   <SelectContent>
-                    {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.first_name} {e.last_name}</SelectItem>)}
+                    {(() => {
+                      const reported = [];
+                      const notReported = [];
+                      for (const e of employees) {
+                        const h = employeeHoursMap[e.id]?.total_hours || 0;
+                        if (h > 0) reported.push({ ...e, _hours: h });
+                        else notReported.push(e);
+                      }
+                      reported.sort((a, b) => b._hours - a._hours);
+                      return (
+                        <>
+                          {reported.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] font-semibold text-emerald-400 border-b border-border/40 sticky top-0 bg-popover z-10">
+                                ✓ С отчет днес ({reported.length})
+                              </div>
+                              {reported.map(e => (
+                                <SelectItem key={e.id} value={e.id}>
+                                  <span className="flex items-center justify-between gap-3 w-full">
+                                    <span>{e.first_name} {e.last_name}</span>
+                                    <span className="text-[10px] font-mono text-emerald-400">{e._hours}ч</span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                          {notReported.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground border-b border-t border-border/40 mt-1">
+                                Без отчет ({notReported.length})
+                              </div>
+                              {notReported.map(e => (
+                                <SelectItem key={e.id} value={e.id}>{e.first_name} {e.last_name}</SelectItem>
+                              ))}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
                   </SelectContent>
                 </Select>
               </div>

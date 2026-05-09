@@ -1,3 +1,24 @@
+## [M20.5d] - 2026-05-09 — DailyReportDialog dropdown grouping
+
+### Changed
+- DailyReportDialog dropdown: служителите са разделени в 2 групи — 
+  "С отчет днес ✓" (отгоре, с показани часове, sortирани по hours desc) 
+  и "Без отчет" (отдолу). Ползва /technician/worker-day-hours.
+
+---
+
+
+## [M20.5c] - 2026-05-09 — PayRunsPage: Платено/Частично badges
+
+### Changed
+- PayRunsPage grid step: "Платено" badge (remaining=0) и "Частично" 
+  badge (previously_paid > 0 && remaining > 0) до името на работника.
+- Fully-paid checkboxes disabled, не се маркират при select-all.
+- Fully-paid редове opacity 60% (визуално приглушени).
+
+---
+
+
 ## [M20.5b] - 2026-05-09 — Small backend improvements
 
 ### Changed

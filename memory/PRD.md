@@ -5,7 +5,7 @@ BEG_Work is an ERP system for construction/field service businesses with compreh
 
 ---
 
-## Master Roadmap (Updated Apr 7, 2026)
+## Master Roadmap (Updated May 9, 2026)
 
 ### COMPLETED BLOCKS:
 - Core Infrastructure (auth, billing, modules)
