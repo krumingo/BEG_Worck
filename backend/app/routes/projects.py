@@ -1357,6 +1357,16 @@ class CreateSubProjectRequest(BaseModel):
     name: str  # Name for the NEW sub-project (Б, В, Г...)
 
 
+# ── New: Wrap-in-group (без миграция) ─────────────────────────────
+class WrapInGroupRequest(BaseModel):
+    group_name: Optional[str] = None  # default = името на обекта
+    new_subproject_name: str  # име на новия празен под-обект
+
+
+class AddSubProjectRequest(BaseModel):
+    name: str  # име на новия празен под-обект към съществуваща шапка
+
+
 @router.post("/projects/{project_id}/create-sub-project", status_code=201)
 async def create_sub_project(project_id: str, data: CreateSubProjectRequest, user: dict = Depends(get_current_user)):
     """
@@ -1568,6 +1578,159 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
 
     return results
 
+
+# ── Wrap-in-group: преобразува съществуващ обект в шапка БЕЗ миграция ─
+@router.post("/projects/{project_id}/wrap-in-group", status_code=201)
+async def wrap_in_group(project_id: str, data: WrapInGroupRequest, user: dict = Depends(get_current_user)):
+    """
+    Wraps an existing project as a sub-project under a NEW group (parent).
+    NO DATA MIGRATION — existing project keeps all its data, just gets a parent.
+    Creates: new empty group (parent) + reassigns existing project as child + new empty sub-project.
+    """
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    org_id = user["org_id"]
+    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.get("parent_project_id"):
+        raise HTTPException(status_code=400, detail="Този обект вече е под-обект на друг")
+
+    has_children = await db.projects.count_documents(
+        {"parent_project_id": project_id, "org_id": org_id}
+    )
+    if has_children > 0:
+        raise HTTPException(status_code=400, detail="Този обект вече е шапка с под-обекти")
+
+    if not data.new_subproject_name or not data.new_subproject_name.strip():
+        raise HTTPException(status_code=400, detail="Името на новия под-обект е задължително")
+
+    now = datetime.now(timezone.utc).isoformat()
+    group_name = (data.group_name or "").strip() or project.get("name", "Шапка")
+
+    # 1) Създаваме нова шапка (parent) — празна обвивка
+    group_id = str(uuid.uuid4())
+    parent_code = project.get("code", "")
+    group_code = f"{parent_code}-Г" if parent_code else None
+
+    group_doc = {
+        "id": group_id,
+        "org_id": org_id,
+        "code": group_code,
+        "name": group_name,
+        "status": project.get("status", "Active"),
+        "type": project.get("type", "Billable"),
+        "is_group": True,
+        "client_id": project.get("client_id"),
+        "owner_id": project.get("owner_id"),
+        "owner_type": project.get("owner_type"),
+        "address_text": project.get("address_text"),
+        "object_type": project.get("object_type"),
+        "tags": project.get("tags", []),
+        "notes": "",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user.get("id"),
+    }
+    await db.projects.insert_one(group_doc)
+
+    # 2) Existing project става child под шапката — БЕЗ ДА ПИПАМЕ ДРУГИ ДАННИ
+    await db.projects.update_one(
+        {"id": project_id, "org_id": org_id},
+        {"$set": {"parent_project_id": group_id, "updated_at": now}}
+    )
+
+    # 3) Създаваме нов празен под-обект (втори брат)
+    new_sub_id = str(uuid.uuid4())
+    new_sub_code = f"{parent_code}-2" if parent_code else None
+    new_sub_doc = {
+        "id": new_sub_id,
+        "org_id": org_id,
+        "code": new_sub_code,
+        "name": data.new_subproject_name.strip(),
+        "status": "Active",
+        "type": project.get("type", "Billable"),
+        "client_id": project.get("client_id"),
+        "owner_id": project.get("owner_id"),
+        "owner_type": project.get("owner_type"),
+        "address_text": project.get("address_text"),
+        "parent_project_id": group_id,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user.get("id"),
+    }
+    await db.projects.insert_one(new_sub_doc)
+
+    return {
+        "ok": True,
+        "group_id": group_id,
+        "group_name": group_name,
+        "group_code": group_code,
+        "existing_child_id": project_id,
+        "existing_child_name": project.get("name", ""),
+        "new_subproject_id": new_sub_id,
+        "new_subproject_name": data.new_subproject_name.strip(),
+        "new_subproject_code": new_sub_code,
+    }
+
+
+# ── Add sub-project to existing group ───────────────────────────────
+@router.post("/projects/{group_id}/add-subproject", status_code=201)
+async def add_subproject_to_group(group_id: str, data: AddSubProjectRequest, user: dict = Depends(get_current_user)):
+    """
+    Add a new empty sub-project to an existing group (parent project).
+    """
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    org_id = user["org_id"]
+    group = await db.projects.find_one({"id": group_id, "org_id": org_id}, {"_id": 0})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    if group.get("parent_project_id"):
+        raise HTTPException(status_code=400, detail="Този обект е под-обект, не може да има деца")
+
+    if not data.name or not data.name.strip():
+        raise HTTPException(status_code=400, detail="Името е задължително")
+
+    now = datetime.now(timezone.utc).isoformat()
+    children_count = await db.projects.count_documents(
+        {"parent_project_id": group_id, "org_id": org_id}
+    )
+
+    new_sub_id = str(uuid.uuid4())
+    group_code = group.get("code", "")
+    new_sub_code = f"{group_code}-{children_count + 1}" if group_code else None
+
+    new_sub_doc = {
+        "id": new_sub_id,
+        "org_id": org_id,
+        "code": new_sub_code,
+        "name": data.name.strip(),
+        "status": "Active",
+        "type": group.get("type", "Billable"),
+        "client_id": group.get("client_id"),
+        "owner_id": group.get("owner_id"),
+        "owner_type": group.get("owner_type"),
+        "address_text": group.get("address_text"),
+        "parent_project_id": group_id,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user.get("id"),
+    }
+    await db.projects.insert_one(new_sub_doc)
+
+    return {
+        "ok": True,
+        "new_subproject_id": new_sub_id,
+        "new_subproject_name": data.name.strip(),
+        "new_subproject_code": new_sub_code,
+        "group_id": group_id,
+        "siblings_count": children_count + 1,
+    }
 
 
 # ── Site Workers (filtered shortlist, no new table) ────────────────

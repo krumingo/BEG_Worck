@@ -95,6 +95,16 @@ export default function ProjectDetailPage() {
   const [newSubName, setNewSubName] = useState("");
   const [creatingSub, setCreatingSub] = useState(false);
   const [aggView, setAggView] = useState("summary"); // "summary" | "individual"
+  // Wrap-in-group dialog (нов подход — БЕЗ миграция)
+  const [showWrapDialog, setShowWrapDialog] = useState(false);
+  const [wrapGroupName, setWrapGroupName] = useState("");
+  const [wrapSubName, setWrapSubName] = useState("");
+  const [wrapping, setWrapping] = useState(false);
+
+  // Add sub-project to existing group (когато сме в шапка)
+  const [showAddSubDialog, setShowAddSubDialog] = useState(false);
+  const [addSubName, setAddSubName] = useState("");
+  const [addingSub, setAddingSub] = useState(false);
 
   // Tab from URL hash
   const hashTab = location.hash?.replace("#", "") || "overview";
@@ -170,6 +180,53 @@ export default function ProjectDetailPage() {
     } finally { setCreatingSub(false); }
   };
 
+  // ── Нов подход: Wrap съществуващ обект в шапка БЕЗ миграция ──
+  const handleWrapInGroup = async () => {
+    if (!wrapSubName.trim()) {
+      toast.error("Името на новия под-обект е задължително");
+      return;
+    }
+    setWrapping(true);
+    try {
+      const res = await API.post(`/projects/${projectId}/wrap-in-group`, {
+        group_name: wrapGroupName.trim() || undefined,
+        new_subproject_name: wrapSubName.trim(),
+      });
+      toast.success(`Шапката "${res.data.group_name}" е създадена. Този обект и "${res.data.new_subproject_name}" са под нея.`);
+      setShowWrapDialog(false);
+      setWrapGroupName("");
+      setWrapSubName("");
+      if (res.data.group_id) {
+        navigate(`/projects/${res.data.group_id}`);
+      } else {
+        fetchDashboard();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Грешка при преобразуване");
+    } finally { setWrapping(false); }
+  };
+
+  // ── Добавяне на още един под-обект към съществуваща шапка ──
+  const handleAddSubproject = async () => {
+    if (!addSubName.trim()) {
+      toast.error("Името е задължително");
+      return;
+    }
+    setAddingSub(true);
+    try {
+      const res = await API.post(`/projects/${projectId}/add-subproject`, {
+        name: addSubName.trim(),
+      });
+      toast.success(`Под-обект "${res.data.new_subproject_name}" е добавен`);
+      setShowAddSubDialog(false);
+      setAddSubName("");
+      fetchDashboard();
+      API.get(`/projects/${projectId}/aggregate`).then(r => setAggregate(r.data?.has_children ? r.data : null)).catch(() => {});
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Грешка при добавяне");
+    } finally { setAddingSub(false); }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-yellow-500" /></div>;
   if (!dashboard) return <div className="p-6 text-center text-gray-400">Проектът не е намерен</div>;
 
@@ -187,8 +244,35 @@ export default function ProjectDetailPage() {
           <div className="flex items-center gap-2">
             <p className="text-gray-400 text-sm">{project.code}</p>
             {parent_project && <Badge variant="outline" className="text-[9px] text-cyan-400 border-cyan-500/30">Обект</Badge>}
+            {project.is_group && <Badge variant="outline" className="text-[9px] text-violet-400 border-violet-500/30">Шапка</Badge>}
           </div>
         </div>
+
+        {/* Sub-project actions */}
+        {!parent_project && !project.is_group && (sub_projects?.length || 0) === 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setWrapGroupName(project.name || ""); setWrapSubName(""); setShowWrapDialog(true); }}
+            className="text-violet-400 border-violet-500/30 hover:bg-violet-500/10"
+            data-testid="btn-wrap-in-group"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Под-обект
+          </Button>
+        )}
+
+        {(project.is_group || (sub_projects?.length || 0) > 0) && !parent_project && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setAddSubName(""); setShowAddSubDialog(true); }}
+            className="text-violet-400 border-violet-500/30 hover:bg-violet-500/10"
+            data-testid="btn-add-subproject"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Нов под-обект
+          </Button>
+        )}
+
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
       </div>
 
@@ -576,6 +660,97 @@ export default function ProjectDetailPage() {
       </Dialog>
       <ClientPickerModal projectId={projectId} open={showClientPicker} onOpenChange={setShowClientPicker} onClientSelected={fetchDashboard} />
       <ExtraWorkModal projectId={projectId} open={showExtraWork} onOpenChange={setShowExtraWork} onCreated={() => setExtraWorkRefresh(prev => prev + 1)} />
+
+      {/* ── Dialog: Wrap in Group (преобразуване в шапка БЕЗ миграция) ── */}
+      <Dialog open={showWrapDialog} onOpenChange={setShowWrapDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+          <DialogHeader><DialogTitle>Преобразуване в шапка с под-обекти</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="rounded-lg bg-gray-800/50 border border-gray-700/50 p-3 text-xs text-gray-400">
+              Този обект ще получи <strong className="text-violet-300">шапка</strong>, която обединява статистиките му с други под-обекти.
+              <br/><br/>
+              <strong className="text-emerald-400">Никакви данни не се местят</strong> — обектът остава точно както е, но получава родителска шапка.
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400">Име на шапката</label>
+              <Input
+                value={wrapGroupName}
+                onChange={e => setWrapGroupName(e.target.value)}
+                placeholder={project.name}
+                className="bg-gray-800 border-gray-700 text-white"
+                data-testid="wrap-group-name"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">По подразбиране = името на обекта</p>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400">Име на новия под-обект <span className="text-red-400">*</span></label>
+              <Input
+                value={wrapSubName}
+                onChange={e => setWrapSubName(e.target.value)}
+                placeholder="Напр. Топлоизолация"
+                className="bg-gray-800 border-gray-700 text-white"
+                data-testid="wrap-sub-name"
+              />
+            </div>
+
+            <div className="rounded-lg bg-violet-500/5 border border-violet-500/20 p-3 text-xs space-y-1">
+              <p className="font-semibold text-violet-300 mb-1">След преобразуване:</p>
+              <p className="text-gray-300">📁 <strong>{wrapGroupName.trim() || project.name}</strong> (шапка — нова, празна обвивка)</p>
+              <p className="text-gray-400 pl-4">└─ {project.name} (същия обект, всички данни остават тук)</p>
+              <p className="text-gray-400 pl-4">└─ {wrapSubName.trim() || "[ново име]"} (нов празен под-обект)</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setShowWrapDialog(false)} disabled={wrapping}>Откажи</Button>
+              <Button
+                size="sm"
+                onClick={handleWrapInGroup}
+                disabled={wrapping || !wrapSubName.trim()}
+                className="bg-violet-600 hover:bg-violet-700"
+                data-testid="wrap-confirm-btn"
+              >
+                {wrapping ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Създаване...</> : "Преобразувай"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Add Sub-Project (към съществуваща шапка) ── */}
+      <Dialog open={showAddSubDialog} onOpenChange={setShowAddSubDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-sm">
+          <DialogHeader><DialogTitle>Нов под-обект</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="text-xs text-gray-400">
+              Под шапка: <strong className="text-violet-300">{project.name}</strong>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400">Име на под-обекта <span className="text-red-400">*</span></label>
+              <Input
+                value={addSubName}
+                onChange={e => setAddSubName(e.target.value)}
+                placeholder="Напр. ВиК"
+                className="bg-gray-800 border-gray-700 text-white"
+                data-testid="add-sub-name"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setShowAddSubDialog(false)} disabled={addingSub}>Откажи</Button>
+              <Button
+                size="sm"
+                onClick={handleAddSubproject}
+                disabled={addingSub || !addSubName.trim()}
+                className="bg-violet-600 hover:bg-violet-700"
+                data-testid="add-sub-confirm-btn"
+              >
+                {addingSub ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Добавяне...</> : "Добави"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

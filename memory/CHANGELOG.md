@@ -1,3 +1,20 @@
+## [M21.2] - 2026-05-10 — Шапка с под-обекти БЕЗ миграция
+
+### Added
+- Backend: POST /projects/{id}/wrap-in-group — преобразува обект в 
+  шапка, създава празна обвивка (parent) + нов празен под-обект, 
+  без миграция на данни.
+- Backend: POST /projects/{group_id}/add-subproject — добавя нов 
+  празен под-обект към съществуваща шапка.
+- Frontend: "Под-обект" бутон в header-а (виолетов, виден само за 
+  обекти без parent и без деца). Отваря WrapInGroup dialog.
+- Frontend: "Нов под-обект" бутон (виден за шапки/групи). Отваря 
+  AddSubProject dialog.
+- "Шапка" badge в header-а за проекти с is_group=true.
+
+---
+
+
 ## [M21.1] - 2026-05-09 — Quick fixes за approval visibility
 
 ### Fixed
