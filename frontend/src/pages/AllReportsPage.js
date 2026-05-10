@@ -291,7 +291,7 @@ export default function AllReportsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8"><input type="checkbox" checked={bulk.count > 0 && data?.items?.length > 0 && bulk.count === data.items.length} onChange={() => bulk.toggleAll((data?.items || []).map(r => r.id))} className="rounded" /></TableHead>
+                <TableHead className="w-8"><input type="checkbox" checked={bulk.count > 0 && data?.items?.length > 0 && bulk.count === (data.items || []).filter(r => r.status !== "APPROVED").length && bulk.count > 0} onChange={() => bulk.toggleAll((data?.items || []).filter(r => r.status !== "APPROVED").map(r => r.id))} className="rounded" /></TableHead>
                 <SortHead col="date">{t("allReports.colDate")}</SortHead>
                 <SortHead col="worker">{t("allReports.colWorker")}</SortHead>
                 <TableHead className="text-[10px]">{t("allReports.colSite")}</TableHead>
@@ -312,11 +312,12 @@ export default function AllReportsPage() {
               ) : !data?.items?.length ? (
                 <TableRow><TableCell colSpan={12} className="text-center py-12 text-muted-foreground">{t("allReports.noData")}</TableCell></TableRow>
               ) : data.items.map(r => {
-                const stCfg = STATUS_BADGE[r.report_status] || { label: r.report_status, cls: "bg-muted text-muted-foreground" };
+                const stCfg = STATUS_BADGE[r.status] || { label: r.status, cls: "bg-muted text-muted-foreground" };
                 const payCfg = PAYROLL_BADGE[r.payroll_status] || PAYROLL_BADGE.none;
+                const isApproved = r.status === "APPROVED";
                 return (
                   <TableRow key={r.id} className={`hover:bg-muted/20 ${bulk.isSelected(r.id) ? "bg-primary/5" : ""}`} data-testid={`report-row-${r.id}`}>
-                    <TableCell><input type="checkbox" checked={bulk.isSelected(r.id)} onChange={() => bulk.toggleId(r.id)} className="rounded" /></TableCell>
+                    <TableCell><input type="checkbox" disabled={isApproved} checked={bulk.isSelected(r.id)} onChange={() => bulk.toggleId(r.id)} className="rounded disabled:opacity-30 disabled:cursor-not-allowed" title={isApproved ? "Вече одобрен" : ""} /></TableCell>
                     <TableCell className="text-xs font-mono whitespace-nowrap">{r.date}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${r.worker_id}?tab=reports`)}>
@@ -452,12 +453,12 @@ export default function AllReportsPage() {
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">{t("allReports.colStatus")}</p>
                   {(() => {
-                    const cfg = STATUS_BADGE[detail.report_status] || {};
+                    const cfg = STATUS_BADGE[detail.status] || {};
                     const Icon = cfg.icon;
                     return (
                       <Badge variant="outline" className={`text-[10px] ${cfg.cls || ""}`}>
                         {Icon && <Icon className="w-2.5 h-2.5 mr-0.5" />}
-                        {cfg.label || detail.report_status}
+                        {cfg.label || detail.status}
                       </Badge>
                     );
                   })()}

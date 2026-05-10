@@ -16,14 +16,14 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  Loader2, Calendar, List, ChevronLeft, ChevronRight,
+  Loader2, Calendar, List, ChevronLeft, ChevronRight, Check,
 } from "lucide-react";
 import DailyReportDialog from "@/components/DailyReportDialog";
 
 const DS_LABELS = { WORKING: "На работа", LEAVE: "Отпуск", ABSENT_UNEXCUSED: "Самоотлъчка", SICK: "Болен" };
 const DS_COLORS = { WORKING: "bg-emerald-500/15 text-emerald-400", LEAVE: "bg-blue-500/15 text-blue-400", ABSENT_UNEXCUSED: "bg-red-500/15 text-red-400", SICK: "bg-orange-500/15 text-orange-400" };
 const AS_LABELS = { DRAFT: "Чернова", SUBMITTED: "Изпратен", APPROVED: "Одобрен", REJECTED: "Отхвърлен" };
-const AS_COLORS = { DRAFT: "bg-gray-500/15 text-gray-400", SUBMITTED: "bg-blue-500/15 text-blue-400", APPROVED: "bg-emerald-500/15 text-emerald-400", REJECTED: "bg-red-500/15 text-red-400" };
+const AS_COLORS = { DRAFT: "bg-gray-500/15 text-gray-400", SUBMITTED: "bg-blue-500/15 text-blue-400", APPROVED: "bg-green-700/30 text-green-300 border-green-600/40", REJECTED: "bg-red-500/15 text-red-400" };
 const PT_LABELS = { Monthly: "Месечно", Akord: "Акорд", Hourly: "Почасово", Daily: "Дневно" };
 const DAYS_BG = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
@@ -178,7 +178,10 @@ export default function ReportsModulePage() {
                   <TableRow key={i} className="cursor-pointer hover:bg-muted/30" onClick={() => { setDetailId(r.id); setDetailOpen(true); }} data-testid={`report-row-${i}`}>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Badge variant="outline" className={`text-[9px] ${AS_COLORS[r.approval_status]}`}>{AS_LABELS[r.approval_status]}</Badge>
+                        <Badge variant="outline" className={`text-[9px] ${AS_COLORS[r.approval_status]}`}>
+                          {r.approval_status === "APPROVED" && <Check className="w-2.5 h-2.5 mr-0.5" />}
+                          {AS_LABELS[r.approval_status]}
+                        </Badge>
                         <Badge variant="outline" className={`text-[9px] ${DS_COLORS[r.day_status]}`}>{DS_LABELS[r.day_status]}</Badge>
                       </div>
                     </TableCell>

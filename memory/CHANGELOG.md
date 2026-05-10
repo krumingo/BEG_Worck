@@ -1,3 +1,20 @@
+## [M21.1] - 2026-05-09 — Quick fixes за approval visibility
+
+### Fixed
+- AllReportsPage таблица: schema mismatch — frontend сега чете 
+  поле "status" (не "report_status"), което backend наистина връща. 
+  Колоната "Статус" вече показва "Одобрен" / "Подаден" / etc.
+- ReportsModulePage: "Одобрен" badge стана dark green + ✓ icon, 
+  идентичен с AllReportsPage стила. Различим от "На работа" emerald.
+
+### Changed
+- AllReportsPage bulk approve: checkbox-овете на already-approved 
+  редове са disabled (визуално заглъхнали, hover показва "Вече одобрен"). 
+  "Маркирай всички" вече игнорира одобрените редове.
+
+---
+
+
 ## [M20.5d] - 2026-05-09 — DailyReportDialog dropdown grouping
 
 ### Changed
