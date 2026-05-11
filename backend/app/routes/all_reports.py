@@ -111,21 +111,32 @@ async def get_all_reports(
         r["position"] = prof.get("position", "")
         rate = _calc_rate(wid)
         r["hourly_rate"] = rate
-        r["labor_value"] = round(r["hours"] * rate, 2)
-        # Build earned formula for transparency
-        hours = r["hours"]
+
+        # labor_value: regular at base rate + overtime at base rate × coefficient
+        reg_h = float(r.get("normal_hours") or 0)
+        ot_h = float(r.get("overtime_hours") or 0)
+        coef = float(r.get("overtime_coefficient") or 1.0)
+        r["overtime_coefficient"] = coef
+        r["labor_value"] = round(reg_h * rate + ot_h * rate * coef, 2)
+
         pay_type = (prof.get("pay_type") or "Monthly").strip()
+        ot_part = ""
+        if ot_h > 0:
+            if coef and coef != 1.0:
+                ot_part = f" + {ot_h}ч × {rate} × {coef}"
+            else:
+                ot_part = f" + {ot_h}ч × {rate}"
         if pay_type == "Hourly":
-            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч"
+            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part}"
         elif pay_type == "Daily":
             dr = float(prof.get("daily_rate") or 0)
-            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч (дн. {dr})"
+            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part} (дн. {dr})"
         elif pay_type == "Akord":
-            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч (акорд)"
+            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part} (акорд)"
         else:
             ms = float(prof.get("monthly_salary") or 0)
             wd = int(prof.get("working_days_per_month") or 22)
-            r["earned_formula"] = f"{hours}ч × {rate} EUR/ч (мес. {ms}/{wd}д)"
+            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part} (мес. {ms}/{wd}д)"
         r["submitted_by_name"] = _user_name(r["submitted_by"]) if r["submitted_by"] else ""
         r["approved_by_name"] = _user_name(r["approved_by"]) if r["approved_by"] else ""
 

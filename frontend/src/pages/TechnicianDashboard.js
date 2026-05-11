@@ -84,19 +84,26 @@ export default function TechnicianDashboard() {
   useEffect(() => { loadSites(); }, [loadSites]);
 
   // M19.1 — Cross-report hours check when entering review
+  // M19.8 B2 fix: exclude current project_id — its in-progress hours live in
+  // `entries` state, not yet in DB. Without exclude, the day would appear to
+  // contain BOTH the freshly-typed hours AND any matching DB rows for the
+  // same project (e.g. drafts saved earlier in this session), double-counting.
   useEffect(() => {
     if (screen !== "review" || !entries.length) {
       if (Object.keys(crossReportSnapshots).length) setCrossReportSnapshots({});
       return;
     }
     const today = new Date().toISOString().split("T")[0];
+    const currentPid = selectedSite?.project_id || "";
     const uniqueWorkerIds = [...new Set(entries.map(e => e.worker_id).filter(Boolean))];
     let cancelled = false;
     (async () => {
       const next = {};
       await Promise.all(uniqueWorkerIds.map(async (wid) => {
         try {
-          const res = await API.get(`/daily-reports/hours-check?employee_id=${wid}&date=${today}`);
+          const params = new URLSearchParams({ employee_id: wid, date: today });
+          if (currentPid) params.append("exclude_project_id", currentPid);
+          const res = await API.get(`/daily-reports/hours-check?${params.toString()}`);
           next[wid] = res.data;
         } catch { /* silent */ }
       }));

@@ -1,3 +1,25 @@
+## [M19.8] - 2026-05-11 — Per-line отчет: split замразен, без преизчисляване, без десетични
+
+### Fixed
+- B1: enrich_hours_batch вече смята per-line с cap 8h (без pro-rata)
+- B2: hours-check приема exclude_project_id за избягване на double-count
+- B3: десетичните часове изчезват (производни на B1)
+- B4: per-line overtime check вместо day-level
+- B5: labor_value формулата прилага коефициент върху overtime частта
+- B6: regular/overtime/coefficient се замразяват в employee_daily_reports
+- B8: validation за коефициент: >= 1 (вместо > 1)
+
+### Added
+- day_aggregate_overtime_hours поле (max(0, day_total - 8))
+- regular_hours/overtime_hours/overtime_coefficient/overtime_reason
+  на ниво employee_daily_reports document
+- exclude_project_id параметър на /daily-reports/hours-check
+- enrich_hours_batch_legacy_pro_rata — за rollback only
+- scripts/migrate_m19_8_freeze_report_split.py — back-fill миграция
+
+---
+
+
 ## [M21.2] - 2026-05-10 — Шапка с под-обекти БЕЗ миграция
 
 ### Added

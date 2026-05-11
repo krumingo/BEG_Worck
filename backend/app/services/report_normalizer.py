@@ -58,6 +58,8 @@ async def fetch_normalized_report_lines(
     new_docs = await db.employee_daily_reports.find(q_new, {"_id": 0}).to_list(5000)
 
     for d in new_docs:
+        reg = d.get("regular_hours")
+        ot = d.get("overtime_hours")
         lines.append({
             "id": d.get("id", ""),
             "source_type": "new",
@@ -78,6 +80,9 @@ async def fetch_normalized_report_lines(
             "entry_mode": d.get("entry_mode", ""),
             "created_at": d.get("created_at", ""),
             "slip_number": d.get("slip_number"),
+            "regular_hours": float(reg) if reg is not None else None,
+            "overtime_hours": float(ot) if ot is not None else None,
+            "overtime_coefficient": d.get("overtime_coefficient"),
         })
 
     # ── B) Old-style (structured with employee_id + day_entries) ───
@@ -130,6 +135,9 @@ async def fetch_normalized_report_lines(
                 "entry_mode": "",
                 "created_at": d.get("created_at", ""),
                 "slip_number": d.get("slip_number"),
+                "regular_hours": None,
+                "overtime_hours": None,
+                "overtime_coefficient": None,
             })
 
     return lines
@@ -146,11 +154,78 @@ def enrich_hours(line: dict) -> dict:
 
 
 def enrich_hours_batch(lines: list) -> list:
-    """Compute normal/overtime by WORKER + DATE total, not per individual line.
-    Rule: first 8h of the day = normal, everything above = overtime.
-    Hours are distributed proportionally across lines for the same worker+date."""
+    """Compute normal/overtime PER LINE (per-отчет), not pro-rated across the day.
 
-    # Group lines by worker_id + date
+    Per-line rule (each report stands on its own):
+      - If line has stored regular_hours/overtime_hours (from approval) → USE THEM (frozen).
+      - Else fall back to: first 8h of the line = normal, rest = overtime.
+        (Single report with 10h → 8 normal + 2 overtime on that line.)
+
+    Day totals (day_total_hours / day_normal_hours / day_overtime_hours /
+    day_aggregate_overtime_hours) are computed from the per-line values
+    AFTER assignment — they are an aggregate view for warnings/UI, not the
+    basis for distribution.
+
+    This avoids decimal artefacts (4.57/3.43/2.67/5.33 etc.) and prevents
+    re-computation of already-approved lines when a new report is added.
+    """
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for ln in lines:
+        key = (ln.get("worker_id", ""), ln.get("date", ""))
+        groups[key].append(ln)
+
+    for (wid, date), group_lines in groups.items():
+        # Step 1: per-line normal/overtime (frozen-aware)
+        for ln in group_lines:
+            stored_reg = ln.get("regular_hours")
+            stored_ot = ln.get("overtime_hours")
+            if stored_reg is not None and stored_ot is not None:
+                ln["normal_hours"] = round(float(stored_reg), 2)
+                ln["overtime_hours"] = round(float(stored_ot), 2)
+            else:
+                h = float(ln.get("hours", 0) or 0)
+                ln["normal_hours"] = round(min(h, NORMAL_DAY), 2)
+                ln["overtime_hours"] = round(max(0, h - NORMAL_DAY), 2)
+
+        # Step 2: day aggregates
+        day_total = round(sum(float(ln.get("hours", 0) or 0) for ln in group_lines), 2)
+        day_normal = round(sum(ln["normal_hours"] for ln in group_lines), 2)
+        day_overtime = round(sum(ln["overtime_hours"] for ln in group_lines), 2)
+        day_aggregate_overtime = round(max(0, day_total - NORMAL_DAY), 2)
+
+        # Step 3: warnings
+        level = "ok"
+        warnings = []
+        if day_total > 12:
+            level = "critical"
+            warnings.append(f"Общо {day_total:.1f}ч за деня ({day_aggregate_overtime:.1f}ч над нормата).")
+        elif day_total > NORMAL_DAY:
+            level = "warning"
+            warnings.append(f"Общо {day_total:.1f}ч за деня ({day_aggregate_overtime:.1f}ч над нормата).")
+        if len(group_lines) > 1:
+            projects = set(ln.get("project_id") for ln in group_lines if ln.get("project_id"))
+            if len(projects) > 1:
+                warnings.append(f"Работил на {len(projects)} обекта в деня.")
+
+        for ln in group_lines:
+            ln["day_total_hours"] = day_total
+            ln["day_normal_hours"] = day_normal
+            ln["day_overtime_hours"] = day_overtime
+            ln["day_aggregate_overtime_hours"] = day_aggregate_overtime
+            ln["day_warnings"] = warnings
+            ln["day_warning_level"] = level
+
+    return lines
+
+
+def enrich_hours_batch_legacy_pro_rata(lines: list) -> list:
+    """LEGACY: Compute normal/overtime by WORKER + DATE total, not per individual line.
+    Rule: first 8h of the day = normal, everything above = overtime.
+    Hours are distributed proportionally across lines for the same worker+date.
+
+    KEPT FOR ROLLBACK ONLY — not called from anywhere.
+    """
     from collections import defaultdict
     groups = defaultdict(list)
     for ln in lines:
@@ -162,7 +237,6 @@ def enrich_hours_batch(lines: list) -> list:
         day_normal = min(day_total, NORMAL_DAY)
         day_overtime = max(0, day_total - NORMAL_DAY)
 
-        # Store day totals on each line for UI access
         for ln in group_lines:
             ln["day_total_hours"] = round(day_total, 2)
             ln["day_normal_hours"] = round(day_normal, 2)
@@ -174,25 +248,20 @@ def enrich_hours_batch(lines: list) -> list:
                 ln["overtime_hours"] = 0
             continue
 
-        # Distribute proportionally
         allocated_normal = 0
         for i, ln in enumerate(group_lines):
             h = ln.get("hours", 0)
             ratio = h / day_total if day_total > 0 else 0
-
             if i < len(group_lines) - 1:
                 ln_normal = round(day_normal * ratio, 2)
                 ln_overtime = round(h - ln_normal, 2)
                 allocated_normal += ln_normal
             else:
-                # Last line gets remainder to avoid rounding errors
                 ln_normal = round(day_normal - allocated_normal, 2)
                 ln_overtime = round(h - ln_normal, 2)
-
             ln["normal_hours"] = max(0, ln_normal)
             ln["overtime_hours"] = max(0, ln_overtime)
 
-        # Warnings
         level = "ok"
         warnings = []
         if day_total > 12:

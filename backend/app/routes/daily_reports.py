@@ -62,7 +62,13 @@ def validate_report(data: DailyReportCreate):
             raise HTTPException(status_code=400, detail="Leave requires leave_from and leave_to")
 
 
-async def check_employee_hours(org_id: str, employee_id: str, report_date: str, exclude_report_id: str = None):
+async def check_employee_hours(
+    org_id: str,
+    employee_id: str,
+    report_date: str,
+    exclude_report_id: str = None,
+    exclude_project_id: str = None,
+):
     """Check total hours for employee on a given date across ALL reports/projects.
     Supports BOTH old schema (worker_id/date/hours) and new schema (employee_id/report_date/day_entries)."""
     query = {
@@ -83,18 +89,22 @@ async def check_employee_hours(org_id: str, employee_id: str, report_date: str, 
         entries = r.get("day_entries") or []
         if entries:
             for e in entries:
+                e_pid = e.get("project_id")
+                if exclude_project_id and e_pid == exclude_project_id:
+                    continue
                 h = float(e.get("hours_worked", 0) or 0)
                 total_hours += h
-                pid = e.get("project_id")
-                if pid:
-                    project_hours[pid] = project_hours.get(pid, 0) + h
+                if e_pid:
+                    project_hours[e_pid] = project_hours.get(e_pid, 0) + h
         else:
+            r_pid = r.get("project_id")
+            if exclude_project_id and r_pid == exclude_project_id:
+                continue
             h = float(r.get("hours") or r.get("hours_worked") or 0)
             if h:
                 total_hours += h
-                pid = r.get("project_id")
-                if pid:
-                    project_hours[pid] = project_hours.get(pid, 0) + h
+                if r_pid:
+                    project_hours[r_pid] = project_hours.get(r_pid, 0) + h
 
     # Build projects_breakdown with names
     projects_breakdown = []
@@ -150,9 +160,19 @@ async def check_employee_hours(org_id: str, employee_id: str, report_date: str, 
 
 
 @router.get("/daily-reports/hours-check")
-async def get_hours_check(employee_id: str, date: str, exclude_report_id: str = "", user: dict = Depends(require_m4)):
+async def get_hours_check(
+    employee_id: str,
+    date: str,
+    exclude_report_id: str = "",
+    exclude_project_id: str = "",
+    user: dict = Depends(require_m4),
+):
     """Check total hours for an employee on a date. Returns warnings."""
-    return await check_employee_hours(user["org_id"], employee_id, date, exclude_report_id or None)
+    return await check_employee_hours(
+        user["org_id"], employee_id, date,
+        exclude_report_id or None,
+        exclude_project_id or None,
+    )
 
 
 # ── CRUD ───────────────────────────────────────────────────────────
@@ -958,10 +978,13 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
         date = report.get("date", "")
         hours = float(report.get("hours", 0))
 
-        # Check total hours for day (excluding this report to avoid double-count)
+        # Day total — informational only (for warnings + future group-level UI)
         day_total = await get_worker_hours_for_day(org_id, worker_id, date)
 
-        if day_total > 8 and rid not in overrides:
+        # Per-line decision
+        line_is_overtime = hours > 8
+
+        if line_is_overtime and rid not in overrides:
             proj_name = ""
             pid = report.get("project_id", "")
             if pid:
@@ -980,11 +1003,11 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
             })
             continue
 
-        # Build overtime metadata with validation
         override = overrides.get(rid, {})
-        is_overtime = day_total > 8
-        if is_overtime and rid in overrides:
-            # Validate override fields
+        coefficient = 1.0
+        reason_text = ""
+
+        if line_is_overtime and rid in overrides:
             o_reg = float(override.get("regular_hours", 0))
             o_ot = float(override.get("overtime_hours", 0))
             o_coef = float(override.get("overtime_coefficient", 0))
@@ -995,27 +1018,30 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
             if o_reg < 0 or o_ot < 0:
                 failed.append({"id": rid, "reason": "negative_split_value"})
                 continue
-            if o_coef <= 1:
-                failed.append({"id": rid, "reason": "coefficient_must_be_gt_1"})
+            # Coefficient must be >= 1 (B8 fix: was > 1)
+            if o_coef < 1:
+                failed.append({"id": rid, "reason": "coefficient_must_be_at_least_1"})
                 continue
             if not o_reason:
                 failed.append({"id": rid, "reason": "reason_required"})
                 continue
             regular_hours = o_reg
             overtime_hours = o_ot
-        elif is_overtime:
+            coefficient = o_coef
+            reason_text = o_reason
+        elif line_is_overtime:
             regular_hours = min(hours, 8)
             overtime_hours = max(0, hours - 8)
         else:
             regular_hours = hours
             overtime_hours = 0
 
-        # Approve the report (reuse existing approve logic inline)
         try:
             smr_type = report.get("smr_type") or report.get("activity_type", "")
             project_id = report.get("project_id", "")
             rate = await _get_hourly_rate_for_approval(org_id, worker_id)
-            labor_cost = round(hours * rate, 2)
+            # B5 fix: labor_cost now applies coefficient on overtime portion
+            labor_cost = round(regular_hours * rate + overtime_hours * rate * coefficient, 2)
 
             slip_number = report.get("slip_number")
             if not slip_number:
@@ -1026,7 +1052,6 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
                 )
                 slip_number = counter.get("value", 1)
 
-            # Create work_session with overtime fields
             session = {
                 "id": str(uuid.uuid4()), "org_id": org_id,
                 "worker_id": worker_id, "worker_name": report.get("worker_name", ""),
@@ -1034,26 +1059,31 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
                 "started_at": f"{date}T08:00:00", "ended_at": f"{date}T{8+int(hours):02d}:00:00",
                 "duration_hours": hours, "hourly_rate": rate, "labor_cost": labor_cost,
                 "approved_report_id": rid, "approved_by": user["id"],
-                "is_overtime": is_overtime,
+                "is_overtime": line_is_overtime,
                 "regular_hours": regular_hours,
                 "overtime_hours": overtime_hours,
-                "overtime_coefficient": override.get("overtime_coefficient") if is_overtime else None,
-                "overtime_reason": override.get("reason", "") if is_overtime else None,
-                "override_by_user_id": user["id"] if is_overtime and rid in overrides else None,
-                "override_at": now if is_overtime and rid in overrides else None,
+                "overtime_coefficient": coefficient if line_is_overtime else None,
+                "overtime_reason": reason_text if line_is_overtime else None,
+                "override_by_user_id": user["id"] if line_is_overtime and rid in overrides else None,
+                "override_at": now if line_is_overtime and rid in overrides else None,
                 "created_at": now,
             }
             await db.work_sessions.insert_one(session)
 
-            # Update report status
+            # B6 fix: freeze split on the report document itself
             await db.employee_daily_reports.update_one({"id": rid}, {"$set": {
                 "approval_status": "APPROVED", "status": "APPROVED",
                 "approved_by": user["id"], "approved_at": now,
                 "slip_number": slip_number, "payroll_ready": True,
+                "regular_hours": regular_hours,
+                "overtime_hours": overtime_hours,
+                "overtime_coefficient": coefficient if line_is_overtime else None,
+                "overtime_reason": reason_text if line_is_overtime else None,
+                "labor_cost": labor_cost,
                 "updated_at": now,
             }})
 
-            succeeded.append({"id": rid, "slip_number": slip_number, "overtime_applied": is_overtime})
+            succeeded.append({"id": rid, "slip_number": slip_number, "overtime_applied": line_is_overtime})
         except Exception as e:
             failed.append({"id": rid, "reason": str(e)})
 
