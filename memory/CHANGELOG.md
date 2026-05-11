@@ -1,3 +1,23 @@
+## [M19.9] - 2026-05-11 — Running-total overtime + групирана таблица с glass
+
+### Changed
+- enrich_hours_batch: running total по created_at вместо per-line cap
+  (B1 продължение)
+- Frozen-aware: одобрените отчети си запазват split-а
+
+### Added
+- day_report_count поле на всеки ред
+- frontend/src/components/GroupedReportsTable.js — glass контур по group
+- View mode toggle "Групирано / Списък" в AllReportsPage (default = Групирано)
+
+### Visual changes
+- Колона Извън. за > 0: червена (text-red-400 font-medium)
+- Колона Стойност за overtime row: червена + суфикс ×?
+- Удивителна ! критична = червена, warning = амбър
+
+---
+
+
 ## [M19.8] - 2026-05-11 — Per-line отчет: split замразен, без преизчисляване, без десетични
 
 ### Fixed

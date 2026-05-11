@@ -25,6 +25,7 @@ import EmployeeDossierSection from "@/components/EmployeeDossierSection";
 import useBulkSelection from "@/hooks/useBulkSelection";
 import { toast } from "sonner";
 import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
+import GroupedReportsTable from "@/components/GroupedReportsTable";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -46,6 +47,7 @@ export default function AllReportsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all"); // all | weekly
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem("allReports.viewMode") || "grouped"); // grouped | list
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -285,7 +287,47 @@ export default function AllReportsPage() {
         </div>
       )}
 
+      {/* View mode toggle */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-muted-foreground">Изглед:</span>
+        <div className="inline-flex rounded-md border border-border overflow-hidden">
+          <button onClick={() => { setViewMode("grouped"); localStorage.setItem("allReports.viewMode", "grouped"); }}
+                  className={`px-3 py-1 text-[11px] transition-colors ${viewMode === "grouped" ? "bg-primary/20 text-primary" : "hover:bg-muted/30 text-muted-foreground"}`}
+                  data-testid="view-grouped">Групирано</button>
+          <button onClick={() => { setViewMode("list"); localStorage.setItem("allReports.viewMode", "list"); }}
+                  className={`px-3 py-1 text-[11px] transition-colors ${viewMode === "list" ? "bg-primary/20 text-primary" : "hover:bg-muted/30 text-muted-foreground"}`}
+                  data-testid="view-list">Списък</button>
+        </div>
+      </div>
+
       {/* Table */}
+      {viewMode === "grouped" ? (
+        <div data-testid="reports-table">
+          {loading ? (
+            <div className="rounded-xl border border-border bg-card overflow-hidden p-12 text-center text-muted-foreground text-xs">
+              {t("common.loading")}
+            </div>
+          ) : (
+            <GroupedReportsTable
+              items={data?.items || []}
+              bulk={bulk}
+              onOpenDetail={setDetail}
+              onOpenOverrideForGroup={(group) => {
+                const draftIds = group.rows.filter(r => r.status !== "APPROVED").map(r => r.id);
+                if (!draftIds.length) { toast.info("Няма отчети за одобрение в тази група"); return; }
+                bulk.clear();
+                draftIds.forEach(id => bulk.toggleId(id));
+                setOverrideBlocked(group.rows.filter(r => r.status !== "APPROVED").map(r => ({
+                  id: r.id, worker_name: r.worker_name, worker_id: r.worker_id,
+                  current_hours: r.day_total_hours, report_hours: r.hours, date: r.date,
+                  project_id: r.project_id, project_name: r.site_name,
+                })));
+                setOverrideOpen(true);
+              }}
+            />
+          )}
+        </div>
+      ) : (
       <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="reports-table">
         <div className="overflow-x-auto">
           <Table>
@@ -373,19 +415,20 @@ export default function AllReportsPage() {
             </TableBody>
           </Table>
         </div>
-
-        {/* Pagination */}
-        {data && data.total_pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border" data-testid="pagination">
-            <span className="text-xs text-muted-foreground">{t("allReports.showing")} {((page - 1) * 50) + 1}–{Math.min(page * 50, data.total)} / {data.total}</span>
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="w-3.5 h-3.5" /></Button>
-              <span className="text-xs flex items-center px-2">{page}/{data.total_pages}</span>
-              <Button variant="outline" size="sm" disabled={page >= data.total_pages} onClick={() => setPage(p => p + 1)} className="h-7 w-7 p-0"><ChevronRight className="w-3.5 h-3.5" /></Button>
-            </div>
-          </div>
-        )}
       </div>
+      )}
+
+      {/* Pagination (shared between grouped and list views) */}
+      {data && data.total_pages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border rounded-xl bg-card mt-2" data-testid="pagination">
+          <span className="text-xs text-muted-foreground">{t("allReports.showing")} {((page - 1) * 50) + 1}–{Math.min(page * 50, data.total)} / {data.total}</span>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="w-3.5 h-3.5" /></Button>
+            <span className="text-xs flex items-center px-2">{page}/{data.total_pages}</span>
+            <Button variant="outline" size="sm" disabled={page >= data.total_pages} onClick={() => setPage(p => p + 1)} className="h-7 w-7 p-0"><ChevronRight className="w-3.5 h-3.5" /></Button>
+          </div>
+        </div>
+      )}
 
       {/* Detail Modal */}
       <Dialog open={!!detail} onOpenChange={() => setDetail(null)}>

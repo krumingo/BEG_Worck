@@ -154,20 +154,29 @@ def enrich_hours(line: dict) -> dict:
 
 
 def enrich_hours_batch(lines: list) -> list:
-    """Compute normal/overtime PER LINE (per-отчет), not pro-rated across the day.
+    """Compute normal/overtime by RUNNING TOTAL across same-day reports.
 
-    Per-line rule (each report stands on its own):
-      - If line has stored regular_hours/overtime_hours (from approval) → USE THEM (frozen).
-      - Else fall back to: first 8h of the line = normal, rest = overtime.
-        (Single report with 10h → 8 normal + 2 overtime on that line.)
+    Sort lines of the same worker+date by `created_at` (earliest first), then
+    walk them allocating the first 8h of cumulative day total to "normal" and
+    everything past 8h to "overtime". This matches how a manager thinks about
+    a shift: the first report of the day is the normal shift, anything that
+    comes after is extra work that needs an admin decision on premium pay.
 
-    Day totals (day_total_hours / day_normal_hours / day_overtime_hours /
-    day_aggregate_overtime_hours) are computed from the per-line values
-    AFTER assignment — they are an aggregate view for warnings/UI, not the
-    basis for distribution.
+    Examples:
+      - First 8h + second 8h    → first: 8+0, second: 0+8
+      - First 5h + second 6h    → first: 5+0, second: 3+3
+      - Single 10h              → 8+2 on that single line
+      - Four small 2+2+2+3      → 2+0, 2+0, 2+0, 2+1
 
-    This avoids decimal artefacts (4.57/3.43/2.67/5.33 etc.) and prevents
-    re-computation of already-approved lines when a new report is added.
+    Frozen-aware: if a line has stored regular_hours/overtime_hours (from
+    approval), those values are USED and the running counter is advanced by
+    their sum — so newly-added drafts after an approval don't reshuffle the
+    approved line.
+
+    Adds aggregate fields on every line for UI:
+      day_total_hours, day_normal_hours, day_overtime_hours,
+      day_aggregate_overtime_hours, day_report_count,
+      day_warnings, day_warning_level.
     """
     from collections import defaultdict
     groups = defaultdict(list)
@@ -176,25 +185,36 @@ def enrich_hours_batch(lines: list) -> list:
         groups[key].append(ln)
 
     for (wid, date), group_lines in groups.items():
-        # Step 1: per-line normal/overtime (frozen-aware)
+        # Sort by created_at (earliest first); id as tiebreaker for stability
+        group_lines.sort(key=lambda ln: (ln.get("created_at", "") or "", ln.get("id", "")))
+
+        # Walk lines, allocating normal up to NORMAL_DAY, then overtime
+        used_normal = 0.0
         for ln in group_lines:
             stored_reg = ln.get("regular_hours")
             stored_ot = ln.get("overtime_hours")
             if stored_reg is not None and stored_ot is not None:
+                # Frozen at approval — respect stored values, advance counter
                 ln["normal_hours"] = round(float(stored_reg), 2)
                 ln["overtime_hours"] = round(float(stored_ot), 2)
+                used_normal += float(stored_reg)
             else:
                 h = float(ln.get("hours", 0) or 0)
-                ln["normal_hours"] = round(min(h, NORMAL_DAY), 2)
-                ln["overtime_hours"] = round(max(0, h - NORMAL_DAY), 2)
+                room = max(0.0, NORMAL_DAY - used_normal)
+                allocated_normal = min(h, room)
+                allocated_overtime = h - allocated_normal
+                ln["normal_hours"] = round(allocated_normal, 2)
+                ln["overtime_hours"] = round(allocated_overtime, 2)
+                used_normal += allocated_normal
 
-        # Step 2: day aggregates
+        # Day aggregates
         day_total = round(sum(float(ln.get("hours", 0) or 0) for ln in group_lines), 2)
         day_normal = round(sum(ln["normal_hours"] for ln in group_lines), 2)
         day_overtime = round(sum(ln["overtime_hours"] for ln in group_lines), 2)
         day_aggregate_overtime = round(max(0, day_total - NORMAL_DAY), 2)
+        day_report_count = len(group_lines)
 
-        # Step 3: warnings
+        # Warnings
         level = "ok"
         warnings = []
         if day_total > 12:
@@ -213,6 +233,7 @@ def enrich_hours_batch(lines: list) -> list:
             ln["day_normal_hours"] = day_normal
             ln["day_overtime_hours"] = day_overtime
             ln["day_aggregate_overtime_hours"] = day_aggregate_overtime
+            ln["day_report_count"] = day_report_count
             ln["day_warnings"] = warnings
             ln["day_warning_level"] = level
 
