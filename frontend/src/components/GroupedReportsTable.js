@@ -49,6 +49,19 @@ export default function GroupedReportsTable({ items, bulk, onOpenDetail, onOpenO
       }
       map.get(key).rows.push(r);
     }
+    // Sort rows within each group by created_at (oldest first).
+    // Backend's enrich_hours_batch assigns normal/overtime in this order, so
+    // the UI must display in the same order — otherwise the user sees, e.g.,
+    // a "norm=3 ot=+5" row appearing before a "norm=5 ot=0" row, which is
+    // confusing because it looks like the running total ran backwards.
+    for (const g of map.values()) {
+      g.rows.sort((a, b) => {
+        const aCa = a.created_at || "";
+        const bCa = b.created_at || "";
+        if (aCa !== bCa) return aCa < bCa ? -1 : 1;
+        return (a.id || "").localeCompare(b.id || "");
+      });
+    }
     return [...map.values()];
   }, [items]);
 

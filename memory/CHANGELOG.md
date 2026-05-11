@@ -1,3 +1,17 @@
+## [M19.9.1] - 2026-05-11 — Hotfix: rows sort by created_at in groups
+
+### Fixed
+- GroupedReportsTable пренареждаше редовете в групите по реда който
+  идва от backend page-sort (date desc), а не по created_at. Това
+  правеше running-total числата визуално объркани — ред с "норм=3,
+  извън=+5" можеше да се покаже преди ред с "норм=5, извън=0" в
+  същата група. UI сега сортира rows в всяка група по created_at
+  (oldest first), за да отговаря на реда в който enrich_hours_batch
+  ги е изчислил.
+
+---
+
+
 ## [M19.9] - 2026-05-11 — Running-total overtime + групирана таблица с glass
 
 ### Changed
