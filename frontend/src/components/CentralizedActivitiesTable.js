@@ -47,7 +47,6 @@ export default function CentralizedActivitiesTable({ projectId }) {
   const totalApproved = activities.reduce((s, a) => s + (a.approved_hours || 0), 0);
   const totalReported = activities.reduce((s, a) => s + (a.total_reported_hours || 0), 0);
   const totalClean = activities.reduce((s, a) => s + (a.clean_labor_cost || 0), 0);
-  const totalLoaded = activities.reduce((s, a) => s + (a.labor_cost_with_overhead || 0), 0);
   const redCount = activities.filter(a => a.risk_status === "red").length;
   const yellowCount = activities.filter(a => a.risk_status === "yellow").length;
   const extraCount = activities.filter(a => a.is_extra).length;
@@ -71,13 +70,12 @@ export default function CentralizedActivitiesTable({ projectId }) {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 md:grid-cols-7 gap-2 text-center text-[10px]">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-[10px]">
         <div className="rounded border border-border p-1.5"><p className="font-mono font-bold text-sm">{fmt(totalPlanned)}</p><p className="text-muted-foreground">{t("actTable.planned")}</p></div>
         <div className="rounded border border-border p-1.5"><p className="font-mono font-bold text-sm text-blue-400">{fmt(totalDraft)}</p><p className="text-muted-foreground">{t("actTable.draft")}</p></div>
         <div className="rounded border border-border p-1.5"><p className="font-mono font-bold text-sm text-emerald-400">{fmt(totalApproved)}</p><p className="text-muted-foreground">{t("actTable.approved")}</p></div>
         <div className="rounded border border-border p-1.5"><p className="font-mono font-bold text-sm">{fmt(totalReported)}</p><p className="text-muted-foreground">{t("actTable.total")}</p></div>
-        <div className="rounded border border-border p-1.5"><p className="font-mono font-bold text-sm">{fmt(totalClean)}</p><p className="text-muted-foreground">{t("actTable.clean")}</p></div>
-        <div className="rounded border border-border p-1.5"><p className="font-mono font-bold text-sm">{fmt(totalLoaded)}</p><p className="text-muted-foreground">{t("actTable.loaded")}</p></div>
+        <div className="rounded border border-border p-1.5" title={t("actTable.cleanTooltip")}><p className="font-mono font-bold text-sm">{fmt(totalClean)}</p><p className="text-muted-foreground">{t("actTable.clean")}</p></div>
         <div className="rounded border border-border p-1.5">
           <p className={`font-mono font-bold text-sm ${totalPlanned > 0 ? (totalReported / totalPlanned > 1 ? "text-red-400" : totalReported / totalPlanned > 0.8 ? "text-amber-400" : "text-emerald-400") : ""}`}>
             {totalPlanned > 0 ? `${Math.round(totalReported / totalPlanned * 100)}%` : "—"}
@@ -98,8 +96,7 @@ export default function CentralizedActivitiesTable({ projectId }) {
               <TableHead className="text-right">{t("actTable.draft")}</TableHead>
               <TableHead className="text-right">{t("actTable.approved")}</TableHead>
               <TableHead className="text-right">{t("actTable.total")}</TableHead>
-              <TableHead className="text-right">{t("actTable.clean")}</TableHead>
-              <TableHead className="text-right">{t("actTable.loaded")}</TableHead>
+              <TableHead className="text-right" title={t("actTable.cleanTooltip")}>{t("actTable.clean")}</TableHead>
               <TableHead className="text-right">{t("actTable.sub")}</TableHead>
               <TableHead className="text-right">%</TableHead>
               <TableHead>{t("actTable.label")}</TableHead>
@@ -129,7 +126,6 @@ export default function CentralizedActivitiesTable({ projectId }) {
                     ) : "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono">{fmt(a.clean_labor_cost)}</TableCell>
-                  <TableCell className="text-right font-mono">{fmt(a.labor_cost_with_overhead)}</TableCell>
                   <TableCell className="text-right font-mono text-muted-foreground">
                     {subPrice > 0 ? fmt(subPrice) : "—"}
                     {variance !== null && (

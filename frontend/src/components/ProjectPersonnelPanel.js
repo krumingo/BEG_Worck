@@ -64,13 +64,12 @@ export default function ProjectPersonnelPanel({ projectId }) {
   const withDrafts = enriched.filter(p => p.draft_reports_count > 0).length;
   const withApproved = enriched.filter(p => p.approved_reports_count > 0).length;
   const totalClean = enriched.reduce((s, p) => s + (p.clean_amount || 0), 0);
-  const totalLoaded = enriched.reduce((s, p) => s + (p.total_amount || 0), 0);
   const missingRateCount = enriched.filter(p => p.missing_rate).length;
 
   return (
     <div className="space-y-4" data-testid="project-personnel-panel">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
+      <div className="grid grid-cols-3 md:grid-cols-5 gap-2 text-center text-xs">
         <div className="rounded-lg border border-border p-2">
           <p className="text-lg font-bold">{total}</p>
           <p className="text-muted-foreground">{t("personnelPanel.total")}</p>
@@ -87,14 +86,10 @@ export default function ProjectPersonnelPanel({ projectId }) {
           <p className="text-lg font-bold text-emerald-400">{withApproved}</p>
           <p className="text-muted-foreground">{t("personnelPanel.withApproved")}</p>
         </button>
-        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&returnTo=/projects/${projectId}&returnTab=team`)} className="rounded-lg border border-border p-2 hover:bg-primary/10 transition-colors" data-testid="link-clean">
+        <button onClick={() => navigate(`/all-reports?project_id=${projectId}&returnTo=/projects/${projectId}&returnTab=team`)} className="rounded-lg border border-border p-2 hover:bg-primary/10 transition-colors" data-testid="link-clean" title={t("personnelPanel.cleanLaborTooltip")}>
           <p className="text-lg font-bold font-mono">{fmt(totalClean)}</p>
           <p className="text-muted-foreground">{t("personnelPanel.cleanLabor")}</p>
         </button>
-        <div className="rounded-lg border border-border p-2">
-          <p className="text-lg font-bold font-mono">{fmt(totalLoaded)}</p>
-          <p className="text-muted-foreground">{t("personnelPanel.loadedLabor")}</p>
-        </div>
       </div>
 
       {/* Warnings */}
@@ -117,8 +112,7 @@ export default function ProjectPersonnelPanel({ projectId }) {
                 <TableHead className="text-right">{t("personnelPanel.drafts")}</TableHead>
                 <TableHead className="text-right">{t("personnelPanel.approved")}</TableHead>
                 <TableHead className="text-right">{t("personnelPanel.hours")}</TableHead>
-                <TableHead className="text-right">{t("personnelPanel.clean")}</TableHead>
-                <TableHead className="text-right">{t("personnelPanel.loaded")}</TableHead>
+                <TableHead className="text-right" title={t("personnelPanel.cleanTooltip")}>{t("personnelPanel.clean")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -155,8 +149,7 @@ export default function ProjectPersonnelPanel({ projectId }) {
                       ) : "—"}
                     </TableCell>
                     <TableCell className="text-right font-mono">{p.total_hours > 0 ? p.total_hours.toFixed(0) : "—"}</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(p.clean_amount)}</TableCell>
-                    <TableCell className="text-right font-mono font-bold">{fmt(p.total_amount)}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">{fmt(p.clean_amount)}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setDrillWorker(p.worker_name)} data-testid={`view-reports-${i}`}>
                         <Eye className="w-3 h-3 mr-1" /> {t("personnelPanel.viewReports")}

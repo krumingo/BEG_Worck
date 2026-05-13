@@ -53,7 +53,7 @@ export default function SiteWorkersPanel({ projectId }) {
               <TableHead className="text-gray-400 text-xs text-center">Дни</TableHead>
               <TableHead className="text-gray-400 text-xs text-center">Отчети</TableHead>
               <TableHead className="text-gray-400 text-xs text-right">Часове</TableHead>
-              <TableHead className="text-gray-400 text-xs text-right">Изплатено</TableHead>
+              <TableHead className="text-gray-400 text-xs text-right" title="Сумата която е добавена в активен pay-run пакет, но още не е реално платена.">В pay-run пакет</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

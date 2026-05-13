@@ -1,3 +1,20 @@
+## [M19.10] - 2026-05-11 — UI преименуване: яснота на заглавията за труд и режийни
+
+### Changed
+- "Чист труд" → "Натрупан труд" (personnelPanel) + tooltip
+- "Чист труд" → "Труд по активности" (actTable) + tooltip
+- "Чист труд" → "Натрупан труд" (centralReports) + tooltip
+- "С режийни" колона/карта премахната от personnelPanel и actTable
+- "Тежести и режийни" → "Фирмени режийни" + tooltip (finResults)
+- "Реален резултат" → "Резултат с фирмени режийни" + tooltip
+- "Изплатено" → "В pay-run пакет" + tooltip (SiteWorkersPanel)
+- CentralizedProjectView Activities таб: премахната колона "Труд + такси"
+- Grid 6→5 (personnelPanel), 7→6 (actTable)
+- Същите промени в en.json
+
+---
+
+
 ## [M19.9.1] - 2026-05-11 — Hotfix: rows sort by created_at in groups
 
 ### Fixed

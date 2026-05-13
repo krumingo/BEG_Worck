@@ -69,8 +69,7 @@ export default function CentralizedProjectView({ projectId, tab = "activities" }
                 <TableHead className="text-right">{t("centralReports.draftHrs")}</TableHead>
                 <TableHead className="text-right">{t("centralReports.approvedHrs")}</TableHead>
                 <TableHead className="text-right">{t("centralReports.totalHrs")}</TableHead>
-                <TableHead className="text-right">{t("centralReports.cleanLabor")}</TableHead>
-                <TableHead className="text-right">{t("centralReports.laborOH")}</TableHead>
+                <TableHead className="text-right" title={t("centralReports.cleanLaborTooltip")}>{t("centralReports.cleanLabor")}</TableHead>
                 <TableHead className="text-right">%</TableHead>
                 <TableHead>{t("centralReports.label")}</TableHead>
               </TableRow>
@@ -89,7 +88,6 @@ export default function CentralizedProjectView({ projectId, tab = "activities" }
                     <TableCell className="text-right font-mono text-emerald-400">{a.approved_hours > 0 ? a.approved_hours.toFixed(0) : "—"}</TableCell>
                     <TableCell className="text-right font-mono font-bold">{a.total_reported_hours > 0 ? a.total_reported_hours.toFixed(0) : "—"}</TableCell>
                     <TableCell className="text-right font-mono">{fmt(a.clean_labor_cost)}</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(a.labor_cost_with_overhead)}</TableCell>
                     <TableCell className="text-right"><span className={`font-mono font-bold ${color}`}>{a.burn_pct_total > 0 ? `${a.burn_pct_total.toFixed(0)}%` : "—"}</span></TableCell>
                     <TableCell>{a.is_extra && <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400">{t("centralReports.extra")}</Badge>}</TableCell>
                   </TableRow>
