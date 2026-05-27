@@ -133,6 +133,7 @@ async def generate_pay_run(
     lines = await fetch_normalized_report_lines(
         org_id=org_id, date_from=period_start, date_to=period_end,
         status_filter="APPROVED",
+        payroll_filter=["!paid", "!batched"],
     )
     for ln in lines:
         enrich_hours(ln)

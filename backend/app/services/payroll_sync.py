@@ -225,7 +225,8 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
             if dates:
                 await db.employee_daily_reports.update_many(
                     {"org_id": org_id, "worker_id": er["employee_id"],
-                     "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}"},
+                     "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
+                     "payroll_status": "batched"},
                     {"$set": {"payroll_status": "none", "payroll_source": None}},
                 )
     else:
@@ -248,6 +249,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                 if dates:
                     await db.employee_daily_reports.update_many(
                         {"org_id": org_id, "worker_id": eid,
-                         "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}"},
+                         "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
+                         "payroll_status": "batched"},
                         {"$set": {"payroll_status": "none", "payroll_source": None}},
                     )

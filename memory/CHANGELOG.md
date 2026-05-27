@@ -1,3 +1,18 @@
+## [P0-1] - 2026-05-27 — Backend заключване срещу двойно плащане на заплати
+
+### Fixed
+- generate_pay_run: добавен payroll_filter=["!paid","!batched"] —
+  вече платени/batched отчети не влизат в нов pay-run.
+- sync_on_reopen: освобождава САМО batched отчети (payroll_status="batched" → "none").
+  Paid отчети остават "paid" и не се връщат за ново плащане.
+
+### Risk documented
+- Reopen на paid pay-run НЕ освобождава платените отчети.
+  За корекция на вече платени отчети е необходим отделен reverse/void flow.
+
+---
+
+
 ## [M19.10] - 2026-05-11 — UI преименуване: яснота на заглавията за труд и режийни
 
 ### Changed
