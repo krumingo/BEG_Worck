@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle, Clock, Printer,
+  DollarSign, Loader2, Check, FileText, Eye, Plus, X, Receipt, Calendar, MapPin, AlertTriangle, Clock, Printer, Lock, X as XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { openGroupPrint, openIndividualPrint, openSelectedPrint } from "@/components/PayRunPrintView";
@@ -107,6 +107,21 @@ export default function PayRunsPage() {
   const [dayEditValue, setDayEditValue] = useState("");
   const [dayEditReason, setDayEditReason] = useState("");
 
+  // P0-2A.2: per-report selection popup state.
+  // reportPopup = { eid, date, row, dc } when open, null when closed.
+  // selectedReportIds = { [eid]: Set<report_id> } — explicit per-report selection per employee.
+  // When empty for an eid, backend falls back to day-level (P0-2A.1) behavior.
+  const [reportPopup, setReportPopup] = useState(null);
+  const [selectedReportIds, setSelectedReportIds] = useState({});
+
+  const toggleReportSelection = (eid, reportId) => {
+    setSelectedReportIds(prev => {
+      const ids = new Set(prev[eid] || []);
+      if (ids.has(reportId)) ids.delete(reportId); else ids.add(reportId);
+      return { ...prev, [eid]: ids };
+    });
+  };
+
   // Audit check
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditData, setAuditData] = useState(null);
@@ -156,6 +171,7 @@ export default function PayRunsPage() {
       setAdjustments({});
       setPaidAmounts({});
       setPaySelected(new Set());
+      setSelectedReportIds({});  // P0-2A.2: clear per-report selections on reload
       setStep("grid");
       // Auto-select all employees with data and all their days
       const emps = new Set();
@@ -276,11 +292,15 @@ export default function PayRunsPage() {
       const empDays = selectedDays[r.employee_id] || new Set();
       const empAdj = getEmpAdj(r.employee_id);
       const paidNow = usePayment ? (paidAmounts[r.employee_id] ?? getEmpNet(r)) : getEmpNet(r);
+      // P0-2A.2: include explicit selected_report_ids if any were chosen via popup.
+      // Empty list → backend uses day-level fallback (P0-2A.1 behavior).
+      const reportIds = Array.from(selectedReportIds[r.employee_id] || []);
       return {
         employee_id: r.employee_id,
         paid_now_amount: Math.round(paidNow * 100) / 100,
         adjustments: empAdj.map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
         notes: "",
+        selected_report_ids: reportIds,
       };
     });
   };
@@ -727,61 +747,102 @@ export default function PayRunsPage() {
                                 return <TableCell key={d} className={`text-center p-1 ${isWeekend ? "bg-muted/10" : ""}`}><span className="text-[10px] text-muted-foreground/20">—</span></TableCell>;
                               }
 
-                              // P0-2A: pick cell color based on payroll_status and report_status.
-                              // Reports that are not approved (rejected/mixed) use gray. Otherwise use PAYROLL_CELL_CFG.
-                              const cellPayrollStatus = dc.payroll_status || "none";
-                              const cellReportStatus = dc.report_status || "";
-                              let cellCfg;
-                              if (cellReportStatus === "REJECTED" || cellReportStatus === "rejected") {
-                                cellCfg = PAYROLL_CELL_REJECTED;
-                              } else {
-                                cellCfg = PAYROLL_CELL_CFG[cellPayrollStatus] || PAYROLL_CELL_CFG.none;
+                              // P0-2A.2: split-cell visualization (Вариант 5).
+                              // Cell can have up to 3 sections shown stacked:
+                              //   1. Paid/batched reports (green/violet, locked, with lock icon + PR number)
+                              //   2. Selectable approved unpaid reports (blue, selectable)
+                              //   3. Rejected reports (red, for reference only) — only if any
+                              // For backwards compat: if backend didn't send reports[], fall back to legacy single-cell render.
+                              const reports = dc.reports || [];
+                              const hasReports = reports.length > 0;
+
+                              if (!hasReports) {
+                                // Legacy fallback: single-color cell using payroll_status (P0-2A behavior).
+                                const cellPayrollStatus = dc.payroll_status || "none";
+                                const cellReportStatus = dc.report_status || "";
+                                let cellCfg;
+                                if (cellReportStatus === "REJECTED" || cellReportStatus === "rejected") {
+                                  cellCfg = PAYROLL_CELL_REJECTED;
+                                } else {
+                                  cellCfg = PAYROLL_CELL_CFG[cellPayrollStatus] || PAYROLL_CELL_CFG.none;
+                                }
+                                const isLockedLegacy = (cellPayrollStatus === "paid" || cellPayrollStatus === "batched");
+                                return (
+                                  <TableCell key={d} className={`text-center p-1 ${isWeekend ? "bg-muted/10" : ""} ${isLockedLegacy ? cellCfg.cls + " cursor-not-allowed opacity-90" : (isDaySelected && isSelected ? "bg-primary/15 border border-primary/30 cursor-pointer" : "hover:bg-muted/20 cursor-pointer")}`}
+                                    onClick={() => { if (!isLockedLegacy) { if (!isSelected) setSelectedEmps(prev => new Set([...prev, eid])); toggleDay(eid, d); } }}>
+                                    <span className="text-[11px] font-mono font-bold">{getDayHours(eid, dc)}ч</span>
+                                  </TableCell>
+                                );
                               }
-                              const isLocked = (cellPayrollStatus === "paid" || cellPayrollStatus === "batched");
-                              // P0-2A.1 FIX 2: partially_paid is NOT locked.
-                              // A partially-paid cell means "some reports inside are paid, others are not".
-                              // The unpaid approved reports still need to be paid → cell must be selectable.
-                              // Backend automatically skips paid reports (FIX 1 + sync_on_confirm filter),
-                              // so clicking a partially_paid cell will only add the unpaid reports to the new pay-run.
-                              const isPartiallyPaid = (cellPayrollStatus === "partially_paid");
-                              const firstBatchId = (dc.payroll_batch_ids && dc.payroll_batch_ids[0]) || null;
+
+                              // Group reports by section
+                              const paidReports = reports.filter(r => r.payroll_status === "paid" || r.payroll_status === "batched");
+                              const selectableReports = reports.filter(r => r.selectable);
+                              const rejectedReports = reports.filter(r => (r.report_status || "").toUpperCase() === "REJECTED");
+
+                              const totalReports = reports.length;
+                              const hasOnlyPaid = paidReports.length === totalReports;
+                              const hasOnlySelectable = selectableReports.length === totalReports;
+                              const isCellLocked = hasOnlyPaid;
+                              const isCellSelectable = selectableReports.length > 0;
+                              const paidHours = paidReports.reduce((s, r) => s + r.hours, 0);
+                              const paidValue = paidReports.reduce((s, r) => s + r.value, 0);
+                              const selectableHours = selectableReports.reduce((s, r) => s + r.hours, 0);
+                              const selectableValue = selectableReports.reduce((s, r) => s + r.value, 0);
+                              const rejectedHours = rejectedReports.reduce((s, r) => s + r.hours, 0);
+                              const rejectedValue = rejectedReports.reduce((s, r) => s + r.value, 0);
+                              const firstPaidBatchId = paidReports[0]?.payroll_batch_id || null;
+                              const hasMultipleReports = totalReports > 1;
+
+                              // Click behavior:
+                              // - Multi-report cell with any selectable: open popup for per-report selection
+                              // - Single selectable report: toggle day directly (old behavior, fastest)
+                              // - Fully locked (only paid): no action
+                              const handleClick = () => {
+                                if (isCellLocked) return;
+                                if (hasMultipleReports && isCellSelectable && (paidReports.length > 0 || rejectedReports.length > 0)) {
+                                  // Mixed cell → open popup
+                                  setReportPopup({ eid, date: d, row, dc });
+                                  return;
+                                }
+                                // Simple cell → toggle day
+                                if (!isSelected) {
+                                  setSelectedEmps(prev => new Set([...prev, eid]));
+                                }
+                                toggleDay(eid, d);
+                              };
 
                               return (
-                                <TableCell
-                                  key={d}
-                                  className={`text-center p-1 transition-colors ${isWeekend ? "bg-muted/10" : ""} ${
-                                    isLocked
-                                      ? cellCfg.cls + " cursor-not-allowed opacity-90"
-                                      : isPartiallyPaid
-                                        ? (isDaySelected && isSelected ? "bg-amber-500/20 border border-amber-500/50 cursor-pointer" : `${cellCfg.cls} cursor-pointer hover:opacity-80`)
-                                        : (isDaySelected && isSelected ? "bg-primary/15 border border-primary/30 cursor-pointer" : "hover:bg-muted/20 cursor-pointer")
-                                  } ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
-                                  onClick={() => {
-                                    if (isLocked) return;
-                                    // P0-2A.1 FIX 3: clicking a cell auto-selects the employee
-                                    // if not already selected, then toggles the day.
-                                    // This restores click-to-select behavior after "Изчисти".
-                                    if (!isSelected) {
-                                      setSelectedEmps(prev => new Set([...prev, eid]));
-                                    }
-                                    toggleDay(eid, d);
-                                  }}
-                                  onDoubleClick={(e) => { e.stopPropagation(); if (!isLocked) openDayEdit(eid, dc, row); }}
-                                  title={
-                                    isLocked
-                                      ? `${cellCfg.label}${firstBatchId ? ` · ${firstBatchId}` : ""}`
-                                      : isPartiallyPaid
-                                        ? `Частично платено${firstBatchId ? ` · част от ${firstBatchId}` : ""} · неплатените отчети ще влязат в новия PR`
-                                        : `${dc.report_count || 0} отчет(а)`
-                                  }
-                                >
-                                  <div className="flex flex-col items-center">
-                                    <span className={`text-[11px] font-mono font-bold ${isLocked ? "" : (isDaySelected && isSelected ? "text-primary" : "text-foreground/60")}`}>{getDayHours(eid, dc)}ч</span>
-                                    <span className={`text-[9px] font-mono ${isLocked ? "" : (isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground")}`}>{getDayValue(eid, dc).toFixed(0)}</span>
-                                    {dc.sites?.length > 0 && <span className="text-[7px] truncate max-w-[60px] opacity-80">{dc.sites[0]}{dc.sites.length > 1 ? ` +${dc.sites.length - 1}` : ""}</span>}
-                                    {(isLocked || isPartiallyPaid) && firstBatchId && <span className="text-[6px] opacity-70">{firstBatchId}</span>}
-                                    {isPartiallyPaid && <span className="text-[6px] text-amber-400">частично</span>}
-                                    {dayOverrides[`${eid}_${d}`] && <span className="text-[6px] text-amber-400">ред.</span>}
+                                <TableCell key={d} className={`p-0 ${isWeekend ? "bg-muted/10" : ""} ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
+                                  onDoubleClick={(e) => { e.stopPropagation(); if (!isCellLocked) openDayEdit(eid, dc, row); }}
+                                  title={hasMultipleReports ? `${totalReports} отчета · клик за детайл` : (reports[0]?.locked_reason || "1 отчет")}>
+                                  <div className={`flex flex-col ${isCellLocked ? "cursor-not-allowed" : "cursor-pointer"} ${isDaySelected && isSelected ? "ring-1 ring-primary" : ""}`}
+                                    onClick={handleClick}>
+                                    {paidReports.length > 0 && (
+                                      <div className="px-1 py-0.5 bg-emerald-500/15 border-b border-emerald-500/30 text-center">
+                                        <div className="flex items-center justify-center gap-0.5 text-[8px] text-emerald-400 font-medium">
+                                          <Lock className="w-2 h-2" />
+                                          <span>{paidReports.length === 1 ? "Платено" : `${paidReports.length} платени`}</span>
+                                        </div>
+                                        <div className="text-[10px] font-mono font-bold text-emerald-300">{paidHours.toFixed(1)}ч · {paidValue.toFixed(0)}</div>
+                                        {firstPaidBatchId && <div className="text-[7px] text-emerald-400/70">{firstPaidBatchId}</div>}
+                                      </div>
+                                    )}
+                                    {selectableReports.length > 0 && (
+                                      <div className={`px-1 py-0.5 text-center ${isDaySelected && isSelected ? "bg-blue-500/30 border-b border-blue-500/60" : "bg-blue-500/15 border-b border-blue-500/30"}`}>
+                                        <div className="text-[8px] text-blue-400 font-medium">{selectableReports.length === 1 ? "За плащане" : `${selectableReports.length} избираеми`}</div>
+                                        <div className="text-[10px] font-mono font-bold text-blue-300">{selectableHours.toFixed(1)}ч · {selectableValue.toFixed(0)}</div>
+                                      </div>
+                                    )}
+                                    {rejectedReports.length > 0 && (
+                                      <div className="px-1 py-0.5 bg-red-500/15 text-center">
+                                        <div className="flex items-center justify-center gap-0.5 text-[8px] text-red-400 font-medium">
+                                          <XIcon className="w-2 h-2" />
+                                          <span>{rejectedReports.length === 1 ? "Отхвърлен" : `${rejectedReports.length} отказани`}</span>
+                                        </div>
+                                        <div className="text-[10px] font-mono text-red-300/80 line-through">{rejectedHours.toFixed(1)}ч · {rejectedValue.toFixed(0)}</div>
+                                      </div>
+                                    )}
                                   </div>
                                 </TableCell>
                               );
@@ -1587,6 +1648,90 @@ export default function PayRunsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* P0-2A.2: Per-report selection popup (Вариант 4 — стек на отчети) */}
+      <Dialog open={!!reportPopup} onOpenChange={() => setReportPopup(null)}>
+        <DialogContent className="max-w-lg" data-testid="report-popup">
+          <DialogHeader>
+            <DialogTitle>
+              {reportPopup?.row?.first_name} {reportPopup?.row?.last_name} — {reportPopup?.date}
+            </DialogTitle>
+          </DialogHeader>
+          {reportPopup && (() => {
+            const dc = reportPopup.dc;
+            const eid = reportPopup.eid;
+            const reports = dc.reports || [];
+            const empSelectedIds = selectedReportIds[eid] || new Set();
+            const paidR = reports.filter(r => r.payroll_status === "paid" || r.payroll_status === "batched");
+            const selectableR = reports.filter(r => r.selectable);
+            const rejectedR = reports.filter(r => (r.report_status || "").toUpperCase() === "REJECTED");
+            const selectedHere = selectableR.filter(r => empSelectedIds.has(r.report_id));
+            const totalSelectedValue = selectedHere.reduce((s, r) => s + r.value, 0);
+            const totalSelectedHours = selectedHere.reduce((s, r) => s + r.hours, 0);
+
+            return (
+              <div className="space-y-3">
+                <div className="text-[11px] text-muted-foreground">{reports.length} отчет(а) в този ден</div>
+
+                {/* Paid/batched reports — locked */}
+                {paidR.map(r => (
+                  <div key={r.report_id} className="flex items-center gap-3 p-2.5 rounded-md bg-emerald-500/15 border border-emerald-500/30">
+                    <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] text-emerald-300 font-medium truncate">{r.project_name || "—"} · {r.hours}ч</div>
+                      <div className="text-[10px] text-emerald-400/80">{r.locked_reason}</div>
+                    </div>
+                    <div className="text-[13px] font-mono font-bold text-emerald-300">{r.value.toFixed(0)}€</div>
+                  </div>
+                ))}
+
+                {/* Selectable approved unpaid reports — with checkbox */}
+                {selectableR.map(r => {
+                  const isChecked = empSelectedIds.has(r.report_id);
+                  return (
+                    <div key={r.report_id} className={`flex items-center gap-3 p-2.5 rounded-md border cursor-pointer ${isChecked ? "bg-blue-500/25 border-blue-500/60" : "bg-blue-500/10 border-blue-500/30"}`}
+                      onClick={() => {
+                        toggleReportSelection(eid, r.report_id);
+                        if (!selectedEmps.has(eid)) setSelectedEmps(prev => new Set([...prev, eid]));
+                      }}>
+                      <input type="checkbox" checked={isChecked} onChange={() => {}} className="w-4 h-4 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] text-blue-300 font-medium truncate">{r.project_name || "—"} · {r.hours}ч</div>
+                        <div className="text-[10px] text-blue-400/80">Одобрен · готов за плащане</div>
+                      </div>
+                      <div className="text-[13px] font-mono font-bold text-blue-300">{r.value.toFixed(0)}€</div>
+                    </div>
+                  );
+                })}
+
+                {/* Rejected reports — for reference only */}
+                {rejectedR.map(r => (
+                  <div key={r.report_id} className="flex items-center gap-3 p-2.5 rounded-md bg-red-500/15 border border-red-500/30 opacity-75">
+                    <XIcon className="w-4 h-4 text-red-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] text-red-300 font-medium truncate line-through">{r.project_name || "—"} · {r.hours}ч</div>
+                      <div className="text-[10px] text-red-400/80">Отхвърлен · само за справка</div>
+                    </div>
+                    <div className="text-[13px] font-mono text-red-300/80 line-through">{r.value.toFixed(0)}€</div>
+                  </div>
+                ))}
+
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-3 border-t border-border mt-3">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">Избрано за плащане</div>
+                    <div className="text-[15px] font-mono font-bold text-blue-300">{totalSelectedValue.toFixed(2)}€ · {totalSelectedHours.toFixed(1)}ч</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setReportPopup(null)}>Откажи</Button>
+                    <Button size="sm" onClick={() => setReportPopup(null)}>Потвърди</Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

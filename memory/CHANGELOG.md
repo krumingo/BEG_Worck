@@ -1,3 +1,62 @@
+## [P0-2A.2] - 2026-05-30 — Финален детайлен дизайн: разделена клетка + popup по отчети
+
+### Added — Backend
+- **`day_cell.reports[]`** — пълен per-report детайл за всеки ден:
+  `report_id`, `project_id`, `project_name`, `hours`, `value`, `report_status`,
+  `payroll_status`, `payroll_batch_id`, `selectable` (bool), `locked_reason` (string).
+  Сега frontend знае точно какво има във всяка клетка.
+- **`day_cell.selectable_report_ids[]`** + **`locked_report_ids[]`** — helper списъци за UI.
+- **`day_cell.selectable_hours`** + **`selectable_value`** — обобщения за неплатеното.
+- **`day_cell.has_rejected`** — флаг дали има отхвърлен отчет (показва червения ред).
+- **`PayRunRowInput.selected_report_ids[]`** — нов опционен параметър при create.
+  Празен → стара логика (FIX 1 филтрира всички unpaid за периода).
+  Подаден → точно тези report_id-та ще влязат в новия PR.
+- **`sync_on_confirm`** — ползва `selected_report_ids` ако е подаден, иначе legacy mode.
+  P0-1 guard остава: `$nin: ["paid", "batched"]` независимо от mode-а.
+
+### Added — Frontend (PayRunsPage.js)
+- **Разделена клетка (Вариант 5)** — клетката се показва като стек от секции:
+  - 🟢 Зелено "Платено" + катинар + PR номер (заключено)
+  - 🔵 Синьо "За плащане" (избираемо)
+  - 🔴 Червено "Отхвърлен" (само за справка) — само ако има реално отхвърлен отчет
+- **Popup при клик (Вариант 4)** — за клетки с >1 отчет с mix от статуси:
+  - Списък на всеки отчет с обект + часове + сума
+  - Платените са заключени с катинар + причина "Платен в PR-XXXX"
+  - Избираемите имат checkbox → toggle избира конкретен report_id
+  - Отхвърлените са в червен ред със зачертан текст
+  - Footer: "Избрано за плащане: X.XX€ · X.Xч" + Откажи/Потвърди
+- **Прости клетки** (1 отчет или само едно ниво) → клик директно toggle-ва деня (бързо)
+- **Mixed клетки** (>1 отчет, mix статуси) → клик отваря popup за прецизен избор
+- `Lock` иконка от lucide-react за заключените секции
+
+### Files changed
+- `backend/app/routes/pay_runs.py` — day_cell.reports[] + selected_report_ids в frozen_row
+- `backend/app/services/payroll_sync.py` — explicit report-id mode + legacy fallback
+- `frontend/src/pages/PayRunsPage.js` — разделена клетка + popup + per-report state
+
+### Not changed (preserved)
+- `report_normalizer.py` — без промяна
+- `settings.py` — без промяна
+- `finance.py`, P&L, `project_pnl.py` — без промяна
+- `AllReportsPage.js`, `EmployeeDetailPage.js`, `GroupedReportsTable.js` — без промяна
+- P0-1 FIX 1 (`payroll_filter=["!paid", "!batched"]`) — активен и непокътнат
+- P0-1 FIX 5 (reopen само batched) — активен и непокътнат
+
+### Critical guarantee
+- При **липсваща** `selected_report_ids` (празен списък) → backend върви по P0-2A.1 поведение
+  (legacy fallback). Стари клиенти продължават да работят без промяна.
+- При **подадена** `selected_report_ids` → точно тези отчети се маркират като batched.
+- P0-1 guard винаги пази: `$nin: ["paid", "batched"]` filter не позволява двойно плащане
+  дори ако frontend изпрати report_id за вече платен отчет.
+
+### Завършва финалния дизайн от mockup-овете
+Това е финалният дизайн избран от потребителя:
+- основна клетка = Вариант 5 (разделена клетка)
+- popup при клик = Вариант 4 (стек на отчети)
+- отхвърлен ред = червен (само ако има реално отхвърлен)
+
+---
+
 ## [P0-2A.1] - 2026-05-30 — Pay-run календар: 3 UI бъга от тестването
 
 ### Fixed

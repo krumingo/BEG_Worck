@@ -90,18 +90,32 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
             await db.payroll_payment_allocations.insert_many(v2_allocs)
 
     # ── B. Reports → BATCHED (not paid!) ──────────────────────────
+    # P0-2A.2: prefer explicit selected_report_ids if provided by frontend (per-report precision).
+    # Fall back to date-based bulk update for backwards compatibility (P0-2A and earlier).
+    # P0-1 guard remains: $nin ["paid", "batched"] — already-locked reports never get re-marked.
     for er in pay_run.get("employee_rows", []):
         if er.get("paid_now_amount", 0) == 0:
             continue
         eid = er["employee_id"]
-        dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
-        if dates:
+        selected_ids = er.get("selected_report_ids", []) or []
+        if selected_ids:
+            # P0-2A.2 precise mode: mark only the explicitly selected reports.
             await db.employee_daily_reports.update_many(
-                {"org_id": org_id, "worker_id": eid, "date": {"$in": dates},
+                {"org_id": org_id, "worker_id": eid, "id": {"$in": selected_ids},
                  "status": "APPROVED",
                  "payroll_status": {"$nin": ["paid", "batched"]}},
                 {"$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
             )
+        else:
+            # Legacy mode: mark all approved unpaid reports for the selected days.
+            dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
+            if dates:
+                await db.employee_daily_reports.update_many(
+                    {"org_id": org_id, "worker_id": eid, "date": {"$in": dates},
+                     "status": "APPROVED",
+                     "payroll_status": {"$nin": ["paid", "batched"]}},
+                    {"$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
+                )
 
     # ── C. v1 payslips as GENERATED (not Paid!) ──────────────────
     existing_v1_active = await db.payslips.count_documents(

@@ -96,6 +96,11 @@ class PayRunRowInput(BaseModel):
     paid_now_amount: float = 0
     adjustments: List[AdjustmentRow] = []
     notes: str = ""
+    # P0-2A.2: optional list of explicit report_ids to pay for this employee.
+    # If empty/missing → backend uses all unpaid approved reports for the period (old behavior).
+    # If provided → backend filters to only these report_ids (precise per-report selection).
+    # Backend always cross-checks against P0-1 guard (paid/batched are excluded regardless).
+    selected_report_ids: List[str] = []
 
 
 class PayRunCreateInput(BaseModel):
@@ -218,8 +223,8 @@ async def generate_pay_run(
 
         # Per-day breakdown
         # P0-2A: aggregate payroll_status per day so calendar cells know their status.
+        # P0-2A.2: also collect reports[] — full per-report detail for click-through popup.
         # Status precedence (mixed reports in same day): paid > batched > none (highest reflects locked state).
-        # Also collect report_ids and report_status for click-through detail.
         by_day = {}
         for ln in emp_lines:
             d = ln["date"]
@@ -229,6 +234,7 @@ async def generate_pay_run(
                     "report_ids": [], "report_count": 0,
                     "payroll_statuses": [], "payroll_batch_ids": [],
                     "report_statuses": [],
+                    "reports": [],  # P0-2A.2: full per-report records for popup
                 }
             by_day[d]["hours"] += ln["hours"]
             site_name = proj_map.get(ln["project_id"], "")
@@ -239,11 +245,37 @@ async def generate_pay_run(
             if rid:
                 by_day[d]["report_ids"].append(rid)
                 by_day[d]["report_count"] += 1
-            by_day[d]["payroll_statuses"].append(ln.get("payroll_status") or "none")
-            bid = ln.get("payroll_batch_id")
-            if bid and bid not in by_day[d]["payroll_batch_ids"]:
-                by_day[d]["payroll_batch_ids"].append(bid)
-            by_day[d]["report_statuses"].append(ln.get("status") or "")
+            ln_payroll_status = ln.get("payroll_status") or "none"
+            ln_batch_id = ln.get("payroll_batch_id")
+            ln_report_status = ln.get("status") or ""
+            by_day[d]["payroll_statuses"].append(ln_payroll_status)
+            if ln_batch_id and ln_batch_id not in by_day[d]["payroll_batch_ids"]:
+                by_day[d]["payroll_batch_ids"].append(ln_batch_id)
+            by_day[d]["report_statuses"].append(ln_report_status)
+            # P0-2A.2: build per-report record for popup detail view.
+            # selectable = approved + not paid/batched (matches FIX 1 backend filter).
+            is_approved = ln_report_status.upper() == "APPROVED"
+            is_locked_by_payroll = ln_payroll_status in ("paid", "batched")
+            is_rejected = ln_report_status.upper() == "REJECTED"
+            ln_hours = float(ln.get("hours") or 0)
+            ln_value = round(ln_hours * e["hourly_rate"], 2)
+            by_day[d]["reports"].append({
+                "report_id": rid,
+                "project_id": ln.get("project_id", ""),
+                "project_name": site_name,
+                "hours": round(ln_hours, 1),
+                "value": ln_value,
+                "report_status": ln_report_status,        # APPROVED / REJECTED / DRAFT
+                "payroll_status": ln_payroll_status,      # none / batched / paid
+                "payroll_batch_id": ln_batch_id,          # PR-XXXX if locked
+                "selectable": is_approved and not is_locked_by_payroll and not is_rejected,
+                "locked_reason": (
+                    f"Платен в {ln_batch_id}" if ln_payroll_status == "paid" else
+                    f"В пакет {ln_batch_id}" if ln_payroll_status == "batched" else
+                    "Отхвърлен" if is_rejected else
+                    None
+                ),
+            })
         # Compute day values using rate
         day_cells = []
         for d in sorted(by_day.keys()):
@@ -279,6 +311,13 @@ async def generate_pay_run(
                 "report_ids": dd["report_ids"],
                 "report_count": dd["report_count"],
                 "report_status": cell_report_status,
+                # P0-2A.2 enrichments: per-report detail for popup + selection
+                "reports": dd["reports"],
+                "selectable_report_ids": [r["report_id"] for r in dd["reports"] if r["selectable"]],
+                "locked_report_ids": [r["report_id"] for r in dd["reports"] if not r["selectable"]],
+                "selectable_hours": round(sum(r["hours"] for r in dd["reports"] if r["selectable"]), 1),
+                "selectable_value": round(sum(r["value"] for r in dd["reports"] if r["selectable"]), 2),
+                "has_rejected": any(r["report_status"].upper() == "REJECTED" for r in dd["reports"]),
             })
 
         rows.append({
@@ -408,6 +447,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "sites": row.get("sites", []),
             "day_cells": row.get("day_cells", []),
             "notes": notes,
+            # P0-2A.2: explicit per-report selection. Empty means "use day-level fallback" (old behavior).
+            "selected_report_ids": list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids) else [],
         }
         employee_rows.append(frozen_row)
 
