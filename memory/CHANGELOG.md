@@ -1,3 +1,24 @@
+## [P0-2A] - 2026-05-30 — Pay-run календар / Payroll Calendar Review
+
+### Added
+- backend/app/routes/settings.py — НОВ: GET/PUT /settings/payroll-week
+  (per-org настройка на начален ден на платежна седмица, default=6/Събота)
+- pay_runs.py: review_mode=true параметър — връща ВСИЧКИ approved отчети
+  (включително paid/batched) за визуален преглед в календара
+- pay_runs.py: day_cells обогатени с payroll_status, payroll_batch_ids,
+  report_ids, report_count, report_status
+- PayRunsPage.js: цветове на клетките (синьо=избираем, зелено=платен,
+  лилаво=в пакет, амбър=частично платен, сиво=отхвърлен)
+- PayRunsPage.js: dropdown за настройка на платежна седмица
+- PayRunsPage.js: computePayrollWeek helper + динамично сортиране
+
+### Unchanged (P0-1 guards intact)
+- FIX 1: generate без review_mode → payroll_filter=["!paid","!batched"]
+- FIX 5: sync_on_reopen → само batched отчети се освобождават
+
+---
+
+
 ## [P0-1] - 2026-05-27 — Backend заключване срещу двойно плащане на заплати
 
 ### Fixed

@@ -27,6 +27,20 @@ const STATUS_CFG = {
   cancelled: { label: "Отменен",   cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
+// P0-2A: Payroll status colors for calendar cells.
+// Mirrors PAYROLL_BADGE from AllReportsPage.js — same semantics, same colors.
+const PAYROLL_CELL_CFG = {
+  none:           { cls: "bg-blue-500/15  text-blue-300   border-blue-500/30",    label: "Избираем" },
+  eligible:       { cls: "bg-blue-500/15  text-blue-300   border-blue-500/30",    label: "Избираем" },
+  batched:        { cls: "bg-violet-500/15 text-violet-300 border-violet-500/30", label: "В pay-run" },
+  paid:           { cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", label: "Платен" },
+  partially_paid: { cls: "bg-amber-500/15 text-amber-300  border-amber-500/30",   label: "Частично" },
+};
+const PAYROLL_CELL_REJECTED = { cls: "bg-gray-500/15 text-gray-400 border-gray-500/30", label: "Отхвърлен" };
+
+// Day-of-week names for column headers (index matches JS Date.getDay(): 0=Sun..6=Sat)
+const BG_D = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
 const ADJ_TYPES = [
   { value: "bonus", label: "Бонус", color: "text-emerald-400" },
   { value: "advance", label: "Аванс", color: "text-blue-400" },
@@ -35,15 +49,40 @@ const ADJ_TYPES = [
   { value: "manual_correction", label: "Ръчна корекция", color: "text-amber-400" },
 ];
 
+// P0-2A: compute payroll week range based on first_day setting.
+// first_day: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat (JS Date.getDay() convention).
+// Returns [start_date, end_date] as YYYY-MM-DD strings, 7-day span.
+// For BEG default (first_day=6, Saturday): today=Wed 28.05 → start=Sat 23.05, end=Fri 29.05.
+function computePayrollWeek(firstDay = 6, today = new Date()) {
+  const d = new Date(today);
+  d.setHours(0, 0, 0, 0);
+  const todayDow = d.getDay();
+  // Find the most recent occurrence of firstDay (today or earlier).
+  // Example: today=Wed (3), firstDay=Sat (6) → diff = (3 - 6 + 7) % 7 = 4 → go back 4 days to Saturday.
+  const diff = (todayDow - firstDay + 7) % 7;
+  const start = new Date(d);
+  start.setDate(start.getDate() - diff);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const fmt = (dt) => dt.toISOString().slice(0, 10);
+  return [fmt(start), fmt(end)];
+}
+
 export default function PayRunsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("generate");
 
+  // P0-2A: payroll week setting (loaded from /settings/payroll-week, default Saturday=6)
+  const [payrollWeekFirstDay, setPayrollWeekFirstDay] = useState(6);
+
   const [periodStart, setPeriodStart] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 6);
-    return d.toISOString().slice(0, 10);
+    const [start] = computePayrollWeek(6);
+    return start;
   });
-  const [periodEnd, setPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [periodEnd, setPeriodEnd] = useState(() => {
+    const [, end] = computePayrollWeek(6);
+    return end;
+  });
 
   const [preview, setPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -108,7 +147,9 @@ export default function PayRunsPage() {
   const loadPreview = useCallback(async () => {
     setLoadingPreview(true);
     try {
-      const res = await API.get(`/pay-runs/generate?period_start=${periodStart}&period_end=${periodEnd}`);
+      // P0-2A: review_mode=true so paid/batched reports also appear in the calendar (locked).
+      // Real pay-run creation still uses generate without review_mode → only unpaid reports.
+      const res = await API.get(`/pay-runs/generate?period_start=${periodStart}&period_end=${periodEnd}&review_mode=true`);
       setPreview(res.data);
       setOverrides({});
       setDayOverrides({});
@@ -122,7 +163,16 @@ export default function PayRunsPage() {
       for (const r of (res.data.rows || [])) {
         if (r.earned_amount > 0) {
           emps.add(r.employee_id);
-          days[r.employee_id] = new Set((r.day_cells || []).map(d => d.date));
+          // P0-2A: auto-select only unpaid/eligible cells (not paid/batched/partially_paid).
+          // Locked cells stay visible (colored) but are not pre-selected for payment.
+          days[r.employee_id] = new Set(
+            (r.day_cells || [])
+              .filter(d => {
+                const st = d.payroll_status || "none";
+                return st === "none" || st === "eligible";
+              })
+              .map(d => d.date)
+          );
         }
       }
       setSelectedEmps(emps);
@@ -168,6 +218,42 @@ export default function PayRunsPage() {
   useEffect(() => { if (tab === "slips") loadSlips(); }, [tab, loadSlips]);
   useEffect(() => { if (tab === "weeks") loadWeeks(); }, [tab, loadWeeks]);
   useEffect(() => { if (tab === "monthly") loadMonth(); }, [tab, loadMonth, monthYear]);
+
+  // P0-2A: load payroll-week settings on mount, recompute default period.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await API.get("/settings/payroll-week");
+        if (cancelled) return;
+        const fd = (typeof res.data?.first_day === "number") ? res.data.first_day : 6;
+        setPayrollWeekFirstDay(fd);
+        // Recompute period using loaded setting (only if user hasn't changed it manually)
+        const [start, end] = computePayrollWeek(fd);
+        setPeriodStart(start);
+        setPeriodEnd(end);
+      } catch (e) {
+        // Settings not available — keep default (Saturday). Silent.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // P0-2A: update payroll week setting from dropdown.
+  const updatePayrollWeekFirstDay = async (newFirstDay) => {
+    const fd = parseInt(newFirstDay, 10);
+    setPayrollWeekFirstDay(fd);
+    // Recompute period
+    const [start, end] = computePayrollWeek(fd);
+    setPeriodStart(start);
+    setPeriodEnd(end);
+    try {
+      await API.put("/settings/payroll-week", { first_day: fd });
+      toast.success("Настройка запазена");
+    } catch (e) {
+      toast.error("Грешка при запазване");
+    }
+  };
 
   const getRowCalc = (row) => {
     const ovr = getOvr(row.employee_id);
@@ -221,7 +307,15 @@ export default function PayRunsPage() {
       const isFullyPaid = (r.previously_paid || 0) > 0 && (r.remaining_after_payment || 0) <= 0;
       if (r.earned_amount > 0 && !isFullyPaid) {
         emps.add(r.employee_id);
-        days[r.employee_id] = new Set((r.day_cells || []).map(d => d.date));
+        // P0-2A: include only unpaid/eligible cells, skip locked (paid/batched/partial).
+        days[r.employee_id] = new Set(
+          (r.day_cells || [])
+            .filter(d => {
+              const st = d.payroll_status || "none";
+              return st === "none" || st === "eligible";
+            })
+            .map(d => d.date)
+        );
       }
     }
     setSelectedEmps(emps);
@@ -231,7 +325,18 @@ export default function PayRunsPage() {
   const clearAllEmps = () => { setSelectedEmps(new Set()); setSelectedDays({}); };
 
   const selectAllDaysForEmp = (eid, dayCells) => {
-    setSelectedDays(prev => ({ ...prev, [eid]: new Set(dayCells.map(d => d.date)) }));
+    // P0-2A: include only unpaid/eligible cells.
+    setSelectedDays(prev => ({
+      ...prev,
+      [eid]: new Set(
+        (dayCells || [])
+          .filter(d => {
+            const st = d.payroll_status || "none";
+            return st === "none" || st === "eligible";
+          })
+          .map(d => d.date)
+      ),
+    }));
     setSelectedEmps(prev => new Set([...prev, eid]));
   };
 
@@ -461,18 +566,38 @@ export default function PayRunsPage() {
             <div><label className="text-[10px] text-muted-foreground">От</label><Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} className="h-9 text-xs w-[140px]" /></div>
             <div><label className="text-[10px] text-muted-foreground">До</label><Input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} className="h-9 text-xs w-[140px]" /></div>
             <Button variant="outline" size="sm" onClick={loadPreview} className="mt-4">Зареди</Button>
+            {/* P0-2A: Payroll week first-day setting, per organization. */}
+            <div className="ml-auto flex items-center gap-2 mt-4 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <label className="text-[11px] text-amber-400 whitespace-nowrap">Седмица започва от:</label>
+              <Select value={String(payrollWeekFirstDay)} onValueChange={updatePayrollWeekFirstDay}>
+                <SelectTrigger className="h-7 w-[120px] text-xs border-amber-500/30 bg-transparent">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Неделя</SelectItem>
+                  <SelectItem value="1">Понеделник</SelectItem>
+                  <SelectItem value="2">Вторник</SelectItem>
+                  <SelectItem value="3">Сряда</SelectItem>
+                  <SelectItem value="4">Четвъртък</SelectItem>
+                  <SelectItem value="5">Петък</SelectItem>
+                  <SelectItem value="6">Събота</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {loadingPreview ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
           : !preview?.rows?.length ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма одобрени отчети за периода</div>
           : (() => {
-            // Sort dates: Sat→Fri (6,0,1,2,3,4,5)
+            // P0-2A: Sort dates by configured payroll week first_day.
+            // satFriOrder example: first_day=6 (Sat) → [6,0,1,2,3,4,5]; first_day=1 (Mon) → [1,2,3,4,5,6,0].
             const rawDates = preview.dates || [];
-            const satFriOrder = [6,0,1,2,3,4,5];
+            const fd = payrollWeekFirstDay;
+            const customOrder = [0,1,2,3,4,5,6].map(i => (fd + i) % 7);
             const dates = [...rawDates].sort((a, b) => {
               const da = new Date(a + "T12:00:00").getDay();
               const db = new Date(b + "T12:00:00").getDay();
-              return satFriOrder.indexOf(da) - satFriOrder.indexOf(db);
+              return customOrder.indexOf(da) - customOrder.indexOf(db);
             });
             const BG_D = ["Нд","Пон","Вт","Ср","Чет","Пет","Съб"];
             return (
@@ -574,14 +699,32 @@ export default function PayRunsPage() {
                                 return <TableCell key={d} className={`text-center p-1 ${isWeekend ? "bg-muted/10" : ""}`}><span className="text-[10px] text-muted-foreground/20">—</span></TableCell>;
                               }
 
+                              // P0-2A: pick cell color based on payroll_status and report_status.
+                              // Reports that are not approved (rejected/mixed) use gray. Otherwise use PAYROLL_CELL_CFG.
+                              const cellPayrollStatus = dc.payroll_status || "none";
+                              const cellReportStatus = dc.report_status || "";
+                              let cellCfg;
+                              if (cellReportStatus === "REJECTED" || cellReportStatus === "rejected") {
+                                cellCfg = PAYROLL_CELL_REJECTED;
+                              } else {
+                                cellCfg = PAYROLL_CELL_CFG[cellPayrollStatus] || PAYROLL_CELL_CFG.none;
+                              }
+                              const isLocked = (cellPayrollStatus === "paid" || cellPayrollStatus === "batched" || cellPayrollStatus === "partially_paid");
+                              const firstBatchId = (dc.payroll_batch_ids && dc.payroll_batch_ids[0]) || null;
+
                               return (
-                                <TableCell key={d} className={`text-center p-1 cursor-pointer transition-colors ${isWeekend ? "bg-muted/10" : ""} ${isDaySelected && isSelected ? "bg-primary/15 border border-primary/30" : "hover:bg-muted/20"} ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
-                                  onClick={() => isSelected && toggleDay(eid, d)}
-                                  onDoubleClick={(e) => { e.stopPropagation(); openDayEdit(eid, dc, row); }}>
+                                <TableCell
+                                  key={d}
+                                  className={`text-center p-1 transition-colors ${isWeekend ? "bg-muted/10" : ""} ${isLocked ? cellCfg.cls + " cursor-not-allowed opacity-90" : (isDaySelected && isSelected ? "bg-primary/15 border border-primary/30 cursor-pointer" : "hover:bg-muted/20 cursor-pointer")} ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
+                                  onClick={() => { if (!isLocked && isSelected) toggleDay(eid, d); }}
+                                  onDoubleClick={(e) => { e.stopPropagation(); if (!isLocked) openDayEdit(eid, dc, row); }}
+                                  title={isLocked ? `${cellCfg.label}${firstBatchId ? ` · ${firstBatchId}` : ""}` : `${dc.report_count || 0} отчет(а)`}
+                                >
                                   <div className="flex flex-col items-center">
-                                    <span className={`text-[11px] font-mono font-bold ${isDaySelected && isSelected ? "text-primary" : "text-foreground/60"}`}>{getDayHours(eid, dc)}ч</span>
-                                    <span className={`text-[9px] font-mono ${isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground"}`}>{getDayValue(eid, dc).toFixed(0)}</span>
-                                    {dc.sites?.length > 0 && <span className="text-[7px] text-muted-foreground truncate max-w-[60px]">{dc.sites[0]}{dc.sites.length > 1 ? ` +${dc.sites.length - 1}` : ""}</span>}
+                                    <span className={`text-[11px] font-mono font-bold ${isLocked ? "" : (isDaySelected && isSelected ? "text-primary" : "text-foreground/60")}`}>{getDayHours(eid, dc)}ч</span>
+                                    <span className={`text-[9px] font-mono ${isLocked ? "" : (isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground")}`}>{getDayValue(eid, dc).toFixed(0)}</span>
+                                    {dc.sites?.length > 0 && <span className="text-[7px] truncate max-w-[60px] opacity-80">{dc.sites[0]}{dc.sites.length > 1 ? ` +${dc.sites.length - 1}` : ""}</span>}
+                                    {isLocked && firstBatchId && <span className="text-[6px] opacity-70">{firstBatchId}</span>}
                                     {dayOverrides[`${eid}_${d}`] && <span className="text-[6px] text-amber-400">ред.</span>}
                                   </div>
                                 </TableCell>

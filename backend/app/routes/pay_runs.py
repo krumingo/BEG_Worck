@@ -120,6 +120,7 @@ async def generate_pay_run(
     user: dict = Depends(get_current_user),
     period_start: str = "",
     period_end: str = "",
+    review_mode: bool = False,  # P0-2A: when True, include paid/batched reports for visual calendar
 ):
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
@@ -130,10 +131,18 @@ async def generate_pay_run(
         period_end = today.strftime("%Y-%m-%d")
         period_start = (today - timedelta(days=6)).strftime("%Y-%m-%d")
 
+    # P0-2A: In review mode, return ALL approved reports (including paid/batched)
+    # for visual calendar display. In normal mode (default), keep FIX 1 behavior
+    # so real pay-run creation only sees unpaid reports.
+    if review_mode:
+        payroll_filter_arg = None  # include all payroll statuses for review
+    else:
+        payroll_filter_arg = ["!paid", "!batched"]  # FIX 1 — selection mode
+
     lines = await fetch_normalized_report_lines(
         org_id=org_id, date_from=period_start, date_to=period_end,
         status_filter="APPROVED",
-        payroll_filter=["!paid", "!batched"],
+        payroll_filter=payroll_filter_arg,
     )
     for ln in lines:
         enrich_hours(ln)
@@ -208,21 +217,69 @@ async def generate_pay_run(
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
 
         # Per-day breakdown
+        # P0-2A: aggregate payroll_status per day so calendar cells know their status.
+        # Status precedence (mixed reports in same day): paid > batched > none (highest reflects locked state).
+        # Also collect report_ids and report_status for click-through detail.
         by_day = {}
         for ln in emp_lines:
             d = ln["date"]
             if d not in by_day:
-                by_day[d] = {"date": d, "hours": 0, "sites": []}
+                by_day[d] = {
+                    "date": d, "hours": 0, "sites": [],
+                    "report_ids": [], "report_count": 0,
+                    "payroll_statuses": [], "payroll_batch_ids": [],
+                    "report_statuses": [],
+                }
             by_day[d]["hours"] += ln["hours"]
             site_name = proj_map.get(ln["project_id"], "")
             if site_name and site_name not in by_day[d]["sites"]:
                 by_day[d]["sites"].append(site_name)
+            # Collect report-level info
+            rid = ln.get("id", "")
+            if rid:
+                by_day[d]["report_ids"].append(rid)
+                by_day[d]["report_count"] += 1
+            by_day[d]["payroll_statuses"].append(ln.get("payroll_status") or "none")
+            bid = ln.get("payroll_batch_id")
+            if bid and bid not in by_day[d]["payroll_batch_ids"]:
+                by_day[d]["payroll_batch_ids"].append(bid)
+            by_day[d]["report_statuses"].append(ln.get("status") or "")
         # Compute day values using rate
         day_cells = []
         for d in sorted(by_day.keys()):
             dd = by_day[d]
             day_val = round(dd["hours"] * e["hourly_rate"], 2)
-            day_cells.append({"date": d, "hours": round(dd["hours"], 1), "value": day_val, "sites": dd["sites"]})
+            # P0-2A: compute aggregate cell status.
+            # Mixed-status precedence: if all paid → "paid"; if any paid + any not → "partially_paid";
+            # else if any batched → "batched"; else "none" (unpaid/eligible).
+            statuses = dd["payroll_statuses"]
+            unique_statuses = set(statuses)
+            if unique_statuses == {"paid"}:
+                cell_status = "paid"
+            elif "paid" in unique_statuses and len(unique_statuses) > 1:
+                cell_status = "partially_paid"
+            elif "batched" in unique_statuses:
+                cell_status = "batched"
+            else:
+                cell_status = "none"
+            # Aggregate report-level status (Approved/Draft/Rejected) — if all same, use that; else "mixed"
+            report_statuses_unique = set(dd["report_statuses"])
+            if len(report_statuses_unique) == 1:
+                cell_report_status = next(iter(report_statuses_unique))
+            else:
+                cell_report_status = "mixed"
+            day_cells.append({
+                "date": d,
+                "hours": round(dd["hours"], 1),
+                "value": day_val,
+                "sites": dd["sites"],
+                # P0-2A enrichments:
+                "payroll_status": cell_status,
+                "payroll_batch_ids": dd["payroll_batch_ids"],
+                "report_ids": dd["report_ids"],
+                "report_count": dd["report_count"],
+                "report_status": cell_report_status,
+            })
 
         rows.append({
             "employee_id": wid,
