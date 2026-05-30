@@ -163,13 +163,16 @@ export default function PayRunsPage() {
       for (const r of (res.data.rows || [])) {
         if (r.earned_amount > 0) {
           emps.add(r.employee_id);
-          // P0-2A: auto-select only unpaid/eligible cells (not paid/batched/partially_paid).
-          // Locked cells stay visible (colored) but are not pre-selected for payment.
+          // P0-2A.1 FIX 2: auto-select unpaid/eligible AND partially_paid cells.
+          // partially_paid means some reports are paid, but some unpaid approved reports remain.
+          // Backend (FIX 1 in pay-run filter) automatically skips already-paid reports,
+          // so selecting a partially_paid cell only adds the still-unpaid reports.
+          // Locked cells (paid/batched) stay visible but are not pre-selected.
           days[r.employee_id] = new Set(
             (r.day_cells || [])
               .filter(d => {
                 const st = d.payroll_status || "none";
-                return st === "none" || st === "eligible";
+                return st === "none" || st === "eligible" || st === "partially_paid";
               })
               .map(d => d.date)
           );
@@ -307,12 +310,13 @@ export default function PayRunsPage() {
       const isFullyPaid = (r.previously_paid || 0) > 0 && (r.remaining_after_payment || 0) <= 0;
       if (r.earned_amount > 0 && !isFullyPaid) {
         emps.add(r.employee_id);
-        // P0-2A: include only unpaid/eligible cells, skip locked (paid/batched/partial).
+        // P0-2A.1 FIX 2: include unpaid/eligible AND partially_paid cells.
+        // Skip locked (paid/batched). Backend filters paid reports automatically.
         days[r.employee_id] = new Set(
           (r.day_cells || [])
             .filter(d => {
               const st = d.payroll_status || "none";
-              return st === "none" || st === "eligible";
+              return st === "none" || st === "eligible" || st === "partially_paid";
             })
             .map(d => d.date)
         );
@@ -322,17 +326,29 @@ export default function PayRunsPage() {
     setSelectedDays(days);
   };
 
-  const clearAllEmps = () => { setSelectedEmps(new Set()); setSelectedDays({}); };
+  // P0-2A.1 FIX 3: Clear button should only clear selected days, NOT remove employees.
+  // Old behavior removed employees from selectedEmps, which made isSelected=false → cell onClick
+  // was blocked by `if (!isLocked && isSelected) toggleDay(...)`. Now we keep all employees
+  // visible and selectable, but with no days picked — user can manually click cells to select.
+  const clearAllEmps = () => {
+    const allEmps = new Set(
+      (preview?.rows || [])
+        .filter(r => r.earned_amount > 0)
+        .map(r => r.employee_id)
+    );
+    setSelectedEmps(allEmps);  // keep employees selectable
+    setSelectedDays({});        // clear all day selections
+  };
 
   const selectAllDaysForEmp = (eid, dayCells) => {
-    // P0-2A: include only unpaid/eligible cells.
+    // P0-2A.1 FIX 2: include unpaid/eligible AND partially_paid cells.
     setSelectedDays(prev => ({
       ...prev,
       [eid]: new Set(
         (dayCells || [])
           .filter(d => {
             const st = d.payroll_status || "none";
-            return st === "none" || st === "eligible";
+            return st === "none" || st === "eligible" || st === "partially_paid";
           })
           .map(d => d.date)
       ),
@@ -589,16 +605,28 @@ export default function PayRunsPage() {
           {loadingPreview ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
           : !preview?.rows?.length ? <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">Няма одобрени отчети за периода</div>
           : (() => {
-            // P0-2A: Sort dates by configured payroll week first_day.
-            // satFriOrder example: first_day=6 (Sat) → [6,0,1,2,3,4,5]; first_day=1 (Mon) → [1,2,3,4,5,6,0].
+            // P0-2A.1 FIX 1: Sort dates correctly based on period length.
+            // - For 7 days or fewer: use custom day-of-week order (Sat→Fri for BEG)
+            //   This makes a payroll week start on the configured first_day.
+            // - For more than 7 days: sort chronologically by date.
+            //   Sorting by day-of-week with multiple weeks would group all Mondays
+            //   together, then all Tuesdays etc. — that breaks readability.
             const rawDates = preview.dates || [];
             const fd = payrollWeekFirstDay;
-            const customOrder = [0,1,2,3,4,5,6].map(i => (fd + i) % 7);
-            const dates = [...rawDates].sort((a, b) => {
-              const da = new Date(a + "T12:00:00").getDay();
-              const db = new Date(b + "T12:00:00").getDay();
-              return customOrder.indexOf(da) - customOrder.indexOf(db);
-            });
+            const isLongPeriod = rawDates.length > 7;
+            let dates;
+            if (isLongPeriod) {
+              // Chronological sort by date string (YYYY-MM-DD sorts naturally)
+              dates = [...rawDates].sort();
+            } else {
+              // Single-week: order by configured first_day → first_day+6
+              const customOrder = [0,1,2,3,4,5,6].map(i => (fd + i) % 7);
+              dates = [...rawDates].sort((a, b) => {
+                const da = new Date(a + "T12:00:00").getDay();
+                const db = new Date(b + "T12:00:00").getDay();
+                return customOrder.indexOf(da) - customOrder.indexOf(db);
+              });
+            }
             const BG_D = ["Нд","Пон","Вт","Ср","Чет","Пет","Съб"];
             return (
             <>
@@ -709,22 +737,50 @@ export default function PayRunsPage() {
                               } else {
                                 cellCfg = PAYROLL_CELL_CFG[cellPayrollStatus] || PAYROLL_CELL_CFG.none;
                               }
-                              const isLocked = (cellPayrollStatus === "paid" || cellPayrollStatus === "batched" || cellPayrollStatus === "partially_paid");
+                              const isLocked = (cellPayrollStatus === "paid" || cellPayrollStatus === "batched");
+                              // P0-2A.1 FIX 2: partially_paid is NOT locked.
+                              // A partially-paid cell means "some reports inside are paid, others are not".
+                              // The unpaid approved reports still need to be paid → cell must be selectable.
+                              // Backend automatically skips paid reports (FIX 1 + sync_on_confirm filter),
+                              // so clicking a partially_paid cell will only add the unpaid reports to the new pay-run.
+                              const isPartiallyPaid = (cellPayrollStatus === "partially_paid");
                               const firstBatchId = (dc.payroll_batch_ids && dc.payroll_batch_ids[0]) || null;
 
                               return (
                                 <TableCell
                                   key={d}
-                                  className={`text-center p-1 transition-colors ${isWeekend ? "bg-muted/10" : ""} ${isLocked ? cellCfg.cls + " cursor-not-allowed opacity-90" : (isDaySelected && isSelected ? "bg-primary/15 border border-primary/30 cursor-pointer" : "hover:bg-muted/20 cursor-pointer")} ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
-                                  onClick={() => { if (!isLocked && isSelected) toggleDay(eid, d); }}
+                                  className={`text-center p-1 transition-colors ${isWeekend ? "bg-muted/10" : ""} ${
+                                    isLocked
+                                      ? cellCfg.cls + " cursor-not-allowed opacity-90"
+                                      : isPartiallyPaid
+                                        ? (isDaySelected && isSelected ? "bg-amber-500/20 border border-amber-500/50 cursor-pointer" : `${cellCfg.cls} cursor-pointer hover:opacity-80`)
+                                        : (isDaySelected && isSelected ? "bg-primary/15 border border-primary/30 cursor-pointer" : "hover:bg-muted/20 cursor-pointer")
+                                  } ${dayOverrides[`${eid}_${d}`] ? "ring-1 ring-amber-500/40" : ""}`}
+                                  onClick={() => {
+                                    if (isLocked) return;
+                                    // P0-2A.1 FIX 3: clicking a cell auto-selects the employee
+                                    // if not already selected, then toggles the day.
+                                    // This restores click-to-select behavior after "Изчисти".
+                                    if (!isSelected) {
+                                      setSelectedEmps(prev => new Set([...prev, eid]));
+                                    }
+                                    toggleDay(eid, d);
+                                  }}
                                   onDoubleClick={(e) => { e.stopPropagation(); if (!isLocked) openDayEdit(eid, dc, row); }}
-                                  title={isLocked ? `${cellCfg.label}${firstBatchId ? ` · ${firstBatchId}` : ""}` : `${dc.report_count || 0} отчет(а)`}
+                                  title={
+                                    isLocked
+                                      ? `${cellCfg.label}${firstBatchId ? ` · ${firstBatchId}` : ""}`
+                                      : isPartiallyPaid
+                                        ? `Частично платено${firstBatchId ? ` · част от ${firstBatchId}` : ""} · неплатените отчети ще влязат в новия PR`
+                                        : `${dc.report_count || 0} отчет(а)`
+                                  }
                                 >
                                   <div className="flex flex-col items-center">
                                     <span className={`text-[11px] font-mono font-bold ${isLocked ? "" : (isDaySelected && isSelected ? "text-primary" : "text-foreground/60")}`}>{getDayHours(eid, dc)}ч</span>
                                     <span className={`text-[9px] font-mono ${isLocked ? "" : (isDaySelected && isSelected ? "text-primary/80" : "text-muted-foreground")}`}>{getDayValue(eid, dc).toFixed(0)}</span>
                                     {dc.sites?.length > 0 && <span className="text-[7px] truncate max-w-[60px] opacity-80">{dc.sites[0]}{dc.sites.length > 1 ? ` +${dc.sites.length - 1}` : ""}</span>}
-                                    {isLocked && firstBatchId && <span className="text-[6px] opacity-70">{firstBatchId}</span>}
+                                    {(isLocked || isPartiallyPaid) && firstBatchId && <span className="text-[6px] opacity-70">{firstBatchId}</span>}
+                                    {isPartiallyPaid && <span className="text-[6px] text-amber-400">частично</span>}
                                     {dayOverrides[`${eid}_${d}`] && <span className="text-[6px] text-amber-400">ред.</span>}
                                   </div>
                                 </TableCell>

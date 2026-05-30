@@ -1,3 +1,35 @@
+## [P0-2A.1] - 2026-05-30 — Pay-run календар: 3 UI бъга от тестването
+
+### Fixed
+- **FIX 1 — Голям период:** За периоди >7 дни дните се подреждат хронологично
+  (1.03, 2.03, 3.03, ...). За периоди ≤7 дни остава custom sort по first_day.
+  Преди: всички понеделници заедно, после всички вторници — нечитаема каша.
+- **FIX 2 — partially_paid НЕ е заключена:** Частично платена клетка става избираема.
+  Backend (FIX 1 в payroll_filter) автоматично пропуска платените отчети,
+  така че клик добавя само неплатените approved отчети в новия PR.
+  Auto-select, selectAllEmps, selectAllDaysForEmp вече включват partially_paid.
+  Tooltip: "Частично платено · неплатените отчети ще влязат в новия PR".
+- **FIX 3 — Изчисти / клик на клетка:** Бутонът "Изчисти" вече не маха работниците,
+  само техните избрани дни. Клик на клетка автоматично селектира работника ако не е,
+  после toggle-ва деня. Преди: след "Изчисти" → клетките ставаха некликаеми.
+
+### Files changed
+- `frontend/src/pages/PayRunsPage.js` (FIX 1+2+3, single-file change)
+
+### Not changed
+- Backend: 0 промени
+- `payroll_sync.py`, `report_normalizer.py`, `pay_runs.py`, `settings.py` — непокътнати
+- P0-1 защита (FIX 1+5) — активна и непокътната
+- AllReportsPage.js, EmployeeDetailPage.js, GroupedReportsTable.js — без промяна
+
+### Known limitations (за следваща задача P0-2A.2)
+- partially_paid клетка все още маркира **целия ден** (не отделните отчети).
+  Backend взима всички неплатени отчети в нея автоматично.
+- За точен избор "плати само отчет X, не отчет Y от същия ден" → нужно P0-2A.2:
+  day_cell.reports[] + popup със стек + selected_report_ids в PayRunCreateInput.
+
+---
+
 ## [P0-2A] - 2026-05-30 — Pay-run календар / Payroll Calendar Review
 
 ### Added
