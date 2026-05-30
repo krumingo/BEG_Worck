@@ -380,16 +380,50 @@ export default function PayRunsPage() {
     setSelectedDays(prev => ({ ...prev, [eid]: new Set() }));
   };
 
+  // P0-2A.3: helper to compute effective day value considering per-report selection.
+  // Priority order:
+  //   1. dayOverrides (manual edit) — takes precedence over everything.
+  //   2. selectedReportIds for this employee (popup picked specific reports) — sum only those.
+  //   3. dc.selectable_value (backend-provided unpaid-only sum) — for partially paid cells.
+  //   4. dc.value (legacy) — full day total.
   const getDayValue = (eid, dc) => {
     const key = `${eid}_${dc.date}`;
     const ovr = dayOverrides[key];
-    return ovr ? ovr.value : dc.value;
+    if (ovr) return ovr.value;
+    // P0-2A.3: if user picked specific reports for this employee, use only those that fall in this day.
+    const empReportIds = selectedReportIds[eid];
+    if (empReportIds && empReportIds.size > 0 && Array.isArray(dc.reports)) {
+      const picked = dc.reports.filter(r => empReportIds.has(r.report_id));
+      if (picked.length > 0) {
+        return picked.reduce((s, r) => s + (r.value || 0), 0);
+      }
+      // If no picks for this day but employee has popup picks elsewhere → 0 for this day.
+      return 0;
+    }
+    // Fallback: prefer selectable_value (unpaid-only) when backend provides it.
+    if (typeof dc.selectable_value === "number" && dc.selectable_value > 0) {
+      return dc.selectable_value;
+    }
+    return dc.value;
   };
 
   const getDayHours = (eid, dc) => {
     const key = `${eid}_${dc.date}`;
     const ovr = dayOverrides[key];
-    return ovr ? ovr.hours : dc.hours;
+    if (ovr) return ovr.hours;
+    // P0-2A.3: per-report selection for this employee.
+    const empReportIds = selectedReportIds[eid];
+    if (empReportIds && empReportIds.size > 0 && Array.isArray(dc.reports)) {
+      const picked = dc.reports.filter(r => empReportIds.has(r.report_id));
+      if (picked.length > 0) {
+        return Math.round(picked.reduce((s, r) => s + (r.hours || 0), 0) * 10) / 10;
+      }
+      return 0;
+    }
+    if (typeof dc.selectable_hours === "number" && dc.selectable_hours > 0) {
+      return dc.selectable_hours;
+    }
+    return dc.hours;
   };
 
   const getEmpPayAmount = (row) => {
@@ -802,6 +836,18 @@ export default function PayRunsPage() {
                                 if (isCellLocked) return;
                                 if (hasMultipleReports && isCellSelectable && (paidReports.length > 0 || rejectedReports.length > 0)) {
                                   // Mixed cell → open popup
+                                  // P0-2A.3: pre-check all selectable reports if user hasn't picked yet.
+                                  // This way the popup opens already showing "what would be paid by default",
+                                  // and the user can uncheck specific reports to exclude them.
+                                  setSelectedReportIds(prev => {
+                                    const existing = prev[eid] || new Set();
+                                    // If user already has picks for these reports → don't override.
+                                    const hasAnyPick = selectableReports.some(r => existing.has(r.report_id));
+                                    if (hasAnyPick) return prev;
+                                    const next = new Set(existing);
+                                    selectableReports.forEach(r => next.add(r.report_id));
+                                    return { ...prev, [eid]: next };
+                                  });
                                   setReportPopup({ eid, date: d, row, dc });
                                   return;
                                 }
@@ -828,12 +874,28 @@ export default function PayRunsPage() {
                                         {firstPaidBatchId && <div className="text-[7px] text-emerald-400/70">{firstPaidBatchId}</div>}
                                       </div>
                                     )}
-                                    {selectableReports.length > 0 && (
-                                      <div className={`px-1 py-0.5 text-center ${isDaySelected && isSelected ? "bg-blue-500/30 border-b border-blue-500/60" : "bg-blue-500/15 border-b border-blue-500/30"}`}>
-                                        <div className="text-[8px] text-blue-400 font-medium">{selectableReports.length === 1 ? "За плащане" : `${selectableReports.length} избираеми`}</div>
-                                        <div className="text-[10px] font-mono font-bold text-blue-300">{selectableHours.toFixed(1)}ч · {selectableValue.toFixed(0)}</div>
-                                      </div>
-                                    )}
+                                    {selectableReports.length > 0 && (() => {
+                                      // P0-2A.3: visual indicator if user picked subset via popup.
+                                      const empPicks = selectedReportIds[eid] || new Set();
+                                      const pickedHere = selectableReports.filter(r => empPicks.has(r.report_id));
+                                      const hasPartialPick = pickedHere.length > 0 && pickedHere.length < selectableReports.length;
+                                      const pickedHours = pickedHere.reduce((s, r) => s + r.hours, 0);
+                                      const pickedValue = pickedHere.reduce((s, r) => s + r.value, 0);
+                                      return (
+                                        <div className={`px-1 py-0.5 text-center ${isDaySelected && isSelected ? "bg-blue-500/30 border-b border-blue-500/60" : "bg-blue-500/15 border-b border-blue-500/30"}`}>
+                                          <div className="text-[8px] text-blue-400 font-medium">
+                                            {hasPartialPick
+                                              ? `${pickedHere.length}/${selectableReports.length} избрани`
+                                              : (selectableReports.length === 1 ? "За плащане" : `${selectableReports.length} избираеми`)}
+                                          </div>
+                                          <div className="text-[10px] font-mono font-bold text-blue-300">
+                                            {hasPartialPick
+                                              ? `${pickedHours.toFixed(1)}ч · ${pickedValue.toFixed(0)}`
+                                              : `${selectableHours.toFixed(1)}ч · ${selectableValue.toFixed(0)}`}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                     {rejectedReports.length > 0 && (
                                       <div className="px-1 py-0.5 bg-red-500/15 text-center">
                                         <div className="flex items-center justify-center gap-0.5 text-[8px] text-red-400 font-medium">
@@ -1725,8 +1787,33 @@ export default function PayRunsPage() {
                     <div className="text-[15px] font-mono font-bold text-blue-300">{totalSelectedValue.toFixed(2)}€ · {totalSelectedHours.toFixed(1)}ч</div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setReportPopup(null)}>Откажи</Button>
-                    <Button size="sm" onClick={() => setReportPopup(null)}>Потвърди</Button>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      // P0-2A.3: cancel = also clear any per-report picks for this employee in this day.
+                      // So if user opened popup then cancelled, nothing changes in main state.
+                      setReportPopup(null);
+                    }}>Откажи</Button>
+                    <Button size="sm" onClick={() => {
+                      // P0-2A.3: commit popup selection to main state.
+                      // - If any selectable report is picked → add this day to selectedDays + ensure employee in selectedEmps.
+                      // - If user unchecked everything → remove this day from selectedDays (sum becomes 0 for it).
+                      const hasPicks = selectedHere.length > 0;
+                      setSelectedEmps(prev => {
+                        if (!hasPicks) return prev;
+                        const n = new Set(prev);
+                        n.add(eid);
+                        return n;
+                      });
+                      setSelectedDays(prev => {
+                        const empDays = new Set(prev[eid] || []);
+                        if (hasPicks) {
+                          empDays.add(reportPopup.date);
+                        } else {
+                          empDays.delete(reportPopup.date);
+                        }
+                        return { ...prev, [eid]: empDays };
+                      });
+                      setReportPopup(null);
+                    }}>Потвърди</Button>
                   </div>
                 </div>
               </div>
