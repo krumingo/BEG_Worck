@@ -24,6 +24,23 @@ import {
 import ImageCropDialog from "@/components/ImageCropDialog";
 import PayslipDialog from "@/components/PayslipDialog";
 
+// P1-0.3: single source of truth for report status buckets.
+// Header, footer (Reports tab) and summary cards all derive from THIS — no drift.
+// "Изработено" = approved only. "Всички въведени" = all statuses (bAll), never labeled just "Общо".
+function bucketsFrom(rpt) {
+  const r = rpt || {};
+  const b = r.buckets || {};
+  return {
+    bAll: b.all || { count: r.count || 0, hours: r.total_hours || 0, value: r.total_value || 0 },
+    bApproved: b.approved || { count: 0, hours: 0, value: 0 },
+    bUnpaidApproved: b.unpaid_approved || { count: 0, hours: 0, value: 0 },
+    bPaid: b.paid || { count: 0, hours: 0, value: 0 },
+    bBatched: b.batched || { count: 0, hours: 0, value: 0 },
+    bDraftSub: b.draft_submitted || { count: 0, hours: 0, value: 0 },
+    bRejected: b.rejected || { count: 0, hours: 0, value: 0 },
+  };
+}
+
 function Avatar({ name, url, size = 48 }) {
   const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
   const [imgError, setImgError] = useState(false);
@@ -408,15 +425,8 @@ export default function EmployeeDetailPage() {
       {dossier && (() => {
         const rpt = dossier.reports || {};
         const pay = dossier.payroll || {};
-        // P1-0.1: use status-aware buckets with fallback to legacy fields
-        const buckets = rpt.buckets || {};
-        const bAll = buckets.all || { count: rpt.count || 0, hours: rpt.total_hours || 0, value: rpt.total_value || 0 };
-        const bApproved = buckets.approved || { count: 0, hours: 0, value: 0 };
-        const bUnpaidApproved = buckets.unpaid_approved || { count: 0, hours: 0, value: 0 };
-        const bPaid = buckets.paid || { count: 0, hours: 0, value: 0 };
-        const bBatched = buckets.batched || { count: 0, hours: 0, value: 0 };
-        const bDraftSub = buckets.draft_submitted || { count: 0, hours: 0, value: 0 };
-        const bRejected = buckets.rejected || { count: 0, hours: 0, value: 0 };
+        // P1-0.3: status-aware buckets via shared helper (same source as header + footer)
+        const { bAll, bApproved, bUnpaidApproved, bPaid, bBatched, bDraftSub, bRejected } = bucketsFrom(rpt);
         // "Изработено" = only APPROVED work (drafts/rejected are NOT recognized as payable)
         const earnedValue = bApproved.value;
         const earnedHours = bApproved.hours;
@@ -491,7 +501,16 @@ export default function EmployeeDetailPage() {
           ))}
         </div>
         <span className="text-[10px] text-muted-foreground ml-auto">
-          {dossier?.reports?.count || 0} отчети | {dossier?.reports?.total_hours || 0}ч | {(dossier?.reports?.total_value || 0).toFixed(0)} EUR
+          {(() => {
+            const { bApproved, bAll } = bucketsFrom(dossier?.reports);
+            return (
+              <>
+                Изработено: <strong className="text-foreground font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} EUR</strong>
+                <span className="text-muted-foreground/50"> · </span>
+                Всички въведени: <strong className="text-foreground font-mono">{bAll.count}</strong>
+              </>
+            );
+          })()}
         </span>
       </div>
 
@@ -662,10 +681,20 @@ export default function EmployeeDetailPage() {
               <div className="p-8 text-center text-muted-foreground text-sm">Няма отчети</div>
             ) : (
               <>
-                <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
-                  <span>Общо: <strong className="text-foreground">{dossier.reports.total_hours}ч</strong></span>
-                  <span>Стойност: <strong className="text-primary font-mono">{dossier.reports.total_value?.toFixed(0)} EUR</strong></span>
-                  <span>Записи: {dossier.reports.count}</span>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3 border-b border-border text-xs text-muted-foreground" data-testid="dossier-reports-summary">
+                  {(() => {
+                    const { bAll, bApproved, bUnpaidApproved, bPaid, bDraftSub, bRejected } = bucketsFrom(dossier?.reports);
+                    return (
+                      <>
+                        <span>Одобрени: <strong className="text-emerald-400 font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} EUR</strong></span>
+                        <span>За плащане: <strong className="text-amber-400 font-mono">{bUnpaidApproved.count} отч · {bUnpaidApproved.hours}ч · {bUnpaidApproved.value.toFixed(0)} EUR</strong></span>
+                        <span>Платени: <strong className="text-emerald-400 font-mono">{bPaid.count} отч · {bPaid.hours}ч · {bPaid.value.toFixed(0)} EUR</strong></span>
+                        <span>Чернови/подадени: <strong className="text-gray-400 font-mono">{bDraftSub.count}</strong></span>
+                        {bRejected.count > 0 && <span>Отхвърлени: <strong className="text-red-400 font-mono">{bRejected.count}</strong></span>}
+                        <span className="text-muted-foreground/70">Всички въведени: <strong className="text-foreground font-mono">{bAll.count}</strong></span>
+                      </>
+                    );
+                  })()}
                 </div>
                 <Table>
                   <TableHeader><TableRow>

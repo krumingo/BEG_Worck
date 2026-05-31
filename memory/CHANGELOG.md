@@ -1,3 +1,15 @@
+## [P1-0.3] - 2026-05-31 — Една терминология в EmployeeDetailPage
+
+### Fixed
+- Header и footer в таб "Отчети" сега показват approved bucket като основно
+  "Изработено" (преди показваха суров total включващ drafts/rejected)
+- Добавен bucketsFrom() helper за единен източник на buckets данни
+- Footer показва пълен breakdown по статуси (одобрени/за плащане/платени/чернови/отхвърлени)
+- "Всички въведени" е ясно етикетирано, никога просто "Общо"
+
+---
+
+
 ## [P1-0.2] - 2026-05-31 — HR Calendar via Normalizer · правилен overtime + унифициран read path
 
 ### Why
