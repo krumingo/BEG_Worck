@@ -10,6 +10,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
+from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours_batch
 from ..models.hr import (
     PAY_TYPES, PAY_SCHEDULES, ADVANCE_TYPES, ADVANCE_STATUSES,
     PAYROLL_STATUSES, PAYSLIP_STATUSES, PAYMENT_METHODS,
@@ -519,71 +520,127 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
             p = await db.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
             att["project_code"] = p["code"] if p else ""
     
-    work_reports = await db.employee_daily_reports.find(
-        {"org_id": org_id, "worker_id": user_id, "date": {"$gte": date_from, "$lt": date_to}},
-        {"_id": 0, "date": 1, "project_id": 1, "hours": 1, "smr_type": 1, "status": 1}
-    ).to_list(62)
-    
-    for wr in work_reports:
-        wr["total_hours"] = float(wr.get("hours") or 0)
-        if wr.get("project_id"):
-            p = await db.projects.find_one({"id": wr["project_id"]}, {"_id": 0, "code": 1})
-            wr["project_code"] = p["code"] if p else ""
-    
+    # ─────────────────────────────────────────────────────────────
+    # P1-0.2: Unified reports via normalizer (replaces 2 separate find()s).
+    # Normalizer reads both NEW (worker_id+date) and OLD (employee_id+report_date+day_entries[])
+    # schemas of employee_daily_reports and returns a flat unified line list.
+    # enrich_hours_batch computes per-day running total → correct overtime split.
+    # ─────────────────────────────────────────────────────────────
+    # Calculate inclusive end-of-month date string for normalizer (which uses $lte, not $lt).
+    import calendar as _cal
+    last_day_of_month = _cal.monthrange(y, m)[1]
+    date_to_inclusive = f"{y}-{m:02d}-{last_day_of_month:02d}"
+
+    raw_lines = await fetch_normalized_report_lines(
+        org_id=org_id,
+        date_from=date_from,
+        date_to=date_to_inclusive,
+        worker_id=user_id,
+    )
+    enrich_hours_batch(raw_lines)
+
+    # Build project_code map once (avoid N+1 queries during day building).
+    pids = {ln.get("project_id") for ln in raw_lines if ln.get("project_id")}
+    proj_code_map = {}
+    if pids:
+        projs = await db.projects.find(
+            {"id": {"$in": list(pids)}}, {"_id": 0, "id": 1, "code": 1}
+        ).to_list(200)
+        proj_code_map = {p["id"]: p.get("code", "") for p in projs}
+
     # Build calendar entries by day
     days = {}
+
+    # Step A: attendance entries → days[d].attendance
     for att in attendance:
         d = att["date"]
         if d not in days:
-            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0}
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0, "reports": [], "normal_hours": 0, "overtime_hours": 0, "report_count": 0}
         days[d]["attendance"] = {"status": att["status"], "project_code": att.get("project_code", "")}
-    
-    for wr in work_reports:
-        d = wr.get("date", "")
-        if d and d not in days:
-            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0}
-        if d:
-            days[d]["work_reports"].append({"project_code": wr.get("project_code", ""), "hours": wr["total_hours"]})
-            days[d]["total_hours"] += wr["total_hours"]
-    
-    # Include employee_daily_reports (new structured reports)
-    daily_reports = await db.employee_daily_reports.find(
+
+    # Step B: unified reports → days[d].reports[] + legacy work_reports[] + total_hours
+    for ln in raw_lines:
+        d = ln.get("date", "")
+        if not d:
+            continue
+        if d not in days:
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0, "reports": [], "normal_hours": 0, "overtime_hours": 0, "report_count": 0}
+        proj_code = proj_code_map.get(ln.get("project_id", ""), "")
+        ln_hours = float(ln.get("hours") or 0)
+        ln_normal = float(ln.get("normal_hours") or 0)
+        ln_overtime = float(ln.get("overtime_hours") or 0)
+        # New unified per-report detail
+        days[d]["reports"].append({
+            "report_id": ln.get("id", ""),
+            "project_id": ln.get("project_id", ""),
+            "project_code": proj_code,
+            "hours": ln_hours,
+            "normal_hours": ln_normal,
+            "overtime_hours": ln_overtime,
+            "smr_type": ln.get("smr_type", ""),
+            "status": ln.get("status", ""),
+            "payroll_status": ln.get("payroll_status", "none"),
+        })
+        # Legacy compat: keep work_reports[] (project_code + hours) for old frontend
+        days[d]["work_reports"].append({"project_code": proj_code, "hours": ln_hours})
+        # Per-day aggregates from batch enrichment
+        days[d]["total_hours"] += ln_hours
+        days[d]["normal_hours"] += ln_normal
+        days[d]["overtime_hours"] += ln_overtime
+        days[d]["report_count"] += 1
+
+    # Round per-day aggregates
+    for d_obj in days.values():
+        d_obj["total_hours"] = round(d_obj["total_hours"], 1)
+        d_obj["normal_hours"] = round(d_obj["normal_hours"], 1)
+        d_obj["overtime_hours"] = round(d_obj["overtime_hours"], 1)
+
+    # Step C: OLD-schema read for day_status ONLY (read-only fallback).
+    # IMPORTANT: status (APPROVED/DRAFT/REJECTED) ≠ day_status (WORKING/LEAVE/SICK/ABSENT_UNEXCUSED).
+    # Normalizer flattens OLD entries into report lines (one per day_entry) but doesn't
+    # carry day_status (it's a day-level field, not entry-level). We read it here purely
+    # to populate days[d].daily_report.day_status — used by frontend for Leave/Sick badges.
+    old_day_meta = await db.employee_daily_reports.find(
         {"org_id": org_id, "employee_id": user_id, "report_date": {"$gte": date_from, "$lt": date_to}},
         {"_id": 0, "report_date": 1, "day_status": 1, "approval_status": 1, "total_hours": 1, "day_entries": 1}
     ).to_list(31)
-    
-    for dr in daily_reports:
+
+    for dr in old_day_meta:
         d = dr.get("report_date", "")
         if not d:
             continue
         if d not in days:
-            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0}
-        # Build project codes from entries
+            days[d] = {"date": d, "attendance": None, "work_reports": [], "daily_report": None, "total_hours": 0, "reports": [], "normal_hours": 0, "overtime_hours": 0, "report_count": 0}
+        # Build project codes from day_entries for daily_report payload (legacy field).
         proj_codes = []
         for entry in dr.get("day_entries", []):
-            if entry.get("project_id"):
-                p = await db.projects.find_one({"id": entry["project_id"]}, {"_id": 0, "code": 1})
-                if p:
-                    proj_codes.append(p["code"])
+            pid = entry.get("project_id")
+            if pid:
+                code = proj_code_map.get(pid, "")
+                if not code:
+                    p = await db.projects.find_one({"id": pid}, {"_id": 0, "code": 1})
+                    code = p["code"] if p else ""
+                if code:
+                    proj_codes.append(code)
         days[d]["daily_report"] = {
-            "day_status": dr["day_status"],
-            "approval_status": dr["approval_status"],
+            "day_status": dr.get("day_status"),
+            "approval_status": dr.get("approval_status"),
             "hours": dr.get("total_hours", 0),
             "project_codes": list(set(proj_codes)),
         }
-        # Add hours if not already counted
-        if days[d]["total_hours"] == 0:
-            days[d]["total_hours"] += dr.get("total_hours", 0)
-        # Set attendance from daily report if no old attendance exists
-        if not days[d]["attendance"] and dr["day_status"] == "WORKING":
-            days[d]["attendance"] = {"status": "Present", "project_code": ", ".join(set(proj_codes))}
-        elif not days[d]["attendance"] and dr["day_status"] == "LEAVE":
-            days[d]["attendance"] = {"status": "Leave", "project_code": ""}
-        elif not days[d]["attendance"] and dr["day_status"] == "SICK":
-            days[d]["attendance"] = {"status": "Sick", "project_code": ""}
-        elif not days[d]["attendance"] and dr["day_status"] == "ABSENT_UNEXCUSED":
-            days[d]["attendance"] = {"status": "Absent", "project_code": ""}
-    
+        # Set attendance from daily report's day_status if no attendance_entries record exists.
+        # This handles Leave/Sick/Absent which come from day_status, not from report status.
+        day_st = dr.get("day_status")
+        if not days[d]["attendance"]:
+            if day_st == "WORKING":
+                days[d]["attendance"] = {"status": "Present", "project_code": ", ".join(set(proj_codes))}
+            elif day_st == "LEAVE":
+                days[d]["attendance"] = {"status": "Leave", "project_code": ""}
+            elif day_st == "SICK":
+                days[d]["attendance"] = {"status": "Sick", "project_code": ""}
+            elif day_st == "ABSENT_UNEXCUSED":
+                days[d]["attendance"] = {"status": "Absent", "project_code": ""}
+
     return {
         "month": month,
         "days": sorted(days.values(), key=lambda x: x["date"]),

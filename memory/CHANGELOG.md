@@ -1,3 +1,70 @@
+## [P1-0.2] - 2026-05-31 — HR Calendar via Normalizer · правилен overtime + унифициран read path
+
+### Why
+След P1-0.1 досието показва правилни числа в карти и таб Заплати. Но Календарът
+в досието все още чете директно от `employee_daily_reports` с **2 отделни find()**-а
+(NEW worker_id+date и OLD employee_id+report_date) и **per-line enrich_hours** —
+което дава грешни overtime числа за многоотчетни дни и разминавания с Отчети таб.
+
+### Fixed — Backend (`hr.py` — single file)
+- **Unified read via normalizer.** Replaced 2 separate find() calls with single
+  `fetch_normalized_report_lines(worker_id, date_from, date_to)`. Normalizer вече
+  обединява NEW и OLD schema unified — Календар таб вече ползва **същия** read path
+  както Отчети таб в dossier (P1-0.1).
+- **Batch overtime.** Замяна на per-line `enrich_hours` с `enrich_hours_batch(raw_lines)` —
+  правилен running-total split (ден с 3+3+3h → 8 normal + 1 overtime, не 9 normal + 0).
+- **N+1 query fix.** Project_code lookups сега се правят с един batch `find({"id": {"$in": [...]}})`
+  вместо отделна заявка per report.
+- **Total hours fix.** Преди: `if days[d]["total_hours"] == 0: days[d]["total_hours"] += ...`
+  (грешен fallback — ако NEW е добавила часове, OLD се пропускаше). Сега: всички
+  unified report lines се сумират → сборът е истинският ден total.
+
+### Response shape — backward compatible
+Запазено:
+- `month`, `days[]`, `total_present`, `total_hours` — без промяна
+- `days[d].attendance` — без промяна (от attendance_entries или day_status fallback)
+- `days[d].work_reports[]` — legacy запазен (project_code + hours) за стария frontend
+- `days[d].daily_report` — запазен със `day_status`/`approval_status`/`hours`/`project_codes`
+  (взима се само от OLD-schema read, защото `day_status` е day-level поле, не line-level)
+
+Добавено (нови полета — frontend може да ги ползва по-късно):
+- `days[d].reports[]` — пълен per-report детайл: report_id, project_id, project_code,
+  hours, normal_hours, overtime_hours, smr_type, status, payroll_status
+- `days[d].normal_hours` / `days[d].overtime_hours` — per-day aggregates от batch
+- `days[d].report_count` — общ брой
+
+### Critical distinction preserved
+- `status` (APPROVED / DRAFT / REJECTED / SUBMITTED) — на ниво отделен отчет, идва от normalizer
+- `day_status` (WORKING / LEAVE / SICK / ABSENT_UNEXCUSED) — на ниво ден, само в OLD schema,
+  чете се с отделна заявка САМО за това поле
+- Leave/Sick/Absent badges продължават да работят, защото `day_status` flow е запазен
+
+### Files changed
+- `backend/app/routes/hr.py` (1 file, ~120 lines)
+
+### Not changed (preserved)
+- Frontend: 0 промени (EmployeeDetailPage.js work_reports + daily_report flow работи както преди)
+- `payroll_sync.py`, `report_normalizer.py`, `pay_runs.py`, `employee_dossier.py`,
+  `settings.py`, `finance.py`, `daily_reports.py`, `server.py` — без промяна
+- `PayRunsPage.js`, `AllReportsPage.js`, `GroupedReportsTable.js`, `ProjectDetailPage.js` — без промяна
+- P0-1 guards (FIX 1 + FIX 5) — активни и непокътнати
+- P0-2A.x flow — непокътнат
+- P1-0.1 buckets в employee_dossier — непокътнати
+
+### Risk
+Small to medium. Number of hours on the calendar may change visibly for any day that
+previously triggered the broken fallback (`total_hours == 0`). This is the intended fix —
+they were wrong before.
+
+### Acceptance
+1. Календарът в досието показва същите дни като таб Отчети (един и същ source).
+2. Ден с няколко отчета показва правилен сбор (без fallback).
+3. Ден >8ч показва правилно извънредно време.
+4. Leave/Sick/Absent продължават да се показват както преди.
+5. Старият frontend не се чупи — work_reports[] и daily_report остават.
+
+---
+
 ## [P1-0.1] - 2026-05-31 — Employee Dossier Truth Fix · split status buckets + period filter
 
 ### Why
