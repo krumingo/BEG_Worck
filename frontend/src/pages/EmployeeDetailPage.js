@@ -408,28 +408,43 @@ export default function EmployeeDetailPage() {
       {dossier && (() => {
         const rpt = dossier.reports || {};
         const pay = dossier.payroll || {};
+        // P1-0.1: use status-aware buckets with fallback to legacy fields
+        const buckets = rpt.buckets || {};
+        const bAll = buckets.all || { count: rpt.count || 0, hours: rpt.total_hours || 0, value: rpt.total_value || 0 };
+        const bApproved = buckets.approved || { count: 0, hours: 0, value: 0 };
+        const bUnpaidApproved = buckets.unpaid_approved || { count: 0, hours: 0, value: 0 };
+        const bPaid = buckets.paid || { count: 0, hours: 0, value: 0 };
+        const bBatched = buckets.batched || { count: 0, hours: 0, value: 0 };
+        const bDraftSub = buckets.draft_submitted || { count: 0, hours: 0, value: 0 };
+        const bRejected = buckets.rejected || { count: 0, hours: 0, value: 0 };
+        // "Изработено" = only APPROVED work (drafts/rejected are NOT recognized as payable)
+        const earnedValue = bApproved.value;
+        const earnedHours = bApproved.hours;
+        // "Платено" = only reports with payroll_status==paid (most precise)
+        const paidValue = bPaid.value;
         const advActive = (dossier.advances || []).filter(a => a.remaining > 0);
         const totalLoans = advActive.reduce((s, a) => s + a.remaining, 0);
-        const remaining = Math.round(((rpt.total_value || 0) - (pay.total_paid || 0)) * 100) / 100;
+        const remaining = Math.round((earnedValue - paidValue) * 100) / 100;
         return (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" data-testid="dossier-summary-cards">
-          <div className="rounded-lg bg-card border border-border p-2 text-center">
-            <p className="text-base font-bold font-mono">{rpt.total_hours || 0}<span className="text-[10px] text-muted-foreground">ч</span></p>
-            <p className="text-[8px] text-muted-foreground">Часове</p>
+        <>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-2" data-testid="dossier-summary-cards">
+          <div className="rounded-lg bg-card border border-border p-2 text-center" title="Часове по одобрени отчети">
+            <p className="text-base font-bold font-mono">{earnedHours}<span className="text-[10px] text-muted-foreground">ч</span></p>
+            <p className="text-[8px] text-muted-foreground">Часове (одобрени)</p>
           </div>
-          <div className="rounded-lg bg-card border border-border p-2 text-center">
-            <p className="text-base font-bold font-mono">{rpt.count || 0}</p>
-            <p className="text-[8px] text-muted-foreground">Отчети</p>
+          <div className="rounded-lg bg-card border border-border p-2 text-center" title="Брой одобрени / всички отчети">
+            <p className="text-base font-bold font-mono">{bApproved.count}<span className="text-[10px] text-muted-foreground">/{bAll.count}</span></p>
+            <p className="text-[8px] text-muted-foreground">Одобрени / всички</p>
           </div>
-          <div className="rounded-lg bg-card border border-border p-2 text-center">
-            <p className="text-base font-bold font-mono text-primary">{(rpt.total_value || 0).toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+          <div className="rounded-lg bg-card border border-border p-2 text-center" title="Сума на одобрените отчети по текуща ставка. Не включва чернови и отхвърлени.">
+            <p className="text-base font-bold font-mono text-primary">{earnedValue.toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
             <p className="text-[8px] text-muted-foreground">Изработено</p>
           </div>
-          <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
-            <p className="text-base font-bold font-mono text-emerald-400">{(pay.total_paid || 0).toFixed(0)}<span className="text-[10px] text-emerald-400/60"> EUR</span></p>
+          <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center" title="Само отчети със payroll_status=paid">
+            <p className="text-base font-bold font-mono text-emerald-400">{paidValue.toFixed(0)}<span className="text-[10px] text-emerald-400/60"> EUR</span></p>
             <p className="text-[8px] text-emerald-400/70">Платено</p>
           </div>
-          <div className={`rounded-lg p-2 text-center ${remaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : "bg-card border border-border"}`}>
+          <div className={`rounded-lg p-2 text-center ${remaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : "bg-card border border-border"}`} title="Одобрено минус платено">
             <p className={`text-base font-bold font-mono ${remaining > 0 ? "text-amber-400" : remaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{remaining.toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
             <p className="text-[8px] text-muted-foreground">Остатък</p>
           </div>
@@ -438,6 +453,25 @@ export default function EmployeeDetailPage() {
             <p className="text-[8px] text-muted-foreground">Заеми</p>
           </div>
         </div>
+        {/* P1-0.1: extra info row — show breakdown by status */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground mb-4" data-testid="dossier-breakdown-row">
+          <span>Всички: <strong className="text-foreground font-mono">{bAll.count}</strong></span>
+          <span className="text-muted-foreground/50">·</span>
+          <span>Одобрени: <strong className="text-emerald-400 font-mono">{bApproved.count}</strong></span>
+          <span className="text-muted-foreground/50">·</span>
+          <span title="Одобрени но още неплатени">За плащане: <strong className="text-amber-400 font-mono">{bUnpaidApproved.count}</strong></span>
+          <span className="text-muted-foreground/50">·</span>
+          <span>В пакет: <strong className="text-violet-400 font-mono">{bBatched.count}</strong></span>
+          <span className="text-muted-foreground/50">·</span>
+          <span>Платени: <strong className="text-emerald-400 font-mono">{bPaid.count}</strong></span>
+          <span className="text-muted-foreground/50">·</span>
+          <span>Чернови/подадени: <strong className="text-gray-400 font-mono">{bDraftSub.count}</strong></span>
+          {bRejected.count > 0 && <>
+            <span className="text-muted-foreground/50">·</span>
+            <span>Отхвърлени: <strong className="text-red-400 font-mono">{bRejected.count}</strong></span>
+          </>}
+        </div>
+        </>
         );
       })()}
 
@@ -783,13 +817,17 @@ function EmployeePayrollWeeks({ userId, periodFrom, periodTo, onViewSlip }) {
   if (!weeks.length) return <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">Няма pay run записи</div>;
 
   const totalEarned = weeks.reduce((s, w) => s + (w.earned_amount || 0), 0);
-  const totalPaid = weeks.reduce((s, w) => s + (w.paid_now_amount || 0), 0);
+  // P1-0.1: split "Платено" into "Потвърдено" (всички с paid_now_amount, вкл. confirmed)
+  // and "Реално платено" (само run_status==paid). This matches the dossier cards above.
+  const totalConfirmed = weeks.reduce((s, w) => s + (w.paid_now_amount || 0), 0);
+  const totalPaid = weeks.reduce((s, w) => s + (w.run_status === "paid" ? (w.paid_now_amount || 0) : 0), 0);
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="emp-payroll-weeks">
-      <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
-        <span>Изработено: <strong className="text-primary font-mono">{totalEarned.toFixed(0)} EUR</strong></span>
-        <span>Платено: <strong className="text-emerald-400 font-mono">{totalPaid.toFixed(0)} EUR</strong></span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3 border-b border-border text-xs text-muted-foreground">
+        <span title="Сума на earned_amount от всички pay-runs на работника в периода">Изработено: <strong className="text-primary font-mono">{totalEarned.toFixed(0)} EUR</strong></span>
+        <span title="Pay-runs със статус confirmed (потвърдени, но още не платени)">Потвърдено: <strong className="text-violet-400 font-mono">{totalConfirmed.toFixed(0)} EUR</strong></span>
+        <span title="Само pay-runs със статус paid (реално платени)">Платено: <strong className="text-emerald-400 font-mono">{totalPaid.toFixed(0)} EUR</strong></span>
         <span>Записи: {weeks.length}</span>
       </div>
       <Table>

@@ -1,3 +1,84 @@
+## [P1-0.1] - 2026-05-31 — Employee Dossier Truth Fix · split status buckets + period filter
+
+### Why
+Following user video tests + parallel audits, the employee dossier was showing
+inconsistent numbers across tabs:
+- Cards on top: "Изработено 994 EUR", "Платено 568 EUR"
+- Tab "Заплати": "Изработено 1136 EUR", "Платено 966 EUR"
+Root causes (4):
+1. dossier reports total_value summed ALL statuses (drafts + rejected included)
+2. dossier pay_runs had no period filter, no archived filter
+3. Tab "Заплати" counted confirmed pay-runs as paid
+4. dossier used per-line `enrich_hours` so overtime was wrong for multi-report days
+
+### Fixed — Backend (`employee_dossier.py`)
+- **Status buckets in `reports.buckets`** — new explicit structure:
+  - `all` — все отчети (legacy total_hours/total_value/count = this bucket)
+  - `approved` — само APPROVED (рекомендира се за "Изработено")
+  - `unpaid_approved` — APPROVED + payroll_status in (none, "")
+  - `paid` — payroll_status == "paid" (за реално "Платено")
+  - `batched` — payroll_status == "batched"
+  - `draft_submitted` — DRAFT + SUBMITTED
+  - `rejected` — REJECTED
+  Legacy fields `total_hours`, `total_value`, `count` preserved for backwards
+  compatibility (other screens reading them won't break).
+- **pay_runs filter** — added `archived: {"$ne": True}` + period overlap:
+  `period_end >= date_from AND period_start <= date_to`. Before: showed ALL
+  pay-runs for worker regardless of period.
+- **`enrich_hours_batch`** instead of per-line `enrich_hours` — correct overtime
+  calculation when day has multiple reports (3+3+3h = 8 normal + 1 overtime,
+  not 9 normal + 0 overtime).
+
+### Fixed — Frontend (`EmployeeDetailPage.js`)
+- **Cards on top** now use status buckets with fallback to legacy fields:
+  - "Изработено" = `bucket.approved.value` (only approved, no drafts/rejected)
+  - "Платено" = `bucket.paid.value` (только payroll_status==paid)
+  - "Часове" = `bucket.approved.hours`
+  - "Отчети" = `bucket.approved.count / bucket.all.count` (X/Y format)
+- **Extra info row** under cards shows breakdown by status:
+  "Всички: N · Одобрени: X · За плащане: Y · В пакет: Z · Платени: W · Чернови: A · Отхвърлени: B"
+- **Tab "Заплати"** now shows 3 distinct numbers in header:
+  - Изработено (sum of earned_amount)
+  - Потвърдено (sum of paid_now_amount, includes confirmed)
+  - Платено (sum of paid_now_amount WHERE run_status == "paid")
+
+### Files changed
+- `backend/app/routes/employee_dossier.py` (~50 lines)
+- `frontend/src/pages/EmployeeDetailPage.js` (~70 lines)
+
+### Not changed (preserved)
+- `payroll_sync.py`, `report_normalizer.py`, `pay_runs.py`, `settings.py`,
+  `finance.py`, `daily_reports.py`, `hr.py`, `project_pnl.py`, `server.py`
+- `PayRunsPage.js`, `AllReportsPage.js`, `GroupedReportsTable.js`, `ProjectDetailPage.js`
+- P0-1 guards (FIX 1 + FIX 5)
+- P0-2A.x flow (calendar cells, popup, selectedReportIds)
+- finance_payments writers
+- payment_slips
+- approve/reject endpoints
+- advances flow
+
+### Backwards compatibility
+- Old fields `reports.total_hours`, `reports.total_value`, `reports.count`
+  remain in response (computed from "all" bucket = same as before fix).
+- Frontend has fallback: if `buckets` missing → uses legacy fields.
+
+### Risk
+Small to medium. Numbers on the dossier change visibly. If formula is wrong
+the user sees wrong totals. Mitigation: legacy fields preserved, fallbacks
+in frontend, no payroll/finance write paths touched.
+
+### Acceptance
+1. Open dossier for Krum, period 2026-01-01 → 2026-05-31.
+2. Cards "Изработено" = sum of value for APPROVED reports only.
+3. Cards "Платено" = sum for reports with payroll_status==paid.
+4. "Платено" in cards == "Платено" in Заплати tab (same paid-only filter).
+5. Extra row shows: Всички: 15 · Одобрени: 12 · За плащане: 5 · ...
+6. Tab Заплати header shows 3 numbers: Изработено / Потвърдено / Платено.
+7. Day with >8h from multiple reports → overtime is correct.
+8. Change period → reports AND payroll numbers update together.
+
+---
+
 ## [P0-2A.3] - 2026-05-30 — Popup държи selection state · main totals се обновяват
 
 ### Fixed

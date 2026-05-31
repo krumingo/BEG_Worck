@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, NORMAL_DAY
+from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, enrich_hours_batch, NORMAL_DAY
 
 
 router = APIRouter(tags=["Employee Dossier"])
@@ -78,9 +78,12 @@ async def get_employee_dossier(
         org_id=org_id, date_from=date_from, date_to=date_to, worker_id=worker_id,
     )
     # Enrich and sort
+    # P1-0.1: use batch enrichment so overtime is computed per-day (running total),
+    # not per-line. A day with 3 reports of 3h each correctly becomes 8 normal + 1 overtime,
+    # not 9 normal + 0 overtime.
+    enrich_hours_batch(raw_lines)
     pids = set()
     for rl in raw_lines:
-        enrich_hours(rl)
         if rl["project_id"]:
             pids.add(rl["project_id"])
     proj_map = {}
@@ -109,9 +112,61 @@ async def get_employee_dossier(
     total_hours = round(sum(r["hours"] for r in report_lines), 1)
     total_value = round(sum(r["value"] for r in report_lines), 2)
 
+    # P1-0.1: split report totals by status bucket.
+    # Lets the UI show clearly which reports are approved for payroll vs draft/rejected.
+    # Legacy fields above (total_hours, total_value, count) stay as "all statuses combined"
+    # to preserve backward compatibility for any other screen reading them.
+    def _bucket(filter_fn):
+        items = [r for r in report_lines if filter_fn(r)]
+        return {
+            "count": len(items),
+            "hours": round(sum(r["hours"] for r in items), 1),
+            "value": round(sum(r["value"] for r in items), 2),
+        }
+
+    def _is_approved(r):
+        return (r.get("status") or "").upper() == "APPROVED"
+
+    def _is_unpaid_approved(r):
+        st = (r.get("status") or "").upper()
+        ps = r.get("payroll_status") or "none"
+        return st == "APPROVED" and ps in ("none", "", None)
+
+    def _is_paid(r):
+        return (r.get("payroll_status") or "") == "paid"
+
+    def _is_batched(r):
+        return (r.get("payroll_status") or "") == "batched"
+
+    def _is_draft_submitted(r):
+        st = (r.get("status") or "").upper()
+        return st in ("DRAFT", "SUBMITTED")
+
+    def _is_rejected(r):
+        return (r.get("status") or "").upper() == "REJECTED"
+
+    report_buckets = {
+        "all":              _bucket(lambda r: True),
+        "approved":         _bucket(_is_approved),
+        "unpaid_approved":  _bucket(_is_unpaid_approved),
+        "paid":             _bucket(_is_paid),
+        "batched":          _bucket(_is_batched),
+        "draft_submitted":  _bucket(_is_draft_submitted),
+        "rejected":         _bucket(_is_rejected),
+    }
+
     # 3) Pay runs containing this worker (v3 — source of truth)
+    # P1-0.1: filter by archived + period overlap.
+    # Period overlap: pay-run touches dossier window iff
+    #   pay_run.period_end >= date_from AND pay_run.period_start <= date_to.
+    # Before: no period filter (showed ALL pay-runs for worker) + no archived filter
+    # → made "Платено" card and "Заплати" tab disagree silently.
     pay_runs = await db.pay_runs.find(
-        {"org_id": org_id, "employee_rows.employee_id": worker_id},
+        {"org_id": org_id,
+         "employee_rows.employee_id": worker_id,
+         "archived": {"$ne": True},
+         "period_end": {"$gte": date_from},
+         "period_start": {"$lte": date_to}},
         {"_id": 0},
     ).sort("period_start", -1).to_list(100)
 
@@ -241,9 +296,12 @@ async def get_employee_dossier(
         "header": header,
         "reports": {
             "lines": report_lines,
+            # Legacy fields (kept for backward compat with other screens)
             "total_hours": total_hours,
             "total_value": total_value,
             "count": len(report_lines),
+            # P1-0.1: explicit per-status breakdown
+            "buckets": report_buckets,
         },
         "payroll": {
             "weeks": payroll_weeks,
