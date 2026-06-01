@@ -270,49 +270,95 @@ async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
     return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
-@router.post("/daily-reports/{report_id}/approve")
-async def approve_daily_report(report_id: str, user: dict = Depends(require_m4)):
-    """
-    SOURCE OF TRUTH: This is the POSTING EVENT.
-    Approve creates work_sessions (the only source of truth for labor cost).
-    See /app/memory/SOURCE_OF_TRUTH.md for full policy.
-    """
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Only SiteManager/Admin can approve")
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+# ── Single-source-of-truth actions (P1-0.5) ────────────────────────
+# approve_report_one / reject_report_one are the ONLY place approve/reject
+# business logic lives. Single endpoints call them once; bulk endpoints call
+# them in a loop — so single and bulk produce IDENTICAL data.
 
-    # Support both old (approval_status) and new (status) naming
-    current_status = report.get("approval_status") or report.get("status", "")
-    if current_status in ("APPROVED",):
-        raise HTTPException(status_code=400, detail=f"Вече одобрен отчет не може да бъде одобрен повторно. Статус: {current_status}")
-
+async def approve_report_one(report: dict, actor: dict, override: dict | None = None,
+                             block_overtime_without_override: bool = False) -> dict:
+    """
+    Canonical approval for ONE report. Does NOT raise — returns:
+      {"status": "ok"|"blocked"|"failed", "report_id": ..., ...}
+    Canonical decisions (P1-0.5):
+      - slip counter key: counter_type="slip_number"
+      - work_session SMR field: smr_type_id (canonical) + smr_type (compat)
+      - labor_cost = regular*rate + overtime*rate*coefficient
+      - default overtime_coefficient = 1.0 (no auto-overpay), split always stored
+    """
+    org_id = actor["org_id"]
+    rid = report["id"]
     now = datetime.now(timezone.utc).isoformat()
-    org_id = user["org_id"]
 
-    # A) Generate slip number (per-org auto-increment)
-    counter = await db.org_counters.find_one_and_update(
-        {"org_id": org_id, "counter_type": "slip_number"},
-        {"$inc": {"value": 1}},
-        upsert=True,
-        return_document=True,
-    )
-    slip_number = counter["value"] if counter and "_id" in counter else 1
-    # Handle case where find_one_and_update returns the pre-update doc
-    if isinstance(counter, dict) and "value" in counter:
-        slip_number = counter["value"]
+    status = report.get("approval_status") or report.get("status", "")
+    if status == "APPROVED":
+        return {"status": "failed", "report_id": rid, "reason": "already_approved"}
 
-    # B) Create work_session from this entry (if it has worker_id + hours)
-    worker_id = report.get("worker_id")
-    hours = report.get("hours") or report.get("hours_worked", 0)
-    project_id = report.get("project_id")
+    worker_id = report.get("worker_id", "")
+    hours = float(report.get("hours") or report.get("hours_worked") or 0)
+    report_date = report.get("date") or report.get("report_date") or now[:10]
+    project_id = report.get("project_id", "")
     smr_type = report.get("smr_type") or report.get("activity_type", "")
-    report_date = report.get("date", now[:10])
 
+    line_is_overtime = hours > 8
+
+    # Overtime gate. Bulk path blocks >8h until admin supplies an override
+    # (drives the override modal). Single path (B2) does NOT block — falls
+    # through to the default split below.
+    if line_is_overtime and override is None and block_overtime_without_override:
+        from app.services.hours_validator import get_worker_hours_for_day
+        day_total = await get_worker_hours_for_day(org_id, worker_id, report_date)
+        proj_name = ""
+        if project_id:
+            proj_doc = await db.projects.find_one({"id": project_id}, {"_id": 0, "name": 1})
+            if proj_doc:
+                proj_name = proj_doc.get("name", "")
+        return {
+            "status": "blocked", "report_id": rid,
+            "worker_name": report.get("worker_name", ""), "worker_id": worker_id,
+            "current_hours": day_total, "report_hours": hours, "date": report_date,
+            "project_id": project_id, "project_name": proj_name,
+        }
+
+    # Split + coefficient (default coef 1.0 = no overpay)
+    coefficient = 1.0
+    reason_text = ""
+    if line_is_overtime and override:
+        o_reg = float(override.get("regular_hours", 0))
+        o_ot = float(override.get("overtime_hours", 0))
+        o_coef = float(override.get("overtime_coefficient", 0))
+        o_reason = (override.get("reason") or "").strip()
+        if abs(o_reg + o_ot - hours) > 0.01:
+            return {"status": "failed", "report_id": rid, "reason": "split_mismatch"}
+        if o_reg < 0 or o_ot < 0:
+            return {"status": "failed", "report_id": rid, "reason": "negative_split_value"}
+        if o_coef < 1:
+            return {"status": "failed", "report_id": rid, "reason": "coefficient_must_be_at_least_1"}
+        if not o_reason:
+            return {"status": "failed", "report_id": rid, "reason": "reason_required"}
+        regular_hours, overtime_hours, coefficient, reason_text = o_reg, o_ot, o_coef, o_reason
+    elif line_is_overtime:
+        regular_hours = min(hours, 8)
+        overtime_hours = max(0, hours - 8)
+    else:
+        regular_hours = hours
+        overtime_hours = 0
+
+    # A) Slip number — canonical counter_type sequence (shared by single + bulk)
+    slip_number = report.get("slip_number")
+    if not slip_number:
+        counter = await db.org_counters.find_one_and_update(
+            {"org_id": org_id, "counter_type": "slip_number"},
+            {"$inc": {"value": 1}}, upsert=True, return_document=True,
+        )
+        slip_number = (counter or {}).get("value", 1)
+
+    rate = await _get_hourly_rate_for_approval(org_id, worker_id)
+    labor_cost = round(regular_hours * rate + overtime_hours * rate * coefficient, 2)
+
+    # B) work_session (source of truth for labor cost) — dedup like single path
     sessions_created = 0
     if worker_id and hours and hours > 0 and project_id:
-        # Check for existing session (avoid duplicate)
         existing_ws = await db.work_sessions.find_one({
             "org_id": org_id, "worker_id": worker_id, "site_id": project_id,
             "smr_type_id": smr_type,
@@ -320,46 +366,40 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
             "source_method": "APPROVED_REPORT",
         })
         if not existing_ws:
-            # Get hourly rate
-            rate = await _get_hourly_rate_for_approval(org_id, worker_id)
-
             project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
             session = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "worker_id": worker_id,
-                "worker_name": report.get("worker_name", ""),
-                "site_id": project_id,
-                "site_name": (project or {}).get("name", ""),
-                "smr_type_id": smr_type,
+                "id": str(uuid.uuid4()), "org_id": org_id,
+                "worker_id": worker_id, "worker_name": report.get("worker_name", ""),
+                "site_id": project_id, "site_name": (project or {}).get("name", ""),
+                "smr_type_id": smr_type,   # canonical
+                "smr_type": smr_type,      # compat (P1-0.5)
                 "started_at": f"{report_date}T08:00:00",
                 "ended_at": f"{report_date}T{8 + int(hours):02d}:{int((hours % 1) * 60):02d}:00",
                 "source_method": "APPROVED_REPORT",
-                "is_flagged": False,
-                "flag_reason": None,
+                "is_flagged": False, "flag_reason": None,
                 "duration_hours": round(hours, 2),
-                "is_overtime": hours > 8,
-                "overtime_type": "over_8h" if hours > 8 else None,
-                "overtime_coefficient": 1.0,
-                "hourly_rate_at_date": rate,
-                "labor_cost": round(hours * rate, 2),
+                "is_overtime": line_is_overtime,
+                "overtime_type": "over_8h" if line_is_overtime else None,
+                "regular_hours": regular_hours, "overtime_hours": overtime_hours,
+                "overtime_coefficient": coefficient,
+                "overtime_reason": reason_text if line_is_overtime else None,
+                "override_by_user_id": actor["id"] if (line_is_overtime and override) else None,
+                "override_at": now if (line_is_overtime and override) else None,
+                "hourly_rate_at_date": rate, "labor_cost": labor_cost,
                 "notes": report.get("notes", ""),
-                "approved_report_id": report_id,
+                "approved_report_id": rid, "approved_by": actor["id"],
                 "entered_by_admin": report.get("entered_by_admin", False),
                 "entry_mode": report.get("entry_mode", "technician_portal"),
                 "submitted_by": report.get("submitted_by"),
-                "created_at": now,
-                "updated_at": now,
+                "created_at": now, "updated_at": now,
             }
             await db.work_sessions.insert_one(session)
             sessions_created = 1
 
-        # C2) Update activity budget consumed hours/quantity
+        # C2) activity_budget consumed
         if smr_type and project_id:
             budget = await db.activity_budgets.find_one({
-                "org_id": org_id,
-                "project_id": project_id,
-                "smr_type_id": smr_type,
+                "org_id": org_id, "project_id": project_id, "smr_type_id": smr_type,
             })
             if budget:
                 new_consumed = round((budget.get("consumed_hours", 0) or 0) + hours, 2)
@@ -367,22 +407,17 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
                 burn_pct = round((new_consumed / planned) * 100, 1)
                 await db.activity_budgets.update_one(
                     {"id": budget["id"]},
-                    {"$set": {
-                        "consumed_hours": new_consumed,
-                        "burn_percent": burn_pct,
-                        "last_updated": now,
-                    }}
+                    {"$set": {"consumed_hours": new_consumed, "burn_percent": burn_pct, "last_updated": now}},
                 )
 
-        # C3) Update worker_calendar
+        # C3) worker_calendar
         cal_existing = await db.worker_calendar.find_one(
             {"org_id": org_id, "worker_id": worker_id, "date": report_date}
         )
         cal_doc = {
             "org_id": org_id, "worker_id": worker_id, "date": report_date,
             "status": "working", "site_id": project_id,
-            "hours": round(hours, 2), "source": "approved_report",
-            "updated_at": now,
+            "hours": round(hours, 2), "source": "approved_report", "updated_at": now,
         }
         if cal_existing:
             await db.worker_calendar.update_one({"id": cal_existing["id"]}, {"$set": cal_doc})
@@ -392,44 +427,99 @@ async def approve_daily_report(report_id: str, user: dict = Depends(require_m4))
             cal_doc["created_by"] = "system"
             await db.worker_calendar.insert_one(cal_doc)
 
-    # D) Update report status + metadata
+    # D) Update report status + frozen split
     update = {
-        "approval_status": "APPROVED",
-        "status": "APPROVED",
-        "approved_by": user["id"],
-        "approved_at": now,
-        "updated_at": now,
-        "slip_number": slip_number,
-        "payroll_ready": True,
+        "approval_status": "APPROVED", "status": "APPROVED",
+        "approved_by": actor["id"], "approved_at": now, "updated_at": now,
+        "slip_number": slip_number, "payroll_ready": True,
         "sessions_created": sessions_created,
+        "regular_hours": regular_hours, "overtime_hours": overtime_hours,
+        "overtime_coefficient": coefficient if line_is_overtime else None,
+        "overtime_reason": reason_text if line_is_overtime else None,
+        "labor_cost": labor_cost,
     }
-    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
-    result = await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+    await db.employee_daily_reports.update_one({"id": rid}, {"$set": update})
+    result = await db.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
 
-    # E) Hours check at approval — return warnings to UI
+    # E) Hours warnings (informational)
     emp_id = report.get("employee_id") or worker_id
     r_date = report.get("report_date") or report.get("date", now[:10])
+    warnings = []
     if emp_id and r_date:
-        result["hours_warnings"] = await check_employee_hours(org_id, emp_id, r_date)
+        warnings = await check_employee_hours(org_id, emp_id, r_date)
 
+    return {"status": "ok", "report_id": rid, "slip_number": slip_number,
+            "overtime_applied": line_is_overtime, "report": result, "hours_warnings": warnings}
+
+
+async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict:
+    """
+    Canonical rejection for ONE report. Does NOT raise — returns:
+      {"status": "ok"|"skipped"|"failed", "report_id": ...}
+    Decision A: APPROVED cannot be rejected directly (failed); already REJECTED is an
+    idempotent skip; always writes rejected_by + reject_reason + updated_at.
+    """
+    rid = report["id"]
+    now = datetime.now(timezone.utc).isoformat()
+    status = report.get("approval_status") or report.get("status", "")
+    if status == "APPROVED":
+        return {"status": "failed", "report_id": rid, "reason": "cannot_reject_approved"}
+    if status == "REJECTED":
+        return {"status": "skipped", "report_id": rid, "reason": "already_rejected"}
+    await db.employee_daily_reports.update_one({"id": rid}, {"$set": {
+        "approval_status": "REJECTED", "status": "REJECTED",
+        "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
+    }})
+    return {"status": "ok", "report_id": rid}
+
+
+_APPROVE_FAIL_MSG = {
+    "already_approved": "Вече одобрен отчет не може да бъде одобрен повторно.",
+    "split_mismatch": "Сборът нормални+извънредни часове не съвпада с часовете на отчета.",
+    "negative_split_value": "Отрицателни часове в разделението.",
+    "coefficient_must_be_at_least_1": "Коефициентът за извънреден труд трябва да е поне 1.",
+    "reason_required": "Изисква се причина за override на извънреден труд.",
+}
+
+
+@router.post("/daily-reports/{report_id}/approve")
+async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Depends(require_m4)):
+    """
+    SOURCE OF TRUTH: the POSTING EVENT (creates work_sessions — see SOURCE_OF_TRUTH.md).
+    P1-0.5: delegates to approve_report_one so single and bulk approve are identical.
+    Single path does NOT block >8h (B2): default split with coefficient 1.0.
+    Optional body: {"override": {regular_hours, overtime_hours, overtime_coefficient, reason}}.
+    """
+    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
+        raise HTTPException(status_code=403, detail="Only SiteManager/Admin can approve")
+    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    res = await approve_report_one(report, user, override=(data or {}).get("override"),
+                                   block_overtime_without_override=False)
+    if res["status"] == "failed":
+        raise HTTPException(status_code=400, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
+    if res["status"] == "blocked":  # not expected on single path
+        raise HTTPException(status_code=409, detail="overtime_requires_override")
+
+    result = res["report"]
+    result["hours_warnings"] = res.get("hours_warnings", [])
     return result
 
 
 @router.post("/daily-reports/{report_id}/reject")
 async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depends(require_m4)):
+    """P1-0.5: delegates to reject_report_one (same logic as bulk)."""
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only SiteManager/Admin can reject")
     report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    current_status = report.get("approval_status") or report.get("status", "")
-    if current_status in ("APPROVED", "REJECTED"):
-        raise HTTPException(status_code=400, detail=f"Отчет със статус {current_status} не може да бъде отхвърлен.")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
-        "approval_status": "REJECTED", "status": "REJECTED",
-        "reject_reason": data.get("reason", ""), "updated_at": now,
-    }})
+    res = await reject_report_one(report, user, (data or {}).get("reason", ""))
+    if res["status"] == "failed":
+        raise HTTPException(status_code=400, detail="Отчет със статус APPROVED не може да бъде отхвърлен.")
+    # ok or skipped(already_rejected) → idempotent: return current report
     return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -948,177 +1038,69 @@ async def get_project_daily_entries(project_id: str, date: Optional[str] = None,
 
 @router.post("/daily-reports/bulk-approve")
 async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
-    """Bulk approve reports with overtime override support."""
+    """
+    Bulk approve = UI convenience only. Backend runs approve_report_one per report,
+    so single and bulk produce identical data. >8h lines are blocked for override
+    (block_overtime_without_override=True) unless an override is supplied.
+    """
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner/SiteManager")
 
     org_id = user["org_id"]
     report_ids = data.get("report_ids", [])
     overrides = data.get("overrides", {})
-    now = datetime.now(timezone.utc).isoformat()
 
-    succeeded = []
-    blocked = []
-    failed = []
-
-    from app.services.hours_validator import get_worker_hours_for_day
-
+    succeeded, blocked, failed = [], [], []
     for rid in report_ids:
         report = await db.employee_daily_reports.find_one({"id": rid, "org_id": org_id}, {"_id": 0})
         if not report:
             failed.append({"id": rid, "reason": "not_found"})
             continue
-
-        status = report.get("approval_status") or report.get("status", "")
-        if status == "APPROVED":
-            failed.append({"id": rid, "reason": "already_approved"})
-            continue
-
-        worker_id = report.get("worker_id", "")
-        date = report.get("date", "")
-        hours = float(report.get("hours", 0))
-
-        # Day total — informational only (for warnings + future group-level UI)
-        day_total = await get_worker_hours_for_day(org_id, worker_id, date)
-
-        # Per-line decision
-        line_is_overtime = hours > 8
-
-        if line_is_overtime and rid not in overrides:
-            proj_name = ""
-            pid = report.get("project_id", "")
-            if pid:
-                proj_doc = await db.projects.find_one({"id": pid}, {"_id": 0, "name": 1})
-                if proj_doc:
-                    proj_name = proj_doc.get("name", "")
-            blocked.append({
-                "id": rid,
-                "worker_name": report.get("worker_name", ""),
-                "worker_id": worker_id,
-                "current_hours": day_total,
-                "report_hours": hours,
-                "date": date,
-                "project_id": pid,
-                "project_name": proj_name,
-            })
-            continue
-
-        override = overrides.get(rid, {})
-        coefficient = 1.0
-        reason_text = ""
-
-        if line_is_overtime and rid in overrides:
-            o_reg = float(override.get("regular_hours", 0))
-            o_ot = float(override.get("overtime_hours", 0))
-            o_coef = float(override.get("overtime_coefficient", 0))
-            o_reason = (override.get("reason") or "").strip()
-            if abs(o_reg + o_ot - hours) > 0.01:
-                failed.append({"id": rid, "reason": "split_mismatch"})
-                continue
-            if o_reg < 0 or o_ot < 0:
-                failed.append({"id": rid, "reason": "negative_split_value"})
-                continue
-            # Coefficient must be >= 1 (B8 fix: was > 1)
-            if o_coef < 1:
-                failed.append({"id": rid, "reason": "coefficient_must_be_at_least_1"})
-                continue
-            if not o_reason:
-                failed.append({"id": rid, "reason": "reason_required"})
-                continue
-            regular_hours = o_reg
-            overtime_hours = o_ot
-            coefficient = o_coef
-            reason_text = o_reason
-        elif line_is_overtime:
-            regular_hours = min(hours, 8)
-            overtime_hours = max(0, hours - 8)
-        else:
-            regular_hours = hours
-            overtime_hours = 0
-
         try:
-            smr_type = report.get("smr_type") or report.get("activity_type", "")
-            project_id = report.get("project_id", "")
-            rate = await _get_hourly_rate_for_approval(org_id, worker_id)
-            # B5 fix: labor_cost now applies coefficient on overtime portion
-            labor_cost = round(regular_hours * rate + overtime_hours * rate * coefficient, 2)
-
-            slip_number = report.get("slip_number")
-            if not slip_number:
-                counter = await db.org_counters.find_one_and_update(
-                    {"org_id": org_id, "type": "slip_number"},
-                    {"$inc": {"value": 1}},
-                    upsert=True, return_document=True,
-                )
-                slip_number = counter.get("value", 1)
-
-            session = {
-                "id": str(uuid.uuid4()), "org_id": org_id,
-                "worker_id": worker_id, "worker_name": report.get("worker_name", ""),
-                "site_id": project_id, "smr_type": smr_type,
-                "started_at": f"{date}T08:00:00", "ended_at": f"{date}T{8+int(hours):02d}:00:00",
-                "duration_hours": hours, "hourly_rate": rate, "labor_cost": labor_cost,
-                "approved_report_id": rid, "approved_by": user["id"],
-                "is_overtime": line_is_overtime,
-                "regular_hours": regular_hours,
-                "overtime_hours": overtime_hours,
-                "overtime_coefficient": coefficient if line_is_overtime else None,
-                "overtime_reason": reason_text if line_is_overtime else None,
-                "override_by_user_id": user["id"] if line_is_overtime and rid in overrides else None,
-                "override_at": now if line_is_overtime and rid in overrides else None,
-                "created_at": now,
-            }
-            await db.work_sessions.insert_one(session)
-
-            # B6 fix: freeze split on the report document itself
-            await db.employee_daily_reports.update_one({"id": rid}, {"$set": {
-                "approval_status": "APPROVED", "status": "APPROVED",
-                "approved_by": user["id"], "approved_at": now,
-                "slip_number": slip_number, "payroll_ready": True,
-                "regular_hours": regular_hours,
-                "overtime_hours": overtime_hours,
-                "overtime_coefficient": coefficient if line_is_overtime else None,
-                "overtime_reason": reason_text if line_is_overtime else None,
-                "labor_cost": labor_cost,
-                "updated_at": now,
-            }})
-
-            succeeded.append({"id": rid, "slip_number": slip_number, "overtime_applied": line_is_overtime})
+            res = await approve_report_one(report, user, override=overrides.get(rid),
+                                           block_overtime_without_override=True)
         except Exception as e:
             failed.append({"id": rid, "reason": str(e)})
+            continue
+        if res["status"] == "ok":
+            succeeded.append({"id": rid, "slip_number": res["slip_number"],
+                              "overtime_applied": res["overtime_applied"]})
+        elif res["status"] == "blocked":
+            blocked.append({
+                "id": rid, "worker_name": res.get("worker_name", ""),
+                "worker_id": res.get("worker_id", ""),
+                "current_hours": res.get("current_hours", 0),
+                "report_hours": res.get("report_hours", 0),
+                "date": res.get("date", ""), "project_id": res.get("project_id", ""),
+                "project_name": res.get("project_name", ""),
+            })
+        else:
+            failed.append({"id": rid, "reason": res.get("reason", "failed")})
 
     return {"succeeded": succeeded, "blocked_for_override": blocked, "failed": failed}
 
 
 @router.post("/daily-reports/bulk-reject")
 async def bulk_reject(data: dict, user: dict = Depends(require_m4)):
+    """Bulk reject = UI convenience. Backend runs reject_report_one per report."""
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner/SiteManager")
 
     org_id = user["org_id"]
     report_ids = data.get("report_ids", [])
     reason = data.get("reason", "")
-    now = datetime.now(timezone.utc).isoformat()
 
-    succeeded = []
-    failed = []
-
+    succeeded, failed = [], []
     for rid in report_ids:
         report = await db.employee_daily_reports.find_one({"id": rid, "org_id": org_id})
         if not report:
             failed.append({"id": rid, "reason": "not_found"})
             continue
-        status = report.get("approval_status") or report.get("status", "")
-        if status in ("APPROVED",):
-            failed.append({"id": rid, "reason": "already_approved"})
-            continue
-
-        await db.employee_daily_reports.update_one({"id": rid}, {"$set": {
-            "approval_status": "REJECTED", "status": "REJECTED",
-            "reject_reason": reason, "rejected_by": user["id"],
-            "updated_at": now,
-        }})
-        succeeded.append({"id": rid})
+        res = await reject_report_one(report, user, reason)
+        if res["status"] in ("ok", "skipped"):  # already_rejected is idempotent success
+            succeeded.append({"id": rid})
+        else:
+            failed.append({"id": rid, "reason": res.get("reason", "failed")})
 
     return {"succeeded": succeeded, "failed": failed}
 

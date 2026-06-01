@@ -1,3 +1,17 @@
+## [P1-0.5] - 2026-06-01 — Single-Action Source of Truth (approve/reject)
+
+### Changed
+- Извлечени approve_report_one() и reject_report_one() като единствен source of truth
+- Единично и bulk approve/reject минават през СЪЩАТА функция → идентични данни
+- labor_cost = regular×rate + overtime×rate×coefficient (навсякъде)
+- slip брояч унифициран: counter_type="slip_number" (единствена редица)
+- work_session: smr_type_id (canonical) + smr_type (compat)
+- >8h единично: не блокира, split 8+ot, coef 1.0. >8h bulk без override: blocked.
+- Reject guard: APPROVED→cannot reject; REJECTED→idempotent skip; rejected_by+reason навсякъде
+
+---
+
+
 ## [P1-0.3] - 2026-05-31 — Една терминология в EmployeeDetailPage
 
 ### Fixed
