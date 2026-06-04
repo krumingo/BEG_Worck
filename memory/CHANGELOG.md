@@ -1,3 +1,16 @@
+## [P1-0.6E] - 2026-06-04 — Payroll patch: clean apply with canonical helpers
+
+### Changed
+- Replaced P1-0.6A/C duplicate helpers with canonical versions from Codex patch:
+  _money_float(), _employee_name(), _validate_no_overpayment(), _build_report_lines()
+- Overpayment guard on CREATE + UPDATE paths (per-row, before freeze)
+- report_lines[] + selected_report_ids + report_line_count frozen on payment_slips
+- UPDATE path: existing_row_map preserves day_cells + selected_report_ids
+- 8/8 tests passing (test_pay_runs_p1_06e_helpers.py)
+
+---
+
+
 ## [P1-0.6C] - 2026-06-04 — Payroll patch: report_lines + overpayment guard (test-verified)
 
 ### Added
