@@ -118,6 +118,78 @@ class PayRunReopenInput(BaseModel):
     reason: str = ""
 
 
+# ── Helpers: report_lines + overpayment guard ─────────────────────
+
+def _build_report_lines(row: dict) -> list:
+    """Extract frozen report_lines from a pay-run employee row's day_cells.
+    Each line traces back to a concrete report_id."""
+    lines = []
+    for dc in row.get("day_cells", []):
+        for rpt in dc.get("reports", []):
+            lines.append({
+                "report_id": rpt.get("report_id") or rpt.get("id", ""),
+                "date": dc.get("date", ""),
+                "project_id": rpt.get("project_id", ""),
+                "project_name": rpt.get("project_name", ""),
+                "hours": rpt.get("hours", 0),
+                "value": rpt.get("value", 0),
+                "payroll_status": rpt.get("payroll_status", ""),
+                "payroll_source": rpt.get("payroll_source", ""),
+            })
+        # Fallback: day_cell has report_ids but no reports[] detail
+        if not dc.get("reports") and dc.get("report_ids"):
+            for rid in dc["report_ids"]:
+                lines.append({
+                    "report_id": rid,
+                    "date": dc.get("date", ""),
+                    "project_id": "",
+                    "project_name": "",
+                    "hours": 0,
+                    "value": 0,
+                    "payroll_status": "",
+                    "payroll_source": "",
+                })
+    return lines
+
+
+def _validate_no_overpayment(employee_rows: list):
+    """Raise HTTP 400 if any employee row has paid_now exceeding remaining payable.
+    Tolerance: 0.01 EUR for rounding."""
+    for er in employee_rows:
+        paid_now = er.get("paid_now_amount", 0)
+        earned = er.get("earned_amount", 0)
+        bonuses = er.get("bonuses_amount", 0)
+        deductions = er.get("deductions_amount", 0)
+        previously_paid = er.get("previously_paid", 0)
+        gross_payable = earned + bonuses - deductions
+        remaining_before = round(gross_payable - previously_paid, 2)
+
+        if paid_now < -0.01:
+            name = f"{er.get('first_name', '')} {er.get('last_name', '')}".strip()
+            raise HTTPException(status_code=400, detail=(
+                f"Отрицателно плащане за {name}: paid_now={paid_now:.2f}. "
+                f"Плащането не може да е отрицателно."
+            ))
+
+        if remaining_before < -0.01 and paid_now > 0.01:
+            name = f"{er.get('first_name', '')} {er.get('last_name', '')}".strip()
+            raise HTTPException(status_code=400, detail=(
+                f"Надплащане за {name}: remaining_before_payment={remaining_before:.2f}, "
+                f"paid_now={paid_now:.2f}. Остатъкът е отрицателен от стари данни — "
+                f"не е разрешено ново плащане."
+            ))
+
+        if paid_now > remaining_before + 0.01:
+            name = f"{er.get('first_name', '')} {er.get('last_name', '')}".strip()
+            raise HTTPException(status_code=400, detail=(
+                f"Надплащане за {name}: paid_now={paid_now:.2f} > "
+                f"remaining={remaining_before:.2f} "
+                f"(earned={earned:.2f} + bonuses={bonuses:.2f} - deductions={deductions:.2f} "
+                f"- previously_paid={previously_paid:.2f}). "
+                f"Платеното не може да надвишава остатъка."
+            ))
+
+
 # ── Generate Pay Run (preview) ─────────────────────────────────────
 
 @router.get("/pay-runs/generate")
@@ -491,8 +563,14 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "status": "confirmed",
             "paid_at": None,
             "created_at": now,
+            # P1-0.6A: frozen report_lines from day_cells for traceability
+            "report_lines": _build_report_lines(frozen_row),
+            "selected_report_ids": frozen_row.get("selected_report_ids", []),
         }
         slips.append(slip)
+
+    # P1-0.6A: overpayment guard before persisting
+    _validate_no_overpayment(employee_rows)
 
     pay_run = {
         "id": run_id,
@@ -885,12 +963,17 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
             "paid_now_amount": round(paid_now, 2),
             "remaining_after_payment": remaining,
             "sites": row.get("sites", []), "notes": ovr.notes if ovr else "",
+            "day_cells": row.get("day_cells", []),
+            "selected_report_ids": list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids) else [],
         })
         grand["earned"] += row["earned_amount"]
         grand["bonuses"] += total_bonuses
         grand["deductions"] += total_deductions
         grand["paid"] += paid_now
         grand["remaining"] += remaining
+
+    # P1-0.6A: overpayment guard before persisting
+    _validate_no_overpayment(employee_rows)
 
     new_version = (run.get("version") or 1) + 1
     history_entry = {
@@ -958,6 +1041,9 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
                 "remaining_after_payment": er["remaining_after_payment"],
                 "sites": er.get("sites", []),
                 "status": "confirmed", "paid_at": None, "created_at": now,
+                # P1-0.6A: frozen report_lines for traceability
+                "report_lines": _build_report_lines(er),
+                "selected_report_ids": er.get("selected_report_ids", []),
             })
         if slips:
             await db.payment_slips.insert_many(slips)

@@ -1,3 +1,23 @@
+## [P1-0.6A] - 2026-06-04 — Payroll slip report_lines + overpayment guard
+
+### Added
+- _build_report_lines(): freezes day_cells.reports[] into slip.report_lines[]
+  (report_id, date, project_id, project_name, hours, value, payroll_status)
+- _validate_no_overpayment(): blocks paid_now > remaining (tolerance 0.01 EUR)
+- payment_slips now include report_lines[] and selected_report_ids on create + update/reconfirm
+- Overpayment guard on both create and update/reconfirm paths (HTTP 400 with details)
+
+### Changed
+- Update/reconfirm path now preserves day_cells + selected_report_ids on employee_rows
+
+### Not changed
+- mark-paid / payroll_sync (separate task)
+- previously_paid algorithm (separate task)
+- existing database documents (no backfill)
+
+---
+
+
 ## [P1-0.5] - 2026-06-01 — Single-Action Source of Truth (approve/reject)
 
 ### Changed
