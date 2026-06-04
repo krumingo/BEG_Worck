@@ -1,3 +1,18 @@
+## [P1-0.6C] - 2026-06-04 — Payroll patch: report_lines + overpayment guard (test-verified)
+
+### Added
+- _build_report_lines(): freezes day_cells into slip.report_lines[] with source tracing
+  (day_cells.reports → detailed; day_cells.report_ids → fallback for missing entries)
+- _validate_no_overpayment(): blocks paid_now > remaining (0.01 tolerance), negative payments,
+  stale negative remaining. Accepts single row or list. Returns row with remaining_before_payment.
+- payment_slips include report_lines[] + selected_report_ids on create + update/reconfirm
+- Overpayment guard on both create and update/reconfirm paths
+- Update path preserves day_cells + selected_report_ids on employee_rows
+- 8 unit tests passing (test_pay_runs_p1_06c_helpers.py)
+
+---
+
+
 ## [P1-0.6A] - 2026-06-04 — Payroll slip report_lines + overpayment guard
 
 ### Added

@@ -122,20 +122,12 @@ class PayRunReopenInput(BaseModel):
 
 def _build_report_lines(row: dict) -> list:
     """Extract frozen report_lines from a pay-run employee row's day_cells.
-    Each line traces back to a concrete report_id.
-    Uses reports[] detail when available, falls back to report_ids for missing entries."""
+    Each line traces back to a concrete report_id."""
     lines = []
     for dc in row.get("day_cells", []):
-        reports = dc.get("reports") or []
-        report_ids = set(dc.get("report_ids") or [])
-        seen_ids = set()
-
-        # First pass: detailed reports
-        for rpt in reports:
-            rid = rpt.get("report_id") or rpt.get("id", "")
-            seen_ids.add(rid)
+        for rpt in dc.get("reports", []):
             lines.append({
-                "report_id": rid,
+                "report_id": rpt.get("report_id") or rpt.get("id", ""),
                 "date": dc.get("date", ""),
                 "project_id": rpt.get("project_id", ""),
                 "project_name": rpt.get("project_name", ""),
@@ -143,38 +135,27 @@ def _build_report_lines(row: dict) -> list:
                 "value": rpt.get("value", 0),
                 "payroll_status": rpt.get("payroll_status", ""),
                 "payroll_source": rpt.get("payroll_source", ""),
-                "source": "day_cells.reports",
             })
-
-        # Second pass: report_ids not covered by reports[]
-        for rid in report_ids - seen_ids:
-            lines.append({
-                "report_id": rid,
-                "date": dc.get("date", ""),
-                "project_id": "",
-                "project_name": "",
-                "hours": 0,
-                "value": 0,
-                "payroll_status": "",
-                "payroll_source": "",
-                "source": "day_cells.report_ids",
-            })
+        # Fallback: day_cell has report_ids but no reports[] detail
+        if not dc.get("reports") and dc.get("report_ids"):
+            for rid in dc["report_ids"]:
+                lines.append({
+                    "report_id": rid,
+                    "date": dc.get("date", ""),
+                    "project_id": "",
+                    "project_name": "",
+                    "hours": 0,
+                    "value": 0,
+                    "payroll_status": "",
+                    "payroll_source": "",
+                })
     return lines
 
 
-def _validate_no_overpayment(employee_row_or_rows):
-    """Validate that paid_now does not exceed remaining payable.
-    Accepts a single row dict OR a list of rows. Tolerance: 0.01 EUR.
-    Returns the row dict with remaining_before_payment added (for single row),
-    or None (for list). Raises HTTP 400 on violation."""
-    if isinstance(employee_row_or_rows, dict):
-        rows = [employee_row_or_rows]
-        single = True
-    else:
-        rows = employee_row_or_rows
-        single = False
-
-    for er in rows:
+def _validate_no_overpayment(employee_rows: list):
+    """Raise HTTP 400 if any employee row has paid_now exceeding remaining payable.
+    Tolerance: 0.01 EUR for rounding."""
+    for er in employee_rows:
         paid_now = er.get("paid_now_amount", 0)
         earned = er.get("earned_amount", 0)
         bonuses = er.get("bonuses_amount", 0)
@@ -182,34 +163,31 @@ def _validate_no_overpayment(employee_row_or_rows):
         previously_paid = er.get("previously_paid", 0)
         gross_payable = earned + bonuses - deductions
         remaining_before = round(gross_payable - previously_paid, 2)
-        er["remaining_before_payment"] = remaining_before
-        eid = er.get("employee_id", "?")
-        name = er.get("employee_name") or f"{er.get('first_name', '')} {er.get('last_name', '')}".strip() or eid
 
-        if paid_now < 0:
+        if paid_now < -0.01:
+            name = f"{er.get('first_name', '')} {er.get('last_name', '')}".strip()
             raise HTTPException(status_code=400, detail=(
-                f"Overpayment is not allowed: paid_now_amount ({paid_now:.2f}) "
-                f"must be >= 0. employee_id={eid}, employee_name={name}"
+                f"Отрицателно плащане за {name}: paid_now={paid_now:.2f}. "
+                f"Плащането не може да е отрицателно."
             ))
 
         if remaining_before < -0.01 and paid_now > 0.01:
+            name = f"{er.get('first_name', '')} {er.get('last_name', '')}".strip()
             raise HTTPException(status_code=400, detail=(
-                f"Overpayment is not allowed: remaining is already negative "
-                f"({remaining_before:.2f}). No positive payment allowed. "
-                f"employee_id={eid}, employee_name={name}, "
-                f"remaining_before_payment={remaining_before:.2f}, paid_now_amount={paid_now:.2f}"
+                f"Надплащане за {name}: remaining_before_payment={remaining_before:.2f}, "
+                f"paid_now={paid_now:.2f}. Остатъкът е отрицателен от стари данни — "
+                f"не е разрешено ново плащане."
             ))
 
         if paid_now > remaining_before + 0.01:
+            name = f"{er.get('first_name', '')} {er.get('last_name', '')}".strip()
             raise HTTPException(status_code=400, detail=(
-                f"Overpayment is not allowed: paid_now_amount ({paid_now:.2f}) "
-                f"exceeds remaining_before_payment ({remaining_before:.2f}). "
-                f"employee_id={eid}, employee_name={name}, "
-                f"remaining_before_payment={remaining_before:.2f}"
+                f"Надплащане за {name}: paid_now={paid_now:.2f} > "
+                f"remaining={remaining_before:.2f} "
+                f"(earned={earned:.2f} + bonuses={bonuses:.2f} - deductions={deductions:.2f} "
+                f"- previously_paid={previously_paid:.2f}). "
+                f"Платеното не може да надвишава остатъка."
             ))
-
-    if single:
-        return rows[0]
 
 
 # ── Generate Pay Run (preview) ─────────────────────────────────────
@@ -509,19 +487,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
                 else:
                     total_deductions += a.amount
 
-        paid_now = _money_float(ovr.paid_now_amount if ovr else row["remaining_after_payment"])
+        paid_now = ovr.paid_now_amount if ovr else row["remaining_after_payment"]
         notes = ovr.notes if ovr else ""
-        selected_report_ids = list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids) else []
-
-        _validate_no_overpayment({
-            "employee_id": eid,
-            "employee_name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
-            "earned_amount": row["earned_amount"],
-            "bonuses_amount": total_bonuses,
-            "deductions_amount": total_deductions,
-            "previously_paid": row["previously_paid"],
-            "paid_now_amount": paid_now,
-        })
 
         remaining = round(
             row["earned_amount"] + total_bonuses - total_deductions - row["previously_paid"] - paid_now, 2
@@ -553,7 +520,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "day_cells": row.get("day_cells", []),
             "notes": notes,
             # P0-2A.2: explicit per-report selection. Empty means "use day-level fallback" (old behavior).
-            "selected_report_ids": selected_report_ids,
+            "selected_report_ids": list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids) else [],
         }
         employee_rows.append(frozen_row)
 
@@ -565,7 +532,6 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
 
         # Generate payment slip
         slip_counter += 1
-        report_lines = _build_report_lines(frozen_row)
         slip = {
             "id": str(uuid.uuid4()),
             "org_id": org_id,
@@ -594,9 +560,6 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "paid_now_amount": round(paid_now, 2),
             "remaining_after_payment": remaining,
             "sites": row.get("sites", []),
-            "selected_report_ids": selected_report_ids,
-            "report_lines": report_lines,
-            "report_line_count": len(report_lines),
             "status": "confirmed",
             "paid_at": None,
             "created_at": now,
@@ -968,12 +931,9 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
     employee_rows = []
     grand = {"earned": 0, "bonuses": 0, "deductions": 0, "paid": 0, "remaining": 0}
 
-    existing_employee_rows_by_id = {er.get("employee_id"): er for er in run.get("employee_rows", [])}
-
     for row in preview["rows"]:
         eid = row["employee_id"]
         ovr = override_map.get(eid)
-        existing_row = existing_employee_rows_by_id.get(eid, {})
         adj_list, total_bonuses, total_deductions = [], 0, 0
         if ovr:
             for a in ovr.adjustments:
@@ -982,23 +942,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
                     total_bonuses += a.amount
                 else:
                     total_deductions += a.amount
-        paid_now = _money_float(ovr.paid_now_amount if ovr else row["remaining_after_payment"])
-        selected_report_ids = (
-            list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids)
-            else list(existing_row.get("selected_report_ids") or row.get("selected_report_ids") or [])
-        )
-        day_cells = row.get("day_cells") or existing_row.get("day_cells", [])
-
-        _validate_no_overpayment({
-            "employee_id": eid,
-            "employee_name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
-            "earned_amount": row["earned_amount"],
-            "bonuses_amount": total_bonuses,
-            "deductions_amount": total_deductions,
-            "previously_paid": row["previously_paid"],
-            "paid_now_amount": paid_now,
-        })
-
+        paid_now = ovr.paid_now_amount if ovr else row["remaining_after_payment"]
         remaining = round(row["earned_amount"] + total_bonuses - total_deductions - row["previously_paid"] - paid_now, 2)
 
         employee_rows.append({
@@ -1075,7 +1019,6 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         week_num = run.get("week_number", 0)
         for er in employee_rows:
             slip_counter += 1
-            report_lines = _build_report_lines(er)
             slips.append({
                 "id": str(uuid.uuid4()), "org_id": org_id,
                 "slip_number": f"SL-{slip_counter:05d}",
@@ -1097,9 +1040,6 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
                 "paid_now_amount": er["paid_now_amount"],
                 "remaining_after_payment": er["remaining_after_payment"],
                 "sites": er.get("sites", []),
-                "selected_report_ids": er.get("selected_report_ids", []),
-                "report_lines": report_lines,
-                "report_line_count": len(report_lines),
                 "status": "confirmed", "paid_at": None, "created_at": now,
                 # P1-0.6A: frozen report_lines for traceability
                 "report_lines": _build_report_lines(er),
