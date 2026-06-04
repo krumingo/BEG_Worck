@@ -371,14 +371,17 @@ function ProjectWizard({ form, setForm, editing, managers, saving, onSave, statu
   const [newClient, setNewClient] = useState({ type: "company", companyName: "", fullName: "", eik: "", phone: "", email: "" });
 
   useEffect(() => {
-    API.get("/clients?limit=100").then(r => setClients(r.data?.items || r.data || [])).catch(() => {});
-  }, []);
+    const q = clientSearch.trim();
+    const handle = setTimeout(() => {
+      // Server-side search (covers company name + EIK after backend change); no 100-cap.
+      const url = q ? `/clients?search=${encodeURIComponent(q)}&page_size=20` : `/clients?page_size=20`;
+      API.get(url).then(r => setClients(r.data?.items || r.data || [])).catch(() => {});
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [clientSearch]);
 
-  const filteredClients = clients.filter(c => {
-    if (!clientSearch) return true;
-    const q = clientSearch.toLowerCase();
-    return (c.companyName || c.fullName || c.name || "").toLowerCase().includes(q);
-  });
+  // Server already filters; keep the name used in the render below.
+  const filteredClients = clients;
 
   const handleCreateClient = async () => {
     try {

@@ -115,6 +115,9 @@ async def list_clients(
         query["$or"] = [
             {"first_name": {"$regex": re.escape(search), "$options": "i"}},
             {"last_name": {"$regex": re.escape(search), "$options": "i"}},
+            {"companyName": {"$regex": re.escape(search), "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"eik": {"$regex": re.escape(search), "$options": "i"}},
             {"phone": {"$regex": re.escape(search), "$options": "i"}},
             {"email": {"$regex": re.escape(search), "$options": "i"}},
             {"address": {"$regex": re.escape(search), "$options": "i"}},
