@@ -1671,6 +1671,8 @@
     "photoInvoice": "Photo Invoice",
     "invoiceUploaded": "Invoice uploaded for approval",
     "mySites": "My Sites",
+    "subObjectOf": "sub-object of",
+    "subObjects": "sub-objects",
     "back": "Back",
     "step1Roster": "Step 1 — Attendance",
     "step2Report": "Step 2 — Report",

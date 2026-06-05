@@ -318,6 +318,11 @@ export default function TechnicianDashboard() {
               : <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]"><Check className="w-3 h-3 mr-1" />{s.reported_workers} отчета</Badge>
             ) : <Badge className="bg-amber-500/20 text-amber-400 text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />{t("technician.noReport")}</Badge>}
           </div>
+          {s.is_subproject ? (
+            <p className="text-[11px] text-violet-400/90 mb-0.5">{t("technician.subObjectOf")} {s.parent_name || "—"}</p>
+          ) : s.sub_count > 0 ? (
+            <p className="text-[11px] text-violet-400/90 mb-0.5">{s.sub_count} {t("technician.subObjects")}</p>
+          ) : null}
           <p className="text-xs text-muted-foreground">{s.address_text || s.code}</p>
           <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><Users className="w-3 h-3" />{s.today_workers}</span>

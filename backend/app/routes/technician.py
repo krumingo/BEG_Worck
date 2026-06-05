@@ -85,7 +85,7 @@ async def my_sites(user: dict = Depends(get_current_user)):
     if user["role"] in ["Admin", "Owner", "SiteManager"]:
         projects = await db.projects.find(
             {"org_id": org_id, "status": {"$in": ["Active", "Draft"]}},
-            {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "owner_id": 1},
+            {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "owner_id": 1, "parent_project_id": 1},
         ).to_list(50)
     else:
         memberships = await db.project_team.find(
@@ -94,8 +94,30 @@ async def my_sites(user: dict = Depends(get_current_user)):
         pids = [m["project_id"] for m in memberships]
         projects = await db.projects.find(
             {"org_id": org_id, "id": {"$in": pids}},
-            {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1},
+            {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "parent_project_id": 1},
         ).to_list(50)
+
+    # Sub-object (под-обект) indicators for the field portal
+    project_ids = [p["id"] for p in projects]
+    name_by_id = {p["id"]: p.get("name", "") for p in projects}
+    sub_count_map = {}
+    if project_ids:
+        agg = await db.projects.aggregate([
+            {"$match": {"org_id": org_id, "parent_project_id": {"$in": project_ids}}},
+            {"$group": {"_id": "$parent_project_id", "count": {"$sum": 1}}},
+        ]).to_list(500)
+        sub_count_map = {row["_id"]: row["count"] for row in agg}
+    parent_ids_needed = list({
+        p.get("parent_project_id") for p in projects
+        if p.get("parent_project_id") and p.get("parent_project_id") not in name_by_id
+    })
+    if parent_ids_needed:
+        parents = await db.projects.find(
+            {"org_id": org_id, "id": {"$in": parent_ids_needed}},
+            {"_id": 0, "id": 1, "name": 1},
+        ).to_list(200)
+        for pr in parents:
+            name_by_id[pr["id"]] = pr.get("name", "")
 
     result = []
     for p in projects:
@@ -144,6 +166,10 @@ async def my_sites(user: dict = Depends(get_current_user)):
             "name": p.get("name", ""),
             "code": p.get("code", ""),
             "address_text": p.get("address_text", ""),
+            "parent_project_id": p.get("parent_project_id"),
+            "parent_name": name_by_id.get(p.get("parent_project_id"), "") if p.get("parent_project_id") else "",
+            "is_subproject": bool(p.get("parent_project_id")),
+            "sub_count": sub_count_map.get(pid, 0),
             "today_sessions": today_sessions,
             "today_hours": reported_hours if reported_hours > 0 else round(sum(s.get("duration_hours") or 0 for s in sessions), 1),
             "today_workers": reported_workers if reported_workers > 0 else len(set(s.get("worker_name") for s in sessions)),

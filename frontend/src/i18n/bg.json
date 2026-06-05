@@ -1853,6 +1853,8 @@
     "photoInvoice": "Снимай фактура",
     "invoiceUploaded": "Фактурата е качена за одобрение",
     "mySites": "Моите обекти",
+    "subObjectOf": "под-обект на",
+    "subObjects": "под-обекта",
     "back": "Назад",
     "step1Roster": "Стъпка 1 — Присъстващи",
     "step2Report": "Стъпка 2 — Отчет",
