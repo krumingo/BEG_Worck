@@ -17,7 +17,7 @@ import {
 import {
   Building2, Clock, Users, Plus, Loader2, Check, Camera, Package,
   FileText, ArrowLeft, Send, Save, AlertTriangle, Trash2, Copy, UserPlus,
-  MapPin, Phone, Pencil, Eye, Mail,
+  MapPin, Phone, Pencil, Eye, Mail, ChevronDown, CornerDownRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ export default function TechnicianDashboard() {
   // Navigation state
   const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
   const [sites, setSites] = useState([]);
+  const [openParents, setOpenParents] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedSite, setSelectedSite] = useState(null);
 
