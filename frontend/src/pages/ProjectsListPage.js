@@ -55,7 +55,7 @@ const STATUS_TRANSITIONS = {
 };
 
 const STATUS_BG = {
-  Draft: "Чернова", Active: "Активен", Paused: "Спрян", Stopped: "Спрян",
+  Draft: "Чернова", Active: "Активен", Paused: "Пауза", Stopped: "Спрян",
   Completed: "Приключен", Cancelled: "Отменен", Overhead: "Режиен", Archived: "Архивиран",
 };
 

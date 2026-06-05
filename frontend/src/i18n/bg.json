@@ -352,9 +352,10 @@
     "status": {
       "draft": "Чернова",
       "active": "Активен",
-      "paused": "Паузиран",
+      "paused": "Пауза",
       "completed": "Завършен",
-      "cancelled": "Отменен"
+      "cancelled": "Отменен",
+      "stopped": "Спрян"
     },
     "type": {
       "billable": "Фактурируем",
@@ -1846,6 +1847,7 @@
     "recent": "скорошен",
     "newSMR": "Ново СМР",
     "newSMRDesc": "Ново СМР от терена",
+    "saveReport": "Запис",
     "newSMRCreated": "нови СМР създадени",
     "smrCreated": "СМР е създадено",
     "qty": "Количество",

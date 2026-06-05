@@ -311,7 +311,8 @@
       "active": "Active",
       "paused": "Paused",
       "completed": "Completed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "stopped": "Stopped"
     },
     "type": {
       "billable": "Billable",
@@ -1664,6 +1665,7 @@
     "recent": "recent",
     "newSMR": "New SMR",
     "newSMRDesc": "New SMR from the field",
+    "saveReport": "Save",
     "newSMRCreated": "new SMR created",
     "smrCreated": "SMR created",
     "qty": "Quantity",

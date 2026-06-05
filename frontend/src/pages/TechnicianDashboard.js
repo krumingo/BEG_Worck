@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import {
   Building2, Clock, Users, Plus, Loader2, Check, Camera, Package,
-  FileText, ArrowLeft, Send, AlertTriangle, Trash2, Copy, UserPlus,
+  FileText, ArrowLeft, Send, Save, AlertTriangle, Trash2, Copy, UserPlus,
   MapPin, Phone, Pencil, Eye, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -1161,7 +1161,7 @@ export default function TechnicianDashboard() {
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setScreen("report")} className="flex-1 h-14 rounded-2xl" data-testid="review-edit-btn"><Pencil className="w-4 h-4 mr-2" />{t("technician.back")}</Button>
           <Button onClick={handleSubmit} disabled={submitting} className="flex-1 h-14 rounded-2xl text-lg" data-testid="review-submit-btn">
-            {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}{t("technician.submit")}
+            {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}{t("technician.saveReport")}
           </Button>
         </div>
       </div>
