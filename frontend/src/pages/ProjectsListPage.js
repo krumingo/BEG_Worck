@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, FolderKanban, Users, Loader2, Eye, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Search, FolderKanban, Users, Loader2, Eye, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -70,6 +70,37 @@ const EMPTY_FORM = {
   start_date: "", end_date: "", planned_days: "",
   budget_planned: "", default_site_manager_id: "", tags: "", notes: "",
   address_text: "", owner_type: "", owner_id: "", parent_project_id: "",
+};
+
+const todayISO = () => new Date().toISOString().split("T")[0];
+
+const suggestNextProjectCode = (projects) => {
+  const all = projects || [];
+  const stats = {};
+  for (const p of all) {
+    if (p.parent_project_id) continue;
+    const m = String(p.code || "").match(/^(.*?)(\d+)$/);
+    if (!m) continue;
+    const prefix = m[1];
+    if (!stats[prefix]) stats[prefix] = { count: 0, width: m[2].length, max: 0 };
+    stats[prefix].count += 1;
+    stats[prefix].width = Math.max(stats[prefix].width, m[2].length);
+    stats[prefix].max = Math.max(stats[prefix].max, parseInt(m[2], 10));
+  }
+  let prefixes = Object.keys(stats);
+  if (!prefixes.length) return "";
+  const nonEmpty = prefixes.filter((p) => p !== "");
+  if (nonEmpty.length) prefixes = nonEmpty;
+  prefixes.sort((a, b) => stats[b].count - stats[a].count || stats[b].max - stats[a].max);
+  const prefix = prefixes[0];
+  const width = stats[prefix].width;
+  const re = new RegExp("^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\d+)$");
+  let max = 0;
+  for (const p of all) {
+    const mm = String(p.code || "").match(re);
+    if (mm) max = Math.max(max, parseInt(mm[1], 10));
+  }
+  return prefix + String(max + 1).padStart(width, "0");
 };
 
 export default function ProjectsListPage() {
@@ -135,7 +166,7 @@ export default function ProjectsListPage() {
     const childOf = searchParams.get("createChild");
     const parentName = searchParams.get("parentName");
     if (childOf) {
-      setForm({ ...EMPTY_FORM, parent_project_id: childOf, name: parentName ? `${parentName} — ` : "" });
+      setForm({ ...EMPTY_FORM, parent_project_id: childOf, name: parentName ? `${parentName} — ` : "", start_date: todayISO() });
       setDialogOpen(true);
       setSearchParams({}, { replace: true });
     }
@@ -145,8 +176,18 @@ export default function ProjectsListPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, code: suggestNextProjectCode(projects), start_date: todayISO() });
     setDialogOpen(true);
+  };
+
+  const handleDelete = async (p) => {
+    if (!window.confirm(`${t("projects.deleteConfirm")}\n\n${p.code} — ${p.name}`)) return;
+    try {
+      await API.delete(`/projects/${p.id}`);
+      await fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+    }
   };
 
   const openEdit = (p) => {
@@ -312,6 +353,7 @@ export default function ProjectsListPage() {
                         <div className="flex items-center justify-end gap-1">
                           <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${p.id}`)}><Eye className="w-3.5 h-3.5" /></Button>
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(p); }}>{t("common.edit")}</Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(p); }} title={t("common.delete")}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -336,6 +378,7 @@ export default function ProjectsListPage() {
                             <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${child.id}`)}><Eye className="w-3.5 h-3.5" /></Button>
                               <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(child); }}>{t("common.edit")}</Button>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(child); }} title={t("common.delete")}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </div>
                           </TableCell>
                         </TableRow>

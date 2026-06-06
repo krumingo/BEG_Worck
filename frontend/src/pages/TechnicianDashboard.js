@@ -285,6 +285,23 @@ export default function TechnicianDashboard() {
     <div className="p-4 max-w-lg mx-auto space-y-4">
       <div className="flex items-center gap-3"><Button variant="ghost" size="sm" onClick={() => setQuickScreen(null)}><ArrowLeft className="w-4 h-4" /></Button><h1 className="text-lg font-bold">{t("technician.newSMR")}</h1></div>
       <Input value={qSmr} onChange={e => setQSmr(e.target.value)} placeholder={t("technician.smrType")} className="h-12 text-base" />
+      {availableTasks.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">{t("technician.existingSmr")}</p>
+          <div className="flex flex-wrap gap-2">
+            {availableTasks.map((tk, ti) => (
+              <button
+                key={ti}
+                type="button"
+                onClick={() => setQSmr(tk.smr_type)}
+                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${qSmr === tk.smr_type ? "bg-primary/20 border-primary/40 text-primary" : "bg-muted/20 border-border text-foreground hover:bg-muted/40"}`}
+              >
+                {tk.source === "offer_approved" ? "✓ " : tk.source === "extra_draft" ? "⊕ " : ""}{tk.smr_type}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <Input type="number" value={qQty} onChange={e => setQQty(e.target.value)} placeholder={t("technician.qty")} className="h-12" />
       <Textarea value={qDesc} onChange={e => setQDesc(e.target.value)} placeholder={t("technician.description")} />
       <Button onClick={submitQuickSmr} className="w-full h-14 text-lg rounded-xl">{t("common.save")}</Button>
