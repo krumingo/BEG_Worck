@@ -972,46 +972,9 @@ export default function TechnicianDashboard() {
 
       {/* MODE B: Group — accumulating day builder */}
       {reportMode === "group" && (() => {
-        // Compute per-worker day totals from existing drafts
-        const draftsByWorker = {};
-        for (const dd of existingDrafts) {
-          const wid = dd.worker_id;
-          if (!draftsByWorker[wid]) draftsByWorker[wid] = { name: dd.worker_name, hours: 0, entries: [] };
-          draftsByWorker[wid].hours += dd.hours || 0;
-          draftsByWorker[wid].entries.push(dd);
-        }
-
         return (
           <div className="space-y-4">
-            {/* Натрупано за деня */}
-            {Object.keys(draftsByWorker).length > 0 && (
-              <div className="rounded-2xl border border-border bg-card overflow-hidden">
-                <div className="px-4 py-2.5 bg-muted/20 border-b border-border/50 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-cyan-400" />
-                  <span className="text-sm font-semibold">Натрупано за деня</span>
-                </div>
-                <div className="p-3 space-y-1">
-                  {roster.map(w => {
-                    const wd = draftsByWorker[w.worker_id];
-                    const dayH = workerDayHours[w.worker_id];
-                    const savedH = wd ? wd.hours : 0;
-                    const crossH = dayH ? dayH.total_hours : savedH;
-                    const remain = Math.max(0, 8 - crossH);
-                    const hCls = crossH > 12 ? "text-red-400" : crossH > 8 ? "text-amber-400" : crossH > 0 ? "text-emerald-400" : "text-muted-foreground";
-                    return (
-                      <div key={w.worker_id} className="flex items-center gap-2 py-1 px-2 rounded-lg text-xs">
-                        <span className="flex-1 truncate">{w.worker_name}</span>
-                        <span className={`font-mono font-bold ${hCls}`}>{crossH > 0 ? `${crossH}ч` : "—"}</span>
-                        {crossH > 0 && crossH <= 8 && <span className="text-[9px] text-muted-foreground">ост. {remain}ч</span>}
-                        {crossH > 8 && <Badge variant="outline" className="text-[8px] text-amber-400 border-amber-500/30">+{(crossH - 8).toFixed(1)}ч OT</Badge>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Group form — add to day */}
+            {/* Group form */}
             <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground">Нов групов ред</p>
               {availableTasks.length > 0 ? (
@@ -1045,30 +1008,15 @@ export default function TechnicianDashboard() {
                 })}
               </div>
               <Button
-                onClick={async () => {
+                onClick={() => {
                   if (!groupSmr || !groupHours || !groupWorkers.length) {
                     toast.error("Изберете дейност, часове и поне 1 човек");
                     return;
                   }
-                  const payload = groupWorkers.map(wid => {
-                    const w = roster.find(r => r.worker_id === wid);
-                    return { worker_id: wid, worker_name: w?.worker_name || "", smr_type: groupSmr, hours: parseFloat(groupHours) || 0, notes: generalNotes || undefined };
-                  });
-                  try {
-                    await API.post("/technician/daily-report", { project_id: selectedSite.project_id, entries: payload });
-                    toast.success(`Добавено: ${groupSmr} × ${groupWorkers.length} човека`);
-                    // Refresh drafts + day hours
-                    const [draftsRes, hoursRes] = await Promise.all([
-                      API.get(`/technician/site/${selectedSite.project_id}/my-drafts`),
-                      API.get(`/technician/worker-day-hours?worker_ids=${roster.map(w => w.worker_id).join(",")}`),
-                    ]);
-                    setExistingDrafts(draftsRes.data.items || []);
-                    setWorkerDayHours(hoursRes.data.workers || {});
-                    setGroupSmr(""); setGroupHours("8"); setGroupWorkers([]); setGeneralNotes("");
-                  } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+                  setScreen("review");
                 }}
-                className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700"
-              ><Plus className="w-4 h-4 mr-2" />Добави към деня</Button>
+                className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+              ><Eye className="w-4 h-4 mr-2" />{t("technician.reviewReport")}</Button>
             </div>
           </div>
         );
