@@ -310,27 +310,67 @@ export default function TechnicianDashboard() {
         {isAdmin && <Badge className="mt-2 bg-violet-500/20 text-violet-400 border-violet-500/30">{t("technician.adminMode")}</Badge>}
       </div>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t("technician.mySites")}</h2>
-      {sites.length === 0 ? <p className="text-center py-8 text-muted-foreground">{t("technician.noSites")}</p> : sites.map(s => (
-        <button key={s.project_id} onClick={() => openObject(s)} className="w-full rounded-2xl border border-border bg-card p-5 text-left hover:border-primary/40 active:scale-[0.98] transition-all" data-testid={`site-${s.project_id}`}>
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="font-bold text-base">{s.name}</h3>
-            {s.reported_workers > 0 ? (
-              s.roster_count > 0 ? <Badge className={`text-[10px] ${s.reported_workers >= s.roster_count ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}><Check className="w-3 h-3 mr-1" />{s.reported_workers}/{s.roster_count} отчета</Badge>
-              : <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]"><Check className="w-3 h-3 mr-1" />{s.reported_workers} отчета</Badge>
-            ) : <Badge className="bg-amber-500/20 text-amber-400 text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />{t("technician.noReport")}</Badge>}
-          </div>
-          {s.is_subproject ? (
-            <p className="text-[11px] text-violet-400/90 mb-0.5">{t("technician.subObjectOf")} {s.parent_name || "—"}</p>
-          ) : s.sub_count > 0 ? (
-            <p className="text-[11px] text-violet-400/90 mb-0.5">{s.sub_count} {t("technician.subObjects")}</p>
-          ) : null}
-          <p className="text-xs text-muted-foreground">{s.address_text || s.code}</p>
-          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><Users className="w-3 h-3" />{s.today_workers}</span>
-            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{s.today_hours}ч</span>
-          </div>
-        </button>
-      ))}
+      {sites.length === 0 ? <p className="text-center py-8 text-muted-foreground">{t("technician.noSites")}</p> : (() => {
+        const byId = {};
+        sites.forEach(x => { byId[x.project_id] = x; });
+        const childrenOf = {};
+        sites.forEach(x => {
+          if (x.is_subproject && x.parent_project_id && byId[x.parent_project_id]) {
+            (childrenOf[x.parent_project_id] = childrenOf[x.parent_project_id] || []).push(x);
+          }
+        });
+        const topLevel = sites.filter(x => !(x.is_subproject && x.parent_project_id && byId[x.parent_project_id]));
+        const statusBadge = (s) => (s.reported_workers > 0 ? (
+          s.roster_count > 0 ? <Badge className={`text-[10px] ${s.reported_workers >= s.roster_count ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}><Check className="w-3 h-3 mr-1" />{s.reported_workers}/{s.roster_count} отчета</Badge>
+          : <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]"><Check className="w-3 h-3 mr-1" />{s.reported_workers} отчета</Badge>
+        ) : <Badge className="bg-amber-500/20 text-amber-400 text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />{t("technician.noReport")}</Badge>);
+        return topLevel.map(s => {
+          const kids = childrenOf[s.project_id] || [];
+          if (kids.length === 0) return (
+            <button key={s.project_id} onClick={() => openObject(s)} className="w-full rounded-2xl border border-border bg-card p-5 text-left hover:border-primary/40 active:scale-[0.98] transition-all" data-testid={`site-${s.project_id}`}>
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-bold text-base">{s.name}</h3>
+                {statusBadge(s)}
+              </div>
+              {s.is_subproject ? <p className="text-[11px] text-violet-400/90 mb-0.5">{t("technician.subObjectOf")} {s.parent_name || "—"}</p> : null}
+              <p className="text-xs text-muted-foreground">{s.address_text || s.code}</p>
+              <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Users className="w-3 h-3" />{s.today_workers}</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{s.today_hours}ч</span>
+              </div>
+            </button>
+          );
+          const open = !!openParents[s.project_id];
+          return (
+            <div key={s.project_id} className="w-full rounded-2xl border border-border bg-card overflow-hidden">
+              <button onClick={() => setOpenParents(p => ({ ...p, [s.project_id]: !p[s.project_id] }))} className="w-full p-5 text-left hover:border-primary/40 active:scale-[0.99] transition-all flex items-center justify-between" data-testid={`parent-${s.project_id}`}>
+                <div>
+                  <h3 className="font-bold text-base">{s.name}</h3>
+                  <p className="text-[11px] text-violet-400/90 mt-0.5">{kids.length} {t("technician.subObjects")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{s.address_text || s.code}</p>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform shrink-0 ${open ? "" : "-rotate-90"}`} />
+              </button>
+              {open && (
+                <div className="border-t border-border">
+                  {kids.map(c => (
+                    <button key={c.project_id} onClick={() => openObject(c)} className="w-full px-5 py-3 pl-8 text-left border-b border-border/50 last:border-b-0 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center justify-between" data-testid={`site-${c.project_id}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CornerDownRight className="w-4 h-4 text-violet-400/90 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{c.name}</p>
+                          <p className="text-[11px] text-muted-foreground font-mono">{c.code}</p>
+                        </div>
+                      </div>
+                      {statusBadge(c)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        });
+      })()}
     </div>
   );
 
