@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import AssetQrBlock from "@/components/AssetQrBlock";
 import DataTable from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Warehouse, Database, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Warehouse, Database, Package, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import BatchesTab from "@/components/warehouse/BatchesTab";
 import StockValueCard from "@/components/warehouse/StockValueCard";
@@ -47,6 +48,7 @@ export default function WarehousesPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [qrWarehouse, setQrWarehouse] = useState(null);
 
   const columns = [
     { key: "code", label: t("data.code"), sortable: true, filterable: true, filterType: "contains", width: "120px" },
@@ -181,6 +183,9 @@ export default function WarehousesPage() {
         exportFilename="warehouses.csv"
         actions={(row) => (
           <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => setQrWarehouse(row)} data-testid={`qr-${row.id}`}>
+              <QrCode className="w-4 h-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => handleEdit(row)} data-testid={`edit-${row.id}`}>
               <Pencil className="w-4 h-4" />
             </Button>
@@ -216,6 +221,18 @@ export default function WarehousesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* QR на склада */}
+      <Dialog open={!!qrWarehouse} onOpenChange={(o) => !o && setQrWarehouse(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>QR — {qrWarehouse?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center py-2">
+            {qrWarehouse && <AssetQrBlock entityType="warehouse" entityId={qrWarehouse.id} name={qrWarehouse.name} code={qrWarehouse.code} />}
+          </div>
+        </DialogContent>
+      </Dialog>
         </>
       )}
 
