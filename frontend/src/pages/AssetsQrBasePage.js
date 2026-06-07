@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
 import { toast } from "sonner";
-import { QrCode, Printer, Plus, Search, Loader2 } from "lucide-react";
+import { QrCode, Printer, Search, Loader2 } from "lucide-react";
 
 const TYPE_FILTERS = [
   { key: "all", label: "Всички" },
@@ -53,7 +53,6 @@ export default function AssetsQrBasePage() {
   const [loading, setLoading] = useState(true);
   const [type, setType] = useState("all");
   const [q, setQ] = useState("");
-  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,19 +75,6 @@ export default function AssetsQrBasePage() {
     return () => clearTimeout(t);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const generateAll = async () => {
-    setGenerating(true);
-    try {
-      const res = await API.post("/assets/qr/generate-bulk", { types: ["project", "employee", "warehouse"] });
-      const c = res.data.created || {};
-      toast.success(`Генерирани: ${c.project || 0} обекта · ${c.employee || 0} служители · ${c.warehouse || 0} склада`);
-      await load();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Грешка при генериране");
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -109,9 +95,6 @@ export default function AssetsQrBasePage() {
         <div className="flex items-center gap-2">
           <button onClick={() => window.print()} className="px-3 py-2 rounded-lg border border-border text-sm flex items-center gap-2 hover:bg-muted/40">
             <Printer className="w-4 h-4" /> Печат на всички
-          </button>
-          <button onClick={generateAll} disabled={generating} className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium flex items-center gap-2 disabled:opacity-50">
-            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Генерирай за всички
           </button>
         </div>
       </div>
@@ -137,7 +120,7 @@ export default function AssetsQrBasePage() {
         {loading ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
         ) : items.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground text-sm">Няма кодове. Натисни „Генерирай за всички“, за да създадеш QR за обектите, служителите и складовете.</div>
+          <div className="py-12 text-center text-muted-foreground text-sm">Няма кодове. QR се генерира автоматично при създаване на обект/служител/склад.</div>
         ) : items.map((it) => (
           <div key={it.qr_id} className="grid grid-cols-[110px_1fr_140px_90px_120px] gap-3 px-4 py-3 items-center border-t border-border/60 text-sm">
             <span><span className={`text-[11px] px-2 py-1 rounded-md ${TYPE_CLASS[it.entity_type] || "bg-muted text-muted-foreground"}`}>{TYPE_BG[it.entity_type] || it.entity_type}</span></span>
