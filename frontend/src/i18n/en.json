@@ -146,6 +146,7 @@
   "nav": {
     "assetsGroup": "Assets",
     "assetsQr": "QR base",
+    "assetsItems": "Items",
     "dashboard": "Dashboard",
     "projects": "Projects",
     "sites": "Sites",

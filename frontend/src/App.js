@@ -47,6 +47,7 @@ import CounterpartiesPage from "@/pages/CounterpartiesPage";
 import ItemsPage from "@/pages/ItemsPage";
 import SalesPage from "@/pages/SalesPage";
 import AssetsQrBasePage from "@/pages/AssetsQrBasePage";
+import AssetsItemsPage from "@/pages/AssetsItemsPage";
 import FinanceAnalysisPage from "@/pages/FinanceAnalysisPage";
 import PricesPage from "@/pages/PricesPage";
 import TurnoverPage from "@/pages/TurnoverPage";
@@ -217,6 +218,7 @@ function AppRoutes() {
       {/* Data Module Routes */}
       <Route path="/data/warehouses" element={<AdminRoute><WarehousesPage /></AdminRoute>} />
       <Route path="/assets/qr" element={<AdminRoute><AssetsQrBasePage /></AdminRoute>} />
+      <Route path="/assets/items" element={<AdminRoute><AssetsItemsPage /></AdminRoute>} />
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
       <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
       <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />
