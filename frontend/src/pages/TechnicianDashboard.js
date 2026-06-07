@@ -1008,15 +1008,13 @@ export default function TechnicianDashboard() {
                 })}
               </div>
               <Button
-                onClick={() => {
-                  if (!groupSmr || !groupHours || !groupWorkers.length) {
-                    toast.error("Изберете дейност, часове и поне 1 човек");
-                    return;
-                  }
-                  setScreen("review");
-                }}
-                className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+                onClick={() => setScreen("review")}
+                disabled={!groupSmr || !groupHours || !groupWorkers.length}
+                className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold disabled:opacity-50 disabled:cursor-not-allowed"
               ><Eye className="w-4 h-4 mr-2" />{t("technician.reviewReport")}</Button>
+              {(!groupSmr || !groupWorkers.length) && (
+                <p className="text-[11px] text-amber-400/80 text-center -mt-1">{!groupSmr ? "Изберете дейност, за да продължите" : "Изберете поне 1 работник"}</p>
+              )}
             </div>
           </div>
         );
