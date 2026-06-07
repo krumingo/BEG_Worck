@@ -10,6 +10,7 @@ const TYPE_FILTERS = [
   { key: "warehouse", label: "Складове" },
   { key: "guest", label: "Гости" },
   { key: "repair", label: "Ремонт" },
+  { key: "asset_unit", label: "Активи" },
 ];
 
 const TYPE_BG = {
@@ -18,6 +19,7 @@ const TYPE_BG = {
   warehouse: "Склад",
   guest: "Гост",
   repair: "Ремонт",
+  asset_unit: "Актив",
 };
 
 const TYPE_CLASS = {
@@ -57,7 +59,7 @@ export default function AssetsQrBasePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { page_size: 500 };
+      const params = { page_size: 200 };
       if (type !== "all") params.type = type;
       if (q.trim()) params.q = q.trim();
       const res = await API.get("/assets/qr", { params });
