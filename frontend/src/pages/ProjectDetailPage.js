@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useActiveProject } from "@/contexts/ProjectContext";
 import API from "@/lib/api";
+import AssetQrBlock from "@/components/AssetQrBlock";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -273,6 +274,7 @@ export default function ProjectDetailPage() {
           </Button>
         )}
 
+        <AssetQrBlock entityType="project" entityId={projectId} name={project.name} code={project.code} />
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
       </div>
 
