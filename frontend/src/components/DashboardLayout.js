@@ -10,7 +10,7 @@ import {
   Wallet, UserCog, Landmark, Calculator, CreditCard, Smartphone,
   User, Package, Truck, RotateCcw, Settings, HelpCircle, Info,
   Menu, X, Lock, Archive, Warehouse, TrendingUp, BarChart3,
-  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart,
+  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -81,6 +81,12 @@ const NAV_GROUPS = [
       { to: "/data/warehouses", icon: Warehouse, labelKey: "nav.warehouses" },
       { to: "/data/items", icon: Package, labelKey: "nav.items" },
       { to: "/sales", icon: ShoppingCart, labelKey: "nav.sales" },
+    ],
+  },
+  {
+    id: "assets", icon: QrCode, labelKey: "nav.assetsGroup",
+    items: [
+      { to: "/assets/qr", icon: QrCode, labelKey: "nav.assetsQr" },
     ],
   },
   { id: "alarms", to: "/alarms", icon: Bell, labelKey: "nav.alarms", standalone: true, badge: true },

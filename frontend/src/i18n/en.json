@@ -144,6 +144,8 @@
     "passwordRequirements": "Requirements: min 10 chars, uppercase, lowercase, digit, special char"
   },
   "nav": {
+    "assetsGroup": "Assets",
+    "assetsQr": "QR base",
     "dashboard": "Dashboard",
     "projects": "Projects",
     "sites": "Sites",
