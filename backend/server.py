@@ -331,6 +331,9 @@ api_router.include_router(pay_runs_router)
 from app.routes.settings import router as settings_router
 api_router.include_router(settings_router)
 
+from app.routes.assets_qr import router as assets_qr_router
+api_router.include_router(assets_qr_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)
