@@ -337,6 +337,9 @@ api_router.include_router(assets_qr_router)
 from app.routes.assets_items import router as assets_items_router
 api_router.include_router(assets_items_router)
 
+from app.routes.assets_units import router as assets_units_router
+api_router.include_router(assets_units_router)
+
 # ── App Setup ────────────────────────────────────────────────────
 
 app.include_router(api_router)

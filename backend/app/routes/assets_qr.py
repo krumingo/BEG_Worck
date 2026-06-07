@@ -22,7 +22,7 @@ router = APIRouter(tags=["Assets QR"])
 
 # Entity types a QR can point to.
 REFERENCED_TYPES = ["project", "employee", "warehouse"]   # point to existing records
-OWNED_TYPES = ["guest", "repair"]                         # lightweight, name stored here
+OWNED_TYPES = ["guest", "repair", "asset_unit"]           # lightweight, name stored here
 VALID_TYPES = REFERENCED_TYPES + OWNED_TYPES
 
 
