@@ -51,8 +51,8 @@ export default function AssetsUnitsPage() {
     try {
       const [u, it, wh] = await Promise.all([
         API.get("/assets/units?page_size=300"),
-        API.get("/assets/items?page_size=200"),
-        API.get("/warehouses?page_size=200&active_only=false"),
+        API.get("/assets/items?page_size=100"),
+        API.get("/warehouses?page_size=100&active_only=false"),
       ]);
       setUnits(u.data.items || []);
       setItems(it.data.items || []);
