@@ -228,7 +228,10 @@ export default function ProjectsListPage() {
         const { code, ...updatePayload } = payload;
         await API.put(`/projects/${editing.id}`, updatePayload);
       } else {
-        await API.post("/projects", payload);
+        const res = await API.post("/projects", payload);
+        try {
+          if (res?.data?.id) await API.post("/assets/qr/generate", { entity_type: "project", entity_id: res.data.id });
+        } catch (e) { /* QR must never block project creation */ }
       }
       setDialogOpen(false);
       await fetchData();

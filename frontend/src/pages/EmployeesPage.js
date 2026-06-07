@@ -16,7 +16,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Users, Plus, Loader2, Search, UserPlus, Camera,
+  Users, Plus, Loader2, Search, UserPlus, Camera, QrCode,
 } from "lucide-react";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { toast } from "sonner";
@@ -122,6 +122,11 @@ export default function EmployeesPage() {
         active: true,
       });
 
+      // 2b. Auto-generate a unique QR for this employee (Assets module) — non-blocking
+      try {
+        await API.post("/assets/qr/generate", { entity_type: "employee", entity_id: newUserId });
+      } catch (e) { /* QR generation must never block employee creation */ }
+
       // 3. Upload avatar if selected
       if (avatarFile) {
         try {
@@ -224,6 +229,14 @@ export default function EmployeesPage() {
         <DialogContent className="sm:max-w-[600px] bg-card border-border max-h-[85vh] overflow-y-auto" data-testid="create-employee-dialog">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Нов служител</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
+            {/* QR — auto-generated on create (Assets module) */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <QrCode className="w-7 h-7 text-primary flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium">QR код</p>
+                <p className="text-xs text-muted-foreground">Генерира се автоматично при създаване — уникален за служителя. Печат от „Активи → QR база“.</p>
+              </div>
+            </div>
             {/* Photo + Basic info */}
             <div className="flex gap-4">
               {/* Avatar */}

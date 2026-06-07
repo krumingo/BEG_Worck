@@ -117,6 +117,11 @@ export default function CreateWarehouseModal({
       };
       
       const res = await API.post("/warehouses", payload);
+
+      // Auto-generate a unique QR for this warehouse (Assets module) — non-blocking
+      try {
+        if (res?.data?.id) await API.post("/assets/qr/generate", { entity_type: "warehouse", entity_id: res.data.id });
+      } catch (e) { /* QR must never block warehouse creation */ }
       
       // Call onCreated with the new warehouse
       if (onCreated) {
