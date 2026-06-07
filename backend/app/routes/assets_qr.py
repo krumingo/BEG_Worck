@@ -224,7 +224,7 @@ async def set_qr_status(qr_id: str, data: QRStatus, user: dict = Depends(require
 
 
 @router.get("/assets/qr/{qr_id}/svg")
-async def qr_svg(qr_id: str, user: dict = Depends(get_current_user)):
+async def qr_svg(qr_id: str, base: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Return the QR code as an SVG image (for printing labels). Offline, no external service."""
     org_id = user["org_id"]
     doc = await db.asset_qr_codes.find_one({"org_id": org_id, "qr_id": qr_id}, {"_id": 0, "qr_id": 1})
@@ -236,5 +236,6 @@ async def qr_svg(qr_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="QR library not installed (segno)")
     import io
     buf = io.BytesIO()
-    segno.make(qr_id, error="m").save(buf, kind="svg", scale=4, border=2)
+    payload = f"{base.rstrip(chr(47))}/s/{qr_id}" if base else qr_id
+    segno.make(payload, error="m").save(buf, kind="svg", scale=4, border=2)
     return Response(content=buf.getvalue(), media_type="image/svg+xml")

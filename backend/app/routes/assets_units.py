@@ -187,3 +187,87 @@ async def delete_asset_unit(unit_id: str, user: dict = Depends(require_admin)):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
     return {"deleted": True}
+
+
+# ── Movement / custody (Етап 2) ────────────────────────────────────
+
+ACTIONS = ["take", "handover", "drop", "repair", "return"]
+
+
+class MoveAction(BaseModel):
+    action: str                       # take | handover | drop | repair | return
+    to_type: Optional[str] = None     # employee | project | warehouse
+    to_id: Optional[str] = None
+    note: Optional[str] = None
+
+
+def _user_name(user: dict) -> str:
+    return (user.get("name")
+            or f"{user.get('first_name','')} {user.get('last_name','')}".strip()
+            or (user.get("email", "").split("@")[0] if user.get("email") else ""))
+
+
+@router.post("/assets/units/{unit_id}/move")
+async def move_unit(unit_id: str, data: MoveAction, user: dict = Depends(get_current_user)):
+    """Record a custody movement (scan-driven). Any logged-in user can act."""
+    org = user["org_id"]
+    if data.action not in ACTIONS:
+        raise HTTPException(status_code=400, detail="Invalid action")
+    unit = await db.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    from_type = unit.get("location_type")
+    from_id = unit.get("location_id")
+    act = data.action
+
+    if act == "take":
+        to_type, to_id, status = "employee", (data.to_id or user["id"]), "in_use"
+    elif act == "handover":
+        if not data.to_id:
+            raise HTTPException(status_code=400, detail="to_id required")
+        to_type, to_id, status = "employee", data.to_id, "in_use"
+    elif act == "drop":
+        if not data.to_id:
+            raise HTTPException(status_code=400, detail="to_id required")
+        to_type, to_id, status = "project", data.to_id, "in_use"
+    elif act == "repair":
+        to_type, to_id, status = from_type, from_id, "repair"
+    else:  # return
+        if not data.to_id:
+            raise HTTPException(status_code=400, detail="to_id required")
+        to_type, to_id, status = "warehouse", data.to_id, "available"
+
+    mv = {
+        "id": str(uuid.uuid4()),
+        "org_id": org,
+        "unit_id": unit_id,
+        "action": act,
+        "from_type": from_type, "from_id": from_id,
+        "to_type": to_type, "to_id": to_id,
+        "by_user": user["id"], "by_name": _user_name(user),
+        "note": (data.note or "").strip() or None,
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.asset_movements.insert_one(mv)
+    await db.asset_units.update_one(
+        {"id": unit_id, "org_id": org},
+        {"$set": {"location_type": to_type, "location_id": to_id, "status": status}},
+    )
+    unit = await db.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
+    await _enrich(org, unit)
+    return unit
+
+
+@router.get("/assets/units/{unit_id}/movements")
+async def list_movements(unit_id: str, user: dict = Depends(get_current_user)):
+    org = user["org_id"]
+    movements = (
+        await db.asset_movements.find({"org_id": org, "unit_id": unit_id}, {"_id": 0})
+        .sort("at", -1)
+        .to_list(200)
+    )
+    for m in movements:
+        m["from_name"] = await _location_name(org, m.get("from_type"), m.get("from_id"))
+        m["to_name"] = await _location_name(org, m.get("to_type"), m.get("to_id"))
+    return {"items": movements}

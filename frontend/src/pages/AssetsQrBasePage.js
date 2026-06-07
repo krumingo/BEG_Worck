@@ -34,7 +34,7 @@ function QrSvg({ qrId, size = 64 }) {
   const [err, setErr] = useState(false);
   useEffect(() => {
     let alive = true;
-    API.get(`/assets/qr/${qrId}/svg`, { responseType: "text" })
+    API.get(`/assets/qr/${qrId}/svg?base=${encodeURIComponent(window.location.origin)}`, { responseType: "text" })
       .then((res) => {
         if (!alive) return;
         const clean = String(res.data).replace(/<\?xml[^>]*\?>/, "");

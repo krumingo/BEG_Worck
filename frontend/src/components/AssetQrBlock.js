@@ -20,7 +20,7 @@ export default function AssetQrBlock({ entityType, entityId, name, code }) {
         if (!alive) return;
         setQrId(id);
         if (id) {
-          const svgRes = await API.get(`/assets/qr/${id}/svg`, { responseType: "text" });
+          const svgRes = await API.get(`/assets/qr/${id}/svg?base=${encodeURIComponent(window.location.origin)}`, { responseType: "text" });
           if (alive) setSvg(String(svgRes.data).replace(/<\?xml[^>]*\?>/, ""));
         }
       } catch (e) {
