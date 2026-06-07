@@ -85,7 +85,7 @@ const NAV_GROUPS = [
   },
   {
     id: "assets", icon: QrCode, labelKey: "nav.assetsGroup",
-    items: [
+    children: [
       { to: "/assets/qr", icon: QrCode, labelKey: "nav.assetsQr" },
     ],
   },
