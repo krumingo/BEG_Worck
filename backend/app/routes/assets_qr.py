@@ -7,7 +7,7 @@ locations are lightweight entities owned by this module (name stored locally).
 
 Multi-tenant: everything is scoped by user["org_id"].
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -221,3 +221,20 @@ async def set_qr_status(qr_id: str, data: QRStatus, user: dict = Depends(require
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="QR not found")
     return {"qr_id": qr_id, "status": data.status}
+
+
+@router.get("/assets/qr/{qr_id}/svg")
+async def qr_svg(qr_id: str, user: dict = Depends(get_current_user)):
+    """Return the QR code as an SVG image (for printing labels). Offline, no external service."""
+    org_id = user["org_id"]
+    doc = await db.asset_qr_codes.find_one({"org_id": org_id, "qr_id": qr_id}, {"_id": 0, "qr_id": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="QR not found")
+    try:
+        import segno  # lazy import: app still starts even if the lib is missing
+    except ImportError:
+        raise HTTPException(status_code=500, detail="QR library not installed (segno)")
+    import io
+    buf = io.BytesIO()
+    segno.make(qr_id, error="m").save(buf, kind="svg", scale=4, border=2)
+    return Response(content=buf.getvalue(), media_type="image/svg+xml")
