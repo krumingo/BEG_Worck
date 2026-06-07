@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import AssetQrBlock from "@/components/AssetQrBlock";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -266,6 +267,7 @@ export default function EmployeeDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <AssetQrBlock entityType="employee" entityId={userId} name={`${emp.first_name} ${emp.last_name}`} />
           <div className="text-right mr-4">
             <p className="text-xs text-muted-foreground">Този месец</p>
             <p className="text-lg font-bold text-foreground">{hours_summary.current_month_days} дни / {hours_summary.current_month_hours}ч</p>
