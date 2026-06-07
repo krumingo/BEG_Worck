@@ -55,6 +55,7 @@ export default function AssetsQrBasePage() {
   const [loading, setLoading] = useState(true);
   const [type, setType] = useState("all");
   const [q, setQ] = useState("");
+  const [bigQr, setBigQr] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,7 +129,7 @@ export default function AssetsQrBasePage() {
             <span><span className={`text-[11px] px-2 py-1 rounded-md ${TYPE_CLASS[it.entity_type] || "bg-muted text-muted-foreground"}`}>{TYPE_BG[it.entity_type] || it.entity_type}</span></span>
             <span className="truncate font-medium">{it.name || "—"}</span>
             <span className="font-mono text-xs text-muted-foreground">{it.code || it.qr_id}</span>
-            <span className="flex items-center gap-2"><QrSvg qrId={it.qr_id} size={48} /></span>
+            <span className="flex items-center gap-2"><button onClick={() => setBigQr(it)} title="Уголеми за сканиране" className="hover:opacity-80 transition-opacity"><QrSvg qrId={it.qr_id} size={48} /></button></span>
             <span className="text-center">
               <button onClick={async () => {
                 try {
@@ -156,6 +157,18 @@ export default function AssetsQrBasePage() {
           ))}
         </div>
       </div>
+
+      {bigQr && (
+        <div onClick={() => setBigQr(null)} className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 print:hidden cursor-pointer">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center text-center max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
+            <QrSvg qrId={bigQr.qr_id} size={260} />
+            <div className="mt-3 text-base font-semibold text-black">{bigQr.name}</div>
+            <div className="text-xs text-gray-600 font-mono">{bigQr.code || bigQr.qr_id}</div>
+            <div className="text-[11px] text-gray-500 mt-1">{TYPE_BG[bigQr.entity_type] || bigQr.entity_type}</div>
+            <button onClick={() => setBigQr(null)} className="mt-4 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm">Затвори</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
