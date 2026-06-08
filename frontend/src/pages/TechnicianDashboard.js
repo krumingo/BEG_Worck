@@ -328,6 +328,7 @@ export default function TechnicianDashboard() {
         <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}</p>
         {isAdmin && <Badge className="mt-2 bg-violet-500/20 text-violet-400 border-violet-500/30">{t("technician.adminMode")}</Badge>}
       </div>
+      <Button variant="outline" onClick={() => navigate("/tech/tools")} className="w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"><Package className="w-5 h-5" />Моите инструменти</Button>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t("technician.mySites")}</h2>
       {sites.length === 0 ? <p className="text-center py-8 text-muted-foreground">{t("technician.noSites")}</p> : (() => {
         const byId = {};
@@ -515,7 +516,6 @@ export default function TechnicianDashboard() {
           <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-16 rounded-2xl flex-col text-xs"><AlertTriangle className="w-5 h-5 mb-1 text-orange-400" />Ново СМР</Button>
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
         </div>
-        <Button variant="outline" onClick={() => navigate("/tech/tools")} className="w-full h-14 rounded-2xl mt-3 flex items-center justify-center gap-2 text-sm font-semibold"><Package className="w-5 h-5" />Моите инструменти</Button>
 
         {/* Чернови за днес — with edit + delete */}
         {existingDrafts.length > 0 && (
