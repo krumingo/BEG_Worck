@@ -122,6 +122,20 @@ function AdminRoute({ children }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+// Field/phone route: authenticated but WITHOUT the desktop shell (clean full-screen)
+function FieldProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
 function CompanyPublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -183,8 +197,8 @@ function AppRoutes() {
       <Route path="/attendance-history" element={<CompanyProtectedRoute><AttendanceHistoryPage /></CompanyProtectedRoute>} />
       <Route path="/my-payslips" element={<CompanyProtectedRoute><MyPayslipsPage /></CompanyProtectedRoute>} />
       <Route path="/tech" element={<CompanyProtectedRoute><TechnicianDashboard /></CompanyProtectedRoute>} />
-      <Route path="/s/:qrId" element={<CompanyProtectedRoute><ScanLandingPage /></CompanyProtectedRoute>} />
-      <Route path="/tech/tools" element={<CompanyProtectedRoute><MyToolsPage /></CompanyProtectedRoute>} />
+      <Route path="/s/:qrId" element={<FieldProtectedRoute><ScanLandingPage /></FieldProtectedRoute>} />
+      <Route path="/tech/tools" element={<FieldProtectedRoute><MyToolsPage /></FieldProtectedRoute>} />
       <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
 
       {/* Admin-only routes — Technician/Worker/Driver redirected to /tech */}

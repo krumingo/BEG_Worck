@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
@@ -7,8 +7,15 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, QrCode, Wrench, Send, Warehouse } from "lucide-react";
+import { ArrowLeft, Loader2, QrCode, Wrench, Send, Warehouse, X } from "lucide-react";
 import { toast } from "sonner";
+
+// "https://host/s/QR-000012" -> "QR-000012";  plain "QR-000012" -> "QR-000012"
+function parseCode(raw) {
+  if (!raw) return "";
+  const m = String(raw).match(/\/s\/([^/?#]+)/);
+  return (m ? m[1] : String(raw)).trim();
+}
 
 export default function MyToolsPage() {
   const navigate = useNavigate();
@@ -17,11 +24,17 @@ export default function MyToolsPage() {
   const [tools, setTools] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [colleagues, setColleagues] = useState([]);
-  const [scanOpen, setScanOpen] = useState(false);
-  const [code, setCode] = useState("");
   const [actionFor, setActionFor] = useState(null); // { id, mode: "handover" | "return" }
   const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // scanning
+  const [scanning, setScanning] = useState(false);
+  const [scanErr, setScanErr] = useState("");
+  const [code, setCode] = useState("");
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -44,9 +57,51 @@ export default function MyToolsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openScan = () => {
-    const c = code.trim();
-    if (c) navigate(`/s/${c}`);
+  const stopScan = useCallback(() => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    setScanning(false);
+  }, []);
+
+  useEffect(() => () => stopScan(), [stopScan]);
+
+  const onCode = (raw) => {
+    const c = parseCode(raw);
+    if (!c) return;
+    stopScan();
+    navigate(`/s/${c}`);
+  };
+
+  const startScan = async () => {
+    setScanErr(""); setScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute("playsinline", "true");
+        await videoRef.current.play().catch(() => {});
+      }
+      let detector = null;
+      if ("BarcodeDetector" in window) {
+        try { detector = new window.BarcodeDetector({ formats: ["qr_code"] }); } catch { detector = null; }
+      }
+      if (!detector) {
+        setScanErr("Този телефон не поддържа авто-сканиране. Въведи кода ръчно отдолу.");
+        return;
+      }
+      const tick = async () => {
+        if (!streamRef.current || !videoRef.current) return;
+        try {
+          const codes = await detector.detect(videoRef.current);
+          if (codes && codes.length) { onCode(codes[0].rawValue || ""); return; }
+        } catch { /* keep scanning */ }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch (err) {
+      setScanErr("Няма достъп до камерата. Въведи кода ръчно отдолу.");
+    }
   };
 
   const doAction = async (unit) => {
@@ -74,16 +129,25 @@ export default function MyToolsPage() {
         <h1 className="text-lg font-bold">Моите инструменти</h1>
       </div>
 
-      <Button onClick={() => setScanOpen((s) => !s)} className="w-full h-12 rounded-2xl mb-2 flex items-center justify-center gap-2">
-        <QrCode className="w-5 h-5" /> Сканирай инструмент
-      </Button>
-      {scanOpen && (
-        <div className="flex gap-2 mb-2">
-          <Input placeholder="или въведи код (QR-000012)" value={code} onChange={(e) => setCode(e.target.value)} />
-          <Button onClick={openScan}>Отвори</Button>
+      {scanning ? (
+        <div className="mb-4">
+          <div className="relative rounded-2xl overflow-hidden bg-black aspect-square">
+            <video ref={videoRef} className="w-full h-full object-cover" muted autoPlay playsInline />
+            <div className="absolute inset-8 border-2 border-white/80 rounded-2xl pointer-events-none" />
+            <Button size="sm" variant="secondary" onClick={stopScan} className="absolute top-2 right-2"><X className="w-4 h-4" /></Button>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-2">Насочи камерата към QR стикера на инструмента</p>
+          {scanErr && <p className="text-center text-xs text-amber-500 mt-1">{scanErr}</p>}
+          <div className="flex gap-2 mt-3">
+            <Input placeholder="или въведи код (QR-000012)" value={code} onChange={(e) => setCode(e.target.value)} />
+            <Button onClick={() => onCode(code)}>Отвори</Button>
+          </div>
         </div>
+      ) : (
+        <Button onClick={startScan} className="w-full h-12 rounded-2xl mb-4 flex items-center justify-center gap-2">
+          <QrCode className="w-5 h-5" /> Сканирай инструмент
+        </Button>
       )}
-      <p className="text-[11px] text-muted-foreground mb-4">Сканирай стикера с камерата на телефона, за да вземеш инструмент.</p>
 
       <p className="text-xs text-muted-foreground mb-2">При теб ({tools.length})</p>
       {loading ? (
