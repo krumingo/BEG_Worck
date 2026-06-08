@@ -50,6 +50,7 @@ import AssetsQrBasePage from "@/pages/AssetsQrBasePage";
 import AssetsItemsPage from "@/pages/AssetsItemsPage";
 import AssetsUnitsPage from "@/pages/AssetsUnitsPage";
 import ScanLandingPage from "@/pages/ScanLandingPage";
+import MyToolsPage from "@/pages/MyToolsPage";
 import FinanceAnalysisPage from "@/pages/FinanceAnalysisPage";
 import PricesPage from "@/pages/PricesPage";
 import TurnoverPage from "@/pages/TurnoverPage";
@@ -183,6 +184,7 @@ function AppRoutes() {
       <Route path="/my-payslips" element={<CompanyProtectedRoute><MyPayslipsPage /></CompanyProtectedRoute>} />
       <Route path="/tech" element={<CompanyProtectedRoute><TechnicianDashboard /></CompanyProtectedRoute>} />
       <Route path="/s/:qrId" element={<CompanyProtectedRoute><ScanLandingPage /></CompanyProtectedRoute>} />
+      <Route path="/tech/tools" element={<CompanyProtectedRoute><MyToolsPage /></CompanyProtectedRoute>} />
       <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
 
       {/* Admin-only routes — Technician/Worker/Driver redirected to /tech */}

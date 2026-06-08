@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { toast } from "sonner";
 export default function TechnicianDashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = ["Admin", "Owner", "SiteManager"].includes(user?.role);
 
   // Navigation state
@@ -513,6 +515,7 @@ export default function TechnicianDashboard() {
           <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-16 rounded-2xl flex-col text-xs"><AlertTriangle className="w-5 h-5 mb-1 text-orange-400" />Ново СМР</Button>
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
         </div>
+        <Button variant="outline" onClick={() => navigate("/tech/tools")} className="w-full h-14 rounded-2xl mt-3 flex items-center justify-center gap-2 text-sm font-semibold"><Package className="w-5 h-5" />Моите инструменти</Button>
 
         {/* Чернови за днес — with edit + delete */}
         {existingDrafts.length > 0 && (
