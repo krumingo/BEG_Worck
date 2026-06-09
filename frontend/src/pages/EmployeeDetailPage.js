@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import PayslipDialog from "@/components/PayslipDialog";
+import AdminResetPasswordModal from "@/components/AdminResetPasswordModal";
 
 // P1-0.3: single source of truth for report status buckets.
 // Header, footer (Reports tab) and summary cards all derive from THIS — no drift.
@@ -97,6 +98,8 @@ export default function EmployeeDetailPage() {
   // Crop state
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSrc, setCropSrc] = useState(null);
+  const [roles, setRoles] = useState(["Admin", "Owner", "SiteManager", "Accountant", "Technician", "Viewer"]);
+  const [resetPwOpen, setResetPwOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -128,6 +131,13 @@ export default function EmployeeDetailPage() {
   }, [userId, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    API.get("/roles").then((r) => {
+      const list = (r.data || []).map((x) => (typeof x === "string" ? x : (x.name || x.value || x.id || x.role))).filter(Boolean);
+      if (list.length) setRoles(list);
+    }).catch(() => {});
+  }, []);
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
 
   // Sync calendar month with period
@@ -324,6 +334,19 @@ export default function EmployeeDetailPage() {
                   <SelectItem value="false">Не</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Роля</Label>
+              <Select value={editBasic.role || ""} onValueChange={v => setEditBasic({...editBasic, role: v})}>
+                <SelectTrigger className="bg-background h-8 text-sm"><SelectValue placeholder="Избери роля" /></SelectTrigger>
+                <SelectContent>
+                  {roles.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Парола за вход</Label>
+              <Button type="button" variant="outline" className="w-full h-8 text-sm" onClick={() => setResetPwOpen(true)} data-testid="set-password-btn">Задай парола</Button>
             </div>
           </div>
 
@@ -817,6 +840,12 @@ export default function EmployeeDetailPage() {
         onClose={() => setPayslipOpen(null)}
         batchId={payslipOpen?.batchId}
         workerId={payslipOpen?.workerId}
+      />
+
+      <AdminResetPasswordModal
+        open={resetPwOpen}
+        onOpenChange={setResetPwOpen}
+        user={{ id: userId, first_name: editBasic.first_name, last_name: editBasic.last_name, email: editBasic.email }}
       />
     </div>
   );
