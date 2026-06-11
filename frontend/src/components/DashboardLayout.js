@@ -123,7 +123,6 @@ const WORKER_NAV = [
   { to: "/my-day", icon: CalendarCheck, labelKey: "nav.myDay" },
   { to: "/attendance-history", icon: CalendarDays, labelKey: "nav.history" },
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
-  { to: "/my-payslips", icon: Receipt, labelKey: "nav.myPayslips" },
 ];
 
 // Mobile tabs (unchanged)
@@ -187,7 +186,7 @@ function MobileProfileMenu({ user, onLogout, onClose, onChangePassword }) {
           <div><p className="font-semibold">{user?.first_name} {user?.last_name}</p><p className="text-sm text-muted-foreground">{user?.email}</p></div>
         </div>
       </div>
-      {PROFILE_MENU.map((item, i) => (
+      {PROFILE_MENU.filter((item) => item.to !== "/my-payslips" || ["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role)).map((item, i) => (
         <button key={i} onClick={() => handleAction(item)} className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm ${item.action === "logout" ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-muted"}`}>
           <item.icon className="w-4 h-4" /><span>{t(item.labelKey)}</span>
         </button>
