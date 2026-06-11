@@ -335,10 +335,12 @@ export default function MyDayPage() {
                 {sessions.is_overtime && <span className="ml-1 text-[9px]">OT</span>}
               </p>
             </div>
+            {["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role) && (
             <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
               <p className="text-muted-foreground">{t("workSessions.totalCost")}</p>
               <p className="font-mono font-bold text-foreground">{sessions.total_cost.toFixed(2)} EUR</p>
             </div>
+            )}
             <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
               <p className="text-muted-foreground">{t("workSessions.sessions")}</p>
               <p className="font-mono font-bold text-foreground">{sessions.total_sessions}</p>

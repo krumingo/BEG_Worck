@@ -25,6 +25,7 @@ import {
 import ImageCropDialog from "@/components/ImageCropDialog";
 import PayslipDialog from "@/components/PayslipDialog";
 import AdminResetPasswordModal from "@/components/AdminResetPasswordModal";
+import { toast } from "sonner";
 
 // P1-0.3: single source of truth for report status buckets.
 // Header, footer (Reports tab) and summary cards all derive from THIS — no drift.
