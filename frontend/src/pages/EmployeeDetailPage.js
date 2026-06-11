@@ -100,6 +100,10 @@ export default function EmployeeDetailPage() {
   const [cropSrc, setCropSrc] = useState(null);
   const [roles, setRoles] = useState(["Admin", "Owner", "SiteManager", "Accountant", "Technician", "Viewer"]);
   const [resetPwOpen, setResetPwOpen] = useState(false);
+  const [assignedSites, setAssignedSites] = useState([]);   // [{member_id, project_id, project_name, code}]
+  const [allProjects, setAllProjects] = useState([]);
+  const [pickProject, setPickProject] = useState("");
+  const [sitesBusy, setSitesBusy] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -131,6 +135,48 @@ export default function EmployeeDetailPage() {
   }, [userId, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const loadAssignedSites = useCallback(async () => {
+    try {
+      const pr = await API.get("/projects");
+      const projects = pr.data || [];
+      setAllProjects(projects);
+      const results = await Promise.all(projects.map(async (p) => {
+        try {
+          const t = await API.get(`/projects/${p.id}/team`);
+          const m = (t.data || []).find((x) => x.user_id === userId);
+          return m ? { member_id: m.id, project_id: p.id, project_name: p.name, code: p.code || "" } : null;
+        } catch { return null; }
+      }));
+      setAssignedSites(results.filter(Boolean));
+    } catch { /* ignore */ }
+  }, [userId]);
+
+  useEffect(() => { loadAssignedSites(); }, [loadAssignedSites]);
+
+  const addSite = async () => {
+    if (!pickProject) return;
+    setSitesBusy(true);
+    try {
+      await API.post(`/projects/${pickProject}/team`, { user_id: userId, role_in_project: "Technician" });
+      toast.success("Обектът е зачислен");
+      setPickProject("");
+      await loadAssignedSites();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Грешка при зачисляване");
+    } finally { setSitesBusy(false); }
+  };
+
+  const removeSite = async (s) => {
+    setSitesBusy(true);
+    try {
+      await API.delete(`/projects/${s.project_id}/team/${s.member_id}`);
+      toast.success("Премахнат от обекта");
+      await loadAssignedSites();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Грешка при премахване");
+    } finally { setSitesBusy(false); }
+  };
 
   useEffect(() => {
     API.get("/roles").then((r) => {
@@ -590,6 +636,29 @@ export default function EmployeeDetailPage() {
         {/* Projects Tab */}
         {/* Projects Tab — derived from dossier reports for period consistency */}
         <TabsContent value="projects">
+          <div className="rounded-xl border border-border bg-card p-4 mb-4" data-testid="assigned-sites">
+            <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-primary" /><h3 className="font-semibold text-sm">Зачислени обекти</h3></div>
+            <p className="text-xs text-muted-foreground mb-3">Служителят вижда в Портал Техник само тези обекти.</p>
+            {assignedSites.length === 0 && <p className="text-sm text-muted-foreground mb-3">Няма зачислени обекти.</p>}
+            {assignedSites.map((s) => (
+              <div key={s.member_id} className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 mb-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="flex-1 text-sm truncate">{s.project_name}{s.code ? <span className="text-xs text-muted-foreground"> · {s.code}</span> : null}</span>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" disabled={sitesBusy} onClick={() => removeSite(s)}>Премахни</Button>
+              </div>
+            ))}
+            <div className="flex gap-2 mt-2">
+              <Select value={pickProject} onValueChange={setPickProject}>
+                <SelectTrigger className="bg-background h-9 text-sm flex-1"><SelectValue placeholder="Избери обект…" /></SelectTrigger>
+                <SelectContent>
+                  {allProjects.filter((p) => !assignedSites.some((s) => s.project_id === p.id)).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}{p.code ? ` · ${p.code}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" disabled={!pickProject || sitesBusy} onClick={addSite} className="h-9">Добави</Button>
+            </div>
+          </div>
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="projects-table">
             {(() => {
               const lines = dossier?.reports?.lines || [];
