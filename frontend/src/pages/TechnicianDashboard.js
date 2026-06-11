@@ -19,6 +19,7 @@ import {
   Building2, Clock, Users, Plus, Loader2, Check, Camera, Package,
   FileText, ArrowLeft, Send, Save, AlertTriangle, Trash2, Copy, UserPlus,
   MapPin, Phone, Pencil, Eye, Mail, ChevronDown, CornerDownRight,
+  QrCode, Truck, Bell, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +32,7 @@ export default function TechnicianDashboard() {
   // Navigation state
   const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
   const [sites, setSites] = useState([]);
+  const [myTools, setMyTools] = useState([]);
   const [openParents, setOpenParents] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedSite, setSelectedSite] = useState(null);
@@ -85,6 +87,11 @@ export default function TechnicianDashboard() {
   }, []);
 
   useEffect(() => { loadSites(); }, [loadSites]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    API.get(`/assets/units?location_type=employee&location_id=${user.id}&page_size=5`).then((r) => setMyTools(r.data?.items || [])).catch(() => {});
+  }, [user]);
 
   // M19.1 — Cross-report hours check when entering review
   // M19.8 B2 fix: exclude current project_id — its in-progress hours live in
@@ -322,13 +329,33 @@ export default function TechnicianDashboard() {
   // ════════════════════════════════════════════════════════════
   if (screen === "myDay") return (
     <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-my-day">
-      <div className="text-center mb-4">
-        <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-xl font-bold text-primary mx-auto mb-2">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
-        <h1 className="text-xl font-bold">{user?.first_name} {user?.last_name}</h1>
-        <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}</p>
-        {isAdmin && <Badge className="mt-2 bg-violet-500/20 text-violet-400 border-violet-500/30">{t("technician.adminMode")}</Badge>}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold leading-tight">Портал Техник</h1>
+          <p className="text-[11px] text-muted-foreground truncate">{user?.first_name} {user?.last_name}{isAdmin ? " · " + t("technician.adminMode") : ""}</p>
+        </div>
+        <Bell className="w-5 h-5 text-muted-foreground" />
       </div>
-      <Button variant="outline" onClick={() => navigate("/tech/tools")} className="w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"><Package className="w-5 h-5" />Моите инструменти</Button>
+      <Button onClick={() => navigate("/tech/tools")} className="w-full h-12 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"><QrCode className="w-5 h-5" />Сканирай QR</Button>
+      <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-3">
+        <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center text-primary shrink-0"><Calendar className="w-5 h-5" /></div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold capitalize leading-tight">{new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long", year: "numeric" })}</p>
+          <p className="text-xs text-muted-foreground capitalize">{new Date().toLocaleDateString("bg-BG", { weekday: "long" })}</p>
+        </div>
+      </div>
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Бързи действия</h2>
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => sites.length === 1 ? openObject(sites[0]) : toast.info("Избери обект по-долу")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Users className="w-5 h-5 text-violet-400" /><span className="text-[10px] text-center leading-tight">Отчети персонал</span></button>
+          <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><FileText className="w-5 h-5 text-blue-400" /><span className="text-[10px] text-center leading-tight">Сканирай фактура</span></button>
+          <button onClick={() => navigate("/tech/tools")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Package className="w-5 h-5 text-emerald-400" /><span className="text-[10px] text-center leading-tight">Вземи/Дай инструмент</span></button>
+          <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Truck className="w-5 h-5 text-amber-400" /><span className="text-[10px] text-center leading-tight">Заявка за курс</span></button>
+          <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Trash2 className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Извозване отпадък</span></button>
+          <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><AlertTriangle className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Докладвай проблем</span></button>
+        </div>
+      </div>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t("technician.mySites")}</h2>
       {sites.length === 0 ? <p className="text-center py-8 text-muted-foreground">{t("technician.noSites")}</p> : (() => {
         const byId = {};
@@ -391,6 +418,18 @@ export default function TechnicianDashboard() {
           );
         });
       })()}
+      {myTools.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Моите инструменти</h2>
+          {myTools.map((tl) => (
+            <div key={tl.id} className="rounded-2xl border border-border bg-card p-3 mb-2 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0"><Package className="w-4 h-4" /></div>
+              <span className="flex-1 text-sm truncate">{tl.item_name || tl.qr_id}</span>
+              <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]">зачислен</Badge>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
