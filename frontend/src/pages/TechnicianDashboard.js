@@ -33,6 +33,7 @@ export default function TechnicianDashboard() {
   const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
   const [sites, setSites] = useState([]);
   const [myTools, setMyTools] = useState([]);
+  const [todayInfo, setTodayInfo] = useState(null);  // { entry, reportsCount }
   const [openParents, setOpenParents] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedSite, setSelectedSite] = useState(null);
@@ -91,6 +92,12 @@ export default function TechnicianDashboard() {
   useEffect(() => {
     if (!user?.id) return;
     API.get(`/assets/units?location_type=employee&location_id=${user.id}&page_size=5`).then((r) => setMyTools(r.data?.items || [])).catch(() => {});
+    Promise.all([
+      API.get("/attendance/my-today").catch(() => ({ data: null })),
+      API.get("/work-reports/my-today").catch(() => ({ data: [] })),
+    ]).then(([att, rep]) => {
+      setTodayInfo({ entry: att.data?.entry || null, reportsCount: (rep.data || []).length });
+    }).catch(() => {});
   }, [user]);
 
   // M19.1 — Cross-report hours check when entering review
@@ -338,12 +345,22 @@ export default function TechnicianDashboard() {
         <Bell className="w-5 h-5 text-muted-foreground" />
       </div>
       <Button onClick={() => navigate("/tech/tools")} className="w-full h-12 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"><QrCode className="w-5 h-5" />Сканирай QR</Button>
-      <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-3">
-        <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center text-primary shrink-0"><Calendar className="w-5 h-5" /></div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold capitalize leading-tight">{new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long", year: "numeric" })}</p>
-          <p className="text-xs text-muted-foreground capitalize">{new Date().toLocaleDateString("bg-BG", { weekday: "long" })}</p>
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center text-primary shrink-0"><Calendar className="w-5 h-5" /></div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold capitalize leading-tight">{new Date().toLocaleDateString("bg-BG", { day: "numeric", month: "long", year: "numeric" })}</p>
+            <p className="text-xs text-muted-foreground capitalize">{new Date().toLocaleDateString("bg-BG", { weekday: "long" })}</p>
+          </div>
+          {todayInfo?.entry ? (
+            <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px] shrink-0">{todayInfo.entry.status === "Late" ? "Закъснял" : "На работа"}{todayInfo.entry.marked_at ? ` · ${todayInfo.entry.marked_at.slice(11, 16)}` : ""}</Badge>
+          ) : (
+            <Badge className="bg-amber-500/20 text-amber-400 text-[10px] shrink-0">Без присъствие</Badge>
+          )}
         </div>
+        <Button variant="outline" onClick={() => navigate("/my-day")} className="w-full h-10 mt-3 rounded-xl text-sm font-semibold">
+          {todayInfo && todayInfo.reportsCount > 0 ? `Отчети днес: ${todayInfo.reportsCount} · продължи` : "Попълни отчет"}
+        </Button>
       </div>
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Бързи действия</h2>
