@@ -108,6 +108,12 @@ function CompanyProtectedRoute({ children }) {
 
 // Admin-only route guard: redirects non-admin roles to /tech
 const ADMIN_ROLES = ["Admin", "Owner", "SiteManager", "Accountant"];
+
+function RoleLanding({ children }) {
+  const { user } = useAuth();
+  if (user && !ADMIN_ROLES.includes(user.role)) return <Navigate to="/tech" replace />;
+  return children;
+}
 function AdminRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
@@ -188,7 +194,7 @@ function AppRoutes() {
       <Route path="/offers/review/:reviewToken" element={<OfferReviewPage />} />
       
       {/* Routes accessible to ALL authenticated users (including Technician/Worker) */}
-      <Route path="/" element={<CompanyProtectedRoute><DashboardPage /></CompanyProtectedRoute>} />
+      <Route path="/" element={<CompanyProtectedRoute><RoleLanding><DashboardPage /></RoleLanding></CompanyProtectedRoute>} />
       <Route path="/projects" element={<CompanyProtectedRoute><ProjectsListPage /></CompanyProtectedRoute>} />
       <Route path="/projects/:projectId" element={<CompanyProtectedRoute><ProjectDetailPage /></CompanyProtectedRoute>} />
       <Route path="/sites" element={<Navigate to="/projects" replace />} />
