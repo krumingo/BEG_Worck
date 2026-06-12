@@ -37,6 +37,8 @@ export default function TechnicianDashboard() {
   const [openParents, setOpenParents] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedSite, setSelectedSite] = useState(null);
+  const [portalTab, setPortalTab] = useState("personal"); // personal | sites
+  const [siteMachines, setSiteMachines] = useState({}); // { project_id: [units] }
 
   // Roster
   const [roster, setRoster] = useState([]);
@@ -99,6 +101,18 @@ export default function TechnicianDashboard() {
       setTodayInfo({ entry: att.data?.entry || null, reportsCount: (rep.data || []).length });
     }).catch(() => {});
   }, [user]);
+
+  // Лично/Обекти Phase 1: машини по обект от съществуващия assets endpoint (page_size <= 500 cap)
+  useEffect(() => {
+    if (!sites.length) return;
+    let cancelled = false;
+    Promise.all(sites.map((st) =>
+      API.get(`/assets/units?location_type=project&location_id=${st.project_id}&page_size=50`)
+        .then((r) => [st.project_id, r.data?.items || []])
+        .catch(() => [st.project_id, []])
+    )).then((pairs) => { if (!cancelled) setSiteMachines(Object.fromEntries(pairs)); });
+    return () => { cancelled = true; };
+  }, [sites]);
 
   // M19.1 — Cross-report hours check when entering review
   // M19.8 B2 fix: exclude current project_id — its in-progress hours live in
@@ -344,6 +358,11 @@ export default function TechnicianDashboard() {
         </div>
         <Bell className="w-5 h-5 text-muted-foreground" />
       </div>
+      <div className="flex bg-muted rounded-xl p-1" data-testid="portal-tabs">
+        <button onClick={() => setPortalTab("personal")} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${portalTab === "personal" ? "bg-card border border-border" : "text-muted-foreground"}`}>Лично</button>
+        <button onClick={() => setPortalTab("sites")} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${portalTab === "sites" ? "bg-card border border-border" : "text-muted-foreground"}`}>Обекти</button>
+      </div>
+      {portalTab === "personal" && (<>
       <Button onClick={() => navigate("/tech/tools")} className="w-full h-12 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"><QrCode className="w-5 h-5" />Сканирай QR</Button>
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
@@ -373,6 +392,24 @@ export default function TechnicianDashboard() {
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><AlertTriangle className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Докладвай проблем</span></button>
         </div>
       </div>
+      {myTools.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Моите инструменти</h2>
+          {myTools.map((tl) => (
+            <div key={tl.id} className="rounded-2xl border border-border bg-card p-3 mb-2 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0"><Package className="w-4 h-4" /></div>
+              <span className="flex-1 text-sm truncate">{tl.item_name || tl.qr_id}</span>
+              <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]">зачислен</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={() => navigate("/attendance-history")} className="w-full rounded-2xl border border-border bg-card p-4 flex items-center justify-between active:scale-[0.98] transition-all" data-testid="history-link">
+        <div className="flex items-center gap-3"><Calendar className="w-5 h-5 text-muted-foreground" /><span className="text-sm font-semibold">История · работен календар</span></div>
+        <ChevronDown className="w-5 h-5 -rotate-90 text-muted-foreground" />
+      </button>
+      </>)}
+      {portalTab === "sites" && (<>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t("technician.mySites")}</h2>
       {sites.length === 0 ? <p className="text-center py-8 text-muted-foreground">{t("technician.noSites")}</p> : (() => {
         const byId = {};
@@ -402,6 +439,14 @@ export default function TechnicianDashboard() {
                 <span className="flex items-center gap-1"><Users className="w-3 h-3" />{s.today_workers}</span>
                 <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{s.today_hours}ч</span>
               </div>
+              {(siteMachines[s.project_id] || []).length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Машини на обекта · {(siteMachines[s.project_id] || []).length}</p>
+                  {(siteMachines[s.project_id] || []).slice(0, 4).map((m) => (
+                    <p key={m.id} className="text-xs text-muted-foreground truncate flex items-center gap-1"><Package className="w-3 h-3 shrink-0" />{m.item_name || m.qr_id}</p>
+                  ))}
+                </div>
+              )}
             </button>
           );
           const open = !!openParents[s.project_id];
@@ -435,18 +480,7 @@ export default function TechnicianDashboard() {
           );
         });
       })()}
-      {myTools.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Моите инструменти</h2>
-          {myTools.map((tl) => (
-            <div key={tl.id} className="rounded-2xl border border-border bg-card p-3 mb-2 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0"><Package className="w-4 h-4" /></div>
-              <span className="flex-1 text-sm truncate">{tl.item_name || tl.qr_id}</span>
-              <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]">зачислен</Badge>
-            </div>
-          ))}
-        </div>
-      )}
+      </>)}
     </div>
   );
 
