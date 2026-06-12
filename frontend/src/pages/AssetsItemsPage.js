@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Wrench } from "lucide-react";
+import { Plus, Pencil, Trash2, Wrench, Camera, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const TYPE_OPTIONS = [
@@ -52,6 +52,59 @@ export default function AssetsItemsPage() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiImage, setAiImage] = useState(null);        // { b64, preview }
+  const [aiPlate, setAiPlate] = useState(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiConsumables, setAiConsumables] = useState([]); // само показване (Пакет 2 ги записва)
+  const [aiPriceIsEstimate, setAiPriceIsEstimate] = useState(false);
+
+  const fileToB64 = (file) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1]);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const pickImage = async (e, setter) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const b64 = await fileToB64(f);
+    setter({ b64, preview: URL.createObjectURL(f) });
+  };
+
+  const runRecognition = async () => {
+    if (!aiImage) { toast.error("Първо снимай или качи снимка"); return; }
+    setAiBusy(true);
+    try {
+      const res = await API.post("/assets/ai-intake", {
+        image_base64: aiImage.b64,
+        plate_image_base64: aiPlate?.b64 || null,
+      });
+      const d = res.data;
+      const today = new Date().toISOString().split("T")[0];
+      setForm({
+        name: d.name || "", type: d.type || "tool", group: d.group || "",
+        brand: d.brand || "", model: d.model || "", article_no: d.serial_no || "",
+        unit: "бр",
+        purchase_price: d.estimated_price_eur ?? "",
+        purchase_currency: "EUR", purchase_date: today,
+        warranty_months: d.warranty_months ?? "",
+        activities: (d.activities || []).join(", "),
+      });
+      setAiPriceIsEstimate(d.estimated_price_eur != null);
+      setAiConsumables(d.consumables || []);
+      setEditingId(null);
+      setAiOpen(false);
+      setModalOpen(true);
+      if ((d.confidence ?? 0) < 50) toast.warning("AI не е сигурен — провери полетата внимателно");
+      else toast.success("Разпознато — провери и запиши");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Разпознаването не успя, опитай пак");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const fetchData = useCallback(async (params) => {
     const q = new URLSearchParams();
@@ -65,7 +118,7 @@ export default function AssetsItemsPage() {
     return res.data;
   }, []);
 
-  const openCreate = () => { setEditingId(null); setForm(EMPTY); setModalOpen(true); };
+  const openCreate = () => { setEditingId(null); setForm(EMPTY); setAiConsumables([]); setAiPriceIsEstimate(false); setModalOpen(true); };
 
   const openEdit = (row) => {
     setEditingId(row.id);
@@ -166,9 +219,14 @@ export default function AssetsItemsPage() {
           <h1 className="text-2xl font-bold" data-testid="asset-items-title">Артикули</h1>
           <p className="text-sm text-muted-foreground">Обща номенклатура</p>
         </div>
-        <Button onClick={openCreate} data-testid="create-asset-item-btn">
-          <Plus className="w-4 h-4 mr-2" /> Нов артикул
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setAiImage(null); setAiPlate(null); setAiOpen(true); }} data-testid="ai-intake-btn">
+            <Camera className="w-4 h-4 mr-2" /> Със снимка
+          </Button>
+          <Button onClick={openCreate} data-testid="create-asset-item-btn">
+            <Plus className="w-4 h-4 mr-2" /> Нов артикул
+          </Button>
+        </div>
       </div>
 
       <DataTable
@@ -246,9 +304,52 @@ export default function AssetsItemsPage() {
               <Input value={form.activities} onChange={(e) => setForm({ ...form, activities: e.target.value })} placeholder="Замазка, Бетон, Боя" />
             </div>
           </div>
+          {aiPriceIsEstimate && form.purchase_price !== "" && (
+            <p className="text-[11px] text-amber-400 -mt-1">Цената е примерна (AI оценка за нова) — замени я с реалната при покупка.</p>
+          )}
+          {aiConsumables.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/40 p-3 mt-1">
+              <p className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-amber-400" />Препоръчани консумативи</p>
+              <div className="flex flex-wrap gap-1.5">
+                {aiConsumables.map((c) => <Badge key={c} variant="outline" className="text-[11px]">{c}</Badge>)}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5">Записването им в склада идва с Пакет 2.</p>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Отказ</Button>
             <Button onClick={handleSave} disabled={saving} data-testid="ai-save">{saving ? "Запазва…" : "Запази"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI прием със снимка */}
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Добави със снимка</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Снимка на машината *</Label>
+              <label className="mt-1 flex flex-col items-center justify-center gap-2 border border-dashed border-border rounded-xl h-36 cursor-pointer overflow-hidden bg-muted/30">
+                {aiImage ? <img src={aiImage.preview} alt="" className="w-full h-full object-contain" /> : (<><Camera className="w-7 h-7 text-muted-foreground" /><span className="text-xs text-muted-foreground">Снимай или избери файл</span></>)}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => pickImage(e, setAiImage)} data-testid="ai-photo-input" />
+              </label>
+            </div>
+            <div>
+              <Label>Табелка със серийния номер (по желание)</Label>
+              <label className="mt-1 flex flex-col items-center justify-center gap-2 border border-dashed border-border rounded-xl h-24 cursor-pointer overflow-hidden bg-muted/30">
+                {aiPlate ? <img src={aiPlate.preview} alt="" className="w-full h-full object-contain" /> : (<><Camera className="w-5 h-5 text-muted-foreground" /><span className="text-xs text-muted-foreground">Снимай табелката</span></>)}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => pickImage(e, setAiPlate)} data-testid="ai-plate-input" />
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAiOpen(false)}>Отказ</Button>
+            <Button onClick={runRecognition} disabled={aiBusy || !aiImage} data-testid="ai-recognize-btn">
+              {aiBusy ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Разпознава…</> : <><Sparkles className="w-4 h-4 mr-2" />Разпознай</>}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
