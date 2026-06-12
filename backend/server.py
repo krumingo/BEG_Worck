@@ -339,6 +339,8 @@ api_router.include_router(assets_items_router)
 
 from app.routes.assets_units import router as assets_units_router
 api_router.include_router(assets_units_router)
+from app.routes.assets_custody import router as assets_custody_router
+api_router.include_router(assets_custody_router)
 
 # ── App Setup ────────────────────────────────────────────────────
 

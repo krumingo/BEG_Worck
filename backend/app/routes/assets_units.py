@@ -16,6 +16,7 @@ import re
 from app.db import db
 from app.deps.auth import get_current_user, require_admin
 from app.routes.assets_qr import _make_qr
+from app.routes.assets_custody import custody_after_move
 
 router = APIRouter(tags=["AssetUnits"])
 
@@ -250,6 +251,7 @@ async def move_unit(unit_id: str, data: MoveAction, user: dict = Depends(get_cur
         "at": datetime.now(timezone.utc).isoformat(),
     }
     await db.asset_movements.insert_one(mv)
+    await custody_after_move(org, unit_id, act, data.to_id, user)
     await db.asset_units.update_one(
         {"id": unit_id, "org_id": org},
         {"$set": {"location_type": to_type, "location_id": to_id, "status": status}},

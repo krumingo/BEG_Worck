@@ -39,6 +39,7 @@ export default function TechnicianDashboard() {
   const [selectedSite, setSelectedSite] = useState(null);
   const [portalTab, setPortalTab] = useState("personal"); // personal | sites
   const [siteMachines, setSiteMachines] = useState({}); // { project_id: [units] }
+  const [pendingCustody, setPendingCustody] = useState([]); // вещи, дадени на мен, чакащи приемане
 
   // Roster
   const [roster, setRoster] = useState([]);
@@ -113,6 +114,22 @@ export default function TechnicianDashboard() {
     )).then((pairs) => { if (!cancelled) setSiteMachines(Object.fromEntries(pairs)); });
     return () => { cancelled = true; };
   }, [sites]);
+
+  // B1: вещи, дадени на мен и чакащи "Приемам"
+  const loadPendingCustody = useCallback(() => {
+    API.get("/assets/custody/my-pending").then((r) => setPendingCustody(r.data?.items || [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadPendingCustody(); }, [loadPendingCustody]);
+
+  const actCustody = async (custodyId, action) => {
+    try {
+      await API.post(`/assets/custody/${custodyId}/${action}`);
+      toast.success(action === "accept" ? "Прието" : "Отказано");
+      loadPendingCustody();
+    } catch {
+      toast.error("Грешка, опитай пак");
+    }
+  };
 
   // M19.1 — Cross-report hours check when entering review
   // M19.8 B2 fix: exclude current project_id — its in-progress hours live in
@@ -363,6 +380,16 @@ export default function TechnicianDashboard() {
         <button onClick={() => setPortalTab("sites")} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${portalTab === "sites" ? "bg-card border border-border" : "text-muted-foreground"}`}>Обекти</button>
       </div>
       {portalTab === "personal" && (<>
+      {pendingCustody.map((pc) => (
+        <div key={pc.id} className="rounded-2xl border border-amber-500/60 bg-amber-500/10 p-4" data-testid={`custody-${pc.id}`}>
+          <p className="font-semibold text-sm flex items-center gap-2"><Package className="w-4 h-4 text-amber-400" />{pc.unit_name}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{pc.given_by_name} ти я дава{pc.note ? ` · ${pc.note}` : ""}</p>
+          <div className="flex gap-2 mt-3">
+            <Button onClick={() => actCustody(pc.id, "accept")} className="flex-1 h-9 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700"><Check className="w-4 h-4 mr-1" />Приемам</Button>
+            <Button variant="outline" onClick={() => actCustody(pc.id, "decline")} className="flex-1 h-9 rounded-xl text-sm">Отказвам</Button>
+          </div>
+        </div>
+      ))}
       <Button onClick={() => navigate("/tech/tools")} className="w-full h-12 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"><QrCode className="w-5 h-5" />Сканирай QR</Button>
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
