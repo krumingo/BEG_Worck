@@ -122,20 +122,17 @@ const WORKER_NAV = [
   { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
   { to: "/my-day", icon: CalendarCheck, labelKey: "nav.myDay" },
   { to: "/attendance-history", icon: CalendarDays, labelKey: "nav.history" },
-  { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
 ];
 
 // Mobile tabs (unchanged)
 const TECHNICIAN_TABS = [
   { to: "/my-day", icon: ClipboardList, labelKey: "nav.requests" },
   { to: "/review-reports", icon: CalendarCheck, labelKey: "nav.reports" },
-  { to: "/projects", icon: Package, labelKey: "nav.inventory" },
   { to: "/attendance-history", icon: RotateCcw, labelKey: "nav.returns" },
   { to: "/profile", icon: User, labelKey: "nav.profile" },
 ];
 const DRIVER_TABS = [
   { to: "/my-day", icon: Truck, labelKey: "nav.trips" },
-  { to: "/projects", icon: ClipboardList, labelKey: "nav.requests" },
   { to: "/attendance-history", icon: RotateCcw, labelKey: "nav.returns" },
   { to: "/profile", icon: User, labelKey: "nav.profile" },
 ];

@@ -195,8 +195,8 @@ function AppRoutes() {
       
       {/* Routes accessible to ALL authenticated users (including Technician/Worker) */}
       <Route path="/" element={<CompanyProtectedRoute><RoleLanding><DashboardPage /></RoleLanding></CompanyProtectedRoute>} />
-      <Route path="/projects" element={<CompanyProtectedRoute><ProjectsListPage /></CompanyProtectedRoute>} />
-      <Route path="/projects/:projectId" element={<CompanyProtectedRoute><ProjectDetailPage /></CompanyProtectedRoute>} />
+      <Route path="/projects" element={<AdminRoute><ProjectsListPage /></AdminRoute>} />
+      <Route path="/projects/:projectId" element={<AdminRoute><ProjectDetailPage /></AdminRoute>} />
       <Route path="/sites" element={<Navigate to="/projects" replace />} />
       <Route path="/sites/:siteId" element={<Navigate to="/projects" replace />} />
       <Route path="/my-day" element={<CompanyProtectedRoute><MyDayPage /></CompanyProtectedRoute>} />
