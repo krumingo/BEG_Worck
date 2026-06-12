@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
@@ -10,7 +10,9 @@ import {
   Clock,
   ThermometerSun,
   Palmtree,
-  CalendarDays,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   FileText,
 } from "lucide-react";
 
@@ -27,6 +29,14 @@ const STATUS_COLORS = {
   Vacation: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
 };
 
+const DOT_COLORS = {
+  Present: "bg-emerald-400",
+  Absent: "bg-red-400",
+  Late: "bg-amber-400",
+  SickLeave: "bg-orange-400",
+  Vacation: "bg-cyan-400",
+};
+
 const REPORT_COLORS = {
   Draft: "text-gray-400",
   Submitted: "text-blue-400",
@@ -34,124 +44,174 @@ const REPORT_COLORS = {
   Rejected: "text-red-400",
 };
 
+const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "нд"];
+
+const toDateStr = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 export default function AttendanceHistoryPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const today = new Date();
+  const [monthDate, setMonthDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [entries, setEntries] = useState([]);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(toDateStr(today));
 
-  const fetchHistory = useCallback(async () => {
+  const fetchMonth = useCallback(async () => {
+    setLoading(true);
     try {
+      const from = toDateStr(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1));
+      const to = toDateStr(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0));
       const [attRes, repRes] = await Promise.all([
-        API.get("/attendance/my-range"),
-        API.get("/work-reports/my-range"),
+        API.get(`/attendance/my-range?from_date=${from}&to_date=${to}`),
+        API.get(`/work-reports/my-range?from_date=${from}&to_date=${to}`),
       ]);
-      setEntries(attRes.data);
-      setReports(repRes.data);
+      setEntries(attRes.data || []);
+      setReports(repRes.data || []);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [monthDate]);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(() => { fetchMonth(); }, [fetchMonth]);
 
-  const days = [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().split("T")[0]);
-  }
+  const entryMap = useMemo(() => {
+    const m = {};
+    entries.forEach((e) => { m[e.date] = e; });
+    return m;
+  }, [entries]);
 
-  const entryMap = {};
-  entries.forEach((e) => { entryMap[e.date] = e; });
+  const reportsByDate = useMemo(() => {
+    const m = {};
+    reports.forEach((r) => {
+      if (!m[r.date]) m[r.date] = [];
+      m[r.date].push(r);
+    });
+    return m;
+  }, [reports]);
 
-  const reportsByDate = {};
-  reports.forEach((r) => {
-    if (!reportsByDate[r.date]) reportsByDate[r.date] = [];
-    reportsByDate[r.date].push(r);
-  });
+  const presentCount = entries.filter((e) => e.status === "Present" || e.status === "Late").length;
+  const totalHours = reports.reduce((sum, r) => sum + (r.total_hours || 0), 0);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const changeMonth = (delta) => {
+    const next = new Date(monthDate.getFullYear(), monthDate.getMonth() + delta, 1);
+    setMonthDate(next);
+    setSelectedDate(null);
+  };
+
+  // Календарна мрежа: седмицата започва от понеделник
+  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const leadingBlanks = (new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay() + 6) % 7;
+  const todayStr = toDateStr(today);
+  const monthLabel = formatDate(monthDate, { month: "long", year: "numeric" });
+
+  const selEntry = selectedDate ? entryMap[selectedDate] : null;
+  const selReports = selectedDate ? (reportsByDate[selectedDate] || []) : [];
+  const SelIcon = selEntry ? (STATUS_ICONS[selEntry.status] || CheckCircle2) : null;
 
   return (
-    <div className="p-6 max-w-[580px] mx-auto" data-testid="attendance-history-page">
-      <div className="flex items-center gap-2 mb-6">
-        <CalendarDays className="w-5 h-5 text-primary" />
-        <h1 className="text-xl font-bold text-foreground">{t("attendance.history")}</h1>
+    <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="attendance-history-page">
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl border border-border bg-card flex items-center justify-center active:scale-95 transition-all" data-testid="history-back">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <h1 className="text-lg font-bold text-foreground">{t("attendance.history")}</h1>
       </div>
-      <p className="text-sm text-muted-foreground mb-6">{t("attendance.last14Days")}</p>
 
-      <div className="space-y-2" data-testid="history-list">
-        {days.map((dateStr) => {
-          const entry = entryMap[dateStr];
-          const dayReports = reportsByDate[dateStr] || [];
-          const d = new Date(dateStr + "T12:00:00");
-          const dayName = formatDate(d, i18n.language, { weekday: "short" });
-          const dayNum = d.getDate();
-          const month = formatDate(d, i18n.language, { month: "short" });
-          const isToday = dateStr === new Date().toISOString().split("T")[0];
-          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          const Icon = entry ? (STATUS_ICONS[entry.status] || CheckCircle2) : null;
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between mb-1">
+          <button onClick={() => changeMonth(-1)} className="w-8 h-8 rounded-lg border border-border flex items-center justify-center active:scale-95 transition-all" data-testid="month-prev">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="font-semibold capitalize">{monthLabel}</span>
+          <button onClick={() => changeMonth(1)} className="w-8 h-8 rounded-lg border border-border flex items-center justify-center active:scale-95 transition-all" data-testid="month-next">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-center text-[11px] text-muted-foreground mb-3">{presentCount} присъствия · {totalHours}ч · {reports.length} отчета</p>
 
-          return (
-            <div
-              key={dateStr}
-              className={`flex items-center gap-4 p-3 rounded-lg border transition-colors ${
-                isToday ? "border-primary/40 bg-primary/5" : "border-border bg-card"
-              } ${isWeekend && !entry ? "opacity-50" : ""}`}
-              data-testid={`history-${dateStr}`}
-            >
-              <div className="w-14 text-center flex-shrink-0">
-                <p className="text-xs text-muted-foreground">{dayName}</p>
-                <p className="text-lg font-bold text-foreground">{dayNum}</p>
-                <p className="text-[10px] text-muted-foreground">{month}</p>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                {entry ? (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Icon className={`w-4 h-4 ${STATUS_COLORS[entry.status]?.split(" ")[1] || "text-muted-foreground"}`} />
-                    <Badge variant="outline" className={`text-xs ${STATUS_COLORS[entry.status] || ""}`}>{t(`attendance.statusLabels.${entry.status.toLowerCase()}`, entry.status)}</Badge>
-                    {dayReports.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => navigate(`/work-reports/${r.id}`)}
-                        className="flex items-center gap-1 text-xs hover:underline"
-                      >
-                        <FileText className={`w-3 h-3 ${REPORT_COLORS[r.status] || ""}`} />
-                        <span className={REPORT_COLORS[r.status]}>{t(`workReports.status.${r.status.toLowerCase()}`)}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    {isWeekend ? t("attendance.weekend") : isToday ? t("attendance.notMarkedYet") : t("attendance.noRecord")}
-                  </span>
-                )}
-              </div>
-
-              {entry && (
-                <span className="text-[11px] text-muted-foreground flex-shrink-0">
-                  {formatTime(entry.marked_at, i18n.language)}
-                </span>
-              )}
-
-              {isToday && (
-                <Badge variant="default" className="text-[10px] px-1.5 py-0 flex-shrink-0">{t("common.today")}</Badge>
-              )}
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {WEEKDAYS.map((w) => (
+                <span key={w} className="text-center text-[10px] text-muted-foreground">{w}</span>
+              ))}
             </div>
-          );
-        })}
+            <div className="grid grid-cols-7 gap-1" data-testid="calendar-grid">
+              {Array.from({ length: leadingBlanks }).map((_, i) => (
+                <div key={`b${i}`} className="h-10" />
+              ))}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const dayNum = i + 1;
+                const dateStr = toDateStr(new Date(monthDate.getFullYear(), monthDate.getMonth(), dayNum));
+                const entry = entryMap[dateStr];
+                const hasReports = (reportsByDate[dateStr] || []).length > 0;
+                const isToday = dateStr === todayStr;
+                const isSelected = dateStr === selectedDate;
+                const isFuture = dateStr > todayStr;
+                const dot = entry ? DOT_COLORS[entry.status] : (hasReports ? "bg-blue-400" : null);
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => setSelectedDate(dateStr)}
+                    className={`h-10 rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 ${
+                      isSelected ? "border-primary bg-primary/10" : isToday ? "border-amber-500/60 bg-amber-500/10" : "border-border"
+                    } ${isFuture || (!entry && !hasReports && !isToday) ? "opacity-40" : ""}`}
+                    data-testid={`cal-${dateStr}`}
+                  >
+                    <span className={`text-xs leading-none ${isToday ? "font-bold" : ""}`}>{dayNum}</span>
+                    {dot ? <span className={`w-1.5 h-1.5 rounded-full ${dot}`} /> : isToday ? <span className="text-[8px] text-amber-400 leading-none">днес</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-center gap-3 mt-3 text-[10px] text-muted-foreground flex-wrap">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />присъства</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />закъснял</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />отсъства</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400" />отчет</span>
+            </div>
+          </>
+        )}
       </div>
+
+      {selectedDate && !loading && (
+        <div className="rounded-2xl border border-border bg-card p-4" data-testid="day-detail">
+          <p className="font-semibold text-sm capitalize mb-2">{formatDate(new Date(selectedDate + "T12:00:00"), { weekday: "long", day: "numeric", month: "long" })}</p>
+          {selEntry ? (
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <SelIcon className={`w-4 h-4 ${STATUS_COLORS[selEntry.status]?.split(" ")[1] || "text-muted-foreground"}`} />
+              <Badge variant="outline" className={`text-xs ${STATUS_COLORS[selEntry.status] || ""}`}>{t(`attendance.statusLabels.${selEntry.status.toLowerCase()}`, selEntry.status)}</Badge>
+              {selEntry.marked_at && <span className="text-[11px] text-muted-foreground">{formatTime(selEntry.marked_at)}</span>}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mb-2">{selectedDate === todayStr ? t("attendance.notMarkedYet") : t("attendance.noRecord")}</p>
+          )}
+          {selReports.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => navigate(`/work-reports/${r.id}`)}
+              className="flex items-center gap-2 text-xs hover:underline py-0.5"
+            >
+              <FileText className={`w-3.5 h-3.5 ${REPORT_COLORS[r.status] || ""}`} />
+              <span className={REPORT_COLORS[r.status]}>{t(`workReports.status.${r.status.toLowerCase()}`)}</span>
+              {r.total_hours ? <span className="text-muted-foreground">· {r.total_hours}ч</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
