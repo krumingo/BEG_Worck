@@ -40,6 +40,7 @@ export default function TechnicianDashboard() {
   const [portalTab, setPortalTab] = useState("personal"); // personal | sites
   const [siteMachines, setSiteMachines] = useState({}); // { project_id: [units] }
   const [pendingCustody, setPendingCustody] = useState([]); // вещи, дадени на мен, чакащи приемане
+  const [canIntake, setCanIntake] = useState(false);
 
   // Roster
   const [roster, setRoster] = useState([]);
@@ -120,6 +121,7 @@ export default function TechnicianDashboard() {
     API.get("/assets/custody/my-pending").then((r) => setPendingCustody(r.data?.items || [])).catch(() => {});
   }, []);
   useEffect(() => { loadPendingCustody(); }, [loadPendingCustody]);
+  useEffect(() => { API.get("/assets/intake/can-submit").then((r) => setCanIntake(!!r.data?.allowed)).catch(() => {}); }, []);
 
   const actCustody = async (custodyId, action) => {
     try {
@@ -414,6 +416,7 @@ export default function TechnicianDashboard() {
           <button onClick={() => sites.length === 1 ? openObject(sites[0]) : toast.info("Избери обект по-долу")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Users className="w-5 h-5 text-violet-400" /><span className="text-[10px] text-center leading-tight">Отчети персонал</span></button>
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><FileText className="w-5 h-5 text-blue-400" /><span className="text-[10px] text-center leading-tight">Сканирай фактура</span></button>
           <button onClick={() => navigate("/tech/tools")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Package className="w-5 h-5 text-emerald-400" /><span className="text-[10px] text-center leading-tight">Вземи/Дай инструмент</span></button>
+          {canIntake && (<button onClick={() => navigate("/assets/batch-intake")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all" data-testid="qa-batch-intake"><Camera className="w-5 h-5 text-amber-400" /><span className="text-[10px] text-center leading-tight">Заскладяване</span></button>)}
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Truck className="w-5 h-5 text-amber-400" /><span className="text-[10px] text-center leading-tight">Заявка за курс</span></button>
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Trash2 className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Извозване отпадък</span></button>
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><AlertTriangle className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Докладвай проблем</span></button>

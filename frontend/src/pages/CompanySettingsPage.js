@@ -16,6 +16,8 @@ export default function CompanySettingsPage() {
   const [sub, setSub] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [intakeRoles, setIntakeRoles] = useState({ technician: false, site_manager: false });
+  const [intakeSaving, setIntakeSaving] = useState(false);
   
   // Invoice numbering state
   const [invoiceSettings, setInvoiceSettings] = useState(null);
@@ -127,6 +129,17 @@ export default function CompanySettingsPage() {
       ...prev,
       [key]: { ...prev[key], [field]: parseFloat(value) || 0 },
     }));
+  };
+
+  useEffect(() => {
+    API.get("/settings/asset-intake-roles").then((r) => setIntakeRoles(r.data)).catch(() => {});
+  }, []);
+
+  const saveIntakeRoles = async (next) => {
+    setIntakeRoles(next);
+    setIntakeSaving(true);
+    try { await API.put("/settings/asset-intake-roles", next); } catch { /* ignore */ }
+    finally { setIntakeSaving(false); }
   };
 
   return (
@@ -429,6 +442,19 @@ export default function CompanySettingsPage() {
           </div>
         </div>
       )}
+
+      <div className="rounded-xl border border-border bg-card p-4 mt-4">
+        <h3 className="font-semibold mb-1 flex items-center gap-2"><Building2 className="w-4 h-4" />Заскладяване на активи</h3>
+        <p className="text-sm text-muted-foreground mb-3">Кой може да снима и заскладява активи (минава през твоето одобрение). Изключи, когато архивът е готов.</p>
+        <div className="flex items-center justify-between py-2 border-b border-border">
+          <span className="text-sm">Техник може да заскладява</span>
+          <Switch checked={intakeRoles.technician} disabled={intakeSaving} onCheckedChange={(v) => saveIntakeRoles({ ...intakeRoles, technician: v })} data-testid="intake-tech-toggle" />
+        </div>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">Site Manager може да заскладява</span>
+          <Switch checked={intakeRoles.site_manager} disabled={intakeSaving} onCheckedChange={(v) => saveIntakeRoles({ ...intakeRoles, site_manager: v })} data-testid="intake-sm-toggle" />
+        </div>
+      </div>
     </div>
   );
 }

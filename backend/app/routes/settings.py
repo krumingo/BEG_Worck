@@ -74,3 +74,27 @@ async def update_payroll_week(
         "first_day": payroll_week["first_day"],
         "updated_at": payroll_week["updated_at"],
     }
+
+
+# ── Asset intake roles (кой може да заскладява) ───────────────────
+class AssetIntakeRoles(BaseModel):
+    technician: bool = False
+    site_manager: bool = False
+
+
+@router.get("/settings/asset-intake-roles")
+async def get_asset_intake_roles(user: dict = Depends(get_current_user)):
+    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "asset_intake_roles": 1})
+    roles = (org or {}).get("asset_intake_roles") or {}
+    return {"technician": bool(roles.get("technician")), "site_manager": bool(roles.get("site_manager"))}
+
+
+@router.put("/settings/asset-intake-roles")
+async def update_asset_intake_roles(data: AssetIntakeRoles, user: dict = Depends(get_current_user)):
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner can change this")
+    await db.organizations.update_one(
+        {"id": user["org_id"]},
+        {"$set": {"asset_intake_roles": {"technician": data.technician, "site_manager": data.site_manager}}},
+    )
+    return {"technician": data.technician, "site_manager": data.site_manager}
