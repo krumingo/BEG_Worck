@@ -9,9 +9,9 @@ import { toast } from "sonner";
 import { Camera, Sparkles, Loader2, Check, MapPin, ArrowLeft, X, Package, Printer, Warehouse, Building2, User, AlertCircle } from "lucide-react";
 
 const LOC_TYPES = [
-  { key: "warehouse", label: "Склад", icon: Warehouse, endpoint: "/warehouses?page_size=200&active_only=false" },
-  { key: "project", label: "Обект", icon: Building2, endpoint: "/projects?page_size=200" },
-  { key: "employee", label: "Човек", icon: User, endpoint: "/employees?page_size=500" },
+  { key: "warehouse", label: "Склад", icon: Warehouse },
+  { key: "project", label: "Обект", icon: Building2 },
+  { key: "employee", label: "Човек", icon: User },
 ];
 
 // Свиване на снимка през canvas. plate=true → по-висока резолюция за серийния номер.
@@ -56,12 +56,16 @@ export default function AssetsBatchIntakePage() {
   const [qrSvg, setQrSvg] = useState("");
 
   const loadLocations = useCallback((type) => {
-    const cfg = LOC_TYPES.find((l) => l.key === type);
-    API.get(cfg.endpoint).then((r) => {
-      const items = r.data?.items || r.data || [];
-      const mapped = items.map((x) => ({ id: x.id, name: x.name || `${x.first_name || ""} ${x.last_name || ""}`.trim() || x.email || x.id }));
-      // за "Човек" добавяме Гост най-отгоре
-      setLocOptions(type === "employee" ? [{ id: "__guest__", name: "Гост (външен)" }, ...mapped] : mapped);
+    API.get(`/assets/intake/locations?type=${type}`).then((r) => {
+      const items = r.data?.items || [];
+      const roleLabels = { Admin: "Админ", Owner: "Собственик", SiteManager: "Site Manager", Accountant: "Счетоводител", Technician: "Техник", Worker: "Работник", Warehousekeeper: "Складар", Driver: "Шофьор" };
+      const mapped = items.map((x) => ({
+        id: x.id,
+        name: x.name || x.id,
+        avatar: x.avatar_url || null,
+        role: roleLabels[x.role] || x.role || "",
+      }));
+      setLocOptions(type === "employee" ? [{ id: "__guest__", name: "Гост (външен)", role: "външен" }, ...mapped] : mapped);
     }).catch(() => setLocOptions([]));
   }, []);
 
@@ -155,10 +159,22 @@ export default function AssetsBatchIntakePage() {
         </div>
         <div>
           <Label className="text-sm">Избери {cfg?.label.toLowerCase()}</Label>
-          <select value={locId} onChange={(e) => { setLocId(e.target.value); setLocName(e.target.options[e.target.selectedIndex].text); }} className="mt-1.5 w-full h-12 rounded-xl border border-border bg-card px-3 text-base" data-testid="batch-loc-select">
-            <option value="">— избери —</option>
-            {locOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          {locType === "employee" ? (
+            <div className="mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-border divide-y divide-border" data-testid="batch-people-list">
+              {locOptions.map((o) => (
+                <button key={o.id} onClick={() => { setLocId(o.id); setLocName(o.name); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${locId === o.id ? "bg-primary/10" : "hover:bg-muted/40"}`}>
+                  {o.avatar ? <img src={o.avatar} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" /> : <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">{o.name.slice(0, 2).toUpperCase()}</div>}
+                  <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{o.name}</p>{o.role && <p className="text-[11px] text-muted-foreground">{o.role}</p>}</div>
+                  {locId === o.id && <Check className="w-4 h-4 text-primary shrink-0" />}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <select value={locId} onChange={(e) => { setLocId(e.target.value); setLocName(e.target.options[e.target.selectedIndex].text); }} className="mt-1.5 w-full h-12 rounded-xl border border-border bg-card px-3 text-base" data-testid="batch-loc-select">
+              <option value="">— избери —</option>
+              {locOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          )}
         </div>
         <Button disabled={!locId} onClick={() => setStep("scan")} className="w-full h-12 text-base" data-testid="batch-start">
           <Camera className="w-5 h-5 mr-2" />Почни снимане

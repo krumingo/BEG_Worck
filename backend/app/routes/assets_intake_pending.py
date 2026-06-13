@@ -182,6 +182,34 @@ async def approve_bulk(data: BulkApprove, user: dict = Depends(require_admin)):
     return {"approved": done, "failed": failed}
 
 
+@router.get("/assets/intake/locations")
+async def intake_locations(type: str, user: dict = Depends(get_current_user)):
+    """Леки списъци за избор на локация при заскладяване. Достъпно за всеки с право да заскладява.
+    type: warehouse | project | employee"""
+    if not await _can_submit(user):
+        raise HTTPException(status_code=403, detail="Нямате право да заскладявате")
+    org = user["org_id"]
+    if type == "warehouse":
+        rows = await db.warehouses.find({"org_id": org}, {"_id": 0, "id": 1, "name": 1}).to_list(300)
+        return {"items": [{"id": w["id"], "name": w.get("name") or w["id"]} for w in rows]}
+    if type == "project":
+        rows = await db.projects.find(
+            {"org_id": org, "status": {"$in": ["Active", "Draft"]}},
+            {"_id": 0, "id": 1, "name": 1, "code": 1},
+        ).to_list(500)
+        return {"items": [{"id": p["id"], "name": p.get("name") or p.get("code") or p["id"]} for p in rows]}
+    if type == "employee":
+        rows = await db.users.find(
+            {"org_id": org}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "name": 1, "email": 1, "role": 1, "avatar_url": 1}
+        ).to_list(500)
+        items = []
+        for u in rows:
+            nm = u.get("name") or f"{u.get('first_name','')} {u.get('last_name','')}".strip() or u.get("email") or u["id"]
+            items.append({"id": u["id"], "name": nm, "role": u.get("role"), "avatar_url": u.get("avatar_url")})
+        return {"items": items}
+    raise HTTPException(status_code=400, detail="Invalid type")
+
+
 @router.post("/assets/intake/{intake_id}/reject")
 async def reject_intake(intake_id: str, user: dict = Depends(require_admin)):
     org = user["org_id"]
