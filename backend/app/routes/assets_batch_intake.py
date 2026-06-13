@@ -25,14 +25,21 @@ MAX_IMG = 8_000_000
 MAX_IMAGES = 4
 
 SYSTEM_PROMPT = """Ти си експерт по строителна техника, инструменти и оборудване в България.
-Получаваш една или няколко снимки на ЕДНА И СЪЩА вещ от различни ъгли (понякога и табелка).
+Получаваш една или няколко снимки на ЕДНА И СЪЩА вещ от различни ъгли. Една от снимките често е КРУПЕН КАДЪР НА ТАБЕЛКАТА/ЕТИКЕТА — разгледай я най-внимателно.
+
+ВАЖНО за разчитане на текст:
+- Прочети ВСИЧКИ надписи по табелката: марка, модел, сериен номер (Serial/SN/S/N/№), артикулен/каталожен номер (Art./IAN/Type/Model No.), мощност, година.
+- Серийният номер често е до баркод или след "SN", "S/N", "Serial". IAN е каталожен номер при Parkside/Lidl. Ако виждаш цифри/код на табелката — върни ги, не подминавай.
+- Ако текст е частично четим, върни най-доброто прочитане, не null.
+
 Върни САМО валиден JSON без markdown:
 {
-  "name": "кратко българско име, напр. Чук",
+  "name": "кратко българско име, напр. Ъглошлайф",
   "type_label": "тип на български: Машина / Ръчен инструмент / Оборудване / друг подходящ",
   "group": "група за филтриране",
   "brand": "марка или null",
-  "model": "модел или null",
+  "model": "модел/тип от табелката или null",
+  "article_no": "артикулен/каталожен № (IAN/Art/Type) или null",
   "serial_no": "сериен номер от табелка или null",
   "estimated_price_eur": число или null,
   "warranty_months": число или null,
@@ -87,8 +94,10 @@ async def _match_existing_item(org_id: str, name: str, brand: Optional[str], mod
 
 @router.post("/assets/batch-intake/recognize")
 async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_user)):
-    if user.get("role") not in ADMIN_ROLES:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Достъпно за всеки с право да заскладява (не само админ) — техникът също разпознава
+    from app.routes.assets_intake_pending import _can_submit
+    if not await _can_submit(user):
+        raise HTTPException(status_code=403, detail="Нямате право да заскладявате")
     imgs = [i for i in (data.images_base64 or []) if i and len(i) > 100]
     if not imgs:
         raise HTTPException(status_code=400, detail="At least one image required")
@@ -107,11 +116,12 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
         api_key=api_key,
         session_id=f"batch-intake-{uuid.uuid4().hex[:8]}",
         system_message=SYSTEM_PROMPT,
-    ).with_model("openai", "gpt-4.1-mini")
+    ).with_model("openai", "gpt-4.1")
 
     try:
         resp = await chat.send_message(UserMessage(
-            text="Разпознай вещта от снимките и върни JSON.",
+            text=("Разпознай вещта от снимките. Ако последната снимка е едър кадър на табелка/етикет, "
+                  "извлечи от нея серийния номер, модела и артикулния номер. Върни JSON."),
             file_contents=[ImageContent(image_base64=b) for b in imgs],
         ))
         parsed = json.loads(_strip(str(resp)))
@@ -145,6 +155,7 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
         "group": (parsed.get("group") or None),
         "brand": brand,
         "model": model,
+        "article_no": (parsed.get("article_no") or None),
         "serial_no": (parsed.get("serial_no") or None),
         "estimated_price_eur": _num(parsed.get("estimated_price_eur")),
         "warranty_months": int(_num(parsed.get("warranty_months")) or 0) or None,

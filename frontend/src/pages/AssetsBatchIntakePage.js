@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Camera, Sparkles, Loader2, Check, MapPin, ArrowLeft, X, Package, Printer, Warehouse, Building2, User, AlertCircle } from "lucide-react";
+import { Camera, Sparkles, Loader2, Check, MapPin, ArrowLeft, X, Package, Printer, Warehouse, Building2, User, AlertCircle, Tag, Coins, CameraIcon } from "lucide-react";
 
 const LOC_TYPES = [
   { key: "warehouse", label: "Склад", icon: Warehouse },
@@ -124,6 +124,7 @@ export default function AssetsBatchIntakePage() {
         suggestion: {
           name: s.name.trim(), type_label: s.type_label || null, type_key: s.type_key || null,
           group: s.group || null, brand: s.brand || null, model: s.model || null,
+          article_no: s.article_no || null,
           serial_no: s.serial_no || null, estimated_price_eur: s.estimated_price_eur ?? null,
           warranty_months: s.warranty_months ?? null, activities: s.activities || [],
         },
@@ -206,19 +207,19 @@ export default function AssetsBatchIntakePage() {
         {!result ? (
           <>
             <div>
-              <Label className="text-sm font-semibold">Снимки на вещта</Label>
-              <p className="text-xs text-muted-foreground mb-2">Няколко кадъра помагат (макс. 4).</p>
+              <p className="text-base font-semibold">Снимки на вещта</p>
+              <p className="text-sm text-muted-foreground mb-3">Няколко кадъра помагат на разпознаването (макс. 4).</p>
               <div className="grid grid-cols-4 gap-2">
                 {images.map((img, i) => (
-                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-border">
+                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-border">
                     <img src={img.preview} alt="" className="w-full h-full object-cover" />
                     <button onClick={() => setImages((p) => p.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white" /></button>
                   </div>
                 ))}
                 {images.length < 4 && (
-                  <label className="aspect-square rounded-xl border border-dashed border-border flex flex-col items-center justify-center cursor-pointer bg-muted/30">
-                    <Camera className="w-6 h-6 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground mt-1">снимка</span>
+                  <label className="aspect-square rounded-lg border border-dashed border-muted-foreground/40 flex flex-col items-center justify-center cursor-pointer bg-muted/30 gap-1">
+                    <Camera className="w-6 h-6 text-primary" />
+                    <span className="text-[10px] text-muted-foreground">снимка</span>
                     <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => addImages(e, false)} data-testid="batch-photo-input" />
                   </label>
                 )}
@@ -226,10 +227,13 @@ export default function AssetsBatchIntakePage() {
             </div>
 
             <div>
-              <Label className="text-sm font-semibold">Табелка със серийния номер</Label>
-              <p className="text-xs text-muted-foreground mb-2">По желание — снима се в по-високо качество за четим номер.</p>
-              <label className="flex items-center justify-center gap-2 h-20 rounded-xl border border-dashed border-border cursor-pointer bg-muted/30 overflow-hidden">
-                {plateImg ? <img src={plateImg.preview} alt="" className="h-full object-contain" /> : <><Camera className="w-5 h-5 text-muted-foreground" /><span className="text-xs text-muted-foreground">снимай табелка</span></>}
+              <div className="flex items-center gap-2 mb-1">
+                <Tag className="w-4 h-4 text-primary" />
+                <p className="text-base font-semibold">Табелка със серийния номер</p>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2 pl-6">По желание — снима се в по-високо качество за четим номер.</p>
+              <label className="flex items-center justify-center gap-2 h-24 rounded-lg border border-dashed border-muted-foreground/40 cursor-pointer bg-muted/30 overflow-hidden">
+                {plateImg ? <img src={plateImg.preview} alt="" className="h-full object-contain" /> : <><Camera className="w-5 h-5 text-primary" /><span className="text-sm text-muted-foreground">снимай табелка</span></>}
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => addImages(e, true)} data-testid="batch-plate-input" />
               </label>
             </div>
@@ -240,7 +244,7 @@ export default function AssetsBatchIntakePage() {
               </div>
             )}
 
-            <Button disabled={busy || (!images.length && !plateImg)} onClick={recognize} className="w-full h-12 text-base" data-testid="batch-recognize">
+            <Button disabled={busy || (!images.length && !plateImg)} onClick={recognize} className="w-full h-14 text-lg" data-testid="batch-recognize">
               {busy ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Разпознава…</> : <><Sparkles className="w-5 h-5 mr-2" />Разпознай</>}
             </Button>
           </>
@@ -258,21 +262,32 @@ export default function AssetsBatchIntakePage() {
                 <Sparkles className="w-4 h-4 inline mr-1" />Нов тип „{s.type_label}" — ще се създаде при запис.
               </div>
             )}
-            <div><Label className="text-xs">Име</Label><Input value={s.name} onChange={(e) => editField("name", e.target.value)} className="h-10" /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">Марка</Label><Input value={s.brand || ""} onChange={(e) => editField("brand", e.target.value)} className="h-10" /></div>
-              <div><Label className="text-xs">Модел</Label><Input value={s.model || ""} onChange={(e) => editField("model", e.target.value)} className="h-10" /></div>
+            <div><Label className="text-sm text-muted-foreground">Име</Label><Input value={s.name} onChange={(e) => editField("name", e.target.value)} className="h-12 text-base mt-1" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-sm text-muted-foreground">Марка</Label><Input value={s.brand || ""} onChange={(e) => editField("brand", e.target.value)} className="h-12 text-base mt-1" /></div>
+              <div><Label className="text-sm text-muted-foreground">Модел</Label><Input value={s.model || ""} onChange={(e) => editField("model", e.target.value)} className="h-12 text-base mt-1" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">Тип</Label><Input value={s.type_label || ""} onChange={(e) => editField("type_label", e.target.value)} className="h-10" /></div>
-              <div><Label className="text-xs">Сериен №</Label><Input value={s.serial_no || ""} onChange={(e) => editField("serial_no", e.target.value)} className="h-10" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-sm text-muted-foreground">Артикулен №</Label><Input value={s.article_no || ""} onChange={(e) => editField("article_no", e.target.value)} className="h-12 text-base mt-1" /></div>
+              <div><Label className="text-sm text-muted-foreground">Сериен №</Label><Input value={s.serial_no || ""} onChange={(e) => editField("serial_no", e.target.value)} className="h-12 text-base mt-1" /></div>
             </div>
-            {s.estimated_price_eur != null && <p className="text-xs text-amber-400">Примерна цена: {s.estimated_price_eur} EUR (AI оценка — замени с реалната).</p>}
-            {s.activities?.length > 0 && <div className="flex flex-wrap gap-1">{s.activities.map((a) => <Badge key={a} variant="outline" className="text-[10px]">{a}</Badge>)}</div>}
-            <div className="flex gap-2 pt-1">
-              <Button variant="outline" onClick={() => setResult(null)} className="flex-1 h-11">Отмени</Button>
-              <Button disabled={saving} onClick={saveAndNext} className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700" data-testid="batch-save-next">
-                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5 mr-1" />Запиши</>}
+            <div><Label className="text-sm text-muted-foreground">Тип</Label><Input value={s.type_label || ""} onChange={(e) => editField("type_label", e.target.value)} className="h-12 text-base mt-1" /></div>
+            {s.estimated_price_eur != null && (
+              <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5">
+                <Coins className="w-5 h-5 text-amber-400 shrink-0" />
+                <span className="text-sm text-amber-300">Примерна цена: <b>{s.estimated_price_eur} EUR</b> · замени с реалната</span>
+              </div>
+            )}
+            {s.activities?.length > 0 && (
+              <div>
+                <Label className="text-sm text-muted-foreground">Дейности</Label>
+                <div className="flex flex-wrap gap-2 mt-1.5">{s.activities.map((a) => <Badge key={a} variant="outline" className="text-xs py-1 px-2.5">{a}</Badge>)}</div>
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={() => setResult(null)} className="flex-1 h-12 text-base">Отмени</Button>
+              <Button disabled={saving} onClick={saveAndNext} className="flex-1 h-12 text-base bg-emerald-600 hover:bg-emerald-700" data-testid="batch-save-next">
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5 mr-1.5" />Запиши</>}
               </Button>
             </div>
           </div>

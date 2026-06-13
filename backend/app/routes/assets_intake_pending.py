@@ -116,7 +116,7 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
         await db.asset_items.insert_one({
             "id": item_id, "org_id": org, "name": (s.get("name") or "").strip() or "Без име",
             "type": type_key, "group": s.get("group"), "brand": s.get("brand"), "model": s.get("model"),
-            "article_no": None, "unit": "бр",
+            "article_no": s.get("article_no"), "unit": "бр",
             "purchase_price": s.get("estimated_price_eur"), "purchase_currency": "EUR",
             "purchase_date": datetime.now(timezone.utc).date().isoformat(),
             "warranty_months": s.get("warranty_months"), "activities": s.get("activities") or [],
