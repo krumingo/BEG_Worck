@@ -4,7 +4,7 @@ import { useActiveProject } from "@/contexts/ProjectContext";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  LayoutDashboard, Users, Building2, Blocks, ScrollText, LogOut,
+  LayoutDashboard, Users, Building2, Blocks, ScrollText, LogOut, KeyRound,
   ChevronRight, ChevronDown, HardHat, FolderKanban, CalendarCheck,
   CalendarDays, ClipboardList, Bell, FileText, Layers, Receipt,
   Wallet, UserCog, Landmark, Calculator, CreditCard, Smartphone,
@@ -347,29 +347,29 @@ export default function DashboardLayout({ children }) {
           <NotificationBell />
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild><Button variant="ghost" size="icon" data-testid="mobile-menu-toggle"><Menu className="w-5 h-5" /></Button></SheetTrigger>
-            <SheetContent side="right" className="w-[280px] p-0">
+            <SheetContent side="right" className="w-[280px] p-0 flex flex-col">
               <div className="p-4 border-b border-border flex items-center justify-between">
                 <span className="font-semibold">{t("nav.menu")}</span>
                 <SheetClose asChild><Button variant="ghost" size="icon"><X className="w-4 h-4" /></Button></SheetClose>
               </div>
-              <nav className="p-2 space-y-1 overflow-y-auto max-h-[calc(100vh-120px)]">
+              <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto" data-testid="mobile-menu-nav">
                 {isAdmin ? getGroups().map(g => {
                   if (g.standalone) {
                     return (
                       <SheetClose asChild key={g.id}>
-                        <NavLink to={g.to} end={g.to === "/"} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-                          <g.icon className="w-4 h-4" /><span>{t(g.labelKey)}</span>
+                        <NavLink to={g.to} end={g.to === "/"} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
+                          <g.icon className="w-4 h-4 shrink-0" /><span className="truncate">{t(g.labelKey)}</span>
                         </NavLink>
                       </SheetClose>
                     );
                   }
                   return (
-                    <div key={g.id}>
-                      <p className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold mt-2">{t(g.labelKey)}</p>
+                    <div key={g.id} className="pt-1.5">
+                      <p className="px-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">{t(g.labelKey)}</p>
                       {g.children?.map(c => (
                         <SheetClose asChild key={c.to}>
-                          <NavLink to={c.to} className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-                            <c.icon className="w-4 h-4" /><span>{t(c.labelKey)}</span>
+                          <NavLink to={c.to} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
+                            <c.icon className="w-4 h-4 shrink-0" /><span className="truncate">{t(c.labelKey)}</span>
                           </NavLink>
                         </SheetClose>
                       ))}
@@ -377,12 +377,29 @@ export default function DashboardLayout({ children }) {
                   );
                 }) : WORKER_NAV.map(item => (
                   <SheetClose asChild key={item.to}>
-                    <NavLink to={item.to} end={item.to === "/"} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-                      <item.icon className="w-4 h-4" /><span>{t(item.labelKey)}</span>
+                    <NavLink to={item.to} end={item.to === "/"} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
+                      <item.icon className="w-4 h-4 shrink-0" /><span className="truncate">{t(item.labelKey)}</span>
                     </NavLink>
                   </SheetClose>
                 ))}
               </nav>
+              <div className="border-t border-border p-2 shrink-0" data-testid="mobile-menu-footer">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">{(user?.name || "?").slice(0,2).toUpperCase()}</div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.name || ""}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{user?.role || ""}</p>
+                  </div>
+                </div>
+                <SheetClose asChild>
+                  <button onClick={() => setChangePasswordOpen(true)} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted">
+                    <KeyRound className="w-4 h-4 shrink-0" /><span>{t("auth.changePassword")}</span>
+                  </button>
+                </SheetClose>
+                <button onClick={handleLogout} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10" data-testid="mobile-logout">
+                  <LogOut className="w-4 h-4 shrink-0" /><span>{t("auth.signOut")}</span>
+                </button>
+              </div>
             </SheetContent>
           </Sheet>
         </div>
