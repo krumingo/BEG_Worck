@@ -343,6 +343,10 @@ from app.routes.assets_custody import router as assets_custody_router
 api_router.include_router(assets_custody_router)
 from app.routes.assets_ai_intake import router as assets_ai_intake_router
 api_router.include_router(assets_ai_intake_router)
+from app.routes.asset_item_types import router as asset_item_types_router
+api_router.include_router(asset_item_types_router)
+from app.routes.assets_batch_intake import router as assets_batch_intake_router
+api_router.include_router(assets_batch_intake_router)
 
 # ── App Setup ────────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ import re
 
 from app.db import db
 from app.deps.auth import get_current_user, require_admin
+from app.routes.asset_item_types import all_type_keys
 
 router = APIRouter(tags=["AssetItems"])
 
@@ -141,7 +142,8 @@ async def list_asset_items(
 
 @router.post("/assets/items", status_code=201)
 async def create_asset_item(data: AssetItemCreate, user: dict = Depends(require_admin)):
-    if data.type not in ASSET_ITEM_TYPES:
+    valid_types = await all_type_keys(user["org_id"])
+    if data.type not in valid_types:
         raise HTTPException(status_code=400, detail="Invalid type")
     item = {
         "id": str(uuid.uuid4()),
@@ -181,8 +183,10 @@ async def get_asset_item(item_id: str, user: dict = Depends(get_current_user)):
 @router.put("/assets/items/{item_id}")
 async def update_asset_item(item_id: str, data: AssetItemUpdate, user: dict = Depends(require_admin)):
     update = {k: v for k, v in data.dict(exclude_unset=True).items()}
-    if "type" in update and update["type"] not in ASSET_ITEM_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid type")
+    if "type" in update:
+        valid_types = await all_type_keys(user["org_id"])
+        if update["type"] not in valid_types:
+            raise HTTPException(status_code=400, detail="Invalid type")
     if not update:
         raise HTTPException(status_code=400, detail="Nothing to update")
     res = await db.asset_items.update_one(

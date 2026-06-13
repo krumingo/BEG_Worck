@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import DataTable from "@/components/DataTable";
@@ -46,6 +47,7 @@ const EMPTY = {
 
 export default function AssetsItemsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -220,6 +222,9 @@ export default function AssetsItemsPage() {
           <p className="text-sm text-muted-foreground">Обща номенклатура</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate("/assets/batch-intake")} data-testid="batch-intake-btn">
+            <Camera className="w-4 h-4 mr-2" /> Прием на партида
+          </Button>
           <Button variant="outline" onClick={() => { setAiImage(null); setAiPlate(null); setAiOpen(true); }} data-testid="ai-intake-btn">
             <Camera className="w-4 h-4 mr-2" /> Със снимка
           </Button>

@@ -49,6 +49,7 @@ import SalesPage from "@/pages/SalesPage";
 import AssetsQrBasePage from "@/pages/AssetsQrBasePage";
 import AssetsItemsPage from "@/pages/AssetsItemsPage";
 import AssetsUnitsPage from "@/pages/AssetsUnitsPage";
+import AssetsBatchIntakePage from "@/pages/AssetsBatchIntakePage";
 import ScanLandingPage from "@/pages/ScanLandingPage";
 import MyToolsPage from "@/pages/MyToolsPage";
 import FinanceAnalysisPage from "@/pages/FinanceAnalysisPage";
@@ -245,6 +246,7 @@ function AppRoutes() {
       <Route path="/assets/qr" element={<AdminRoute><AssetsQrBasePage /></AdminRoute>} />
       <Route path="/assets/items" element={<AdminRoute><AssetsItemsPage /></AdminRoute>} />
       <Route path="/assets/units" element={<AdminRoute><AssetsUnitsPage /></AdminRoute>} />
+      <Route path="/assets/batch-intake" element={<AdminRoute><AssetsBatchIntakePage /></AdminRoute>} />
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
       <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
       <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />
