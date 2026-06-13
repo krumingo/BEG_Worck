@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Camera, Sparkles, Loader2, Check, MapPin, ArrowLeft, Plus, X, Package } from "lucide-react";
+import { Camera, Sparkles, Loader2, Check, MapPin, ArrowLeft, Plus, X, Package, Printer } from "lucide-react";
 
 const LOC_TYPES = [
   { key: "warehouse", label: "Склад", endpoint: "/warehouses?page_size=100&active_only=false" },
@@ -28,6 +28,8 @@ export default function AssetsBatchIntakePage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null); // { suggestion, matched_item }
   const [saving, setSaving] = useState(false);
+  const [lastUnit, setLastUnit] = useState(null); // { qr_id, name } за печат
+  const [qrSvg, setQrSvg] = useState("");
 
   const loadLocations = useCallback((type) => {
     const cfg = LOC_TYPES.find((l) => l.key === type);
@@ -100,11 +102,20 @@ export default function AssetsBatchIntakePage() {
       }
 
       // 3) актив (бройка) с локация = "къде съм" — QR се генерира от бекенда
-      await API.post("/assets/units", {
+      const ur = await API.post("/assets/units", {
         item_id: itemId, serial_no: s.serial_no || null,
         location_type: locType, location_id: locId,
       });
 
+      const created = ur.data;
+      setLastUnit({ qr_id: created.qr_id, name: s.name });
+      setQrSvg("");
+      if (created.qr_id) {
+        try {
+          const svgRes = await API.get(`/assets/qr/${created.qr_id}/svg?base=${encodeURIComponent(window.location.origin)}`, { responseType: "text" });
+          setQrSvg(svgRes.data);
+        } catch { /* печатът е по желание */ }
+      }
       setSavedCount((c) => c + 1);
       toast.success(result.matched_item ? `Добавен към „${s.name}"` : `Създаден „${s.name}"`);
       setImages([]); setResult(null);
@@ -147,6 +158,7 @@ export default function AssetsBatchIntakePage() {
   const s = result?.suggestion;
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
+      <style>{`@media print { body * { visibility: hidden; } #qr-print, #qr-print * { visibility: visible !important; } #qr-print { position: absolute; left: 0; top: 0; width: 100%; } .qr-svg svg { width: 100%; height: 100%; } }`}</style>
       <div className="flex items-center gap-3">
         <button onClick={() => setStep("location")} className="w-9 h-9 rounded-xl border border-border bg-card flex items-center justify-center"><ArrowLeft className="w-4 h-4" /></button>
         <div className="flex-1">
@@ -155,6 +167,25 @@ export default function AssetsBatchIntakePage() {
         </div>
       </div>
 
+      {lastUnit && !result && (
+        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-3" data-testid="last-created">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-sm font-semibold">{lastUnit.name}</p>
+              <p className="text-[11px] text-muted-foreground">{lastUnit.qr_id}</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => window.print()} disabled={!qrSvg} data-testid="print-qr">
+              <Printer className="w-4 h-4 mr-1" />Печат QR
+            </Button>
+          </div>
+          {qrSvg && (
+            <div id="qr-print" className="hidden print:block">
+              <div className="qr-svg" style={{ width: 200, height: 200, margin: "0 auto" }} dangerouslySetInnerHTML={{ __html: qrSvg }} />
+              <p style={{ textAlign: "center", fontSize: 14, marginTop: 8 }}>{lastUnit.name} · {lastUnit.qr_id}</p>
+            </div>
+          )}
+        </div>
+      )}
       {!result ? (
         <>
           <div className="grid grid-cols-4 gap-2">

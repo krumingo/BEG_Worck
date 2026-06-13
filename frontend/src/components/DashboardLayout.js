@@ -10,7 +10,7 @@ import {
   Wallet, UserCog, Landmark, Calculator, CreditCard, Smartphone,
   User, Package, Truck, RotateCcw, Settings, HelpCircle, Info,
   Menu, X, Lock, Archive, Warehouse, TrendingUp, BarChart3,
-  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode,
+  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode, Camera,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -86,6 +86,7 @@ const NAV_GROUPS = [
   {
     id: "assets", icon: QrCode, labelKey: "nav.assetsGroup",
     children: [
+      { to: "/assets/batch-intake", icon: Camera, labelKey: "nav.assetsBatchIntake" },
       { to: "/assets/items", icon: Package, labelKey: "nav.assetsItems" },
       { to: "/assets/units", icon: ScanLine, labelKey: "nav.assetsUnits" },
       { to: "/assets/qr", icon: QrCode, labelKey: "nav.assetsQr" },
@@ -119,6 +120,7 @@ const PLATFORM_ADMIN_CHILDREN = [
 
 const WORKER_NAV = [
   { to: "/tech", icon: ClipboardList, labelKey: "nav.techDashboard" },
+  { to: "/assets/batch-intake", icon: Camera, labelKey: "nav.assetsBatchIntake" },
   { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
   { to: "/my-day", icon: CalendarCheck, labelKey: "nav.myDay" },
   { to: "/attendance-history", icon: CalendarDays, labelKey: "nav.history" },

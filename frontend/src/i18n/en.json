@@ -146,6 +146,7 @@
   "nav": {
     "assetsGroup": "Assets",
     "assetsQr": "QR base",
+    "assetsBatchIntake": "Batch intake",
     "assetsItems": "Items",
     "assetsUnits": "Assets (QR)",
     "dashboard": "Dashboard",

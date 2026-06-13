@@ -246,7 +246,7 @@ function AppRoutes() {
       <Route path="/assets/qr" element={<AdminRoute><AssetsQrBasePage /></AdminRoute>} />
       <Route path="/assets/items" element={<AdminRoute><AssetsItemsPage /></AdminRoute>} />
       <Route path="/assets/units" element={<AdminRoute><AssetsUnitsPage /></AdminRoute>} />
-      <Route path="/assets/batch-intake" element={<AdminRoute><AssetsBatchIntakePage /></AdminRoute>} />
+      <Route path="/assets/batch-intake" element={<FieldProtectedRoute><AssetsBatchIntakePage /></FieldProtectedRoute>} />
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
       <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
       <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />

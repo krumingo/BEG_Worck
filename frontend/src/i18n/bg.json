@@ -156,6 +156,7 @@
   "nav": {
     "assetsGroup": "Активи",
     "assetsQr": "QR база",
+    "assetsBatchIntake": "Прием на партида",
     "assetsItems": "Артикули",
     "assetsUnits": "Активи (QR)",
     "dashboard": "Табло",
