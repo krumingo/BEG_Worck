@@ -27,18 +27,21 @@ export default function WarehouseCards({ refreshKey, onEdit, onArchive, onQr }) 
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Складовете се зареждат НЕЗАВИСИМО от summary — ако summary гръмне, складовете пак се виждат
     try {
-      const [wh, sum] = await Promise.all([
-        API.get("/warehouses?active_only=false&page_size=200"),
-        API.get("/warehouses/asset-summary"),
-      ]);
+      const wh = await API.get("/warehouses?active_only=false&page_size=100");
       setWarehouses(wh.data?.items || []);
-      setSummary(sum.data?.summary || {});
     } catch {
       setWarehouses([]);
-      setSummary({});
     } finally {
       setLoading(false);
+    }
+    // summary е "бонус" — броячите/стойността; провалът му не бива да крие складовете
+    try {
+      const sum = await API.get("/warehouses/asset-summary");
+      setSummary(sum.data?.summary || {});
+    } catch {
+      setSummary({});
     }
   }, []);
 
