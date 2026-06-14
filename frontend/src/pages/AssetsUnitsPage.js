@@ -33,6 +33,7 @@ const STATUS = {
 const EMPTY = {
   item_id: "", serial_no: "", inventory_no: "", status: "available",
   location_id: "", notes: "",
+  purchase_date: "", warranty_months: "", purchase_price: "",
 };
 
 export default function AssetsUnitsPage() {
@@ -101,6 +102,9 @@ export default function AssetsUnitsPage() {
       status: u.status || "available",
       location_id: u.location_type === "warehouse" ? (u.location_id || "") : "",
       notes: u.notes || "",
+      purchase_date: u.purchase_date || "",
+      warranty_months: u.warranty_months ?? "",
+      purchase_price: u.purchase_price ?? "",
     });
     setModalOpen(true);
   };
@@ -116,6 +120,9 @@ export default function AssetsUnitsPage() {
         location_type: form.location_id ? "warehouse" : null,
         location_id: form.location_id || null,
         notes: form.notes.trim() || null,
+        purchase_date: form.purchase_date || null,
+        warranty_months: form.warranty_months === "" ? null : Number(form.warranty_months),
+        purchase_price: form.purchase_price === "" ? null : Number(form.purchase_price),
       };
       if (editingId) {
         await API.put(`/assets/units/${editingId}`, base);
@@ -311,6 +318,14 @@ export default function AssetsUnitsPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Дата на покупка</Label><Input type="date" value={form.purchase_date} onChange={(e) => setForm({ ...form, purchase_date: e.target.value })} data-testid="unit-purchase-date" /></div>
+              <div><Label>Гаранция (мес.)</Label><Input type="number" min="0" value={form.warranty_months} onChange={(e) => setForm({ ...form, warranty_months: e.target.value })} data-testid="unit-warranty" /></div>
+            </div>
+            <div>
+              <Label>Цена (€)</Label>
+              <Input type="number" min="0" step="0.01" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} data-testid="unit-price" />
             </div>
             <div>
               <Label>Бележки</Label>
