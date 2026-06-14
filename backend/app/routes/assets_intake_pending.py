@@ -141,7 +141,7 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
         "location_type": loc_type if loc_id or loc_type == "guest" else None,
         "location_id": loc_id, "location_name_cached": rec.get("location_name"),
         # дата/гаранция/цена на ниво БРОЙКА (всяка вещ си има своите)
-        "purchase_date": datetime.now(timezone.utc).date().isoformat(),
+        "purchase_date": s.get("purchase_date") or datetime.now(timezone.utc).date().isoformat(),
         "warranty_months": s.get("warranty_months"),
         "purchase_price": s.get("estimated_price_eur"),
         "notes": None, "is_active": True, "created_at": _now(), "created_by": reviewer["id"],

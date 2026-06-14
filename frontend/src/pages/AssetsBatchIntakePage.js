@@ -95,7 +95,13 @@ export default function AssetsBatchIntakePage() {
     const timer = setTimeout(() => controller.abort(), 60000);
     try {
       const res = await API.post("/assets/batch-intake/recognize", { images_base64: all }, { signal: controller.signal });
-      setResult(res.data);
+      // дата на покупка по подразбиране = днес (на ниво бройка)
+      const today = new Date().toISOString().slice(0, 10);
+      const data = res.data;
+      if (data?.suggestion && !data.suggestion.purchase_date) {
+        data.suggestion.purchase_date = today;
+      }
+      setResult(data);
       if ((res.data.suggestion?.confidence ?? 0) < 50) toast.warning("AI не е сигурен — провери внимателно");
     } catch (err) {
       const msg = err.name === "CanceledError" || err.name === "AbortError"
@@ -126,7 +132,8 @@ export default function AssetsBatchIntakePage() {
           group: s.group || null, brand: s.brand || null, model: s.model || null,
           article_no: s.article_no || null,
           serial_no: s.serial_no || null, estimated_price_eur: s.estimated_price_eur ?? null,
-          warranty_months: s.warranty_months ?? null, activities: s.activities || [],
+          warranty_months: s.warranty_months ?? null, purchase_date: s.purchase_date || null,
+          activities: s.activities || [],
         },
         matched_item_id: result.matched_item?.id || null,
         photo_b64: images[0]?.b64 || plateImg?.b64 || null,
@@ -272,12 +279,20 @@ export default function AssetsBatchIntakePage() {
               <div><Label className="text-sm text-muted-foreground">Сериен №</Label><Input value={s.serial_no || ""} onChange={(e) => editField("serial_no", e.target.value)} className="h-12 text-base mt-1" /></div>
             </div>
             <div><Label className="text-sm text-muted-foreground">Тип</Label><Input value={s.type_label || ""} onChange={(e) => editField("type_label", e.target.value)} className="h-12 text-base mt-1" /></div>
-            {s.estimated_price_eur != null && (
-              <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5">
-                <Coins className="w-5 h-5 text-amber-400 shrink-0" />
-                <span className="text-sm text-amber-300">Примерна цена: <b>{s.estimated_price_eur} EUR</b> · замени с реалната</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm text-muted-foreground">Дата на покупка</Label>
+                <Input type="date" value={s.purchase_date || ""} onChange={(e) => editField("purchase_date", e.target.value)} className="h-12 text-base mt-1" data-testid="batch-purchase-date" />
               </div>
-            )}
+              <div>
+                <Label className="text-sm text-muted-foreground">Гаранция (месеци)</Label>
+                <Input type="number" min="0" value={s.warranty_months ?? ""} onChange={(e) => editField("warranty_months", e.target.value === "" ? null : Number(e.target.value))} className="h-12 text-base mt-1" data-testid="batch-warranty" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm text-muted-foreground">Цена (€){s.estimated_price_eur != null ? " · AI предложи, замени с реалната" : ""}</Label>
+              <Input type="number" min="0" step="0.01" value={s.estimated_price_eur ?? ""} onChange={(e) => editField("estimated_price_eur", e.target.value === "" ? null : Number(e.target.value))} className="h-12 text-base mt-1" data-testid="batch-price" />
+            </div>
             {s.activities?.length > 0 && (
               <div>
                 <Label className="text-sm text-muted-foreground">Дейности</Label>
