@@ -32,6 +32,10 @@ class AssetUnitCreate(BaseModel):
     location_type: Optional[str] = "warehouse"   # warehouse | project | employee
     location_id: Optional[str] = None            # home location (usually a warehouse)
     notes: Optional[str] = None
+    # Полета на ниво БРОЙКА (всяка физическа вещ има своя дата/гаранция/цена)
+    purchase_date: Optional[str] = None
+    warranty_months: Optional[int] = None
+    purchase_price: Optional[float] = None
 
 
 class AssetUnitUpdate(BaseModel):
@@ -42,6 +46,9 @@ class AssetUnitUpdate(BaseModel):
     location_id: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    purchase_date: Optional[str] = None
+    warranty_months: Optional[int] = None
+    purchase_price: Optional[float] = None
 
 
 async def _location_name(org_id: str, ltype: Optional[str], lid: Optional[str]) -> str:
@@ -74,8 +81,10 @@ async def _enrich(org_id: str, unit: dict) -> dict:
     unit["brand"] = item.get("brand") if item else None
     unit["model"] = item.get("model") if item else None
     unit["photo_url"] = item.get("photo_url") if item else None
-    unit["purchase_date"] = item.get("purchase_date") if item else None
-    unit["warranty_months"] = item.get("warranty_months") if item else None
+    # Гаранция/дата/цена са на ниво БРОЙКА; ако липсват (стари записи) → fallback към артикула
+    unit["purchase_date"] = unit.get("purchase_date") or (item.get("purchase_date") if item else None)
+    unit["warranty_months"] = unit.get("warranty_months") if unit.get("warranty_months") is not None else (item.get("warranty_months") if item else None)
+    unit["purchase_price"] = unit.get("purchase_price") if unit.get("purchase_price") is not None else (item.get("purchase_price") if item else None)
     unit["location_name"] = await _location_name(org_id, unit.get("location_type"), unit.get("location_id"))
     # кой е въвел бройката (име)
     cb = unit.get("created_by")
@@ -157,6 +166,9 @@ async def create_asset_unit(data: AssetUnitCreate, user: dict = Depends(require_
         "location_type": data.location_type if data.location_id else None,
         "location_id": data.location_id or None,
         "notes": (data.notes or "").strip() or None,
+        "purchase_date": data.purchase_date or None,
+        "warranty_months": data.warranty_months,
+        "purchase_price": data.purchase_price,
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"],
