@@ -29,7 +29,7 @@ export default function WarehouseCards({ refreshKey, onEdit, onArchive, onQr }) 
     setLoading(true);
     try {
       const [wh, sum] = await Promise.all([
-        API.get("/warehouses?active_only=true&page_size=200"),
+        API.get("/warehouses?active_only=false&page_size=200"),
         API.get("/warehouses/asset-summary"),
       ]);
       setWarehouses(wh.data?.items || []);
