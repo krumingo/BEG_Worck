@@ -67,13 +67,15 @@ async def _location_name(org_id: str, ltype: Optional[str], lid: Optional[str]) 
 async def _enrich(org_id: str, unit: dict) -> dict:
     item = await db.asset_items.find_one(
         {"id": unit.get("item_id"), "org_id": org_id},
-        {"_id": 0, "name": 1, "type": 1, "brand": 1, "model": 1, "photo_url": 1},
+        {"_id": 0, "name": 1, "type": 1, "brand": 1, "model": 1, "photo_url": 1, "purchase_date": 1, "warranty_months": 1},
     )
     unit["item_name"] = item.get("name", "") if item else ""
     unit["item_type"] = item.get("type", "") if item else ""
     unit["brand"] = item.get("brand") if item else None
     unit["model"] = item.get("model") if item else None
     unit["photo_url"] = item.get("photo_url") if item else None
+    unit["purchase_date"] = item.get("purchase_date") if item else None
+    unit["warranty_months"] = item.get("warranty_months") if item else None
     unit["location_name"] = await _location_name(org_id, unit.get("location_type"), unit.get("location_id"))
     # кой е въвел бройката (име)
     cb = unit.get("created_by")

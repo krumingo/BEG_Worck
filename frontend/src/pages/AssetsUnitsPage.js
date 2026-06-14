@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck } from "lucide-react";
+import { warrantyStatus } from "@/lib/warranty";
 import { toast } from "sonner";
 
 const STATUS = {
@@ -212,7 +213,12 @@ export default function AssetsUnitsPage() {
                       {u.photo_url ? <img src={u.photo_url} alt="" className="w-full h-full object-cover rounded-lg" /> : <Dot status={u.status} />}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{u.item_name || "—"}</p>
+                      <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                        {u.item_name || "—"}
+                        {warrantyStatus(u.purchase_date, u.warranty_months).inWarranty && (
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="В гаранция" />
+                        )}
+                      </p>
                       <p className="text-[10px] font-mono text-muted-foreground">{u.qr_id || u.serial_no || "—"}</p>
                     </div>
                   </div>

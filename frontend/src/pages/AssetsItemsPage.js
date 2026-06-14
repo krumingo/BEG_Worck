@@ -31,7 +31,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Wrench, Camera, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Wrench, Camera, Sparkles, Loader2, ShieldCheck } from "lucide-react";
+import { warrantyStatus } from "@/lib/warranty";
 import { toast } from "sonner";
 
 const TYPE_OPTIONS = [
@@ -203,9 +204,21 @@ export default function AssetsItemsPage() {
       ),
     },
     {
-      key: "type", label: "Тип", width: "110px", sortable: true, filterable: true, filterType: "in",
+      key: "type", label: "Тип", width: "150px", sortable: true, filterable: true, filterType: "in",
       options: TYPE_OPTIONS,
-      render: (v) => <Badge variant="outline">{v === "machine" ? "Машина" : "Инструмент"}</Badge>,
+      render: (v, row) => {
+        const w = warrantyStatus(row.purchase_date, row.warranty_months);
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge variant="outline">{v === "machine" ? "Машина" : "Инструмент"}</Badge>
+            {w.inWarranty && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title={`В гаранция до ${w.untilLabel}`}>
+                <ShieldCheck className="w-3 h-3" />гаранция
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     { key: "group", label: "Група", filterable: true, filterType: "contains" },
     { key: "unit", label: "Ед.", width: "70px", sortable: false },
