@@ -4,6 +4,7 @@ import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, Trash2 } from "lucide-react";
+import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS = {
@@ -43,6 +44,8 @@ export default function AssetsUnitsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
+  const [view, setView] = useState("table"); // table | board
+  const [moveHist, setMoveHist] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -141,6 +144,16 @@ export default function AssetsUnitsPage() {
     }
   };
 
+  const ACTION_LABELS = { take: "Взет", handover: "Предаден", drop: "Оставен", repair: "В ремонт", return: "Върнат", intake: "Заприходен" };
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("bg-BG") : "—";
+  const openHistory = async (unit) => {
+    setMoveHist({ unit, items: null });
+    try {
+      const r = await API.get(`/assets/units/${unit.id}/movements`);
+      setMoveHist({ unit, items: r.data?.items || [] });
+    } catch { setMoveHist({ unit, items: [] }); }
+  };
+
   const Dot = ({ status }) => (
     <span style={{ color: (STATUS[status] || {}).color || "#9ca3af" }}>●</span>
   );
@@ -181,6 +194,39 @@ export default function AssetsUnitsPage() {
           Още няма активи. Натисни „Нов актив", за да добавиш първата бройка (получава QR автоматично).
         </div>
       ) : (
+        <>
+          <div className="flex items-center gap-2 mb-3">
+            <button onClick={() => setView("table")} className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${view === "table" ? "border-primary bg-primary/10" : "border-border text-muted-foreground"}`} data-testid="view-table"><List className="w-4 h-4" />Таблица</button>
+            <button onClick={() => setView("board")} className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${view === "board" ? "border-primary bg-primary/10" : "border-border text-muted-foreground"}`} data-testid="view-board"><LayoutGrid className="w-4 h-4" />По локация</button>
+          </div>
+
+          {view === "table" ? (
+            <div className="rounded-xl border border-border overflow-hidden">
+              <div className="grid grid-cols-[1.9fr_1.4fr_1.1fr_1fr_0.8fr] gap-3 px-4 py-2.5 border-b border-border text-xs text-muted-foreground">
+                <span>Артикул</span><span>Къде</span><span>Въведен</span><span>Кой</span><span className="text-right">Действия</span>
+              </div>
+              {filtered.map((u) => (
+                <div key={u.id} className="grid grid-cols-[1.9fr_1.4fr_1.1fr_1fr_0.8fr] gap-3 px-4 py-3 border-b border-border last:border-0 items-center hover:bg-muted/40" data-testid={`unit-row-${u.id}`}>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      {u.photo_url ? <img src={u.photo_url} alt="" className="w-full h-full object-cover rounded-lg" /> : <Dot status={u.status} />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{u.item_name || "—"}</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">{u.qr_id || u.serial_no || "—"}</p>
+                    </div>
+                  </div>
+                  <span className="text-sm inline-flex items-center gap-1 min-w-0"><MapPin className="w-3.5 h-3.5 text-primary shrink-0" /><span className="truncate">{u.location_name || "—"}</span></span>
+                  <span className="text-sm text-muted-foreground">{fmtDate(u.created_at)}</span>
+                  <span className="text-sm text-muted-foreground truncate">{u.created_by_name || "—"}</span>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openHistory(u)} data-testid={`hist-${u.id}`}><History className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(u)} data-testid={`edit-${u.id}`}><Search className="w-4 h-4" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {groupKeys.map((key) => (
             <div key={key} className="min-w-[200px] flex-shrink-0">
@@ -209,6 +255,8 @@ export default function AssetsUnitsPage() {
             </div>
           ))}
         </div>
+          )}
+        </>
       )}
 
       {/* Create / Edit */}
@@ -276,6 +324,35 @@ export default function AssetsUnitsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* История на движенията */}
+      <Dialog open={!!moveHist} onOpenChange={(o) => !o && setMoveHist(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><History className="w-5 h-5" />История · {moveHist?.unit?.item_name}</DialogTitle>
+          </DialogHeader>
+          {moveHist?.items === null ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          ) : (moveHist?.items || []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Няма движения.</p>
+          ) : (
+            <div className="space-y-2">
+              {moveHist.items.map((m, i) => (
+                <div key={i} className="rounded-lg border border-border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline">{ACTION_LABELS[m.action] || m.action}</Badge>
+                    <span className="text-xs text-muted-foreground">{fmtDate(m.at)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{m.from_name ? `от ${m.from_name} ` : ""}{m.to_name ? `→ ${m.to_name}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">{m.by_name}</p>
+                  {m.note && <p className="text-xs mt-1">{m.note}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
