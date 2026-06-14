@@ -75,6 +75,16 @@ async def _enrich(org_id: str, unit: dict) -> dict:
     unit["model"] = item.get("model") if item else None
     unit["photo_url"] = item.get("photo_url") if item else None
     unit["location_name"] = await _location_name(org_id, unit.get("location_type"), unit.get("location_id"))
+    # кой е въвел бройката (име)
+    cb = unit.get("created_by")
+    if cb:
+        u = await db.users.find_one({"id": cb, "org_id": org_id}, {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1})
+        if u:
+            unit["created_by_name"] = u.get("name") or f"{u.get('first_name','')} {u.get('last_name','')}".strip() or u.get("email") or ""
+        else:
+            unit["created_by_name"] = ""
+    else:
+        unit["created_by_name"] = ""
     return unit
 
 

@@ -48,6 +48,10 @@ const EMPTY = {
 export default function AssetsItemsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [unitsItem, setUnitsItem] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [moveHist, setMoveHist] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -179,7 +183,28 @@ export default function AssetsItemsPage() {
     }
   };
 
+  const openUnits = async (item) => {
+    setUnitsItem(item); setUnits([]); setUnitsLoading(true);
+    try {
+      const r = await API.get(`/assets/units?item_id=${item.id}&page_size=200`);
+      setUnits(r.data?.items || []);
+    } catch { setUnits([]); }
+    finally { setUnitsLoading(false); }
+  };
+
+  const openHistory = async (unit) => {
+    setMoveHist({ unit, items: null });
+    try {
+      const r = await API.get(`/assets/units/${unit.id}/movements`);
+      setMoveHist({ unit, items: r.data?.items || [] });
+    } catch { setMoveHist({ unit, items: [] }); }
+  };
+
+  const ACTION_LABELS = { take: "Взет", handover: "Предаден", drop: "Оставен", repair: "В ремонт", return: "Върнат", intake: "Заприходен" };
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("bg-BG") : "—";
+
   const columns = [
+
     {
       key: "photo_url", label: "", width: "56px", sortable: false,
       render: (v) => (
@@ -238,6 +263,7 @@ export default function AssetsItemsPage() {
         columns={columns}
         fetchData={fetchData}
         refreshKey={refreshKey}
+        onRowClick={openUnits}
         exportFilename="asset-items.csv"
         actions={(row) => (
           <div className="flex items-center gap-1">
@@ -372,6 +398,64 @@ export default function AssetsItemsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Бройки на артикула — къде, кога, кой */}
+      <Dialog open={!!unitsItem} onOpenChange={(o) => !o && setUnitsItem(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Package className="w-5 h-5" />{unitsItem?.name} — бройки</DialogTitle>
+          </DialogHeader>
+          {unitsLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          ) : units.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Няма заведени бройки.</p>
+          ) : (
+            <div className="space-y-2">
+              {units.map((u) => (
+                <div key={u.id} className="rounded-lg border border-border p-3 flex items-center gap-3 flex-wrap" data-testid={`unit-${u.id}`}>
+                  <span className="font-mono text-xs text-muted-foreground">{u.qr_id || u.serial_no || "—"}</span>
+                  <span className="inline-flex items-center gap-1 text-sm"><MapPin className="w-4 h-4 text-primary" />{u.location_name || "—"}</span>
+                  <span className="inline-flex items-center gap-1 text-sm text-muted-foreground"><Calendar className="w-4 h-4" />{fmtDate(u.created_at)}</span>
+                  <span className="inline-flex items-center gap-1 text-sm text-muted-foreground"><User className="w-4 h-4" />{u.created_by_name || "—"}</span>
+                  <Button variant="outline" size="sm" className="ml-auto" onClick={() => openHistory(u)} data-testid={`hist-${u.id}`}>
+                    <History className="w-4 h-4 mr-1" />История
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* История на движенията */}
+      <Dialog open={!!moveHist} onOpenChange={(o) => !o && setMoveHist(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><History className="w-5 h-5" />История на движенията</DialogTitle>
+          </DialogHeader>
+          {moveHist?.items === null ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          ) : (moveHist?.items || []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Няма движения.</p>
+          ) : (
+            <div className="space-y-2">
+              {moveHist.items.map((m, i) => (
+                <div key={i} className="rounded-lg border border-border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline">{ACTION_LABELS[m.action] || m.action}</Badge>
+                    <span className="text-xs text-muted-foreground">{fmtDate(m.at)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {m.from_name ? `от ${m.from_name} ` : ""}{m.to_name ? `→ ${m.to_name}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{m.by_name}</p>
+                  {m.note && <p className="text-xs mt-1">{m.note}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
