@@ -53,6 +53,7 @@ import useBulkSelection from "@/hooks/useBulkSelection";
 import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
+import ProjectAssetsTab from "@/components/ProjectAssetsTab";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -288,6 +289,7 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="finance" data-testid="tab-finance">{t("projectDetail.tabs.finance")}</TabsTrigger>
           <TabsTrigger value="info" data-testid="tab-info">{t("projectDetail.tabs.info")}</TabsTrigger>
           <TabsTrigger value="team" data-testid="tab-team">{t("projectDetail.tabs.team")}</TabsTrigger>
+          <TabsTrigger value="assets" data-testid="tab-assets">Активи</TabsTrigger>
         </TabsList>
 
         {/* ════ TAB: OVERVIEW ════ */}
@@ -630,6 +632,11 @@ export default function ProjectDetailPage() {
               setOverrideOpen(false); setOverrideBlocked([]); bulk.clear(); fetchDashboard();
             }}
           />
+        </TabsContent>
+
+        {/* ════ TAB: ASSETS (активи на обекта) ════ */}
+        <TabsContent value="assets" className="space-y-4 mt-4">
+          <ProjectAssetsTab projectId={projectId} />
         </TabsContent>
       </Tabs>
 
