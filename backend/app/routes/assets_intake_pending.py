@@ -120,6 +120,10 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
             "purchase_price": s.get("estimated_price_eur"), "purchase_currency": "EUR",
             "purchase_date": datetime.now(timezone.utc).date().isoformat(),
             "warranty_months": s.get("warranty_months"), "activities": s.get("activities") or [],
+            "photo_url": (
+                rec.get("photo_b64") if not rec.get("photo_b64")
+                else (rec["photo_b64"] if rec["photo_b64"].startswith("data:") else f"data:image/jpeg;base64,{rec['photo_b64']}")
+            ),
             "is_active": True, "created_at": _now(), "created_by": reviewer["id"],
         })
 
