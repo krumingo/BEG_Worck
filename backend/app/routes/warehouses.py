@@ -170,6 +170,30 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
     return {k: v for k, v in warehouse.items() if k != "_id"}
 
 
+@router.get("/warehouses/asset-summary")
+async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
+    """За всеки склад: брой машини/инструменти + обща стойност на активите в него.
+    Една агрегация — без N+1."""
+    org = user["org_id"]
+    # units по локация-склад, обединени с типа/цената на артикула
+    pipeline = [
+        {"$match": {"org_id": org, "location_type": "warehouse", "status": {"$ne": "written_off"}}},
+        {"$lookup": {
+            "from": "asset_items", "localField": "item_id", "foreignField": "id", "as": "item",
+        }},
+        {"$unwind": {"path": "$item", "preserveNullAndEmptyArrays": True}},
+        {"$group": {
+            "_id": "$location_id",
+            "machines": {"$sum": {"$cond": [{"$eq": ["$item.type", "machine"]}, 1, 0]}},
+            "tools": {"$sum": {"$cond": [{"$ne": ["$item.type", "machine"]}, 1, 0]}},
+            "value": {"$sum": {"$ifNull": ["$item.purchase_price", 0]}},
+        }},
+    ]
+    rows = await db.asset_units.aggregate(pipeline).to_list(1000)
+    summary = {r["_id"]: {"machines": r["machines"], "tools": r["tools"], "value": round(r["value"], 2)} for r in rows}
+    return {"summary": summary}
+
+
 @router.get("/warehouses/{warehouse_id}")
 async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user)):
     """Get warehouse details"""

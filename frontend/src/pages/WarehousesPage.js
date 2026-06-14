@@ -34,16 +34,18 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Warehouse, Database, Package, QrCode } from "lucide-react";
+import { Plus, Pencil, Trash2, Warehouse, Database, Package, QrCode, LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
 import BatchesTab from "@/components/warehouse/BatchesTab";
 import StockValueCard from "@/components/warehouse/StockValueCard";
+import WarehouseCards from "@/components/warehouse/WarehouseCards";
 
 const WAREHOUSE_TYPES = ["central", "project", "vehicle", "person"];
 
 export default function WarehousesPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("warehouses");
+  const [whView, setWhView] = useState("cards"); // cards | table
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -176,6 +178,19 @@ export default function WarehousesPage() {
       {/* Tab: Складове */}
       {activeTab === "warehouses" && (
         <>
+          <div className="flex items-center gap-2 mb-3">
+            <button onClick={() => setWhView("cards")} className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${whView === "cards" ? "border-primary bg-primary/10" : "border-border text-muted-foreground"}`} data-testid="wh-view-cards"><LayoutGrid className="w-4 h-4" />Картички</button>
+            <button onClick={() => setWhView("table")} className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${whView === "table" ? "border-primary bg-primary/10" : "border-border text-muted-foreground"}`} data-testid="wh-view-table"><List className="w-4 h-4" />Таблица</button>
+          </div>
+
+          {whView === "cards" ? (
+            <WarehouseCards
+              refreshKey={refreshKey}
+              onEdit={handleEdit}
+              onArchive={handleDelete}
+              onQr={setQrWarehouse}
+            />
+          ) : (
           <DataTable
         columns={columns}
         fetchData={fetchData}
@@ -195,6 +210,7 @@ export default function WarehousesPage() {
           </div>
         )}
       />
+          )}
 
       {/* Create/Edit Modal */}
       <WarehouseModal
