@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck } from "lucide-react";
+import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck, Pencil } from "lucide-react";
 import { warrantyStatus } from "@/lib/warranty";
 import UnitQrBlock from "@/components/UnitQrBlock";
 import { toast } from "sonner";
@@ -237,7 +237,7 @@ export default function AssetsUnitsPage() {
                   <span className="text-sm text-muted-foreground truncate">{u.created_by_name || "—"}</span>
                   <div className="flex items-center justify-end gap-1">
                     <Button variant="ghost" size="icon" onClick={() => openHistory(u)} data-testid={`hist-${u.id}`}><History className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(u)} data-testid={`edit-${u.id}`}><Search className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(u)} data-testid={`edit-${u.id}`}><Pencil className="w-4 h-4" /></Button>
                   </div>
                 </div>
               ))}
