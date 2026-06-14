@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck } from "lucide-react";
 import { warrantyStatus } from "@/lib/warranty";
+import UnitQrBlock from "@/components/UnitQrBlock";
 import { toast } from "sonner";
 
 const STATUS = {
@@ -46,6 +47,7 @@ export default function AssetsUnitsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
+  const [editingQr, setEditingQr] = useState("");
   const [view, setView] = useState("table"); // table | board
   const [moveHist, setMoveHist] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -90,11 +92,12 @@ export default function AssetsUnitsPage() {
   const groupKeys = Object.keys(groups).sort((a, b) =>
     a === "Ремонт" ? 1 : b === "Ремонт" ? -1 : a.localeCompare(b, "bg"));
 
-  const openCreate = () => { setEditingId(null); setEditingName(""); setForm(EMPTY); setModalOpen(true); };
+  const openCreate = () => { setEditingId(null); setEditingName(""); setEditingQr(""); setForm(EMPTY); setModalOpen(true); };
 
   const openEdit = (u) => {
     setEditingId(u.id);
     setEditingName(u.item_name || "");
+    setEditingQr(u.qr_id || "");
     setForm({
       item_id: u.item_id || "",
       serial_no: u.serial_no || "",
@@ -279,6 +282,11 @@ export default function AssetsUnitsPage() {
             <DialogTitle>{editingId ? `Актив · ${editingName}` : "Нов актив"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {editingId && editingQr && (
+              <div className="flex justify-center pb-1">
+                <UnitQrBlock qrId={editingQr} serialNo={form.serial_no} />
+              </div>
+            )}
             {!editingId && (
               <div>
                 <Label>Артикул *</Label>
