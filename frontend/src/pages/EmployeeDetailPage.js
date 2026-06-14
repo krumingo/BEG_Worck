@@ -17,10 +17,11 @@ import {
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
+import EmployeeAssetsTab from "@/components/EmployeeAssetsTab";
 import {
   ArrowLeft, Calendar, Clock, MapPin, CreditCard, Loader2,
   ChevronLeft, ChevronRight, Save, X, Pencil, Camera,
-  FileText, DollarSign, Banknote, AlertTriangle, Briefcase, Check, Eye,
+  FileText, DollarSign, Banknote, AlertTriangle, Briefcase, Check, Eye, Wrench,
 } from "lucide-react";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import PayslipDialog from "@/components/PayslipDialog";
@@ -595,6 +596,7 @@ export default function EmployeeDetailPage() {
           <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Заеми</TabsTrigger>
           <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="w-4 h-4 mr-1" /> Присъствия</TabsTrigger>
           <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Фишове</TabsTrigger>
+          <TabsTrigger value="assets" data-testid="tab-assets"><Wrench className="w-4 h-4 mr-1" /> Активи</TabsTrigger>
         </TabsList>
 
         {/* Calendar Tab */}
@@ -881,6 +883,10 @@ export default function EmployeeDetailPage() {
         {/* Фишове Tab — real payment slips */}
         <TabsContent value="payroll">
           <EmployeeSlips userId={userId} periodFrom={periodFrom} periodTo={periodTo} />
+        </TabsContent>
+
+        <TabsContent value="assets">
+          <EmployeeAssetsTab userId={userId} />
         </TabsContent>
       </Tabs>
 
