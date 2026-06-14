@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Wrench, Camera, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Wrench, Camera, Sparkles, Loader2, MapPin, Calendar, User, History, Package } from "lucide-react";
 import { toast } from "sonner";
 
 const TYPE_OPTIONS = [
