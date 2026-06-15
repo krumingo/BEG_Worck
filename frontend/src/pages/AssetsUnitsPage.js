@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck, Pencil, X } from "lucide-react";
+import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck, Pencil, X, Wrench, CheckCircle2 } from "lucide-react";
 import { warrantyStatus } from "@/lib/warranty";
 import UnitQrBlock from "@/components/UnitQrBlock";
 import { toast } from "sonner";
@@ -54,6 +54,10 @@ export default function AssetsUnitsPage() {
   const [editingQr, setEditingQr] = useState("");
   const [view, setView] = useState("table"); // table | board
   const [moveHist, setMoveHist] = useState(null);
+  const [repairSend, setRepairSend] = useState(null);   // { unit } | null
+  const [repairReturn, setRepairReturn] = useState(null); // { unit } | null
+  const [rForm, setRForm] = useState({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
+  const [rSaving, setRSaving] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -186,6 +190,47 @@ export default function AssetsUnitsPage() {
     } catch { setMoveHist({ unit, items: [] }); }
   };
 
+  const openRepairSend = (unit) => {
+    setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
+    setRepairSend({ unit });
+  };
+  const openRepairReturn = (unit) => {
+    const w = warrantyStatus(unit.purchase_date, unit.warranty_months);
+    setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: w.inWarranty ? "0" : "", work_done: "", is_warranty: w.inWarranty });
+    setRepairReturn({ unit });
+  };
+  const submitRepairSend = async () => {
+    if (!repairSend) return;
+    setRSaving(true);
+    try {
+      await API.post(`/assets/units/${repairSend.unit.id}/repair/send`, {
+        sent_by_name: rForm.sent_by_name || null,
+        service: rForm.service || null,
+        issue: rForm.issue || null,
+      });
+      setRepairSend(null);
+      load();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Грешка при изпращане на ремонт");
+    } finally { setRSaving(false); }
+  };
+  const submitRepairReturn = async () => {
+    if (!repairReturn) return;
+    setRSaving(true);
+    try {
+      await API.post(`/assets/units/${repairReturn.unit.id}/repair/return`, {
+        returned_by_name: rForm.returned_by_name || null,
+        cost: rForm.is_warranty ? 0 : (rForm.cost === "" ? null : Number(rForm.cost)),
+        work_done: rForm.work_done || null,
+        is_warranty: rForm.is_warranty,
+      });
+      setRepairReturn(null);
+      load();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Грешка при връщане от ремонт");
+    } finally { setRSaving(false); }
+  };
+
   const Dot = ({ status }) => (
     <span style={{ color: (STATUS[status] || {}).color || "#9ca3af" }}>●</span>
   );
@@ -304,6 +349,11 @@ export default function AssetsUnitsPage() {
                   <span className="text-sm text-muted-foreground">{fmtDate(u.created_at)}</span>
                   <span className="text-sm text-muted-foreground truncate">{u.created_by_name || "—"}</span>
                   <div className="flex items-center justify-end gap-1">
+                    {u.status === "repair" ? (
+                      <Button variant="ghost" size="icon" onClick={() => openRepairReturn(u)} data-testid={`repair-return-${u.id}`} title="Върни от ремонт"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" onClick={() => openRepairSend(u)} data-testid={`repair-send-${u.id}`} title="На ремонт"><Wrench className="w-4 h-4 text-amber-500" /></Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => openHistory(u)} data-testid={`hist-${u.id}`}><History className="w-4 h-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(u)} data-testid={`edit-${u.id}`}><Pencil className="w-4 h-4" /></Button>
                   </div>
@@ -449,7 +499,60 @@ export default function AssetsUnitsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Изпрати на ремонт */}
+      <Dialog open={!!repairSend} onOpenChange={(o) => !o && setRepairSend(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Wrench className="w-5 h-5 text-amber-500" />Изпрати на ремонт</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg bg-muted/40 p-2.5 text-sm">
+              {repairSend?.unit?.item_name} <span className="text-[10px] font-mono text-muted-foreground">{repairSend?.unit?.qr_id}</span>
+            </div>
+            <div><Label>Кой го закара</Label><Input value={rForm.sent_by_name} onChange={(e) => setRForm({ ...rForm, sent_by_name: e.target.value })} data-testid="repair-sent-by" /></div>
+            <div><Label>Сервиз / при кого</Label><Input value={rForm.service} onChange={(e) => setRForm({ ...rForm, service: e.target.value })} data-testid="repair-service" /></div>
+            <div><Label>Повреда</Label><Input value={rForm.issue} onChange={(e) => setRForm({ ...rForm, issue: e.target.value })} data-testid="repair-issue" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRepairSend(null)}>Отказ</Button>
+            <Button onClick={submitRepairSend} disabled={rSaving} data-testid="repair-send-submit">{rSaving ? "Изпраща…" : "Изпрати на ремонт"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Върни от ремонт */}
+      <Dialog open={!!repairReturn} onOpenChange={(o) => !o && setRepairReturn(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-500" />Върни от ремонт</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg bg-muted/40 p-2.5 text-sm">
+              {repairReturn?.unit?.item_name} <span className="text-[10px] font-mono text-muted-foreground">{repairReturn?.unit?.qr_id}</span>
+            </div>
+            {repairReturn && warrantyStatus(repairReturn.unit.purchase_date, repairReturn.unit.warranty_months).inWarranty && (
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs text-emerald-300">В гаранция до {warrantyStatus(repairReturn.unit.purchase_date, repairReturn.unit.warranty_months).untilLabel} · ремонтът трябва да е безплатен</span>
+              </div>
+            )}
+            <div><Label>Кой го взе</Label><Input value={rForm.returned_by_name} onChange={(e) => setRForm({ ...rForm, returned_by_name: e.target.value })} data-testid="repair-returned-by" /></div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, is_warranty: e.target.checked, cost: e.target.checked ? "0" : rForm.cost })} data-testid="repair-is-warranty" />
+              Гаранционен ремонт (безплатно)
+            </label>
+            <div><Label>Цена (€){rForm.is_warranty ? " · заключена при гаранция" : ""}</Label><Input type="number" min="0" step="0.01" value={rForm.cost} disabled={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, cost: e.target.value })} data-testid="repair-cost" /></div>
+            <div><Label>Какво е направено</Label><Input value={rForm.work_done} onChange={(e) => setRForm({ ...rForm, work_done: e.target.value })} data-testid="repair-work-done" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRepairReturn(null)}>Отказ</Button>
+            <Button onClick={submitRepairReturn} disabled={rSaving} data-testid="repair-return-submit">{rSaving ? "Връща…" : "Готов · върни в наличност"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
 
