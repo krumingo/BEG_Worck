@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck, Pencil } from "lucide-react";
+import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutGrid, List, ShieldCheck, Pencil, X } from "lucide-react";
 import { warrantyStatus } from "@/lib/warranty";
 import UnitQrBlock from "@/components/UnitQrBlock";
 import { toast } from "sonner";
@@ -44,6 +44,10 @@ export default function AssetsUnitsPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [fStatus, setFStatus] = useState("");
+  const [fType, setFType] = useState("");
+  const [fLoc, setFLoc] = useState("");
+  const [fWho, setFWho] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
@@ -76,13 +80,30 @@ export default function AssetsUnitsPage() {
   const counts = units.reduce((a, u) => { a[u.status] = (a[u.status] || 0) + 1; return a; }, {});
 
   const q = search.trim().toLowerCase();
-  const filtered = q
-    ? units.filter((u) =>
-        (u.item_name || "").toLowerCase().includes(q) ||
-        (u.qr_id || "").toLowerCase().includes(q) ||
-        (u.serial_no || "").toLowerCase().includes(q) ||
-        (u.inventory_no || "").toLowerCase().includes(q))
-    : units;
+  const filtered = units.filter((u) => {
+    if (q && !(
+      (u.item_name || "").toLowerCase().includes(q) ||
+      (u.qr_id || "").toLowerCase().includes(q) ||
+      (u.serial_no || "").toLowerCase().includes(q) ||
+      (u.inventory_no || "").toLowerCase().includes(q)
+    )) return false;
+    if (fStatus && u.status !== fStatus) return false;
+    if (fType && (u.item_type || "") !== fType) return false;
+    if (fLoc && (u.location_name || "Без място") !== fLoc) return false;
+    if (fWho && (u.created_by_name || "") !== fWho) return false;
+    return true;
+  });
+
+  // опции за филтрите — само реално срещаните стойности
+  const locOptions = [...new Set(units.map((u) => u.location_name || "Без място"))].sort();
+  const whoOptions = [...new Set(units.map((u) => u.created_by_name).filter(Boolean))].sort();
+  const activeFilters = [
+    fStatus && { key: "status", label: `Статус: ${(STATUS[fStatus] || {}).label || fStatus}`, clear: () => setFStatus("") },
+    fType && { key: "type", label: `Тип: ${fType === "machine" ? "Машина" : "Инструмент"}`, clear: () => setFType("") },
+    fLoc && { key: "loc", label: `Къде: ${fLoc}`, clear: () => setFLoc("") },
+    fWho && { key: "who", label: `Кой: ${fWho}`, clear: () => setFWho("") },
+  ].filter(Boolean);
+  const clearAll = () => { setFStatus(""); setFType(""); setFLoc(""); setFWho(""); };
 
   const groups = {};
   filtered.forEach((u) => {
@@ -196,6 +217,53 @@ export default function AssetsUnitsPage() {
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input className="pl-9" placeholder="Търси по QR код, сериен номер или име…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
+
+      {/* филтри */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select value={fStatus || "all"} onValueChange={(v) => setFStatus(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-auto h-9 text-sm" data-testid="filter-status"><SelectValue placeholder="Статус" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Статус: всички</SelectItem>
+            {Object.entries(STATUS).map(([k, st]) => <SelectItem key={k} value={k}>{st.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={fType || "all"} onValueChange={(v) => setFType(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-auto h-9 text-sm" data-testid="filter-type"><SelectValue placeholder="Тип" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Тип: всички</SelectItem>
+            <SelectItem value="machine">Машина</SelectItem>
+            <SelectItem value="tool">Инструмент</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={fLoc || "all"} onValueChange={(v) => setFLoc(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-auto h-9 text-sm" data-testid="filter-loc"><SelectValue placeholder="Къде" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Къде: всички</SelectItem>
+            {locOptions.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={fWho || "all"} onValueChange={(v) => setFWho(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-auto h-9 text-sm" data-testid="filter-who"><SelectValue placeholder="Кой" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Кой: всички</SelectItem>
+            {whoOptions.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* активни филтри */}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs text-muted-foreground">Активни:</span>
+          {activeFilters.map((f) => (
+            <span key={f.key} className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-md inline-flex items-center gap-1.5">
+              {f.label}
+              <button onClick={f.clear} data-testid={`clear-${f.key}`}><X className="w-3 h-3" /></button>
+            </span>
+          ))}
+          <button onClick={clearAll} className="text-xs text-amber-500 px-2" data-testid="clear-all-filters">Изчисти всички</button>
+        </div>
+      )}
 
       {/* board */}
       {loading ? (
