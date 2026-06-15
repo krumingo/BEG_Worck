@@ -349,6 +349,8 @@ from app.routes.assets_batch_intake import router as assets_batch_intake_router
 api_router.include_router(assets_batch_intake_router)
 from app.routes.assets_intake_pending import router as assets_intake_pending_router
 api_router.include_router(assets_intake_pending_router)
+from app.routes.assets_repairs import router as assets_repairs_router
+api_router.include_router(assets_repairs_router)
 
 # ── App Setup ────────────────────────────────────────────────────
 
