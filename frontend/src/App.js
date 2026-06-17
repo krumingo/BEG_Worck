@@ -49,6 +49,7 @@ import SalesPage from "@/pages/SalesPage";
 import AssetsQrBasePage from "@/pages/AssetsQrBasePage";
 import AssetsItemsPage from "@/pages/AssetsItemsPage";
 import AssetsUnitsPage from "@/pages/AssetsUnitsPage";
+import AssetUnitDetailPage from "@/pages/AssetUnitDetailPage";
 import AssetsBatchIntakePage from "@/pages/AssetsBatchIntakePage";
 import AssetsIntakeReviewPage from "@/pages/AssetsIntakeReviewPage";
 import ScanLandingPage from "@/pages/ScanLandingPage";
@@ -247,6 +248,7 @@ function AppRoutes() {
       <Route path="/assets/qr" element={<AdminRoute><AssetsQrBasePage /></AdminRoute>} />
       <Route path="/assets/items" element={<AdminRoute><AssetsItemsPage /></AdminRoute>} />
       <Route path="/assets/units" element={<AdminRoute><AssetsUnitsPage /></AdminRoute>} />
+      <Route path="/assets/units/:unitId" element={<AdminRoute><AssetUnitDetailPage /></AdminRoute>} />
       <Route path="/assets/batch-intake" element={<FieldProtectedRoute><AssetsBatchIntakePage /></FieldProtectedRoute>} />
       <Route path="/assets/intake-review" element={<AdminRoute><AssetsIntakeReviewPage /></AdminRoute>} />
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />

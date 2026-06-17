@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const EMPTY = {
 
 export default function AssetsUnitsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [units, setUnits] = useState([]);
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -349,7 +351,7 @@ export default function AssetsUnitsPage() {
               </div>
               {filtered.map((u) => (
                 <div key={u.id} className="grid grid-cols-[1.9fr_1.4fr_1.1fr_1fr_0.8fr] gap-3 px-4 py-3 border-b border-border last:border-0 items-center hover:bg-muted/40" data-testid={`unit-row-${u.id}`}>
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 cursor-pointer" onClick={() => navigate(`/assets/units/${u.id}`)} data-testid={`open-unit-${u.id}`}>
                     <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                       {u.photo_url ? <img src={u.photo_url} alt="" className="w-full h-full object-cover rounded-lg" /> : <Dot status={u.status} />}
                     </div>
