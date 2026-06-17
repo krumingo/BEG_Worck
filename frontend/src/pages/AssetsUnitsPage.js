@@ -187,22 +187,35 @@ export default function AssetsUnitsPage() {
 
   const ACTION_LABELS = { take: "Взет", handover: "Предаден", drop: "Оставен", repair: "В ремонт", return: "Върнат", intake: "Заприходен" };
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("bg-BG") : "—";
+  const daysSince = (iso) => {
+    if (!iso) return "";
+    const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    return d <= 0 ? " · днес" : ` · преди ${d} ${d === 1 ? "ден" : "дни"}`;
+  };
   const openHistory = async (unit) => {
-    setMoveHist({ unit, items: null });
+    setMoveHist({ unit, items: null, repairs: null, totalPaid: 0 });
     try {
       const r = await API.get(`/assets/units/${unit.id}/movements`);
-      setMoveHist({ unit, items: r.data?.items || [] });
-    } catch { setMoveHist({ unit, items: [] }); }
+      setMoveHist((prev) => ({ ...prev, unit, items: r.data?.items || [] }));
+    } catch { setMoveHist((prev) => ({ ...prev, unit, items: [] })); }
+    try {
+      const rp = await API.get(`/assets/units/${unit.id}/repairs`);
+      setMoveHist((prev) => ({ ...prev, repairs: rp.data?.items || [], totalPaid: rp.data?.total_paid || 0 }));
+    } catch { setMoveHist((prev) => ({ ...prev, repairs: [] })); }
   };
 
   const openRepairSend = (unit) => {
     setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
     setRepairSend({ unit });
   };
-  const openRepairReturn = (unit) => {
+  const openRepairReturn = async (unit) => {
     const w = warrantyStatus(unit.purchase_date, unit.warranty_months);
-    setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: w.inWarranty ? "0" : "", work_done: "", is_warranty: w.inWarranty });
-    setRepairReturn({ unit });
+    setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: w.inWarranty });
+    setRepairReturn({ unit, open: null });
+    try {
+      const r = await API.get(`/assets/units/${unit.id}/repairs`);
+      setRepairReturn({ unit, open: r.data?.open || null });
+    } catch { /* данните от изпращането са по желание */ }
   };
   const submitRepairSend = async () => {
     if (!repairSend) return;
@@ -225,7 +238,7 @@ export default function AssetsUnitsPage() {
     try {
       await API.post(`/assets/units/${repairReturn.unit.id}/repair/return`, {
         returned_by_name: rForm.returned_by_name || null,
-        cost: rForm.is_warranty ? 0 : (rForm.cost === "" ? null : Number(rForm.cost)),
+        cost: rForm.cost === "" ? null : Number(rForm.cost),
         work_done: rForm.work_done || null,
         is_warranty: rForm.is_warranty,
       });
@@ -502,6 +515,33 @@ export default function AssetsUnitsPage() {
               ))}
             </div>
           )}
+
+          {moveHist?.repairs && moveHist.repairs.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium flex items-center gap-1.5"><Wrench className="w-4 h-4 text-amber-500" />Ремонти</p>
+                <span className="text-xs text-muted-foreground">Похарчено общо: <b className="text-amber-400">{(moveHist.totalPaid || 0).toLocaleString("bg-BG")} €</b></span>
+              </div>
+              <div className="space-y-2">
+                {moveHist.repairs.map((rp, i) => (
+                  <div key={i} className="rounded-lg border border-border p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">{fmtDate(rp.sent_at)}{rp.returned_at ? ` → ${fmtDate(rp.returned_at)}` : " · в ремонт"}</span>
+                      <div className="flex items-center gap-1.5">
+                        {rp.is_warranty && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">гаранция</span>}
+                        {rp.cost != null && rp.cost > 0 && <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">{rp.cost} €</span>}
+                      </div>
+                    </div>
+                    {rp.work_done && <p className="text-xs mt-1">{rp.work_done}</p>}
+                    {rp.issue && !rp.work_done && <p className="text-xs mt-1 text-muted-foreground">Повреда: {rp.issue}</p>}
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {rp.service ? `${rp.service} · ` : ""}{rp.sent_by_name ? `закара: ${rp.sent_by_name}` : ""}{rp.returned_by_name ? ` · взе: ${rp.returned_by_name}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -543,12 +583,20 @@ export default function AssetsUnitsPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg bg-muted/40 p-2.5 text-sm">
-              {repairReturn?.unit?.item_name} <span className="text-[10px] font-mono text-muted-foreground">{repairReturn?.unit?.qr_id}</span>
+              <p className="font-medium">{repairReturn?.unit?.item_name} <span className="text-[10px] font-mono text-muted-foreground">{repairReturn?.unit?.qr_id}</span></p>
+              {repairReturn?.open && (
+                <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
+                  <span>Изпратен: <b className="text-foreground">{fmtDate(repairReturn.open.sent_at)}</b>{daysSince(repairReturn.open.sent_at)}</span>
+                  {repairReturn.open.service && <span>Сервиз: <b className="text-foreground">{repairReturn.open.service}</b></span>}
+                  {repairReturn.open.sent_by_name && <span>Закара: <b className="text-foreground">{repairReturn.open.sent_by_name}</b></span>}
+                  {repairReturn.open.issue && <span>Повреда: <b className="text-foreground">{repairReturn.open.issue}</b></span>}
+                </div>
+              )}
             </div>
             {repairReturn && warrantyStatus(repairReturn.unit.purchase_date, repairReturn.unit.warranty_months).inWarranty && (
               <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="text-xs text-emerald-300">В гаранция до {warrantyStatus(repairReturn.unit.purchase_date, repairReturn.unit.warranty_months).untilLabel} · ремонтът трябва да е безплатен</span>
+                <span className="text-xs text-emerald-300">В гаранция до {warrantyStatus(repairReturn.unit.purchase_date, repairReturn.unit.warranty_months).untilLabel} · но диагностика/транспорт може да се плащат</span>
               </div>
             )}
             <div>
@@ -562,10 +610,10 @@ export default function AssetsUnitsPage() {
               </Select>
             </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, is_warranty: e.target.checked, cost: e.target.checked ? "0" : rForm.cost })} data-testid="repair-is-warranty" />
-              Гаранционен ремонт (безплатно)
+              <input type="checkbox" checked={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, is_warranty: e.target.checked })} data-testid="repair-is-warranty" />
+              Покрито от гаранция
             </label>
-            <div><Label>Цена (€){rForm.is_warranty ? " · заключена при гаранция" : ""}</Label><Input type="number" min="0" step="0.01" value={rForm.cost} disabled={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, cost: e.target.value })} data-testid="repair-cost" /></div>
+            <div><Label>Цена (€){rForm.is_warranty ? " · диагностика/транспорт може да се плащат" : ""}</Label><Input type="number" min="0" step="0.01" placeholder="0" value={rForm.cost} onChange={(e) => setRForm({ ...rForm, cost: e.target.value })} data-testid="repair-cost" /></div>
             <div><Label>Какво е направено</Label><Input value={rForm.work_done} onChange={(e) => setRForm({ ...rForm, work_done: e.target.value })} data-testid="repair-work-done" /></div>
           </div>
           <DialogFooter>

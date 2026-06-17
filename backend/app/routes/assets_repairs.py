@@ -114,11 +114,12 @@ async def repair_return(unit_id: str, data: RepairReturn, user: dict = Depends(g
     if not rec:
         raise HTTPException(status_code=400, detail="Този актив не е на ремонт")
 
-    # гаранция по подразбиране от бройката (ако не е подадено явно)
+    # гаранция по подразбиране от бройката (само МАРКЕР — НЕ заключва цената;
+    # дори в гаранция често се плаща диагностика/транспорт)
     warranty = data.is_warranty
     if warranty is None:
         warranty = _in_warranty(unit.get("purchase_date"), unit.get("warranty_months"))
-    cost = 0.0 if warranty else (data.cost if data.cost is not None else None)
+    cost = data.cost if data.cost is not None else None
 
     # къде се връща — подаден склад или там, откъдето е тръгнал
     ret_loc_type = "warehouse" if data.return_location_id else rec.get("from_location_type")
@@ -152,6 +153,6 @@ async def list_repairs(unit_id: str, user: dict = Depends(get_current_user)):
         .sort("sent_at", -1)
         .to_list(500)
     )
-    total_paid = sum((r.get("cost") or 0) for r in items if not r.get("is_warranty"))
+    total_paid = sum((r.get("cost") or 0) for r in items)  # всичко платено (вкл. диагностика в гаранция)
     open_repair = next((r for r in items if r.get("status") == "in_repair"), None)
     return {"items": items, "total_paid": round(total_paid, 2), "open": open_repair}
