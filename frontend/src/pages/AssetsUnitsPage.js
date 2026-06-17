@@ -58,11 +58,16 @@ export default function AssetsUnitsPage() {
   const [repairReturn, setRepairReturn] = useState(null); // { unit } | null
   const [rForm, setRForm] = useState({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
   const [rSaving, setRSaving] = useState(false);
+  const [employees, setEmployees] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    try {
+      const emp = await API.get("/employees");
+      setEmployees(Array.isArray(emp.data) ? emp.data : (emp.data?.items || []));
+    } catch { /* списъкът със служители е по желание */ }
     try {
       const [u, it, wh] = await Promise.all([
         API.get("/assets/units?page_size=300"),
@@ -510,7 +515,16 @@ export default function AssetsUnitsPage() {
             <div className="rounded-lg bg-muted/40 p-2.5 text-sm">
               {repairSend?.unit?.item_name} <span className="text-[10px] font-mono text-muted-foreground">{repairSend?.unit?.qr_id}</span>
             </div>
-            <div><Label>Кой го закара</Label><Input value={rForm.sent_by_name} onChange={(e) => setRForm({ ...rForm, sent_by_name: e.target.value })} data-testid="repair-sent-by" /></div>
+            <div>
+              <Label>Кой го закара</Label>
+              <Select value={rForm.sent_by_name || "none"} onValueChange={(v) => setRForm({ ...rForm, sent_by_name: v === "none" ? "" : v })}>
+                <SelectTrigger data-testid="repair-sent-by"><SelectValue placeholder="Избери служител" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {employees.map((e) => <SelectItem key={e.id} value={e.name || e.email}>{e.name || e.email}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Сервиз / при кого</Label><Input value={rForm.service} onChange={(e) => setRForm({ ...rForm, service: e.target.value })} data-testid="repair-service" /></div>
             <div><Label>Повреда</Label><Input value={rForm.issue} onChange={(e) => setRForm({ ...rForm, issue: e.target.value })} data-testid="repair-issue" /></div>
           </div>
@@ -537,7 +551,16 @@ export default function AssetsUnitsPage() {
                 <span className="text-xs text-emerald-300">В гаранция до {warrantyStatus(repairReturn.unit.purchase_date, repairReturn.unit.warranty_months).untilLabel} · ремонтът трябва да е безплатен</span>
               </div>
             )}
-            <div><Label>Кой го взе</Label><Input value={rForm.returned_by_name} onChange={(e) => setRForm({ ...rForm, returned_by_name: e.target.value })} data-testid="repair-returned-by" /></div>
+            <div>
+              <Label>Кой го взе</Label>
+              <Select value={rForm.returned_by_name || "none"} onValueChange={(v) => setRForm({ ...rForm, returned_by_name: v === "none" ? "" : v })}>
+                <SelectTrigger data-testid="repair-returned-by"><SelectValue placeholder="Избери служител" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {employees.map((e) => <SelectItem key={e.id} value={e.name || e.email}>{e.name || e.email}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, is_warranty: e.target.checked, cost: e.target.checked ? "0" : rForm.cost })} data-testid="repair-is-warranty" />
               Гаранционен ремонт (безплатно)
