@@ -28,6 +28,19 @@ def _user_name(user: dict) -> str:
             or (user.get("email", "").split("@")[0] if user.get("email") else ""))
 
 
+async def _person_by_id(org_id: str, user_id: Optional[str]) -> dict:
+    """Връща {name, avatar_url} за users.id; празно ако няма id или потребител."""
+    if not user_id:
+        return {}
+    u = await db.users.find_one(
+        {"id": user_id, "org_id": org_id},
+        {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1, "avatar_url": 1},
+    )
+    if not u:
+        return {}
+    return {"name": _user_name(u) or None, "avatar_url": u.get("avatar_url")}
+
+
 def _in_warranty(purchase_date: Optional[str], warranty_months: Optional[int]) -> bool:
     """Сметка за гаранция от датата на покупка + месеци."""
     if not purchase_date or not warranty_months:
@@ -47,13 +60,15 @@ def _in_warranty(purchase_date: Optional[str], warranty_months: Optional[int]) -
 
 
 class RepairSend(BaseModel):
-    sent_by_name: Optional[str] = None   # кой го закара
+    sent_by: Optional[str] = None        # users.id на този, който закара
+    sent_by_name: Optional[str] = None   # кой го закара (snapshot / резерва за стари записи)
     service: Optional[str] = None        # сервиз / при кого
     issue: Optional[str] = None          # повреда
 
 
 class RepairReturn(BaseModel):
-    returned_by_name: Optional[str] = None  # кой го взе
+    returned_by: Optional[str] = None       # users.id на този, който взе
+    returned_by_name: Optional[str] = None  # кой го взе (snapshot / резерва за стари записи)
     cost: Optional[float] = None            # цена
     work_done: Optional[str] = None         # какво е направено
     is_warranty: Optional[bool] = None      # гаранционен ремонт
@@ -78,16 +93,22 @@ async def repair_send(unit_id: str, data: RepairSend, user: dict = Depends(get_c
     if existing:
         raise HTTPException(status_code=400, detail="Този актив вече е на ремонт")
 
+    # име + аватар се извеждат на живо по id; името пазим и като snapshot (резерва)
+    sent_person = await _person_by_id(org, data.sent_by)
+    sent_name = sent_person.get("name") or ((data.sent_by_name or "").strip() or None)
+
     rec = {
         "id": str(uuid.uuid4()),
         "org_id": org,
         "unit_id": unit_id,
         "status": "in_repair",
         "sent_at": datetime.now(timezone.utc).date().isoformat(),
-        "sent_by_name": (data.sent_by_name or "").strip() or None,
+        "sent_by": (data.sent_by or "").strip() or None,
+        "sent_by_name": sent_name,
         "service": (data.service or "").strip() or None,
         "issue": (data.issue or "").strip() or None,
         "returned_at": None,
+        "returned_by": None,
         "returned_by_name": None,
         "cost": None,
         "work_done": None,
@@ -125,12 +146,17 @@ async def repair_return(unit_id: str, data: RepairReturn, user: dict = Depends(g
     ret_loc_type = "warehouse" if data.return_location_id else rec.get("from_location_type")
     ret_loc_id = data.return_location_id or rec.get("from_location_id")
 
+    # име + аватар се извеждат на живо по id; името пазим и като snapshot (резерва)
+    ret_person = await _person_by_id(org, data.returned_by)
+    ret_name = ret_person.get("name") or ((data.returned_by_name or "").strip() or None)
+
     await db.asset_repairs.update_one(
         {"id": rec["id"], "org_id": org},
         {"$set": {
             "status": "done",
             "returned_at": datetime.now(timezone.utc).date().isoformat(),
-            "returned_by_name": (data.returned_by_name or "").strip() or None,
+            "returned_by": (data.returned_by or "").strip() or None,
+            "returned_by_name": ret_name,
             "cost": cost,
             "work_done": (data.work_done or "").strip() or None,
             "is_warranty": bool(warranty),
@@ -154,5 +180,25 @@ async def list_repairs(unit_id: str, user: dict = Depends(get_current_user)):
         .to_list(500)
     )
     total_paid = sum((r.get("cost") or 0) for r in items)  # всичко платено (вкл. диагностика в гаранция)
+
+    # обогатяване с име + аватар на живо по users.id (старите записи без id ползват snapshot)
+    ids = {r.get("sent_by") for r in items if r.get("sent_by")} | \
+          {r.get("returned_by") for r in items if r.get("returned_by")}
+    people = {}
+    if ids:
+        async for u in db.users.find(
+            {"id": {"$in": list(ids)}, "org_id": org},
+            {"_id": 0, "id": 1, "name": 1, "first_name": 1, "last_name": 1, "email": 1, "avatar_url": 1},
+        ):
+            people[u["id"]] = {"name": _user_name(u) or None, "avatar_url": u.get("avatar_url")}
+
+    for r in items:
+        sp = people.get(r.get("sent_by"), {})
+        rp = people.get(r.get("returned_by"), {})
+        r["sent_by_name"] = sp.get("name") or r.get("sent_by_name")
+        r["sent_by_avatar"] = sp.get("avatar_url")
+        r["returned_by_name"] = rp.get("name") or r.get("returned_by_name")
+        r["returned_by_avatar"] = rp.get("avatar_url")
+
     open_repair = next((r for r in items if r.get("status") == "in_repair"), None)
     return {"items": items, "total_paid": round(total_paid, 2), "open": open_repair}

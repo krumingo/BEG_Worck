@@ -38,6 +38,35 @@ const EMPTY = {
   purchase_date: "", warranty_months: "", purchase_price: "",
 };
 
+// име за показване от потребителски запис: name → first+last → имейл
+const empName = (e) =>
+  (e?.name || `${e?.first_name || ""} ${e?.last_name || ""}`.trim() || e?.email || "").trim();
+
+function Avatar({ name, url, size = 24 }) {
+  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
+  const [imgErr, setImgErr] = useState(false);
+  const initials = (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  if (fullUrl && !imgErr) {
+    return <img src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
+  }
+  return (
+    <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0" style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {initials}
+    </div>
+  );
+}
+
+// аватар + име в едно (за история и резюмета); ако няма име — нищо
+function PersonChip({ name, avatar, size = 18 }) {
+  if (!name) return null;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      <Avatar name={name} url={avatar} size={size} />
+      <span className="text-foreground">{name}</span>
+    </span>
+  );
+}
+
 export default function AssetsUnitsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -58,7 +87,7 @@ export default function AssetsUnitsPage() {
   const [moveHist, setMoveHist] = useState(null);
   const [repairSend, setRepairSend] = useState(null);   // { unit } | null
   const [repairReturn, setRepairReturn] = useState(null); // { unit } | null
-  const [rForm, setRForm] = useState({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
+  const [rForm, setRForm] = useState({ sent_by: "", sent_by_name: "", service: "", issue: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
   const [rSaving, setRSaving] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [form, setForm] = useState(EMPTY);
@@ -207,12 +236,12 @@ export default function AssetsUnitsPage() {
   };
 
   const openRepairSend = (unit) => {
-    setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
+    setRForm({ sent_by: "", sent_by_name: "", service: "", issue: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
     setRepairSend({ unit });
   };
   const openRepairReturn = async (unit) => {
     const w = warrantyStatus(unit.purchase_date, unit.warranty_months);
-    setRForm({ sent_by_name: "", service: "", issue: "", returned_by_name: "", cost: "", work_done: "", is_warranty: w.inWarranty });
+    setRForm({ sent_by: "", sent_by_name: "", service: "", issue: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: w.inWarranty });
     setRepairReturn({ unit, open: null });
     try {
       const r = await API.get(`/assets/units/${unit.id}/repairs`);
@@ -224,7 +253,8 @@ export default function AssetsUnitsPage() {
     setRSaving(true);
     try {
       await API.post(`/assets/units/${repairSend.unit.id}/repair/send`, {
-        sent_by_name: rForm.sent_by_name || null,
+        sent_by: rForm.sent_by || null,
+        sent_by_name: empName(employees.find((e) => e.id === rForm.sent_by)) || rForm.sent_by_name || null,
         service: rForm.service || null,
         issue: rForm.issue || null,
       });
@@ -239,7 +269,8 @@ export default function AssetsUnitsPage() {
     setRSaving(true);
     try {
       await API.post(`/assets/units/${repairReturn.unit.id}/repair/return`, {
-        returned_by_name: rForm.returned_by_name || null,
+        returned_by: rForm.returned_by || null,
+        returned_by_name: empName(employees.find((e) => e.id === rForm.returned_by)) || rForm.returned_by_name || null,
         cost: rForm.cost === "" ? null : Number(rForm.cost),
         work_done: rForm.work_done || null,
         is_warranty: rForm.is_warranty,
@@ -536,9 +567,11 @@ export default function AssetsUnitsPage() {
                     </div>
                     {rp.work_done && <p className="text-xs mt-1">{rp.work_done}</p>}
                     {rp.issue && !rp.work_done && <p className="text-xs mt-1 text-muted-foreground">Повреда: {rp.issue}</p>}
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {rp.service ? `${rp.service} · ` : ""}{rp.sent_by_name ? `закара: ${rp.sent_by_name}` : ""}{rp.returned_by_name ? ` · взе: ${rp.returned_by_name}` : ""}
-                    </p>
+                    <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                      {rp.service && <span>{rp.service} ·</span>}
+                      {rp.sent_by_name && <span className="inline-flex items-center gap-1">закара: <PersonChip name={rp.sent_by_name} avatar={rp.sent_by_avatar} /></span>}
+                      {rp.returned_by_name && <span className="inline-flex items-center gap-1">· взе: <PersonChip name={rp.returned_by_name} avatar={rp.returned_by_avatar} /></span>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -559,11 +592,11 @@ export default function AssetsUnitsPage() {
             </div>
             <div>
               <Label>Кой го закара</Label>
-              <Select value={rForm.sent_by_name || "none"} onValueChange={(v) => setRForm({ ...rForm, sent_by_name: v === "none" ? "" : v })}>
+              <Select value={rForm.sent_by || "none"} onValueChange={(v) => setRForm({ ...rForm, sent_by: v === "none" ? "" : v })}>
                 <SelectTrigger data-testid="repair-sent-by"><SelectValue placeholder="Избери служител" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">—</SelectItem>
-                  {employees.map((e) => <SelectItem key={e.id} value={e.name || e.email}>{e.name || e.email}</SelectItem>)}
+                  {employees.map((e) => <SelectItem key={e.id} value={e.id}><span className="inline-flex items-center gap-2"><Avatar name={empName(e)} url={e.avatar_url} size={22} />{empName(e)}</span></SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -590,7 +623,7 @@ export default function AssetsUnitsPage() {
                 <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
                   <span>Изпратен: <b className="text-foreground">{fmtDate(repairReturn.open.sent_at)}</b>{daysSince(repairReturn.open.sent_at)}</span>
                   {repairReturn.open.service && <span>Сервиз: <b className="text-foreground">{repairReturn.open.service}</b></span>}
-                  {repairReturn.open.sent_by_name && <span>Закара: <b className="text-foreground">{repairReturn.open.sent_by_name}</b></span>}
+                  {repairReturn.open.sent_by_name && <span className="inline-flex items-center gap-1">Закара: <PersonChip name={repairReturn.open.sent_by_name} avatar={repairReturn.open.sent_by_avatar} /></span>}
                   {repairReturn.open.issue && <span>Повреда: <b className="text-foreground">{repairReturn.open.issue}</b></span>}
                 </div>
               )}
@@ -603,11 +636,11 @@ export default function AssetsUnitsPage() {
             )}
             <div>
               <Label>Кой го взе</Label>
-              <Select value={rForm.returned_by_name || "none"} onValueChange={(v) => setRForm({ ...rForm, returned_by_name: v === "none" ? "" : v })}>
+              <Select value={rForm.returned_by || "none"} onValueChange={(v) => setRForm({ ...rForm, returned_by: v === "none" ? "" : v })}>
                 <SelectTrigger data-testid="repair-returned-by"><SelectValue placeholder="Избери служител" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">—</SelectItem>
-                  {employees.map((e) => <SelectItem key={e.id} value={e.name || e.email}>{e.name || e.email}</SelectItem>)}
+                  {employees.map((e) => <SelectItem key={e.id} value={e.id}><span className="inline-flex items-center gap-2"><Avatar name={empName(e)} url={e.avatar_url} size={22} />{empName(e)}</span></SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

@@ -19,6 +19,30 @@ const STATUS = {
 const ACTION_LABELS = { take: "Взет", handover: "Предаден", drop: "Оставен", repair: "В ремонт", return: "Върнат", intake: "Заприходен" };
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("bg-BG") : "—");
 
+function Avatar({ name, url, size = 18 }) {
+  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
+  const [imgErr, setImgErr] = useState(false);
+  const initials = (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  if (fullUrl && !imgErr) {
+    return <img src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
+  }
+  return (
+    <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0" style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {initials}
+    </div>
+  );
+}
+
+function PersonChip({ name, avatar, size = 18 }) {
+  if (!name) return null;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      <Avatar name={name} url={avatar} size={size} />
+      <span className="text-foreground">{name}</span>
+    </span>
+  );
+}
+
 export default function AssetUnitDetailPage() {
   const { unitId } = useParams();
   const navigate = useNavigate();
@@ -139,9 +163,11 @@ export default function AssetUnitDetailPage() {
                     </div>
                     {rp.work_done && <p className="text-xs mt-1">{rp.work_done}</p>}
                     {rp.issue && !rp.work_done && <p className="text-xs mt-1 text-muted-foreground">Повреда: {rp.issue}</p>}
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {rp.service ? `${rp.service} · ` : ""}{rp.sent_by_name ? `закара: ${rp.sent_by_name}` : ""}{rp.returned_by_name ? ` · взе: ${rp.returned_by_name}` : ""}
-                    </p>
+                    <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                      {rp.service && <span>{rp.service} ·</span>}
+                      {rp.sent_by_name && <span className="inline-flex items-center gap-1">закара: <PersonChip name={rp.sent_by_name} avatar={rp.sent_by_avatar} /></span>}
+                      {rp.returned_by_name && <span className="inline-flex items-center gap-1">· взе: <PersonChip name={rp.returned_by_name} avatar={rp.returned_by_avatar} /></span>}
+                    </div>
                   </div>
                 ))}
               </div>
