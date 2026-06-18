@@ -81,6 +81,7 @@ import ContractPaymentsPage from "@/pages/ContractPaymentsPage";
 import WorkerCalendarPage from "@/pages/WorkerCalendarPage";
 import AlarmsDashboardPage from "@/pages/AlarmsDashboardPage";
 import TechnicianDashboard from "@/pages/TechnicianDashboard";
+import MyMoneyPage from "@/pages/MyMoneyPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
 import AllReportsPage from "@/pages/AllReportsPage";
 import OCRInvoicePage from "@/pages/OCRInvoicePage";
@@ -208,6 +209,7 @@ function AppRoutes() {
       <Route path="/tech" element={<CompanyProtectedRoute><TechnicianDashboard /></CompanyProtectedRoute>} />
       <Route path="/s/:qrId" element={<FieldProtectedRoute><ScanLandingPage /></FieldProtectedRoute>} />
       <Route path="/tech/tools" element={<FieldProtectedRoute><MyToolsPage /></FieldProtectedRoute>} />
+      <Route path="/tech/my-money" element={<FieldProtectedRoute><MyMoneyPage /></FieldProtectedRoute>} />
       <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
 
       {/* Admin-only routes — Technician/Worker/Driver redirected to /tech */}

@@ -98,3 +98,51 @@ async def update_asset_intake_roles(data: AssetIntakeRoles, user: dict = Depends
         {"$set": {"asset_intake_roles": {"technician": data.technician, "site_manager": data.site_manager}}},
     )
     return {"technician": data.technician, "site_manager": data.site_manager}
+
+
+# ── Workers see own pay (self-view toggle) ─────────────────────────
+class WorkersSeePay(BaseModel):
+    enabled: bool = False
+
+
+@router.get("/settings/workers-see-pay")
+async def get_workers_see_pay(user: dict = Depends(get_current_user)):
+    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "workers_see_pay": 1})
+    return {"enabled": bool((org or {}).get("workers_see_pay"))}
+
+
+@router.put("/settings/workers-see-pay")
+async def update_workers_see_pay(data: WorkersSeePay, user: dict = Depends(get_current_user)):
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner can change this")
+    await db.organizations.update_one(
+        {"id": user["org_id"]},
+        {"$set": {"workers_see_pay": data.enabled}},
+    )
+    return {"enabled": data.enabled}
+
+
+@router.get("/my-pay-summary")
+async def my_pay_summary(user: dict = Depends(get_current_user)):
+    """Worker self-view: owed (unpaid slips' period net) + payment history.
+    Gated by the org 'workers_see_pay' setting; always own-scoped."""
+    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "workers_see_pay": 1})
+    if not bool((org or {}).get("workers_see_pay")):
+        raise HTTPException(status_code=403, detail="Disabled")
+    slips = await db.payment_slips.find(
+        {"org_id": user["org_id"], "employee_id": user["id"], "archived": {"$ne": True}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+    owed = 0.0
+    out = []
+    for s in slips:
+        net_period = round(
+            float(s.get("earned_amount") or 0)
+            + float(s.get("bonuses_amount") or 0)
+            - float(s.get("deductions_amount") or 0), 2
+        )
+        s["net_period"] = net_period
+        if (s.get("status") or "") != "paid":
+            owed += net_period
+        out.append(s)
+    return {"enabled": True, "currency": "EUR", "owed": round(owed, 2), "slips": out}

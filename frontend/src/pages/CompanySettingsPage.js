@@ -18,6 +18,8 @@ export default function CompanySettingsPage() {
   const [saved, setSaved] = useState(false);
   const [intakeRoles, setIntakeRoles] = useState({ technician: false, site_manager: false });
   const [intakeSaving, setIntakeSaving] = useState(false);
+  const [workersSeePay, setWorkersSeePay] = useState(false);
+  const [wspSaving, setWspSaving] = useState(false);
   
   // Invoice numbering state
   const [invoiceSettings, setInvoiceSettings] = useState(null);
@@ -134,6 +136,17 @@ export default function CompanySettingsPage() {
   useEffect(() => {
     API.get("/settings/asset-intake-roles").then((r) => setIntakeRoles(r.data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    API.get("/settings/workers-see-pay").then((r) => setWorkersSeePay(!!r.data?.enabled)).catch(() => {});
+  }, []);
+
+  const saveWorkersSeePay = async (v) => {
+    setWorkersSeePay(v);
+    setWspSaving(true);
+    try { await API.put("/settings/workers-see-pay", { enabled: v }); } catch { /* ignore */ }
+    finally { setWspSaving(false); }
+  };
 
   const saveIntakeRoles = async (next) => {
     setIntakeRoles(next);
@@ -453,6 +466,15 @@ export default function CompanySettingsPage() {
         <div className="flex items-center justify-between py-2">
           <span className="text-sm">Site Manager може да заскладява</span>
           <Switch checked={intakeRoles.site_manager} disabled={intakeSaving} onCheckedChange={(v) => saveIntakeRoles({ ...intakeRoles, site_manager: v })} data-testid="intake-sm-toggle" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 mt-4">
+        <h3 className="font-semibold mb-1 flex items-center gap-2"><Building2 className="w-4 h-4" />Заплати на работниците</h3>
+        <p className="text-sm text-muted-foreground mb-3">Когато е включено, всеки работник вижда в портала „Моите пари" — дължимото за получаване и историята на плащанията си (само своите).</p>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm">Работниците виждат своите пари</span>
+          <Switch checked={workersSeePay} disabled={wspSaving} onCheckedChange={saveWorkersSeePay} data-testid="workers-see-pay-toggle" />
         </div>
       </div>
     </div>

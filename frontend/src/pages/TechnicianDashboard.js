@@ -19,7 +19,7 @@ import {
   Building2, Clock, Users, Plus, Loader2, Check, Camera, Package,
   FileText, ArrowLeft, Send, Save, AlertTriangle, Trash2, Copy, UserPlus,
   MapPin, Phone, Pencil, Eye, Mail, ChevronDown, CornerDownRight,
-  QrCode, Truck, Bell, Calendar,
+  QrCode, Truck, Bell, Calendar, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +41,7 @@ export default function TechnicianDashboard() {
   const [siteMachines, setSiteMachines] = useState({}); // { project_id: [units] }
   const [pendingCustody, setPendingCustody] = useState([]); // вещи, дадени на мен, чакащи приемане
   const [canIntake, setCanIntake] = useState(false);
+  const [canSeeOwnPay, setCanSeeOwnPay] = useState(false);
 
   // Roster
   const [roster, setRoster] = useState([]);
@@ -122,6 +123,7 @@ export default function TechnicianDashboard() {
   }, []);
   useEffect(() => { loadPendingCustody(); }, [loadPendingCustody]);
   useEffect(() => { API.get("/assets/intake/can-submit").then((r) => setCanIntake(!!r.data?.allowed)).catch(() => {}); }, []);
+  useEffect(() => { API.get("/settings/workers-see-pay").then((r) => setCanSeeOwnPay(!!r.data?.enabled)).catch(() => {}); }, []);
 
   const actCustody = async (custodyId, action) => {
     try {
@@ -417,6 +419,7 @@ export default function TechnicianDashboard() {
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><FileText className="w-5 h-5 text-blue-400" /><span className="text-[10px] text-center leading-tight">Сканирай фактура</span></button>
           <button onClick={() => navigate("/tech/tools")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Package className="w-5 h-5 text-emerald-400" /><span className="text-[10px] text-center leading-tight">Вземи/Дай инструмент</span></button>
           {canIntake && (<button onClick={() => navigate("/assets/batch-intake")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all" data-testid="qa-batch-intake"><Camera className="w-5 h-5 text-amber-400" /><span className="text-[10px] text-center leading-tight">Заскладяване</span></button>)}
+          {canSeeOwnPay && (<button onClick={() => navigate("/tech/my-money")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all" data-testid="qa-my-money"><Wallet className="w-5 h-5 text-amber-400" /><span className="text-[10px] text-center leading-tight">Моите пари</span></button>)}
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Truck className="w-5 h-5 text-amber-400" /><span className="text-[10px] text-center leading-tight">Заявка за курс</span></button>
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><Trash2 className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Извозване отпадък</span></button>
           <button onClick={() => toast.info("Идва скоро")} className="rounded-2xl border border-border bg-card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-all"><AlertTriangle className="w-5 h-5 text-red-400" /><span className="text-[10px] text-center leading-tight">Докладвай проблем</span></button>
