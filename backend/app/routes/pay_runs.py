@@ -1263,6 +1263,11 @@ async def list_payment_slips(
     page_size: int = Query(20, ge=1, le=100),
 ):
     org_id = user["org_id"]
+    # Сигурност: техникът вижда само своите фишове; платежни роли (Admin/Owner/Accountant) — всички; други — забранено.
+    if user["role"] == "Technician":
+        employee_id = user["id"]
+    elif user["role"] not in ("Admin", "Owner", "Accountant"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     q = {"org_id": org_id, "archived": {"$ne": True}}
     if employee_id:
         q["employee_id"] = employee_id
@@ -1282,6 +1287,12 @@ async def get_payment_slip(slip_id: str, user: dict = Depends(get_current_user))
     )
     if not slip:
         raise HTTPException(status_code=404, detail="Slip not found")
+    # Сигурност: техникът вижда само своя фиш; невалидни роли — забранено.
+    if user["role"] == "Technician":
+        if slip.get("employee_id") != user["id"]:
+            raise HTTPException(status_code=404, detail="Slip not found")
+    elif user["role"] not in ("Admin", "Owner", "Accountant"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     return slip
 
 
