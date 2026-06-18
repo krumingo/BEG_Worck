@@ -31,6 +31,15 @@ const STATUS_COLORS = {
   Finalized: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   Paid: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   Reversed: "bg-red-500/20 text-red-400 border-red-500/30",
+  confirmed: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  paid: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  reopened: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+};
+
+const STATUS_LABEL = {
+  confirmed: "Confirmed",
+  paid: "Paid",
+  reopened: "Reopened",
 };
 
 export default function MyPayslipsPage() {
@@ -42,8 +51,8 @@ export default function MyPayslipsPage() {
 
   const fetchPayslips = useCallback(async () => {
     try {
-      const res = await API.get("/payslips");
-      setPayslips(res.data);
+      const res = await API.get("/payment-slips?page_size=100");
+      setPayslips(res.data.items || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -55,7 +64,7 @@ export default function MyPayslipsPage() {
 
   const openDetail = async (payslip) => {
     try {
-      const res = await API.get(`/payslips/${payslip.id}`);
+      const res = await API.get(`/payment-slips/${payslip.id}`);
       setSelectedPayslip(res.data);
       setDetailOpen(true);
     } catch (err) {
@@ -110,16 +119,16 @@ export default function MyPayslipsPage() {
                         <span className="text-sm">{ps.period_start} - {ps.period_end}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">{formatCurrency(ps.base_amount)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{formatCurrency(ps.earned_amount)}</TableCell>
                     <TableCell className="text-right font-mono text-sm text-red-400">
-                      {(ps.deductions_amount || 0) + (ps.advances_deducted_amount || 0) > 0 
-                        ? `-${formatCurrency((ps.deductions_amount || 0) + (ps.advances_deducted_amount || 0))}` 
+                      {(ps.deductions_amount || 0) > 0
+                        ? `-${formatCurrency(ps.deductions_amount)}`
                         : "-"}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm font-bold text-primary">{formatCurrency(ps.net_pay)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm font-bold text-primary">{formatCurrency(ps.paid_now_amount)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-xs ${STATUS_COLORS[ps.status] || ""}`}>
-                        {ps.status}
+                        {STATUS_LABEL[ps.status] || ps.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -147,57 +156,51 @@ export default function MyPayslipsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
-                    {selectedPayslip.payroll_run?.period_start} - {selectedPayslip.payroll_run?.period_end}
+                    {selectedPayslip.period_start} - {selectedPayslip.period_end}
                   </span>
                 </div>
                 <Badge variant="outline" className={`text-xs ${STATUS_COLORS[selectedPayslip.status] || ""}`}>
-                  {selectedPayslip.status}
+                  {STATUS_LABEL[selectedPayslip.status] || selectedPayslip.status}
                 </Badge>
               </div>
 
               <div className="space-y-3">
                 <div className="flex justify-between py-2 border-b border-border">
                   <span className="text-sm text-muted-foreground">Pay Type</span>
-                  <span className="text-sm font-medium">{selectedPayslip.details_json?.pay_type || "-"}</span>
+                  <span className="text-sm font-medium">{selectedPayslip.pay_type || "-"}</span>
                 </div>
-                {selectedPayslip.details_json?.days_present !== undefined && (
+                {selectedPayslip.approved_days !== undefined && (
                   <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">Days Present</span>
-                    <span className="text-sm font-medium">{selectedPayslip.details_json.days_present}</span>
+                    <span className="text-sm text-muted-foreground">Days</span>
+                    <span className="text-sm font-medium">{selectedPayslip.approved_days}</span>
                   </div>
                 )}
-                {selectedPayslip.details_json?.total_hours !== undefined && (
+                {selectedPayslip.approved_hours !== undefined && (
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Hours Worked</span>
-                    <span className="text-sm font-medium">{selectedPayslip.details_json.total_hours}h</span>
+                    <span className="text-sm font-medium">{selectedPayslip.approved_hours}h{selectedPayslip.overtime_hours > 0 ? ` (incl. ${selectedPayslip.overtime_hours}h OT)` : ""}</span>
                   </div>
                 )}
-                {selectedPayslip.details_json?.daily_rate !== undefined && (
-                  <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">Daily Rate</span>
-                    <span className="text-sm font-medium">{formatCurrency(selectedPayslip.details_json.daily_rate)}</span>
-                  </div>
-                )}
-                {selectedPayslip.details_json?.hourly_rate !== undefined && (
+                {selectedPayslip.frozen_hourly_rate > 0 && (
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Hourly Rate</span>
-                    <span className="text-sm font-medium">{formatCurrency(selectedPayslip.details_json.hourly_rate)}</span>
+                    <span className="text-sm font-medium">{formatCurrency(selectedPayslip.frozen_hourly_rate)}</span>
                   </div>
                 )}
                 <div className="flex justify-between py-2 border-b border-border">
                   <span className="text-sm text-muted-foreground">Base Amount</span>
-                  <span className="text-sm font-medium">{formatCurrency(selectedPayslip.base_amount)}</span>
+                  <span className="text-sm font-medium">{formatCurrency(selectedPayslip.earned_amount)}</span>
                 </div>
+                {selectedPayslip.bonuses_amount > 0 && (
+                  <div className="flex justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Bonuses</span>
+                    <span className="text-sm font-medium text-emerald-400">+{formatCurrency(selectedPayslip.bonuses_amount)}</span>
+                  </div>
+                )}
                 {selectedPayslip.deductions_amount > 0 && (
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Deductions</span>
                     <span className="text-sm font-medium text-red-400">-{formatCurrency(selectedPayslip.deductions_amount)}</span>
-                  </div>
-                )}
-                {selectedPayslip.advances_deducted_amount > 0 && (
-                  <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">Advances Deducted</span>
-                    <span className="text-sm font-medium text-amber-400">-{formatCurrency(selectedPayslip.advances_deducted_amount)}</span>
                   </div>
                 )}
               </div>
@@ -208,7 +211,7 @@ export default function MyPayslipsPage() {
                     <DollarSign className="w-5 h-5 text-primary" />
                     <span className="font-semibold">Net Pay</span>
                   </div>
-                  <span className="text-2xl font-bold text-primary">{formatCurrency(selectedPayslip.net_pay)}</span>
+                  <span className="text-2xl font-bold text-primary">{formatCurrency(selectedPayslip.paid_now_amount)}</span>
                 </div>
               </div>
 
