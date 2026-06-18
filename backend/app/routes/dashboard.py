@@ -8,6 +8,7 @@ from calendar import monthrange
 import re
 
 from app.db import db
+from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 
@@ -365,10 +366,7 @@ async def get_finance_series(
         expenses_overhead = sum(t.get("amount", 0) for t in overhead)
         
         # Payroll
-        payroll = await db.payroll_payments.find({
-            "org_id": org_id,
-            "payment_date": {"$gte": date_from, "$lte": date_to}
-        }, {"_id": 0, "net_salary": 1}).to_list(1000)
+        payroll = await paid_labor_v3(org_id, date_from, date_to)
         expenses_payroll = sum(p.get("net_salary", 0) for p in payroll)
         
         # Bonus
@@ -514,8 +512,7 @@ async def get_finance_details_summary(
     expenses_overhead = sum(t.get("amount", 0) for t in overhead)
     
     # Payroll
-    payroll_query = {"org_id": org_id, "payment_date": {"$gte": date_from, "$lte": date_to}}
-    payroll = await db.payroll_payments.find(payroll_query, {"_id": 0, "net_salary": 1}).to_list(10000)
+    payroll = await paid_labor_v3(org_id, date_from, date_to)
     expenses_payroll = sum(p.get("net_salary", 0) for p in payroll)
     
     # Bonus
@@ -845,10 +842,7 @@ async def get_finance_transactions(
     # Payroll
     if not transaction_type or transaction_type == "payroll":
         if not direction or direction == "expense":
-            payroll = await db.payroll_payments.find({
-                "org_id": org_id,
-                "payment_date": {"$gte": date_from, "$lte": date_to}
-            }, {"_id": 0}).to_list(1000)
+            payroll = await paid_labor_v3(org_id, date_from, date_to)
             for p in payroll:
                 transactions.append({
                     "id": p.get("id"),

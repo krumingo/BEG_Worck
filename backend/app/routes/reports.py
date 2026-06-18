@@ -8,6 +8,7 @@ from calendar import monthrange
 import re
 
 from app.db import db
+from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 
@@ -613,11 +614,8 @@ async def get_company_finance_summary(
             weekly_data[week_num]["expenses_overhead"] += txn.get("amount", 0)
             weekly_data[week_num]["expenses"] += txn.get("amount", 0)
     
-    # 5. Payroll Payments (from hr/payroll system)
-    payroll_payments = await db.payroll_payments.find({
-        "org_id": org_id,
-        "payment_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "payment_date": 1, "net_salary": 1}).to_list(1000)
+    # 5. Payroll Payments (from v3 paid slips)
+    payroll_payments = await paid_labor_v3(org_id, date_from, date_to)
     
     for pay in payroll_payments:
         week_num = get_week_number_in_month(pay["payment_date"])
@@ -755,10 +753,7 @@ async def get_month_finance_totals(org_id: str, year: int, month: int) -> dict:
     expenses_overhead = sum(txn.get("amount", 0) for txn in overhead_txns)
     
     # 5. Payroll Payments
-    payroll_payments = await db.payroll_payments.find({
-        "org_id": org_id,
-        "payment_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "net_salary": 1}).to_list(1000)
+    payroll_payments = await paid_labor_v3(org_id, date_from, date_to)
     expenses_payroll = sum(pay.get("net_salary", 0) for pay in payroll_payments)
     
     # 6. Bonus Payments
@@ -1166,10 +1161,7 @@ async def export_company_finance(
             weekly_data[week_num]["expenses"] += txn.get("amount", 0)
     
     # 5. Payroll Payments
-    payroll_payments = await db.payroll_payments.find({
-        "org_id": org_id,
-        "payment_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "payment_date": 1, "net_salary": 1}).to_list(1000)
+    payroll_payments = await paid_labor_v3(org_id, date_from, date_to)
     
     for pay in payroll_payments:
         week_num = get_week_number_in_month(pay["payment_date"])
