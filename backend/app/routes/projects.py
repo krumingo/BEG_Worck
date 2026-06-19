@@ -14,6 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db import db
+from app.services.paid_labor import paid_labor_for_projects_v3
 from app.deps.auth import (
     get_current_user, require_admin,
     can_access_project, can_manage_project, get_user_project_ids,
@@ -2002,15 +2003,9 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     for c in children:
         per_child[c["id"]]["materials"] = await count_materials([c["id"]])
 
-    # ── Paid Labor (от payroll allocations — само active) ──
+    # ── Paid Labor (from v3 paid pay_runs) ──
     async def count_paid_labor(pids):
-        allocs = await db.payroll_payment_allocations.find(
-            {"org_id": org_id, "project_id": {"$in": pids}, "status": "active"},
-            {"_id": 0, "allocated_gross_labor": 1, "allocated_hours": 1},
-        ).to_list(5000)
-        gross = round(sum(a.get("allocated_gross_labor", 0) for a in allocs), 2)
-        hours = round(sum(a.get("allocated_hours", 0) for a in allocs), 1)
-        return {"gross_labor": gross, "paid_hours": hours}
+        return await paid_labor_for_projects_v3(org_id, pids)
 
     own_paid = await count_paid_labor([project_id])
     child_paid = await count_paid_labor(child_ids) if child_ids else {"gross_labor": 0, "paid_hours": 0}

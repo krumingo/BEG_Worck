@@ -7,6 +7,7 @@ Operating = earned revenue - direct costs (no overhead)
 Fully Loaded = operating - allocated overhead - insurance burden (real profit)
 """
 from app.db import db
+from app.services.paid_labor import paid_labor_allocations_v3
 from datetime import datetime as _dt, timezone as _tz
 from app.services.resource_model import (
     get_resource_config, classify_worker, compute_subcontractor_burden,
@@ -51,19 +52,10 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     ).to_list(5000)
     reported_labor = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
 
-    # ── PAID LABOR LAYER (from payroll_payment_allocations) ──
-    # Only "active" allocations count as real paid labor.
-    # "provisional" (confirmed but not yet paid) and "reversed" are excluded.
-    paid_allocs = await db.payroll_payment_allocations.find(
-        {"org_id": org_id, "project_id": project_id,
-         "status": {"$in": ["active", None]},
-         "archived": {"$ne": True}},
-        {"_id": 0, "allocated_gross_labor": 1, "allocated_hours": 1,
-         "worker_id": 1, "worker_name": 1, "week_start": 1, "week_end": 1,
-         "payroll_batch_id": 1, "status": 1},
-    ).to_list(500)
-    # Legacy allocations (no status field) are treated as active
-    paid_allocs = [a for a in paid_allocs if a.get("status") != "reversed" and a.get("status") != "provisional"]
+    # ── PAID LABOR LAYER (from v3 paid pay_runs) ──
+    # Per-project paid labor, reproduced from paid pay_runs (status == "paid").
+    # Only paid runs count as real paid labor (matches the old "active" filter).
+    paid_allocs = await paid_labor_allocations_v3(org_id, project_id)
     paid_labor_expense = round(sum(a.get("allocated_gross_labor", 0) for a in paid_allocs), 2)
     paid_labor_hours = round(sum(a.get("allocated_hours", 0) for a in paid_allocs), 1)
 
