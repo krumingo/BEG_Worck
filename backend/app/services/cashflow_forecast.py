@@ -4,6 +4,7 @@ Service - Cash Flow Forecast v1 (rule-based).
 """
 from datetime import datetime, timezone, timedelta
 from app.db import db
+from app.services.legacy_payslips import legacy_payslips
 
 
 async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str = None) -> dict:
@@ -103,12 +104,9 @@ async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str =
                 })
                 outgoing_by_date[est_date] = outgoing_by_date.get(est_date, 0) + amt
 
-    # Payroll estimate (weekly from recent)
-    last_payroll = await db.payslips.find(
-        {"org_id": org_id, "status": {"$in": ["Draft", "Approved"]}},
-        {"_id": 0, "net_pay": 1},
-    ).sort("created_at", -1).to_list(50)
-    weekly_payroll = sum(p.get("net_pay", 0) for p in last_payroll[:20])
+    # Payroll estimate (weekly from recent) — from v3 confirmed slips (expected net)
+    last_payroll = await legacy_payslips(org_id, v1_statuses=["Generated"], limit=50)
+    weekly_payroll = sum(p.get("net_period", 0) for p in last_payroll[:20])
     if weekly_payroll > 0:
         # Spread across fridays in the period
         d = start

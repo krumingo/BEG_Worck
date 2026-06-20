@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
@@ -276,13 +277,12 @@ async def list_payslips(
     elif not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    query = {"org_id": user["org_id"], "archived": {"$ne": True}}
-    if payroll_run_id:
-        query["payroll_run_id"] = payroll_run_id
-    if user_id:
-        query["$or"] = [{"user_id": user_id}, {"employee_id": user_id}]
-    
-    payslips = await db.payslips.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    payslips = await legacy_payslips(
+        user["org_id"],
+        employee_id=user_id or None,
+        pay_run_id=payroll_run_id or None,
+        limit=500,
+    )
     
     # Enrich
     for ps in payslips:
@@ -308,7 +308,7 @@ async def list_payslips(
 
 @router.get("/payslips/{payslip_id}")
 async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
-    payslip = await db.payslips.find_one({"id": payslip_id, "org_id": user["org_id"]}, {"_id": 0})
+    payslip = await legacy_payslip_one(user["org_id"], payslip_id)
     if not payslip:
         raise HTTPException(status_code=404, detail="Payslip not found")
     
@@ -459,11 +459,8 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     combined_hours = month_hours + daily_hours
     combined_days = month_att + daily_days
     
-    # Recent payslips — enrich with period info from v3 pay_runs
-    payslips_raw = await db.payslips.find(
-        {"org_id": org_id, "user_id": user_id},
-        {"_id": 0, "id": 1, "payroll_run_id": 1, "source_pay_run_id": 1, "base_amount": 1, "net_pay": 1, "status": 1}
-    ).sort("created_at", -1).limit(5).to_list(5)
+    # Recent payslips — from v3 (period already included by the adapter)
+    payslips_raw = await legacy_payslips(org_id, employee_id=user_id, limit=5)
     
     payslips = []
     for ps in payslips_raw:

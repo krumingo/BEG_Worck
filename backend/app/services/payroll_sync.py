@@ -117,35 +117,8 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                     {"$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
                 )
 
-    # ── C. v1 payslips as GENERATED (not Paid!) ──────────────────
-    existing_v1_active = await db.payslips.count_documents(
-        {"source_pay_run_id": run_id, "org_id": org_id, "status": {"$in": ["Generated", "Paid"]}}
-    )
-    if existing_v1_active == 0:
-        import uuid as _uuid
-        v1_slips = []
-        for er in pay_run.get("employee_rows", []):
-            v1_slips.append({
-                "id": str(_uuid.uuid4()),
-                "org_id": org_id,
-                "source_pay_run_id": run_id,
-                "payroll_run_id": f"sync_{run_id}",
-                "user_id": er["employee_id"],
-                "employee_id": er["employee_id"],
-                "period_start": pay_run.get("period_start", ""),
-                "period_end": pay_run.get("period_end", ""),
-                "gross_pay": round(er.get("earned_amount", 0), 2),
-                "deductions": round(er.get("deductions_amount", 0), 2),
-                "bonuses": round(er.get("bonuses_amount", 0), 2),
-                "net_pay": round(er.get("paid_now_amount", 0), 2),
-                "status": "Generated",
-                "employee_name": f"{er.get('first_name', '')} {er.get('last_name', '')}".strip(),
-                "week_number": pay_run.get("week_number"),
-                "created_at": now,
-                "synced_from": "v3_pay_runs",
-            })
-        if v1_slips:
-            await db.payslips.insert_many(v1_slips)
+    # ── C. v1 payslips mirror — RETIRED. Admin HR + cashflow now read v3
+    # payment_slips via the legacy_payslips adapter; no mirror is written.
 
 
 async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
@@ -174,11 +147,7 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
                 {"$set": {"payroll_status": "paid"}},
             )
 
-    # C. v1 payslips: Generated → Paid
-    await db.payslips.update_many(
-        {"source_pay_run_id": run_id, "org_id": org_id, "status": "Generated"},
-        {"$set": {"status": "Paid", "paid_at": paid_at}},
-    )
+    # C. v1 payslips mirror — RETIRED (no status update needed).
 
     # D. payroll_payments mirror — RETIRED.
     # Finance dashboard/reports now read paid labor directly from v3
@@ -198,10 +167,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
             {"source_pay_run_id": run_id, "org_id": org_id},
             {"$set": {"status": "reversed"}},
         )
-        await db.payslips.update_many(
-            {"source_pay_run_id": run_id, "org_id": org_id},
-            {"$set": {"status": "Reversed"}},
-        )
+        # C. v1 payslips mirror — RETIRED (no status update needed).
         # D. payroll_payments mirror — RETIRED (nothing to delete).
         for er in pay_run.get("employee_rows", []):
             dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
@@ -218,10 +184,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                 {"source_pay_run_id": run_id, "org_id": org_id, "worker_id": eid},
                 {"$set": {"status": "reversed"}},
             )
-            await db.payslips.update_many(
-                {"source_pay_run_id": run_id, "org_id": org_id, "employee_id": eid},
-                {"$set": {"status": "Reversed"}},
-            )
+            # C. v1 payslips mirror — RETIRED (no status update needed).
             # D. payroll_payments mirror — RETIRED (nothing to delete).
             er = next((r for r in pay_run.get("employee_rows", []) if r["employee_id"] == eid), None)
             if er:
