@@ -347,7 +347,7 @@ export default function MissingSMRPage() {
     try {
       const res = await API.post(`/missing-smr/${id}/ai-estimate`);
       setSelected(res.data.item);
-      toast.success(`${t("missingSMR.aiEstimated")}: ${res.data.estimated_price} лв`);
+      toast.success(`${t("missingSMR.aiEstimated")}: ${res.data.estimated_price} €`);
     } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
     finally { setActionLoading(false); }
   };

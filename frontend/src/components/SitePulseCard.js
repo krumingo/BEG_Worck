@@ -97,7 +97,7 @@ export function SitePulseCard({ pulse }) {
               {pulse.workers.map(w => (
                 <div key={w.worker_id} className="flex justify-between p-1 bg-muted/10 rounded">
                   <span>{w.worker_name}</span>
-                  <span className="font-mono">{w.hours?.toFixed(1)}ч | {w.labor_cost?.toFixed(0)}лв</span>
+                  <span className="font-mono">{w.hours?.toFixed(1)}ч | {w.labor_cost?.toFixed(0)} €</span>
                 </div>
               ))}
             </div>

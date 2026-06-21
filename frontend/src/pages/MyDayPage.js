@@ -362,7 +362,7 @@ export default function MyDayPage() {
                     </div>
                     <div className="flex-1 min-w-0 truncate">{s.site_name}</div>
                     <div className="font-mono text-xs flex-shrink-0">{hours.toFixed(1)}ч</div>
-                    {s.labor_cost > 0 && <div className="font-mono text-xs text-muted-foreground flex-shrink-0">{s.labor_cost.toFixed(0)}лв</div>}
+                    {s.labor_cost > 0 && <div className="font-mono text-xs text-muted-foreground flex-shrink-0">{s.labor_cost.toFixed(0)} €</div>}
                     {s.is_overtime && <Badge variant="outline" className="text-[9px] text-orange-400 border-orange-400/30">OT</Badge>}
                     {s.is_flagged && <Badge variant="outline" className="text-[9px] text-red-400 border-red-400/30">{s.flag_reason}</Badge>}
                     {isOpen && <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0" />}

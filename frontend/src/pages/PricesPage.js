@@ -85,21 +85,21 @@ export default function PricesPage() {
       filterable: true,
       filterType: "numberRange",
       width: "100px",
-      render: (value) => value ? `${value.toFixed(2)} лв.` : "-",
+      render: (value) => value ? `${value.toFixed(2)} €` : "-",
     },
     { 
       key: "line_total_ex_vat", 
       label: t("data.totalExVat"), 
       sortable: true,
       width: "110px",
-      render: (value) => value ? `${value.toFixed(2)} лв.` : "-",
+      render: (value) => value ? `${value.toFixed(2)} €` : "-",
     },
     { 
       key: "vat_amount", 
       label: t("data.vat"), 
       sortable: true,
       width: "80px",
-      render: (value) => value ? `${value.toFixed(2)} лв.` : "-",
+      render: (value) => value ? `${value.toFixed(2)} €` : "-",
     },
     { 
       key: "line_total_inc_vat", 
@@ -107,7 +107,7 @@ export default function PricesPage() {
       sortable: true,
       width: "110px",
       render: (value) => (
-        <span className="font-medium">{value ? `${value.toFixed(2)} лв.` : "-"}</span>
+        <span className="font-medium">{value ? `${value.toFixed(2)} €` : "-"}</span>
       ),
     },
     { 

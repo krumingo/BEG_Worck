@@ -383,7 +383,7 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                     <CheckCircle2 className="w-3 h-3 mr-1" /> Приеми LLM подобрения ({Object.keys(refineDelta).length})
                   </Button>
                 )}
-                <div className="font-mono text-lg font-bold text-primary">{round2(grandTotal).toFixed(2)} лв</div>
+                <div className="font-mono text-lg font-bold text-primary">{round2(grandTotal).toFixed(2)} €</div>
               </div>
             </div>
 
@@ -413,7 +413,7 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                           Приеми LLM
                         </Button>
                       )}
-                      <span className="font-mono font-bold text-primary">{lineTotal.toFixed(2)} лв</span>
+                      <span className="font-mono font-bold text-primary">{lineTotal.toFixed(2)} €</span>
                     </div>
                   </div>
 
@@ -429,11 +429,11 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                         <Input value={p.activity_subtype} onChange={e => editProp(i, "activity_subtype", e.target.value)} className="bg-background h-7 text-xs" />
                       </div>
                       <div className="space-y-0.5">
-                        <label className="text-[10px] text-muted-foreground">Мат. лв/ед</label>
+                        <label className="text-[10px] text-muted-foreground">Мат. €/ед</label>
                         <Input type="number" step="0.01" value={p.material_price} onChange={e => editProp(i, "material_price", parseFloat(e.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                       </div>
                       <div className="space-y-0.5">
-                        <label className="text-[10px] text-muted-foreground">Труд лв/ед</label>
+                        <label className="text-[10px] text-muted-foreground">Труд €/ед</label>
                         <Input type="number" step="0.01" value={p.labor_price} onChange={e => editProp(i, "labor_price", parseFloat(e.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                       </div>
                       <div className="space-y-0.5">
@@ -450,13 +450,13 @@ export default function ExtraWorkModal({ projectId, open, onOpenChange, onCreate
                     <div className="flex flex-wrap gap-2 text-[10px]">
                       {p.small_qty_adj > 0 && <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">+{p.small_qty_adj}% малко к-во</Badge>}
                       {p.hourly_info && <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
-                        <Clock className="w-2.5 h-2.5 mr-0.5" />{p.hourly_info.worker_type} {p.hourly_info.hourly_rate}лв/ч
+                        <Clock className="w-2.5 h-2.5 mr-0.5" />{p.hourly_info.worker_type} {p.hourly_info.hourly_rate} €/ч
                         {p.hourly_info.min_applied && " (мин.)"}
                       </Badge>}
                       {p.explanation && <span className="text-muted-foreground/70 italic">{p.explanation.slice(0, 80)}</span>}
                       {p.internal_hint?.available && (
                         <Badge variant="outline" className="bg-violet-500/10 text-violet-400 border-violet-500/30">
-                          Вътрешна: {p.internal_hint.range_label} лв ({p.internal_hint.sample_count}x)
+                          Вътрешна: {p.internal_hint.range_label} € ({p.internal_hint.sample_count}x)
                         </Badge>
                       )}
                     </div>

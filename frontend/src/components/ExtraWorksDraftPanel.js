@@ -114,7 +114,7 @@ export default function ExtraWorksDraftPanel({ projectId, refreshKey }) {
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                 <span>{d.qty} {d.unit}</span>
-                {d.ai_total_price_per_unit && <span className="text-emerald-400 font-mono">{(d.ai_total_price_per_unit * d.qty).toFixed(2)} лв</span>}
+                {d.ai_total_price_per_unit && <span className="text-emerald-400 font-mono">{(d.ai_total_price_per_unit * d.qty).toFixed(2)} €</span>}
                 <span>{formatDate(d.work_date)}</span>
                 {(d.location_floor || d.location_room) && (
                   <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{[d.location_floor && `Ет.${d.location_floor}`, d.location_room, d.location_zone].filter(Boolean).join(", ")}</span>
