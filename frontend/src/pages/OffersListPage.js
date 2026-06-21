@@ -357,7 +357,7 @@ export default function OffersListPage() {
                   </table>
                 </div>
                 <div className="text-right text-sm font-mono">
-                  Общо: <span className="font-bold text-primary">{importPreview.lines.reduce((s, l) => s + (l.material_price + l.labor_price) * l.qty, 0).toFixed(2)} лв</span>
+                  Общо: <span className="font-bold text-primary">{formatCurrency(importPreview.lines.reduce((s, l) => s + (l.material_price + l.labor_price) * l.qty, 0))}</span>
                 </div>
               </>
             )}

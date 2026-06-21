@@ -232,7 +232,7 @@ export default function HistoricalOffersPage() {
                       <th className="p-1.5">Подтип</th>
                       <th className="p-1.5">Ед.</th>
                       <th className="p-1.5 text-right">Мат./ед</th>
-                      <th className="p-1.5 text-right">Труд/ед</th>
+                      <th className="p-1.5 text-right">Труд/ед, €</th>
                       <th className="p-1.5 text-right">Общо/ед</th>
                     </tr></thead>
                     <tbody className="divide-y divide-border">

@@ -394,7 +394,7 @@ export default function InvoiceLinesPage() {
                       <div className="font-medium text-white">{line.description}</div>
                       {line.unit && (
                         <div className="text-xs text-gray-500">
-                          Единица: {line.unit} | Цена: {formatCurrency(line.unit_price || 0, "BGN")}
+                          Единица: {line.unit} | Цена: {formatCurrency(line.unit_price || 0, invoice?.currency || "EUR")}
                         </div>
                       )}
                     </TableCell>
@@ -474,7 +474,7 @@ export default function InvoiceLinesPage() {
           <div>
             <span className="text-gray-500">Обща стойност:</span>{" "}
             <span className="text-white font-medium">
-              {formatCurrency(invoice?.total || 0, invoice?.currency || "BGN")}
+              {formatCurrency(invoice?.total || 0, invoice?.currency || "EUR")}
             </span>
           </div>
         </div>

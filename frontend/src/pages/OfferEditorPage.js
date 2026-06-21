@@ -807,8 +807,8 @@ export default function OfferEditorPage() {
                     {offer?.offer_type === "extra" && <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Локация</th>}
                     <th className="text-left p-3 text-xs uppercase text-muted-foreground font-medium w-[60px]">Мярка</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[60px]">К-во</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">Мат/ед</th>
-                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">Труд/ед</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">Мат/ед, €</th>
+                    <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[90px]">Труд/ед, €</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[95px]">Материал</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[95px]">Труд</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">Общо</th>
