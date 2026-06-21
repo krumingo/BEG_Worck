@@ -278,8 +278,6 @@ export default function FinancialAccountsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="BGN">BGN</SelectItem>
                     <SelectItem value="GBP">GBP</SelectItem>
                   </SelectContent>
                 </Select>

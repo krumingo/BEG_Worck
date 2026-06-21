@@ -308,7 +308,6 @@ export default function AssetsItemsPage() {
                     <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="BGN">BGN</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
