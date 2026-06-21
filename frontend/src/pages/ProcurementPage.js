@@ -211,7 +211,7 @@ export default function ProcurementPage() {
                     <TableCell className="text-sm">{inv.supplier_name || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{inv.project_code || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(inv.invoice_date)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{inv.total > 0 ? formatCurrency(inv.total, "BGN") : "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inv.total > 0 ? formatCurrency(inv.total, "EUR") : "—"}</TableCell>
                     <TableCell>
                       {inv.original_file_url ? (
                         <Button variant="ghost" size="sm" onClick={() => window.open(inv.original_file_url, '_blank')} className="text-xs text-primary"><Eye className="w-3 h-3 mr-1" /> Документ</Button>
@@ -302,7 +302,7 @@ export default function ProcurementPage() {
                         <div className="col-span-2"><Input type="number" step="0.01" value={line.unit_price} onChange={e => updateReviewLine(i, "unit_price", e.target.value)} placeholder="Цена" className="bg-background text-sm h-8 font-mono" /></div>
                         <div className="col-span-1"><Input type="number" step="0.1" value={line.discount_percent} onChange={e => updateReviewLine(i, "discount_percent", e.target.value)} placeholder="%" className="bg-background text-sm h-8 font-mono" /></div>
                         <div className="col-span-2 flex items-center gap-1">
-                          <span className="font-mono text-sm text-foreground">{total.toFixed(2)}</span>
+                          <span className="font-mono text-sm text-foreground">{formatCurrency(total)}</span>
                           <Button variant="ghost" size="sm" onClick={() => removeReviewLine(i)} className="text-destructive h-7 w-7 p-0"><Trash2 className="w-3 h-3" /></Button>
                         </div>
                       </div>
@@ -310,7 +310,7 @@ export default function ProcurementPage() {
                   })}
                 </div>
                 <div className="text-right mt-2 font-mono text-sm">
-                  Общо: <span className="font-bold text-primary">{reviewLines.reduce((s, l) => s + (parseFloat(l.qty) || 0) * ((parseFloat(l.unit_price) || 0) * (1 - (parseFloat(l.discount_percent) || 0) / 100)), 0).toFixed(2)} лв</span>
+                  Общо: <span className="font-bold text-primary">{formatCurrency(reviewLines.reduce((s, l) => s + (parseFloat(l.qty) || 0) * ((parseFloat(l.unit_price) || 0) * (1 - (parseFloat(l.discount_percent) || 0) / 100)), 0))}</span>
                 </div>
               </div>
             </div>

@@ -2,6 +2,7 @@
  * StockValueCard — Shows total warehouse value from FIFO batches.
  */
 import { useState, useEffect } from "react";
+import { money } from "@/lib/i18nUtils";
 import API from "@/lib/api";
 import { DollarSign, Loader2 } from "lucide-react";
 
@@ -24,7 +25,7 @@ export default function StockValueCard() {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Стойност на склада</p>
-          <p className="text-xl font-bold font-mono text-emerald-400">{(data.grand_total || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 })} BGN</p>
+          <p className="text-xl font-bold font-mono text-emerald-400">{money(data.grand_total)}</p>
         </div>
       </div>
       {data.warehouses?.length > 0 && (
@@ -32,7 +33,7 @@ export default function StockValueCard() {
           {data.warehouses.map(w => (
             <div key={w.warehouse_id} className="flex justify-between text-xs">
               <span className="text-muted-foreground">{w.name}</span>
-              <span className="font-mono">{w.total_value.toLocaleString("bg-BG")} BGN ({w.items_count} арт.)</span>
+              <span className="font-mono">{money(w.total_value)} ({w.items_count} арт.)</span>
             </div>
           ))}
         </div>

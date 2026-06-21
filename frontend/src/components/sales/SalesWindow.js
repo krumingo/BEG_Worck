@@ -2,6 +2,7 @@
  * SalesWindow — FIFO sale modal with preview, margin protection, historical context.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { money } from "@/lib/i18nUtils";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,13 +130,13 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
     try {
       const res = await API.post("/sales/commit", {
         item_id: itemId, warehouse_id: warehouseId, quantity: qty,
-        unit_sale_price: price, currency: "BGN",
+        unit_sale_price: price, currency: "EUR",
         client_id: clientId || null, project_id: projectId || null,
         snapshot_token: preview.snapshot_token,
         warning_acknowledged: acknowledged,
         warning_reason: reason,
       });
-      toast.success(`Продажба записана: ${res.data.total_sale} BGN (марж ${res.data.margin_percent}%)`);
+      toast.success(`Продажба записана: ${money(res.data.total_sale)} (марж ${res.data.margin_percent}%)`);
       onOpenChange(false);
     } catch (err) {
       const detail = err.response?.data?.detail || "Грешка";
@@ -209,7 +210,7 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
               <div className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground">FIFO разбивка</p>
-                  <Badge variant="outline" className="text-[9px]">Себестойност: {preview.weighted_avg_cost} BGN/ед</Badge>
+                  <Badge variant="outline" className="text-[9px]">Себестойност: {money(preview.weighted_avg_cost)}/ед</Badge>
                 </div>
                 <Table>
                   <TableHeader><TableRow className="text-[10px]">
@@ -231,7 +232,7 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
                 </Table>
                 <div className="flex justify-between text-xs pt-1 border-t">
                   <span className="text-muted-foreground">Обща себестойност:</span>
-                  <span className="font-bold font-mono">{preview.total_cost} BGN</span>
+                  <span className="font-bold font-mono">{money(preview.total_cost)}</span>
                 </div>
               </div>
             )}
@@ -252,7 +253,7 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
                   </div>
                   <div className="rounded-lg border p-2 text-center">
                     <p className="text-[9px] text-muted-foreground">Печалба</p>
-                    <p className={`text-sm font-bold font-mono ${profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{profit} BGN</p>
+                    <p className={`text-sm font-bold font-mono ${profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{money(profit)}</p>
                   </div>
                   <div className="rounded-lg border p-2 text-center">
                     <p className="text-[9px] text-muted-foreground">Реален марж</p>
@@ -302,7 +303,7 @@ export default function SalesWindow({ open, onOpenChange, presetItemId, prefillW
                 </div>
                 {history.last_sale && (
                   <div className="text-[10px] text-muted-foreground pt-1 border-t">
-                    Последна: {history.last_sale.date} — {history.last_sale.price} BGN × {history.last_sale.quantity}
+                    Последна: {history.last_sale.date} — {money(history.last_sale.price)} × {history.last_sale.quantity}
                   </div>
                 )}
               </div>

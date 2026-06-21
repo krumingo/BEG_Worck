@@ -63,7 +63,7 @@ export default function InventoryDashboardPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-4" data-testid="card-total-value">
           <p className="text-xs text-muted-foreground">Стойност</p>
-          <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(overview.total_value, "BGN")}</p>
+          <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(overview.total_value, "EUR")}</p>
         </div>
         <div className={`rounded-xl border p-4 ${overview.low_stock_count > 0 ? "border-red-500/30 bg-red-500/5" : "border-border bg-card"}`} data-testid="card-low-stock">
           <p className="text-xs text-muted-foreground">Ниски наличности</p>
@@ -123,7 +123,7 @@ export default function InventoryDashboardPage() {
                     <TableCell className="text-sm font-medium text-foreground">{s.material_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{s.unit}</TableCell>
                     <TableCell className={`text-right font-mono text-sm font-bold ${s.is_low_stock ? "text-red-400" : "text-foreground"}`}>{s.qty}</TableCell>
-                    <TableCell className="text-right font-mono text-sm text-muted-foreground">{s.value > 0 ? formatCurrency(s.value, "BGN") : "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm text-muted-foreground">{s.value > 0 ? formatCurrency(s.value, "EUR") : "—"}</TableCell>
                     <TableCell className="text-right font-mono text-sm text-muted-foreground">{s.low_stock_threshold}</TableCell>
                     <TableCell>
                       {s.is_low_stock ? (

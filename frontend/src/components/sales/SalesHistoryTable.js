@@ -2,6 +2,7 @@
  * SalesHistoryTable — Sales list with filters, summary cards, detail modal.
  */
 import { useState, useEffect, useCallback } from "react";
+import { money } from "@/lib/i18nUtils";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,15 +65,15 @@ export default function SalesHistoryTable() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-xl border p-3">
           <p className="text-[10px] text-muted-foreground">Общи приходи</p>
-          <p className="text-lg font-bold font-mono text-emerald-400">{(summary.total_revenue || 0).toLocaleString("bg-BG")} BGN</p>
+          <p className="text-lg font-bold font-mono text-emerald-400">{money(summary.total_revenue)}</p>
         </div>
         <div className="rounded-xl border p-3">
           <p className="text-[10px] text-muted-foreground">Себестойност</p>
-          <p className="text-lg font-bold font-mono">{(summary.total_cost || 0).toLocaleString("bg-BG")} BGN</p>
+          <p className="text-lg font-bold font-mono">{money(summary.total_cost)}</p>
         </div>
         <div className="rounded-xl border p-3">
           <p className="text-[10px] text-muted-foreground">Печалба</p>
-          <p className={`text-lg font-bold font-mono ${(summary.total_profit || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>{(summary.total_profit || 0).toLocaleString("bg-BG")} BGN</p>
+          <p className={`text-lg font-bold font-mono ${(summary.total_profit || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>{money(summary.total_profit)}</p>
         </div>
         <div className="rounded-xl border p-3">
           <p className="text-[10px] text-muted-foreground">Среден марж</p>
