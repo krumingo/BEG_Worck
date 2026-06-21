@@ -27,6 +27,8 @@ async def get_pnl_summary(project_id: str, user: dict = Depends(get_current_user
         "project_id": project_id,
         "total_budget": pnl["budget"]["total_budget"],
         "total_revenue": pnl["revenue"]["total_revenue"],
+        "total_invoiced": pnl["revenue"]["invoiced_total"],
+        "total_received": pnl["revenue"]["paid_total"],
         "total_expense": pnl["expense"]["total_expense"],
         "gross_profit": pnl["profit"]["gross_profit"],
         "margin_pct": pnl["profit"]["margin_pct"],

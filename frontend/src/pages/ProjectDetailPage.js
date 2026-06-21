@@ -359,11 +359,11 @@ export default function ProjectDetailPage() {
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-balance">
               <div className="flex items-center gap-2 mb-3"><Scale className="w-5 h-5 text-green-500" /><h3 className="font-semibold text-white">Баланс (касов)</h3></div>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-gray-400">Платено от клиент:</span><span className="text-green-400 font-mono">{formatCurrency(balance.income, "BGN")}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">Разходи:</span><span className="text-red-400 font-mono">{formatCurrency(balance.expenses, "BGN")}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Платено от клиент:</span><span className="text-green-400 font-mono">{formatCurrency(balance.income, "EUR")}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Разходи:</span><span className="text-red-400 font-mono">{formatCurrency(balance.expenses, "EUR")}</span></div>
                 <div className="flex justify-between pt-2 border-t border-gray-700">
                   <span className="text-gray-400">Баланс:</span>
-                  <span className={`font-bold ${balance.balance >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(balance.balance, "BGN")}</span>
+                  <span className={`font-bold ${balance.balance >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(balance.balance, "EUR")}</span>
                 </div>
               </div>
             </div>
@@ -393,7 +393,7 @@ export default function ProjectDetailPage() {
                 {offers.accepted_count > 0 && (
                   <div className="flex justify-between"><span className="text-emerald-400">Одобрени:</span><span className="text-emerald-400 font-bold">{offers.accepted_count} ({offers.accepted_lines} позиции)</span></div>
                 )}
-                <div className="flex justify-between"><span className="text-gray-400">С ДДС:</span><span className="text-yellow-500 font-mono">{formatCurrency(offers.total_inc_vat, "BGN")}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">С ДДС:</span><span className="text-yellow-500 font-mono">{formatCurrency(offers.total_inc_vat, "EUR")}</span></div>
               </div>
               <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={() => handleTabChange("offers")}>Виж оферти →</Button>
             </div>
@@ -490,11 +490,11 @@ export default function ProjectDetailPage() {
                 {/* Summary totals */}
                 <div className="mt-4 pt-4 border-t border-gray-700 space-y-2" data-testid="invoices-summary">
                   <div className="grid grid-cols-5 gap-3 text-sm">
-                    <div className="text-center"><p className="text-gray-400 text-xs">Без ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.subtotal, "BGN")}</p></div>
-                    <div className="text-center"><p className="text-gray-400 text-xs">ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.vat, "BGN")}</p></div>
-                    <div className="text-center"><p className="text-gray-400 text-xs">С ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.total, "BGN")}</p></div>
-                    <div className="text-center"><p className="text-gray-400 text-xs">Платено</p><p className="text-green-400 font-bold font-mono">{formatCurrency(invoices.totals.paid, "BGN")}</p></div>
-                    <div className="text-center"><p className="text-gray-400 text-xs">Чакащо</p><p className="text-amber-400 font-bold font-mono">{formatCurrency(invoices.totals.unpaid, "BGN")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">Без ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.subtotal, "EUR")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.vat, "EUR")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">С ДДС</p><p className="text-white font-bold font-mono">{formatCurrency(invoices.totals.total, "EUR")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">Платено</p><p className="text-green-400 font-bold font-mono">{formatCurrency(invoices.totals.paid, "EUR")}</p></div>
+                    <div className="text-center"><p className="text-gray-400 text-xs">Чакащо</p><p className="text-amber-400 font-bold font-mono">{formatCurrency(invoices.totals.unpaid, "EUR")}</p></div>
                   </div>
                 </div>
               </>
@@ -511,7 +511,7 @@ export default function ProjectDetailPage() {
                 {offers.extra_offers.map(eo => (
                   <div key={eo.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/15 hover:bg-muted/25 cursor-pointer border border-gray-700/50 hover:border-amber-500/30 transition-colors" onClick={() => navigate(`/offers/${eo.id}`)}>
                     <div className="min-w-0 flex-1"><span className="font-mono text-sm text-amber-400">{eo.offer_no}</span><p className="text-sm text-gray-300 truncate">{eo.title}</p></div>
-                    <div className="text-right ml-4"><p className="font-mono text-sm font-bold text-white">{formatCurrency(eo.total || 0, eo.currency || "BGN")}</p></div>
+                    <div className="text-right ml-4"><p className="font-mono text-sm font-bold text-white">{formatCurrency(eo.total || 0, eo.currency || "EUR")}</p></div>
                   </div>
                 ))}
               </div>
@@ -985,11 +985,11 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               <AggRowMulti label="Хора" childrenData={childrenData} field={c => c?.team?.count} total={agg.team?.total?.count} />
               <AggRowMulti label="Часове днес" childrenData={childrenData} field={c => c?.team?.hours} total={agg.team?.total?.hours} suffix="ч" />
               <AggRowMulti label="Фактури" childrenData={childrenData} field={c => c?.invoices?.count} total={agg.invoices?.total?.count} />
-              <AggRowMulti label="Фактурирано" childrenData={childrenData} field={c => c?.invoices?.invoiced} total={agg.invoices?.total?.invoiced} suffix=" лв." color="text-primary" />
-              <AggRowMulti label="Платено" childrenData={childrenData} field={c => c?.invoices?.paid} total={agg.invoices?.total?.paid} suffix=" лв." color="text-emerald-400" />
-              <AggRowMulti label="Неплатено" childrenData={childrenData} field={c => c?.invoices?.unpaid} total={agg.invoices?.total?.unpaid} suffix=" лв." color="text-amber-400" />
+              <AggRowMulti label="Фактурирано" childrenData={childrenData} field={c => c?.invoices?.invoiced} total={agg.invoices?.total?.invoiced} suffix=" €" color="text-primary" />
+              <AggRowMulti label="Платено" childrenData={childrenData} field={c => c?.invoices?.paid} total={agg.invoices?.total?.paid} suffix=" €" color="text-emerald-400" />
+              <AggRowMulti label="Неплатено" childrenData={childrenData} field={c => c?.invoices?.unpaid} total={agg.invoices?.total?.unpaid} suffix=" €" color="text-amber-400" />
               {(agg.invoices?.total?.overdue || 0) > 0 && (
-                <AggRowMulti label="Просрочено" childrenData={childrenData} field={c => c?.invoices?.overdue} total={agg.invoices?.total?.overdue} suffix=" лв." color="text-red-400" />
+                <AggRowMulti label="Просрочено" childrenData={childrenData} field={c => c?.invoices?.overdue} total={agg.invoices?.total?.overdue} suffix=" €" color="text-red-400" />
               )}
               <AggRowMulti label="Оферти" childrenData={childrenData} field={c => c?.offers?.count} total={agg.offers?.total?.count} />
               <AggRowMulti label="Отчети" childrenData={childrenData} field={c => c?.reports?.count} total={agg.reports?.total?.count} />
