@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
+import { money } from "@/lib/i18nUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,11 +167,6 @@ export default function OfferVersionsPanel({ offerId, onRestore }) {
   };
   
   // Format currency
-  const formatCurrency = (val) => {
-    if (val === undefined || val === null) return "0.00";
-    return val.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-  
   return (
     <>
       <Card data-testid="offer-versions-panel">
@@ -377,9 +373,9 @@ export default function OfferVersionsPanel({ offerId, onRestore }) {
                             {line.activity_subtype && ` / ${line.activity_subtype}`}
                           </TableCell>
                           <TableCell className="text-right">{line.qty} {line.unit}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(line.material_unit_cost)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(line.labor_unit_cost)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCurrency(line.line_total)}</TableCell>
+                          <TableCell className="text-right">{money(line.material_unit_cost)}</TableCell>
+                          <TableCell className="text-right">{money(line.labor_unit_cost)}</TableCell>
+                          <TableCell className="text-right font-medium">{money(line.line_total)}</TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -398,15 +394,15 @@ export default function OfferVersionsPanel({ offerId, onRestore }) {
                 <div className="w-64 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Междинна сума:</span>
-                    <span>{formatCurrency(previewVersion.snapshot_json.subtotal)} лв.</span>
+                    <span>{money(previewVersion.snapshot_json.subtotal)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">ДДС ({previewVersion.snapshot_json.vat_percent || 0}%):</span>
-                    <span>{formatCurrency(previewVersion.snapshot_json.vat_amount)} лв.</span>
+                    <span>{money(previewVersion.snapshot_json.vat_amount)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-base pt-2 border-t">
                     <span>Общо:</span>
-                    <span>{formatCurrency(previewVersion.snapshot_json.total)} лв.</span>
+                    <span>{money(previewVersion.snapshot_json.total)}</span>
                   </div>
                 </div>
               </div>

@@ -45,6 +45,18 @@ export const formatCurrency = (amount, currency = 'EUR') => {
   }).format(amount || 0);
 };
 
+// Canonical money formatter — ALWAYS EUR (€). Single source of truth for
+// money display across the app. Optional VAT tag:
+//   money(x)                 → "1 200,00 €"
+//   money(x, {vat: 'incl'})  → "1 200,00 € с ДДС"
+//   money(x, {vat: 'excl'})  → "1 200,00 € без ДДС"
+export const money = (amount, opts = {}) => {
+  const base = formatCurrency(amount, 'EUR');
+  if (opts.vat === 'incl') return `${base} с ДДС`;
+  if (opts.vat === 'excl') return `${base} без ДДС`;
+  return base;
+};
+
 // Format number
 export const formatNumber = (num, decimals = 2) => {
   if (num === null || num === undefined) return '-';
