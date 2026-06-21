@@ -421,7 +421,7 @@ export default function CompanySettingsPage() {
                 Ценообразуване / Часови ставки
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Тези ставки се използват от AI при ценови предложения. Валута: EUR.
+                Тези ставки се използват от AI при ценови предложения. Валута: €.
                 {ratesSource === "demo" && <Badge variant="outline" className="ml-2 text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">ДЕМО стойности</Badge>}
                 {ratesSource === "organization" && <Badge variant="outline" className="ml-2 text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Конфигурирани</Badge>}
               </p>

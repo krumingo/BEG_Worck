@@ -74,7 +74,7 @@ ${rows.map((r, i) => {
 </tr>
 </tbody></table>
 <div class="footer">
-  Избрани: ${rows.length} | Общо платено: ${rows.reduce((s, r) => s + (r.paid_now_amount || 0), 0).toFixed(2)} EUR | Остатък: ${totalRemain.toFixed(2)} EUR
+  Избрани: ${rows.length} | Общо платено: ${rows.reduce((s, r) => s + (r.paid_now_amount || 0), 0).toFixed(2)} € | Остатък: ${totalRemain.toFixed(2)} €
   <br>Изготвил: _______________ Дата: ${new Date().toISOString().slice(0, 10)}
 </div>
 </body></html>`);
@@ -151,12 +151,12 @@ ${adjs.length > 0 ? `<table>
 </tr>`).join("")}</tbody></table>` : ""}
 
 <div class="calc">
-  <div><span>Изработено</span><span class="b">${(empRow?.earned_amount || 0).toFixed(2)} EUR</span></div>
+  <div><span>Изработено</span><span class="b">${(empRow?.earned_amount || 0).toFixed(2)} €</span></div>
   ${(empRow?.bonuses_amount || 0) > 0 ? `<div><span class="green">+ Бонуси</span><span class="green">+${empRow.bonuses_amount.toFixed(2)}</span></div>` : ""}
   ${(empRow?.deductions_amount || 0) > 0 ? `<div><span class="red">- Удръжки</span><span class="red">-${empRow.deductions_amount.toFixed(2)}</span></div>` : ""}
   ${(empRow?.previously_paid || 0) > 0 ? `<div><span>- Вече платено</span><span>-${empRow.previously_paid.toFixed(2)}</span></div>` : ""}
-  <div style="border-top:1px solid #333;padding-top:4px;margin-top:4px"><span class="b">РЕАЛНО ПЛАТЕНО</span><span class="b green" style="font-size:13px">${(empRow?.paid_now_amount || 0).toFixed(2)} EUR</span></div>
-  <div><span>Остатък</span><span class="${(empRow?.remaining_after_payment || 0) > 0 ? "amber" : ""} b">${(empRow?.remaining_after_payment || 0).toFixed(2)} EUR</span></div>
+  <div style="border-top:1px solid #333;padding-top:4px;margin-top:4px"><span class="b">РЕАЛНО ПЛАТЕНО</span><span class="b green" style="font-size:13px">${(empRow?.paid_now_amount || 0).toFixed(2)} €</span></div>
+  <div><span>Остатък</span><span class="${(empRow?.remaining_after_payment || 0) > 0 ? "amber" : ""} b">${(empRow?.remaining_after_payment || 0).toFixed(2)} €</span></div>
 </div>
 
 <div class="sig-row">
@@ -216,11 +216,11 @@ ${days.map(d => {
 <tr class="totals"><td colspan="2" class="b">ОБЩО</td><td class="r b">${days.reduce((s,d)=>s+(d.hours||0),0).toFixed(1)}</td><td></td><td class="r b">${(empRow.earned_amount||0).toFixed(2)}</td></tr>
 </tbody></table>
 <div class="calc">
-<div><span>Изработено</span><span class="b">${(empRow.earned_amount||0).toFixed(2)} EUR</span></div>
+<div><span>Изработено</span><span class="b">${(empRow.earned_amount||0).toFixed(2)} €</span></div>
 ${(empRow.bonuses_amount||0)>0?`<div><span class="green">+ Бонуси</span><span class="green">+${empRow.bonuses_amount.toFixed(2)}</span></div>`:""}
 ${(empRow.deductions_amount||0)>0?`<div><span class="red">- Удръжки</span><span class="red">-${empRow.deductions_amount.toFixed(2)}</span></div>`:""}
-<div style="border-top:1px solid #333;padding-top:4px;margin-top:4px"><span class="b">ПЛАТЕНО</span><span class="b green" style="font-size:13px">${(empRow.paid_now_amount||0).toFixed(2)} EUR</span></div>
-<div><span>Остатък</span><span class="${(empRow.remaining_after_payment||0)>0?"amber":""} b">${(empRow.remaining_after_payment||0).toFixed(2)} EUR</span></div>
+<div style="border-top:1px solid #333;padding-top:4px;margin-top:4px"><span class="b">ПЛАТЕНО</span><span class="b green" style="font-size:13px">${(empRow.paid_now_amount||0).toFixed(2)} €</span></div>
+<div><span>Остатък</span><span class="${(empRow.remaining_after_payment||0)>0?"amber":""} b">${(empRow.remaining_after_payment||0).toFixed(2)} €</span></div>
 </div>
 <div class="sig-row"><div>Работодател<br><span class="sig-line"></span></div><div>Служител<br><span class="sig-line"></span></div></div>
 </div>`;

@@ -162,7 +162,7 @@ export default function SMRAnalysisListPage() {
                       <TableCell className="text-sm text-muted-foreground">{a.project_name}</TableCell>
                       <TableCell className="text-center"><Badge variant="outline" className="text-[10px]">v{a.version}</Badge></TableCell>
                       <TableCell><Badge className={`text-xs ${st.color}`} variant="outline">{st.label}</Badge></TableCell>
-                      <TableCell className="text-right font-mono font-bold">{(a.totals?.grand_total || 0).toFixed(2)} EUR</TableCell>
+                      <TableCell className="text-right font-mono font-bold">{(a.totals?.grand_total || 0).toFixed(2)} €</TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{new Date(a.created_at).toLocaleDateString("bg-BG")}</TableCell>
                       <TableCell><Eye className="w-4 h-4 text-muted-foreground" /></TableCell>
                     </TableRow>

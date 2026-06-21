@@ -994,9 +994,9 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               <AggRowMulti label="Оферти" childrenData={childrenData} field={c => c?.offers?.count} total={agg.offers?.total?.count} />
               <AggRowMulti label="Отчети" childrenData={childrenData} field={c => c?.reports?.count} total={agg.reports?.total?.count} />
               <AggRowMulti label="Общо часове" childrenData={childrenData} field={c => c?.reports?.hours} total={agg.reports?.total?.hours} suffix="ч" />
-              <AggRowMulti label="Труд (одобрен)" childrenData={childrenData} field={c => c?.work?.labor_cost} total={agg.work?.total?.labor_cost} suffix=" EUR" color="text-blue-400" />
-              <AggRowMulti label="Материали" childrenData={childrenData} field={c => c?.materials?.ex_vat} total={agg.materials?.total?.ex_vat} suffix=" EUR" color="text-cyan-400" />
-              <AggRowMulti label="Платен труд" childrenData={childrenData} field={c => c?.paid_labor?.gross_labor} total={agg.paid_labor?.total?.gross_labor} suffix=" EUR" color="text-orange-400" />
+              <AggRowMulti label="Труд (одобрен)" childrenData={childrenData} field={c => c?.work?.labor_cost} total={agg.work?.total?.labor_cost} suffix=" €" color="text-blue-400" />
+              <AggRowMulti label="Материали" childrenData={childrenData} field={c => c?.materials?.ex_vat} total={agg.materials?.total?.ex_vat} suffix=" €" color="text-cyan-400" />
+              <AggRowMulti label="Платен труд" childrenData={childrenData} field={c => c?.paid_labor?.gross_labor} total={agg.paid_labor?.total?.gross_labor} suffix=" €" color="text-orange-400" />
             </tbody>
           </table>
         </div>
@@ -1248,7 +1248,7 @@ function AggregatedSMRPanel({ projectId }) {
       </div>
       {result && (
         <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3 mb-3 flex items-center justify-between">
-          <span className="text-xs text-emerald-400">Оферта {result.offer_no} ({result.lines_count} реда, {result.subtotal} EUR)</span>
+          <span className="text-xs text-emerald-400">Оферта {result.offer_no} ({result.lines_count} реда, {result.subtotal} €)</span>
           <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate(`/offers/${result.offer_id}`)}>Отвори →</Button>
         </div>
       )}
@@ -1331,7 +1331,7 @@ function ProjectOffersTab({ projectId, projectName }) {
             return <Badge key={s} variant="outline" className={`text-[9px] ${cfg.cls || ""}`}>{cfg.label || s}: {c}</Badge>;
           })}
         </div>
-        <span className="text-xs font-mono text-primary">{totalValue.toFixed(0)} EUR</span>
+        <span className="text-xs font-mono text-primary">{totalValue.toFixed(0)} €</span>
       </div>
 
       {offers.length === 0 ? (
@@ -1353,7 +1353,7 @@ function ProjectOffersTab({ projectId, projectName }) {
                     <span className="text-sm text-white truncate">{o.title || `${linesCount} позиции`}</span>
                     <Badge variant="outline" className={`text-[10px] ${st.cls}`}>{st.label}</Badge>
                   </div>
-                  <span className={`text-sm font-mono font-bold ${isZero ? "text-gray-500" : "text-amber-400"}`}>{(o.total || 0).toFixed(0)} EUR</span>
+                  <span className={`text-sm font-mono font-bold ${isZero ? "text-gray-500" : "text-amber-400"}`}>{(o.total || 0).toFixed(0)} €</span>
                 </div>
 
                 {/* Zero-price warning */}
@@ -1391,7 +1391,7 @@ function ProjectOffersTab({ projectId, projectName }) {
                   {o.status === "Draft" && (
                     isZero ? (
                       <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-gray-500 border-gray-600 cursor-not-allowed" disabled title="Попълнете цените преди изпращане">
-                        Изпрати (0 EUR)
+                        Изпрати (0 €)
                       </Button>
                     ) : (
                       <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-blue-400 border-blue-500/30" onClick={() => handleAction(o.id, "send")}>

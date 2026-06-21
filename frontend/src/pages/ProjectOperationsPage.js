@@ -197,7 +197,7 @@ export default function ProjectOperationsPage() {
                   <TableRow key={i}>
                     <TableCell className="font-mono text-sm text-primary">{act.act_number}</TableCell>
                     <TableCell className="text-sm">{formatDate(act.act_date)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{act.subtotal?.toFixed(2)} EUR</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{act.subtotal?.toFixed(2)} €</TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${act.status === "Accepted" ? "bg-emerald-500/15 text-emerald-400" : ""}`}>{act.status === "Draft" ? "Чернова" : act.status === "Accepted" ? "Приет" : act.status}</Badge></TableCell>
                     <TableCell>
                       {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => handleSave(`/client-acts/${act.id}/confirm`, {}))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
@@ -228,7 +228,7 @@ export default function ProjectOperationsPage() {
                   <span className="text-xs text-muted-foreground ml-2">v{s.version}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-sm font-bold">{s.total_contract_value?.toFixed(2)} EUR</span>
+                  <span className="font-mono text-sm font-bold">{s.total_contract_value?.toFixed(2)} €</span>
                   <span className="text-xs text-muted-foreground">{formatDate(s.frozen_at)}</span>
                 </div>
               </div>
@@ -251,7 +251,7 @@ export default function ProjectOperationsPage() {
             ) : ohSnapshots.slice(0, 10).map((o, i) => (
               <div key={i} className="flex items-center justify-between p-2 rounded border border-border text-sm">
                 <div><span className="text-foreground">{o.category_name || o.category_code}</span> <span className="text-muted-foreground">• {o.period_key}</span></div>
-                <span className="font-mono">{o.amount?.toFixed(2)} EUR</span>
+                <span className="font-mono">{o.amount?.toFixed(2)} €</span>
               </div>
             ))}
           </div>
@@ -308,7 +308,7 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} EUR?`, () => handleSave("/subcontractor-payments", form))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
+            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", form))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -321,7 +321,7 @@ export default function ProjectOperationsPage() {
             <div><Label className="text-xs">Оферта *</Label>
               <Select value={form.source_offer_id || ""} onValueChange={v => setForm({...form, source_offer_id: v})}>
                 <SelectTrigger className="bg-background"><SelectValue placeholder="Избери оферта" /></SelectTrigger>
-                <SelectContent>{acceptedOffers.map(o => <SelectItem key={o.id} value={o.id}>{o.offer_no} ({o.total} EUR)</SelectItem>)}</SelectContent>
+                <SelectContent>{acceptedOffers.map(o => <SelectItem key={o.id} value={o.id}>{o.offer_no} ({o.total} €)</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">% изпълнение</Label><Input type="number" min="0" max="100" value={form.percent || 100} onChange={e => setForm({...form, percent: e.target.value})} className="bg-background font-mono" /></div>

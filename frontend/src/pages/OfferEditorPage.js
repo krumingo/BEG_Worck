@@ -592,7 +592,7 @@ export default function OfferEditorPage() {
             const zeroCount = lines.filter(l => !l.unit_price || l.unit_price === 0).length;
             const totalVal = lines.reduce((s, l) => s + (l.total || (l.qty || 0) * (l.unit_price || 0)), 0);
             return zeroCount > 0 || totalVal === 0 ? (
-              <Button onClick={() => { if (window.confirm(`Офертата има ${zeroCount} реда без цена (обща стойност: ${totalVal.toFixed(0)} EUR). Наистина ли искате да изпратите?`)) handleSend(); }} disabled={saving || lines.length === 0} className="bg-amber-600 hover:bg-amber-700" data-testid="send-btn">
+              <Button onClick={() => { if (window.confirm(`Офертата има ${zeroCount} реда без цена (обща стойност: ${totalVal.toFixed(0)} €). Наистина ли искате да изпратите?`)) handleSend(); }} disabled={saving || lines.length === 0} className="bg-amber-600 hover:bg-amber-700" data-testid="send-btn">
                 <Send className="w-4 h-4 mr-1" /> {t("common.send")} ⚠
               </Button>
             ) : (
@@ -1223,7 +1223,7 @@ export default function OfferEditorPage() {
                 <div className="flex items-center justify-between p-2 rounded-lg bg-violet-500/10 border border-violet-500/30">
                   <span className="text-xs text-violet-300">{aiResults.line_count} реда</span>
                   <span className="font-mono text-sm font-bold text-primary">
-                    {Object.values(aiEdits).reduce((s, e) => s + (parseFloat(e.material) + parseFloat(e.labor)) * parseFloat(e.qty), 0).toFixed(2)} EUR
+                    {Object.values(aiEdits).reduce((s, e) => s + (parseFloat(e.material) + parseFloat(e.labor)) * parseFloat(e.qty), 0).toFixed(2)} €
                   </span>
                 </div>
 
@@ -1261,11 +1261,11 @@ export default function OfferEditorPage() {
                           <Input type="number" step="0.01" value={e.qty} onChange={ev => editAiProp(i, "qty", parseFloat(ev.target.value) || 1)} className="bg-background h-7 text-xs font-mono" />
                         </div>
                         <div className="space-y-0.5">
-                          <label className="text-[10px] text-muted-foreground">Мат. EUR/ед</label>
+                          <label className="text-[10px] text-muted-foreground">Мат. €/ед</label>
                           <Input type="number" step="0.01" value={e.material} onChange={ev => editAiProp(i, "material", parseFloat(ev.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                         </div>
                         <div className="space-y-0.5">
-                          <label className="text-[10px] text-muted-foreground">Труд EUR/ед</label>
+                          <label className="text-[10px] text-muted-foreground">Труд €/ед</label>
                           <Input type="number" step="0.01" value={e.labor} onChange={ev => editAiProp(i, "labor", parseFloat(ev.target.value) || 0)} className="bg-background h-7 text-xs font-mono" />
                         </div>
                         <div className="space-y-0.5">

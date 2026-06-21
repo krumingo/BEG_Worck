@@ -461,8 +461,8 @@ export default function EmployeeDetailPage() {
 
             {editProfile.pay_type === "Monthly" && editProfile.monthly_salary > 0 && (
               <p className="text-xs text-muted-foreground mt-2">
-                {editProfile.monthly_salary} EUR / {editProfile.working_days_per_month} дни = <span className="text-emerald-400 font-mono">{editProfile.daily_rate} EUR/ден</span>
-                {" → "}{editProfile.daily_rate} / {editProfile.standard_hours_per_day}ч = <span className="text-emerald-400 font-mono">{editProfile.hourly_rate} EUR/ч</span>
+                {editProfile.monthly_salary} € / {editProfile.working_days_per_month} дни = <span className="text-emerald-400 font-mono">{editProfile.daily_rate} €/ден</span>
+                {" → "}{editProfile.daily_rate} / {editProfile.standard_hours_per_day}ч = <span className="text-emerald-400 font-mono">{editProfile.hourly_rate} €/ч</span>
               </p>
             )}
           </div>
@@ -473,9 +473,9 @@ export default function EmployeeDetailPage() {
           {prof?.position && <div><span className="text-muted-foreground">Длъжност:</span> <span className="text-foreground font-medium">{prof.position}</span></div>}
           {emp.phone && <div><span className="text-muted-foreground">Тел:</span> <span className="text-foreground">{emp.phone}</span></div>}
           {prof && <div><span className="text-muted-foreground">Тип:</span> <span className="font-medium">{PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type}</span></div>}
-          {prof?.pay_type === "Monthly" && prof?.monthly_salary > 0 && <div><span className="text-muted-foreground">Месечна:</span> <span className="font-mono">{prof.monthly_salary} EUR</span></div>}
-          {displayDailyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Дневна:</span> <span className="font-mono">{displayDailyRate} EUR</span></div>}
-          {displayHourlyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Часова:</span> <span className="font-mono">{displayHourlyRate} EUR/ч</span></div>}
+          {prof?.pay_type === "Monthly" && prof?.monthly_salary > 0 && <div><span className="text-muted-foreground">Месечна:</span> <span className="font-mono">{prof.monthly_salary} €</span></div>}
+          {displayDailyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Дневна:</span> <span className="font-mono">{displayDailyRate} €</span></div>}
+          {displayHourlyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Часова:</span> <span className="font-mono">{displayHourlyRate} €/ч</span></div>}
           {prof?.pay_type === "Akord" && <div><span className="text-muted-foreground">Акорд:</span> <span className="text-foreground">{prof.akord_note || "Договорено по задача"}</span></div>}
           <Badge variant="outline" className={prof?.active !== false ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>
             {prof?.active !== false ? "Активен" : "Неактивен"}
@@ -520,19 +520,19 @@ export default function EmployeeDetailPage() {
             <p className="text-[8px] text-muted-foreground">Одобрени / всички</p>
           </div>
           <div className="rounded-lg bg-card border border-border p-2 text-center" title="Сума на одобрените отчети по текуща ставка. Не включва чернови и отхвърлени.">
-            <p className="text-base font-bold font-mono text-primary">{earnedValue.toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+            <p className="text-base font-bold font-mono text-primary">{earnedValue.toFixed(0)}<span className="text-[10px] text-muted-foreground"> €</span></p>
             <p className="text-[8px] text-muted-foreground">Изработено</p>
           </div>
           <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center" title="Само отчети със payroll_status=paid">
-            <p className="text-base font-bold font-mono text-emerald-400">{paidValue.toFixed(0)}<span className="text-[10px] text-emerald-400/60"> EUR</span></p>
+            <p className="text-base font-bold font-mono text-emerald-400">{paidValue.toFixed(0)}<span className="text-[10px] text-emerald-400/60"> €</span></p>
             <p className="text-[8px] text-emerald-400/70">Платено</p>
           </div>
           <div className={`rounded-lg p-2 text-center ${remaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : "bg-card border border-border"}`} title="Одобрено минус платено">
-            <p className={`text-base font-bold font-mono ${remaining > 0 ? "text-amber-400" : remaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{remaining.toFixed(0)}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+            <p className={`text-base font-bold font-mono ${remaining > 0 ? "text-amber-400" : remaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{remaining.toFixed(0)}<span className="text-[10px] text-muted-foreground"> €</span></p>
             <p className="text-[8px] text-muted-foreground">Остатък</p>
           </div>
           <div className={`rounded-lg p-2 text-center ${totalLoans > 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
-            <p className={`text-base font-bold font-mono ${totalLoans > 0 ? "text-red-400" : "text-muted-foreground"}`}>{totalLoans > 0 ? totalLoans.toFixed(0) : "0"}<span className="text-[10px] text-muted-foreground"> EUR</span></p>
+            <p className={`text-base font-bold font-mono ${totalLoans > 0 ? "text-red-400" : "text-muted-foreground"}`}>{totalLoans > 0 ? totalLoans.toFixed(0) : "0"}<span className="text-[10px] text-muted-foreground"> €</span></p>
             <p className="text-[8px] text-muted-foreground">Заеми</p>
           </div>
         </div>
@@ -578,7 +578,7 @@ export default function EmployeeDetailPage() {
             const { bApproved, bAll } = bucketsFrom(dossier?.reports);
             return (
               <>
-                Изработено: <strong className="text-foreground font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} EUR</strong>
+                Изработено: <strong className="text-foreground font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} €</strong>
                 <span className="text-muted-foreground/50"> · </span>
                 Всички въведени: <strong className="text-foreground font-mono">{bAll.count}</strong>
               </>
@@ -683,14 +683,14 @@ export default function EmployeeDetailPage() {
                 <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
                   <span>Обекти: <strong className="text-foreground">{projects.length}</strong></span>
                   <span>Часове: <strong className="text-foreground font-mono">{totalH.toFixed(0)}ч</strong></span>
-                  <span>Стойност: <strong className="text-primary font-mono">{totalV.toFixed(0)} EUR</strong></span>
+                  <span>Стойност: <strong className="text-primary font-mono">{totalV.toFixed(0)} €</strong></span>
                 </div>
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead className="text-[10px]">Обект</TableHead>
                     <TableHead className="text-[10px] text-center">Дни</TableHead>
                     <TableHead className="text-[10px] text-center">Часове</TableHead>
-                    <TableHead className="text-[10px] text-center">Стойност</TableHead>
+                    <TableHead className="text-[10px] text-center">Стойност, €</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {projects.map(p => (
@@ -698,14 +698,14 @@ export default function EmployeeDetailPage() {
                         <TableCell className="text-sm"><MapPin className="w-3 h-3 inline mr-1 text-primary" /><span className="text-primary">{p.project_name}</span></TableCell>
                         <TableCell className="text-center font-mono text-sm">{p.days}</TableCell>
                         <TableCell className="text-center font-mono text-sm font-bold">{p.hours.toFixed(0)}</TableCell>
-                        <TableCell className="text-center font-mono text-sm text-primary">{p.value.toFixed(0)} EUR</TableCell>
+                        <TableCell className="text-center font-mono text-sm text-primary">{p.value.toFixed(0)} €</TableCell>
                       </TableRow>
                     ))}
                     <TableRow className="border-t-2 border-border font-bold">
                       <TableCell className="text-xs">ОБЩО</TableCell>
                       <TableCell />
                       <TableCell className="text-center font-mono text-xs">{totalH.toFixed(0)}</TableCell>
-                      <TableCell className="text-center font-mono text-xs text-primary">{totalV.toFixed(0)} EUR</TableCell>
+                      <TableCell className="text-center font-mono text-xs text-primary">{totalV.toFixed(0)} €</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
@@ -783,9 +783,9 @@ export default function EmployeeDetailPage() {
                     const { bAll, bApproved, bUnpaidApproved, bPaid, bDraftSub, bRejected } = bucketsFrom(dossier?.reports);
                     return (
                       <>
-                        <span>Одобрени: <strong className="text-emerald-400 font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} EUR</strong></span>
-                        <span>За плащане: <strong className="text-amber-400 font-mono">{bUnpaidApproved.count} отч · {bUnpaidApproved.hours}ч · {bUnpaidApproved.value.toFixed(0)} EUR</strong></span>
-                        <span>Платени: <strong className="text-emerald-400 font-mono">{bPaid.count} отч · {bPaid.hours}ч · {bPaid.value.toFixed(0)} EUR</strong></span>
+                        <span>Одобрени: <strong className="text-emerald-400 font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} €</strong></span>
+                        <span>За плащане: <strong className="text-amber-400 font-mono">{bUnpaidApproved.count} отч · {bUnpaidApproved.hours}ч · {bUnpaidApproved.value.toFixed(0)} €</strong></span>
+                        <span>Платени: <strong className="text-emerald-400 font-mono">{bPaid.count} отч · {bPaid.hours}ч · {bPaid.value.toFixed(0)} €</strong></span>
                         <span>Чернови/подадени: <strong className="text-gray-400 font-mono">{bDraftSub.count}</strong></span>
                         {bRejected.count > 0 && <span>Отхвърлени: <strong className="text-red-400 font-mono">{bRejected.count}</strong></span>}
                         <span className="text-muted-foreground/70">Всички въведени: <strong className="text-foreground font-mono">{bAll.count}</strong></span>
@@ -800,7 +800,7 @@ export default function EmployeeDetailPage() {
                     <TableHead className="text-[10px]">СМР</TableHead>
                     <TableHead className="text-[10px] text-center">Часове</TableHead>
                     <TableHead className="text-[10px] text-center">Извънр.</TableHead>
-                    <TableHead className="text-[10px] text-center">Стойност</TableHead>
+                    <TableHead className="text-[10px] text-center">Стойност, €</TableHead>
                     <TableHead className="text-[10px]">Статус</TableHead>
                     <TableHead className="text-[10px]">Заплата</TableHead>
                   </TableRow></TableHeader>
@@ -849,8 +849,8 @@ export default function EmployeeDetailPage() {
                   <span>Общо: <strong className="text-foreground">{all.length}</strong></span>
                   <span>Активни: <strong className="text-amber-400">{active.length}</strong></span>
                   <span>Върнати: <strong className="text-emerald-400">{returned.length}</strong></span>
-                  <span>Дълг: <strong className="text-red-400 font-mono">{totalActive.toFixed(0)} EUR</strong></span>
-                  <span>Издадени общо: <strong className="font-mono">{totalAll.toFixed(0)} EUR</strong></span>
+                  <span>Дълг: <strong className="text-red-400 font-mono">{totalActive.toFixed(0)} €</strong></span>
+                  <span>Издадени общо: <strong className="font-mono">{totalAll.toFixed(0)} €</strong></span>
                 </div>
                 <Table>
                   <TableHeader><TableRow>
@@ -866,8 +866,8 @@ export default function EmployeeDetailPage() {
                       <TableRow key={a.id} className={`hover:bg-muted/10 ${a.remaining > 0 ? "" : "opacity-50"}`}>
                         <TableCell className="text-xs">{a.type === "advance" ? "Аванс" : a.type === "loan" ? "Заем" : a.type}</TableCell>
                         <TableCell className="text-xs font-mono">{a.date || "—"}</TableCell>
-                        <TableCell className="text-center text-xs font-mono">{a.amount?.toFixed(0)} EUR</TableCell>
-                        <TableCell className={`text-center text-xs font-mono ${a.remaining > 0 ? "text-amber-400 font-bold" : "text-emerald-400"}`}>{a.remaining?.toFixed(0)} EUR</TableCell>
+                        <TableCell className="text-center text-xs font-mono">{a.amount?.toFixed(0)} €</TableCell>
+                        <TableCell className={`text-center text-xs font-mono ${a.remaining > 0 ? "text-amber-400 font-bold" : "text-emerald-400"}`}>{a.remaining?.toFixed(0)} €</TableCell>
                         <TableCell><Badge variant="outline" className={`text-[9px] ${a.status === "active" || a.status === "approved" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" : a.remaining === 0 ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" : "text-muted-foreground"}`}>{a.status === "active" ? "Активен" : a.status === "approved" ? "Одобрен" : a.remaining === 0 ? "Върнат" : a.status}</Badge></TableCell>
                         <TableCell className="text-[10px] text-muted-foreground truncate max-w-[150px]">{a.note || "—"}</TableCell>
                       </TableRow>
@@ -961,9 +961,9 @@ function EmployeePayrollWeeks({ userId, periodFrom, periodTo, onViewSlip }) {
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="emp-payroll-weeks">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3 border-b border-border text-xs text-muted-foreground">
-        <span title="Сума на earned_amount от всички pay-runs на работника в периода">Изработено: <strong className="text-primary font-mono">{totalEarned.toFixed(0)} EUR</strong></span>
-        <span title="Pay-runs със статус confirmed (потвърдени, но още не платени)">Потвърдено: <strong className="text-violet-400 font-mono">{totalConfirmed.toFixed(0)} EUR</strong></span>
-        <span title="Само pay-runs със статус paid (реално платени)">Платено: <strong className="text-emerald-400 font-mono">{totalPaid.toFixed(0)} EUR</strong></span>
+        <span title="Сума на earned_amount от всички pay-runs на работника в периода">Изработено: <strong className="text-primary font-mono">{totalEarned.toFixed(0)} €</strong></span>
+        <span title="Pay-runs със статус confirmed (потвърдени, но още не платени)">Потвърдено: <strong className="text-violet-400 font-mono">{totalConfirmed.toFixed(0)} €</strong></span>
+        <span title="Само pay-runs със статус paid (реално платени)">Платено: <strong className="text-emerald-400 font-mono">{totalPaid.toFixed(0)} €</strong></span>
         <span>Записи: {weeks.length}</span>
       </div>
       <Table>
@@ -1063,7 +1063,7 @@ function EmployeeSlips({ userId, periodFrom, periodTo }) {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Период</span><span className="font-mono">{detail.period_start} → {detail.period_end}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Дни / Часове</span><span className="font-mono">{detail.approved_days}д / {detail.approved_hours}ч</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Ставка</span><span className="font-mono">{detail.frozen_hourly_rate} EUR/ч</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Ставка</span><span className="font-mono">{detail.frozen_hourly_rate} €/ч</span></div>
               {detail.adjustments?.length > 0 && (
                 <div className="border-t border-border pt-2 mt-2">
                   <p className="text-[10px] text-muted-foreground uppercase mb-1">Корекции</p>
@@ -1073,11 +1073,11 @@ function EmployeeSlips({ userId, periodFrom, periodTo }) {
                 </div>
               )}
               <div className="border-t border-border pt-2 mt-2 rounded-lg bg-primary/5 p-3 space-y-1">
-                <div className="flex justify-between"><span>Изработено</span><span className="font-mono">{detail.earned_amount?.toFixed(2)} EUR</span></div>
+                <div className="flex justify-between"><span>Изработено</span><span className="font-mono">{detail.earned_amount?.toFixed(2)} €</span></div>
                 {detail.bonuses_amount > 0 && <div className="flex justify-between text-emerald-400"><span>+ Бонуси</span><span className="font-mono">+{detail.bonuses_amount?.toFixed(2)}</span></div>}
                 {detail.deductions_amount > 0 && <div className="flex justify-between text-red-400"><span>- Удръжки</span><span className="font-mono">-{detail.deductions_amount?.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold pt-1 border-t border-border"><span>Платено</span><span className="font-mono text-primary">{detail.paid_now_amount?.toFixed(2)} EUR</span></div>
-                <div className="flex justify-between"><span>Остатък</span><span className={`font-mono font-bold ${detail.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{detail.remaining_after_payment?.toFixed(2)} EUR</span></div>
+                <div className="flex justify-between font-bold pt-1 border-t border-border"><span>Платено</span><span className="font-mono text-primary">{detail.paid_now_amount?.toFixed(2)} €</span></div>
+                <div className="flex justify-between"><span>Остатък</span><span className={`font-mono font-bold ${detail.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{detail.remaining_after_payment?.toFixed(2)} €</span></div>
               </div>
               {detail.paid_at && <p className="text-xs text-emerald-400 mt-2">Платено на {detail.paid_at?.slice(0, 10)}</p>}
             </div>

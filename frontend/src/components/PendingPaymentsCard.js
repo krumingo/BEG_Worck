@@ -31,12 +31,12 @@ export default function PendingPaymentsCard() {
 
       <div className="grid grid-cols-3 gap-3 mb-3">
         <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-2 text-center">
-          <p className="text-lg font-bold font-mono text-amber-400">{data.total_unpaid.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+          <p className="text-lg font-bold font-mono text-amber-400">{data.total_unpaid.toFixed(0)}<span className="text-xs text-muted-foreground"> €</span></p>
           <p className="text-[8px] text-amber-400/70">{t("pendingPay.unpaid")}</p>
         </div>
         {data.total_overdue > 0 && (
           <div className="rounded-lg bg-red-500/5 border border-red-500/20 p-2 text-center">
-            <p className="text-lg font-bold font-mono text-red-400">{data.total_overdue.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+            <p className="text-lg font-bold font-mono text-red-400">{data.total_overdue.toFixed(0)}<span className="text-xs text-muted-foreground"> €</span></p>
             <p className="text-[8px] text-red-400/70">{t("pendingPay.overdue")}</p>
           </div>
         )}
@@ -56,7 +56,7 @@ export default function PendingPaymentsCard() {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {inv.due_date && <span className="text-[10px] text-muted-foreground">{inv.due_date}</span>}
-              <span className={`font-mono font-bold ${inv.is_overdue ? "text-red-400" : "text-amber-400"}`}>{inv.remaining.toFixed(0)} EUR</span>
+              <span className={`font-mono font-bold ${inv.is_overdue ? "text-red-400" : "text-amber-400"}`}>{inv.remaining.toFixed(0)} €</span>
             </div>
           </div>
         ))}

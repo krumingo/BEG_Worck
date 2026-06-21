@@ -154,7 +154,7 @@ export default function ReportsModulePage() {
           <div className="flex items-center gap-6 mb-3 text-sm text-muted-foreground">
             <span>Отчети: <span className="text-foreground font-bold">{rows.length}</span></span>
             <span>Часове: <span className="font-mono text-foreground">{totalHours.toFixed(1)}</span></span>
-            <span>Сума: <span className="font-mono text-primary font-bold">{totalCost.toFixed(2)} EUR</span></span>
+            <span>Сума: <span className="font-mono text-primary font-bold">{totalCost.toFixed(2)} €</span></span>
           </div>
 
           {/* Table */}
@@ -167,7 +167,7 @@ export default function ReportsModulePage() {
                 <TableHead className="text-[10px] uppercase text-muted-foreground">Проект</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground">Тип</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Часове</TableHead>
-                <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Сума EUR</TableHead>
+                <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Сума €</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {loading ? (
@@ -194,7 +194,7 @@ export default function ReportsModulePage() {
                       {r.cost_basis === "akord" ? (
                         <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400">Акорд</Badge>
                       ) : r.cost_estimate != null ? (
-                        <span title={`${r.total_hours}ч × ${r.hourly_rate} EUR/ч`}>{r.cost_estimate.toFixed(2)}</span>
+                        <span title={`${r.total_hours}ч × ${r.hourly_rate} €/ч`}>{r.cost_estimate.toFixed(2)}</span>
                       ) : "—"}
                     </TableCell>
                   </TableRow>

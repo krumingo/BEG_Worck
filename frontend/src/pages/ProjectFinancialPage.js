@@ -172,7 +172,7 @@ export default function ProjectFinancialPage() {
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium">{a.message}</p>
-                  {a.amount && <p className="text-xs opacity-70">{a.amount} EUR</p>}
+                  {a.amount && <p className="text-xs opacity-70">{a.amount} €</p>}
                 </div>
               </div>
             ))}
@@ -261,26 +261,26 @@ export default function ProjectFinancialPage() {
               {/* Revenue */}
               <div className="p-3 rounded-lg bg-muted/20 border border-border">
                 <p className="text-xs text-muted-foreground mb-2 uppercase">Приход</p>
-                <p className="text-xl font-mono font-bold text-foreground">{detailData.sale_total?.toFixed(2)} EUR</p>
+                <p className="text-xl font-mono font-bold text-foreground">{detailData.sale_total?.toFixed(2)} €</p>
               </div>
 
               {/* Costs breakdown */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg border border-border">
                   <p className="text-[10px] text-muted-foreground">Материали</p>
-                  <p className="font-mono text-sm">{detailData.costs?.material?.toFixed(2)} EUR</p>
+                  <p className="font-mono text-sm">{detailData.costs?.material?.toFixed(2)} €</p>
                 </div>
                 <div className="p-3 rounded-lg border border-border">
                   <p className="text-[10px] text-muted-foreground">Труд</p>
-                  <p className="font-mono text-sm">{detailData.costs?.labor?.toFixed(2)} EUR</p>
+                  <p className="font-mono text-sm">{detailData.costs?.labor?.toFixed(2)} €</p>
                 </div>
                 <div className="p-3 rounded-lg border border-border">
                   <p className="text-[10px] text-muted-foreground">Подизпълнители</p>
-                  <p className="font-mono text-sm">{detailData.costs?.subcontract?.toFixed(2)} EUR</p>
+                  <p className="font-mono text-sm">{detailData.costs?.subcontract?.toFixed(2)} €</p>
                 </div>
                 <div className="p-3 rounded-lg border border-border">
                   <p className="text-[10px] text-muted-foreground">Режийни</p>
-                  <p className="font-mono text-sm">{detailData.costs?.overhead?.toFixed(2)} EUR</p>
+                  <p className="font-mono text-sm">{detailData.costs?.overhead?.toFixed(2)} €</p>
                 </div>
               </div>
 
@@ -289,14 +289,14 @@ export default function ProjectFinancialPage() {
                 <div className={`p-3 rounded-lg border ${(detailData.margin?.gross_margin || 0) >= 0 ? "border-emerald-500/30 bg-emerald-500/5" : "border-red-500/30 bg-red-500/5"}`}>
                   <p className="text-[10px] text-muted-foreground">Бруто марж</p>
                   <p className={`font-mono text-lg font-bold ${(detailData.margin?.gross_margin || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {detailData.margin?.gross_margin?.toFixed(2)} EUR
+                    {detailData.margin?.gross_margin?.toFixed(2)} €
                   </p>
                   <p className="text-xs text-muted-foreground">{detailData.margin?.gross_margin_percent}%</p>
                 </div>
                 <div className={`p-3 rounded-lg border ${(detailData.margin?.net_margin || 0) >= 0 ? "border-emerald-500/30 bg-emerald-500/5" : "border-red-500/30 bg-red-500/5"}`}>
                   <p className="text-[10px] text-muted-foreground">Нето марж</p>
                   <p className={`font-mono text-lg font-bold ${(detailData.margin?.net_margin || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {detailData.margin?.net_margin?.toFixed(2)} EUR
+                    {detailData.margin?.net_margin?.toFixed(2)} €
                   </p>
                   <p className="text-xs text-muted-foreground">{detailData.margin?.net_margin_percent}%</p>
                 </div>
@@ -305,10 +305,10 @@ export default function ProjectFinancialPage() {
               {/* Expected vs actual */}
               <div className="flex items-center gap-4 text-sm">
                 <span className="text-muted-foreground">Очакван марж:</span>
-                <span className="font-mono">{detailData.margin?.expected_margin?.toFixed(2) || "—"} EUR</span>
+                <span className="font-mono">{detailData.margin?.expected_margin?.toFixed(2) || "—"} €</span>
                 <span className="text-muted-foreground">Отклонение:</span>
                 <span className={`font-mono font-bold ${(detailData.margin?.margin_variance || 0) < 0 ? "text-red-400" : "text-emerald-400"}`}>
-                  {detailData.margin?.margin_variance?.toFixed(2) || "—"} EUR
+                  {detailData.margin?.margin_variance?.toFixed(2) || "—"} €
                 </span>
               </div>
 

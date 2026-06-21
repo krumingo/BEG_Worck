@@ -236,7 +236,7 @@ export default function AllReportsPage() {
             <p className="text-[10px] text-amber-400/70">{t("allReports.overtimeHours")}</p>
           </div>
           <div className="rounded-lg bg-card border border-border p-3 text-center">
-            <p className="text-xl font-bold font-mono text-primary">{s.total_value?.toFixed(0)}<span className="text-sm text-muted-foreground"> EUR</span></p>
+            <p className="text-xl font-bold font-mono text-primary">{s.total_value?.toFixed(0)}<span className="text-sm text-muted-foreground"> €</span></p>
             <p className="text-[10px] text-muted-foreground">{t("allReports.laborValue")}</p>
           </div>
         </div>
@@ -471,8 +471,8 @@ export default function AllReportsPage() {
                     {detail.day_warnings.map((w, i) => <p key={i} className="text-[11px] text-amber-400">{w}</p>)}
                   </div>
                 )}
-                <DetailRow label={t("allReports.colRate")} value={detail.hourly_rate > 0 ? `${detail.hourly_rate} EUR/ч` : "—"} />
-                <DetailRow label={t("allReports.colValue")} value={detail.labor_value > 0 ? `${detail.labor_value.toFixed(2)} EUR` : "—"} color="text-primary" bold />
+                <DetailRow label={t("allReports.colRate")} value={detail.hourly_rate > 0 ? `${detail.hourly_rate} €/ч` : "—"} />
+                <DetailRow label={t("allReports.colValue")} value={detail.labor_value > 0 ? `${detail.labor_value.toFixed(2)} €` : "—"} color="text-primary" bold />
                 {detail.earned_formula && (() => {
                   const payTypeLabels = {Hourly: "Часово", Daily: "Надница", Monthly: "Месечно", Akord: "Акорд", mixed: "Смесено"};
                   const payTypeLabel = payTypeLabels[detail.pay_type || detail.rate_type] || detail.pay_type || "—";
@@ -482,7 +482,7 @@ export default function AllReportsPage() {
                       <p className="text-xs font-mono text-primary mb-2">{detail.earned_formula}</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div><span className="text-muted-foreground">Тип: </span>{payTypeLabel}</div>
-                        <div><span className="text-muted-foreground">Ставка: </span>{detail.hourly_rate || detail.hourly_rate_at_date || "—"} EUR/ч</div>
+                        <div><span className="text-muted-foreground">Ставка: </span>{detail.hourly_rate || detail.hourly_rate_at_date || "—"} €/ч</div>
                         <div><span className="text-muted-foreground">Обект: </span>{detail.site_name || detail.project_name || "—"}</div>
                         <div><span className="text-muted-foreground">Дата: </span>{detail.date || "—"}</div>
                       </div>

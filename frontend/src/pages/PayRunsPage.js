@@ -706,7 +706,7 @@ export default function PayRunsPage() {
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <span>Избрани: <strong className="text-foreground">{totalSelectedEmps}</strong> хора</span>
                   <span>Дни: <strong className="text-foreground">{totalSelectedDays}</strong></span>
-                  <span>Нетно: <strong className="text-primary font-mono text-sm">{totalSelectedPay.toFixed(0)} EUR</strong></span>
+                  <span>Нетно: <strong className="text-primary font-mono text-sm">{totalSelectedPay.toFixed(0)} €</strong></span>
                 </div>
                 {step === "grid" && <div className="flex gap-1">
                   <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={selectAllEmps}>Избери всички</Button>
@@ -1044,7 +1044,7 @@ export default function PayRunsPage() {
                   {step === "payment" && (
                     <Button onClick={handleCreate} disabled={creating || payTotals.count === 0} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="create-payrun-btn">
                       {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                      Потвърди плащане ({payTotals.paid.toFixed(0)} EUR)
+                      Потвърди плащане ({payTotals.paid.toFixed(0)} €)
                     </Button>
                   )}
                 </div>
@@ -1114,23 +1114,23 @@ export default function PayRunsPage() {
               <p className="text-[8px] text-muted-foreground">Хора</p>
             </div>
             <div className="rounded-lg bg-card border border-border p-2 text-center">
-              <p className="text-lg font-bold font-mono text-primary">{grandEarned.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className="text-lg font-bold font-mono text-primary">{grandEarned.toFixed(0)}<span className="text-xs text-muted-foreground"> €</span></p>
               <p className="text-[8px] text-muted-foreground">Изработено</p>
             </div>
             <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
-              <p className="text-lg font-bold font-mono text-emerald-400">{grandPaid.toFixed(0)}<span className="text-xs text-emerald-400/60"> EUR</span></p>
+              <p className="text-lg font-bold font-mono text-emerald-400">{grandPaid.toFixed(0)}<span className="text-xs text-emerald-400/60"> €</span></p>
               <p className="text-[8px] text-emerald-400/70">Платено</p>
             </div>
             <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
-              <p className="text-lg font-bold font-mono text-emerald-400">{grandBonuses.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className="text-lg font-bold font-mono text-emerald-400">{grandBonuses.toFixed(0)}<span className="text-xs text-muted-foreground"> €</span></p>
               <p className="text-[8px] text-muted-foreground">Бонуси</p>
             </div>
             <div className={`rounded-lg p-2 text-center ${grandDeductions > 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
-              <p className={`text-lg font-bold font-mono ${grandDeductions > 0 ? "text-red-400" : "text-muted-foreground"}`}>{grandDeductions.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className={`text-lg font-bold font-mono ${grandDeductions > 0 ? "text-red-400" : "text-muted-foreground"}`}>{grandDeductions.toFixed(0)}<span className="text-xs text-muted-foreground"> €</span></p>
               <p className="text-[8px] text-muted-foreground">Удръжки</p>
             </div>
             <div className={`rounded-lg p-2 text-center ${grandRemaining > 0 ? "bg-amber-500/5 border border-amber-500/20" : grandRemaining < 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
-              <p className={`text-lg font-bold font-mono ${grandRemaining > 0 ? "text-amber-400" : grandRemaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{grandRemaining.toFixed(0)}<span className="text-xs text-muted-foreground"> EUR</span></p>
+              <p className={`text-lg font-bold font-mono ${grandRemaining > 0 ? "text-amber-400" : grandRemaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{grandRemaining.toFixed(0)}<span className="text-xs text-muted-foreground"> €</span></p>
               <p className="text-[8px] text-muted-foreground">Остатък</p>
             </div>
           </div>
@@ -1428,7 +1428,7 @@ export default function PayRunsPage() {
               <SelectContent>{ADJ_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
             <Input value={adjTitle} onChange={e => setAdjTitle(e.target.value)} placeholder="Заглавие (опц.)" className="h-9" />
-            <Input type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="Сума EUR" className="h-9" />
+            <Input type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="Сума €" className="h-9" />
             <Input value={adjNote} onChange={e => setAdjNote(e.target.value)} placeholder="Бележка..." className="h-9" />
             <Button onClick={addAdj} disabled={!adjAmount} className="w-full">Добави</Button>
           </div>
@@ -1536,7 +1536,7 @@ export default function PayRunsPage() {
                           <p className="text-xs font-medium truncate">{s.site_name}</p>
                           <div className="flex items-center gap-2 text-[10px] mt-1">
                             <span className="text-muted-foreground">{s.hours}ч</span>
-                            <span className="text-emerald-400 font-mono">{s.paid} EUR</span>
+                            <span className="text-emerald-400 font-mono">{s.paid} €</span>
                             {s.remaining > 0 && <span className="text-amber-400 font-mono">+{s.remaining}</span>}
                           </div>
                         </div>
@@ -1591,7 +1591,7 @@ export default function PayRunsPage() {
                         ))}
                       </div>
                       {emp.rounding_adjustment !== 0 && (
-                        <p className="text-[7px] text-muted-foreground mt-1">Закръгляне: {emp.rounding_adjustment} EUR (последен ред поема остатъка)</p>
+                        <p className="text-[7px] text-muted-foreground mt-1">Закръгляне: {emp.rounding_adjustment} € (последен ред поема остатъка)</p>
                       )}
                     </div>
                     );
@@ -1622,7 +1622,7 @@ export default function PayRunsPage() {
               <div className="grid grid-cols-3 gap-2">
                 <SumCard label="Дни" value={detailSlip.approved_days} />
                 <SumCard label="Часове" value={`${detailSlip.approved_hours}ч`} />
-                <SumCard label="Ставка" value={`${detailSlip.frozen_hourly_rate} EUR/ч`} />
+                <SumCard label="Ставка" value={`${detailSlip.frozen_hourly_rate} €/ч`} />
               </div>
               {detailSlip.adjustments?.length > 0 && (
                 <div className="space-y-1">
@@ -1630,21 +1630,21 @@ export default function PayRunsPage() {
                   {detailSlip.adjustments.map((a, i) => (
                     <div key={i} className="flex justify-between text-xs px-2">
                       <span className={a.type === "bonus" ? "text-emerald-400" : "text-red-400"}>{a.title || a.type} {a.note && `(${a.note})`}</span>
-                      <span className="font-mono">{a.type === "bonus" ? "+" : "-"}{a.amount} EUR</span>
+                      <span className="font-mono">{a.type === "bonus" ? "+" : "-"}{a.amount} €</span>
                     </div>
                   ))}
                 </div>
               )}
               <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1 text-xs">
-                <div className="flex justify-between"><span>Изработено</span><span className="font-mono">{detailSlip.earned_amount?.toFixed(2)} EUR</span></div>
-                {detailSlip.bonuses_amount > 0 && <div className="flex justify-between text-emerald-400"><span>+ Бонуси</span><span className="font-mono">+{detailSlip.bonuses_amount?.toFixed(2)} EUR</span></div>}
-                {detailSlip.deductions_amount > 0 && <div className="flex justify-between text-red-400"><span>- Удръжки</span><span className="font-mono">-{detailSlip.deductions_amount?.toFixed(2)} EUR</span></div>}
-                {detailSlip.previously_paid > 0 && <div className="flex justify-between text-muted-foreground"><span>- Вече платено</span><span className="font-mono">-{detailSlip.previously_paid?.toFixed(2)} EUR</span></div>}
-                <div className="flex justify-between font-bold text-sm pt-1 border-t border-border"><span>Платено сега</span><span className="font-mono text-primary">{detailSlip.paid_now_amount?.toFixed(2)} EUR</span></div>
-                <div className="flex justify-between"><span>Остатък</span><span className={`font-mono font-bold ${detailSlip.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{detailSlip.remaining_after_payment?.toFixed(2)} EUR</span></div>
+                <div className="flex justify-between"><span>Изработено</span><span className="font-mono">{detailSlip.earned_amount?.toFixed(2)} €</span></div>
+                {detailSlip.bonuses_amount > 0 && <div className="flex justify-between text-emerald-400"><span>+ Бонуси</span><span className="font-mono">+{detailSlip.bonuses_amount?.toFixed(2)} €</span></div>}
+                {detailSlip.deductions_amount > 0 && <div className="flex justify-between text-red-400"><span>- Удръжки</span><span className="font-mono">-{detailSlip.deductions_amount?.toFixed(2)} €</span></div>}
+                {detailSlip.previously_paid > 0 && <div className="flex justify-between text-muted-foreground"><span>- Вече платено</span><span className="font-mono">-{detailSlip.previously_paid?.toFixed(2)} €</span></div>}
+                <div className="flex justify-between font-bold text-sm pt-1 border-t border-border"><span>Платено сега</span><span className="font-mono text-primary">{detailSlip.paid_now_amount?.toFixed(2)} €</span></div>
+                <div className="flex justify-between"><span>Остатък</span><span className={`font-mono font-bold ${detailSlip.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{detailSlip.remaining_after_payment?.toFixed(2)} €</span></div>
               </div>
               {detailSlip.paid_at && <p className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> Платено на {detailSlip.paid_at?.slice(0, 10)}</p>}
-              {detailSlip.remaining_after_payment < 0 && <p className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Внимание: Надплащане ({detailSlip.remaining_after_payment?.toFixed(2)} EUR)</p>}
+              {detailSlip.remaining_after_payment < 0 && <p className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Внимание: Надплащане ({detailSlip.remaining_after_payment?.toFixed(2)} €)</p>}
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-[9px] text-muted-foreground">Формула: Остатък = Изработено + Бонуси - Удръжки - Вече платено - Платено сега</span>
               </div>
@@ -1699,10 +1699,10 @@ export default function PayRunsPage() {
                 {dayEditDialog.cell?.sites?.length > 0 && <span className="text-primary"> | {dayEditDialog.cell.sites.join(", ")}</span>}
               </div>
               <div className="rounded-lg bg-muted/20 p-2 text-[10px] text-muted-foreground">
-                Оригинал: {dayEditDialog.cell?.hours}ч / {dayEditDialog.cell?.value?.toFixed(2)} EUR
+                Оригинал: {dayEditDialog.cell?.hours}ч / {dayEditDialog.cell?.value?.toFixed(2)} €
               </div>
               <div><label className="text-[10px] text-muted-foreground">Часове</label><Input type="number" value={dayEditHours} onChange={e => setDayEditHours(e.target.value)} className="h-9" /></div>
-              <div><label className="text-[10px] text-muted-foreground">Сума EUR</label><Input type="number" value={dayEditValue} onChange={e => setDayEditValue(e.target.value)} className="h-9" /></div>
+              <div><label className="text-[10px] text-muted-foreground">Сума €</label><Input type="number" value={dayEditValue} onChange={e => setDayEditValue(e.target.value)} className="h-9" /></div>
               <div><label className="text-[10px] text-muted-foreground">Причина</label><Input value={dayEditReason} onChange={e => setDayEditReason(e.target.value)} placeholder="Причина за промяната..." className="h-9" /></div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setDayEditDialog(null)} className="flex-1">Откажи</Button>
@@ -1835,7 +1835,7 @@ export default function PayRunsPage() {
                   <div key={i} className="flex justify-between text-xs">
                     <span>{a.title} {a.note && `(${a.note})`}</span>
                     <div className="flex items-center gap-1">
-                      <span className="font-mono">{a.amount} EUR</span>
+                      <span className="font-mono">{a.amount} €</span>
                       <button onClick={() => { const idx = getEmpAdj(adjDialog.employee_id).indexOf(a); removeAdj(adjDialog.employee_id, idx); }} className="text-red-400 text-[9px]">×</button>
                     </div>
                   </div>
@@ -1847,7 +1847,7 @@ export default function PayRunsPage() {
               <SelectContent>{ADJ_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
             <Input value={adjTitle} onChange={e => setAdjTitle(e.target.value)} placeholder="Заглавие" className="h-9" />
-            <Input type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="Сума EUR" className="h-9" />
+            <Input type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} placeholder="Сума €" className="h-9" />
             <Input value={adjNote} onChange={e => setAdjNote(e.target.value)} placeholder="Бележка..." className="h-9" />
             <Button onClick={() => adjDialog && addAdj(adjDialog.employee_id)} disabled={!adjAmount} className="w-full">Добави</Button>
           </div>

@@ -93,7 +93,7 @@ export default function AssetsIntakeReviewPage() {
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{it.location_name || it.location_type}</span>
                       <span className="flex items-center gap-1"><User className="w-3 h-3" />{it.submitted_by_name}</span>
-                      {s.estimated_price_eur != null && <span className="text-amber-400">~{s.estimated_price_eur} EUR</span>}
+                      {s.estimated_price_eur != null && <span className="text-amber-400">~{s.estimated_price_eur} €</span>}
                     </div>
                   </div>
                 </div>

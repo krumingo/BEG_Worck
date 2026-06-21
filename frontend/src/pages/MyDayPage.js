@@ -338,7 +338,7 @@ export default function MyDayPage() {
             {["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role) && (
             <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
               <p className="text-muted-foreground">{t("workSessions.totalCost")}</p>
-              <p className="font-mono font-bold text-foreground">{sessions.total_cost.toFixed(2)} EUR</p>
+              <p className="font-mono font-bold text-foreground">{sessions.total_cost.toFixed(2)} €</p>
             </div>
             )}
             <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">

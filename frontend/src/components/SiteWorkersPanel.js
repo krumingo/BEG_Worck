@@ -79,7 +79,7 @@ export default function SiteWorkersPanel({ projectId }) {
                 <TableCell className="text-xs text-center font-mono">{w.days_count}</TableCell>
                 <TableCell className="text-xs text-center font-mono">{w.report_count}</TableCell>
                 <TableCell className="text-xs text-right font-mono">{w.total_hours}ч</TableCell>
-                <TableCell className="text-xs text-right font-mono text-emerald-400">{w.total_earned > 0 ? formatCurrency(w.total_earned, "BGN") : "—"}</TableCell>
+                <TableCell className="text-xs text-right font-mono text-emerald-400">{w.total_earned > 0 ? formatCurrency(w.total_earned, "EUR") : "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>

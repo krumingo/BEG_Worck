@@ -49,7 +49,7 @@ export default function BatchesTab() {
 
   // New batch form
   const [form, setForm] = useState({
-    item_id: "", warehouse_id: "", qty: "", unit_cost: "", currency: "BGN",
+    item_id: "", warehouse_id: "", qty: "", unit_cost: "", currency: "EUR",
     supplier_id: "", invoice_number: "", invoice_date: "", notes: "",
   });
   const [saving, setSaving] = useState(false);
@@ -95,7 +95,7 @@ export default function BatchesTab() {
       });
       toast.success("Партида създадена");
       setNewOpen(false);
-      setForm({ item_id: "", warehouse_id: "", qty: "", unit_cost: "", currency: "BGN", supplier_id: "", invoice_number: "", invoice_date: "", notes: "" });
+      setForm({ item_id: "", warehouse_id: "", qty: "", unit_cost: "", currency: "EUR", supplier_id: "", invoice_number: "", invoice_date: "", notes: "" });
       load();
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
     finally { setSaving(false); }

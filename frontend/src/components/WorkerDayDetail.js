@@ -66,7 +66,7 @@ export default function WorkerDayDetail({ sessionId, onBack }) {
           </div>
           <div className="font-mono text-right">
             <span>{data.hours?.toFixed(1)} × {data.hourly_rate?.toFixed(2)} = </span>
-            <strong className="text-primary">{data.total_cost?.toFixed(2)} EUR</strong>
+            <strong className="text-primary">{data.total_cost?.toFixed(2)} €</strong>
           </div>
         </div>
         {data.is_overtime && (

@@ -69,7 +69,7 @@ export default function ProjectSMRTab({ projectId }) {
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="font-mono text-lg font-bold text-foreground">{mo.total?.toLocaleString("en", {minimumFractionDigits: 2})} EUR</p>
+              <p className="font-mono text-lg font-bold text-foreground">{mo.total?.toLocaleString("en", {minimumFractionDigits: 2})} €</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => navigate(`/offers/${mo.id}`)} data-testid="open-offer-btn">
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Отвори
@@ -81,7 +81,7 @@ export default function ProjectSMRTab({ projectId }) {
       {/* Summary strip */}
       <div className="flex items-center gap-6 text-sm text-muted-foreground">
         <span>СМР: <span className="text-foreground font-bold">{s.total_packages}</span></span>
-        <span>Продажба: <span className="font-mono text-foreground">{s.total_sale?.toLocaleString("en", {minimumFractionDigits: 2})} EUR</span></span>
+        <span>Продажба: <span className="font-mono text-foreground">{s.total_sale?.toLocaleString("en", {minimumFractionDigits: 2})} €</span></span>
         <span>Труд бюджет: <span className="font-mono text-foreground">{s.total_labor_budget?.toLocaleString("en", {minimumFractionDigits: 2})}</span></span>
         <span>Труд факт: <span className="font-mono text-foreground">{s.total_labor_actual?.toLocaleString("en", {minimumFractionDigits: 2})}</span></span>
         {s.with_warnings > 0 && <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400"><AlertTriangle className="w-3 h-3 mr-0.5 inline" />{s.with_warnings}</Badge>}
@@ -156,7 +156,7 @@ export default function ProjectSMRTab({ projectId }) {
               <div className="flex items-center gap-3">
                 <Badge variant="outline" className={`text-xs ${MODE_COLORS[detailRow.mode]}`}>{MODE_LABELS[detailRow.mode]}</Badge>
                 <span className="text-sm text-muted-foreground">{detailRow.qty} {detailRow.unit}</span>
-                <span className="font-mono text-sm">{detailRow.sale_total.toFixed(2)} EUR продажба</span>
+                <span className="font-mono text-sm">{detailRow.sale_total.toFixed(2)} € продажба</span>
               </div>
 
               {/* Labor section */}
@@ -164,11 +164,11 @@ export default function ProjectSMRTab({ projectId }) {
                 <p className="text-xs text-muted-foreground font-medium uppercase">Труд</p>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div><p className="text-[10px] text-muted-foreground">По оферта</p><p className="font-mono">{detailRow.offer_labor_unit_price != null ? `${detailRow.offer_labor_unit_price.toFixed(2)}/ед` : "—"}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Бюджет</p><p className="font-mono">{detailRow.labor_budget.toFixed(2)} EUR</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Изхарчен</p><p className={`font-mono ${detailRow.flags.includes("labor_overrun") ? "text-red-400 font-bold" : ""}`}>{detailRow.labor_actual.toFixed(2)} EUR</p></div>
+                  <div><p className="text-[10px] text-muted-foreground">Бюджет</p><p className="font-mono">{detailRow.labor_budget.toFixed(2)} €</p></div>
+                  <div><p className="text-[10px] text-muted-foreground">Изхарчен</p><p className={`font-mono ${detailRow.flags.includes("labor_overrun") ? "text-red-400 font-bold" : ""}`}>{detailRow.labor_actual.toFixed(2)} €</p></div>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div><p className="text-[10px] text-muted-foreground">Остатък</p><p className={`font-mono font-bold ${detailRow.labor_remaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{detailRow.labor_remaining != null ? `${detailRow.labor_remaining.toFixed(2)} EUR` : "—"}</p></div>
+                  <div><p className="text-[10px] text-muted-foreground">Остатък</p><p className={`font-mono font-bold ${detailRow.labor_remaining < 0 ? "text-red-400" : "text-emerald-400"}`}>{detailRow.labor_remaining != null ? `${detailRow.labor_remaining.toFixed(2)} €` : "—"}</p></div>
                   <div><p className="text-[10px] text-muted-foreground">Часове</p><p className="font-mono">{detailRow.used_hours}/{detailRow.planned_hours || "?"}</p></div>
                   <div><p className="text-[10px] text-muted-foreground">Остатък ч.</p><p className="font-mono">{detailRow.remaining_hours != null ? detailRow.remaining_hours : "—"}</p></div>
                 </div>

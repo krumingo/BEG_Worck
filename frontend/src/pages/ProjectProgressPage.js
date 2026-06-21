@@ -357,7 +357,7 @@ export default function ProjectProgressPage() {
 
               <div className="p-3 rounded-lg bg-muted/20 border border-border text-xs text-muted-foreground">
                 <p>Планирани часове: {compData.raw.planned_hours || "?"} | Използвани: {compData.raw.used_hours}</p>
-                <p>Мат. бюджет: {compData.raw.material_budget} EUR | Факт: {compData.raw.material_actual} EUR</p>
+                <p>Мат. бюджет: {compData.raw.material_budget} € | Факт: {compData.raw.material_actual} €</p>
               </div>
 
               {compData.metrics_partial && (

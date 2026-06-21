@@ -94,7 +94,7 @@ export default function OCRInvoicePage() {
       invoice_date: d.invoice_date || "",
       total_amount: d.total_amount || "",
       vat_amount: d.vat_amount || "",
-      currency: d.currency || "BGN",
+      currency: d.currency || "EUR",
       notes: d.notes || "",
     });
     setShowDetail(true);

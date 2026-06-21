@@ -68,7 +68,7 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
                 )}
                 <div>
                   <p className="font-semibold">{w.first_name} {w.last_name}</p>
-                  <p className="text-xs text-muted-foreground">{w.position || "—"} | {w.pay_type || "—"} | {w.hourly_rate > 0 ? `${w.hourly_rate} EUR/ч` : "—"}</p>
+                  <p className="text-xs text-muted-foreground">{w.position || "—"} | {w.pay_type || "—"} | {w.hourly_rate > 0 ? `${w.hourly_rate} €/ч` : "—"}</p>
                 </div>
               </div>
               <div className="text-right">
@@ -85,8 +85,8 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
               <SumCard label={t("payslip.hours")} value={`${s.total_hours}ч`} />
               <SumCard label={t("payslip.normal")} value={`${s.normal_hours}ч`} color="text-emerald-400" />
               <SumCard label={t("payslip.overtime")} value={s.overtime_hours > 0 ? `+${s.overtime_hours}ч` : "—"} color={s.overtime_hours > 0 ? "text-amber-400" : ""} />
-              <SumCard label={t("payslip.gross")} value={`${s.gross?.toFixed(0)} EUR`} color="text-primary" />
-              <SumCard label={t("payslip.net")} value={`${s.net?.toFixed(0)} EUR`} color="text-primary" bold />
+              <SumCard label={t("payslip.gross")} value={`${s.gross?.toFixed(0)} €`} color="text-primary" />
+              <SumCard label={t("payslip.net")} value={`${s.net?.toFixed(0)} €`} color="text-primary" bold />
             </div>
 
             {/* Day breakdown */}
@@ -129,7 +129,7 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="font-mono text-muted-foreground">{p.hours}ч</span>
-                        <span className="font-mono text-primary font-bold">{p.value?.toFixed(0)} EUR</span>
+                        <span className="font-mono text-primary font-bold">{p.value?.toFixed(0)} €</span>
                       </div>
                     </div>
                   ))}
@@ -148,7 +148,7 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
                         {a.type === "bonus" ? t("payslip.adjBonus") : a.type === "deduction" ? t("payslip.adjDeduction") : a.type === "loan" ? t("payslip.adjLoan") : a.type === "rent" ? t("payslip.adjRent") : a.type === "fine" ? t("payslip.adjFine") : a.type}
                         {a.note && ` (${a.note})`}
                       </span>
-                      <span className="text-xs font-mono">{a.type === "bonus" ? "+" : "-"}{a.amount} EUR</span>
+                      <span className="text-xs font-mono">{a.type === "bonus" ? "+" : "-"}{a.amount} €</span>
                     </div>
                   ))}
                 </div>
@@ -157,12 +157,12 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
 
             {/* Final calculation */}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
-              <div className="flex justify-between text-xs"><span>{t("payslip.gross")}</span><span className="font-mono">{s.gross?.toFixed(2)} EUR</span></div>
-              {s.bonuses > 0 && <div className="flex justify-between text-xs text-emerald-400"><span>+ {t("payslip.bonusesTotal")}</span><span className="font-mono">+{s.bonuses?.toFixed(2)} EUR</span></div>}
-              {s.deductions > 0 && <div className="flex justify-between text-xs text-red-400"><span>- {t("payslip.deductionsTotal")}</span><span className="font-mono">-{s.deductions?.toFixed(2)} EUR</span></div>}
+              <div className="flex justify-between text-xs"><span>{t("payslip.gross")}</span><span className="font-mono">{s.gross?.toFixed(2)} €</span></div>
+              {s.bonuses > 0 && <div className="flex justify-between text-xs text-emerald-400"><span>+ {t("payslip.bonusesTotal")}</span><span className="font-mono">+{s.bonuses?.toFixed(2)} €</span></div>}
+              {s.deductions > 0 && <div className="flex justify-between text-xs text-red-400"><span>- {t("payslip.deductionsTotal")}</span><span className="font-mono">-{s.deductions?.toFixed(2)} €</span></div>}
               <div className="flex justify-between font-bold text-sm pt-1 border-t border-border">
                 <span>{t("payslip.netPayable")}</span>
-                <span className="font-mono text-primary">{s.net?.toFixed(2)} EUR</span>
+                <span className="font-mono text-primary">{s.net?.toFixed(2)} €</span>
               </div>
             </div>
 

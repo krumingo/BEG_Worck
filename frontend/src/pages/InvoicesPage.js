@@ -121,7 +121,7 @@ export default function InvoicesPage() {
         notes: payNote,
         account_id: payAccount || undefined,
       });
-      toast.success(`Плащане ${amt.toFixed(2)} EUR записано`);
+      toast.success(`Плащане ${amt.toFixed(2)} € записано`);
       setPayDialog(null); setPayAmount(""); setPayRef(""); setPayNote("");
       fetchData();
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }

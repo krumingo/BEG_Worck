@@ -189,7 +189,7 @@ export default function EmployeesPage() {
               <TableHead className="text-xs uppercase text-muted-foreground">Роля</TableHead>
               <TableHead className="text-xs uppercase text-muted-foreground">Телефон</TableHead>
               <TableHead className="text-xs uppercase text-muted-foreground">Тип</TableHead>
-              <TableHead className="text-xs uppercase text-muted-foreground text-right">Ставка EUR</TableHead>
+              <TableHead className="text-xs uppercase text-muted-foreground text-right">Ставка €</TableHead>
               <TableHead className="text-xs uppercase text-muted-foreground">Статус</TableHead>
             </TableRow>
           </TableHeader>
@@ -211,7 +211,7 @@ export default function EmployeesPage() {
                   <TableCell><Badge variant="outline" className="text-[10px]">{emp.role}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{emp.phone || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{prof ? PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type : "—"}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{rate ? `${rate} EUR${rateLabel}` : "—"}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{rate ? `${rate} €${rateLabel}` : "—"}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`text-[10px] ${prof?.active !== false ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
                       {prof?.active !== false ? "Активен" : "Неактивен"}
@@ -333,13 +333,13 @@ export default function EmployeesPage() {
               {/* Auto-calc preview */}
               {createForm.pay_type === "Monthly" && createForm.monthly_salary > 0 && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  {createForm.monthly_salary} EUR / {createForm.working_days}д = <span className="text-emerald-400 font-mono">{createForm.daily_rate} EUR/ден</span>
-                  {" → "}<span className="text-emerald-400 font-mono">{createForm.hourly_rate} EUR/ч</span>
+                  {createForm.monthly_salary} € / {createForm.working_days}д = <span className="text-emerald-400 font-mono">{createForm.daily_rate} €/ден</span>
+                  {" → "}<span className="text-emerald-400 font-mono">{createForm.hourly_rate} €/ч</span>
                 </p>
               )}
               {createForm.pay_type === "Daily" && createForm.daily_rate > 0 && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  {createForm.daily_rate} EUR/ден ÷ {createForm.hours_day}ч = <span className="text-emerald-400 font-mono">{createForm.hourly_rate} EUR/ч</span>
+                  {createForm.daily_rate} €/ден ÷ {createForm.hours_day}ч = <span className="text-emerald-400 font-mono">{createForm.hourly_rate} €/ч</span>
                 </p>
               )}
             </div>

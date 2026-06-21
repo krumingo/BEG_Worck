@@ -175,8 +175,8 @@ export default function ContractPaymentsPage() {
                     <TableRow key={c.id} className="cursor-pointer hover:bg-muted/40" onClick={() => { setSelected(c); setShowDetail(true); }} data-testid={`contract-row-${c.id}`}>
                       <TableCell className="font-medium">{c.worker_name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">{c.description || "-"}</TableCell>
-                      <TableCell className="text-right font-mono">{c.total_amount?.toFixed(2)} EUR</TableCell>
-                      <TableCell className="text-right font-mono text-emerald-400">{paid.toFixed(2)} EUR</TableCell>
+                      <TableCell className="text-right font-mono">{c.total_amount?.toFixed(2)} €</TableCell>
+                      <TableCell className="text-right font-mono text-emerald-400">{paid.toFixed(2)} €</TableCell>
                       <TableCell><Badge className={`text-xs ${st.color}`} variant="outline">{st.label}</Badge></TableCell>
                     </TableRow>
                   );
@@ -238,14 +238,14 @@ export default function ContractPaymentsPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{t("contractPayments.total")}</span>
-                <span className="font-mono font-bold">{selected.total_amount?.toFixed(2)} EUR</span>
+                <span className="font-mono font-bold">{selected.total_amount?.toFixed(2)} €</span>
               </div>
               <Progress value={(() => { const p = selected.tranches?.filter(t => t.status === "paid").reduce((s, t) => s + t.amount, 0) || 0; return selected.total_amount > 0 ? (p / selected.total_amount) * 100 : 0; })()} className="h-2" />
               <div className="space-y-2">
                 {selected.tranches?.map((tr, i) => (
                   <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/10 text-sm">
                     <div>
-                      <span className="font-mono">{tr.amount?.toFixed(2)} EUR</span>
+                      <span className="font-mono">{tr.amount?.toFixed(2)} €</span>
                       {tr.due_date && <span className="text-xs text-muted-foreground ml-2">до {tr.due_date}</span>}
                     </div>
                     {tr.status === "paid" ? (
