@@ -325,9 +325,10 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     # Revenue from invoices
     invoices = await db.invoices.find(
         {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "total": 1, "paid_amount": 1, "status": 1},
+        {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(200)
-    total_revenue = round(sum(i.get("total", 0) for i in invoices if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
+    # NET revenue (без ДДС) so balance/margin sit on the same basis as costs
+    total_revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in invoices if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
 
     total_expense = round(total_labor_with_oh + total_materials, 2)
     balance = round(total_revenue - total_expense, 2)

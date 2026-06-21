@@ -42,6 +42,10 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
     agg_profit = agg_revenue - agg_expense
     agg_margin = round(agg_profit / agg_revenue * 100, 1) if agg_revenue else 0
 
+    agg_output_vat = sum(_safe(pnl_results[pid], "vat", "output_vat") for pid in all_ids)
+    agg_input_vat = sum(_safe(pnl_results[pid], "vat", "input_vat") for pid in all_ids)
+    agg_vat_payable = round(agg_output_vat - agg_input_vat, 2)
+
     # Expense breakdown
     labor = sum(_safe_exp(pnl_results[pid], "labor") for pid in all_ids)
     materials = sum(_safe_exp(pnl_results[pid], "materials") for pid in all_ids)
@@ -61,6 +65,11 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
             "total_expense": round(agg_expense, 2),
             "total_profit": round(agg_profit, 2),
             "margin_pct": agg_margin,
+            "vat": {
+                "output_vat": round(agg_output_vat, 2),
+                "input_vat": round(agg_input_vat, 2),
+                "vat_payable": agg_vat_payable,
+            },
             "expense_breakdown": {
                 "labor": round(labor, 2),
                 "materials": round(materials, 2),
