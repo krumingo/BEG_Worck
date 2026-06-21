@@ -96,8 +96,8 @@ export default function CentralizedActivitiesTable({ projectId }) {
               <TableHead className="text-right">{t("actTable.draft")}</TableHead>
               <TableHead className="text-right">{t("actTable.approved")}</TableHead>
               <TableHead className="text-right">{t("actTable.total")}</TableHead>
-              <TableHead className="text-right" title={t("actTable.cleanTooltip")}>{t("actTable.clean")}</TableHead>
-              <TableHead className="text-right">{t("actTable.sub")}</TableHead>
+              <TableHead className="text-right" title={t("actTable.cleanTooltip")}>{t("actTable.clean")} €</TableHead>
+              <TableHead className="text-right">{t("actTable.sub")} €</TableHead>
               <TableHead className="text-right">%</TableHead>
               <TableHead>{t("actTable.label")}</TableHead>
               <TableHead></TableHead>

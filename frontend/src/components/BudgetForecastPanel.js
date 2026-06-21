@@ -130,7 +130,7 @@ export default function BudgetForecastPanel({ projectId }) {
             ].map(({ label, val }) => (
               <div key={label} className="flex justify-between p-1 bg-muted/10 rounded">
                 <span className="text-muted-foreground">{label}</span>
-                <span className="font-mono">{(val || 0).toFixed(0)} лв</span>
+                <span className="font-mono">{(val || 0).toFixed(0)} €</span>
               </div>
             ))}
           </div>

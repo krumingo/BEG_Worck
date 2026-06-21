@@ -11,7 +11,7 @@ import {
   Loader2, DollarSign, Users, Package, Building2, Shield,
 } from "lucide-react";
 
-function fmt(n) { return n == null ? "—" : n.toLocaleString("bg-BG", { maximumFractionDigits: 0 }); }
+function fmt(n) { return n == null ? "—" : `${n.toLocaleString("bg-BG", { maximumFractionDigits: 0 })} €`; }
 
 const CARD_CFG = {
   cash: { icon: Wallet, color: "text-blue-400", border: "border-blue-500/20", bg: "bg-blue-500/5" },

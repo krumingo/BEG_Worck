@@ -86,7 +86,7 @@ export default function PricingPanel({ analysisId, lineId, materials, onUpdated,
               <span className="truncate flex-1 min-w-0">{m.name}</span>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {m.unit_price > 0 && (
-                  <span className="font-mono">{m.unit_price.toFixed(2)} лв/{m.unit}</span>
+                  <span className="font-mono">{m.unit_price.toFixed(2)} €/{m.unit}</span>
                 )}
                 {m.price_confidence > 0 && (
                   <Badge variant="outline" className="text-[9px]">{Math.round(m.price_confidence * 100)}%</Badge>
@@ -115,7 +115,7 @@ export default function PricingPanel({ analysisId, lineId, materials, onUpdated,
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
                 <div>
                   <p className="text-xs text-muted-foreground">{t("pricing.recommendedPrice")}</p>
-                  <p className="text-lg font-bold font-mono">{detailData.recommended_price?.toFixed(2) || "—"} лв</p>
+                  <p className="text-lg font-bold font-mono">{detailData.recommended_price?.toFixed(2) || "—"} €</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground">{t("pricing.confidence")}</p>
@@ -145,7 +145,7 @@ export default function PricingPanel({ analysisId, lineId, materials, onUpdated,
                               <span>{p.source_name}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-mono font-bold">{p.price?.toFixed(2)} лв</TableCell>
+                          <TableCell className="text-right font-mono font-bold">{p.price?.toFixed(2)} €</TableCell>
                           <TableCell className="text-right">{Math.round((p.confidence || 0) * 100)}%</TableCell>
                           <TableCell className="text-right">
                             <span className={`inline-block w-2 h-2 rounded-full ${f.dot}`} />

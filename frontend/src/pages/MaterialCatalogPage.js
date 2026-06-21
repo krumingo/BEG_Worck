@@ -124,7 +124,7 @@ export default function MaterialCatalogPage() {
                       <TableCell className="font-medium">{item.material_name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{item.material_category || "-"}</TableCell>
                       <TableCell className="text-sm">{item.unit || "-"}</TableCell>
-                      <TableCell className="text-right font-mono font-bold">{(item.median_price || 0).toFixed(2)} лв</TableCell>
+                      <TableCell className="text-right font-mono font-bold">{(item.median_price || 0).toFixed(2)} €</TableCell>
                       <TableCell className="text-right">{Math.round((item.confidence || 0) * 100)}%</TableCell>
                       <TableCell className="text-center">{item.prices?.length || 0}</TableCell>
                       <TableCell className="text-center">
@@ -159,7 +159,7 @@ export default function MaterialCatalogPage() {
                 <div className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
                   <div>
                     <p className="text-xs text-muted-foreground">{t("pricing.recommendedPrice")}</p>
-                    <p className="text-lg font-bold font-mono">{lookupResult.recommended_price?.toFixed(2) || "—"} лв</p>
+                    <p className="text-lg font-bold font-mono">{lookupResult.recommended_price?.toFixed(2) || "—"} €</p>
                   </div>
                   <Badge variant="outline">{Math.round((lookupResult.confidence || 0) * 100)}%</Badge>
                 </div>
@@ -171,7 +171,7 @@ export default function MaterialCatalogPage() {
                           <Badge variant="outline" className="text-[9px]">A{p.agent_id}</Badge>
                           <span>{p.source_name}</span>
                         </div>
-                        <span className="font-mono font-bold">{p.price?.toFixed(2)} лв</span>
+                        <span className="font-mono font-bold">{p.price?.toFixed(2)} €</span>
                       </div>
                     ))}
                   </div>

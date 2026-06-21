@@ -104,14 +104,14 @@ export default function ProjectPnLDashboard({ projectId }) {
                   <span>{label}</span>
                 </div>
                 <div className="text-right">
-                  <span className="font-mono font-bold">{(val || 0).toFixed(0)} лв</span>
+                  <span className="font-mono font-bold">{(val || 0).toFixed(0)} €</span>
                   {sub && <p className="text-[9px] text-muted-foreground">{sub}</p>}
                 </div>
               </div>
             ))}
             <div className="flex justify-between p-1.5 rounded bg-muted/20 font-bold">
               <span>{t("pnl.totalExpense")}</span>
-              <span className="font-mono">{expense.total_expense.toFixed(0)} лв</span>
+              <span className="font-mono">{expense.total_expense.toFixed(0)} €</span>
             </div>
           </div>
 
@@ -126,12 +126,12 @@ export default function ProjectPnLDashboard({ projectId }) {
             ].map(({ label, val }) => (
               <div key={label} className="flex items-center justify-between p-1.5 rounded bg-muted/10">
                 <span>{label}</span>
-                <span className="font-mono font-bold">{(val || 0).toFixed(0)} лв</span>
+                <span className="font-mono font-bold">{(val || 0).toFixed(0)} €</span>
               </div>
             ))}
             <div className="flex justify-between p-1.5 rounded bg-muted/20 font-bold">
               <span>{t("pnl.totalRevenue")}</span>
-              <span className="font-mono text-blue-400">{revenue.total_revenue.toFixed(0)} лв</span>
+              <span className="font-mono text-blue-400">{revenue.total_revenue.toFixed(0)} €</span>
             </div>
           </div>
         </div>

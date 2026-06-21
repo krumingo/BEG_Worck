@@ -75,21 +75,21 @@ export default function TurnoverPage() {
       label: t("data.sumNet"),
       sortable: true,
       width: "120px",
-      render: (value) => `${value.toFixed(2)} лв.`,
+      render: (value) => `${value.toFixed(2)} €`,
     },
     {
       key: "sum_vat",
       label: t("data.sumVat"),
       sortable: true,
       width: "100px",
-      render: (value) => `${value.toFixed(2)} лв.`,
+      render: (value) => `${value.toFixed(2)} €`,
     },
     {
       key: "sum_total",
       label: t("data.sumTotal"),
       sortable: true,
       width: "120px",
-      render: (value) => <span className="font-bold">{value.toFixed(2)} лв.</span>,
+      render: (value) => <span className="font-bold">{value.toFixed(2)} €</span>,
     },
     {
       key: "sum_paid",
@@ -97,7 +97,7 @@ export default function TurnoverPage() {
       sortable: true,
       width: "110px",
       render: (value) => (
-        <span className="text-green-600">{value.toFixed(2)} лв.</span>
+        <span className="text-green-600">{value.toFixed(2)} €</span>
       ),
     },
     {
@@ -107,9 +107,9 @@ export default function TurnoverPage() {
       width: "110px",
       render: (value) =>
         value > 0 ? (
-          <span className="text-red-600 font-medium">{value.toFixed(2)} лв.</span>
+          <span className="text-red-600 font-medium">{value.toFixed(2)} €</span>
         ) : (
-          <span className="text-muted-foreground">0.00 лв.</span>
+          <span className="text-muted-foreground">0.00 €</span>
         ),
     },
     {
@@ -272,7 +272,7 @@ export default function TurnoverPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {grandTotals.total_subtotal?.toFixed(2)} лв.
+                {grandTotals.total_subtotal?.toFixed(2)} €
               </div>
             </CardContent>
           </Card>
@@ -284,7 +284,7 @@ export default function TurnoverPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {grandTotals.total_vat?.toFixed(2)} лв.
+                {grandTotals.total_vat?.toFixed(2)} €
               </div>
             </CardContent>
           </Card>
@@ -296,7 +296,7 @@ export default function TurnoverPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-primary">
-                {grandTotals.total_amount?.toFixed(2)} лв.
+                {grandTotals.total_amount?.toFixed(2)} €
               </div>
             </CardContent>
           </Card>
@@ -308,7 +308,7 @@ export default function TurnoverPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {grandTotals.total_paid?.toFixed(2)} лв.
+                {grandTotals.total_paid?.toFixed(2)} €
               </div>
             </CardContent>
           </Card>
@@ -320,7 +320,7 @@ export default function TurnoverPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {grandTotals.total_remaining?.toFixed(2)} лв.
+                {grandTotals.total_remaining?.toFixed(2)} €
               </div>
             </CardContent>
           </Card>
@@ -356,7 +356,7 @@ export default function TurnoverPage() {
               <div>
                 <div className="text-sm text-muted-foreground">{t("data.sumTotal")}</div>
                 <div className="text-lg font-bold">
-                  {selectedCounterparty?.sum_total?.toFixed(2)} лв.
+                  {selectedCounterparty?.sum_total?.toFixed(2)} €
                 </div>
               </div>
             </div>
@@ -399,7 +399,7 @@ export default function TurnoverPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold">{inv.total?.toFixed(2)} лв.</div>
+                        <div className="font-bold">{inv.total?.toFixed(2)} €</div>
                         <Badge
                           variant={inv.status === "Paid" ? "default" : "secondary"}
                           className="text-xs"

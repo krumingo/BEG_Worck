@@ -143,7 +143,7 @@ export default function SMRGroupsPanel({ projectId }) {
                         </button>
                         <Package className="w-3.5 h-3.5" style={{ color: g.color || "#a78bfa" }} />
                         <span className="text-sm flex-1">{g.name}</span>
-                        <span className="font-mono text-xs font-bold text-primary mr-1">{g.summary?.total_cost?.toFixed(0) || 0} лв</span>
+                        <span className="font-mono text-xs font-bold text-primary mr-1">{g.summary?.total_cost?.toFixed(0) || 0} €</span>
                         <Badge variant="outline" className="text-[9px]">{g.summary?.lines_count || 0}</Badge>
                         <button onClick={() => handleDeleteGroup(g.id)} className="p-0.5 opacity-0 group-hover:opacity-100 hover:text-red-400">
                           <Trash2 className="w-3 h-3" />
@@ -156,7 +156,7 @@ export default function SMRGroupsPanel({ projectId }) {
                           <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
                           <span className="flex-1 truncate">{ln.smr_type || "—"}</span>
                           <span className="font-mono">{ln.qty} {ln.unit}</span>
-                          <span className="font-mono font-bold text-foreground">{(ln.final_total || 0).toFixed(0)} лв</span>
+                          <span className="font-mono font-bold text-foreground">{(ln.final_total || 0).toFixed(0)} €</span>
                           <Badge variant="outline" className="text-[8px]">{ln.source === "smr_analysis" ? "Анализ" : ln.source === "missing_smr" ? "Липсв." : "Доп."}</Badge>
                         </div>
                       ))}
@@ -176,7 +176,7 @@ export default function SMRGroupsPanel({ projectId }) {
           <div className="flex gap-4">
             <span>{t("smrGroups.material")}: <strong className="font-mono">{grandTotal.total_material?.toFixed(0) || 0}</strong></span>
             <span>{t("smrGroups.labor")}: <strong className="font-mono">{grandTotal.total_labor?.toFixed(0) || 0}</strong></span>
-            <span className="font-bold text-primary font-mono">{grandTotal.total_cost?.toFixed(0) || 0} лв</span>
+            <span className="font-bold text-primary font-mono">{grandTotal.total_cost?.toFixed(0) || 0} €</span>
           </div>
         </div>
       )}

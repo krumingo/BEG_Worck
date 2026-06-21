@@ -419,7 +419,7 @@ export default function FinanceDetailsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground">{t("dashboard.totalIncome")}</p>
-                  <p className="text-xl font-bold text-green-500">{summary.totals.income.toFixed(2)} лв.</p>
+                  <p className="text-xl font-bold text-green-500">{summary.totals.income.toFixed(2)} €</p>
                 </div>
                 <TrendingUp className="w-6 h-6 text-green-500/50" />
               </div>
@@ -430,7 +430,7 @@ export default function FinanceDetailsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground">{t("dashboard.totalExpenses")}</p>
-                  <p className="text-xl font-bold text-red-500">{summary.totals.expenses.toFixed(2)} лв.</p>
+                  <p className="text-xl font-bold text-red-500">{summary.totals.expenses.toFixed(2)} €</p>
                 </div>
                 <TrendingDown className="w-6 h-6 text-red-500/50" />
               </div>
@@ -442,7 +442,7 @@ export default function FinanceDetailsPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">{t("dashboard.netBalance")}</p>
                   <p className={`text-xl font-bold ${summary.totals.net >= 0 ? "text-blue-500" : "text-amber-500"}`}>
-                    {summary.totals.net >= 0 ? "+" : ""}{summary.totals.net.toFixed(2)} лв.
+                    {summary.totals.net >= 0 ? "+" : ""}{summary.totals.net.toFixed(2)} €
                   </p>
                 </div>
                 <Wallet className="w-6 h-6 text-blue-500/50" />
@@ -454,7 +454,7 @@ export default function FinanceDetailsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground">{t("financeDetails.avgWeeklyExpense") || "Среден разход/седм."}</p>
-                  <p className="text-xl font-bold text-purple-500">{summary.kpis.avg_weekly_expenses.toFixed(2)} лв.</p>
+                  <p className="text-xl font-bold text-purple-500">{summary.kpis.avg_weekly_expenses.toFixed(2)} €</p>
                 </div>
                 <FileText className="w-6 h-6 text-purple-500/50" />
               </div>
@@ -520,13 +520,13 @@ export default function FinanceDetailsPage() {
                             {formatMonthName(m.year, m.month)}
                           </TableCell>
                           <TableCell className="text-right text-green-500">
-                            {(m.income_total || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                            {(m.income_total || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                           </TableCell>
                           <TableCell className="text-right text-red-500">
-                            {(m.expenses_total || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                            {(m.expenses_total || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                           </TableCell>
                           <TableCell className={`text-right font-medium ${(m.net || 0) >= 0 ? "text-blue-500" : "text-amber-500"}`}>
-                            {(m.net || 0) >= 0 ? "+" : ""}{(m.net || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                            {(m.net || 0) >= 0 ? "+" : ""}{(m.net || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                           </TableCell>
                           <TableCell className="text-right text-muted-foreground text-sm">
                             {(m.breakdown?.income_invoices || 0).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
@@ -553,13 +553,13 @@ export default function FinanceDetailsPage() {
                             ОБЩО
                           </TableCell>
                           <TableCell className="text-right font-bold text-green-400">
-                            {monthlyTotals.income.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                            {monthlyTotals.income.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                           </TableCell>
                           <TableCell className="text-right font-bold text-red-400">
-                            {monthlyTotals.expenses.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                            {monthlyTotals.expenses.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                           </TableCell>
                           <TableCell className={`text-right font-bold ${monthlyTotals.net >= 0 ? "text-blue-400" : "text-amber-400"}`}>
-                            {monthlyTotals.net >= 0 ? "+" : ""}{monthlyTotals.net.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} лв.
+                            {monthlyTotals.net >= 0 ? "+" : ""}{monthlyTotals.net.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                           </TableCell>
                           <TableCell className="text-right font-semibold text-muted-foreground text-sm">
                             {monthlyTotals.breakdown.income_invoices.toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
@@ -609,7 +609,7 @@ export default function FinanceDetailsPage() {
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "8px"
                       }}
-                      formatter={(value) => [`${value.toLocaleString("bg-BG", { minimumFractionDigits: 2 })} лв.`]}
+                      formatter={(value) => [`${value.toLocaleString("bg-BG", { minimumFractionDigits: 2 })} €`]}
                     />
                     <Legend />
                     <Bar dataKey="income" name="Приходи" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -644,11 +644,11 @@ export default function FinanceDetailsPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Среден приход/седмица:</span>
-                  <span className="font-medium text-green-500">{summary?.kpis?.avg_weekly_income?.toFixed(2) || 0} лв.</span>
+                  <span className="font-medium text-green-500">{summary?.kpis?.avg_weekly_income?.toFixed(2) || 0} €</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Среден разход/седмица:</span>
-                  <span className="font-medium text-red-500">{summary?.kpis?.avg_weekly_expenses?.toFixed(2) || 0} лв.</span>
+                  <span className="font-medium text-red-500">{summary?.kpis?.avg_weekly_expenses?.toFixed(2) || 0} €</span>
                 </div>
               </CardContent>
             </Card>
@@ -669,7 +669,7 @@ export default function FinanceDetailsPage() {
                           <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
                           <span className="truncate max-w-[200px]">{cp.counterparty_name}</span>
                         </div>
-                        <span className="font-medium text-red-400">{cp.total.toFixed(2)} лв.</span>
+                        <span className="font-medium text-red-400">{cp.total.toFixed(2)} €</span>
                       </div>
                     ))}
                   </div>
@@ -716,7 +716,7 @@ export default function FinanceDetailsPage() {
                           border: "1px solid #374151",
                           borderRadius: "8px",
                         }}
-                        formatter={(value) => [`${value.toFixed(2)} лв.`]}
+                        formatter={(value) => [`${value.toFixed(2)} €`]}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -746,7 +746,7 @@ export default function FinanceDetailsPage() {
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: EXPENSE_COLORS.invoices }} />
                             Фактури
                           </TableCell>
-                          <TableCell className="text-right">{summary.breakdown.expenses_invoices.toFixed(2)} лв.</TableCell>
+                          <TableCell className="text-right">{summary.breakdown.expenses_invoices.toFixed(2)} €</TableCell>
                           <TableCell className="text-right">{summary.kpis.invoice_share}%</TableCell>
                         </TableRow>
                         <TableRow>
@@ -754,7 +754,7 @@ export default function FinanceDetailsPage() {
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: EXPENSE_COLORS.cash }} />
                             Каса
                           </TableCell>
-                          <TableCell className="text-right">{summary.breakdown.expenses_cash.toFixed(2)} лв.</TableCell>
+                          <TableCell className="text-right">{summary.breakdown.expenses_cash.toFixed(2)} €</TableCell>
                           <TableCell className="text-right">{summary.kpis.cash_share}%</TableCell>
                         </TableRow>
                         <TableRow>
@@ -762,7 +762,7 @@ export default function FinanceDetailsPage() {
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: EXPENSE_COLORS.overhead }} />
                             Режийни
                           </TableCell>
-                          <TableCell className="text-right">{summary.breakdown.expenses_overhead.toFixed(2)} лв.</TableCell>
+                          <TableCell className="text-right">{summary.breakdown.expenses_overhead.toFixed(2)} €</TableCell>
                           <TableCell className="text-right">{summary.kpis.overhead_share}%</TableCell>
                         </TableRow>
                         <TableRow>
@@ -770,7 +770,7 @@ export default function FinanceDetailsPage() {
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: EXPENSE_COLORS.payroll }} />
                             Заплати
                           </TableCell>
-                          <TableCell className="text-right">{summary.breakdown.expenses_payroll.toFixed(2)} лв.</TableCell>
+                          <TableCell className="text-right">{summary.breakdown.expenses_payroll.toFixed(2)} €</TableCell>
                           <TableCell className="text-right">{summary.kpis.payroll_share}%</TableCell>
                         </TableRow>
                         <TableRow>
@@ -778,7 +778,7 @@ export default function FinanceDetailsPage() {
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: EXPENSE_COLORS.bonus }} />
                             Бонуси
                           </TableCell>
-                          <TableCell className="text-right">{summary.breakdown.expenses_bonus.toFixed(2)} лв.</TableCell>
+                          <TableCell className="text-right">{summary.breakdown.expenses_bonus.toFixed(2)} €</TableCell>
                           <TableCell className="text-right">{summary.kpis.bonus_share}%</TableCell>
                         </TableRow>
                       </>
@@ -819,9 +819,9 @@ export default function FinanceDetailsPage() {
                         <TableCell>
                           <Badge variant="outline">{item.counterparty_type}</Badge>
                         </TableCell>
-                        <TableCell className="text-right text-green-500">{item.total_income?.toFixed(2) || 0} лв.</TableCell>
-                        <TableCell className="text-right text-red-500">{item.total_expenses?.toFixed(2) || 0} лв.</TableCell>
-                        <TableCell className="text-right font-medium">{item.total?.toFixed(2) || 0} лв.</TableCell>
+                        <TableCell className="text-right text-green-500">{item.total_income?.toFixed(2) || 0} €</TableCell>
+                        <TableCell className="text-right text-red-500">{item.total_expenses?.toFixed(2) || 0} €</TableCell>
+                        <TableCell className="text-right font-medium">{item.total?.toFixed(2) || 0} €</TableCell>
                         <TableCell className="text-right">{item.invoice_count}</TableCell>
                       </TableRow>
                     ))
@@ -876,9 +876,9 @@ export default function FinanceDetailsPage() {
                       <TableRow key={item.project_id}>
                         <TableCell className="font-mono text-primary">{item.project_code}</TableCell>
                         <TableCell className="font-medium">{item.project_name}</TableCell>
-                        <TableCell className="text-right text-green-500">{item.total_income?.toFixed(2) || 0} лв.</TableCell>
-                        <TableCell className="text-right text-red-500">{item.total_expenses?.toFixed(2) || 0} лв.</TableCell>
-                        <TableCell className="text-right font-medium">{item.total?.toFixed(2) || 0} лв.</TableCell>
+                        <TableCell className="text-right text-green-500">{item.total_income?.toFixed(2) || 0} €</TableCell>
+                        <TableCell className="text-right text-red-500">{item.total_expenses?.toFixed(2) || 0} €</TableCell>
+                        <TableCell className="text-right font-medium">{item.total?.toFixed(2) || 0} €</TableCell>
                         <TableCell className="text-right">{item.invoice_count}</TableCell>
                       </TableRow>
                     ))
@@ -978,7 +978,7 @@ export default function FinanceDetailsPage() {
                         </TableCell>
                         <TableCell className="max-w-[300px] truncate">{item.description}</TableCell>
                         <TableCell className={`text-right font-medium ${item.direction === "income" ? "text-green-500" : "text-red-500"}`}>
-                          {item.direction === "income" ? "+" : "-"}{item.amount.toFixed(2)} лв.
+                          {item.direction === "income" ? "+" : "-"}{item.amount.toFixed(2)} €
                         </TableCell>
                       </TableRow>
                     ))

@@ -187,20 +187,20 @@ export default function ActivityBudgetsPanel({ projectId }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Бюджет Труд</p>
-                <p className="font-bold text-green-500">{fmt(summary.totals.labor_budget)} лв.</p>
+                <p className="font-bold text-green-500">{fmt(summary.totals.labor_budget)} €</p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Изхарчено Труд</p>
-                <p className="font-bold text-blue-500">{fmt(summary.totals.labor_spent)} лв.</p>
+                <p className="font-bold text-blue-500">{fmt(summary.totals.labor_spent)} €</p>
                 {getPercentBadge(summary.totals.percent_labor_used)}
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Бюджет Материали</p>
-                <p className="font-bold text-green-500">{fmt(summary.totals.materials_budget)} лв.</p>
+                <p className="font-bold text-green-500">{fmt(summary.totals.materials_budget)} €</p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Изхарчено Материали</p>
-                <p className="font-bold text-blue-500">{fmt(summary.totals.materials_spent)} лв.</p>
+                <p className="font-bold text-blue-500">{fmt(summary.totals.materials_spent)} €</p>
                 {getPercentBadge(summary.totals.percent_materials_used)}
               </div>
             </div>
@@ -309,7 +309,7 @@ export default function ActivityBudgetsPanel({ projectId }) {
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Бюджет Труд (лв.)</Label>
+                <Label>Бюджет Труд (€)</Label>
                 <Input
                   type="number"
                   value={formLaborBudget}
@@ -319,7 +319,7 @@ export default function ActivityBudgetsPanel({ projectId }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Бюджет Материали (лв.)</Label>
+                <Label>Бюджет Материали (€)</Label>
                 <Input
                   type="number"
                   value={formMaterialsBudget}

@@ -409,7 +409,7 @@ export default function ChangeOrdersPage() {
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Hammer className="w-4 h-4" />
-                    Труд (лв.)
+                    Труд (€)
                   </Label>
                   <Input
                     type="number"
@@ -422,7 +422,7 @@ export default function ChangeOrdersPage() {
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Package className="w-4 h-4" />
-                    Материали (лв.)
+                    Материали (€)
                   </Label>
                   <Input
                     type="number"
@@ -438,7 +438,7 @@ export default function ChangeOrdersPage() {
               {totalDelta > 0 && (
                 <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between">
                   <span className="text-sm">Общо:</span>
-                  <span className="font-bold text-lg">{totalDelta.toFixed(2)} лв.</span>
+                  <span className="font-bold text-lg">{totalDelta.toFixed(2)} €</span>
                 </div>
               )}
               
@@ -561,7 +561,7 @@ export default function ChangeOrdersPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-sm">{order.total_delta?.toFixed(2) || "0.00"} лв.</p>
+                            <p className="font-bold text-sm">{order.total_delta?.toFixed(2) || "0.00"} €</p>
                             <p className="text-xs text-muted-foreground">{order.created_by_name}</p>
                           </div>
                         </div>
@@ -621,15 +621,15 @@ export default function ChangeOrdersPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Труд</p>
-                  <p className="font-medium">{selectedOrder.labor_delta?.toFixed(2)} лв.</p>
+                  <p className="font-medium">{selectedOrder.labor_delta?.toFixed(2)} €</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Материали</p>
-                  <p className="font-medium">{selectedOrder.material_delta?.toFixed(2)} лв.</p>
+                  <p className="font-medium">{selectedOrder.material_delta?.toFixed(2)} €</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-muted-foreground">Общо</p>
-                  <p className="font-bold text-lg">{selectedOrder.total_delta?.toFixed(2)} лв.</p>
+                  <p className="font-bold text-lg">{selectedOrder.total_delta?.toFixed(2)} €</p>
                 </div>
               </div>
               

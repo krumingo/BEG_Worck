@@ -73,7 +73,7 @@ export default function ItemsPage() {
       filterable: true,
       filterType: "numberRange",
       width: "120px",
-      render: (value) => value ? `${value.toFixed(2)} лв.` : "-",
+      render: (value) => value ? `${value.toFixed(2)} €` : "-",
     },
     {
       key: "is_active",

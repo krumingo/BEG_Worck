@@ -63,9 +63,9 @@ export default function FinanceAnalysisPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Приходи</p><p className="text-lg font-bold font-mono">{fmt(totals.revenue)} EUR</p></div>
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Разходи</p><p className="text-lg font-bold font-mono text-red-400">{fmt(totals.expense)} EUR</p></div>
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Печалба</p><p className={`text-lg font-bold font-mono ${totals.profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(totals.profit)} EUR</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Приходи</p><p className="text-lg font-bold font-mono">{fmt(totals.revenue)} €</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Разходи</p><p className="text-lg font-bold font-mono text-red-400">{fmt(totals.expense)} €</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Печалба</p><p className={`text-lg font-bold font-mono ${totals.profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(totals.profit)} €</p></div>
         <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Марж</p><p className="text-lg font-bold font-mono">{totals.margin_pct || 0}%</p></div>
       </div>
 
@@ -114,7 +114,7 @@ export default function FinanceAnalysisPage() {
                     <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" stroke="none">
                       {donutData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} formatter={(v) => [`${v.toLocaleString("bg-BG")} EUR`]} />
+                    <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} formatter={(v) => [`${v.toLocaleString("bg-BG")} €`]} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
