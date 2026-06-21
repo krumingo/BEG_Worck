@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
-import { formatDateTime } from "@/lib/i18nUtils";
+import { formatDateTime, money } from "@/lib/i18nUtils";
 import {
   Users, FolderKanban, PlayCircle, CheckCircle2, ArrowUpRight, Clock,
   CalendarCheck, AlertTriangle, FileX, ChevronDown, ChevronUp, Loader2,
@@ -184,7 +184,7 @@ export default function DashboardPage() {
             <DollarSign className="w-5 h-5 text-cyan-400" />
             <div>
               <p className="text-[10px] text-muted-foreground uppercase">{t("dashboard.overheadPerDay")}</p>
-              <p className="text-xl font-bold font-mono text-primary">{overhead.overhead_per_person_day?.toFixed(2)} лв</p>
+              <p className="text-xl font-bold font-mono text-primary">{money(overhead.overhead_per_person_day)}</p>
             </div>
           </div>
           <div className="text-sm text-muted-foreground">
@@ -241,10 +241,10 @@ export default function DashboardPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">{t("dashboard.pnlSite")}</TableHead>
-                  <TableHead className="text-xs text-right">{t("dashboard.pnlBudget")}</TableHead>
-                  <TableHead className="text-xs text-right">{t("dashboard.pnlRevenue")}</TableHead>
-                  <TableHead className="text-xs text-right">{t("dashboard.pnlExpense")}</TableHead>
-                  <TableHead className="text-xs text-right">{t("dashboard.pnlProfit")}</TableHead>
+                  <TableHead className="text-xs text-right">{t("dashboard.pnlBudget")}, €</TableHead>
+                  <TableHead className="text-xs text-right">{t("dashboard.pnlRevenue")}, €</TableHead>
+                  <TableHead className="text-xs text-right">{t("dashboard.pnlExpense")}, €</TableHead>
+                  <TableHead className="text-xs text-right">{t("dashboard.pnlProfit")}, €</TableHead>
                   <TableHead className="text-xs text-right">%</TableHead>
                 </TableRow>
               </TableHeader>

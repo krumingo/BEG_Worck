@@ -3,6 +3,7 @@
  * Shows: P&L this month, overdue count+amount, upcoming due count+amount.
  */
 import { useState, useEffect } from "react";
+import { money } from "@/lib/i18nUtils";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -47,14 +48,14 @@ export default function FinancePulseCard() {
         {/* P&L */}
         <button onClick={() => navigate("/finance")} className="text-left rounded-lg border border-border p-3 hover:bg-muted/20 transition-colors">
           <p className="text-[10px] text-muted-foreground">Печалба (общо)</p>
-          <p className={`text-lg font-bold font-mono ${profitCls}`}>{profit.toLocaleString("bg-BG")} EUR</p>
+          <p className={`text-lg font-bold font-mono ${profitCls}`}>{money(profit)}</p>
           <p className="text-[9px] text-muted-foreground">Марж: {pnl?.margin_pct || 0}%</p>
         </button>
 
         {/* Receivables */}
         <button onClick={() => navigate("/finance/invoices")} className="text-left rounded-lg border border-border p-3 hover:bg-muted/20 transition-colors">
           <p className="text-[10px] text-muted-foreground">Вземания</p>
-          <p className="text-lg font-bold font-mono">{receivablesTotal.toLocaleString("bg-BG")} EUR</p>
+          <p className="text-lg font-bold font-mono">{money(receivablesTotal)}</p>
           <p className="text-[9px] text-muted-foreground">{stats?.receivables_count || 0} фактури</p>
         </button>
 
@@ -63,7 +64,7 @@ export default function FinancePulseCard() {
           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
             {overdueCount > 0 && <AlertTriangle className="w-3 h-3 text-red-400" />}Просрочени
           </p>
-          <p className={`text-lg font-bold font-mono ${overdueCount > 0 ? "text-red-400" : "text-muted-foreground"}`}>{overdueAmount.toLocaleString("bg-BG")} EUR</p>
+          <p className={`text-lg font-bold font-mono ${overdueCount > 0 ? "text-red-400" : "text-muted-foreground"}`}>{money(overdueAmount)}</p>
           {overdueCount > 0 && <p className="text-[9px] text-red-400">{overdueCount} бр. · Най-стара: {oldestDays}д</p>}
           {overdueCount === 0 && <p className="text-[9px] text-emerald-400">Няма просрочени</p>}
         </button>
@@ -71,7 +72,7 @@ export default function FinancePulseCard() {
         {/* Cash */}
         <div className="rounded-lg border border-border p-3">
           <p className="text-[10px] text-muted-foreground">Каса + Банка</p>
-          <p className="text-lg font-bold font-mono">{((stats?.cash_balance || 0) + (stats?.bank_balance || 0)).toLocaleString("bg-BG")} EUR</p>
+          <p className="text-lg font-bold font-mono">{money((stats?.cash_balance || 0) + (stats?.bank_balance || 0))}</p>
           <p className="text-[9px] text-muted-foreground">Каса: {stats?.cash_balance || 0} · Банка: {stats?.bank_balance || 0}</p>
         </div>
       </div>

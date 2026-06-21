@@ -2,6 +2,7 @@
  * ProfitAttributionWidget — "Why am I profitable/losing" for Dashboard.
  */
 import { useState, useEffect } from "react";
+import { money } from "@/lib/i18nUtils";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ export default function ProfitAttributionWidget() {
 
   const { totals, top_winners, top_losers, expense_breakdown } = data;
   const donutData = Object.entries(expense_breakdown || {}).filter(([, v]) => v.amount > 0).map(([k, v]) => ({ name: LABELS[k] || k, value: v.amount, pct: v.pct, fill: COLORS[k] || "#888" }));
-  const fmt = (n) => (n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 });
+  const fmt = (n) => `${(n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 })} €`;
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 mb-4" data-testid="profit-attribution">
@@ -74,7 +75,7 @@ export default function ProfitAttributionWidget() {
                   <Pie data={donutData} cx="50%" cy="50%" innerRadius={25} outerRadius={45} dataKey="value" stroke="none">
                     {donutData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} formatter={(v, n) => [`${v.toLocaleString("bg-BG")} EUR`, n]} />
+                  <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} formatter={(v, n) => [`${v.toLocaleString("bg-BG")} €`, n]} />
                 </RechartsPie>
               </ResponsiveContainer>
             </div>

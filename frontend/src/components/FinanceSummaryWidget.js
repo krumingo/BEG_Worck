@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { money } from "@/lib/i18nUtils";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
@@ -370,7 +371,7 @@ export default function FinanceSummaryWidget() {
                   <p className="text-sm text-muted-foreground">
                     {t("dashboard.totalIncome")} {viewMode === "rolling" ? `(${period} мес.)` : ""}
                   </p>
-                  <p className="text-2xl font-bold text-green-500">{totals.income?.toFixed(2)} лв.</p>
+                  <p className="text-2xl font-bold text-green-500">{money(totals.income)}</p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-green-500/50" />
               </div>
@@ -383,7 +384,7 @@ export default function FinanceSummaryWidget() {
                   <p className="text-sm text-muted-foreground">
                     {t("dashboard.totalExpenses")} {viewMode === "rolling" ? `(${period} мес.)` : ""}
                   </p>
-                  <p className="text-2xl font-bold text-red-500">{totals.expenses?.toFixed(2)} лв.</p>
+                  <p className="text-2xl font-bold text-red-500">{money(totals.expenses)}</p>
                 </div>
                 <TrendingDown className="w-8 h-8 text-red-500/50" />
               </div>
@@ -397,7 +398,7 @@ export default function FinanceSummaryWidget() {
                     {t("dashboard.netBalance")} {viewMode === "rolling" ? `(${period} мес.)` : ""}
                   </p>
                   <p className={`text-2xl font-bold ${netValue >= 0 ? "text-blue-500" : "text-amber-500"}`}>
-                    {netValue >= 0 ? "+" : ""}{netValue?.toFixed(2)} лв.
+                    {netValue >= 0 ? "+" : ""}{money(netValue)}
                   </p>
                 </div>
                 <Wallet className={`w-8 h-8 ${netValue >= 0 ? "text-blue-500/50" : "text-amber-500/50"}`} />
@@ -429,7 +430,7 @@ export default function FinanceSummaryWidget() {
                       border: "1px solid #374151",
                       borderRadius: "8px",
                     }}
-                    formatter={(value) => [`${value.toFixed(2)} лв.`]}
+                    formatter={(value) => [money(value)]}
                     labelFormatter={(label, payload) => payload?.[0]?.payload?.name || label}
                   />
                   <Legend />
@@ -459,7 +460,7 @@ export default function FinanceSummaryWidget() {
                       border: "1px solid #374151",
                       borderRadius: "8px",
                     }}
-                    formatter={(value) => [`${value.toFixed(2)} лв.`, t("dashboard.netBalance")]}
+                    formatter={(value) => [money(value), t("dashboard.netBalance")]}
                     labelFormatter={(label, payload) => payload?.[0]?.payload?.name || label}
                   />
                   <Line
@@ -510,7 +511,7 @@ export default function FinanceSummaryWidget() {
                         border: "1px solid #374151",
                         borderRadius: "8px",
                       }}
-                      formatter={(value) => [`${value.toFixed(2)} лв.`]}
+                      formatter={(value) => [money(value)]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -587,7 +588,7 @@ export default function FinanceSummaryWidget() {
                         border: "1px solid #374151",
                         borderRadius: "8px",
                       }}
-                      formatter={(value) => [`${value.toFixed(2)} лв.`]}
+                      formatter={(value) => [money(value)]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -614,7 +615,7 @@ export default function FinanceSummaryWidget() {
                       border: "1px solid #374151",
                       borderRadius: "8px",
                     }}
-                    formatter={(value) => [`${value.toFixed(2)} лв.`, t("dashboard.balance")]}
+                    formatter={(value) => [money(value), t("dashboard.balance")]}
                   />
                   <Line
                     type="monotone"

@@ -2,6 +2,7 @@
  * MorningBriefingPanel — Rule-based daily management summary.
  */
 import { useState, useEffect } from "react";
+import { money } from "@/lib/i18nUtils";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
@@ -95,7 +96,7 @@ export default function MorningBriefingPanel() {
                     </div>
                     <div className="flex justify-between text-[10px]">
                       <span className="text-muted-foreground truncate">{p.counterparty_name}</span>
-                      <span className="font-mono font-bold">{p.unpaid?.toFixed(0)} лв</span>
+                      <span className="font-mono font-bold">{money(p.unpaid)}</span>
                     </div>
                   </div>
                 ))}
