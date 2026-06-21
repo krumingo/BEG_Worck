@@ -24,9 +24,19 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     # ── b. REVENUE ─────────────────────────────────────────────────
     invoices = await db.invoices.find(
-        {"org_id": org_id, "project_id": project_id}, {"_id": 0, "total": 1, "status": 1, "paid_amount": 1}
+        {"org_id": org_id, "project_id": project_id},
+        {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
-    invoiced_total = sum(i.get("total", 0) for i in invoices if i.get("status") in ["Sent", "Paid", "PartiallyPaid"])
+    _rev_statuses = ["Sent", "Paid", "PartiallyPaid"]
+    # Gross (с ДДС) — invoiced / received, the cash view
+    invoiced_total = sum(i.get("total", 0) for i in invoices if i.get("status") in _rev_statuses)
+    # Net (без ДДС) — management revenue basis
+    invoiced_net = sum(
+        (i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0))
+        for i in invoices if i.get("status") in _rev_statuses
+    )
+    # Output VAT collected on sales invoices
+    output_vat = sum(i.get("vat_amount", 0) or 0 for i in invoices if i.get("status") in _rev_statuses)
     paid_total = sum(i.get("paid_amount", 0) or 0 for i in invoices)
 
     # Client acts revenue
@@ -43,7 +53,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     ).to_list(200)
     additional_offered = sum(m.get("ai_estimated_price") or 0 for m in additional)
 
-    total_revenue = max(paid_total, invoiced_total)
+    total_revenue = round(invoiced_net, 2)  # NET basis (без ДДС) for management P&L / margin
 
     # ── c. LABOR COST (from work_sessions) ─────────────────────────
     # READS FROM: work_sessions — the source of truth for labor cost.
@@ -57,12 +67,13 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     overtime_cost = round(sum(s.get("labor_cost", 0) for s in sessions if s.get("is_overtime")), 2)
 
     # ── d. MATERIAL COST ───────────────────────────────────────────
-    # From supplier invoices allocated to project
+    # From supplier invoices allocated to project — NET (без ДДС); their VAT = input VAT
     inv_lines = await db.invoice_lines.find(
         {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
-        {"_id": 0, "total_amount": 1},
+        {"_id": 0, "line_total_ex_vat": 1, "vat_amount": 1},
     ).to_list(500)
-    material_cost_invoices = round(sum(l.get("total_amount", 0) for l in inv_lines), 2)
+    material_cost_invoices = round(sum(l.get("line_total_ex_vat", 0) for l in inv_lines), 2)
+    input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
 
     # From warehouse issue transactions
     issues = await db.warehouse_transactions.find(
@@ -106,6 +117,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     gross_profit = round(total_revenue - total_expense, 2)
     margin_pct = round(gross_profit / total_revenue * 100, 1) if total_revenue > 0 else 0
     budget_vs_actual = round(total_budget - total_expense, 2)
+    vat_payable = round(output_vat - input_vat, 2)  # ДДС за внасяне = изходящ − входящ
 
     status = "profitable" if gross_profit > 0 else ("break_even" if gross_profit == 0 else "loss")
 
@@ -119,10 +131,16 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
         },
         "revenue": {
             "invoiced_total": round(invoiced_total, 2),
+            "invoiced_net": round(invoiced_net, 2),
             "paid_total": round(paid_total, 2),
             "acts_total": round(acts_total, 2),
             "additional_offered": round(additional_offered, 2),
             "total_revenue": round(total_revenue, 2),
+        },
+        "vat": {
+            "output_vat": round(output_vat, 2),
+            "input_vat": round(input_vat, 2),
+            "vat_payable": vat_payable,
         },
         "expense": {
             "labor_cost": labor_cost,
