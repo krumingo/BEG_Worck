@@ -183,6 +183,10 @@ class PackageLineInput(BaseModel):
     assigned_qty: float = 0
     sale_unit_price: float = 0
     subcontract_unit_price: float = 0
+    labor_unit_price: float = 0
+    material_unit_price: float = 0
+    material_by: str = "them"          # me | them | split — who buys the material
+    material_my_share: float = 0       # 0..1, my share of the material cost
 
 
 async def _get_assigned_qty(org_id: str, offer_line_id: str, exclude_pkg_id: str = None) -> float:
@@ -224,7 +228,23 @@ async def add_package_lines(pkg_id: str, data: dict, user: dict = Depends(requir
                 raise HTTPException(status_code=400, detail=f"Over-allocation: {il.get('activity_name','')} — free={free:.2f}, requested={assigned:.2f}")
 
         sale_up = float(il.get("sale_unit_price", 0))
-        sub_up = float(il.get("subcontract_unit_price", 0))
+        # Separated labour + material (труд и материал разделени)
+        labor_up = float(il.get("labor_unit_price", 0) or 0)
+        material_up = float(il.get("material_unit_price", 0) or 0)
+        material_by = il.get("material_by", "them")
+        if material_by == "me":
+            my_share = 1.0
+        elif material_by == "them":
+            my_share = 0.0
+        else:
+            my_share = float(il.get("material_my_share", 0.5) or 0)
+        # What I pay the brigade = labour + the part of the material they cover
+        if labor_up or material_up:
+            sub_up = round(labor_up + material_up * (1 - my_share), 2)
+            cost_up = round(labor_up + material_up, 2)   # full cost (труд + целия материал)
+        else:
+            sub_up = float(il.get("subcontract_unit_price", 0))
+            cost_up = sub_up
 
         line = {
             "id": str(uuid.uuid4()), "org_id": org_id,
@@ -238,9 +258,14 @@ async def add_package_lines(pkg_id: str, data: dict, user: dict = Depends(requir
             "source_qty": source_qty, "assigned_qty": assigned,
             "sale_unit_price": sale_up,
             "sale_total_for_assigned_qty": round(assigned * sale_up, 2),
+            "labor_unit_price": labor_up,
+            "material_unit_price": material_up,
+            "material_by": material_by,
+            "material_my_share": my_share,
+            "cost_unit_price": cost_up,
             "subcontract_unit_price": sub_up,
             "subcontract_total": round(assigned * sub_up, 2),
-            "planned_margin": round(assigned * (sale_up - sub_up), 2),
+            "planned_margin": round(assigned * (sale_up - cost_up), 2),
             "certified_qty": 0, "certified_total": 0, "paid_total": 0,
             "remaining_qty": assigned, "remaining_value": round(assigned * sub_up, 2),
             "status": "active", "sort_order": existing_count + i,
@@ -451,6 +476,7 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
     amount = float(data.get("amount", 0))
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    vat_amount = round(float(data.get("vat_amount", 0) or 0), 2)  # input VAT (без ДДС amount stays in `amount`)
 
     now = datetime.now(timezone.utc).isoformat()
     payment = {
@@ -459,7 +485,7 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         "package_id": pkg_id, "act_id": data.get("act_id"),
         "payment_no": await _get_next_pay_no(org_id),
         "payment_date": data.get("payment_date", now[:10]),
-        "amount": amount, "currency": pkg.get("currency", "EUR"),
+        "amount": amount, "vat_amount": vat_amount, "currency": pkg.get("currency", "EUR"),
         "payment_type": data.get("payment_type", "partial"),
         "payment_method": data.get("payment_method", "bank"),
         "notes": data.get("notes", ""),
