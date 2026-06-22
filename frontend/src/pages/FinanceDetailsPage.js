@@ -418,7 +418,7 @@ export default function FinanceDetailsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">{t("dashboard.totalIncome")}</p>
+                  <p className="text-xs text-muted-foreground flex items-center">{t("dashboard.totalIncome")}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1.5">без ДДС</span></p>
                   <p className="text-xl font-bold text-green-500">{summary.totals.income.toFixed(2)} €</p>
                 </div>
                 <TrendingUp className="w-6 h-6 text-green-500/50" />
@@ -429,7 +429,7 @@ export default function FinanceDetailsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">{t("dashboard.totalExpenses")}</p>
+                  <p className="text-xs text-muted-foreground flex items-center">{t("dashboard.totalExpenses")}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1.5">без ДДС</span></p>
                   <p className="text-xl font-bold text-red-500">{summary.totals.expenses.toFixed(2)} €</p>
                 </div>
                 <TrendingDown className="w-6 h-6 text-red-500/50" />
@@ -440,7 +440,7 @@ export default function FinanceDetailsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">{t("dashboard.netBalance")}</p>
+                  <p className="text-xs text-muted-foreground flex items-center">{t("dashboard.netBalance")}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1.5">без ДДС</span></p>
                   <p className={`text-xl font-bold ${summary.totals.net >= 0 ? "text-blue-500" : "text-amber-500"}`}>
                     {summary.totals.net >= 0 ? "+" : ""}{summary.totals.net.toFixed(2)} €
                   </p>
@@ -453,7 +453,7 @@ export default function FinanceDetailsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">{t("financeDetails.avgWeeklyExpense") || "Среден разход/седм."}</p>
+                  <p className="text-xs text-muted-foreground flex items-center">{t("financeDetails.avgWeeklyExpense") || "Среден разход/седм."}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1.5">без ДДС</span></p>
                   <p className="text-xl font-bold text-purple-500">{summary.kpis.avg_weekly_expenses.toFixed(2)} €</p>
                 </div>
                 <FileText className="w-6 h-6 text-purple-500/50" />
@@ -494,6 +494,7 @@ export default function FinanceDetailsPage() {
               <CardTitle className="text-sm flex items-center gap-2">
                 <CalendarDays className="w-4 h-4" />
                 Месечна разбивка ({period} {parseInt(period) === 1 ? "месец" : "месеца"})
+                <span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -908,6 +909,10 @@ export default function FinanceDetailsPage() {
 
         {/* Transactions Tab */}
         <TabsContent value="transactions" className="mt-6 space-y-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Реални фактури/плащания</span>
+            <span className="text-[9px] px-1.5 py-px rounded-full bg-amber-500/15 text-amber-300">с ДДС</span>
+          </div>
           {/* Transaction Filters */}
           <Card>
             <CardContent className="p-4">
