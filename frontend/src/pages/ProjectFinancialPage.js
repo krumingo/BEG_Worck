@@ -117,7 +117,7 @@ export default function ProjectFinancialPage() {
 
         {/* Costs */}
         <div className="rounded-xl border border-border bg-card p-4 col-span-2 md:col-span-4">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center gap-1"><Package className="w-3.5 h-3.5" /> Разходи (EUR)</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center gap-1"><Package className="w-3.5 h-3.5" /> Разходи (EUR)<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></h3>
           <div className="grid grid-cols-6 gap-4">
             <Metric label="Материали" value={c.material} partial={!ma.material} />
             <Metric label="Труд" value={c.labor} partial={!ma.labor} />
@@ -133,7 +133,7 @@ export default function ProjectFinancialPage() {
 
         {/* Profit */}
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 col-span-2">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Печалба</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center">Печалба<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-[10px] text-muted-foreground">Бруто печалба</p>

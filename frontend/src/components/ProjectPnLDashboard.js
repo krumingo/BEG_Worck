@@ -53,17 +53,17 @@ export default function ProjectPnLDashboard({ projectId }) {
           <p className="text-[9px] text-muted-foreground">EUR</p>
         </div>
         <div className="rounded-lg border border-border p-3 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase">{t("pnl.revenue")}</p>
+          <p className="text-[10px] text-muted-foreground uppercase flex items-center justify-center gap-1">{t("pnl.revenue")}<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></p>
           <p className="font-mono font-bold text-lg text-blue-400">{revenue.total_revenue.toFixed(0)}</p>
           <p className="text-[9px] text-muted-foreground">{t("pnl.paid")}: {revenue.paid_total.toFixed(0)}</p>
         </div>
         <div className="rounded-lg border border-border p-3 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase">{t("pnl.expense")}</p>
+          <p className="text-[10px] text-muted-foreground uppercase flex items-center justify-center gap-1">{t("pnl.expense")}<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></p>
           <p className="font-mono font-bold text-lg text-orange-400">{expense.total_expense.toFixed(0)}</p>
           <p className="text-[9px] text-muted-foreground">{expense.labor_hours.toFixed(0)}ч {t("pnl.labor")}</p>
         </div>
         <div className={`rounded-lg border border-border p-3 text-center ${statusBg}`}>
-          <p className="text-[10px] text-muted-foreground uppercase">{t("pnl.profit")}</p>
+          <p className="text-[10px] text-muted-foreground uppercase flex items-center justify-center gap-1">{t("pnl.profit")}<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></p>
           <p className={`font-mono font-bold text-lg ${statusColor}`}>{profit.gross_profit.toFixed(0)}</p>
           <p className={`text-[9px] ${statusColor}`}>{profit.margin_pct}%</p>
         </div>
