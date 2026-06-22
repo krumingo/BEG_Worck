@@ -565,26 +565,28 @@ async def get_company_finance_summary(
         "org_id": org_id,
         "direction": "Issued",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "issue_date": 1, "total": 1}).to_list(1000)
+    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
     
     for inv in issued_invoices:
         week_num = get_week_number_in_month(inv["issue_date"])
         if week_num in weekly_data:
-            weekly_data[week_num]["income_invoices"] += inv.get("total", 0)
-            weekly_data[week_num]["income"] += inv.get("total", 0)
+            _net = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            weekly_data[week_num]["income_invoices"] += _net
+            weekly_data[week_num]["income"] += _net
     
     # 2. Received Invoices (Expenses)
     received_invoices = await db.invoices.find({
         "org_id": org_id,
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "issue_date": 1, "total": 1}).to_list(1000)
+    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
     
     for inv in received_invoices:
         week_num = get_week_number_in_month(inv["issue_date"])
         if week_num in weekly_data:
-            weekly_data[week_num]["expenses_invoices"] += inv.get("total", 0)
-            weekly_data[week_num]["expenses"] += inv.get("total", 0)
+            _net = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            weekly_data[week_num]["expenses_invoices"] += _net
+            weekly_data[week_num]["expenses"] += _net
     
     # 3. Cash Transactions
     cash_txns = await db.cash_transactions.find({
@@ -1111,26 +1113,28 @@ async def export_company_finance(
         "org_id": org_id,
         "direction": "Issued",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "issue_date": 1, "total": 1}).to_list(1000)
+    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
     
     for inv in issued_invoices:
         week_num = get_week_number_in_month(inv["issue_date"])
         if week_num in weekly_data:
-            weekly_data[week_num]["income_invoices"] += inv.get("total", 0)
-            weekly_data[week_num]["income"] += inv.get("total", 0)
+            _net = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            weekly_data[week_num]["income_invoices"] += _net
+            weekly_data[week_num]["income"] += _net
     
     # 2. Received Invoices (Expenses)
     received_invoices = await db.invoices.find({
         "org_id": org_id,
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "issue_date": 1, "total": 1}).to_list(1000)
+    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
     
     for inv in received_invoices:
         week_num = get_week_number_in_month(inv["issue_date"])
         if week_num in weekly_data:
-            weekly_data[week_num]["expenses_invoices"] += inv.get("total", 0)
-            weekly_data[week_num]["expenses"] += inv.get("total", 0)
+            _net = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            weekly_data[week_num]["expenses_invoices"] += _net
+            weekly_data[week_num]["expenses"] += _net
     
     # 3. Cash Transactions
     cash_txns = await db.cash_transactions.find({

@@ -331,8 +331,8 @@ async def get_finance_series(
             "org_id": org_id,
             "direction": "Issued",
             "issue_date": {"$gte": date_from, "$lte": date_to}
-        }, {"_id": 0, "total": 1}).to_list(1000)
-        income_invoices = sum(inv.get("total", 0) for inv in issued_invoices)
+        }, {"_id": 0, "total": 1, "subtotal": 1}).to_list(1000)
+        income_invoices = sum((inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)) for inv in issued_invoices)
         
         # Income from cash
         cash_income = await db.cash_transactions.find({
@@ -347,8 +347,8 @@ async def get_finance_series(
             "org_id": org_id,
             "direction": "Received",
             "issue_date": {"$gte": date_from, "$lte": date_to}
-        }, {"_id": 0, "total": 1}).to_list(1000)
-        expenses_invoices = sum(inv.get("total", 0) for inv in received_invoices)
+        }, {"_id": 0, "total": 1, "subtotal": 1}).to_list(1000)
+        expenses_invoices = sum((inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)) for inv in received_invoices)
         
         # Expenses from cash
         cash_expense = await db.cash_transactions.find({
@@ -491,13 +491,13 @@ async def get_finance_details_summary(
     # Issued invoices (income)
     issued_query = {**inv_query, "direction": "Issued"}
     issued = await db.invoices.find(issued_query, {"_id": 0, "total": 1, "subtotal": 1, "vat": 1}).to_list(10000)
-    income_invoices = sum(i.get("total", 0) for i in issued)
+    income_invoices = sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in issued)
     income_count = len(issued)
     
     # Received invoices (expenses)
     received_query = {**inv_query, "direction": "Received"}
     received = await db.invoices.find(received_query, {"_id": 0, "total": 1, "subtotal": 1, "vat": 1}).to_list(10000)
-    expenses_invoices = sum(i.get("total", 0) for i in received)
+    expenses_invoices = sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in received)
     expenses_invoice_count = len(received)
     
     # Cash transactions

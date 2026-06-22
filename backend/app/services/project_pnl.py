@@ -184,9 +184,9 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
         inv = await db.invoices.find(
             {"org_id": org_id, "project_id": project_id,
              "created_at": {"$gte": ms, "$lt": me}},
-            {"_id": 0, "total": 1, "status": 1},
+            {"_id": 0, "total": 1, "subtotal": 1, "status": 1},
         ).to_list(100)
-        revenue = round(sum(i.get("total", 0) for i in inv if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
+        revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in inv if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
 
         # Expense (work sessions in this month)
         sess = await db.work_sessions.find(

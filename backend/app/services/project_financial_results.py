@@ -28,7 +28,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # Cash in: actual payments received
     invoices = await db.invoices.find(
         {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "total": 1, "paid_amount": 1, "status": 1},
+        {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(500)
     cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
 
@@ -145,7 +145,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Invoiced revenue (accrual): total of all non-draft/cancelled invoices
     invoiced_revenue = round(sum(
-        i.get("total", 0) for i in invoices
+        (i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in invoices
         if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
     ), 2)
 
