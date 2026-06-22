@@ -32,8 +32,9 @@ export default function FinanceAnalysisPage() {
 
   if (loading) return <div className="p-6 flex justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>;
 
-  const { totals, expense_breakdown } = data || { totals: {}, expense_breakdown: {} };
+  const { expense_breakdown } = data || { expense_breakdown: {} };
   const projects = overview?.projects || [];
+  const totals = overview?.totals || { revenue: 0, expense: 0, profit: 0, margin_pct: 0 };
   const fmt = (n) => (n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 });
 
   const sorted = [...projects].sort((a, b) => {
@@ -63,10 +64,10 @@ export default function FinanceAnalysisPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Приходи</p><p className="text-lg font-bold font-mono">{fmt(totals.revenue)} €</p></div>
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Разходи</p><p className="text-lg font-bold font-mono text-red-400">{fmt(totals.expense)} €</p></div>
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Печалба</p><p className={`text-lg font-bold font-mono ${totals.profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(totals.profit)} €</p></div>
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground">Марж</p><p className="text-lg font-bold font-mono">{totals.margin_pct || 0}%</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Приходи<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono">{fmt(totals.revenue)} €</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Разходи<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono text-red-400">{fmt(totals.expense)} €</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Печалба<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className={`text-lg font-bold font-mono ${totals.profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(totals.profit)} €</p></div>
+        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Марж<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono">{totals.margin_pct || 0}%</p></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
