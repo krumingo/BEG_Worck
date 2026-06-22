@@ -212,7 +212,7 @@ export default function ProjectOperationsPage() {
         {/* ═══ REVENUE TAB ═══ */}
         <TabsContent value="revenue">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Revenue Snapshots</h3>
+            <h3 className="text-sm font-semibold flex items-center">Revenue Snapshots<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1.5">без ДДС</span></h3>
             {acceptedOffers.length > 0 && (
               <Button size="sm" onClick={() => showConfirm("create-snapshot", `Замрази приходна база от ${acceptedOffers[0].offer_no}?`, () => handleSave(`/revenue-snapshots/from-offer/${acceptedOffers[0].id}`, {}))} data-testid="new-snapshot-btn"><Shield className="w-3 h-3 mr-1" /> Замрази</Button>
             )}
