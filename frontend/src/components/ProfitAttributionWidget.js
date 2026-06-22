@@ -33,7 +33,7 @@ export default function ProfitAttributionWidget() {
   return (
     <div className="rounded-xl border border-border bg-card p-4 mb-4" data-testid="profit-attribution">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2"><PieChart className="w-5 h-5 text-primary" /><h3 className="text-sm font-semibold">Защо си на {totals.profit >= 0 ? "печалба" : "загуба"}</h3></div>
+        <div className="flex items-center gap-2"><PieChart className="w-5 h-5 text-primary" /><h3 className="text-sm font-semibold">Защо си на {totals.profit >= 0 ? "печалба" : "загуба"}</h3><span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></div>
         <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/finance/analysis")}>Пълен анализ <ArrowRight className="w-3 h-3 ml-1" /></Button>
       </div>
 

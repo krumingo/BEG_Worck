@@ -47,14 +47,14 @@ export default function FinancePulseCard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* P&L */}
         <button onClick={() => navigate("/finance")} className="text-left rounded-lg border border-border p-3 hover:bg-muted/20 transition-colors">
-          <p className="text-[10px] text-muted-foreground">Печалба (общо)</p>
+          <p className="text-[10px] text-muted-foreground">Печалба (общо)<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1">без ДДС</span></p>
           <p className={`text-lg font-bold font-mono ${profitCls}`}>{money(profit)}</p>
           <p className="text-[9px] text-muted-foreground">Марж: {pnl?.margin_pct || 0}%</p>
         </button>
 
         {/* Receivables */}
         <button onClick={() => navigate("/finance/invoices")} className="text-left rounded-lg border border-border p-3 hover:bg-muted/20 transition-colors">
-          <p className="text-[10px] text-muted-foreground">Вземания</p>
+          <p className="text-[10px] text-muted-foreground">Вземания<span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span></p>
           <p className="text-lg font-bold font-mono">{money(receivablesTotal)}</p>
           <p className="text-[9px] text-muted-foreground">{stats?.receivables_count || 0} фактури</p>
         </button>
@@ -62,7 +62,7 @@ export default function FinancePulseCard() {
         {/* Overdue */}
         <button onClick={() => navigate("/finance/invoices?status=overdue")} className={`text-left rounded-lg border p-3 hover:bg-muted/20 transition-colors ${overdueCount > 0 ? "border-red-500/30 bg-red-500/5" : "border-border"}`}>
           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-            {overdueCount > 0 && <AlertTriangle className="w-3 h-3 text-red-400" />}Просрочени
+            {overdueCount > 0 && <AlertTriangle className="w-3 h-3 text-red-400" />}Просрочени<span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span>
           </p>
           <p className={`text-lg font-bold font-mono ${overdueCount > 0 ? "text-red-400" : "text-muted-foreground"}`}>{money(overdueAmount)}</p>
           {overdueCount > 0 && <p className="text-[9px] text-red-400">{overdueCount} бр. · Най-стара: {oldestDays}д</p>}

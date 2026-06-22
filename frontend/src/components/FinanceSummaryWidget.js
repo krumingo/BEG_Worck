@@ -369,7 +369,7 @@ export default function FinanceSummaryWidget() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {t("dashboard.totalIncome")} {viewMode === "rolling" ? `(${period} мес.)` : ""}
+                    {t("dashboard.totalIncome")} {viewMode === "rolling" ? `(${period} мес.)` : ""}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1 align-middle">без ДДС</span>
                   </p>
                   <p className="text-2xl font-bold text-green-500">{money(totals.income)}</p>
                 </div>
@@ -382,7 +382,7 @@ export default function FinanceSummaryWidget() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {t("dashboard.totalExpenses")} {viewMode === "rolling" ? `(${period} мес.)` : ""}
+                    {t("dashboard.totalExpenses")} {viewMode === "rolling" ? `(${period} мес.)` : ""}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1 align-middle">без ДДС</span>
                   </p>
                   <p className="text-2xl font-bold text-red-500">{money(totals.expenses)}</p>
                 </div>
@@ -395,7 +395,7 @@ export default function FinanceSummaryWidget() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {t("dashboard.netBalance")} {viewMode === "rolling" ? `(${period} мес.)` : ""}
+                    {t("dashboard.netBalance")} {viewMode === "rolling" ? `(${period} мес.)` : ""}<span className="text-[9px] px-1.5 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1 align-middle">без ДДС</span>
                   </p>
                   <p className={`text-2xl font-bold ${netValue >= 0 ? "text-blue-500" : "text-amber-500"}`}>
                     {netValue >= 0 ? "+" : ""}{money(netValue)}
