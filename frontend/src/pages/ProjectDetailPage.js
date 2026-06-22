@@ -357,7 +357,7 @@ export default function ProjectDetailPage() {
 
             {/* Card: Баланс */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-balance">
-              <div className="flex items-center gap-2 mb-3"><Scale className="w-5 h-5 text-green-500" /><h3 className="font-semibold text-white">Баланс (касов)</h3></div>
+              <div className="flex items-center gap-2 mb-3"><Scale className="w-5 h-5 text-green-500" /><h3 className="font-semibold text-white">Баланс (касов)</h3><span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span></div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-400">Платено от клиент:</span><span className="text-green-400 font-mono">{formatCurrency(balance.income, "EUR")}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Разходи:</span><span className="text-red-400 font-mono">{formatCurrency(balance.expenses, "EUR")}</span></div>

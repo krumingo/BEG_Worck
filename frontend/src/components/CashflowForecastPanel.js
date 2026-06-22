@@ -73,7 +73,7 @@ export default function CashflowForecastPanel() {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold">{t("dashboard.cashflowForecast.title")}</h2>
-            <Badge variant="outline" className={`text-[10px] ${warn.color}`}>{warn.label}</Badge>
+            <Badge variant="outline" className={`text-[10px] ${warn.color}`}>{warn.label}</Badge><span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span>
           </div>
           <p className="text-xs text-muted-foreground">{data.headline}</p>
         </div>

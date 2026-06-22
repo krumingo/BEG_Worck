@@ -91,17 +91,17 @@ export default function ClientDetailPage() {
         <div className="rounded-lg border border-border bg-card p-3 text-center">
           <Receipt className="w-5 h-5 mx-auto mb-1 text-blue-400" />
           <p className="text-2xl font-bold font-mono">{totals.total_revenue.toFixed(0)}</p>
-          <p className="text-[10px] text-muted-foreground">{t("clientDetail.totalRevenue")}</p>
+          <p className="text-[10px] text-muted-foreground flex items-center justify-center">{t("clientDetail.totalRevenue")}<span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span></p>
         </div>
         <div className="rounded-lg border border-border bg-card p-3 text-center">
           <DollarSign className="w-5 h-5 mx-auto mb-1 text-emerald-400" />
           <p className="text-2xl font-bold font-mono text-emerald-400">{totals.total_paid.toFixed(0)}</p>
-          <p className="text-[10px] text-muted-foreground">{t("clientDetail.totalPaid")}</p>
+          <p className="text-[10px] text-muted-foreground flex items-center justify-center">{t("clientDetail.totalPaid")}<span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span></p>
         </div>
         <div className="rounded-lg border border-border bg-card p-3 text-center">
           <AlertTriangle className={`w-5 h-5 mx-auto mb-1 ${totals.total_outstanding > 0 ? "text-red-400" : "text-emerald-400"}`} />
           <p className={`text-2xl font-bold font-mono ${totals.total_outstanding > 0 ? "text-red-400" : "text-emerald-400"}`}>{totals.total_outstanding.toFixed(0)}</p>
-          <p className="text-[10px] text-muted-foreground">{t("clientDetail.outstanding")}</p>
+          <p className="text-[10px] text-muted-foreground flex items-center justify-center">{t("clientDetail.outstanding")}<span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span></p>
         </div>
       </div>
 
