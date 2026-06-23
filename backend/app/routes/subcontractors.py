@@ -479,6 +479,15 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
     vat_amount = round(float(data.get("vat_amount", 0) or 0), 2)  # input VAT (без ДДС amount stays in `amount`)
 
     now = datetime.now(timezone.utc).isoformat()
+
+    # Resolve cash/bank account for the outflow (default = first Cash account = Каса)
+    req_account_id = data.get("account_id")
+    if req_account_id:
+        account = await db.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
+    else:
+        account = await db.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
+    account_id = account["id"] if account else None
+
     payment = {
         "id": str(uuid.uuid4()), "org_id": org_id,
         "project_id": pkg["project_id"], "subcontractor_id": pkg["subcontractor_id"],
@@ -490,9 +499,27 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         "payment_method": data.get("payment_method", "bank"),
         "notes": data.get("notes", ""),
         "status": "completed",
+        "account_id": account_id,
         "created_at": now,
     }
     await db.subcontractor_payments.insert_one(payment)
+
+    # Cash outflow from the chosen account (Каса/Банка) — keeps cash flow / account balance correct
+    if account_id:
+        await db.finance_payments.insert_one({
+            "id": str(uuid.uuid4()), "org_id": org_id,
+            "direction": "Outflow", "amount": amount,
+            "currency": pkg.get("currency", "EUR"),
+            "date": payment["payment_date"],
+            "method": (account.get("account_type", "Cash") if account else "Cash"),
+            "account_id": account_id,
+            "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
+            "reference": payment["payment_no"],
+            "note": "Подизпълнител/бригада плащане",
+            "project_id": pkg["project_id"],
+            "subcontractor_payment_id": payment["id"],
+            "created_at": now, "updated_at": now,
+        })
 
     # Update package paid totals
     all_pays = await db.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)

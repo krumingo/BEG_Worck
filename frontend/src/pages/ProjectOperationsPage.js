@@ -47,6 +47,7 @@ export default function ProjectOperationsPage() {
 
   // Offers for dropdowns
   const [offers, setOffers] = useState([]);
+  const [accounts, setAccounts] = useState([]);
 
   // Dialogs
   const [dialog, setDialog] = useState(null); // { type, data }
@@ -56,7 +57,7 @@ export default function ProjectOperationsPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [projRes, subsRes, pkgRes, actsRes, payRes, caRes, snapRes, ohRes, offRes] = await Promise.all([
+      const [projRes, subsRes, pkgRes, actsRes, payRes, caRes, snapRes, ohRes, offRes, accRes] = await Promise.all([
         API.get(`/projects/${projectId}`),
         API.get("/subcontractors"),
         API.get(`/subcontractor-packages?project_id=${projectId}`),
@@ -66,6 +67,7 @@ export default function ProjectOperationsPage() {
         API.get(`/revenue-snapshots?project_id=${projectId}`),
         API.get("/overhead-snapshots"),
         API.get("/offers"),
+        API.get("/finance/accounts"),
       ]);
       setProject(projRes.data);
       setSubs(subsRes.data);
@@ -76,6 +78,7 @@ export default function ProjectOperationsPage() {
       setSnapshots(snapRes.data);
       setOhSnapshots(ohRes.data);
       setOffers(offRes.data.filter(o => o.project_id === projectId));
+      setAccounts(accRes.data || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [projectId]);
@@ -162,7 +165,7 @@ export default function ProjectOperationsPage() {
                           {pkg.status !== "draft" && pkg.status !== "closed" && (
                             <>
                               <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, lines: [], act_date: new Date().toISOString().split("T")[0], notes: "" }); setDialog({ type: "new-act", pkg }); }} data-testid={`new-act-${i}`}><FileText className="w-3 h-3 mr-0.5" />Акт</Button>
-                              <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, amount: "", payment_date: new Date().toISOString().split("T")[0], payment_type: "partial", payment_method: "bank", notes: "" }); setDialog({ type: "new-pay", pkg }); }} data-testid={`new-pay-${i}`}><CreditCard className="w-3 h-3 mr-0.5" />Плати</Button>
+                              <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, amount: "", payment_date: new Date().toISOString().split("T")[0], payment_type: "partial", payment_method: "bank", account_id: (accounts.find(a => a.account_type === "Cash") || accounts[0] || {}).id || "", notes: "" }); setDialog({ type: "new-pay", pkg }); }} data-testid={`new-pay-${i}`}><CreditCard className="w-3 h-3 mr-0.5" />Плати</Button>
                             </>
                           )}
                         </div>
@@ -303,6 +306,14 @@ export default function ProjectOperationsPage() {
           <div className="space-y-2 py-2">
             <div className="p-2 rounded bg-muted/30 text-sm"><span className="text-muted-foreground">Пакет:</span> <span className="font-mono">{dialog?.pkg?.package_no}</span></div>
             <div><Label className="text-xs">Сума (EUR) *</Label><Input type="number" step="0.01" value={form.amount || ""} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background font-mono" /></div>
+            <div><Label className="text-xs">От сметка (Каса/Банка)</Label>
+              <Select value={form.account_id || ""} onValueChange={v => setForm({...form, account_id: v})}>
+                <SelectTrigger className="bg-background h-9"><SelectValue placeholder="Избери сметка…" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.account_type === "Cash" ? "Каса" : "Банка"})</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label className="text-xs">Дата</Label><Input type="date" value={form.payment_date || ""} onChange={e => setForm({...form, payment_date: e.target.value})} className="bg-background" /></div>
             <div><Label className="text-xs">Бележка</Label><Input value={form.notes || ""} onChange={e => setForm({...form, notes: e.target.value})} className="bg-background" /></div>
           </div>
