@@ -435,6 +435,86 @@ async def list_invoices(
     return invoices
 
 
+@router.get("/finance/subcontractor-documents")
+async def list_subcontractor_documents(
+    user: dict = Depends(require_m5),
+    status: Optional[str] = None,
+    project_id: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+):
+    """Read-only view: completed subcontractor/brigade payments (фишове) returned in the
+    same shape as Received invoices, so they can be shown alongside bills in the expense
+    documents list. This is DISPLAY ONLY — the expense is still counted once via
+    subcontractor packages/payments. Nothing here feeds P&L or cash flow aggregators,
+    so there is no double counting."""
+    if not finance_permission(user):
+        if user["role"] == "SiteManager":
+            assigned = await get_user_project_ids(user["id"])
+            if not assigned:
+                return []
+            if project_id and project_id not in assigned:
+                return []
+        else:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    # Фиш document is always Received-side and always "Paid"; honour status filter parity.
+    if status and status != "Paid":
+        return []
+
+    query = {"org_id": user["org_id"], "status": "completed"}
+    if project_id:
+        query["project_id"] = project_id
+    elif user["role"] == "SiteManager":
+        assigned = await get_user_project_ids(user["id"])
+        query["project_id"] = {"$in": assigned}
+    if from_date:
+        query["payment_date"] = {"$gte": from_date}
+    if to_date:
+        query.setdefault("payment_date", {})["$lte"] = to_date
+
+    payments = await db.subcontractor_payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+    # Resolve names without an N+1 storm
+    sub_names: dict = {}
+    proj_cache: dict = {}
+    docs = []
+    for p in payments:
+        sub_id = p.get("subcontractor_id")
+        if sub_id and sub_id not in sub_names:
+            s = await db.subcontractors.find_one({"id": sub_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
+            sub_names[sub_id] = s["name"] if s else None
+        proj_id = p.get("project_id")
+        if proj_id and proj_id not in proj_cache:
+            pr = await db.projects.find_one({"id": proj_id}, {"_id": 0, "code": 1, "name": 1})
+            proj_cache[proj_id] = pr or {}
+
+        amount = round(float(p.get("amount", 0) or 0), 2)
+        pr = proj_cache.get(proj_id, {})
+        docs.append({
+            "id": p["id"],
+            "doc_type": "fish",
+            "direction": "Received",
+            "invoice_no": p.get("payment_no", ""),
+            "status": "Paid",
+            "project_id": proj_id,
+            "project_code": pr.get("code", ""),
+            "project_name": pr.get("name", ""),
+            "counterparty_name": sub_names.get(sub_id) or "Подизпълнител/бригада",
+            "issue_date": p.get("payment_date", ""),
+            "due_date": p.get("payment_date", ""),
+            "currency": p.get("currency", "EUR"),
+            "subtotal": amount,        # без ДДС
+            "vat_amount": 0.0,         # фиш = ДДС 0 (ДДС тече през Received фактурата, не през фиша)
+            "total": amount,           # с ДДС == без ДДС
+            "paid_amount": amount,
+            "remaining_amount": 0.0,
+            "is_overdue": False,
+        })
+
+    return docs
+
+
 @router.post("/finance/invoices", status_code=201)
 async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):

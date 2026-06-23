@@ -61,12 +61,14 @@ export default function InvoicesPage() {
   const projectParam = searchParams.get("projectId") || "";
 
   const [invoices, setInvoices] = useState([]);
+  const [fishDocs, setFishDocs] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [directionFilter, setDirectionFilter] = useState(directionParam);
   const [statusFilter, setStatusFilter] = useState(statusParam);
   const [projectFilter, setProjectFilter] = useState(projectParam);
+  const [docTypeFilter, setDocTypeFilter] = useState("all"); // all | invoice | fish (display-only)
 
   // Payment
   const [payDialog, setPayDialog] = useState(null); // invoice object
@@ -96,6 +98,18 @@ export default function InvoicesPage() {
       ]);
       setInvoices(invoicesRes.data);
       setProjects(projectsRes.data);
+
+      // Фишове (подизпълнител/бригада плащания) — само за показване до фактурите.
+      // Не се броят втори път никъде; разходът си остава един източник.
+      const fishParams = new URLSearchParams();
+      if (statusFilter) fishParams.append("status", statusFilter);
+      if (projectFilter) fishParams.append("project_id", projectFilter);
+      try {
+        const fishRes = await API.get(`/finance/subcontractor-documents?${fishParams.toString()}`);
+        setFishDocs(Array.isArray(fishRes.data) ? fishRes.data : []);
+      } catch (e) {
+        setFishDocs([]);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -166,13 +180,26 @@ export default function InvoicesPage() {
     if (key === "projectId") setProjectFilter(value === "all" ? "" : value);
   };
 
+  // Обединен списък: фактури + фишове (фишът се показва само от Received страната).
+  const combinedDocs = (() => {
+    const inv = invoices.map(i => ({ ...i, doc_type: i.doc_type || "invoice" }));
+    const showFish = directionFilter !== "Issued";
+    let list;
+    if (docTypeFilter === "invoice") list = inv;
+    else if (docTypeFilter === "fish") list = showFish ? fishDocs : [];
+    else list = showFish ? [...inv, ...fishDocs] : inv;
+    return [...list].sort((a, b) =>
+      String(b.issue_date || b.created_at || "").localeCompare(String(a.issue_date || a.created_at || ""))
+    );
+  })();
+
   const filteredInvoices = search
-    ? invoices.filter(inv =>
+    ? combinedDocs.filter(inv =>
         inv.invoice_no?.toLowerCase().includes(search.toLowerCase()) ||
         inv.counterparty_name?.toLowerCase().includes(search.toLowerCase()) ||
         inv.project_code?.toLowerCase().includes(search.toLowerCase())
       )
-    : invoices;
+    : combinedDocs;
 
   const getStatusKey = (status) => {
     const map = {
@@ -266,6 +293,16 @@ export default function InvoicesPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={docTypeFilter} onValueChange={setDocTypeFilter}>
+          <SelectTrigger className="w-[170px] bg-card" data-testid="doctype-filter">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Всички документи</SelectItem>
+            <SelectItem value="invoice">Само фактури</SelectItem>
+            <SelectItem value="fish">Само фишове</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -328,20 +365,27 @@ export default function InvoicesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredInvoices.map((invoice) => (
+                filteredInvoices.map((invoice) => {
+                  const isFish = invoice.doc_type === "fish";
+                  return (
                   <TableRow 
                     key={invoice.id} 
-                    className="table-row-hover cursor-pointer"
-                    onClick={() => navigate(`/finance/invoices/${invoice.id}`)}
-                    data-testid={`invoice-row-${invoice.id}`}
+                    className={`table-row-hover ${isFish ? "bg-amber-500/5" : "cursor-pointer"}`}
+                    onClick={isFish ? undefined : () => navigate(`/finance/invoices/${invoice.id}`)}
+                    data-testid={`${isFish ? "fish" : "invoice"}-row-${invoice.id}`}
                   >
                     <TableCell onClick={e => e.stopPropagation()}>
-                      {invoice.remaining_amount > 0 && <input type="checkbox" checked={selected.has(invoice.id)} onChange={() => { const s = new Set(selected); if (s.has(invoice.id)) s.delete(invoice.id); else s.add(invoice.id); setSelected(s); }} className="rounded" />}
+                      {!isFish && invoice.remaining_amount > 0 && <input type="checkbox" checked={selected.has(invoice.id)} onChange={() => { const s = new Set(selected); if (s.has(invoice.id)) s.delete(invoice.id); else s.add(invoice.id); setSelected(s); }} className="rounded" />}
                     </TableCell>
                     <TableCell>
                       <p className="font-mono text-sm text-primary">{invoice.invoice_no}</p>
                     </TableCell>
                     <TableCell>
+                      {isFish ? (
+                        <Badge variant="outline" className="bg-amber-400/20 text-amber-200 border-amber-400/40">
+                          <FileText className="w-3 h-3 mr-1" />Фиш
+                        </Badge>
+                      ) : (
                       <Badge variant="outline" className={
                         invoice.direction === "Issued" 
                           ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
@@ -349,6 +393,7 @@ export default function InvoicesPage() {
                       }>
                         {invoice.direction === "Issued" ? t("finance.invoiceType.sale") : t("finance.invoiceType.bill")}
                       </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-foreground max-w-[150px] truncate">
                       {invoice.counterparty_name || "-"}
@@ -385,6 +430,10 @@ export default function InvoicesPage() {
                     </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex gap-1 justify-end">
+                        {isFish ? (
+                          <span className="text-xs text-muted-foreground pr-1">—</span>
+                        ) : (
+                          <>
                         {invoice.remaining_amount > 0 && (
                           <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 text-emerald-400 border-emerald-500/30" onClick={() => { setPayDialog(invoice); setPayAmount(String(invoice.remaining_amount)); }}>
                             <DollarSign className="w-3 h-3" />Плати
@@ -393,10 +442,12 @@ export default function InvoicesPage() {
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => navigate(`/finance/invoices/${invoice.id}`)}>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  );})
               )}
             </TableBody>
           </Table>
