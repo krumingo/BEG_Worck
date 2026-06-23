@@ -89,11 +89,15 @@ export default function FinanceOverviewPage() {
             <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-emerald-400" />
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">с ДДС</span>
           </div>
-          <p className="text-sm text-muted-foreground">{t("finance.receivables")}</p>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.receivables_total)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("finance.openInvoices", { count: stats?.receivables_count || 0 })}</p>
+          <p className="text-sm text-muted-foreground">За събиране <span className="text-muted-foreground/60">· от клиенти</span></p>
+          <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(stats?.receivables_total)}</p>
+          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">без ДДС {formatCurrency(stats?.receivables_net)}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">ДДС {formatCurrency(stats?.receivables_vat)}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">{stats?.receivables_count || 0} отворени</p>
           {stats?.receivables_overdue > 0 && (
             <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
@@ -112,11 +116,15 @@ export default function FinanceOverviewPage() {
             <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
               <TrendingDown className="w-5 h-5 text-red-400" />
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">с ДДС</span>
           </div>
-          <p className="text-sm text-muted-foreground">{t("finance.payables")}</p>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.payables_total)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("finance.billsToPay", { count: stats?.payables_count || 0 })}</p>
+          <p className="text-sm text-muted-foreground">За плащане <span className="text-muted-foreground/60">· към доставчици</span></p>
+          <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(stats?.payables_total)}</p>
+          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">без ДДС {formatCurrency(stats?.payables_net)}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">ДДС {formatCurrency(stats?.payables_vat)}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">{stats?.payables_count || 0} сметки</p>
           {stats?.payables_overdue > 0 && (
             <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
@@ -135,11 +143,11 @@ export default function FinanceOverviewPage() {
             <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
               <Wallet className="w-5 h-5 text-amber-400" />
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">с ДДС</span>
           </div>
-          <p className="text-sm text-muted-foreground">{t("finance.cashBalance")}</p>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.cash_balance)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("finance.allCashAccounts")}</p>
+          <p className="text-sm text-muted-foreground">Каса <span className="text-muted-foreground/60">· в брой</span></p>
+          <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(stats?.cash_balance)}</p>
+          <p className="text-xs text-muted-foreground mt-2">налични пари</p>
         </div>
 
         {/* Bank Balance */}
@@ -152,54 +160,35 @@ export default function FinanceOverviewPage() {
             <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
               <Building2 className="w-5 h-5 text-blue-400" />
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">с ДДС</span>
           </div>
-          <p className="text-sm text-muted-foreground">{t("finance.bankBalance")}</p>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.bank_balance)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("finance.allBankAccounts")}</p>
+          <p className="text-sm text-muted-foreground">Банка <span className="text-muted-foreground/60">· по сметки</span></p>
+          <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(stats?.bank_balance)}</p>
+          <p className="text-xs text-muted-foreground mt-2">{accounts.length} {accounts.length === 1 ? "сметка" : "сметки"}</p>
         </div>
       </div>
 
       {/* Quick Links */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Accounts */}
+        {/* Accounts (nav tile — balances live in the Bank/Cash cards above) */}
         <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="accounts-section">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-primary" />
-              {t("finance.financialAccounts")}
+              <CreditCard className="w-4 h-4 text-primary" />
+              Сметки
             </h2>
             <Button variant="ghost" size="sm" onClick={() => navigate("/finance/accounts")}>
               {t("common.viewAll")} <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
           <div className="p-4 space-y-3">
-            {accounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">{t("finance.noAccounts")}</p>
-            ) : (
-              accounts.slice(0, 4).map((acc) => (
-                <div key={acc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      acc.type === "Cash" ? "bg-amber-500/20" : "bg-blue-500/20"
-                    }`}>
-                      {acc.type === "Cash" ? (
-                        <Wallet className="w-4 h-4 text-amber-400" />
-                      ) : (
-                        <Building2 className="w-4 h-4 text-blue-400" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{acc.name}</p>
-                      <p className="text-xs text-muted-foreground">{t(`finance.accountType.${acc.type.toLowerCase()}`)}</p>
-                    </div>
-                  </div>
-                  <p className="font-mono text-sm font-medium text-foreground">
-                    {formatCurrency(acc.current_balance, acc.currency)}
-                  </p>
-                </div>
-              ))
-            )}
+            <div
+              className="p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => navigate("/finance/accounts")}
+            >
+              <p className="text-sm text-muted-foreground">Управление на Каса / Банка</p>
+              <p className="text-lg font-bold text-foreground">{accounts.length} {accounts.length === 1 ? "сметка" : "сметки"}</p>
+            </div>
             {canManage && accounts.length === 0 && (
               <Button variant="outline" className="w-full" onClick={() => navigate("/finance/accounts")}>
                 <Plus className="w-4 h-4 mr-2" /> {t("finance.newAccount")}

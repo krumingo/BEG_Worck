@@ -1222,6 +1222,26 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
         {"$group": {"_id": None, "total": {"$sum": "$remaining_amount"}, "count": {"$sum": 1}}}
     ]).to_list(1)
     
+    # Net (без ДДС) / VAT split of outstanding receivables & payables — proportional on the
+    # remaining amount of each open invoice (exact for a single VAT rate, correct for mixed rates).
+    async def _outstanding_net(direction: str) -> float:
+        rows = await db.invoices.find(
+            {"org_id": org_id, "direction": direction, "status": {"$nin": ["Draft", "Cancelled", "Paid"]}},
+            {"_id": 0, "subtotal": 1, "total": 1, "remaining_amount": 1},
+        ).to_list(2000)
+        net = 0.0
+        for r in rows:
+            rem = r.get("remaining_amount", 0) or 0
+            tot = r.get("total", 0) or 0
+            sub = r.get("subtotal", 0) or 0
+            net += (rem * (sub / tot)) if tot > 0 else rem
+        return round(net, 2)
+
+    recv_total = round(receivables[0]["total"], 2) if receivables else 0
+    pay_total = round(payables[0]["total"], 2) if payables else 0
+    recv_net = await _outstanding_net("Issued")
+    pay_net = await _outstanding_net("Received")
+
     # Account balances — count ALL accounts so the KPI cards match the accounts list
     # (legacy/auto-created accounts may lack the "active" flag; excluding them made
     # Cash/Bank show 0 while the list showed the real balance).
@@ -1246,10 +1266,14 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
     
     return {
         "receivables_total": round(receivables[0]["total"], 2) if receivables else 0,
+        "receivables_net": recv_net,
+        "receivables_vat": round(recv_total - recv_net, 2),
         "receivables_count": receivables[0]["count"] if receivables else 0,
         "receivables_overdue": round(overdue_recv[0]["total"], 2) if overdue_recv else 0,
         "receivables_overdue_count": overdue_recv[0]["count"] if overdue_recv else 0,
         "payables_total": round(payables[0]["total"], 2) if payables else 0,
+        "payables_net": pay_net,
+        "payables_vat": round(pay_total - pay_net, 2),
         "payables_count": payables[0]["count"] if payables else 0,
         "payables_overdue": round(overdue_pay[0]["total"], 2) if overdue_pay else 0,
         "payables_overdue_count": overdue_pay[0]["count"] if overdue_pay else 0,
