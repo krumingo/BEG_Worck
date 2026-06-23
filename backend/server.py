@@ -325,6 +325,9 @@ api_router.include_router(weekly_matrix_router)
 from app.routes.employee_dossier import router as employee_dossier_router
 api_router.include_router(employee_dossier_router)
 
+from app.routes.brigades import router as brigades_router
+api_router.include_router(brigades_router)
+
 from app.routes.pay_runs import router as pay_runs_router
 api_router.include_router(pay_runs_router)
 
