@@ -121,6 +121,8 @@ export default function EmployeeDetailPage() {
         daily_rate: p.daily_rate || 0,
         hourly_rate: p.hourly_rate || 0,
         akord_note: p.akord_note || "",
+        insurance_pct: p.insurance_pct != null ? Math.round(p.insurance_pct * 1000) / 10 : "",
+        insurance_amount: p.insurance_amount != null ? p.insurance_amount : "",
         working_days_per_month: p.working_days_per_month || 22,
         standard_hours_per_day: p.standard_hours_per_day || 8,
         active: p.active !== false,
@@ -229,6 +231,8 @@ export default function EmployeeDetailPage() {
         daily_rate: parseFloat(editProfile.daily_rate) || null,
         hourly_rate: parseFloat(editProfile.hourly_rate) || null,
         akord_note: editProfile.akord_note || null,
+        insurance_pct: editProfile.insurance_pct !== "" && editProfile.insurance_pct != null ? parseFloat(editProfile.insurance_pct) / 100 : null,
+        insurance_amount: editProfile.insurance_amount !== "" && editProfile.insurance_amount != null ? parseFloat(editProfile.insurance_amount) : null,
         working_days_per_month: parseFloat(editProfile.working_days_per_month) || 22,
         standard_hours_per_day: parseFloat(editProfile.standard_hours_per_day) || 8,
         active: editProfile.active,
@@ -442,6 +446,17 @@ export default function EmployeeDetailPage() {
                     placeholder="Напр. по обект, по задача, договорена цена..." className="bg-background h-8 text-sm" data-testid="akord-note-input" />
                 </div>
               )}
+
+              <div className="space-y-1">
+                <Label className="text-xs">Осигуровки % (работодател)</Label>
+                <Input type="number" step="0.1" value={editProfile.insurance_pct} onChange={e => setEditProfile({...editProfile, insurance_pct: e.target.value})}
+                  placeholder="напр. 32.8" className="bg-background h-8 text-sm" data-testid="insurance-pct-input" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Осигуровки фикс. сума (EUR, по избор)</Label>
+                <Input type="number" step="0.01" value={editProfile.insurance_amount} onChange={e => setEditProfile({...editProfile, insurance_amount: e.target.value})}
+                  placeholder="по избор" className="bg-background h-8 text-sm" data-testid="insurance-amount-input" />
+              </div>
             </div>
 
             {editProfile.pay_type === "Monthly" && editProfile.monthly_salary > 0 && (

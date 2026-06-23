@@ -20,6 +20,8 @@ class EmployeeProfileCreate(BaseModel):
     daily_rate: Optional[float] = None
     monthly_salary: Optional[float] = None
     akord_note: Optional[str] = None
+    insurance_pct: Optional[float] = None      # employer social-security %, e.g. 0.328
+    insurance_amount: Optional[float] = None   # optional fixed осигуровки amount (overrides %)
     standard_hours_per_day: float = 8
     working_days_per_month: float = 22
     pay_schedule: str = "Monthly"
@@ -33,6 +35,8 @@ class EmployeeProfileUpdate(BaseModel):
     daily_rate: Optional[float] = None
     monthly_salary: Optional[float] = None
     akord_note: Optional[str] = None
+    insurance_pct: Optional[float] = None
+    insurance_amount: Optional[float] = None
     standard_hours_per_day: Optional[float] = None
     working_days_per_month: Optional[float] = None
     pay_schedule: Optional[str] = None

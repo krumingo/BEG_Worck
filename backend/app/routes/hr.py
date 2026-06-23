@@ -99,6 +99,8 @@ async def upsert_employee_profile(data: EmployeeProfileCreate, user: dict = Depe
         "daily_rate": data.daily_rate,
         "monthly_salary": data.monthly_salary,
         "akord_note": data.akord_note,
+        "insurance_pct": data.insurance_pct,
+        "insurance_amount": data.insurance_amount,
         "standard_hours_per_day": data.standard_hours_per_day,
         "working_days_per_month": data.working_days_per_month,
         "pay_schedule": data.pay_schedule,
