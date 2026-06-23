@@ -30,6 +30,7 @@ import OffersListPage from "@/pages/OffersListPage";
 import OfferEditorPage from "@/pages/OfferEditorPage";
 import ActivityCatalogPage from "@/pages/ActivityCatalogPage";
 import EmployeesPage from "@/pages/EmployeesPage";
+import BrigadesPage from "@/pages/BrigadesPage";
 import AdvancesPage from "@/pages/AdvancesPage";
 import PayRunsPage from "@/pages/PayRunsPage";
 import MyPayslipsPage from "@/pages/MyPayslipsPage";
@@ -229,6 +230,7 @@ function AppRoutes() {
       <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
       <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
       <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />
+      <Route path="/brigades" element={<AdminRoute><BrigadesPage /></AdminRoute>} />
       <Route path="/projects/:projectId/novo-smr" element={<AdminRoute><NovoSMRPage /></AdminRoute>} />
       <Route path="/projects/:projectId/financial" element={<AdminRoute><ProjectFinancialPage /></AdminRoute>} />
       <Route path="/projects/:projectId/progress" element={<AdminRoute><ProjectProgressPage /></AdminRoute>} />
