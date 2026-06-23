@@ -84,7 +84,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Subcontractor payments
     sub_payments = await db.subcontractor_payments.find(
-        {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid"]}},
+        {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
         {"_id": 0, "amount": 1},
     ).to_list(200)
     paid_subcontractors = round(sum(p.get("amount", 0) for p in sub_payments), 2)
