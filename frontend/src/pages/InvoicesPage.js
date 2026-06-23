@@ -84,6 +84,9 @@ export default function InvoicesPage() {
 
   const canCreate = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
+  // A draft or cancelled invoice is not payable, regardless of remaining amount.
+  const isPayable = (inv) => inv.remaining_amount > 0 && !["Draft", "Cancelled"].includes(inv.status);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -143,7 +146,7 @@ export default function InvoicesPage() {
   };
 
   const handleBatchPay = async () => {
-    const sel = invoices.filter(i => selected.has(i.id) && i.remaining_amount > 0);
+    const sel = invoices.filter(i => selected.has(i.id) && isPayable(i));
     if (sel.length === 0) return;
     setPaying(true);
     try {
@@ -336,7 +339,7 @@ export default function InvoicesPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[30px]"><input type="checkbox" checked={selected.size === invoices.filter(i => i.remaining_amount > 0).length && selected.size > 0} onChange={e => { if (e.target.checked) setSelected(new Set(invoices.filter(i => i.remaining_amount > 0).map(i => i.id))); else setSelected(new Set()); }} className="rounded" /></TableHead>
+                <TableHead className="w-[30px]"><input type="checkbox" checked={selected.size === invoices.filter(isPayable).length && selected.size > 0} onChange={e => { if (e.target.checked) setSelected(new Set(invoices.filter(isPayable).map(i => i.id))); else setSelected(new Set()); }} className="rounded" /></TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.invoiceNo")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.type")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.counterparty")}</TableHead>
@@ -375,7 +378,7 @@ export default function InvoicesPage() {
                     data-testid={`${isFish ? "fish" : "invoice"}-row-${invoice.id}`}
                   >
                     <TableCell onClick={e => e.stopPropagation()}>
-                      {!isFish && invoice.remaining_amount > 0 && <input type="checkbox" checked={selected.has(invoice.id)} onChange={() => { const s = new Set(selected); if (s.has(invoice.id)) s.delete(invoice.id); else s.add(invoice.id); setSelected(s); }} className="rounded" />}
+                      {!isFish && isPayable(invoice) && <input type="checkbox" checked={selected.has(invoice.id)} onChange={() => { const s = new Set(selected); if (s.has(invoice.id)) s.delete(invoice.id); else s.add(invoice.id); setSelected(s); }} className="rounded" />}
                     </TableCell>
                     <TableCell>
                       <p className="font-mono text-sm text-primary">{invoice.invoice_no}</p>
@@ -434,7 +437,7 @@ export default function InvoicesPage() {
                           <span className="text-xs text-muted-foreground pr-1">—</span>
                         ) : (
                           <>
-                        {invoice.remaining_amount > 0 && (
+                        {isPayable(invoice) && (
                           <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 text-emerald-400 border-emerald-500/30" onClick={() => { setPayDialog(invoice); setPayAmount(String(invoice.remaining_amount)); }}>
                             <DollarSign className="w-3 h-3" />Плати
                           </Button>

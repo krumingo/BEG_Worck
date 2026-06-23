@@ -323,7 +323,10 @@ async def list_accounts(user: dict = Depends(require_m5)):
         ]).to_list(1)
         inflow_total = inflows[0]["total"] if inflows else 0
         outflow_total = outflows[0]["total"] if outflows else 0
-        acc["current_balance"] = round(acc.get("opening_balance", 0) + inflow_total - outflow_total, 2)
+        opening = acc.get("opening_balance", acc.get("balance", 0)) or 0
+        acc["current_balance"] = round(opening + inflow_total - outflow_total, 2)
+        # Legacy/auto-created accounts may lack an explicit "active" flag — treat as active
+        acc["active"] = acc.get("active", True)
     
     return accounts
 
@@ -888,16 +891,19 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         if not default:
             default = await db.financial_accounts.find_one({"org_id": org_id})
         if not default:
-            # Create a default account
+            # Create a well-formed default account (same shape as create_account)
+            now_iso = datetime.now(timezone.utc).isoformat()
             default = {
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
                 "name": "Основна сметка",
                 "type": "Bank",
                 "currency": "EUR",
-                "balance": 0,
+                "opening_balance": 0,
+                "active": True,
                 "is_default": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": now_iso,
+                "updated_at": now_iso,
             }
             await db.financial_accounts.insert_one(default)
         account_id = default["id"]
@@ -1216,8 +1222,10 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
         {"$group": {"_id": None, "total": {"$sum": "$remaining_amount"}, "count": {"$sum": 1}}}
     ]).to_list(1)
     
-    # Account balances
-    accounts = await db.financial_accounts.find({"org_id": org_id, "active": True}, {"_id": 0}).to_list(100)
+    # Account balances — count ALL accounts so the KPI cards match the accounts list
+    # (legacy/auto-created accounts may lack the "active" flag; excluding them made
+    # Cash/Bank show 0 while the list showed the real balance).
+    accounts = await db.financial_accounts.find({"org_id": org_id}, {"_id": 0}).to_list(100)
     cash_balance = 0
     bank_balance = 0
     for acc in accounts:
@@ -1229,8 +1237,9 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
             {"$match": {"org_id": org_id, "account_id": acc["id"], "direction": "Outflow"}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
-        balance = acc.get("opening_balance", 0) + (inflows[0]["total"] if inflows else 0) - (outflows[0]["total"] if outflows else 0)
-        if acc["type"] == "Cash":
+        opening = acc.get("opening_balance", acc.get("balance", 0)) or 0
+        balance = opening + (inflows[0]["total"] if inflows else 0) - (outflows[0]["total"] if outflows else 0)
+        if acc.get("type") == "Cash":
             cash_balance += balance
         else:
             bank_balance += balance

@@ -342,8 +342,8 @@ export default function PaymentsPage() {
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.direction")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.accounts")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.counterparty")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("payroll.paymentMethod")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("payroll.reference")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Метод</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Референция</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.amount")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.allocated")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
@@ -503,7 +503,7 @@ export default function PaymentsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("payroll.paymentMethod")}</Label>
+                <Label>Метод</Label>
                 <Select value={formData.method} onValueChange={(v) => setFormData({ ...formData, method: v })}>
                   <SelectTrigger className="bg-background">
                     <SelectValue />
@@ -527,7 +527,7 @@ export default function PaymentsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>{t("payroll.reference")}</Label>
+              <Label>Референция</Label>
               <Input
                 value={formData.reference}
                 onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
