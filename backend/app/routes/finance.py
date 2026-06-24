@@ -53,6 +53,60 @@ def compute_invoice_totals(invoice: dict) -> dict:
     return invoice
 
 
+def _is_cash_method(method: str) -> bool:
+    return str(method or "").strip().lower() in ("cash", "в брой", "вброй", "каса")
+
+
+async def _resolve_payment_account(org_id: str, method: str, account_id: Optional[str]) -> str:
+    """Return the account a payment should hit, creating it if needed.
+    Cash-method payments are routed to a Cash (Каса) account so the Cash KPI is correct;
+    any other method uses the chosen account, otherwise the default Bank account."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if _is_cash_method(method):
+        # honour an explicitly chosen cash account
+        if account_id:
+            acc = await db.financial_accounts.find_one({"id": account_id, "org_id": org_id})
+            if acc and acc.get("type") == "Cash":
+                return account_id
+        cash = await db.financial_accounts.find_one({"org_id": org_id, "type": "Cash"})
+        if not cash:
+            cash = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "name": "Каса",
+                "type": "Cash",
+                "currency": "EUR",
+                "opening_balance": 0,
+                "active": True,
+                "is_default": False,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+            await db.financial_accounts.insert_one(cash)
+        return cash["id"]
+    # non-cash: chosen account, else the default Bank account (create one if missing)
+    if account_id:
+        return account_id
+    default = await db.financial_accounts.find_one({"org_id": org_id, "is_default": True})
+    if not default:
+        default = await db.financial_accounts.find_one({"org_id": org_id, "type": "Bank"})
+    if not default:
+        default = {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "name": "Основна сметка",
+            "type": "Bank",
+            "currency": "EUR",
+            "opening_balance": 0,
+            "active": True,
+            "is_default": True,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        await db.financial_accounts.insert_one(default)
+    return default["id"]
+
+
 async def update_invoice_status(invoice_id: str, org_id: str):
     """Auto-update invoice status based on allocations and due date"""
     invoice = await db.invoices.find_one({"id": invoice_id, "org_id": org_id})
@@ -884,37 +938,15 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     if amount > remaining + 0.01:  # small tolerance for rounding
         raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
     
-    account_id = data.get("account_id")
-    if not account_id:
-        # Auto-use or create default account
-        default = await db.financial_accounts.find_one({"org_id": org_id, "is_default": True})
-        if not default:
-            default = await db.financial_accounts.find_one({"org_id": org_id})
-        if not default:
-            # Create a well-formed default account (same shape as create_account)
-            now_iso = datetime.now(timezone.utc).isoformat()
-            default = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "name": "Основна сметка",
-                "type": "Bank",
-                "currency": "EUR",
-                "opening_balance": 0,
-                "active": True,
-                "is_default": True,
-                "created_at": now_iso,
-                "updated_at": now_iso,
-            }
-            await db.financial_accounts.insert_one(default)
-        account_id = default["id"]
-    
+    method = data.get("method") or data.get("payment_method", "BankTransfer")
+    # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
+    account_id = await _resolve_payment_account(org_id, method, data.get("account_id"))
     account = await db.financial_accounts.find_one({"id": account_id, "org_id": org_id})
     if not account:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     
     payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
     payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    method = data.get("method") or data.get("payment_method", "BankTransfer")
     reference = data.get("reference") or data.get("payment_reference", "")
     note = data.get("note") or data.get("notes", "")
     
@@ -1047,8 +1079,9 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    # Verify account exists
-    account = await db.financial_accounts.find_one({"id": data.account_id, "org_id": user["org_id"]})
+    # Route to the correct account: cash → Каса, otherwise the chosen account.
+    account_id = await _resolve_payment_account(user["org_id"], data.method, data.account_id)
+    account = await db.financial_accounts.find_one({"id": account_id, "org_id": user["org_id"]})
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
@@ -1061,7 +1094,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
         "currency": data.currency,
         "date": data.date,
         "method": data.method,
-        "account_id": data.account_id,
+        "account_id": account_id,
         "counterparty_name": data.counterparty_name,
         "reference": data.reference,
         "note": data.note,
@@ -1071,7 +1104,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
     await db.finance_payments.insert_one(payment)
     
     await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
-                    {"amount": data.amount, "direction": data.direction, "account_id": data.account_id})
+                    {"amount": data.amount, "direction": data.direction, "account_id": account_id})
     
     return {k: v for k, v in payment.items() if k != "_id"}
 
