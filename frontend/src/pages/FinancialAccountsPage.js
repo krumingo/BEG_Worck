@@ -38,6 +38,7 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  ArrowLeftRight,
 } from "lucide-react";
 
 export default function FinancialAccountsPage() {
@@ -52,6 +53,9 @@ export default function FinancialAccountsPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
+  const [movementOpen, setMovementOpen] = useState(false);
+  const [movementType, setMovementType] = useState("transfer"); // transfer | funding
+  const [movement, setMovement] = useState({ from_account_id: "", to_account_id: "", amount: "", date: "", note: "" });
   const [formData, setFormData] = useState({
     name: "",
     type: "Cash",
@@ -119,8 +123,42 @@ export default function FinancialAccountsPage() {
     }
   };
 
-  const handleDelete = async (account) => {
-    if (!window.confirm(t("finance.confirmDeleteAccount", { name: account.name }))) return;
+  const openMovement = () => {
+    setMovementType("transfer");
+    setMovement({ from_account_id: "", to_account_id: "", amount: "", date: new Date().toISOString().slice(0, 10), note: "" });
+    setMovementOpen(true);
+  };
+
+  const handleMovement = async () => {
+    const amt = parseFloat(movement.amount);
+    if (!amt || amt <= 0) { alert("Сумата трябва да е положителна"); return; }
+    setSaving(true);
+    try {
+      if (movementType === "transfer") {
+        if (!movement.from_account_id || !movement.to_account_id || movement.from_account_id === movement.to_account_id) {
+          alert("Изберете две различни сметки"); setSaving(false); return;
+        }
+        await API.post("/finance/transfers", {
+          from_account_id: movement.from_account_id,
+          to_account_id: movement.to_account_id,
+          amount: amt, date: movement.date, note: movement.note,
+        });
+      } else {
+        if (!movement.to_account_id) { alert("Изберете сметка"); setSaving(false); return; }
+        await API.post("/finance/account-funding", {
+          account_id: movement.to_account_id, amount: amt, date: movement.date, note: movement.note,
+        });
+      }
+      setMovementOpen(false);
+      await fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (account) => {    if (!window.confirm(t("finance.confirmDeleteAccount", { name: account.name }))) return;
     try {
       await API.delete(`/finance/accounts/${account.id}`);
       await fetchData();
@@ -143,9 +181,14 @@ export default function FinancialAccountsPage() {
           </div>
         </div>
         {canManage && (
-          <Button onClick={openCreateDialog} data-testid="create-account-btn">
-            <Plus className="w-4 h-4 mr-2" /> {t("finance.newAccount")}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={openMovement} data-testid="movement-btn">
+              <ArrowLeftRight className="w-4 h-4 mr-2" /> Движение
+            </Button>
+            <Button onClick={openCreateDialog} data-testid="create-account-btn">
+              <Plus className="w-4 h-4 mr-2" /> {t("finance.newAccount")}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -312,6 +355,82 @@ export default function FinancialAccountsPage() {
             <Button onClick={handleSave} disabled={saving} data-testid="save-account-btn">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {editingAccount ? t("common.update") : t("common.create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Movement dialog — transfer between accounts / fund an account */}
+      <Dialog open={movementOpen} onOpenChange={setMovementOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Движение по сметка</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-1 bg-muted/40 p-1 rounded-md">
+              <button type="button" onClick={() => setMovementType("transfer")}
+                className={`flex-1 text-sm py-1.5 rounded ${movementType === "transfer" ? "bg-card font-medium" : "text-muted-foreground"}`}>
+                Прехвърляне
+              </button>
+              <button type="button" onClick={() => setMovementType("funding")}
+                className={`flex-1 text-sm py-1.5 rounded ${movementType === "funding" ? "bg-card font-medium" : "text-muted-foreground"}`}>
+                Захранване
+              </button>
+            </div>
+
+            {movementType === "transfer" && (
+              <div>
+                <Label>От сметка</Label>
+                <Select value={movement.from_account_id} onValueChange={(v) => setMovement({ ...movement, from_account_id: v })}>
+                  <SelectTrigger data-testid="movement-from"><SelectValue placeholder="Изберете сметка" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(a.current_balance, a.currency)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <Label>{movementType === "transfer" ? "Към сметка" : "Сметка"}</Label>
+              <Select value={movement.to_account_id} onValueChange={(v) => setMovement({ ...movement, to_account_id: v })}>
+                <SelectTrigger data-testid="movement-to"><SelectValue placeholder="Изберете сметка" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(a.current_balance, a.currency)})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Сума</Label>
+                <Input type="number" step="0.01" value={movement.amount} onChange={(e) => setMovement({ ...movement, amount: e.target.value })} data-testid="movement-amount" />
+              </div>
+              <div>
+                <Label>Дата</Label>
+                <Input type="date" value={movement.date} onChange={(e) => setMovement({ ...movement, date: e.target.value })} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Бележка (по избор)</Label>
+              <Input value={movement.note} onChange={(e) => setMovement({ ...movement, note: e.target.value })} />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {movementType === "transfer"
+                ? "Създава 2 записа: − от едната сметка, + в другата."
+                : "Захранване с пари отвън. Не е приход в печалбата."}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMovementOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleMovement} disabled={saving} data-testid="save-movement-btn">
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {movementType === "transfer" ? "Прехвърли" : "Захрани"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -385,6 +385,86 @@ async def list_accounts(user: dict = Depends(require_m5)):
     return accounts
 
 
+@router.post("/finance/transfers", status_code=201)
+async def create_transfer(data: dict, user: dict = Depends(require_m5)):
+    """Move money between two own accounts (e.g. Bank → Cash withdrawal).
+    Creates two linked finance_payments: an Outflow from the source and an Inflow to the
+    destination. Net effect on total cash is zero; each account balance adjusts. No P&L impact."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    org = user["org_id"]
+    from_id = data.get("from_account_id")
+    to_id = data.get("to_account_id")
+    try:
+        amount = round(float(data.get("amount") or 0), 2)
+    except (TypeError, ValueError):
+        amount = 0
+    if not from_id or not to_id or from_id == to_id:
+        raise HTTPException(status_code=400, detail="Изберете две различни сметки")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    src = await db.financial_accounts.find_one({"id": from_id, "org_id": org})
+    dst = await db.financial_accounts.find_one({"id": to_id, "org_id": org})
+    if not src or not dst:
+        raise HTTPException(status_code=404, detail="Сметката не е намерена")
+    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    note = data.get("note", "")
+    transfer_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    out_entry = {
+        "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
+        "currency": src.get("currency", "EUR"), "date": date, "method": "Transfer",
+        "account_id": from_id, "counterparty_name": f"Прехвърляне към {dst.get('name', '')}",
+        "reference": transfer_id, "note": note, "transfer_id": transfer_id,
+        "created_at": now, "updated_at": now,
+    }
+    in_entry = {
+        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+        "currency": dst.get("currency", "EUR"), "date": date, "method": "Transfer",
+        "account_id": to_id, "counterparty_name": f"Прехвърляне от {src.get('name', '')}",
+        "reference": transfer_id, "note": note, "transfer_id": transfer_id,
+        "created_at": now, "updated_at": now,
+    }
+    await db.finance_payments.insert_many([out_entry, in_entry])
+    await log_audit(org, user["id"], user["email"], "transfer_created", "transfer", transfer_id,
+                    {"amount": amount, "from": from_id, "to": to_id})
+    return {"transfer_id": transfer_id, "amount": amount, "from_account_id": from_id, "to_account_id": to_id}
+
+
+@router.post("/finance/account-funding", status_code=201)
+async def fund_account(data: dict, user: dict = Depends(require_m5)):
+    """Top up an account with outside cash (capital injection). Inflow only.
+    This is NOT revenue — it does not feed P&L; it only raises the account balance."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    org = user["org_id"]
+    to_id = data.get("account_id")
+    try:
+        amount = round(float(data.get("amount") or 0), 2)
+    except (TypeError, ValueError):
+        amount = 0
+    if not to_id:
+        raise HTTPException(status_code=400, detail="Изберете сметка")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    dst = await db.financial_accounts.find_one({"id": to_id, "org_id": org})
+    if not dst:
+        raise HTTPException(status_code=404, detail="Сметката не е намерена")
+    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).isoformat()
+    payment = {
+        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+        "currency": dst.get("currency", "EUR"), "date": date, "method": "Funding",
+        "account_id": to_id, "counterparty_name": "Захранване на сметка",
+        "reference": "", "note": data.get("note", ""), "is_funding": True,
+        "created_at": now, "updated_at": now,
+    }
+    await db.finance_payments.insert_one(payment)
+    await log_audit(org, user["id"], user["email"], "account_funded", "payment", payment["id"],
+                    {"amount": amount, "account_id": to_id})
+    return {"id": payment["id"], "amount": amount, "account_id": to_id}
+
+
 @router.post("/finance/accounts", status_code=201)
 async def create_account(data: FinancialAccountCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):
