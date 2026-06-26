@@ -42,6 +42,8 @@ import {
   Loader2,
   Link2,
   Trash2,
+  FileText,
+  Building2,
 } from "lucide-react";
 import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 
@@ -291,6 +293,8 @@ export default function PaymentsPage() {
     const p = projects.find((x) => x.id === id);
     return p ? (p.name || p.code || id) : id;
   };
+  const hasInvoice = (p) => p.linked_invoices && p.linked_invoices.length > 0;
+  const isMovement = (p) => p.method === "Transfer" || p.method === "Funding" || p.is_funding;
 
   const openOther = () => {
     setOtherForm({ project_id: "", amount: "", account_id: accounts[0]?.id || "", method: "Cash", counterparty_name: "", date: new Date().toISOString().split("T")[0], note: "" });
@@ -394,19 +398,16 @@ export default function PaymentsPage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.date")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.direction")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.accounts")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.counterparty")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Метод</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Референция</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">За какво</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Сметка · Метод</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.amount")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("finance.allocated")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     <CreditCard className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p>{t("finance.noPayments")}</p>
                     {canManage && (
@@ -434,54 +435,61 @@ export default function PaymentsPage() {
                         </span>
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-foreground">{payment.account_name}</TableCell>
-                    <TableCell className="text-muted-foreground max-w-[180px]">
+                    <TableCell className="max-w-[280px]">
                       {isOther(payment) ? (
                         <div>
                           <div className="flex items-center gap-1 flex-wrap">
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium">Режийни</span>
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">Други</span>
+                            {payment.note && <span className="text-xs text-muted-foreground truncate">· {payment.note}</span>}
                           </div>
                           <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">обект: {projectName(payment.project_id)}{payment.counterparty_name ? ` · ${payment.counterparty_name}` : ""}</div>
                         </div>
+                      ) : hasInvoice(payment) ? (
+                        <div className="truncate">
+                          <span className="text-foreground">Фактура {payment.linked_invoices[0].invoice_no}</span>
+                          {payment.linked_invoices[0].counterparty_name && (
+                            <span className="text-muted-foreground"> · {payment.linked_invoices[0].counterparty_name}</span>
+                          )}
+                          {payment.linked_invoices.length > 1 && (
+                            <span className="text-muted-foreground"> +{payment.linked_invoices.length - 1}</span>
+                          )}
+                        </div>
+                      ) : payment.method === "Transfer" ? (
+                        <span className="text-foreground truncate block">{payment.counterparty_name || "Прехвърляне"}</span>
+                      ) : (payment.method === "Funding" || payment.is_funding) ? (
+                        <span className="text-foreground">Захранване на каса</span>
                       ) : (
-                        <span className="truncate block">{payment.counterparty_name || "-"}</span>
+                        <span className="text-muted-foreground truncate block">{payment.note || payment.counterparty_name || "—"}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{methodLabel(payment.method)}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {payment.reference || "-"}
+                    <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
+                      {payment.account_name} · {methodLabel(payment.method)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-medium text-foreground">
                       {formatCurrency(payment.amount, payment.currency)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {isOther(payment) ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                      <div className="text-xs">
-                        <span className={payment.unallocated_amount > 0 ? "text-amber-400" : "text-emerald-400"}>
-                          {formatCurrency(payment.allocated_amount, payment.currency)}
-                        </span>
-                        {payment.unallocated_amount > 0 && (
-                          <p className="text-muted-foreground">
-                            {formatCurrency(payment.unallocated_amount, payment.currency)} {t("common.free")}
-                          </p>
-                        )}
-                      </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {canManage && payment.unallocated_amount > 0 && !isOther(payment) && (
+                        {hasInvoice(payment) && (
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/finance/invoices/${payment.linked_invoices[0].id}`)} title="Отвори фактурата" data-testid={`open-doc-btn-${payment.id}`}>
+                            <FileText className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {isOther(payment) && payment.project_id && (
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${payment.project_id}`)} title="Отвори обекта" data-testid={`open-project-btn-${payment.id}`}>
+                            <Building2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {canManage && payment.unallocated_amount > 0 && !isOther(payment) && !isMovement(payment) && !hasInvoice(payment) && (
                           <Button variant="ghost" size="sm" onClick={() => openAllocDialog(payment)} data-testid={`allocate-btn-${payment.id}`}>
                             <Link2 className="w-4 h-4" />
                           </Button>
                         )}
                         {canManage && payment.allocation_count === 0 && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="text-destructive hover:text-destructive"
                             onClick={() => handleDeletePayment(payment)}
                             data-testid={`delete-btn-${payment.id}`}

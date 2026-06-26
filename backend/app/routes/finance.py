@@ -1188,6 +1188,21 @@ async def list_payments(
         pay["allocated_amount"] = round(allocated, 2)
         pay["unallocated_amount"] = round(pay["amount"] - allocated, 2)
         pay["allocation_count"] = len(allocations)
+
+        # Linked invoices (so the list can show "За какво" + open the document)
+        linked = []
+        for a in allocations:
+            inv = await db.invoices.find_one(
+                {"id": a.get("invoice_id"), "org_id": user["org_id"]},
+                {"_id": 0, "invoice_no": 1, "counterparty_name": 1},
+            )
+            if inv:
+                linked.append({
+                    "id": a.get("invoice_id"),
+                    "invoice_no": inv.get("invoice_no", ""),
+                    "counterparty_name": inv.get("counterparty_name", ""),
+                })
+        pay["linked_invoices"] = linked
     
     return payments
 
