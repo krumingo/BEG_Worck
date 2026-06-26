@@ -112,8 +112,15 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     ).to_list(50)
     overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
 
+    # ── f2. OTHER — documentless cash expenses booked straight to the project ──
+    other_docs = await db.finance_payments.find(
+        {"org_id": org_id, "project_id": project_id, "direction": "Outflow", "category": "Други"},
+        {"_id": 0, "amount": 1},
+    ).to_list(500)
+    other_cost = round(sum(p.get("amount", 0) for p in other_docs), 2)
+
     # ── g. TOTALS ──────────────────────────────────────────────────
-    total_expense = round(labor_cost + material_cost + subcontractor_cost + contract_cost + overhead, 2)
+    total_expense = round(labor_cost + material_cost + subcontractor_cost + contract_cost + overhead + other_cost, 2)
     gross_profit = round(total_revenue - total_expense, 2)
     margin_pct = round(gross_profit / total_revenue * 100, 1) if total_revenue > 0 else 0
     budget_vs_actual = round(total_budget - total_expense, 2)
@@ -150,6 +157,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
             "overhead": overhead,
+            "other_cost": other_cost,
             "total_expense": total_expense,
         },
         "profit": {

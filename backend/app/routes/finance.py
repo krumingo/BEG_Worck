@@ -465,6 +465,44 @@ async def fund_account(data: dict, user: dict = Depends(require_m5)):
     return {"id": payment["id"], "amount": amount, "account_id": to_id}
 
 
+@router.post("/finance/other-expense", status_code=201)
+async def create_other_expense(data: dict, user: dict = Depends(require_m5)):
+    """Documentless cash expense (food, small/second-hand purchases) booked to a project.
+    Creates a finance_payments Outflow (cash out of Каса/Банка) tagged category='Други' and a
+    project_id, so it is counted as that project's expense in P&L (additive 'other_cost' line)."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    org = user["org_id"]
+    project_id = data.get("project_id")
+    try:
+        amount = round(float(data.get("amount") or 0), 2)
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="Изберете обект")
+    method = data.get("method") or "Cash"
+    account_id = await _resolve_payment_account(org, method, data.get("account_id"))
+    account = await db.financial_accounts.find_one({"id": account_id, "org_id": org})
+    if not account:
+        raise HTTPException(status_code=404, detail="Сметката не е намерена")
+    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).isoformat()
+    payment = {
+        "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
+        "currency": account.get("currency", "EUR"), "date": date, "method": method,
+        "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
+        "reference": "", "note": data.get("note", ""),
+        "project_id": project_id, "category": "Други", "is_expense": True,
+        "created_at": now, "updated_at": now,
+    }
+    await db.finance_payments.insert_one(payment)
+    await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
+                    {"amount": amount, "project_id": project_id})
+    return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+
 @router.post("/finance/accounts", status_code=201)
 async def create_account(data: FinancialAccountCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):

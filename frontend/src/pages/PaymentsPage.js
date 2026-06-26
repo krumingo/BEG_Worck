@@ -59,6 +59,7 @@ export default function PaymentsPage() {
 
   const [payments, setPayments] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allClients, setAllClients] = useState([]);
@@ -84,6 +85,8 @@ export default function PaymentsPage() {
   });
 
   const [allocDialogOpen, setAllocDialogOpen] = useState(false);
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherForm, setOtherForm] = useState({ project_id: "", amount: "", account_id: "", method: "Cash", counterparty_name: "", date: "", note: "" });
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [allocations, setAllocations] = useState([]);
 
@@ -94,15 +97,17 @@ export default function PaymentsPage() {
       if (directionFilter) params.append("direction", directionFilter);
       if (accountFilter) params.append("account_id", accountFilter);
 
-      const [paymentsRes, accountsRes, invoicesRes, clientsRes] = await Promise.all([
+      const [paymentsRes, accountsRes, invoicesRes, clientsRes, projectsRes] = await Promise.all([
         API.get(`/finance/payments?${params.toString()}`),
         API.get("/finance/accounts"),
         API.get("/finance/invoices"),
         API.get("/clients?page_size=100"),
+        API.get("/projects"),
       ]);
       setPayments(paymentsRes.data);
       setAccounts(accountsRes.data);
       setInvoices(invoicesRes.data);
+      setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : (projectsRes.data?.items || []));
       setAllClients((clientsRes.data?.items || clientsRes.data || []).map(c => ({ id: c.id, name: c.companyName || c.fullName || c.name || "", eik: c.eik || "" })));
 
       if (invoiceParam) {
@@ -279,6 +284,35 @@ export default function PaymentsPage() {
     return t(`finance.paymentMethod.${getMethodKey(method)}`);
   };
 
+  const openOther = () => {
+    setOtherForm({ project_id: "", amount: "", account_id: accounts[0]?.id || "", method: "Cash", counterparty_name: "", date: new Date().toISOString().split("T")[0], note: "" });
+    setOtherOpen(true);
+  };
+
+  const handleOther = async () => {
+    if (!otherForm.project_id) { alert("Изберете обект"); return; }
+    const amt = parseFloat(otherForm.amount);
+    if (!amt || amt <= 0) { alert("Сумата трябва да е положителна"); return; }
+    setSaving(true);
+    try {
+      await API.post("/finance/other-expense", {
+        project_id: otherForm.project_id,
+        amount: amt,
+        account_id: otherForm.account_id,
+        method: otherForm.method,
+        counterparty_name: otherForm.counterparty_name,
+        date: otherForm.date,
+        note: otherForm.note,
+      });
+      setOtherOpen(false);
+      await fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="p-8 max-w-[1400px]" data-testid="payments-page">
       {/* Header */}
@@ -293,9 +327,14 @@ export default function PaymentsPage() {
           </div>
         </div>
         {canManage && (
-          <Button onClick={openCreateDialog} data-testid="create-payment-btn">
-            <Plus className="w-4 h-4 mr-2" /> {t("finance.recordPayment")}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={openOther} data-testid="other-expense-btn">
+              <Plus className="w-4 h-4 mr-2" /> Друг разход
+            </Button>
+            <Button onClick={openCreateDialog} data-testid="create-payment-btn">
+              <Plus className="w-4 h-4 mr-2" /> {t("finance.recordPayment")}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -644,6 +683,77 @@ export default function PaymentsPage() {
             <Button onClick={handleAllocate} disabled={saving || allocations.length === 0} data-testid="confirm-allocate-btn">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t("finance.allocatePayment")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Other expense (documentless cash expense booked to a project) */}
+      <Dialog open={otherOpen} onOpenChange={setOtherOpen}>
+        <DialogContent className="sm:max-w-[450px] bg-card border-border" data-testid="other-expense-dialog">
+          <DialogHeader>
+            <DialogTitle>Друг разход <span className="text-xs text-muted-foreground">· без документ</span></DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Обект *</Label>
+              <Select value={otherForm.project_id} onValueChange={(v) => setOtherForm({ ...otherForm, project_id: v })}>
+                <SelectTrigger className="bg-background" data-testid="other-project-select"><SelectValue placeholder="Изберете обект" /></SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name || p.code || p.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Сума *</Label>
+                <Input type="number" step="0.01" value={otherForm.amount} onChange={(e) => setOtherForm({ ...otherForm, amount: e.target.value })} className="bg-background" data-testid="other-amount-input" />
+              </div>
+              <div>
+                <Label>От сметка</Label>
+                <Select value={otherForm.account_id} onValueChange={(v) => setOtherForm({ ...otherForm, account_id: v })}>
+                  <SelectTrigger className="bg-background"><SelectValue placeholder="Сметка" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Метод</Label>
+                <Select value={otherForm.method} onValueChange={(v) => setOtherForm({ ...otherForm, method: v })}>
+                  <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cash">{t("finance.paymentMethod.cash")}</SelectItem>
+                    <SelectItem value="BankTransfer">{t("finance.paymentMethod.bankTransfer")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Дата</Label>
+                <Input type="date" value={otherForm.date} onChange={(e) => setOtherForm({ ...otherForm, date: e.target.value })} className="bg-background" />
+              </div>
+            </div>
+            <div>
+              <Label>Доставчик (по избор)</Label>
+              <Input value={otherForm.counterparty_name} onChange={(e) => setOtherForm({ ...otherForm, counterparty_name: e.target.value })} placeholder="напр. магазин / име" className="bg-background" />
+            </div>
+            <div>
+              <Label>Бележка</Label>
+              <Input value={otherForm.note} onChange={(e) => setOtherForm({ ...otherForm, note: e.target.value })} className="bg-background" />
+            </div>
+            <p className="text-xs text-muted-foreground">Излиза от Каса/Банка и се брои като разход по обекта.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOtherOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleOther} disabled={saving} data-testid="save-other-btn">
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Запиши разход
             </Button>
           </DialogFooter>
         </DialogContent>
