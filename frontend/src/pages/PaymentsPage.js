@@ -272,6 +272,13 @@ export default function PaymentsPage() {
     return map[method] || method.toLowerCase();
   };
 
+  // Transfer/Funding are created from the accounts "Движение" dialog and have no i18n key.
+  const methodLabel = (method) => {
+    if (method === "Transfer") return "Прехвърляне";
+    if (method === "Funding") return "Захранване";
+    return t(`finance.paymentMethod.${getMethodKey(method)}`);
+  };
+
   return (
     <div className="p-8 max-w-[1400px]" data-testid="payments-page">
       {/* Header */}
@@ -384,7 +391,7 @@ export default function PaymentsPage() {
                     <TableCell className="text-muted-foreground max-w-[150px] truncate">
                       {payment.counterparty_name || "-"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{t(`finance.paymentMethod.${getMethodKey(payment.method)}`)}</TableCell>
+                    <TableCell className="text-muted-foreground">{methodLabel(payment.method)}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {payment.reference || "-"}
                     </TableCell>
