@@ -284,6 +284,14 @@ export default function PaymentsPage() {
     return t(`finance.paymentMethod.${getMethodKey(method)}`);
   };
 
+  // "Друг разход" entries are overhead (режийни) expenses of subtype "Други",
+  // booked to a project — not invoice payments, so they are not allocatable.
+  const isOther = (p) => p.category === "Други";
+  const projectName = (id) => {
+    const p = projects.find((x) => x.id === id);
+    return p ? (p.name || p.code || id) : id;
+  };
+
   const openOther = () => {
     setOtherForm({ project_id: "", amount: "", account_id: accounts[0]?.id || "", method: "Cash", counterparty_name: "", date: new Date().toISOString().split("T")[0], note: "" });
     setOtherOpen(true);
@@ -410,7 +418,7 @@ export default function PaymentsPage() {
                 </TableRow>
               ) : (
                 filteredPayments.map((payment) => (
-                  <TableRow key={payment.id} className="table-row-hover" data-testid={`payment-row-${payment.id}`}>
+                  <TableRow key={payment.id} className={`table-row-hover ${isOther(payment) ? "bg-amber-500/5" : ""}`} data-testid={`payment-row-${payment.id}`}>
                     <TableCell className="text-sm text-foreground">
                       {formatDate(payment.date)}
                     </TableCell>
@@ -427,8 +435,18 @@ export default function PaymentsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-foreground">{payment.account_name}</TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate">
-                      {payment.counterparty_name || "-"}
+                    <TableCell className="text-muted-foreground max-w-[180px]">
+                      {isOther(payment) ? (
+                        <div>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium">Режийни</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">Други</span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">обект: {projectName(payment.project_id)}{payment.counterparty_name ? ` · ${payment.counterparty_name}` : ""}</div>
+                        </div>
+                      ) : (
+                        <span className="truncate block">{payment.counterparty_name || "-"}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{methodLabel(payment.method)}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
@@ -438,6 +456,9 @@ export default function PaymentsPage() {
                       {formatCurrency(payment.amount, payment.currency)}
                     </TableCell>
                     <TableCell className="text-right">
+                      {isOther(payment) ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
                       <div className="text-xs">
                         <span className={payment.unallocated_amount > 0 ? "text-amber-400" : "text-emerald-400"}>
                           {formatCurrency(payment.allocated_amount, payment.currency)}
@@ -448,10 +469,11 @@ export default function PaymentsPage() {
                           </p>
                         )}
                       </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {canManage && payment.unallocated_amount > 0 && (
+                        {canManage && payment.unallocated_amount > 0 && !isOther(payment) && (
                           <Button variant="ghost" size="sm" onClick={() => openAllocDialog(payment)} data-testid={`allocate-btn-${payment.id}`}>
                             <Link2 className="w-4 h-4" />
                           </Button>
