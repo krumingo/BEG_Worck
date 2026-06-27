@@ -70,6 +70,7 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [directionFilter, setDirectionFilter] = useState(directionParam);
   const [accountFilter, setAccountFilter] = useState(accountParam);
+  const [typeFilter, setTypeFilter] = useState("");
 
   const canManage = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
@@ -151,13 +152,19 @@ export default function PaymentsPage() {
     if (key === "accountId") setAccountFilter(value === "all" ? "" : value);
   };
 
-  const filteredPayments = search
-    ? payments.filter(p =>
-        p.reference?.toLowerCase().includes(search.toLowerCase()) ||
-        p.counterparty_name?.toLowerCase().includes(search.toLowerCase()) ||
-        p.account_name?.toLowerCase().includes(search.toLowerCase())
-      )
-    : payments;
+  const filteredPayments = payments.filter((p) => {
+    if (typeFilter === "rezhiyni" && p.category !== "Други") return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        p.reference?.toLowerCase().includes(q) ||
+        p.counterparty_name?.toLowerCase().includes(q) ||
+        p.account_name?.toLowerCase().includes(q) ||
+        p.note?.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
 
   const openCreateDialog = () => {
     setFormData({
@@ -384,6 +391,16 @@ export default function PaymentsPage() {
             ))}
           </SelectContent>
         </Select>
+
+        <Select value={typeFilter || "all"} onValueChange={(v) => setTypeFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-[150px] bg-card" data-testid="type-filter">
+            <SelectValue placeholder="Всички видове" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Всички видове</SelectItem>
+            <SelectItem value="rezhiyni">Режийни</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -398,6 +415,7 @@ export default function PaymentsPage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.date")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("finance.direction")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Вид</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">За какво</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Сметка · Метод</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("common.amount")}</TableHead>
@@ -407,7 +425,7 @@ export default function PaymentsPage() {
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <CreditCard className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p>{t("finance.noPayments")}</p>
                     {canManage && (
@@ -435,14 +453,17 @@ export default function PaymentsPage() {
                         </span>
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {isOther(payment) ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium whitespace-nowrap">Режийни</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="max-w-[280px]">
                       {isOther(payment) ? (
                         <div>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium">Режийни</span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">Други</span>
-                            {payment.note && <span className="text-xs text-muted-foreground truncate">· {payment.note}</span>}
-                          </div>
+                          <div className="text-foreground truncate">{payment.note || "Друг разход"}</div>
                           <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">обект: {projectName(payment.project_id)}{payment.counterparty_name ? ` · ${payment.counterparty_name}` : ""}</div>
                         </div>
                       ) : hasInvoice(payment) ? (
