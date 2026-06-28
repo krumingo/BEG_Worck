@@ -232,6 +232,7 @@ class AdjustmentRow(BaseModel):
     title: str = ""
     amount: float = 0
     note: str = ""
+    ref_id: Optional[str] = None  # links an advance/loan deduction to a specific db.advances record
 
 
 class PayRunRowInput(BaseModel):
@@ -347,6 +348,19 @@ async def generate_pay_run(
     period_days = (datetime.strptime(period_end, "%Y-%m-%d") - datetime.strptime(period_start, "%Y-%m-%d")).days + 1
 
     rows = []
+    # Open advances per employee → surfaced so Корекции can auto-suggest the deduction
+    _adv_docs = await db.advances.find(
+        {"org_id": org_id, "status": "Open"},
+        {"_id": 0, "id": 1, "user_id": 1, "type": 1, "remaining_amount": 1},
+    ).to_list(1000)
+    adv_by_user = {}
+    for _a in _adv_docs:
+        if (_a.get("remaining_amount") or 0) > 0 and _a.get("user_id"):
+            adv_by_user.setdefault(_a["user_id"], []).append({
+                "id": _a["id"],
+                "type": _a.get("type", "Advance"),
+                "remaining_amount": round(_a.get("remaining_amount", 0), 2),
+            })
     for wid, emp_lines in by_emp.items():
         emp = emp_map.get(wid)
         if not emp:
@@ -486,6 +500,7 @@ async def generate_pay_run(
             "previously_paid": prev_paid,
             "paid_now_amount": 0,
             "remaining_after_payment": remaining,
+            "open_advances": adv_by_user.get(wid, []),
             "sites": sites,
             "day_cells": day_cells,
         })
@@ -981,6 +996,25 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
         "payment_reference": payment_info["payment_reference"],
         "totals_snapshot": run.get("totals", {}),
     }}})
+
+    # Reduce advance/loan balances for deductions linked to a specific advance (ref_id).
+    # Only adjustments that carry a ref_id are touched, so runs without linked advances are unaffected.
+    for er in run.get("employee_rows", []):
+        for adj in er.get("adjustments", []) or []:
+            if adj.get("type") in ("advance", "loan") and adj.get("ref_id") and (adj.get("amount") or 0) > 0:
+                adv = await db.advances.find_one({"id": adj["ref_id"], "org_id": org_id})
+                if adv and adv.get("status") != "Closed":
+                    new_remaining = round((adv.get("remaining_amount") or 0) - adj["amount"], 2)
+                    if new_remaining < 0:
+                        new_remaining = 0
+                    await db.advances.update_one(
+                        {"id": adj["ref_id"], "org_id": org_id},
+                        {"$set": {"remaining_amount": new_remaining,
+                                  "status": "Closed" if new_remaining <= 0 else "Open",
+                                  "updated_at": now},
+                         "$push": {"deductions": {"amount": adj["amount"], "date": now[:10],
+                                                  "pay_run_id": run_id, "at": now}}},
+                    )
 
     # Sync downstream
     await sync_on_paid(run, org_id, now)
