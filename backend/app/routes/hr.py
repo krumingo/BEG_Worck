@@ -199,10 +199,15 @@ async def list_advances(
     
     advances = await db.advances.find(query, {"_id": 0}).sort("issued_date", -1).to_list(500)
     
-    # Enrich with user name
+    # Enrich with recipient name (employee or external guest)
     for adv in advances:
-        u = await db.users.find_one({"id": adv["user_id"]}, {"_id": 0, "name": 1, "email": 1})
-        adv["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
+        if adv.get("recipient_name"):
+            adv["user_name"] = adv["recipient_name"]
+        elif adv.get("user_id"):
+            u = await db.users.find_one({"id": adv["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+            adv["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
+        else:
+            adv["user_name"] = adv.get("guest_name") or "—"
     
     return advances
 
@@ -211,31 +216,71 @@ async def list_advances(
 async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m4)):
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    target = await db.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+
+    org = user["org_id"]
+    is_loan = (data.type or "").lower() == "loan"
+
+    # Resolve recipient: employee (user_id) or external guest (loan only)
+    recipient_name = None
+    if data.user_id:
+        target = await db.users.find_one({"id": data.user_id, "org_id": org})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        recipient_name = target.get("name") or target.get("email") or "Служител"
+    elif is_loan and data.guest_name:
+        recipient_name = data.guest_name.strip()
+    else:
+        raise HTTPException(status_code=400, detail="Изберете служител (или външен човек за заем)")
+
+    if not data.amount or data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+
     now = datetime.now(timezone.utc).isoformat()
+    issued = data.issued_date or now[:10]
+    type_label = "Заем" if is_loan else "Аванс"
+
+    # Cash movement — money leaves Каса/Банка (the missing register entry)
+    payment_id = None
+    if data.account_id:
+        account = await db.financial_accounts.find_one({"id": data.account_id, "org_id": org})
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        acc_type = (account.get("type") or "").lower()
+        method = "Cash" if acc_type in ("cash", "каса") else "BankTransfer"
+        payment_id = str(uuid.uuid4())
+        await db.finance_payments.insert_one({
+            "id": payment_id, "org_id": org, "direction": "Outflow", "amount": data.amount,
+            "currency": data.currency, "date": issued, "method": method,
+            "account_id": data.account_id, "counterparty_name": recipient_name,
+            "reference": "", "note": f"{type_label} · {recipient_name}",
+            "category": type_label,
+            "created_at": now, "updated_at": now,
+        })
+
     advance = {
         "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
+        "org_id": org,
         "user_id": data.user_id,
+        "guest_name": data.guest_name if not data.user_id else None,
+        "recipient_name": recipient_name,
         "type": data.type,
         "amount": data.amount,
         "remaining_amount": data.amount,
         "currency": data.currency,
-        "issued_date": data.issued_date or now[:10],
+        "account_id": data.account_id,
+        "project_id": data.project_id,
+        "payment_id": payment_id,
+        "issued_date": issued,
         "note": data.note,
         "status": "Open",
         "created_at": now,
         "updated_at": now,
     }
     await db.advances.insert_one(advance)
-    
-    await log_audit(user["org_id"], user["id"], user["email"], "advance_created", "advance", advance["id"],
-                    {"user_id": data.user_id, "type": data.type, "amount": data.amount})
-    
+
+    await log_audit(org, user["id"], user["email"], "advance_created", "advance", advance["id"],
+                    {"recipient": recipient_name, "type": data.type, "amount": data.amount})
+
     return {k: v for k, v in advance.items() if k != "_id"}
 
 

@@ -44,10 +44,13 @@ class EmployeeProfileUpdate(BaseModel):
     start_date: Optional[str] = None
 
 class AdvanceLoanCreate(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
+    guest_name: Optional[str] = None
     type: str = "Advance"
     amount: float
     currency: str = "EUR"
+    account_id: Optional[str] = None
+    project_id: Optional[str] = None
     issued_date: Optional[str] = None
     note: Optional[str] = None
 

@@ -55,15 +55,25 @@ export default function AdvancesPage() {
   const [formAmount, setFormAmount] = useState("");
   const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
   const [formNote, setFormNote] = useState("");
+  const [accounts, setAccounts] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [formAccountId, setFormAccountId] = useState("");
+  const [formProjectId, setFormProjectId] = useState("");
+  const [formGuestName, setFormGuestName] = useState("");
+  const [recipientMode, setRecipientMode] = useState("employee");
 
   const fetchData = useCallback(async () => {
     try {
-      const [advRes, empRes] = await Promise.all([
+      const [advRes, empRes, accRes, projRes] = await Promise.all([
         API.get(`/advances${statusFilter ? `?status=${statusFilter}` : ""}${userFilter ? `${statusFilter ? "&" : "?"}user_id=${userFilter}` : ""}`),
         API.get("/employees"),
+        API.get("/finance/accounts"),
+        API.get("/projects"),
       ]);
       setAdvances(advRes.data);
       setEmployees(empRes.data);
+      setAccounts(accRes.data);
+      setProjects(Array.isArray(projRes.data) ? projRes.data : (projRes.data?.items || []));
     } catch (err) {
       console.error(err);
     } finally {
@@ -79,20 +89,28 @@ export default function AdvancesPage() {
     setFormAmount("");
     setFormDate(new Date().toISOString().slice(0, 10));
     setFormNote("");
+    setFormAccountId(accounts[0]?.id || "");
+    setFormProjectId("");
+    setFormGuestName("");
+    setRecipientMode("employee");
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!formUserId || !formAmount) {
+    const isGuest = recipientMode === "guest" && formType === "Loan";
+    if ((!isGuest && !formUserId) || (isGuest && !formGuestName.trim()) || !formAmount) {
       alert(t("validation.required"));
       return;
     }
     setSaving(true);
     try {
       await API.post("/advances", {
-        user_id: formUserId,
+        user_id: isGuest ? null : formUserId,
+        guest_name: isGuest ? formGuestName.trim() : null,
         type: formType,
         amount: parseFloat(formAmount),
+        account_id: formAccountId || null,
+        project_id: formProjectId || null,
         issued_date: formDate,
         note: formNote || null,
       });
@@ -206,23 +224,10 @@ export default function AdvancesPage() {
             <DialogTitle>{t("advances.newAdvance")} / {t("advances.loan")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{t("employees.employee")} *</Label>
-              <Select value={formUserId} onValueChange={setFormUserId}>
-                <SelectTrigger className="bg-background" data-testid="form-user-select">
-                  <SelectValue placeholder={t("advances.selectEmployee")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.name || e.email}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("common.type")}</Label>
-                <Select value={formType} onValueChange={setFormType}>
+                <Select value={formType} onValueChange={(v) => { setFormType(v); if (v !== "Loan") setRecipientMode("employee"); }}>
                   <SelectTrigger className="bg-background" data-testid="form-type-select">
                     <SelectValue />
                   </SelectTrigger>
@@ -236,14 +241,72 @@ export default function AdvancesPage() {
                 <Input type="number" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="0.00" className="bg-background" data-testid="form-amount-input" />
               </div>
             </div>
+
             <div className="space-y-2">
-              <Label>{t("advances.issueDate")}</Label>
-              <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="bg-background" data-testid="form-date-input" />
+              <Label>Получател *</Label>
+              {formType === "Loan" && (
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant={recipientMode === "employee" ? "default" : "outline"} onClick={() => setRecipientMode("employee")}>Служител</Button>
+                  <Button type="button" size="sm" variant={recipientMode === "guest" ? "default" : "outline"} onClick={() => setRecipientMode("guest")}>Външен гост</Button>
+                </div>
+              )}
+              {recipientMode === "guest" && formType === "Loan" ? (
+                <Input value={formGuestName} onChange={(e) => setFormGuestName(e.target.value)} placeholder="Име на външен човек" className="bg-background" data-testid="form-guest-input" />
+              ) : (
+                <Select value={formUserId} onValueChange={setFormUserId}>
+                  <SelectTrigger className="bg-background" data-testid="form-user-select">
+                    <SelectValue placeholder={t("advances.selectEmployee")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name || e.email}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>От сметка</Label>
+                <Select value={formAccountId} onValueChange={setFormAccountId}>
+                  <SelectTrigger className="bg-background" data-testid="form-account-select">
+                    <SelectValue placeholder="Сметка" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t("advances.issueDate")}</Label>
+                <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="bg-background" data-testid="form-date-input" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Обект (по избор)</Label>
+              <Select value={formProjectId || "none"} onValueChange={(v) => setFormProjectId(v === "none" ? "" : v)}>
+                <SelectTrigger className="bg-background" data-testid="form-project-select">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name || p.code || p.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label>{t("common.note")}</Label>
               <Textarea value={formNote} onChange={(e) => setFormNote(e.target.value)} placeholder={t("common.optionalNote")} className="bg-background" data-testid="form-note-input" />
             </div>
+
+            <p className="text-xs text-muted-foreground">Излиза от Каса/Банка. Аванс се гаси с труд (заплата); заем се връща с пари.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
