@@ -548,7 +548,7 @@ export default function EmployeeDetailPage() {
           </div>
           <div className={`rounded-lg p-2 text-center ${totalLoans > 0 ? "bg-red-500/5 border border-red-500/20" : "bg-card border border-border"}`}>
             <p className={`text-base font-bold font-mono ${totalLoans > 0 ? "text-red-400" : "text-muted-foreground"}`}>{totalLoans > 0 ? totalLoans.toFixed(0) : "0"}<span className="text-[10px] text-muted-foreground"> €</span></p>
-            <p className="text-[8px] text-muted-foreground">Заеми</p>
+            <p className="text-[8px] text-muted-foreground">Аванс/заем</p>
           </div>
         </div>
         {/* P1-0.1: extra info row — show breakdown by status */}
@@ -608,7 +608,7 @@ export default function EmployeeDetailPage() {
           <TabsTrigger value="reports" data-testid="tab-reports"><FileText className="w-4 h-4 mr-1" /> Отчети</TabsTrigger>
           <TabsTrigger value="payroll-weeks" data-testid="tab-payroll-weeks"><DollarSign className="w-4 h-4 mr-1" /> Заплати</TabsTrigger>
           <TabsTrigger value="projects" data-testid="tab-projects"><MapPin className="w-4 h-4 mr-1" /> Обекти</TabsTrigger>
-          <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Заеми</TabsTrigger>
+          <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Аванси и заеми</TabsTrigger>
           <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="w-4 h-4 mr-1" /> Присъствия</TabsTrigger>
           <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Фишове</TabsTrigger>
           <TabsTrigger value="assets" data-testid="tab-assets"><Wrench className="w-4 h-4 mr-1" /> Активи</TabsTrigger>
@@ -852,7 +852,7 @@ export default function EmployeeDetailPage() {
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="dossier-advances-tab">
             {(() => {
               const all = dossier?.advances || [];
-              const active = all.filter(a => a.remaining > 0 && (a.status === "active" || a.status === "approved"));
+              const active = all.filter(a => a.remaining > 0 && ["active", "approved", "open"].includes((a.status || "").toLowerCase()));
               const returned = all.filter(a => a.remaining === 0);
               const totalActive = active.reduce((s, a) => s + a.remaining, 0);
               const totalAll = all.reduce((s, a) => s + a.amount, 0);
@@ -879,11 +879,11 @@ export default function EmployeeDetailPage() {
                   <TableBody>
                     {all.map(a => (
                       <TableRow key={a.id} className={`hover:bg-muted/10 ${a.remaining > 0 ? "" : "opacity-50"}`}>
-                        <TableCell className="text-xs">{a.type === "advance" ? "Аванс" : a.type === "loan" ? "Заем" : a.type}</TableCell>
+                        <TableCell className="text-xs">{(a.type || "").toLowerCase() === "advance" ? "Аванс" : (a.type || "").toLowerCase() === "loan" ? "Заем" : a.type}</TableCell>
                         <TableCell className="text-xs font-mono">{a.date || "—"}</TableCell>
                         <TableCell className="text-center text-xs font-mono">{a.amount?.toFixed(0)} €</TableCell>
                         <TableCell className={`text-center text-xs font-mono ${a.remaining > 0 ? "text-amber-400 font-bold" : "text-emerald-400"}`}>{a.remaining?.toFixed(0)} €</TableCell>
-                        <TableCell><Badge variant="outline" className={`text-[9px] ${a.status === "active" || a.status === "approved" ? "text-amber-400 bg-amber-500/15 border-amber-500/30" : a.remaining === 0 ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" : "text-muted-foreground"}`}>{a.status === "active" ? "Активен" : a.status === "approved" ? "Одобрен" : a.remaining === 0 ? "Върнат" : a.status}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className={`text-[9px] ${a.remaining === 0 ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" : ["active", "approved", "open"].includes((a.status || "").toLowerCase()) ? "text-amber-400 bg-amber-500/15 border-amber-500/30" : "text-muted-foreground"}`}>{a.remaining === 0 ? "Върнат" : (a.status || "").toLowerCase() === "open" ? "Отворен" : (a.status || "").toLowerCase() === "active" ? "Активен" : (a.status || "").toLowerCase() === "approved" ? "Одобрен" : (a.status || "").toLowerCase() === "closed" ? "Затворен" : a.status}</Badge></TableCell>
                         <TableCell className="text-[10px] text-muted-foreground truncate max-w-[150px]">{a.note || "—"}</TableCell>
                       </TableRow>
                     ))}
