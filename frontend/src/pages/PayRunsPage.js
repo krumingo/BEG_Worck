@@ -168,7 +168,6 @@ export default function PayRunsPage() {
       setPreview(res.data);
       setOverrides({});
       setDayOverrides({});
-      setAdjustments({});
       setPaidAmounts({});
       setPaySelected(new Set());
       setSelectedReportIds({});  // P0-2A.2: clear per-report selections on reload
@@ -176,6 +175,7 @@ export default function PayRunsPage() {
       // Auto-select all employees with data and all their days
       const emps = new Set();
       const days = {};
+      const autoAdj = {};
       for (const r of (res.data.rows || [])) {
         if (r.earned_amount > 0) {
           emps.add(r.employee_id);
@@ -192,8 +192,22 @@ export default function PayRunsPage() {
               })
               .map(d => d.date)
           );
+          // 3a: auto-suggest advance deductions, capped at available salary (rest carries to next run)
+          const _avail = Math.max(0, (r.earned_amount || 0) - (r.previously_paid || 0));
+          let _cap = _avail;
+          const _advList = [];
+          for (const adv of (r.open_advances || [])) {
+            if (_cap <= 0) break;
+            const _amt = Math.min(adv.remaining_amount || 0, _cap);
+            if (_amt > 0) {
+              _advList.push({ type: "advance", title: "Аванс (авто)", amount: Math.round(_amt * 100) / 100, note: "", ref_id: adv.id });
+              _cap = Math.round((_cap - _amt) * 100) / 100;
+            }
+          }
+          if (_advList.length) autoAdj[r.employee_id] = _advList;
         }
       }
+      setAdjustments(autoAdj);
       setSelectedEmps(emps);
       setSelectedDays(days);
     } catch { setPreview(null); }
@@ -298,7 +312,7 @@ export default function PayRunsPage() {
       return {
         employee_id: r.employee_id,
         paid_now_amount: Math.round(paidNow * 100) / 100,
-        adjustments: empAdj.map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note })),
+        adjustments: empAdj.map(a => ({ type: a.type, title: a.title, amount: a.amount, note: a.note, ref_id: a.ref_id || null })),
         notes: "",
         selected_report_ids: reportIds,
       };
