@@ -567,7 +567,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
         total_deductions = 0
         if ovr:
             for a in ovr.adjustments:
-                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note})
+                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note, "ref_id": a.ref_id})
                 if a.type == "bonus":
                     total_bonuses += a.amount
                 else:
@@ -1052,7 +1052,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         adj_list, total_bonuses, total_deductions = [], 0, 0
         if ovr:
             for a in ovr.adjustments:
-                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note})
+                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note, "ref_id": a.ref_id})
                 if a.type == "bonus":
                     total_bonuses += a.amount
                 else:
