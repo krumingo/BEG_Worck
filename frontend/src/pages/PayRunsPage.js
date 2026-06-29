@@ -523,8 +523,13 @@ export default function PayRunsPage() {
     if (!preview) return;
     setCreating(true);
     try {
-      await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "confirmed" });
-      toast.success("Pay Run потвърден");
+      const res = await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "confirmed" });
+      const newId = res.data?.id;
+      // Pay immediately so the advance balance drops and (later) cash leaves Каса — one action.
+      if (newId) {
+        await API.post(`/pay-runs/${newId}/mark-paid`, { payment_method: "cash", payment_reference: "", payment_note: "" });
+      }
+      toast.success("Платено");
       setTab("history");
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
     finally { setCreating(false); }
