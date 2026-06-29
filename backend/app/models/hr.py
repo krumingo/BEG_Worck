@@ -51,6 +51,8 @@ class AdvanceLoanCreate(BaseModel):
     currency: str = "EUR"
     account_id: Optional[str] = None
     project_id: Optional[str] = None
+    installment_amount: Optional[float] = None
+    installment_period: Optional[str] = None
     issued_date: Optional[str] = None
     note: Optional[str] = None
 

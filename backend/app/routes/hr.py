@@ -270,6 +270,8 @@ async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m
         "currency": data.currency,
         "account_id": data.account_id,
         "project_id": data.project_id,
+        "installment_amount": data.installment_amount,
+        "installment_period": data.installment_period,
         "payment_id": payment_id,
         "issued_date": issued,
         "note": data.note,

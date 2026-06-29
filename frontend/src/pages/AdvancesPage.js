@@ -77,6 +77,8 @@ export default function AdvancesPage() {
   const [formProjectId, setFormProjectId] = useState("");
   const [formGuestName, setFormGuestName] = useState("");
   const [recipientMode, setRecipientMode] = useState("employee");
+  const [formInstallment, setFormInstallment] = useState("");
+  const [formInstallmentPeriod, setFormInstallmentPeriod] = useState("weekly");
 
   const fetchData = useCallback(async () => {
     try {
@@ -109,6 +111,8 @@ export default function AdvancesPage() {
     setFormProjectId("");
     setFormGuestName("");
     setRecipientMode("employee");
+    setFormInstallment("");
+    setFormInstallmentPeriod("weekly");
     setDialogOpen(true);
   };
 
@@ -127,6 +131,8 @@ export default function AdvancesPage() {
         amount: parseFloat(formAmount),
         account_id: formAccountId || null,
         project_id: formProjectId || null,
+        installment_amount: formInstallment ? parseFloat(formInstallment) : null,
+        installment_period: formInstallmentPeriod,
         issued_date: formDate,
         note: formNote || null,
       });
@@ -320,6 +326,18 @@ export default function AdvancesPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Вноска <span className="text-xs text-muted-foreground">(по избор)</span></Label>
+              <div className="flex gap-2">
+                <Input type="number" value={formInstallment} onChange={(e) => setFormInstallment(e.target.value)} placeholder="напр. 100" className="bg-background flex-1" data-testid="form-installment-input" />
+                <div className="flex gap-1">
+                  <Button type="button" size="sm" variant={formInstallmentPeriod === "weekly" ? "default" : "outline"} onClick={() => setFormInstallmentPeriod("weekly")}>Седмично</Button>
+                  <Button type="button" size="sm" variant={formInstallmentPeriod === "monthly" ? "default" : "outline"} onClick={() => setFormInstallmentPeriod("monthly")}>Месечно</Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Колко да се удържа на разплащане. Празно = колкото позволява заплатата.</p>
             </div>
 
             <div className="space-y-2">

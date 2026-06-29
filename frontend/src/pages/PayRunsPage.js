@@ -198,9 +198,10 @@ export default function PayRunsPage() {
           const _advList = [];
           for (const adv of (r.open_advances || [])) {
             if (_cap <= 0) break;
-            const _amt = Math.min(adv.remaining_amount || 0, _cap);
+            const _want = (adv.installment_amount && adv.installment_amount > 0) ? adv.installment_amount : (adv.remaining_amount || 0);
+            const _amt = Math.min(_want, adv.remaining_amount || 0, _cap);
             if (_amt > 0) {
-              _advList.push({ type: "advance", title: "Аванс (авто)", amount: Math.round(_amt * 100) / 100, note: "", ref_id: adv.id });
+              _advList.push({ type: "advance", title: "Аванс (авто)", amount: Math.round(_amt * 100) / 100, note: "", ref_id: adv.id, max_amount: adv.remaining_amount || 0 });
               _cap = Math.round((_cap - _amt) * 100) / 100;
             }
           }
@@ -446,6 +447,19 @@ export default function PayRunsPage() {
   };
 
   const getEmpAdj = (eid) => adjustments[eid] || [];
+  const setAdvanceAmount = (eid, value) => {
+    const num = Math.max(0, parseFloat(value) || 0);
+    setAdjustments(prev => ({
+      ...prev,
+      [eid]: (prev[eid] || []).map(a => {
+        if (a.type === "advance" && a.ref_id) {
+          const capped = a.max_amount != null ? Math.min(num, a.max_amount) : num;
+          return { ...a, amount: Math.round(capped * 100) / 100 };
+        }
+        return a;
+      }),
+    }));
+  };
   const getEmpBonuses = (eid) => getEmpAdj(eid).filter(a => a.type === "bonus").reduce((s, a) => s + a.amount, 0);
   const getEmpDeductions = (eid) => getEmpAdj(eid).filter(a => a.type !== "bonus").reduce((s, a) => s + a.amount, 0);
   const getEmpNet = (row) => {
@@ -975,6 +989,14 @@ export default function PayRunsPage() {
                             {["advance","loan_repayment","deduction","bonus","manual_correction"].map(t => {
                               const v = byType(t);
                               const isPos = t === "bonus";
+                              if (t === "advance") {
+                                const advAdj = adjs.find(a => a.type === "advance" && a.ref_id);
+                                if (advAdj) {
+                                  return <TableCell key={t} className="text-center p-1">
+                                    <input type="number" value={advAdj.amount} onChange={e => setAdvanceAmount(eid, e.target.value)} className="w-12 text-center text-xs font-mono text-red-400 bg-transparent border border-border rounded px-1 py-0.5" data-testid={`adv-input-${eid}`} />
+                                  </TableCell>;
+                                }
+                              }
                               return <TableCell key={t} className="text-center p-1 cursor-pointer hover:bg-muted/20" onClick={() => { setAdjDialog(row); setAdjType(t); setAdjTitle(""); setAdjAmount(""); setAdjNote(""); }}>
                                 {v > 0 ? <span className={`text-xs font-mono ${isPos ? "text-emerald-400" : "text-red-400"}`}>{isPos ? "+" : "-"}{v}</span> : <span className="text-[10px] text-muted-foreground/30">+</span>}
                               </TableCell>;

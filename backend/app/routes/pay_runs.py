@@ -351,7 +351,7 @@ async def generate_pay_run(
     # Open advances per employee → surfaced so Корекции can auto-suggest the deduction
     _adv_docs = await db.advances.find(
         {"org_id": org_id, "status": "Open"},
-        {"_id": 0, "id": 1, "user_id": 1, "type": 1, "remaining_amount": 1},
+        {"_id": 0, "id": 1, "user_id": 1, "type": 1, "remaining_amount": 1, "installment_amount": 1},
     ).to_list(1000)
     adv_by_user = {}
     for _a in _adv_docs:
@@ -360,6 +360,7 @@ async def generate_pay_run(
                 "id": _a["id"],
                 "type": _a.get("type", "Advance"),
                 "remaining_amount": round(_a.get("remaining_amount", 0), 2),
+                "installment_amount": _a.get("installment_amount"),
             })
     for wid, emp_lines in by_emp.items():
         emp = emp_map.get(wid)
