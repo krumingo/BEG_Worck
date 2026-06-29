@@ -38,6 +38,22 @@ import {
 
 const ADVANCE_TYPES = ["Advance", "Loan"];
 
+function EmpAvatar({ name, url, size = 22 }) {
+  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
+  const [imgErr, setImgErr] = useState(false);
+  const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  if (fullUrl && !imgErr) {
+    return <img src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
+  }
+  return (
+    <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0" style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {initials}
+    </div>
+  );
+}
+
+const empName = (e) => e.name || [e.first_name, e.last_name].filter(Boolean).join(" ") || e.email;
+
 export default function AdvancesPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -259,7 +275,12 @@ export default function AdvancesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.name || e.email}</SelectItem>
+                      <SelectItem key={e.id} value={e.id}>
+                        <div className="flex items-center gap-2">
+                          <EmpAvatar name={empName(e)} url={e.avatar_url} />
+                          <span>{empName(e)}</span>
+                        </div>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

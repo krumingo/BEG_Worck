@@ -357,6 +357,31 @@ export default function PaymentsPage() {
         )}
       </div>
 
+      {/* Каса / Банка / Общо */}
+      {accounts.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <button
+            onClick={() => updateFilter("accountId", "all")}
+            className={`text-left rounded-lg border p-3 transition-colors ${!accountFilter ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/40"}`}
+            data-testid="acct-summary-all"
+          >
+            <div className="text-xs text-muted-foreground">Общо</div>
+            <div className="text-lg font-bold text-foreground">{accounts.reduce((s, a) => s + (a.current_balance || 0), 0).toFixed(2)} €</div>
+          </button>
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => updateFilter("accountId", a.id)}
+              className={`text-left rounded-lg border p-3 transition-colors ${accountFilter === a.id ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/40"}`}
+              data-testid={`acct-summary-${a.id}`}
+            >
+              <div className="text-xs text-muted-foreground">{a.type === "Cash" ? "КАСА" : a.type === "Bank" ? "БАНКА" : (a.name || "Сметка")}</div>
+              <div className="text-lg font-bold text-foreground">{(a.current_balance || 0).toFixed(2)} €</div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex items-center gap-3 mb-6 flex-wrap" data-testid="payment-filters">
         <div className="relative flex-1 min-w-[200px] max-w-[300px]">
