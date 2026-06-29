@@ -1016,21 +1016,25 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
                                                   "pay_run_id": run_id, "at": now}}},
                     )
 
-    # Salary leaves Каса/Банка so the payment shows in the cash register (Плащания)
+    # Salary leaves Каса/Банка — one cash movement per employee (with name + avatar in the register)
     method = (payment_info.get("payment_method") or "cash").lower()
     acc_type = "Bank" if method in ("bank_transfer", "bank", "transfer") else "Cash"
-    total_paid = round(sum((er.get("paid_now_amount") or 0) for er in run.get("employee_rows", [])), 2)
-    if total_paid > 0:
-        account = await db.financial_accounts.find_one({"org_id": org_id, "type": acc_type}) \
-            or await db.financial_accounts.find_one({"org_id": org_id, "type": "Cash"})
-        if account:
-            label = ("Заплати " + str(run.get("number", ""))).strip()
+    account = await db.financial_accounts.find_one({"org_id": org_id, "type": acc_type}) \
+        or await db.financial_accounts.find_one({"org_id": org_id, "type": "Cash"})
+    if account:
+        run_label = ("Заплата " + str(run.get("number", ""))).strip()
+        for er in run.get("employee_rows", []):
+            paid = round((er.get("paid_now_amount") or 0), 2)
+            if paid <= 0:
+                continue
+            emp_name = (" ".join(filter(None, [er.get("first_name"), er.get("last_name")])) or "Служител").strip()
             await db.finance_payments.insert_one({
                 "id": str(uuid.uuid4()), "org_id": org_id, "direction": "Outflow",
-                "amount": total_paid, "currency": "EUR", "date": now[:10],
+                "amount": paid, "currency": "EUR", "date": now[:10],
                 "method": "BankTransfer" if acc_type == "Bank" else "Cash",
-                "account_id": account["id"], "counterparty_name": label,
-                "reference": run_id, "note": label, "category": "Заплата",
+                "account_id": account["id"], "counterparty_name": emp_name,
+                "user_id": er.get("employee_id"),
+                "reference": run_id, "note": run_label, "category": "Заплата",
                 "created_at": now, "updated_at": now,
             })
 

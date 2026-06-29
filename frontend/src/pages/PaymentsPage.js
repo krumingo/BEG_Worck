@@ -49,6 +49,22 @@ import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 
 const PAYMENT_METHODS = ["Cash", "BankTransfer", "Card", "Check", "Other"];
 
+function EmpAvatar({ name, url, size = 22 }) {
+  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
+  const [imgErr, setImgErr] = useState(false);
+  const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  if (fullUrl && !imgErr) {
+    return <img src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
+  }
+  return (
+    <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0" style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {initials}
+    </div>
+  );
+}
+
+const empLabel = (e) => e ? (e.name || [e.first_name, e.last_name].filter(Boolean).join(" ") || e.email) : "";
+
 export default function PaymentsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -60,6 +76,7 @@ export default function PaymentsPage() {
   const invoiceParam = searchParams.get("invoice_id") || "";
 
   const [payments, setPayments] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -100,14 +117,16 @@ export default function PaymentsPage() {
       if (directionFilter) params.append("direction", directionFilter);
       if (accountFilter) params.append("account_id", accountFilter);
 
-      const [paymentsRes, accountsRes, invoicesRes, clientsRes, projectsRes] = await Promise.all([
+      const [paymentsRes, accountsRes, invoicesRes, clientsRes, projectsRes, employeesRes] = await Promise.all([
         API.get(`/finance/payments?${params.toString()}`),
         API.get("/finance/accounts"),
         API.get("/finance/invoices"),
         API.get("/clients?page_size=100"),
         API.get("/projects"),
+        API.get("/employees"),
       ]);
       setPayments(paymentsRes.data);
+      setEmployees(employeesRes.data || []);
       setAccounts(accountsRes.data);
       setInvoices(invoicesRes.data);
       setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : (projectsRes.data?.items || []));
@@ -301,6 +320,7 @@ export default function PaymentsPage() {
     return p ? (p.name || p.code || id) : id;
   };
   const hasInvoice = (p) => p.linked_invoices && p.linked_invoices.length > 0;
+  const empById = (id) => (id ? employees.find((e) => e.id === id) : null);
   const isMovement = (p) => p.method === "Transfer" || p.method === "Funding" || p.is_funding;
 
   const openOther = () => {
@@ -486,7 +506,15 @@ export default function PaymentsPage() {
                       )}
                     </TableCell>
                     <TableCell className="max-w-[280px]">
-                      {isOther(payment) ? (
+                      {empById(payment.user_id) ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <EmpAvatar name={empLabel(empById(payment.user_id))} url={empById(payment.user_id).avatar_url} />
+                          <div className="min-w-0">
+                            <div className="text-foreground truncate">{empLabel(empById(payment.user_id))}</div>
+                            <div className="text-[10px] text-muted-foreground/70 truncate">{payment.category || payment.note || ""}</div>
+                          </div>
+                        </div>
+                      ) : isOther(payment) ? (
                         <div>
                           <div className="text-foreground truncate">{payment.note || "Друг разход"}</div>
                           <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">обект: {projectName(payment.project_id)}{payment.counterparty_name ? ` · ${payment.counterparty_name}` : ""}</div>

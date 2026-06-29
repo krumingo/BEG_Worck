@@ -226,7 +226,7 @@ async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m
         target = await db.users.find_one({"id": data.user_id, "org_id": org})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        recipient_name = target.get("name") or target.get("email") or "Служител"
+        recipient_name = target.get("name") or " ".join(filter(None, [target.get("first_name"), target.get("last_name")])) or target.get("email") or "Служител"
     elif is_loan and data.guest_name:
         recipient_name = data.guest_name.strip()
     else:
@@ -254,6 +254,7 @@ async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m
             "account_id": data.account_id, "counterparty_name": recipient_name,
             "reference": "", "note": f"{type_label} · {recipient_name}",
             "category": type_label,
+            "user_id": data.user_id,
             "created_at": now, "updated_at": now,
         })
 
