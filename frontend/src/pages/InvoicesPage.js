@@ -265,6 +265,7 @@ export default function InvoicesPage() {
         const sumNet = inKind.reduce((s, i) => s + (i.subtotal != null ? i.subtotal : (i.total || 0) / (1 + (i.vat_percent || 0) / 100)), 0);
         const sumVat = Math.round((sumTotal - sumNet) * 100) / 100;
         const sumPaid = inKind.reduce((s, i) => s + (i.paid_amount || 0), 0);
+        const sumBalance = Math.round((sumTotal - sumPaid) * 100) / 100;
         const kindStats = (k) => { const arr = issued.filter((i) => (i.kind || "Invoice") === k); return { count: arr.length, total: arr.reduce((s, i) => s + (i.total || 0), 0) }; };
         return (
           <div className="mb-6 space-y-3">
@@ -280,12 +281,14 @@ export default function InvoicesPage() {
                 </button>
               ); })}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">Без ДДС</div><div className="text-lg font-bold text-foreground">{formatCurrency(Math.round(sumNet * 100) / 100, "EUR")}</div></div>
               <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">ДДС</div><div className="text-lg font-bold text-blue-400">{formatCurrency(sumVat, "EUR")}</div></div>
-              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">С ДДС</div><div className="text-lg font-bold text-foreground">{formatCurrency(Math.round(sumTotal * 100) / 100, "EUR")}</div></div>
-              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">Платено (приход)</div><div className="text-lg font-bold text-emerald-400">{formatCurrency(Math.round(sumPaid * 100) / 100, "EUR")}</div></div>
+              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">Общо (с ДДС)</div><div className="text-lg font-bold text-foreground">{formatCurrency(Math.round(sumTotal * 100) / 100, "EUR")}</div></div>
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3"><div className="text-xs text-emerald-400">Платено = приход</div><div className="text-lg font-bold text-emerald-400">{formatCurrency(Math.round(sumPaid * 100) / 100, "EUR")}</div></div>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"><div className="text-xs text-amber-400">Баланс (остатък)</div><div className="text-lg font-bold text-amber-400">{formatCurrency(sumBalance, "EUR")}</div></div>
             </div>
+            <p className="text-[11px] text-muted-foreground">Приходът се признава при <strong>плащане</strong> — „Платено" е реалният приход; „Баланс" остава да влезе (бъдещо вземане).</p>
           </div>
         );
       })()}
@@ -439,7 +442,12 @@ export default function InvoicesPage() {
                         {invoice.direction === "Issued" ? t("finance.invoiceType.sale") : t("finance.invoiceType.bill")}
                       </Badge>
                       )}
-                      {!isFish && <div className="text-[10px] text-muted-foreground mt-1">{kindLabel(invoice.kind)}</div>}
+                      {!isFish && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground">{kindLabel(invoice.kind)}</span>
+                          <span className={`text-[9px] font-medium ${invoice.direction === "Issued" ? "text-emerald-400" : "text-amber-400"}`}>● {invoice.direction === "Issued" ? "Приход" : "Разход"}</span>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-foreground max-w-[150px] truncate">
                       {invoice.counterparty_name || "-"}
