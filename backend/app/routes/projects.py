@@ -1146,6 +1146,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_list = []
     totals_paid = 0
     totals_unpaid = 0
+    totals_proforma_future = 0
     totals_subtotal = 0
     totals_vat = 0
     totals_total = 0
@@ -1194,10 +1195,14 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         
         # Skip cancelled invoices from financial totals
         if inv.get("status") != "Cancelled":
-            totals_paid += paid_amount
-            totals_unpaid += remaining_amount
-            totals_subtotal += subtotal
-            totals_vat += vat_amount
+            if (inv.get("kind") or "Invoice") == "Proforma":
+                # Proforma = future receivable, kept out of P&L revenue
+                totals_proforma_future += remaining_amount
+            else:
+                totals_paid += paid_amount
+                totals_unpaid += remaining_amount
+                totals_subtotal += subtotal
+                totals_vat += vat_amount
             totals_total += total
         
         inv_id = inv.get("id")
@@ -1230,6 +1235,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             "total": round(totals_total, 2),
             "paid": round(totals_paid, 2),
             "unpaid": round(totals_unpaid, 2),
+            "proforma_future": round(totals_proforma_future, 2),
         },
     }
     
@@ -1930,19 +1936,26 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     async def count_invoices(pids):
         invs = await db.invoices.find(
             {"org_id": org_id, "project_id": {"$in": pids}},
-            {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1},
+            {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
         ).to_list(500)
-        count = len(invs)
-        invoiced = round(sum(i.get("total", 0) for i in invs if i.get("status") not in ["Draft", "Cancelled"]), 2)
-        paid = round(sum(i.get("paid_amount", 0) or 0 for i in invs), 2)
+        # Proformas are future receivables, not P&L revenue — kept out of invoiced/paid
+        real = [i for i in invs if (i.get("kind") or "Invoice") != "Proforma"]
+        profs = [i for i in invs if (i.get("kind") or "Invoice") == "Proforma"]
+        count = len(real)
+        invoiced = round(sum(i.get("total", 0) for i in real if i.get("status") not in ["Draft", "Cancelled"]), 2)
+        paid = round(sum(i.get("paid_amount", 0) or 0 for i in real), 2)
         unpaid = round(invoiced - paid, 2)
         overdue = round(sum(
             (i.get("total", 0) - (i.get("paid_amount") or 0))
-            for i in invs
+            for i in real
             if i.get("status") not in ["Draft", "Cancelled", "Paid"]
             and (i.get("due_date") or "9999") < today
         ), 2)
-        return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue}
+        proforma_future = round(sum(
+            (i.get("total", 0) - (i.get("paid_amount") or 0))
+            for i in profs if i.get("status") != "Cancelled"
+        ), 2)
+        return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue, "proforma_future": proforma_future}
 
     own_inv = await count_invoices([project_id])
     child_inv = await count_invoices(child_ids) if child_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0}

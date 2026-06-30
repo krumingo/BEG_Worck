@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   DollarSign,
   Loader2,
+  Clock,
 } from "lucide-react";
 import {
   Dialog,
@@ -266,6 +267,7 @@ export default function InvoicesPage() {
         const sumVat = Math.round((sumTotal - sumNet) * 100) / 100;
         const sumPaid = inKind.reduce((s, i) => s + (i.paid_amount || 0), 0);
         const sumBalance = Math.round((sumTotal - sumPaid) * 100) / 100;
+        const proformaFuture = Math.round(issued.filter((i) => (i.kind || "Invoice") === "Proforma").reduce((s, i) => s + ((i.total || 0) - (i.paid_amount || 0)), 0) * 100) / 100;
         const kindStats = (k) => { const arr = issued.filter((i) => (i.kind || "Invoice") === k); return { count: arr.length, total: arr.reduce((s, i) => s + (i.total || 0), 0) }; };
         return (
           <div className="mb-6 space-y-3">
@@ -289,6 +291,15 @@ export default function InvoicesPage() {
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"><div className="text-xs text-amber-400">Баланс (остатък)</div><div className="text-lg font-bold text-amber-400">{formatCurrency(sumBalance, "EUR")}</div></div>
             </div>
             <p className="text-[11px] text-muted-foreground">Приходът се признава при <strong>плащане</strong> — „Платено" е реалният приход; „Баланс" остава да влезе (бъдещо вземане).</p>
+            {proformaFuture > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-3" data-testid="future-receivables">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <span className="text-sm text-indigo-300">Бъдещи вземания <span className="text-xs text-muted-foreground">(отворени проформи · не е в P&amp;L)</span></span>
+                </div>
+                <span className="text-lg font-bold text-indigo-300">{formatCurrency(proformaFuture, "EUR")}</span>
+              </div>
+            )}
           </div>
         );
       })()}
