@@ -5,6 +5,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +50,7 @@ import {
   Trash2,
   FileText,
   Building2,
+  ChevronDown,
 } from "lucide-react";
 import SmartAutocomplete from "@/components/common/SmartAutocomplete";
 
@@ -127,7 +134,10 @@ export default function PaymentsPage() {
         API.get("/projects"),
         API.get("/employees"),
       ]);
-      setPayments(paymentsRes.data);
+      setPayments([...(paymentsRes.data || [])].sort((a, b) =>
+        (b.date || "").localeCompare(a.date || "") ||
+        (b.created_at || "").localeCompare(a.created_at || "")
+      ));
       setEmployees(employeesRes.data || []);
       setAccounts(accountsRes.data);
       setInvoices(invoicesRes.data);
@@ -396,17 +406,24 @@ export default function PaymentsPage() {
           </div>
         </div>
         {canManage && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={openIncome} data-testid="other-income-btn">
-              <Plus className="w-4 h-4 mr-2" /> Друг приход
-            </Button>
-            <Button variant="outline" onClick={openOther} data-testid="other-expense-btn">
-              <Plus className="w-4 h-4 mr-2" /> Друг разход
-            </Button>
-            <Button onClick={openCreateDialog} data-testid="create-payment-btn">
-              <Plus className="w-4 h-4 mr-2" /> {t("finance.recordPayment")}
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button data-testid="payments-add-menu">
+                <Plus className="w-4 h-4 mr-2" /> Запиши плащане <ChevronDown className="w-4 h-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={openCreateDialog} data-testid="menu-record-payment">
+                <Plus className="w-4 h-4 mr-2" /> Плащане по фактура
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openIncome} data-testid="menu-other-income">
+                <Plus className="w-4 h-4 mr-2" /> Друг приход
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openOther} data-testid="menu-other-expense">
+                <Plus className="w-4 h-4 mr-2" /> Друг разход
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 

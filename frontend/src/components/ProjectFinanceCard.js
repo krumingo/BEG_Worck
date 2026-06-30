@@ -25,7 +25,7 @@ export default function ProjectFinanceCard({ projectId, onNavigateFinance }) {
     : "bg-red-500/10 border-red-500/30 text-red-400";
   const statusLabel = margin > 5 ? "Печеливш" : margin > -5 ? "Нулев" : "На загуба";
 
-  const fmt = (n) => (n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 });
+  const fmt = (n) => (n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 }) + " €";
   const net = data.total_invoiced_net ?? data.total_revenue ?? 0;
   const invoiced = data.total_invoiced ?? data.total_revenue ?? 0;
   const received = data.total_received || 0;
