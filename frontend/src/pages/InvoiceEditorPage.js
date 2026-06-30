@@ -43,6 +43,7 @@ import {
   CircleDollarSign,
   Download,
   ExternalLink,
+  Pencil,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import SmartAutocomplete from "@/components/common/SmartAutocomplete";
@@ -97,6 +98,7 @@ export default function InvoiceEditorPage() {
 
   const [direction, setDirection] = useState(directionParam);
   const [kind, setKind] = useState("Invoice");
+  const [editing, setEditing] = useState(false);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [projectId, setProjectId] = useState(projectIdParam);
   const [counterpartyName, setCounterpartyName] = useState("");
@@ -312,6 +314,7 @@ export default function InvoiceEditorPage() {
           })),
         });
         await fetchData();
+        setEditing(false);
       }
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.saveFailed"));
@@ -374,7 +377,6 @@ export default function InvoiceEditorPage() {
         date: payForm.date,
         method: payForm.method,
         account_id: payForm.account_id,
-        reference: payForm.reference,
         note: payForm.note,
       });
       setPayDialogOpen(false);
@@ -397,6 +399,8 @@ export default function InvoiceEditorPage() {
   const isDraft = !invoice || invoice.status === "Draft";
   // Allow editing: Draft, Sent, PartiallyPaid, Overdue. Not: Paid, Cancelled
   const canEdit = canManage && (!invoice || !["Paid", "Cancelled"].includes(invoice.status));
+  const isAdmin = ["Admin", "Owner"].includes(user?.role);
+  const locked = !(canEdit && (isNew || editing));
   const canSend = isDraft && !isNew && canManage;
   const canDeleteDraft = isDraft && !isNew && canManage;
   const canCancel = invoice && ["Sent", "PartiallyPaid", "Overdue"].includes(invoice.status) && canManage;
@@ -455,7 +459,12 @@ export default function InvoiceEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {canEdit && (
+          {canEdit && !isNew && !editing && (
+            <Button variant="outline" onClick={() => setEditing(true)} data-testid="edit-btn">
+              <Pencil className="w-4 h-4 mr-1" /> Редакция
+            </Button>
+          )}
+          {canEdit && (isNew || editing) && (
             <Button variant="outline" onClick={handleSave} disabled={saving} data-testid="save-btn">
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
               {t("common.save")}
@@ -476,12 +485,7 @@ export default function InvoiceEditorPage() {
               <Download className="w-4 h-4 mr-1" /> PDF
             </Button>
           )}
-          {canPay && (
-            <Button onClick={openPayDialog} className="bg-emerald-600 hover:bg-emerald-700" data-testid="add-payment-btn">
-              <Banknote className="w-4 h-4 mr-1" /> {t("finance.addPayment")}
-            </Button>
-          )}
-          {canCancel && (
+          {canCancel && isAdmin && (
             <Button variant="outline" className="text-red-400 border-red-500/30" onClick={handleCancel} disabled={saving} data-testid="cancel-btn">
               <X className="w-4 h-4 mr-1" /> {t("finance.cancelInvoice")}
             </Button>
@@ -545,7 +549,7 @@ export default function InvoiceEditorPage() {
               </div>
               <div className="space-y-2">
                 <Label>Тип документ</Label>
-                <Select value={kind} onValueChange={setKind} disabled={!canEdit}>
+                <Select value={kind} onValueChange={setKind} disabled={locked}>
                   <SelectTrigger className="bg-background" data-testid="kind-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Invoice">Фактура</SelectItem>
@@ -560,7 +564,7 @@ export default function InvoiceEditorPage() {
                 <div className="relative">
                   <Input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)}
                     placeholder={direction === "Issued" ? "INV-0001" : "BILL-0001"}
-                    disabled={!canEdit || (isNew && invoiceNo.startsWith("INV-"))}
+                    disabled={locked || (isNew && invoiceNo.startsWith("INV-"))}
                     className={cn("bg-background font-mono", isNew && invoiceNo && "bg-muted/50")}
                     data-testid="invoice-no-input" />
                   {isNew && invoiceNo && (
@@ -575,7 +579,7 @@ export default function InvoiceEditorPage() {
               </div>
               <div className="space-y-2">
                 <Label>{t("offers.project")}</Label>
-                <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)} disabled={!canEdit}>
+                <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)} disabled={locked}>
                   <SelectTrigger className="bg-background" data-testid="project-select"><SelectValue placeholder={t("common.noProject")} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">{t("common.noProject")}</SelectItem>
@@ -614,19 +618,19 @@ export default function InvoiceEditorPage() {
                   <div className="space-y-2">
                     <Label>ЕИК</Label>
                     <Input value={counterpartyEik} onChange={(e) => setCounterpartyEik(e.target.value)}
-                      placeholder="ЕИК на фирмата" disabled={!canEdit}
+                      placeholder="ЕИК на фирмата" disabled={locked}
                       className="bg-background font-mono placeholder:text-muted-foreground/50" data-testid="counterparty-eik-input" />
                   </div>
                   <div className="space-y-2">
                     <Label>ДДС номер</Label>
                     <Input value={counterpartyVatNo} onChange={(e) => setCounterpartyVatNo(e.target.value)}
-                      placeholder="ДДС номер" disabled={!canEdit}
+                      placeholder="ДДС номер" disabled={locked}
                       className="bg-background font-mono placeholder:text-muted-foreground/50" data-testid="counterparty-vat-input" />
                   </div>
                   <div className="space-y-2">
                     <Label>МОЛ</Label>
                     <Input value={counterpartyMol} onChange={(e) => setCounterpartyMol(e.target.value)}
-                      placeholder="Материално отговорно лице" disabled={!canEdit}
+                      placeholder="Материално отговорно лице" disabled={locked}
                       className="bg-background placeholder:text-muted-foreground/50" data-testid="counterparty-mol-input" />
                   </div>
                 </>
@@ -634,30 +638,30 @@ export default function InvoiceEditorPage() {
               <div className="space-y-2">
                 <Label>Адрес</Label>
                 <Input value={counterpartyAddress} onChange={(e) => setCounterpartyAddress(e.target.value)}
-                  placeholder="Адрес" disabled={!canEdit}
+                  placeholder="Адрес" disabled={locked}
                   className="bg-background placeholder:text-muted-foreground/50" data-testid="counterparty-address-input" />
               </div>
               <div className="space-y-2">
                 <Label>Имейл</Label>
                 <Input type="email" value={counterpartyEmail} onChange={(e) => setCounterpartyEmail(e.target.value)}
-                  placeholder="Имейл адрес" disabled={!canEdit}
+                  placeholder="Имейл адрес" disabled={locked}
                   className="bg-background placeholder:text-muted-foreground/50" data-testid="counterparty-email-input" />
               </div>
               <div className="space-y-2">
                 <Label>Телефон</Label>
                 <Input value={counterpartyPhone} onChange={(e) => setCounterpartyPhone(e.target.value)}
-                  placeholder="Телефон" disabled={!canEdit}
+                  placeholder="Телефон" disabled={locked}
                   className="bg-background placeholder:text-muted-foreground/50" data-testid="counterparty-phone-input" />
               </div>
               <div className="space-y-2">
                 <Label>{t("finance.issueDate")} *</Label>
                 <Input type="date" value={issueDate} onChange={(e) => handleIssueDateChange(e.target.value)}
-                  disabled={!canEdit} className="bg-background" data-testid="issue-date-input" />
+                  disabled={locked} className="bg-background" data-testid="issue-date-input" />
               </div>
               <div className="space-y-2">
                 <Label>{t("finance.dueDate")} *</Label>
                 <Input type="date" value={dueDate} onChange={(e) => handleDueDateChange(e.target.value)}
-                  disabled={!canEdit} min={issueDate}
+                  disabled={locked} min={issueDate}
                   className={cn("bg-background", dateError && "border-red-500")} data-testid="due-date-input" />
                 {dateError && (
                   <p className="text-xs text-red-500 flex items-center gap-1">
@@ -678,7 +682,7 @@ export default function InvoiceEditorPage() {
               <div className="space-y-2">
                 <Label>{t("offers.vatPercent")}</Label>
                 <Input type="number" value={vatPercent} onChange={(e) => setVatPercent(parseFloat(e.target.value) || 0)}
-                  disabled={!canEdit} className="bg-background" data-testid="vat-input" />
+                  disabled={locked} className="bg-background" data-testid="vat-input" />
               </div>
             </div>
           </div>
@@ -689,7 +693,7 @@ export default function InvoiceEditorPage() {
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-primary" /> {t("finance.lineItems")} ({lines.length})
               </h2>
-              {canEdit && (
+              {!locked && (
                 <Button size="sm" onClick={addLine} data-testid="add-line-btn">
                   <Plus className="w-4 h-4 mr-1" /> {t("finance.addLine")}
                 </Button>
@@ -704,7 +708,7 @@ export default function InvoiceEditorPage() {
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[100px]">{t("offers.qty")}</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">{t("finance.unitPrice")}</th>
                     <th className="text-right p-3 text-xs uppercase text-muted-foreground font-medium w-[120px]">{t("common.total")}</th>
-                    {canEdit && <th className="w-[50px]"></th>}
+                    {!locked && <th className="w-[50px]"></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -715,10 +719,10 @@ export default function InvoiceEditorPage() {
                       <tr key={line.id || idx} className="hover:bg-muted/30" data-testid={`line-row-${idx}`}>
                         <td className="p-2">
                           <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)}
-                            placeholder={t("finance.itemDescription")} disabled={!canEdit} className="bg-background h-9 text-sm" />
+                            placeholder={t("finance.itemDescription")} disabled={locked} className="bg-background h-9 text-sm" />
                         </td>
                         <td className="p-2">
-                          <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={!canEdit}>
+                          <Select value={line.unit} onValueChange={(v) => updateLine(idx, "unit", v)} disabled={locked}>
                             <SelectTrigger className="bg-background h-9 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {UNITS.map((u) => <SelectItem key={u} value={u}>{t(`units.${u}`)}</SelectItem>)}
@@ -728,17 +732,17 @@ export default function InvoiceEditorPage() {
                         <td className="p-2">
                           <Input type="number" min="0" step="0.01" value={line.qty}
                             onChange={(e) => updateLine(idx, "qty", e.target.value)}
-                            disabled={!canEdit} className="bg-background h-9 text-sm text-right font-mono" />
+                            disabled={locked} className="bg-background h-9 text-sm text-right font-mono" />
                         </td>
                         <td className="p-2">
                           <Input type="number" min="0" step="0.01" value={line.unit_price}
                             onChange={(e) => updateLine(idx, "unit_price", e.target.value)}
-                            disabled={!canEdit} className="bg-background h-9 text-sm text-right font-mono" />
+                            disabled={locked} className="bg-background h-9 text-sm text-right font-mono" />
                         </td>
                         <td className="p-2 text-right font-mono font-medium text-foreground">
                           {formatCurrency(line.line_total, currency)}
                         </td>
-                        {canEdit && (
+                        {!locked && (
                           <td className="p-2">
                             <Button variant="ghost" size="sm" onClick={() => removeLine(idx)} className="text-destructive hover:text-destructive">
                               <Trash2 className="w-4 h-4" />
@@ -757,7 +761,7 @@ export default function InvoiceEditorPage() {
           <div className="rounded-xl border border-border bg-card p-5">
             <Label className="mb-2 block">{t("common.notes")}</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("common.notes")}
-              disabled={!canEdit} className="bg-background min-h-[80px]" data-testid="notes-textarea" />
+              disabled={locked} className="bg-background min-h-[80px]" data-testid="notes-textarea" />
           </div>
 
           {/* Payment History */}
@@ -770,11 +774,6 @@ export default function InvoiceEditorPage() {
                     <Badge variant="outline" className="text-xs ml-1">{invoicePayments.length}</Badge>
                   )}
                 </h2>
-                {canPay && (
-                  <Button size="sm" onClick={openPayDialog} className="bg-emerald-600 hover:bg-emerald-700" data-testid="add-payment-inline-btn">
-                    <Plus className="w-4 h-4 mr-1" /> {t("finance.addPayment")}
-                  </Button>
-                )}
               </div>
               <div className="divide-y divide-border">
                 {invoicePayments.length === 0 ? (
@@ -960,7 +959,7 @@ export default function InvoiceEditorPage() {
                   className="bg-background" data-testid="pay-date-input" />
               </div>
               <div className="space-y-2">
-                <Label>{t("payroll.paymentMethod")}</Label>
+                <Label>Метод на плащане</Label>
                 <Select value={payForm.method} onValueChange={(v) => setPayForm({ ...payForm, method: v })}>
                   <SelectTrigger className="bg-background" data-testid="pay-method-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -978,13 +977,6 @@ export default function InvoiceEditorPage() {
                   {accounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name} ({acc.type})</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>{t("finance.paymentRef")}</Label>
-              <Input value={payForm.reference}
-                onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })}
-                placeholder="PMT-001" className="bg-background font-mono" data-testid="pay-reference-input" />
             </div>
             
             <div className="space-y-2">
