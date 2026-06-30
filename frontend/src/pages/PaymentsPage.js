@@ -107,6 +107,8 @@ export default function PaymentsPage() {
   const [allocDialogOpen, setAllocDialogOpen] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherForm, setOtherForm] = useState({ project_id: "", amount: "", account_id: "", method: "Cash", counterparty_name: "", date: "", note: "" });
+  const [incomeOpen, setIncomeOpen] = useState(false);
+  const [incomeForm, setIncomeForm] = useState({ project_id: "", amount: "", account_id: "", method: "Cash", counterparty_name: "", date: "", note: "" });
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [allocations, setAllocations] = useState([]);
 
@@ -352,6 +354,34 @@ export default function PaymentsPage() {
     }
   };
 
+  const openIncome = () => {
+    setIncomeForm({ project_id: "", amount: "", account_id: accounts[0]?.id || "", method: "Cash", counterparty_name: "", date: new Date().toISOString().split("T")[0], note: "" });
+    setIncomeOpen(true);
+  };
+
+  const handleIncome = async () => {
+    const amt = parseFloat(incomeForm.amount);
+    if (!amt || amt <= 0) { alert("Сумата трябва да е положителна"); return; }
+    setSaving(true);
+    try {
+      await API.post("/finance/other-income", {
+        project_id: incomeForm.project_id || null,
+        amount: amt,
+        account_id: incomeForm.account_id,
+        method: incomeForm.method,
+        counterparty_name: incomeForm.counterparty_name,
+        date: incomeForm.date,
+        note: incomeForm.note,
+      });
+      setIncomeOpen(false);
+      await fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || t("toast.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="p-8 max-w-[1400px]" data-testid="payments-page">
       {/* Header */}
@@ -367,6 +397,9 @@ export default function PaymentsPage() {
         </div>
         {canManage && (
           <div className="flex gap-2">
+            <Button variant="outline" onClick={openIncome} data-testid="other-income-btn">
+              <Plus className="w-4 h-4 mr-2" /> Друг приход
+            </Button>
             <Button variant="outline" onClick={openOther} data-testid="other-expense-btn">
               <Plus className="w-4 h-4 mr-2" /> Друг разход
             </Button>
@@ -787,6 +820,73 @@ export default function PaymentsPage() {
             <Button onClick={handleAllocate} disabled={saving || allocations.length === 0} data-testid="confirm-allocate-btn">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t("finance.allocatePayment")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Other income (documentless cash income — proforma / deposit, not P&L revenue) */}
+      <Dialog open={incomeOpen} onOpenChange={setIncomeOpen}>
+        <DialogContent className="sm:max-w-[450px] bg-card border-border" data-testid="other-income-dialog">
+          <DialogHeader>
+            <DialogTitle>Друг приход <span className="text-xs text-muted-foreground">· без фактура</span></DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Сума *</Label>
+                <Input type="number" step="0.01" value={incomeForm.amount} onChange={(e) => setIncomeForm({ ...incomeForm, amount: e.target.value })} className="bg-background" data-testid="income-amount-input" />
+              </div>
+              <div>
+                <Label>Към сметка</Label>
+                <Select value={incomeForm.account_id} onValueChange={(v) => setIncomeForm({ ...incomeForm, account_id: v })}>
+                  <SelectTrigger className="bg-background"><SelectValue placeholder="Сметка" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (<SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Метод</Label>
+                <Select value={incomeForm.method} onValueChange={(v) => setIncomeForm({ ...incomeForm, method: v })}>
+                  <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cash">{t("finance.paymentMethod.cash")}</SelectItem>
+                    <SelectItem value="BankTransfer">{t("finance.paymentMethod.bankTransfer")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Дата</Label>
+                <Input type="date" value={incomeForm.date} onChange={(e) => setIncomeForm({ ...incomeForm, date: e.target.value })} className="bg-background" />
+              </div>
+            </div>
+            <div>
+              <Label>Обект <span className="text-xs text-muted-foreground">(по избор)</span></Label>
+              <Select value={incomeForm.project_id} onValueChange={(v) => setIncomeForm({ ...incomeForm, project_id: v })}>
+                <SelectTrigger className="bg-background"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name || p.code || p.id}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>От кого (по избор)</Label>
+              <Input value={incomeForm.counterparty_name} onChange={(e) => setIncomeForm({ ...incomeForm, counterparty_name: e.target.value })} placeholder="напр. клиент / име" className="bg-background" />
+            </div>
+            <div>
+              <Label>Бележка</Label>
+              <Input value={incomeForm.note} onChange={(e) => setIncomeForm({ ...incomeForm, note: e.target.value })} className="bg-background" />
+            </div>
+            <p className="text-xs text-muted-foreground">Влиза в Каса/Банка като приход. Не е приход в P&amp;L (той идва от фактури).</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIncomeOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleIncome} disabled={saving} data-testid="save-income-btn">
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Запиши приход
             </Button>
           </DialogFooter>
         </DialogContent>

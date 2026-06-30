@@ -50,6 +50,10 @@ const STATUS_COLORS = {
   Cancelled: "bg-gray-500/20 text-gray-400 border-gray-500/30",
 };
 
+const KIND_LABELS = { Invoice: "Фактура", Proforma: "Проформа", CreditNote: "Кредитно известие", DebitNote: "Дебитно известие" };
+const kindLabel = (k) => KIND_LABELS[k] || "Фактура";
+const KIND_ORDER = ["Invoice", "Proforma", "CreditNote", "DebitNote"];
+
 export default function InvoicesPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -69,6 +73,7 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState(statusParam);
   const [projectFilter, setProjectFilter] = useState(projectParam);
   const [docTypeFilter, setDocTypeFilter] = useState("all"); // all | invoice | fish (display-only)
+  const [kindFilter, setKindFilter] = useState("all"); // all | Invoice | Proforma | CreditNote | DebitNote
 
   // Payment
   const [payDialog, setPayDialog] = useState(null); // invoice object
@@ -196,13 +201,16 @@ export default function InvoicesPage() {
     );
   })();
 
-  const filteredInvoices = search
+  const searchedDocs = search
     ? combinedDocs.filter(inv =>
         inv.invoice_no?.toLowerCase().includes(search.toLowerCase()) ||
         inv.counterparty_name?.toLowerCase().includes(search.toLowerCase()) ||
         inv.project_code?.toLowerCase().includes(search.toLowerCase())
       )
     : combinedDocs;
+  const filteredInvoices = kindFilter === "all"
+    ? searchedDocs
+    : searchedDocs.filter(inv => inv.doc_type !== "fish" && (inv.kind || "Invoice") === kindFilter);
 
   const getStatusKey = (status) => {
     const map = {
@@ -247,6 +255,40 @@ export default function InvoicesPage() {
           </Button>
         )}
       </div>
+
+      {/* Издадени документи — по тип + обобщение */}
+      {(() => {
+        const issued = invoices.filter((i) => i.direction === "Issued" && i.status !== "Cancelled");
+        if (issued.length === 0) return null;
+        const inKind = kindFilter === "all" ? issued : issued.filter((i) => (i.kind || "Invoice") === kindFilter);
+        const sumTotal = inKind.reduce((s, i) => s + (i.total || 0), 0);
+        const sumNet = inKind.reduce((s, i) => s + (i.subtotal != null ? i.subtotal : (i.total || 0) / (1 + (i.vat_percent || 0) / 100)), 0);
+        const sumVat = Math.round((sumTotal - sumNet) * 100) / 100;
+        const sumPaid = inKind.reduce((s, i) => s + (i.paid_amount || 0), 0);
+        const kindStats = (k) => { const arr = issued.filter((i) => (i.kind || "Invoice") === k); return { count: arr.length, total: arr.reduce((s, i) => s + (i.total || 0), 0) }; };
+        return (
+          <div className="mb-6 space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <button onClick={() => setKindFilter("all")} className={`text-left rounded-lg border p-2.5 transition-colors ${kindFilter === "all" ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/40"}`}>
+                <div className="text-[11px] text-muted-foreground">Всички</div>
+                <div className="text-sm font-bold text-foreground">{issued.length}</div>
+              </button>
+              {KIND_ORDER.map((k) => { const st = kindStats(k); return (
+                <button key={k} onClick={() => setKindFilter(k)} className={`text-left rounded-lg border p-2.5 transition-colors ${kindFilter === k ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/40"}`}>
+                  <div className="text-[11px] text-muted-foreground truncate">{kindLabel(k)}</div>
+                  <div className="text-sm font-bold text-foreground">{st.count} <span className="text-[10px] font-normal text-muted-foreground">· {formatCurrency(Math.round(st.total * 100) / 100, "EUR")}</span></div>
+                </button>
+              ); })}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">Без ДДС</div><div className="text-lg font-bold text-foreground">{formatCurrency(Math.round(sumNet * 100) / 100, "EUR")}</div></div>
+              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">ДДС</div><div className="text-lg font-bold text-blue-400">{formatCurrency(sumVat, "EUR")}</div></div>
+              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">С ДДС</div><div className="text-lg font-bold text-foreground">{formatCurrency(Math.round(sumTotal * 100) / 100, "EUR")}</div></div>
+              <div className="rounded-lg border border-border bg-card p-3"><div className="text-xs text-muted-foreground">Платено (приход)</div><div className="text-lg font-bold text-emerald-400">{formatCurrency(Math.round(sumPaid * 100) / 100, "EUR")}</div></div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-6 flex-wrap" data-testid="invoice-filters">
@@ -397,6 +439,7 @@ export default function InvoicesPage() {
                         {invoice.direction === "Issued" ? t("finance.invoiceType.sale") : t("finance.invoiceType.bill")}
                       </Badge>
                       )}
+                      {!isFish && <div className="text-[10px] text-muted-foreground mt-1">{kindLabel(invoice.kind)}</div>}
                     </TableCell>
                     <TableCell className="text-foreground max-w-[150px] truncate">
                       {invoice.counterparty_name || "-"}

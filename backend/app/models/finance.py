@@ -61,6 +61,7 @@ class InvoiceLineInput(BaseModel):
 
 class InvoiceCreate(BaseModel):
     direction: str
+    kind: str = "Invoice"  # Invoice | Proforma | CreditNote | DebitNote
     invoice_no: Optional[str] = None  # Auto-generated if empty
     project_id: Optional[str] = None
     counterparty_name: Optional[str] = None
@@ -81,6 +82,7 @@ class InvoiceCreate(BaseModel):
 
 class InvoiceUpdate(BaseModel):
     invoice_no: Optional[str] = None
+    kind: Optional[str] = None
     counterparty_name: Optional[str] = None
     counterparty_eik: Optional[str] = None
     counterparty_vat_no: Optional[str] = None

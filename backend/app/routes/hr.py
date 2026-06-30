@@ -312,6 +312,45 @@ async def apply_advance_deduction(advance_id: str, amount: float, user: dict = D
     return await db.advances.find_one({"id": advance_id}, {"_id": 0})
 
 
+@router.post("/advances/{advance_id}/repay")
+async def repay_advance(advance_id: str, amount: float, account_id: str = None, user: dict = Depends(require_m4)):
+    """Repay a loan with money: records a cash INFLOW and reduces the balance."""
+    if not payroll_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    org_id = user["org_id"]
+    advance = await db.advances.find_one({"id": advance_id, "org_id": org_id})
+    if not advance:
+        raise HTTPException(status_code=404, detail="Advance not found")
+    if advance.get("status") == "Closed":
+        raise HTTPException(status_code=400, detail="Already closed")
+    rem = round(advance.get("remaining_amount") or 0, 2)
+    amt = round(amount, 2)
+    if amt <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if amt > rem:
+        amt = rem
+    now = datetime.now(timezone.utc).isoformat()
+    new_remaining = round(rem - amt, 2)
+    if new_remaining < 0:
+        new_remaining = 0
+    acc_id = account_id or advance.get("account_id")
+    label = advance.get("recipient_name") or advance.get("guest_name") or "Заем"
+    await db.finance_payments.insert_one({
+        "id": str(uuid.uuid4()), "org_id": org_id, "direction": "Inflow",
+        "amount": amt, "currency": advance.get("currency", "EUR"), "date": now[:10],
+        "method": "Cash", "account_id": acc_id, "counterparty_name": label,
+        "reference": "", "note": f"Връщане на заем · {label}", "category": "Връщане заем",
+        "user_id": advance.get("user_id"),
+        "created_at": now, "updated_at": now,
+    })
+    await db.advances.update_one({"id": advance_id, "org_id": org_id}, {
+        "$set": {"remaining_amount": new_remaining,
+                 "status": "Closed" if new_remaining <= 0 else "Open",
+                 "updated_at": now},
+        "$push": {"repayments": {"amount": amt, "date": now[:10], "account_id": acc_id, "at": now}},
+    })
+    return await db.advances.find_one({"id": advance_id}, {"_id": 0})
+
 
 # ── Payslips ───────────────────────────────────────────────────────
 

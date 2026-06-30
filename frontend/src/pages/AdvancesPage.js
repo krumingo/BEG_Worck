@@ -79,6 +79,9 @@ export default function AdvancesPage() {
   const [recipientMode, setRecipientMode] = useState("employee");
   const [formInstallment, setFormInstallment] = useState("");
   const [formInstallmentPeriod, setFormInstallmentPeriod] = useState("weekly");
+  const [repayDialog, setRepayDialog] = useState(null);
+  const [repayAmount, setRepayAmount] = useState("");
+  const [repayAccount, setRepayAccount] = useState("");
 
   const fetchData = useCallback(async () => {
     try {
@@ -145,6 +148,24 @@ export default function AdvancesPage() {
     }
   };
 
+  const openRepay = (adv) => {
+    setRepayDialog(adv);
+    setRepayAmount(String(adv.remaining_amount || ""));
+    setRepayAccount(adv.account_id || accounts[0]?.id || "");
+  };
+
+  const handleRepay = async () => {
+    if (!repayDialog) return;
+    const amt = parseFloat(repayAmount);
+    if (!amt || amt <= 0) { alert("Въведи сума"); return; }
+    const acc = repayAccount || repayDialog.account_id || "";
+    try {
+      await API.post(`/advances/${repayDialog.id}/repay?amount=${amt}${acc ? `&account_id=${acc}` : ""}`);
+      setRepayDialog(null); setRepayAmount(""); setRepayAccount("");
+      fetchData();
+    } catch (err) { alert(err.response?.data?.detail || t("toast.saveFailed")); }
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR" }).format(amount || 0);
   };
@@ -203,12 +224,13 @@ export default function AdvancesPage() {
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">{t("advances.remaining")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.status")}</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">{t("common.note")}</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {advances.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     <Wallet className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p>{t("advances.noAdvances")}</p>
                   </TableCell>
@@ -231,6 +253,13 @@ export default function AdvancesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground truncate max-w-[150px]">{adv.note || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      {adv.type === "Loan" && adv.status === "Open" ? (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openRepay(adv)} data-testid={`repay-btn-${adv.id}`}>
+                          Връщане
+                        </Button>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -353,6 +382,38 @@ export default function AdvancesPage() {
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
               {t("common.create")}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Repay Loan Dialog */}
+      <Dialog open={!!repayDialog} onOpenChange={(o) => !o && setRepayDialog(null)}>
+        <DialogContent className="sm:max-w-[420px] bg-card border-border" data-testid="repay-dialog">
+          <DialogHeader>
+            <DialogTitle>Връщане на заем</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="text-sm text-muted-foreground">
+              {repayDialog?.user_name} · остатък <span className="font-mono text-foreground">{formatCurrency(repayDialog?.remaining_amount || 0)}</span>
+            </div>
+            <div className="space-y-2">
+              <Label>Сума за връщане</Label>
+              <Input type="number" value={repayAmount} onChange={(e) => setRepayAmount(e.target.value)} className="bg-background" data-testid="repay-amount" />
+            </div>
+            <div className="space-y-2">
+              <Label>Към сметка</Label>
+              <Select value={repayAccount} onValueChange={setRepayAccount}>
+                <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a) => (<SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Парите влизат в касата като приход и намаляват салдото на заема.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRepayDialog(null)}>Отказ</Button>
+            <Button onClick={handleRepay} data-testid="repay-confirm">Върни</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

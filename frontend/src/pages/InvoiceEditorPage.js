@@ -96,6 +96,7 @@ export default function InvoiceEditorPage() {
   const [saving, setSaving] = useState(false);
 
   const [direction, setDirection] = useState(directionParam);
+  const [kind, setKind] = useState("Invoice");
   const [invoiceNo, setInvoiceNo] = useState("");
   const [projectId, setProjectId] = useState(projectIdParam);
   const [counterpartyName, setCounterpartyName] = useState("");
@@ -180,6 +181,7 @@ export default function InvoiceEditorPage() {
         const inv = invoiceRes.data;
         setInvoice(inv);
         setDirection(inv.direction);
+        setKind(inv.kind || "Invoice");
         setInvoiceNo(inv.invoice_no);
         setProjectId(inv.project_id || "");
         setCounterpartyName(inv.counterparty_name || "");
@@ -280,7 +282,7 @@ export default function InvoiceEditorPage() {
     setSaving(true);
     try {
       const payload = {
-        direction, invoice_no: invoiceNo, project_id: projectId || null,
+        direction, kind, invoice_no: invoiceNo, project_id: projectId || null,
         counterparty_name: counterpartyName || null, counterparty_eik: counterpartyEik || null,
         counterparty_vat_no: counterpartyVatNo || null, counterparty_address: counterpartyAddress || null,
         counterparty_mol: counterpartyMol || null, counterparty_email: counterpartyEmail || null,
@@ -296,7 +298,7 @@ export default function InvoiceEditorPage() {
         navigate(`/finance/invoices/${res.data.id}`, { replace: true });
       } else {
         await API.put(`/finance/invoices/${invoiceId}`, {
-          invoice_no: invoiceNo, counterparty_name: counterpartyName || null,
+          invoice_no: invoiceNo, kind, counterparty_name: counterpartyName || null,
           counterparty_eik: counterpartyEik || null, counterparty_vat_no: counterpartyVatNo || null,
           counterparty_address: counterpartyAddress || null, counterparty_mol: counterpartyMol || null,
           counterparty_email: counterpartyEmail || null, counterparty_phone: counterpartyPhone || null,
@@ -538,6 +540,18 @@ export default function InvoiceEditorPage() {
                   <SelectContent>
                     <SelectItem value="Issued">{t("finance.issuedSales")}</SelectItem>
                     <SelectItem value="Received">{t("finance.receivedBills")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Тип документ</Label>
+                <Select value={kind} onValueChange={setKind} disabled={!canEdit}>
+                  <SelectTrigger className="bg-background" data-testid="kind-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Invoice">Фактура</SelectItem>
+                    <SelectItem value="Proforma">Проформа</SelectItem>
+                    <SelectItem value="CreditNote">Кредитно известие</SelectItem>
+                    <SelectItem value="DebitNote">Дебитно известие</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
