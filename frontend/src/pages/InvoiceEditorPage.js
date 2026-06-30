@@ -92,6 +92,7 @@ export default function InvoiceEditorPage() {
   const [projects, setProjects] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [invoicePayments, setInvoicePayments] = useState([]);
+  const [invoiceVersions, setInvoiceVersions] = useState([]);
   const [allClients, setAllClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -206,6 +207,10 @@ export default function InvoiceEditorPage() {
           const payRes = await API.get(`/finance/invoices/${invoiceId}/payments`);
           setInvoicePayments(payRes.data);
         } catch { setInvoicePayments([]); }
+        try {
+          const verRes = await API.get(`/finance/invoices/${invoiceId}/versions`);
+          setInvoiceVersions(verRes.data || []);
+        } catch { setInvoiceVersions([]); }
       } else {
         const defaultDue = new Date();
         defaultDue.setDate(defaultDue.getDate() + 30);
@@ -459,7 +464,7 @@ export default function InvoiceEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {canEdit && !isNew && !editing && (
+          {isAdmin && !isNew && !editing && (
             <Button variant="outline" onClick={() => setEditing(true)} data-testid="edit-btn">
               <Pencil className="w-4 h-4 mr-1" /> Редакция
             </Button>
@@ -815,6 +820,31 @@ export default function InvoiceEditorPage() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          )}
+
+          {isAdmin && invoiceVersions.length > 0 && (
+            <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="version-history-panel">
+              <div className="p-4 border-b border-border flex items-center gap-2">
+                <Clock className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">История на промените</h2>
+                <Badge variant="outline" className="text-xs ml-1">{invoiceVersions.length}</Badge>
+              </div>
+              <div className="divide-y divide-border">
+                {invoiceVersions.map((v) => (
+                  <div key={v.id} className="p-3 flex items-center justify-between text-sm" data-testid={`version-row-${v.version_no}`}>
+                    <div>
+                      <span className="font-medium text-foreground">в.{v.version_no}</span>
+                      <span className="text-muted-foreground"> · {v.edited_by_name || "—"}</span>
+                      <div className="text-xs text-muted-foreground/70 mt-0.5">{formatDate(v.edited_at)}</div>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <div>№ {v.snapshot?.invoice_no || "—"}</div>
+                      <div className="font-mono">{formatCurrency(v.snapshot?.total || 0, v.snapshot?.currency || currency)}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

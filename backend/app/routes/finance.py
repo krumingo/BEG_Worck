@@ -845,6 +845,18 @@ async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     return invoice
 
 
+@router.get("/finance/invoices/{invoice_id}/versions")
+async def list_invoice_versions(invoice_id: str, user: dict = Depends(require_m5)):
+    """Edit history (snapshots) of an invoice, newest first."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    versions = await db.invoice_versions.find(
+        {"invoice_id": invoice_id, "org_id": user["org_id"]},
+        {"_id": 0},
+    ).sort("version_no", -1).to_list(100)
+    return versions
+
+
 @router.put("/finance/invoices/{invoice_id}")
 async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depends(require_m5)):
     if not finance_permission(user):
@@ -882,7 +894,18 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    
+
+    # Keep a snapshot (version copy) before editing an already-issued document
+    if invoice.get("status") != "Draft":
+        prior = {k: v for k, v in invoice.items() if k != "_id"}
+        vcount = await db.invoice_versions.count_documents({"invoice_id": invoice_id})
+        await db.invoice_versions.insert_one({
+            "id": str(uuid.uuid4()), "org_id": user["org_id"], "invoice_id": invoice_id,
+            "version_no": vcount + 1, "snapshot": prior,
+            "edited_by": user.get("id"), "edited_by_name": user.get("name") or user.get("email"),
+            "edited_at": update["updated_at"],
+        })
+
     await db.invoices.update_one({"id": invoice_id}, {"$set": update})
     
     # Recompute if vat changed
