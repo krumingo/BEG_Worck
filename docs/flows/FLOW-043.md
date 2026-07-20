@@ -52,6 +52,16 @@ AI може да активира ново СМР само когато едно
 
 При липса на някое условие AI създава само чернова и насочва въпросите/одобренията към правилните хора.
 
+### Носител на писменото одобрение
+
+Пълният Client Portal не е задължителен predecessor за Wave 1. До неговото внедряване exact-version клиентското одобрение се доказва чрез `Interim Approval Receipt` по FLOW-003/046:
+
+- подписан PDF/e-signature;
+- verified email reply, който цитира exact version/ID;
+- защитена еднократна approval page.
+
+Receipt-ът пази identity, version/hash, scope, quantity/specification, price/terms, timestamp, original `file_id` и AuditEvent. Свободно „ОК“ или устно одобрение не изпълнява условието на D-07.
+
 **Решение:** AI добавката остава. Тя е изрично потвърдена от Крум на 18.07.2026 с „да да може“, а след това е разширена и за ново клиентско СМР при верифицирано писмено одобрение.
 
 ## D-08 — Един общ AuditEvent
@@ -128,4 +138,4 @@ BEG_Work се развива като `Construction Operating System`:
 - D-13: сесия 16.07.2026 — Disaster Recovery / Backup / Standby.
 - D-14: сесия 16.07.2026 — Construction Operating System.
 - D-07 AI активиране: сесии 18.07.2026 — пряко активиране по предварително одобрени правила и клиентска верификация.
-- Корекционен проход по PR #2: 20.07.2026 — потвърдени са официалните одобрения и е добавена проследимост.
+- Claude Cross-FLOW Logic Audit, C-01: Interim Approval Receipt преди пълния Client Portal, 20.07.2026.
