@@ -1,0 +1,38 @@
+name: Normalize FLOW source traceability
+
+on:
+  push:
+    branches:
+      - agent/add-recovery-pack-2026-07-20
+    paths:
+      - .github/workflows/normalize-flow-sources.yml
+      - scripts/normalize_flow_sources.py
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/add-recovery-pack-2026-07-20
+          fetch-depth: 0
+
+      - name: Normalize and verify FLOW source sections
+        run: python scripts/normalize_flow_sources.py
+
+      - name: Commit normalized documentation
+        run: |
+          if git diff --quiet -- docs/flows; then
+            echo "No FLOW source updates required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/flows
+          git commit -m "docs: add source traceability to all FLOW files"
+          git push origin HEAD:agent/add-recovery-pack-2026-07-20
