@@ -133,3 +133,10 @@ Timeline трябва визуално да свързва:
 - Каноничен архив FLOW-001–043.
 - FLOW-005 и FLOW-027 решения за Contract & Project Timeline.
 - FLOW-043: Timeline не е source of truth.
+
+## Източници / сесии
+
+- Каноничен архив: `BEG_Work_ALL_FLOWS_001-043_CANONICAL_FULL_2026-07-15.docx`.
+- Архитектурна рамка и cross-FLOW решения: FLOW-043.
+- Последващи изрични решения на Крум до 20.07.2026.
+- Recovery и корекционен проход: Draft PR #2, 20.07.2026.

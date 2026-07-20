@@ -161,3 +161,10 @@ AI никога не е единственият начин за въвежда�
 - FLOW-013/014 за теренните отчети.
 - FLOW-045 за role-aware AI и confirmation-before-action.
 - D-12 Operational Resilience.
+
+## Източници / сесии
+
+- Каноничен архив: `BEG_Work_ALL_FLOWS_001-043_CANONICAL_FULL_2026-07-15.docx`.
+- Архитектурна рамка и cross-FLOW решения: FLOW-043.
+- Последващи изрични решения на Крум до 20.07.2026.
+- Recovery и корекционен проход: Draft PR #2, 20.07.2026.

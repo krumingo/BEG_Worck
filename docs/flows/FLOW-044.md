@@ -133,3 +133,10 @@ RTO: до 1 час
 - FLOW-040 — AuditEvent;
 - FLOW-042 — QA, rollback и release acceptance;
 - FLOW-043 — D-13.
+
+## Източници / сесии
+
+- Сесия 16.07.2026: Disaster Recovery / Backup / Standby архитектура.
+- Официално потвърждение от Крум: 16.07.2026.
+- Архитектурна рамка и зависимости: FLOW-043 и свързаните FLOW документи.
+- Recovery и корекционен проход: Draft PR #2, 20.07.2026.

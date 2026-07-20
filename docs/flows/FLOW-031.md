@@ -149,3 +149,10 @@ AI никога самостоятелно не:
 - общ orchestration state;
 - audit на tool routing;
 - тестове за cross-agent conflict, permission leakage и forbidden autonomy.
+
+## Източници / сесии
+
+- Каноничен архив: `BEG_Work_ALL_FLOWS_001-043_CANONICAL_FULL_2026-07-15.docx`.
+- Архитектурна рамка и cross-FLOW решения: FLOW-043.
+- Последващи изрични решения на Крум до 20.07.2026.
+- Recovery и корекционен проход: Draft PR #2, 20.07.2026.

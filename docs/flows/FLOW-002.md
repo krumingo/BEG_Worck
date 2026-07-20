@@ -158,7 +158,7 @@ AI не изпълнява критично действие без човешк
 - AI tool permission checks;
 - защита срещу direct URL access.
 
-## Източници и проследимост
+## Източници / сесии
 
 - Каноничен архив FLOW-001–043.
 - FLOW-043 Architecture Decisions.
