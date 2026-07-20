@@ -34,8 +34,8 @@
 | FLOW-030 | BEG Brain / централен AI | 100% | 0 |
 | FLOW-031 | Модулни AI agent-шапки | 100% | 0 |
 | FLOW-032 | Master Data / единна база | 100% | 0 |
-| FLOW-033 | Data Quality Center | 95% | 1 |
-| FLOW-034 | Approval Center | 75% | 3 |
+| FLOW-033 | Data Quality Center | 100% | 0 |
+| FLOW-034 | Approval Center | 100% | 0 |
 | FLOW-035 | Work Package Engine | 85% | 2 |
 | FLOW-036 | Object Timeline | 55% | 3 |
 | FLOW-037 | Mobile Field App 2.0 | 50% | 4 |
