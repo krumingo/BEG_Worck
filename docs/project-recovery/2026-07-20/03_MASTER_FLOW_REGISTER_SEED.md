@@ -8,10 +8,10 @@
 ## Обобщение
 
 - Общо FLOW-ове: **49**
-- На 100% Business Lock: **33**
-- Активни незавършени FLOW-ове: **15**
+- На 100% Business Lock: **35**
+- Активни незавършени FLOW-ове: **13**
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **57**
+- Общо оставащи конкретни бизнес решения: **53**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -49,7 +49,7 @@
 | FLOW-032 | Master Data / единна база | 100% | 0 |
 | FLOW-033 | Data Quality Center | 100% | 0 |
 | FLOW-034 | Approval Center | 100% | 0 |
-| FLOW-035 | Work Package Engine | 85% | 2 |
+| FLOW-035 | Work Package Engine | 100% | 0 |
 | FLOW-036 | Object Timeline | 55% | 3 |
 | FLOW-037 | Mobile Field App 2.0 | 50% | 4 |
 | FLOW-038 | Procurement Agent | 45% | 5 |
@@ -59,34 +59,40 @@
 | FLOW-042 | Release / QA / Test Center | 40% | 4 |
 | FLOW-043 | Architecture Decisions D-01–D-14 | 100% | 0 |
 | FLOW-044 | Disaster Recovery | 100% | 0 |
-| FLOW-045 | AI Command Center | 95% | 1 |
-| FLOW-046 | Client Portal | 75% | 4 |
+| FLOW-045 | AI Command Center | 100% | 0 |
+| FLOW-046 | Client Portal | 80% | 3 |
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 35% | 6 |
 | FLOW-049 | Marketplace / свободен капацитет | 40% | 8 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
-## Потвърждение на спорните статуси
+## Последни бизнес корекции и затваряния
 
 - FLOW-003 — изрично заключен след 15.07.2026: **да**.
 - FLOW-005 — изрично заключен след 15.07.2026: **да**.
-- FLOW-025 — изрично заключен самостоятелно след 15.07.2026: **не**; остава на 80% с 2 решения.
-- FLOW-008 — възстановен на 100% Business Lock в корекционния проход от 20.07.2026.
+- FLOW-008 — възстановен на 100% Business Lock.
+- FLOW-025 — остава 80% с 2 документални матрици.
+- FLOW-035 — затворен на 100%: PackageTemplate, идемпотентно generation и финален Work Package екран.
+- FLOW-045 — затворен на 100%: същият BEG Brain + финална intent/action matrix.
+- FLOW-046 — 80%: каналите и standard approval evidence са заключени; остават 3 решения.
+- FLOW-019/024 — заключено финансовото и KPI третиране на престоя.
 
 ## Следващ препоръчан ред за бизнес затваряне
 
-1. FLOW-045 — 1 решение;
-2. FLOW-025 и FLOW-035 — по 2 решения;
-3. FLOW-010 — 3 решения;
-4. FLOW-012 и FLOW-046 — по 4 решения;
-5. FLOW-036–042, FLOW-048 и FLOW-049.
+1. FLOW-025 и FLOW-040 — по 2 решения;
+2. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения;
+3. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения;
+4. FLOW-038 и FLOW-039 — по 5 решения;
+5. FLOW-048 — 6 решения;
+6. FLOW-049 — 8 решения.
 
 ## Важно техническо уточнение
 
-33 FLOW-а са заключени на бизнес ниво, но cross-FLOW одитът установи общи foundation blockers. За реалния код водещи са:
+35 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
 
-- [Cross-FLOW Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
+- [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
+- [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
 - [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
 
@@ -94,5 +100,5 @@
 
 - Каноничен архив FLOW-001–043.
 - Последващи изрични решения на Крум от 15–20.07.2026.
-- Корекционен проход по PR #2: 20.07.2026.
+- Корекционен и logic-audit pass по Draft PR #2: 20.07.2026.
 - Технически code audit срещу `main`: 20.07.2026.
