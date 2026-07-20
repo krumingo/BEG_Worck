@@ -2,17 +2,19 @@
 
 > **Обхват:** FLOW-001–FLOW-049  
 > **Канон:** отделните FLOW документи + Master Flow Register + последващи изрични решения на Крум  
-> **Важно:** Business Lock и Implementation Gate са отделни статуси.
+> **Важно:** Business Lock и Implementation Gate са отделни статуси  
+> **Проследимост:** всеки FLOW файл съдържа стандартна секция `Източници / сесии`
 
 ## Основни регистри
 
 - [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)
-- [Decision Register Seed](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)
+- [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)
 - [Master Knowledge Base Seed](../project-recovery/2026-07-20/05_MASTER_KNOWLEDGE_BASE_SEED.md)
 
 ## Архитектура и готовност за програмиране
 
 - [Architecture Index](../architecture/README.md)
+- [Correction Pass — 20.07.2026](../architecture/CORRECTION_PASS_2026-07-20.md)
 - [Cross-FLOW Implementation Audit](../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Implementation Gate Matrix](../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../architecture/IMPLEMENTATION_WAVES.md)
@@ -86,7 +88,15 @@
 Всяка следваща сесия трябва да обновява:
 
 1. засегнатия FLOW документ;
-2. Master Flow Register;
-3. Decision Register, когато има ново архитектурно решение;
-4. Session Archive;
-5. Implementation/QA backlog, когато FLOW е готов за технически gate.
+2. секцията `Източници / сесии` в него;
+3. Master Flow Register;
+4. Decision Register, когато има ново архитектурно решение;
+5. Session Archive;
+6. Implementation/QA backlog, когато FLOW е готов за технически gate.
+
+Преди merge се проверява:
+
+- непрекъсната серия FLOW-001–049;
+- `Източници / сесии` във всички 49 файла;
+- съвпадение на проценти и оставащи точки между регистъра и отделните FLOW файлове;
+- съвпадение на D-решенията между FLOW-043 и Decision Register.
