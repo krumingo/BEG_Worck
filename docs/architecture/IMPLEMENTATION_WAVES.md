@@ -1,6 +1,7 @@
 # BEG_Work — Implementation Waves
 
-> Цел: паралелно програмиране без нарушаване на FLOW зависимостите.
+> Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
+> Корекция 20.07.2026: FLOW-008 е 100% Business Lock; FLOW-025 остава 80% с 2 решения.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -86,9 +87,9 @@
 - FLOW-005 Contracts/annexes/retentions/guarantees.
 - FLOW-006 Finance/payment allocations.
 - FLOW-007 Extra works/change orders.
-- FLOW-008 Project financial view — след останалите 3 бизнес решения.
+- FLOW-008 Project financial view — бизнес логиката е заключена; изисква source map, read-only drill-down и reconciliation tests.
 - FLOW-010 Master-linked counterparties — след останалите 3 решения.
-- FLOW-025 document control.
+- FLOW-025 document control — след двете финални checklist/blocking матрици.
 
 ## Exit criteria
 
@@ -98,7 +99,8 @@
 - fixed-price and remeasurement act tests;
 - one payment ledger;
 - contract/offer/act/invoice/payment reconciliation;
-- Krum dashboard drill-down.
+- Krum dashboard drill-down;
+- document checklist/blocking rules са изрично заключени преди FLOW-025 release.
 
 ---
 
@@ -191,6 +193,7 @@
 - W0 permission, Master Data, File Registry, AuditEvent, tests and DR can be separate workstreams with agreed schemas.
 - UI mockups for W1/W2 can proceed against versioned API contracts.
 - Data migration inventory can proceed in parallel with business FLOW completion.
+- FLOW-008 technical refactor може да се проектира паралелно, защото Business Lock е възстановен.
 
 ## Не може да върви независимо
 
@@ -199,6 +202,7 @@
 - Marketplace before generic WorkPackage and Counterparty Master.
 - payroll release before canonical daily reports and one payment service.
 - file/photo expansion before File Registry abstraction.
+- FLOW-025 final implementation before the two document/checklist matrices are approved.
 
 ---
 
@@ -214,3 +218,9 @@
 8. Canonical daily report validation/migration.
 9. Acceptance test harness.
 10. Backup/version manifest and restore dry-run.
+
+## Източници / сесии
+
+- FLOW-001–049 business documents in PR #2.
+- Cross-FLOW code audit, 20.07.2026.
+- Correction pass, 20.07.2026.
