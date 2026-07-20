@@ -1,13 +1,21 @@
 # BEG_Work — FLOW Documentation Index
 
 > **Обхват:** FLOW-001–FLOW-049  
-> **Канон:** отделните FLOW документи + Master Flow Register + последващи изрични решения на Крум
+> **Канон:** отделните FLOW документи + Master Flow Register + последващи изрични решения на Крум  
+> **Важно:** Business Lock и Implementation Gate са отделни статуси.
 
 ## Основни регистри
 
 - [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)
 - [Decision Register Seed](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)
 - [Master Knowledge Base Seed](../project-recovery/2026-07-20/05_MASTER_KNOWLEDGE_BASE_SEED.md)
+
+## Архитектура и готовност за програмиране
+
+- [Architecture Index](../architecture/README.md)
+- [Cross-FLOW Implementation Audit](../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
+- [Implementation Gate Matrix](../architecture/IMPLEMENTATION_GATE_MATRIX.md)
+- [Implementation Waves](../architecture/IMPLEMENTATION_WAVES.md)
 
 ## FLOW-001–FLOW-010
 
