@@ -5,20 +5,26 @@
 
 ## Основни документи
 
-1. [Cross-FLOW Implementation Audit — 20.07.2026](CROSS_FLOW_AUDIT_2026-07-20.md)  
+1. [Correction Pass — 20.07.2026](CORRECTION_PASS_2026-07-20.md)  
+   Потвърдените корекции по FLOW-008, FLOW-025, D-07 и D-12–D-14, плюс merge блокерите за PR #2.
+
+2. [Cross-FLOW Implementation Audit — 20.07.2026](CROSS_FLOW_AUDIT_2026-07-20.md)  
    Двадесет находки от проверката на FLOW-001–049 срещу реалния backend/runtime код.
 
-2. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
+3. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
    Статус по всеки FLOW: foundation blocker, refactor, business-open, ready wave или legacy.
 
-3. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
+4. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
    Безопасен ред за паралелно програмиране: Wave 0 Foundation → Commercial Core → Field Operations → AI → Portals/Marketplace.
 
-4. [FLOW Documentation Index](../flows/README.md)  
+5. [FLOW Documentation Index](../flows/README.md)  
    Индекс към отделните документи FLOW-001–049.
 
-5. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
+6. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
    Бизнес готовност и оставащи решения.
+
+7. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
+   Синхронизираните решения D-01–D-14 и техните източници.
 
 ## Главен технически извод
 
@@ -48,5 +54,7 @@
 
 - Този PR е документационен и остава Draft до преглед от Крум.
 - Не променя приложния код или базата.
+- FLOW-001–049 имат стандартна секция `Източници / сесии`.
+- Master Flow Register, Decision Register и отделните FLOW файлове трябва да съвпадат преди merge.
 - След merge документацията става обща основа за ChatGPT, Claude, Emergent и разработчиците.
 - Feature implementation не получава PASS без permission, migration, tests, audit, idempotency, DQ/Approval и rollback/restore план.
