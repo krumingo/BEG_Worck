@@ -1,4 +1,16 @@
-# Master Flow Register Seed
+# Master Flow Register — FLOW-001–049
+
+> **Актуално към:** 20.07.2026  
+> **Показател:** бизнес готовност, не процент програмиран код  
+> **100%:** Business Lock; Implementation Gate се проверява отделно
+
+## Обобщение
+
+- Общо FLOW-ове: **49**
+- На 100% Business Lock: **32**
+- Активни незавършени FLOW-ове: **16**
+- Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
+- Общо оставащи конкретни решения: **60**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -19,7 +31,7 @@
 | FLOW-015 | Dashboard / справки / аларми | 100% | 0 |
 | FLOW-016 | File Registry / документи / файлове | 100% | 0 |
 | FLOW-017 | Задачи / GitHub / Emergent / контрол | 100% | 0 |
-| FLOW-018 | Quality / дефекти / гаранции — legacy MVP | 35% | 0 |
+| FLOW-018 | Quality / дефекти / гаранции — legacy MVP | 35% | 0* |
 | FLOW-019 | СМР / труд / производителност / марж | 100% | 0 |
 | FLOW-020 | Материали / заявки / доставки / фактури | 100% | 0 |
 | FLOW-021 | Подизпълнители / бригади / рейтинг | 100% | 0 |
@@ -44,10 +56,21 @@
 | FLOW-040 | AI Audit Log / AuditEvent изглед | 65% | 2 |
 | FLOW-041 | Scenario / What-if Engine | 35% | 4 |
 | FLOW-042 | Release / QA / Test Center | 40% | 4 |
-| FLOW-043 | Architecture Decisions D-01–D-10 | 100% | 0 |
+| FLOW-043 | Architecture Decisions D-01–D-14 | 100% | 0 |
 | FLOW-044 | Disaster Recovery | 100% | 0 |
 | FLOW-045 | AI Command Center | 95% | 1 |
 | FLOW-046 | Client Portal | 75% | 4 |
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 35% | 6 |
 | FLOW-049 | Marketplace / свободен капацитет | 40% | 8 |
+
+\* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
+
+## Следващ препоръчан ред за бизнес затваряне
+
+1. FLOW-045 — 1 решение;
+2. FLOW-001 — 2 решения;
+3. FLOW-035 — 2 решения;
+4. FLOW-008 и FLOW-010 — по 3 решения;
+5. FLOW-012 и FLOW-046 — по 4 решения;
+6. FLOW-036–042, FLOW-048 и FLOW-049.
