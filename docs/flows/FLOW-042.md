@@ -3,7 +3,7 @@
 > **Статус:** 40% — BUSINESS DESIGN IN PROGRESS  
 > **Последна проверка:** 20.07.2026  
 > **Оставащи решения:** 4  
-> **Implementation Gate:** този FLOW управлява самия gate
+> **Implementation Gate:** този FLOW управлява самия gate и се изгражда във Wave 0
 
 ## Цел
 
@@ -21,6 +21,35 @@ Business Lock
 → приемане от Крум
 → release
 ```
+
+## Bootstrap QA Gate v0 — докато Test Center още не е реализиран
+
+FLOW-042 е самият gate keeper, но runtime модулът му още не съществува. До неговото внедряване се използва задължителен GitHub-based bootstrap процес.
+
+За всяка промяна се създава versioned Markdown/YAML test record в repository/PR, съдържащ:
+
+- Test ID и FLOW;
+- бизнес правило;
+- branch, commit и PR;
+- предусловия и тестова среда;
+- роля и permission scope;
+- стъпки;
+- очакван резултат;
+- забранен резултат;
+- correction/reversal сценарий;
+- evidence links — screenshot, video, log, file или API output;
+- automation result, ако има;
+- проверил технически;
+- решение на Крум;
+- release/rollback бележка.
+
+### Bootstrap правила
+
+- Няма `Implementation Gate PASS` само по устно твърдение или текст от Emergent/AI.
+- Критичният forbidden scenario трябва да е проверен.
+- Крум е единственият, който дава финалното бизнес приемане.
+- Test record-ите по-късно се мигрират в Test Center без загуба на commit, evidence и решение.
+- Bootstrap Gate v0 не означава, че FLOW-042 е 100%; той е временна контролна рамка, докато пълният модул се изгради във Wave 0.
 
 ## Минимален тестов пакет за всеки FLOW
 
@@ -76,7 +105,8 @@ GitHub commit / PR / release
 - снимка, видео, лог или друг доказателствен файл;
 - свързания GitHub branch, commit и PR;
 - нерешени дефекти и блокиращи регресии;
-- коя версия е в production и коя е в standby.
+- коя версия е в production и коя е в standby;
+- дали тестът е Bootstrap v0 или вече е в реалния Test Center.
 
 ## Какво НЕ трябва да позволява
 
@@ -86,7 +116,8 @@ GitHub commit / PR / release
 - успешно състояние без доказателство;
 - Emergent/AI да затвори окончателно тест вместо Крум;
 - неуспешен критичен тест да бъде скрит от общия статус;
-- нов release да няма план за rollback.
+- нов release да няма план за rollback;
+- липсата на готов Test Center да се използва като причина да няма QA record.
 
 ## Връзки
 
@@ -98,14 +129,13 @@ GitHub commit / PR / release
 
 ## Отворени решения
 
-1. Окончателен стандарт на тестовия сценарий.
+1. Окончателен стандарт на test-case schema след bootstrap периода.
 2. Критерии за приемане по тежест на дефекта.
 3. UI на Test Center и ролите в него.
-4. Финална връзка между тест, commit, branch, PR, deployment и release version.
+4. Финална runtime връзка между тест, commit, branch, PR, deployment и release version.
 
 ## Източници / сесии
 
 - Каноничен архив: `BEG_Work_ALL_FLOWS_001-043_CANONICAL_FULL_2026-07-15.docx`.
-- Архитектурна рамка и cross-FLOW решения: FLOW-043.
-- Последващи изрични решения на Крум до 20.07.2026.
-- Recovery и корекционен проход: Draft PR #2, 20.07.2026.
+- Архитектурна рамка и cross-FLOW решения: FLOW-017, FLOW-043 и FLOW-044.
+- Claude Cross-FLOW Logic Audit, C-07: bootstrap QA gate, 20.07.2026.
