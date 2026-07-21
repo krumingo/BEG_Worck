@@ -1,7 +1,7 @@
 # BEG_Work — Implementation Waves
 
 > Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
-> Business-close pass 21.07.2026: FLOW-025 и FLOW-040 са 100%; document control и audit retention/visibility rules са заключени.
+> Business-close pass 21.07.2026: FLOW-010, FLOW-025 и FLOW-040 са 100%; counterparty communication/bank rules, document control и audit retention/visibility rules са заключени.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -108,7 +108,7 @@
 - FLOW-006 Finance/payment allocations;
 - FLOW-007 Extra works/change orders;
 - FLOW-008 Project financial view — бизнес логиката е заключена; изисква source map, read-only drill-down и reconciliation tests;
-- FLOW-010 Master-linked counterparties — след останалите 3 решения;
+- FLOW-010 Master-linked counterparties — бизнес заключен; runtime след FLOW-032, FLOW-002, FLOW-034, FLOW-016 и FLOW-040;
 - FLOW-025 Document Control — бизнес заключен; runtime след FLOW-016, FLOW-002, FLOW-034 и FLOW-040.
 
 ## Written client approval преди FLOW-046
@@ -117,9 +117,31 @@
 
 - подписан PDF/e-signature;
 - verified email reply към exact version/ID;
-- защитена еднократна approval page.
+- защитена еднократна approval page;
+- exact-version approval card в клиентския чат.
 
 Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Approval Center и AuditEvent. Portal-ът по-късно използва същия модел, без миграция към втори approval register.
+
+## Counterparty / Communication / Bank Verification runtime / FLOW-010
+
+Wave 1 изгражда:
+
+- един `MasterOrganization_ID` и `MasterPerson_ID` с role/scope assignments;
+- controlled deduplication/merge и redirect history;
+- отделни internal project threads и client/investor threads;
+- context links към project, contract, offer, Change Request, act, invoice, document и task;
+- versioned AI summary snapshots с original-source links, permission masking и retention;
+- client offer cards, exact-version `ApprovalReceipt` и invalidation при нова версия;
+- `VerifiedBankAccount` registry със статуси, evidence и history;
+- AI/OCR comparison между invoice IBAN и verified accounts;
+- first-payment/new-or-changed-IBAN block;
+- two-independent-source verification, без задължително двама служители;
+- risk-triggered re-verification;
+- financial read model `counterparty → project → contract/package → role`;
+- отделни receivables/payables, overdue positions, advances и retentions;
+- informational net exposure без automatic netting.
+
+Проверка на IBAN и одобрение на плащането са отделни действия. Изходяща BEG фактура допуска само active verified company IBAN.
 
 ## Document Control runtime / FLOW-025
 
@@ -145,6 +167,15 @@ Document Control не създава собствено плащане и не �
 - one payment ledger;
 - contract/offer/act/invoice/payment reconciliation;
 - Krum dashboard drill-down;
+- one Master organization/person identity with controlled merge;
+- contact authority and project/contract scope are enforceable;
+- internal and client communications cannot leak into each other;
+- AI summary points open their original source and preserve version history;
+- first payment to unverified IBAN is blocked;
+- two-source verification and invoice-IBAN mismatch tests pass;
+- verified IBAN does not bypass payment Approval;
+- counterparty financial view separates invoiced/received revenue, costs, overdue receivables and overdue payables by project/contract;
+- no automatic netting between different obligations/contracts;
 - one-Current document version constraint;
 - requirement template/snapshot traceability;
 - allowed/forbidden tests за act, invoice и payment blockers;
@@ -267,6 +298,7 @@ Document Control не създава собствено плащане и не �
 - UI mockups for W1/W2 can proceed against versioned API contracts;
 - Data migration inventory can proceed in parallel with business FLOW completion;
 - FLOW-008 technical refactor може да се проектира паралелно;
+- FLOW-010 Master IDs, role/scope, communication threads, VerifiedBankAccount и financial-read contracts могат да се проектират след agreement за W0 IDs, permissions, Approval, File Registry и AuditEvent;
 - FLOW-035 schema/UI contract може да се проектира след W0 IDs/permissions agreement;
 - Interim Approval Receipt adapter може да се проектира преди пълния FLOW-046 portal;
 - FLOW-025 requirement model може да се проектира паралелно след agreement за File Registry IDs, Approval, Permission и AuditEvent contracts;
@@ -277,6 +309,7 @@ Document Control не създава собствено плащане и не �
 - AI write actions before Permission/DQ/Approval/Audit;
 - portal/magic link before ExternalPrincipal/AccessGrant security contract;
 - Marketplace before generic WorkPackage and Counterparty Master;
+- FLOW-010 bank/payment guards before Payment Core, Approval, AuditEvent and Master Organization contracts;
 - payroll release before canonical daily reports and one payment service;
 - management bonus payment before FLOW-047 calculation + Approval + FLOW-028 obligation;
 - file/photo/document expansion before File Registry abstraction;
@@ -298,15 +331,18 @@ Document Control не създава собствено плащане и не �
 8. Bootstrap QA Gate repository structure.
 9. Canonical project status migration.
 10. Canonical daily report/downtime validation and migration.
-11. ApprovalReceipt model + signed-PDF/email/secure-page adapters.
-12. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
-13. Generic WorkPackage + PackageTemplate schema contract.
-14. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
+11. ApprovalReceipt model + signed-PDF/email/secure-page/chat-card adapters.
+12. Master Counterparty/Contact Role + CommunicationThread/AISummarySnapshot + VerifiedBankAccount schema contracts.
+13. Counterparty financial read model and no-automatic-netting tests.
+14. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
+15. Generic WorkPackage + PackageTemplate schema contract.
+16. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
 
 ## Източници / сесии
 
 - FLOW-001–049 business documents in PR #2.
 - Cross-FLOW code audit, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
+- FLOW-010 business-close pass, 21.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
