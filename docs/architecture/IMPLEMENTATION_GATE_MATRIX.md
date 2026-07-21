@@ -2,7 +2,7 @@
 
 > **Дата:** 21.07.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-040 е 100%; retention, immutable storage и visibility policy са заключени.
+> **Последен business-close pass:** FLOW-010 е 100%; communication summary, verified-bank-account и financial-profile rules са заключени.
 
 ## Легенда
 
@@ -24,7 +24,7 @@
 | 007 | 100% | extra-work drafts and offer creation foundation | **READY-W1** | FLOW-003 stable identity + FLOW-034 + exact-version client approval |
 | 008 | 100% | P&L/full-cost/financial-result routes | **REFACTOR / READY-W1** | source map, locked card order, advance-coverage formula, read-only drill-down tests |
 | 009 | 100% | warehouses, batches/FIFO, items, movements | **READY-W1** | FLOW-032 items/locations + transaction idempotency + cost recognition |
-| 010 | 70% | clients, counterparties, persons/companies foundations | **BUSINESS-OPEN** | FLOW-032 org/person consolidation + bank-change approval |
+| 010 | 100% | clients, counterparties, persons/companies foundations | **REFACTOR / READY-W1 after W0/032** | Master Organization/Person migration; scoped contacts; internal/client threads; AI summary source links; ApprovalReceipt; VerifiedBankAccount; contract-scoped financial read model |
 | 011 | 100% | asset items/units/custody/QR/repairs/intake | **READY-W1** | FLOW-032 asset type + FLOW-034 write-offs + File Registry |
 | 012 | 70% | procurement/warehouse/mobile fragments | **BUSINESS-OPEN** | driver UX, QR custody chain, partial/damaged delivery, acceptance SLA |
 | 013 | 100% | attendance + old/new report schemas | **W0/W1 REFACTOR** | canonical presence/report schema and hard validation |
@@ -82,11 +82,11 @@
 
 ## Може да се развива паралелно само зад feature flags и migration adapters
 
-- FLOW-001, 003–009, 011, 013–016, 019–021, 024–029, 035, 045 и 047.
+- FLOW-001, 003–011, 013–016, 019–021, 024–029, 035, 045 и 047.
 
 ## Не трябва да се финализира преди оставащите бизнес решения
 
-- FLOW-010, 012, 036–039, 041–042, 046, 048 и 049.
+- FLOW-012, 036–039, 041–042, 046, 048 и 049.
 
 ## Release правило
 
@@ -101,6 +101,20 @@
 7. Data Quality / Approval връзки;
 8. проверен UI за Крум;
 9. rollback/restore план.
+
+За FLOW-010 допълнително се изискват:
+
+- един Master Organization/Person модел и controlled deduplication/merge;
+- role/scope/authority модел за контактите;
+- отделни вътрешни и клиентски communication threads;
+- versioned AI summary, source links, retention и permission masking;
+- exact-version ApprovalReceipt от клиентския чат;
+- VerifiedBankAccount registry и доказуеми два независими verification sources;
+- first-payment/new-IBAN block и invoice mismatch tests;
+- разграничение между bank verification и payment approval;
+- financial read model по counterparty→project→contract/package→role;
+- отделни receivables/payables и тест срещу automatic netting;
+- изходяща BEG фактура да допуска само active verified company IBAN.
 
 За FLOW-025 допълнително се изискват:
 
@@ -130,5 +144,6 @@
 - FLOW-001–049 business documents in this PR.
 - Cross-FLOW code audit against `main`, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
+- FLOW-010 business-close pass, 21.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
