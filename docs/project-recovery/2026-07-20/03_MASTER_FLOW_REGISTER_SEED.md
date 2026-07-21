@@ -1,6 +1,6 @@
 # Master Flow Register — FLOW-001–049
 
-> **Актуално към:** 20.07.2026  
+> **Актуално към:** 21.07.2026  
 > **Показател:** бизнес готовност, не процент програмиран код  
 > **100%:** Business Lock; Implementation Gate се проверява отделно  
 > **Технически статус:** виж [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -8,10 +8,10 @@
 ## Обобщение
 
 - Общо FLOW-ове: **49**
-- На 100% Business Lock: **35**
-- Активни незавършени FLOW-ове: **13**
+- На 100% Business Lock: **36**
+- Активни незавършени FLOW-ове: **12**
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **53**
+- Общо оставащи конкретни бизнес решения: **51**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -39,7 +39,7 @@
 | FLOW-022 | Цени труд София | 100% | 0 |
 | FLOW-023 | Автоматично офериране / анализ цена | 100% | 0 |
 | FLOW-024 | Режийни / Overhead | 100% | 0 |
-| FLOW-025 | Договорни документи / версии / контрол | 80% | 2 |
+| FLOW-025 | Договорни документи / версии / контрол | 100% | 0 |
 | FLOW-026 | Аларми за риск / загуба / кеш | 100% | 0 |
 | FLOW-027 | График / човекодни / прогрес / закъснение | 100% | 0 |
 | FLOW-028 | Заплати / акорд / Pay Run / фишове | 100% | 0 |
@@ -72,15 +72,15 @@
 - FLOW-003 — изрично заключен след 15.07.2026: **да**.
 - FLOW-005 — изрично заключен след 15.07.2026: **да**.
 - FLOW-008 — възстановен на 100% Business Lock.
-- FLOW-025 — остава 80% с 2 документални матрици.
+- FLOW-019/024 — заключено финансовото и KPI третиране на престоя.
+- FLOW-025 — затворен на 100% на 21.07.2026: action-specific document matrices, requirement templates/snapshots, exceptions и payment-fact rule.
 - FLOW-035 — затворен на 100%: PackageTemplate, идемпотентно generation и финален Work Package екран.
 - FLOW-045 — затворен на 100%: същият BEG Brain + финална intent/action matrix.
 - FLOW-046 — 80%: каналите и standard approval evidence са заключени; остават 3 решения.
-- FLOW-019/024 — заключено финансовото и KPI третиране на престоя.
 
 ## Следващ препоръчан ред за бизнес затваряне
 
-1. FLOW-025 и FLOW-040 — по 2 решения;
+1. FLOW-040 — 2 решения;
 2. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения;
 3. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения;
 4. FLOW-038 и FLOW-039 — по 5 решения;
@@ -89,16 +89,18 @@
 
 ## Важно техническо уточнение
 
-35 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
+36 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
 
 - [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
+- [FLOW-025 Business Close](../../architecture/FLOW_025_BUSINESS_CLOSE_2026-07-21.md)
 - [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
 
 ## Източници / сесии
 
 - Каноничен архив FLOW-001–043.
-- Последващи изрични решения на Крум от 15–20.07.2026.
+- Последващи изрични решения на Крум от 15–21.07.2026.
 - Корекционен и logic-audit pass по Draft PR #2: 20.07.2026.
+- FLOW-025 business-close pass: 21.07.2026.
 - Технически code audit срещу `main`: 20.07.2026.
