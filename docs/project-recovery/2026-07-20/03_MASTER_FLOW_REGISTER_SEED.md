@@ -8,10 +8,10 @@
 ## Обобщение
 
 - Общо FLOW-ове: **49**
-- На 100% Business Lock: **36**
-- Активни незавършени FLOW-ове: **12**
+- На 100% Business Lock: **37**
+- Активни незавършени FLOW-ове: **11**
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **51**
+- Общо оставащи конкретни бизнес решения: **49**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -54,7 +54,7 @@
 | FLOW-037 | Mobile Field App 2.0 | 50% | 4 |
 | FLOW-038 | Procurement Agent | 45% | 5 |
 | FLOW-039 | Quality / Defects / Warranty | 40% | 5 |
-| FLOW-040 | AI Audit Log / AuditEvent изглед | 65% | 2 |
+| FLOW-040 | AuditEvent / AI Audit Log | 100% | 0 |
 | FLOW-041 | Scenario / What-if Engine | 35% | 4 |
 | FLOW-042 | Release / QA / Test Center | 40% | 4 |
 | FLOW-043 | Architecture Decisions D-01–D-14 | 100% | 0 |
@@ -75,25 +75,26 @@
 - FLOW-019/024 — заключено финансовото и KPI третиране на престоя.
 - FLOW-025 — затворен на 100% на 21.07.2026: action-specific document matrices, requirement templates/snapshots, exceptions и payment-fact rule.
 - FLOW-035 — затворен на 100%: PackageTemplate, идемпотентно generation и финален Work Package екран.
+- FLOW-040 — затворен на 100% на 21.07.2026: retention classes, append-only/tamper-evident storage, legal hold и role/scope visibility matrix.
 - FLOW-045 — затворен на 100%: същият BEG Brain + финална intent/action matrix.
 - FLOW-046 — 80%: каналите и standard approval evidence са заключени; остават 3 решения.
 
 ## Следващ препоръчан ред за бизнес затваряне
 
-1. FLOW-040 — 2 решения;
-2. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения;
-3. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения;
-4. FLOW-038 и FLOW-039 — по 5 решения;
-5. FLOW-048 — 6 решения;
-6. FLOW-049 — 8 решения.
+1. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения;
+2. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения;
+3. FLOW-038 и FLOW-039 — по 5 решения;
+4. FLOW-048 — 6 решения;
+5. FLOW-049 — 8 решения.
 
 ## Важно техническо уточнение
 
-36 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
+37 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
 
 - [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
 - [FLOW-025 Business Close](../../architecture/FLOW_025_BUSINESS_CLOSE_2026-07-21.md)
+- [FLOW-040 Business Close](../../architecture/FLOW_040_BUSINESS_CLOSE_2026-07-21.md)
 - [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
 
@@ -103,4 +104,5 @@
 - Последващи изрични решения на Крум от 15–21.07.2026.
 - Корекционен и logic-audit pass по Draft PR #2: 20.07.2026.
 - FLOW-025 business-close pass: 21.07.2026.
+- FLOW-040 business-close pass: 21.07.2026.
 - Технически code audit срещу `main`: 20.07.2026.
