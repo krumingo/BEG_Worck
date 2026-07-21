@@ -1,8 +1,8 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 20.07.2026  
+> **Дата:** 21.07.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Logic-audit pass:** FLOW-035 и FLOW-045 са 100%; FLOW-046 е 80% с 3 решения; Interim Approval Receipt е допустим преди пълния портал.
+> **Последен business-close pass:** FLOW-025 е 100%; document requirements и action blockers са заключени.
 
 ## Легенда
 
@@ -39,7 +39,7 @@
 | 022 | 100% | pricing/reporting foundations | **READY-W3** | validated historical data + marketplace signals + source timestamps |
 | 023 | 100% | AI proposal, SMR analysis, pricing/calibration | **READY-W2/W3** | FLOW-032, DQ, tool framework, no demo rates in official results |
 | 024 | 100% | overhead categories/costs/snapshots/allocations | **READY-W2** | canonical allocation; project-vs-firm downtime; gross cost + separate recovery |
-| 025 | 80% | files exist, but no full document-control domain | **BUSINESS-OPEN** | close 2 document/checklist matrices; FLOW-016 first |
+| 025 | 100% | files exist, but no full document-control runtime | **READY-W1 after W0/016/034** | DocumentType/Family/Version; requirement templates/snapshots; action guards; exception approvals; migration |
 | 026 | 100% | alarm engine/events/rules | **REFACTOR / READY-W2** | separate Alarm/DQ/Approval/Task; blocking semantics and audit |
 | 027 | 100% | budget progress, expected/actual, weekly matrix | **READY-W2** | FLOW-005 timeline + FLOW-014 delay evidence + overlap logic |
 | 028 | 100% | Pay Runs v3, slips, allocations, sync, audit checks | **REFACTOR / READY-W2** | canonical labor; akord quantity; management-bonus source adapters; payment idempotency |
@@ -82,11 +82,11 @@
 
 ## Може да се развива паралелно само зад feature flags и migration adapters
 
-- FLOW-001, 003–009, 011, 013–016, 019–021, 024, 026–029, 035, 045 и 047.
+- FLOW-001, 003–009, 011, 013–016, 019–021, 024–029, 035, 045 и 047.
 
 ## Не трябва да се финализира преди оставащите бизнес решения
 
-- FLOW-010, 012, 025, 036–042, 046, 048 и 049.
+- FLOW-010, 012, 036–042, 046, 048 и 049.
 
 ## Release правило
 
@@ -102,6 +102,14 @@
 8. проверен UI за Крум;
 9. rollback/restore план.
 
+За FLOW-025 допълнително се изискват:
+
+- one-Current constraint по document family;
+- versioned requirement templates;
+- immutable requirement snapshots;
+- action-specific blocking tests;
+- доказан сценарий за вече настъпило, но unallocated плащане.
+
 До пълния FLOW-042 Test Center доказателството се пази чрез Bootstrap QA Gate v0.
 
 ## Източници / сесии
@@ -109,3 +117,4 @@
 - FLOW-001–049 business documents in this PR.
 - Cross-FLOW code audit against `main`, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
+- FLOW-025 business-close pass, 21.07.2026.
