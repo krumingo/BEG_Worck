@@ -2,7 +2,7 @@
 
 > **Дата:** 21.07.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-025 е 100%; document requirements и action blockers са заключени.
+> **Последен business-close pass:** FLOW-040 е 100%; retention, immutable storage и visibility policy са заключени.
 
 ## Легенда
 
@@ -54,7 +54,7 @@
 | 037 | 50% | mobile bootstrap/config only | **BUSINESS-OPEN** | mobile UX, offline queue, sync, idempotency, edit rules |
 | 038 | 45% | procurement foundation, no supplier RFQ agent | **BUSINESS-OPEN** | supplier registry/RFQ/parser/ranking/approval |
 | 039 | 40% | assets repairs and scattered defect concepts | **BUSINESS-OPEN** | defect lifecycle, warranty calendar, responsibility, cost/rating |
-| 040 | 65% | basic `audit_logs` | **BUSINESS-OPEN / W0** | AuditEvent envelope, retention/visibility, mandatory coverage |
+| 040 | 100% | basic `audit_logs`; no canonical immutable event store | **W0-BLOCKER / FOUNDATION** | AuditEvent envelope; append-only/hash manifests; retention classes; hold/disposition; role/field visibility; audit-of-audit; migration |
 | 041 | 35% | cashflow/expected-actual fragments | **BUSINESS-OPEN** | scenario catalog, assumptions, comparison UI, fact/forecast separation |
 | 042 | 40% | legacy smoke script; no FLOW acceptance center | **BUSINESS-OPEN / W0** | Bootstrap QA Gate v0 now; full test schema, CI, migration tests and release linkage later |
 | 043 | 100% | architecture documentation | **DOC PASS** | enforce D-01–D-14 through ADRs, lint/checklists and code review |
@@ -76,7 +76,7 @@
 - FLOW-016 — File Registry / Storage Provider.
 - FLOW-032 — Master Data migration foundation.
 - FLOW-033/034 — DQ and Approval core.
-- FLOW-040 — AuditEvent envelope.
+- FLOW-040 — canonical immutable AuditEvent, retention and visibility runtime.
 - FLOW-042 — Bootstrap QA Gate + acceptance/migration harness.
 - FLOW-044 — backup/restore infrastructure.
 
@@ -86,7 +86,7 @@
 
 ## Не трябва да се финализира преди оставащите бизнес решения
 
-- FLOW-010, 012, 036–042, 046, 048 и 049.
+- FLOW-010, 012, 036–039, 041–042, 046, 048 и 049.
 
 ## Release правило
 
@@ -110,6 +110,19 @@
 - action-specific blocking tests;
 - доказан сценарий за вече настъпило, но unallocated плащане.
 
+За FLOW-040 допълнително се изискват:
+
+- append-only store и correction events вместо edit/delete;
+- hash chain или signed manifests и integrity verification;
+- immutable archive + off-site backup/restore;
+- R1–R6 retention class assignment и anchor tests;
+- hot→archive→restore и legal/incident hold tests;
+- controlled disposition със signed manifest;
+- L0–L5 role/scope/field visibility и masking tests;
+- audit-of-audit, export и two-person break-glass tests;
+- AI request→tools→draft→human confirmation→domain execution correlation;
+- rebuild на searchable index от immutable archive.
+
 До пълния FLOW-042 Test Center доказателството се пази чрез Bootstrap QA Gate v0.
 
 ## Източници / сесии
@@ -118,3 +131,4 @@
 - Cross-FLOW code audit against `main`, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
+- FLOW-040 business-close pass, 21.07.2026.
