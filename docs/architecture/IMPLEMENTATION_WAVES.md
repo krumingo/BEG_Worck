@@ -1,7 +1,7 @@
 # BEG_Work — Implementation Waves
 
 > Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
-> Business-close pass 21.07.2026: FLOW-025 е 100%; action-specific document requirements и blocking rules са заключени.
+> Business-close pass 21.07.2026: FLOW-025 и FLOW-040 са 100%; document control и audit retention/visibility rules са заключени.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -25,13 +25,19 @@
 - inventory на старите collections;
 - read/write cutoff plan.
 
-## W0-03 — Audit / Lifecycle / Idempotency
+## W0-03 — Audit / Lifecycle / Idempotency / FLOW-040
 
-- Common `AuditEvent` envelope;
-- `archived_at/deleted_at` policy;
+- canonical common `AuditEvent` envelope;
+- append-only store и correction/reversal/annotation events вместо update/delete;
 - request/correlation/idempotency keys;
-- before/after/reason/actor/source FLOW;
-- critical write coverage test.
+- before/after references, reason, actor, effective role/scope и source FLOW;
+- AI request→tools→draft→human confirmation→domain execution correlation;
+- R1–R6 retention classes и retention anchors;
+- hot storage, immutable archive, legal/incident hold и controlled disposition;
+- hash chain или signed batch manifests и integrity verification;
+- L0–L5 visibility, field masking и audit-of-audit;
+- immutable/off-site backup и searchable-index rebuild;
+- migration от текущите `audit_logs` и critical-write coverage test.
 
 ## W0-04 — Payment Core / FLOW-006
 
@@ -68,9 +74,20 @@
 
 - version manifest;
 - DB PITR/backups;
-- file backup and immutable off-site copy;
-- restore script and health checks;
+- file and AuditEvent backup with immutable off-site copy;
+- restore script and health/integrity checks;
 - quarterly full restore drill.
+
+## Wave 0 exit criteria
+
+- permission checks use canonical assignments, not ad hoc role strings;
+- critical writes create one canonical AuditEvent;
+- event sequence/hash integrity is verifiable;
+- retention/hold/archive/disposition and visibility tests pass;
+- payment writes are idempotent and source-unique;
+- files use provider-neutral IDs and versions;
+- DQ/Approval and Bootstrap QA foundations are available;
+- database, files and audit archive have a proven restore path.
 
 ---
 
@@ -92,7 +109,7 @@
 - FLOW-007 Extra works/change orders;
 - FLOW-008 Project financial view — бизнес логиката е заключена; изисква source map, read-only drill-down и reconciliation tests;
 - FLOW-010 Master-linked counterparties — след останалите 3 решения;
-- FLOW-025 Document Control — бизнес заключен; runtime след FLOW-016, FLOW-002 и FLOW-034.
+- FLOW-025 Document Control — бизнес заключен; runtime след FLOW-016, FLOW-002, FLOW-034 и FLOW-040.
 
 ## Written client approval преди FLOW-046
 
@@ -131,7 +148,8 @@ Document Control не създава собствено плащане и не �
 - one-Current document version constraint;
 - requirement template/snapshot traceability;
 - allowed/forbidden tests за act, invoice и payment blockers;
-- imported real payment без основание се пази в ledger, но остава unallocated и блокирано за closing.
+- imported real payment без основание се пази в ledger, но остава unallocated и блокирано за closing;
+- commercial critical actions имат R1 AuditEvent и exact source-version references.
 
 ---
 
@@ -171,7 +189,8 @@ Document Control не създава собствено плащане и не �
 - offline writes are idempotent and conflict-aware;
 - quality/defect cost affects package/project/rating;
 - paid labor, management bonus and subcontractor cash movements reconcile to finance ledger;
-- VAT-neutral bonus calculation and source-unique obligation tests pass.
+- VAT-neutral bonus calculation and source-unique obligation tests pass;
+- operational critical events inherit R1/R2 retention and are reconstructable from the audit trail.
 
 ---
 
@@ -185,7 +204,7 @@ Document Control не създава собствено плащане и не �
 - FLOW-031 agent hats;
 - FLOW-036 Object Timeline — after 3 business decisions;
 - FLOW-038 Procurement Agent — after 5 business decisions;
-- FLOW-040 AI Audit Log — after 2 business decisions;
+- FLOW-040 AI Audit View — business locked; runtime foundation starts in Wave 0;
 - FLOW-041 Scenario/What-if — after 4 business decisions;
 - FLOW-045 AI Command Center — business locked; runtime after Wave 0 foundations;
 - FLOW-048 Resource Recommendation — after 6 business decisions.
@@ -199,7 +218,20 @@ Document Control не създава собствено плащане и не �
 - no direct MongoDB access from LLM;
 - AI cannot invent Master IDs, locations, prices or approvals;
 - every tool call/action is auditable;
-- every retryable action has idempotency key.
+- every retryable action has idempotency key;
+- AI Audit View чете единния AuditEvent, не отделен log;
+- raw AI content следва R4 retention, а structured official action trail наследява R1/R2/R3;
+- AI наследява scope-а на invoking user и няма собствен full-tenant audit access;
+- highly sensitive read/export/break-glass събития се одитират.
+
+## AI exit criteria
+
+- request, tool calls, shown draft, human decision and domain execution имат correlation chain;
+- model/tool/prompt-template versions са известни;
+- secrets и PII са masked;
+- личен chat delete не заличава structured official audit trail;
+- raw content expiry не премахва заключеното AuditEvidence;
+- denied actions и permission failures са видими без разкриване на забранени данни.
 
 ---
 
@@ -221,7 +253,9 @@ Document Control не създава собствено плащане и не �
 - calendar reservations and conflict handling;
 - verified profiles and evidence-based rating;
 - disputes/cancellations/sanctions;
-- no automatic contractor selection.
+- no automatic contractor selection;
+- external actors see only their own receipt/access events, not internal audit;
+- external access, approval and revoke actions are tamper-evident and retained by the relevant class.
 
 ---
 
@@ -235,7 +269,8 @@ Document Control не създава собствено плащане и не �
 - FLOW-008 technical refactor може да се проектира паралелно;
 - FLOW-035 schema/UI contract може да се проектира след W0 IDs/permissions agreement;
 - Interim Approval Receipt adapter може да се проектира преди пълния FLOW-046 portal;
-- FLOW-025 requirement model може да се проектира паралелно след agreement за File Registry IDs, Approval и Permission contracts.
+- FLOW-025 requirement model може да се проектира паралелно след agreement за File Registry IDs, Approval, Permission и AuditEvent contracts;
+- AuditEvent schema, retention archive, visibility policy tests and critical-write inventory can run as separate coordinated W0 workstreams.
 
 ## Не може да върви независимо
 
@@ -245,7 +280,9 @@ Document Control не създава собствено плащане и не �
 - payroll release before canonical daily reports and one payment service;
 - management bonus payment before FLOW-047 calculation + Approval + FLOW-028 obligation;
 - file/photo/document expansion before File Registry abstraction;
-- FLOW-025 action guards before FLOW-016 version relations and FLOW-034 exception/approval contracts.
+- FLOW-025 action guards before FLOW-016 version relations and FLOW-034 exception/approval contracts;
+- critical feature release before its AuditEvent coverage, retention class and visibility rules exist;
+- full audit export before L4 approval, masking, manifest and audit-of-audit are implemented.
 
 ---
 
@@ -253,17 +290,18 @@ Document Control не създава собствено плащане и не �
 
 1. ADR + schema for RoleAssignment and ExternalPrincipal/AccessGrant.
 2. Master Data inventory/migration map.
-3. AuditEvent schema and critical-write helper.
-4. Payment idempotency and source unique indexes.
-5. File Registry schema and local adapter.
-6. DQ/Approval minimal models.
-7. Bootstrap QA Gate repository structure.
-8. Canonical project status migration.
-9. Canonical daily report/downtime validation and migration.
-10. ApprovalReceipt model + signed-PDF/email/secure-page adapters.
-11. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
-12. Generic WorkPackage + PackageTemplate schema contract.
-13. Backup/version manifest and restore dry-run.
+3. Canonical AuditEvent + AuditEvidence schema, critical-write map and migration from `audit_logs`.
+4. Append-only/hash-manifest store, R1–R6 retention, hold/disposition and L0–L5 visibility contracts.
+5. Payment idempotency and source unique indexes.
+6. File Registry schema and local adapter.
+7. DQ/Approval minimal models.
+8. Bootstrap QA Gate repository structure.
+9. Canonical project status migration.
+10. Canonical daily report/downtime validation and migration.
+11. ApprovalReceipt model + signed-PDF/email/secure-page adapters.
+12. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
+13. Generic WorkPackage + PackageTemplate schema contract.
+14. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
 
 ## Източници / сесии
 
@@ -271,3 +309,4 @@ Document Control не създава собствено плащане и не �
 - Cross-FLOW code audit, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
+- FLOW-040 business-close pass, 21.07.2026.
