@@ -18,33 +18,37 @@
 4. [FLOW-025 Business Close — 21.07.2026](FLOW_025_BUSINESS_CLOSE_2026-07-21.md)  
    Каноничните document requirement и lifecycle матрици преди актуване, фактуриране, плащане и project transitions.
 
-5. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
+5. [FLOW-040 Business Close — 21.07.2026](FLOW_040_BUSINESS_CLOSE_2026-07-21.md)  
+   AuditEvent retention classes, append-only/tamper-evident storage, legal hold и ролева видимост L0–L5.
+
+6. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
    Статус по всеки FLOW: foundation blocker, refactor, business-open, ready wave или legacy.
 
-6. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
+7. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
    Безопасен ред: Wave 0 Foundation → Commercial Core → Field Operations → AI → Portals/Marketplace.
 
-7. [FLOW Documentation Index](../flows/README.md)  
+8. [FLOW Documentation Index](../flows/README.md)  
    Индекс към отделните документи FLOW-001–049.
 
-8. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
+9. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
    Бизнес готовност и оставащи решения.
 
-9. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
-   Синхронизираните решения D-01–D-14 и техните източници.
+10. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
+    Синхронизираните решения D-01–D-14 и техните източници.
 
 ## Текущ бизнес статус
 
 - Общо FLOW-ове: **49**
-- 100% Business Lock: **36**
-- Активни незавършени: **12**
+- 100% Business Lock: **37**
+- Активни незавършени: **11**
 - Legacy: **1** — FLOW-018 → FLOW-039
-- Оставащи конкретни решения: **51**
+- Оставащи конкретни решения: **49**
 
 Последните business-close pass-ове затвориха:
 
 - FLOW-025 — Document Control;
 - FLOW-035 — Work Package Engine;
+- FLOW-040 — AuditEvent / AI Audit Log;
 - FLOW-045 — AI Command Center.
 
 И уточниха:
@@ -54,7 +58,8 @@
 - management bonus line types и VAT-neutral formula;
 - Bootstrap QA Gate v0;
 - ExternalPrincipal/AccessGrant за magic links;
-- versioned document requirements, immutable snapshots и правилото за вече настъпило unallocated плащане.
+- versioned document requirements, immutable snapshots и правилото за вече настъпило unallocated плащане;
+- R1–R6 audit retention, legal/incident hold, immutable disposition и L0–L5 visibility.
 
 ## Главен технически извод
 
@@ -62,7 +67,8 @@
 
 - RoleAssignment, ExternalPrincipal и централизирани права;
 - Master Data и migration map;
-- AuditEvent, soft-delete и idempotency;
+- canonical append-only AuditEvent, retention, integrity и visibility;
+- soft-delete и idempotency;
 - един payment write service;
 - provider-neutral File Registry;
 - Data Quality и Approval Center runtime;
@@ -73,7 +79,7 @@
 
 1. FLOW-002 — Permission Service + External Access Grants.
 2. FLOW-032 — Master Data foundation.
-3. FLOW-040/043 — AuditEvent/lifecycle/idempotency.
+3. FLOW-040/043 — AuditEvent, lifecycle, idempotency, retention и visibility.
 4. FLOW-006 — Payment Core.
 5. FLOW-016 — File Registry.
 6. FLOW-033/034 — Data Quality + Approval.
@@ -82,9 +88,9 @@
 
 ## Следващ business-close приоритет
 
-1. FLOW-040 — 2 решения.
-2. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения.
-3. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
+1. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения.
+2. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
+3. FLOW-038/039, FLOW-048 и FLOW-049.
 
 ## Правило за PR и release
 
