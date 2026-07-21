@@ -1,7 +1,7 @@
 # BEG_Work — Implementation Waves
 
 > Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
-> Logic-audit pass 20.07.2026: FLOW-035 и FLOW-045 са 100%; FLOW-046 е 80% с 3 решения; exact-version approval е възможен чрез Interim Approval Receipt преди пълния портал.
+> Business-close pass 21.07.2026: FLOW-025 е 100%; action-specific document requirements и blocking rules са заключени.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -92,7 +92,7 @@
 - FLOW-007 Extra works/change orders;
 - FLOW-008 Project financial view — бизнес логиката е заключена; изисква source map, read-only drill-down и reconciliation tests;
 - FLOW-010 Master-linked counterparties — след останалите 3 решения;
-- FLOW-025 document control — след двете финални checklist/blocking матрици.
+- FLOW-025 Document Control — бизнес заключен; runtime след FLOW-016, FLOW-002 и FLOW-034.
 
 ## Written client approval преди FLOW-046
 
@@ -104,6 +104,20 @@
 
 Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Approval Center и AuditEvent. Portal-ът по-късно използва същия модел, без миграция към втори approval register.
 
+## Document Control runtime / FLOW-025
+
+Wave 1 изгражда:
+
+- `DocumentType`, `DocumentFamily` и immutable `DocumentVersion`;
+- one-Current constraint по version family;
+- versioned `DocumentRequirementTemplate`;
+- immutable `DocumentRequirementSnapshot` при акт, фактура, плащане и project transition;
+- action-specific guards за client act, subcontractor act, advance invoice, progress/final invoice, supplier payable, payroll/bonus payment и retention release;
+- exception requests през FLOW-034;
+- правило: system-initiated payment се блокира при липсващи документи, но вече настъпил банков факт винаги се записва като `Unallocated / За проверка`.
+
+Document Control не създава собствено плащане и не копира файлове извън FLOW-016.
+
 ## Exit criteria
 
 - no hard delete of used project/commercial records;
@@ -114,7 +128,10 @@ Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Appr
 - one payment ledger;
 - contract/offer/act/invoice/payment reconciliation;
 - Krum dashboard drill-down;
-- document checklist/blocking rules са изрично заключени преди FLOW-025 release.
+- one-Current document version constraint;
+- requirement template/snapshot traceability;
+- allowed/forbidden tests за act, invoice и payment blockers;
+- imported real payment без основание се пази в ledger, но остава unallocated и блокирано за closing.
 
 ---
 
@@ -217,7 +234,8 @@ Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Appr
 - Data migration inventory can proceed in parallel with business FLOW completion;
 - FLOW-008 technical refactor може да се проектира паралелно;
 - FLOW-035 schema/UI contract може да се проектира след W0 IDs/permissions agreement;
-- Interim Approval Receipt adapter може да се проектира преди пълния FLOW-046 portal.
+- Interim Approval Receipt adapter може да се проектира преди пълния FLOW-046 portal;
+- FLOW-025 requirement model може да се проектира паралелно след agreement за File Registry IDs, Approval и Permission contracts.
 
 ## Не може да върви независимо
 
@@ -226,8 +244,8 @@ Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Appr
 - Marketplace before generic WorkPackage and Counterparty Master;
 - payroll release before canonical daily reports and one payment service;
 - management bonus payment before FLOW-047 calculation + Approval + FLOW-028 obligation;
-- file/photo expansion before File Registry abstraction;
-- FLOW-025 final implementation before the two document/checklist matrices are approved.
+- file/photo/document expansion before File Registry abstraction;
+- FLOW-025 action guards before FLOW-016 version relations and FLOW-034 exception/approval contracts.
 
 ---
 
@@ -243,11 +261,13 @@ Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Appr
 8. Canonical project status migration.
 9. Canonical daily report/downtime validation and migration.
 10. ApprovalReceipt model + signed-PDF/email/secure-page adapters.
-11. Generic WorkPackage + PackageTemplate schema contract.
-12. Backup/version manifest and restore dry-run.
+11. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
+12. Generic WorkPackage + PackageTemplate schema contract.
+13. Backup/version manifest and restore dry-run.
 
 ## Източници / сесии
 
 - FLOW-001–049 business documents in PR #2.
 - Cross-FLOW code audit, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
+- FLOW-025 business-close pass, 21.07.2026.
