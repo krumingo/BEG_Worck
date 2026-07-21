@@ -15,37 +15,41 @@
 3. [Claude Cross-FLOW Logic Audit — 20.07.2026](CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)  
    Независима проверка FLOW срещу FLOW: пари, материали, труд, AI, външен достъп и зависимости. Съдържа решенията C-01–C-08.
 
-4. [FLOW-025 Business Close — 21.07.2026](FLOW_025_BUSINESS_CLOSE_2026-07-21.md)  
+4. [FLOW-010 Business Close — 21.07.2026](FLOW_010_BUSINESS_CLOSE_2026-07-21.md)  
+   Комуникация и AI summary, клиентски approval cards, verified bank accounts и финансов профил по обект/договор.
+
+5. [FLOW-025 Business Close — 21.07.2026](FLOW_025_BUSINESS_CLOSE_2026-07-21.md)  
    Каноничните document requirement и lifecycle матрици преди актуване, фактуриране, плащане и project transitions.
 
-5. [FLOW-040 Business Close — 21.07.2026](FLOW_040_BUSINESS_CLOSE_2026-07-21.md)  
+6. [FLOW-040 Business Close — 21.07.2026](FLOW_040_BUSINESS_CLOSE_2026-07-21.md)  
    AuditEvent retention classes, append-only/tamper-evident storage, legal hold и ролева видимост L0–L5.
 
-6. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
+7. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
    Статус по всеки FLOW: foundation blocker, refactor, business-open, ready wave или legacy.
 
-7. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
+8. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
    Безопасен ред: Wave 0 Foundation → Commercial Core → Field Operations → AI → Portals/Marketplace.
 
-8. [FLOW Documentation Index](../flows/README.md)  
+9. [FLOW Documentation Index](../flows/README.md)  
    Индекс към отделните документи FLOW-001–049.
 
-9. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
-   Бизнес готовност и оставащи решения.
+10. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
+    Бизнес готовност и оставащи решения.
 
-10. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
+11. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
     Синхронизираните решения D-01–D-14 и техните източници.
 
 ## Текущ бизнес статус
 
 - Общо FLOW-ове: **49**
-- 100% Business Lock: **37**
-- Активни незавършени: **11**
+- 100% Business Lock: **38**
+- Активни незавършени: **10**
 - Legacy: **1** — FLOW-018 → FLOW-039
-- Оставащи конкретни решения: **49**
+- Оставащи конкретни решения: **46**
 
 Последните business-close pass-ове затвориха:
 
+- FLOW-010 — Clients / Contacts / Counterparties;
 - FLOW-025 — Document Control;
 - FLOW-035 — Work Package Engine;
 - FLOW-040 — AuditEvent / AI Audit Log;
@@ -53,6 +57,11 @@
 
 И уточниха:
 
+- object-scoped internal/client communication;
+- AI summary с original-source traceability;
+- exact-version approval card и ApprovalReceipt в клиентския чат;
+- VerifiedBankAccount с два независими verification sources;
+- финансов профил `Контрагент → Обект → Договор → Роля` без automatic netting;
 - Interim Approval Receipt преди пълния Client Portal;
 - финансовото/KPI третиране на престоя;
 - management bonus line types и VAT-neutral formula;
@@ -88,7 +97,7 @@
 
 ## Следващ business-close приоритет
 
-1. FLOW-010, FLOW-036 и FLOW-046 — по 3 решения.
+1. FLOW-036 и FLOW-046 — по 3 решения.
 2. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
 3. FLOW-038/039, FLOW-048 и FLOW-049.
 
