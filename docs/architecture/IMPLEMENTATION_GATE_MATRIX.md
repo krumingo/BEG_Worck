@@ -1,8 +1,8 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 21.07.2026  
+> **Дата:** 22.07.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-010 е 100%; communication summary, verified-bank-account и financial-profile rules са заключени.
+> **Последен business-close pass:** FLOW-036 е 100%; Timeline event catalog, pause/resume hierarchy, financial layer, filters и AI summaries са заключени.
 
 ## Легенда
 
@@ -15,7 +15,7 @@
 
 | FLOW | Business | Налична основа в кода | Implementation Gate | Критичен predecessor / действие |
 |---|---:|---|---|---|
-| 001 | 100% | projects CRUD, team, phases, status transitions | **REFACTOR** | FLOW-002; canonical statuses; soft delete; closing guards |
+| 001 | 100% | projects CRUD, team, phases, status transitions | **REFACTOR** | FLOW-002; canonical statuses; project/subproject pause vs blocked SMR; Pause Impact; soft delete; closing guards |
 | 002 | 100% | auth, JWT, single `user.role`, project-team checks | **W0-BLOCKER** | RoleAssignment + ExternalPrincipal/AccessGrant + Permission Service + migration |
 | 003 | 100% | offers, lines, versions, Excel import, extra-work drafts | **REFACTOR / READY-W1** | stable Line_ID, provenance, DQ/Approval, Interim Approval Receipt, client/internal views |
 | 004 | 100% | partial invoice/offer/payment foundations; subcontractor acts | **READY-W1** | FLOW-005 contract basis + canonical act domain + FLOW-006 |
@@ -50,7 +50,7 @@
 | 033 | 100% | local checks/alarms, no central DQ router | **W0/W1 FOUNDATION** | DQ issue model, dedupe, severity/blocking, responsibility/SLA |
 | 034 | 100% | няма central Approval runtime | **W0/W1 FOUNDATION** | request/evidence/decision/execution model + dual approval |
 | 035 | 100% | subcontractor packages/budgets, no generic package | **READY-W2 after W0** | generic WorkPackage, versioned PackageTemplate, idempotent draft generation, canonical UI |
-| 036 | 55% | scattered timestamps/events, no read-only timeline service | **BUSINESS-OPEN** | event catalog, filters, AI summaries, source links |
+| 036 | 100% | scattered timestamps/events, no canonical read-only timeline service | **READY-W3 after W0/W1/W2 sources** | TimelineEvent projection; source adapters; pause/resume and blocked-work states; Pause Impact; permission layers; overlap/causal chains; versioned summaries |
 | 037 | 50% | mobile bootstrap/config only | **BUSINESS-OPEN** | mobile UX, offline queue, sync, idempotency, edit rules |
 | 038 | 45% | procurement foundation, no supplier RFQ agent | **BUSINESS-OPEN** | supplier registry/RFQ/parser/ranking/approval |
 | 039 | 40% | assets repairs and scattered defect concepts | **BUSINESS-OPEN** | defect lifecycle, warranty calendar, responsibility, cost/rating |
@@ -82,11 +82,11 @@
 
 ## Може да се развива паралелно само зад feature flags и migration adapters
 
-- FLOW-001, 003–011, 013–016, 019–021, 024–029, 035, 045 и 047.
+- FLOW-001, 003–011, 013–016, 019–021, 024–029, 035, 036 projection contracts, 045 и 047.
 
 ## Не трябва да се финализира преди оставащите бизнес решения
 
-- FLOW-012, 036–039, 041–042, 046, 048 и 049.
+- FLOW-012, 037–039, 041–042, 046, 048 и 049.
 
 ## Release правило
 
@@ -124,6 +124,18 @@
 - action-specific blocking tests;
 - доказан сценарий за вече настъпило, но unallocated плащане.
 
+За FLOW-036 допълнително се изискват:
+
+- canonical read-only TimelineEvent projection и stable source links;
+- project/subproject `Временно спрян` и WorkPackage/SMR `Блокирано` като различни състояния;
+- Pause Impact Assessment snapshot/versioning и resume checks;
+- source adapters за contract, offer, report, material, quality, finance, Approval и AuditEvent domains;
+- financial/client/operational permission layers без data leakage;
+- delay overlap и causal-chain tests;
+- daily/weekly/immediate/period AI summaries със source links и version history;
+- test срещу duplicate financial records и Timeline write-through;
+- performance, pagination, timezone и correction propagation tests.
+
 За FLOW-040 допълнително се изискват:
 
 - append-only store и correction events вместо edit/delete;
@@ -146,4 +158,5 @@
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
 - FLOW-010 business-close pass, 21.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
+- FLOW-036 business-close pass, 22.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
