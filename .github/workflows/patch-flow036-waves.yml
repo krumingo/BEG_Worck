@@ -1,0 +1,38 @@
+name: Patch FLOW-036 implementation waves
+
+on:
+  push:
+    branches:
+      - agent/add-recovery-pack-2026-07-20
+    paths:
+      - .github/workflows/patch-flow036-waves.yml
+      - scripts/patch_flow036_waves.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/add-recovery-pack-2026-07-20
+          fetch-depth: 0
+
+      - name: Patch Implementation Waves
+        run: python scripts/patch_flow036_waves.py
+
+      - name: Commit patched documentation
+        run: |
+          if git diff --quiet -- docs/architecture/IMPLEMENTATION_WAVES.md; then
+            echo "No waves update required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture/IMPLEMENTATION_WAVES.md
+          git commit -m "docs: synchronize waves for FLOW-036"
+          git push origin HEAD:agent/add-recovery-pack-2026-07-20
