@@ -1,7 +1,7 @@
 # BEG_Work — Implementation Waves
 
 > Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
-> Business-close pass 21.07.2026: FLOW-010, FLOW-025 и FLOW-040 са 100%; counterparty communication/bank rules, document control и audit retention/visibility rules са заключени.
+> Business-close pass 22.07.2026: FLOW-010, FLOW-025, FLOW-036 и FLOW-040 са 100%; counterparty, document-control, Object Timeline и audit rules са заключени.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -233,12 +233,26 @@ Document Control не създава собствено плащане и не �
 - FLOW-023 automatic offer analysis;
 - FLOW-030 BEG Brain;
 - FLOW-031 agent hats;
-- FLOW-036 Object Timeline — after 3 business decisions;
+- FLOW-036 Object Timeline — business locked; runtime after W0 foundations and stable W1/W2 source domains;
 - FLOW-038 Procurement Agent — after 5 business decisions;
 - FLOW-040 AI Audit View — business locked; runtime foundation starts in Wave 0;
 - FLOW-041 Scenario/What-if — after 4 business decisions;
 - FLOW-045 AI Command Center — business locked; runtime after Wave 0 foundations;
 - FLOW-048 Resource Recommendation — after 6 business decisions.
+
+## Object Timeline runtime / FLOW-036
+
+Wave 3 изгражда read-only Timeline projection върху стабилните source domains:
+
+- canonical `TimelineEvent` projection и source adapters;
+- project/subproject `Временно спрян` срещу WorkPackage/СМР `Блокирано`;
+- `PauseImpactAssessment` snapshot, pause/resume и remobilization effect;
+- operational, client and financial permission layers;
+- delay overlap и causal-chain logic;
+- daily, weekly, immediate and full-period versioned AI summaries със source links;
+- drill-down към оригиналния договор, отчет, доставка, акт, фактура, плащане, дефект, Approval или AuditEvent.
+
+Timeline не записва втори business fact и не извършва write-through към source domain.
 
 ## Rules
 
@@ -262,7 +276,11 @@ Document Control не създава собствено плащане и не �
 - secrets и PII са masked;
 - личен chat delete не заличава structured official audit trail;
 - raw content expiry не премахва заключеното AuditEvidence;
-- denied actions и permission failures са видими без разкриване на забранени данни.
+- denied actions и permission failures са видими без разкриване на забранени данни;
+- Timeline summaries не измислят причина, сума, вина или approval;
+- `Общо` показва важните събития и summaries, а raw events се разгъват;
+- financial Timeline events сочат към FLOW-006 и никога не дублират Payment/Invoice/Act;
+- pause/resume и blocked-work events са permission-filtered и auditable.
 
 ---
 
@@ -299,6 +317,7 @@ Document Control не създава собствено плащане и не �
 - Data migration inventory can proceed in parallel with business FLOW completion;
 - FLOW-008 technical refactor може да се проектира паралелно;
 - FLOW-010 Master IDs, role/scope, communication threads, VerifiedBankAccount и financial-read contracts могат да се проектират след agreement за W0 IDs, permissions, Approval, File Registry и AuditEvent;
+- FLOW-036 TimelineEvent/source-adapter contracts могат да се проектират паралелно, но финалната projection изчаква стабилните W1/W2 source schemas;
 - FLOW-035 schema/UI contract може да се проектира след W0 IDs/permissions agreement;
 - Interim Approval Receipt adapter може да се проектира преди пълния FLOW-046 portal;
 - FLOW-025 requirement model може да се проектира паралелно след agreement за File Registry IDs, Approval, Permission и AuditEvent contracts;
@@ -310,6 +329,7 @@ Document Control не създава собствено плащане и не �
 - portal/magic link before ExternalPrincipal/AccessGrant security contract;
 - Marketplace before generic WorkPackage and Counterparty Master;
 - FLOW-010 bank/payment guards before Payment Core, Approval, AuditEvent and Master Organization contracts;
+- FLOW-036 final Timeline projection before canonical project/subproject pause states, source links, permissions and domain event contracts;
 - payroll release before canonical daily reports and one payment service;
 - management bonus payment before FLOW-047 calculation + Approval + FLOW-028 obligation;
 - file/photo/document expansion before File Registry abstraction;
@@ -336,7 +356,8 @@ Document Control не създава собствено плащане и не �
 13. Counterparty financial read model and no-automatic-netting tests.
 14. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
 15. Generic WorkPackage + PackageTemplate schema contract.
-16. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
+16. TimelineEvent projection + PauseImpactAssessment + source-adapter contract.
+17. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
 
 ## Източници / сесии
 
@@ -345,4 +366,5 @@ Document Control не създава собствено плащане и не �
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
 - FLOW-010 business-close pass, 21.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
+- FLOW-036 business-close pass, 22.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
