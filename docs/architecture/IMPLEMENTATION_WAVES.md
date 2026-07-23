@@ -1,7 +1,7 @@
 # BEG_Work — Implementation Waves
 
 > Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
-> Business-close pass 22.07.2026: FLOW-010, FLOW-025, FLOW-036 и FLOW-040 са 100%; counterparty, document-control, Object Timeline и audit rules са заключени.
+> Business-close pass 23.07.2026: FLOW-010, FLOW-025, FLOW-036, FLOW-040 и FLOW-046 са 100%; counterparty, document-control, Timeline, audit и Client Portal правилата са заключени.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -10,11 +10,11 @@
 ## W0-01 — Permission Service / FLOW-002
 
 - `role_assignments` model;
-- `ExternalPrincipal` и `AccessGrant` за бъдещия Client Portal/Marketplace;
-- action/module/scope/resource/version permissions;
+- `ExternalPrincipal`, client organization membership и `AccessGrant`;
+- action/module/scope/resource/version/amount permissions;
 - project/location scope;
 - compatibility adapter за `users.role`;
-- expiry/revoke/tenant-isolation rules;
+- OTP/MFA, expiry, revoke, session/device и tenant-isolation rules;
 - миграция и permission test matrix.
 
 ## W0-02 — Master Data / FLOW-032
@@ -81,6 +81,7 @@
 ## Wave 0 exit criteria
 
 - permission checks use canonical assignments, not ad hoc role strings;
+- external access uses scoped and revocable AccessGrants;
 - critical writes create one canonical AuditEvent;
 - event sequence/hash integrity is verifiable;
 - retention/hold/archive/disposition and visibility tests pass;
@@ -95,8 +96,6 @@
 
 ## Цел
 
-Един надежден път:
-
 `Object → Offer → Contract/Annex → Act → Invoice → Payment → Project result`
 
 ## FLOW scope
@@ -107,80 +106,65 @@
 - FLOW-005 Contracts/annexes/retentions/guarantees;
 - FLOW-006 Finance/payment allocations;
 - FLOW-007 Extra works/change orders;
-- FLOW-008 Project financial view — бизнес логиката е заключена; изисква source map, read-only drill-down и reconciliation tests;
-- FLOW-010 Master-linked counterparties — бизнес заключен; runtime след FLOW-032, FLOW-002, FLOW-034, FLOW-016 и FLOW-040;
-- FLOW-025 Document Control — бизнес заключен; runtime след FLOW-016, FLOW-002, FLOW-034 и FLOW-040.
+- FLOW-008 Project financial view;
+- FLOW-010 Master-linked counterparties;
+- FLOW-025 Document Control.
 
-## Written client approval преди FLOW-046
+## Written client approval before full portal runtime
 
-Пълният Client Portal не блокира Wave 1. Exact-version approval се реализира чрез един `ApprovalReceipt` модел и adapters за:
+Exact-version approval uses one `ApprovalReceipt` model and adapters for:
 
-- подписан PDF/e-signature;
-- verified email reply към exact version/ID;
-- защитена еднократна approval page;
-- exact-version approval card в клиентския чат.
+- signed PDF/e-signature;
+- verified email reply to exact version/ID;
+- secure one-time approval page;
+- exact-version approval card in a client thread.
 
-Receipt-ът използва File Registry, ExternalPrincipal/AccessGrant, Approval Center и AuditEvent. Portal-ът по-късно използва същия модел, без миграция към втори approval register.
+The receipt uses File Registry, ExternalPrincipal/AccessGrant, Approval Center and AuditEvent. FLOW-046 later uses the same records without a second approval register.
 
-## Counterparty / Communication / Bank Verification runtime / FLOW-010
+## Counterparty / Communication / Bank Verification / FLOW-010
 
-Wave 1 изгражда:
+Wave 1 builds:
 
-- един `MasterOrganization_ID` и `MasterPerson_ID` с role/scope assignments;
-- controlled deduplication/merge и redirect history;
-- отделни internal project threads и client/investor threads;
-- context links към project, contract, offer, Change Request, act, invoice, document и task;
-- versioned AI summary snapshots с original-source links, permission masking и retention;
-- client offer cards, exact-version `ApprovalReceipt` и invalidation при нова версия;
-- `VerifiedBankAccount` registry със статуси, evidence и history;
-- AI/OCR comparison между invoice IBAN и verified accounts;
-- first-payment/new-or-changed-IBAN block;
-- two-independent-source verification, без задължително двама служители;
-- risk-triggered re-verification;
-- financial read model `counterparty → project → contract/package → role`;
-- отделни receivables/payables, overdue positions, advances и retentions;
-- informational net exposure без automatic netting.
+- Master Organization/Person with role/scope assignments;
+- controlled deduplication/merge and redirects;
+- separate internal and client project threads;
+- context links to project, contract, offer, Change Request, act, invoice, document and task;
+- versioned AI summary snapshots with source links and masking;
+- ApprovalReceipt and invalidation at new version;
+- VerifiedBankAccount registry and AI/OCR invoice comparison;
+- first-payment/new-or-changed-IBAN block and two-source verification;
+- financial view `counterparty → project → contract/package → role`;
+- separate receivables/payables and no automatic netting.
 
-Проверка на IBAN и одобрение на плащането са отделни действия. Изходяща BEG фактура допуска само active verified company IBAN.
+IBAN verification and payment approval are separate actions. An outgoing BEG invoice may use only an active verified company IBAN.
 
-## Document Control runtime / FLOW-025
+## Document Control / FLOW-025
 
-Wave 1 изгражда:
+Wave 1 builds:
 
-- `DocumentType`, `DocumentFamily` и immutable `DocumentVersion`;
-- one-Current constraint по version family;
+- `DocumentType`, `DocumentFamily`, immutable `DocumentVersion` and one-Current constraint;
 - versioned `DocumentRequirementTemplate`;
-- immutable `DocumentRequirementSnapshot` при акт, фактура, плащане и project transition;
-- action-specific guards за client act, subcontractor act, advance invoice, progress/final invoice, supplier payable, payroll/bonus payment и retention release;
-- exception requests през FLOW-034;
-- правило: system-initiated payment се блокира при липсващи документи, но вече настъпил банков факт винаги се записва като `Unallocated / За проверка`.
+- immutable `DocumentRequirementSnapshot`;
+- action guards for acts, invoices, payables, payroll/bonus payments and retention release;
+- exception requests through FLOW-034;
+- rule: a system-initiated payment is blocked when requirements are missing, but an already occurred bank/cash fact is recorded as `Unallocated / За проверка`.
 
-Document Control не създава собствено плащане и не копира файлове извън FLOW-016.
-
-## Exit criteria
+## Wave 1 exit criteria
 
 - no hard delete of used project/commercial records;
-- stable offer line identity;
-- exact-version client/contract approval чрез валиден Approval Receipt;
-- new-version invalidation на стар approval link;
+- stable offer line identity and exact-version approval;
 - fixed-price and remeasurement act tests;
-- one payment ledger;
-- contract/offer/act/invoice/payment reconciliation;
-- Krum dashboard drill-down;
-- one Master organization/person identity with controlled merge;
-- contact authority and project/contract scope are enforceable;
-- internal and client communications cannot leak into each other;
-- AI summary points open their original source and preserve version history;
+- one payment ledger and reconciliation across contract/offer/act/invoice/payment;
+- one Master organization/person identity and enforceable contact authority;
+- internal/client communication isolation;
+- AI summaries open their original sources;
 - first payment to unverified IBAN is blocked;
-- two-source verification and invoice-IBAN mismatch tests pass;
 - verified IBAN does not bypass payment Approval;
-- counterparty financial view separates invoiced/received revenue, costs, overdue receivables and overdue payables by project/contract;
-- no automatic netting between different obligations/contracts;
-- one-Current document version constraint;
-- requirement template/snapshot traceability;
-- allowed/forbidden tests за act, invoice и payment blockers;
-- imported real payment без основание се пази в ledger, но остава unallocated и блокирано за closing;
-- commercial critical actions имат R1 AuditEvent и exact source-version references.
+- financial view separates invoiced/received revenue, costs and overdue positions by project/contract;
+- no automatic netting;
+- one-Current document version and requirement snapshot traceability;
+- allowed/forbidden tests for act, invoice and payment blockers;
+- commercial critical actions have R1 AuditEvent and exact source-version references.
 
 ---
 
@@ -190,7 +174,7 @@ Document Control не създава собствено плащане и не �
 
 - FLOW-009 warehouse/FIFO/movements;
 - FLOW-011 assets/QR/custody/repairs;
-- FLOW-012 logistics — след 4 business decisions;
+- FLOW-012 logistics — after 4 business decisions;
 - FLOW-013 attendance;
 - FLOW-014 daily reports/side work/change requests/downtime;
 - FLOW-015 dashboards;
@@ -202,12 +186,12 @@ Document Control не създава собствено плащане и не �
 - FLOW-027 progress/timeline/delays;
 - FLOW-028 payroll/Pay Run + management bonus obligations;
 - FLOW-029 photo archive;
-- FLOW-035 generic Work Package, PackageTemplate and canonical UI — business locked;
-- FLOW-037 offline field app — след 4 business decisions;
-- FLOW-039 quality/defects/warranty — след 5 business decisions;
+- FLOW-035 generic Work Package + PackageTemplate;
+- FLOW-037 offline field app — after 4 business decisions;
+- FLOW-039 quality/defects/warranty — after 5 business decisions;
 - FLOW-047 managed package/bonus fund.
 
-## Exit criteria
+## Wave 2 exit criteria
 
 - one canonical attendance/report schema;
 - no report without presence/SMR/time;
@@ -219,9 +203,9 @@ Document Control не създава собствено плащане и не �
 - PackageTemplate generation is idempotent and produces drafts/preview;
 - offline writes are idempotent and conflict-aware;
 - quality/defect cost affects package/project/rating;
-- paid labor, management bonus and subcontractor cash movements reconcile to finance ledger;
+- paid labor, management bonus and subcontractor cash movements reconcile to the finance ledger;
 - VAT-neutral bonus calculation and source-unique obligation tests pass;
-- operational critical events inherit R1/R2 retention and are reconstructable from the audit trail.
+- operational critical events inherit R1/R2 retention and are reconstructable.
 
 ---
 
@@ -233,54 +217,41 @@ Document Control не създава собствено плащане и не �
 - FLOW-023 automatic offer analysis;
 - FLOW-030 BEG Brain;
 - FLOW-031 agent hats;
-- FLOW-036 Object Timeline — business locked; runtime after W0 foundations and stable W1/W2 source domains;
+- FLOW-036 Object Timeline — business locked; runtime after stable source domains;
 - FLOW-038 Procurement Agent — after 5 business decisions;
 - FLOW-040 AI Audit View — business locked; runtime foundation starts in Wave 0;
 - FLOW-041 Scenario/What-if — after 4 business decisions;
-- FLOW-045 AI Command Center — business locked; runtime after Wave 0 foundations;
+- FLOW-045 AI Command Center — business locked;
 - FLOW-048 Resource Recommendation — after 6 business decisions.
 
-## Object Timeline runtime / FLOW-036
+## Object Timeline / FLOW-036
 
-Wave 3 изгражда read-only Timeline projection върху стабилните source domains:
+Wave 3 builds:
 
-- canonical `TimelineEvent` projection и source adapters;
-- project/subproject `Временно спрян` срещу WorkPackage/СМР `Блокирано`;
-- `PauseImpactAssessment` snapshot, pause/resume и remobilization effect;
+- canonical read-only `TimelineEvent` projection and source adapters;
+- project/subproject `Временно спрян` versus WorkPackage/SMR `Блокирано`;
+- `PauseImpactAssessment`, pause/resume and remobilization effect;
 - operational, client and financial permission layers;
-- delay overlap и causal-chain logic;
-- daily, weekly, immediate and full-period versioned AI summaries със source links;
-- drill-down към оригиналния договор, отчет, доставка, акт, фактура, плащане, дефект, Approval или AuditEvent.
+- delay overlap and causal-chain logic;
+- daily, weekly, immediate and full-period versioned AI summaries;
+- drill-down to original contract, report, delivery, act, invoice, payment, defect, Approval or AuditEvent.
 
-Timeline не записва втори business fact и не извършва write-through към source domain.
+Timeline does not write a second business fact.
 
-## Rules
+## AI rules and exit criteria
 
-- FLOW-045 е интерфейсът/orchestrator на същия BEG Brain, не отделен AI;
+- FLOW-045 is the interface/orchestrator of the same BEG Brain;
 - read-only tools first;
-- write tools only through intent catalog, draft/preview, confirmation, permission and Approval;
-- tool output states included/excluded/current timestamp;
-- no direct MongoDB access from LLM;
+- write tools only through draft, confirmation, permission and Approval;
+- no direct MongoDB access from the LLM;
 - AI cannot invent Master IDs, locations, prices or approvals;
-- every tool call/action is auditable;
-- every retryable action has idempotency key;
-- AI Audit View чете единния AuditEvent, не отделен log;
-- raw AI content следва R4 retention, а structured official action trail наследява R1/R2/R3;
-- AI наследява scope-а на invoking user и няма собствен full-tenant audit access;
-- highly sensitive read/export/break-glass събития се одитират.
-
-## AI exit criteria
-
-- request, tool calls, shown draft, human decision and domain execution имат correlation chain;
-- model/tool/prompt-template versions са известни;
-- secrets и PII са masked;
-- личен chat delete не заличава structured official audit trail;
-- raw content expiry не премахва заключеното AuditEvidence;
-- denied actions и permission failures са видими без разкриване на забранени данни;
-- Timeline summaries не измислят причина, сума, вина или approval;
-- `Общо` показва важните събития и summaries, а raw events се разгъват;
-- financial Timeline events сочат към FLOW-006 и никога не дублират Payment/Invoice/Act;
-- pause/resume и blocked-work events са permission-filtered и auditable.
+- every tool call/action is auditable and retryable actions use idempotency keys;
+- raw AI content follows R4, while official structured trails inherit R1/R2/R3;
+- AI inherits the invoking user scope;
+- request, tool calls, draft, human decision and execution form one correlation chain;
+- secrets and PII are masked;
+- Timeline summaries do not invent cause, amount, fault or approval;
+- financial Timeline events point to FLOW-006 and never duplicate records.
 
 ---
 
@@ -288,23 +259,44 @@ Timeline не записва втори business fact и не извършва w
 
 ## FLOW scope
 
-- FLOW-046 Client Portal — after remaining 3 business decisions;
+- FLOW-046 Client Portal — **100% Business Lock**, runtime after W0 and stable W1 approval/document/finance contracts;
 - FLOW-049 Marketplace — after 8 business decisions.
 
-## Exit criteria
+## Client Portal runtime / FLOW-046
+
+Wave 4 builds:
+
+- one external identity model for secure links, persistent profiles and corporate client representatives;
+- scoped `AccessGrant` by tenant, organization, project, resource/version, action, amount and expiry;
+- OTP/MFA, session/device, expiry and revoke;
+- explicit authority matrix: view, comment, technical choice, offer/act approval, contract/annex approval and financial view;
+- Decision Inbox;
+- allowlist client visibility and safe projection layer;
+- separate internal/client threads;
+- `Comment`, `Question`, `DecisionRequest` and `OfficialNotice` contracts;
+- verified email/SMS ingress and exact context mapping;
+- exact-version ApprovalReceipt and invalidation when a new version appears;
+- client-safe AI summary and permission-filtered client Timeline;
+- restricted finance view that reads FLOW-006;
+- client-visible photos, progress, documents and guarantees;
+- AuditEvent coverage for access, publish, read, reply, approve, reject and revoke.
+
+## Wave 4 exit criteria
 
 - tenant/client isolation;
-- ExternalPrincipal/AccessGrant enforcement;
-- exact-version written approvals using the same ApprovalReceipt from Wave 1;
-- magic link/identity verification and revoke/expiry;
-- restricted financial view;
+- ExternalPrincipal/client-membership/AccessGrant enforcement;
+- secure link and persistent-profile modes use the same permission service;
+- contact does not become an approver automatically;
+- exact-version written approval uses the same ApprovalReceipt from Wave 1;
+- magic link expiry/revoke and new-version invalidation;
+- client visibility is allowlist-based;
+- no leak of margin, payroll, internal chat, subcontractor data or other tenants;
+- portal communication is contextual and `read ≠ approve`;
+- client finance is a restricted projection, not a second ledger;
 - WorkPackage publication redacts internal margin/budget;
-- calendar reservations and conflict handling;
-- verified profiles and evidence-based rating;
-- disputes/cancellations/sanctions;
+- marketplace calendar reservations, verified profiles, evidence-based rating and disputes are implemented later in FLOW-049;
 - no automatic contractor selection;
-- external actors see only their own receipt/access events, not internal audit;
-- external access, approval and revoke actions are tamper-evident and retained by the relevant class.
+- external access and approvals are tamper-evident and auditable.
 
 ---
 
@@ -312,52 +304,51 @@ Timeline не записва втори business fact и не извършва w
 
 ## Може да върви едновременно
 
-- W0 permission, Master Data, File Registry, AuditEvent, tests and DR can be separate workstreams with agreed schemas;
-- UI mockups for W1/W2 can proceed against versioned API contracts;
-- Data migration inventory can proceed in parallel with business FLOW completion;
-- FLOW-008 technical refactor може да се проектира паралелно;
-- FLOW-010 Master IDs, role/scope, communication threads, VerifiedBankAccount и financial-read contracts могат да се проектират след agreement за W0 IDs, permissions, Approval, File Registry и AuditEvent;
-- FLOW-036 TimelineEvent/source-adapter contracts могат да се проектират паралелно, но финалната projection изчаква стабилните W1/W2 source schemas;
-- FLOW-035 schema/UI contract може да се проектира след W0 IDs/permissions agreement;
-- Interim Approval Receipt adapter може да се проектира преди пълния FLOW-046 portal;
-- FLOW-025 requirement model може да се проектира паралелно след agreement за File Registry IDs, Approval, Permission и AuditEvent contracts;
-- AuditEvent schema, retention archive, visibility policy tests and critical-write inventory can run as separate coordinated W0 workstreams.
+- W0 permission, Master Data, File Registry, AuditEvent, tests and DR as coordinated workstreams;
+- UI mockups for W1/W2/W4 against versioned API contracts;
+- data migration inventory in parallel with business FLOW completion;
+- FLOW-010, FLOW-025, FLOW-035, FLOW-036 and FLOW-046 schema/UI contracts after agreement on shared IDs, permissions, Approval, File Registry and AuditEvent;
+- client portal safe-view templates and UI prototypes before full runtime, without production external access;
+- Interim ApprovalReceipt adapters before the full portal;
+- AuditEvent schema, archive, visibility tests and critical-write inventory as coordinated W0 streams.
 
 ## Не може да върви независимо
 
 - AI write actions before Permission/DQ/Approval/Audit;
-- portal/magic link before ExternalPrincipal/AccessGrant security contract;
+- portal/magic link runtime before ExternalPrincipal/AccessGrant security contract;
+- client publishing before allowlist visibility and forbidden-leak tests;
+- free-text reply or `ОК` treated as exact-version approval;
 - Marketplace before generic WorkPackage and Counterparty Master;
-- FLOW-010 bank/payment guards before Payment Core, Approval, AuditEvent and Master Organization contracts;
-- FLOW-036 final Timeline projection before canonical project/subproject pause states, source links, permissions and domain event contracts;
+- FLOW-010 bank/payment guards before Payment Core and Approval;
+- final Timeline projection before source schemas and permissions;
 - payroll release before canonical daily reports and one payment service;
 - management bonus payment before FLOW-047 calculation + Approval + FLOW-028 obligation;
 - file/photo/document expansion before File Registry abstraction;
-- FLOW-025 action guards before FLOW-016 version relations and FLOW-034 exception/approval contracts;
-- critical feature release before its AuditEvent coverage, retention class and visibility rules exist;
-- full audit export before L4 approval, masking, manifest and audit-of-audit are implemented.
+- critical feature release before AuditEvent coverage and retention rules;
+- full audit export before L4 approval, masking and audit-of-audit.
 
 ---
 
 # First programming backlog
 
-1. ADR + schema for RoleAssignment and ExternalPrincipal/AccessGrant.
+1. ADR + schema for RoleAssignment, ExternalPrincipal, client membership and AccessGrant.
 2. Master Data inventory/migration map.
-3. Canonical AuditEvent + AuditEvidence schema, critical-write map and migration from `audit_logs`.
-4. Append-only/hash-manifest store, R1–R6 retention, hold/disposition and L0–L5 visibility contracts.
+3. Canonical AuditEvent + AuditEvidence and migration from `audit_logs`.
+4. Append-only/hash-manifest store, R1–R6 retention, hold/disposition and L0–L5 visibility.
 5. Payment idempotency and source unique indexes.
 6. File Registry schema and local adapter.
 7. DQ/Approval minimal models.
 8. Bootstrap QA Gate repository structure.
 9. Canonical project status migration.
 10. Canonical daily report/downtime validation and migration.
-11. ApprovalReceipt model + signed-PDF/email/secure-page/chat-card adapters.
-12. Master Counterparty/Contact Role + CommunicationThread/AISummarySnapshot + VerifiedBankAccount schema contracts.
-13. Counterparty financial read model and no-automatic-netting tests.
-14. DocumentType/Family/Version + RequirementTemplate/Snapshot schema contract.
-15. Generic WorkPackage + PackageTemplate schema contract.
-16. TimelineEvent projection + PauseImpactAssessment + source-adapter contract.
-17. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
+11. ApprovalReceipt + signed-PDF/email/secure-page/chat-card adapters.
+12. Counterparty/Contact Role + CommunicationThread/AISummarySnapshot + VerifiedBankAccount.
+13. Counterparty financial read model and no-netting tests.
+14. DocumentType/Family/Version + RequirementTemplate/Snapshot.
+15. Generic WorkPackage + PackageTemplate.
+16. TimelineEvent projection + PauseImpactAssessment + source adapters.
+17. Client Portal contracts: profile/membership, AccessGrant, visibility allowlist, threads/messages, Decision Inbox and client-safe projections.
+18. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
 
 ## Източници / сесии
 
@@ -368,3 +359,4 @@ Timeline не записва втори business fact и не извършва w
 - FLOW-025 business-close pass, 21.07.2026.
 - FLOW-036 business-close pass, 22.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
+- FLOW-046 business-close pass, 23.07.2026.
