@@ -2,7 +2,7 @@
 
 > **Обхват:** бизнес FLOW документация, FLOW-срещу-FLOW логика и текущият `main` код  
 > **Правило:** `100% Business Lock` не означава автоматично `Implementation Gate PASS`.  
-> **PR статус:** Draft; не се слива преди следващите business-close решения на Крум.
+> **PR статус:** Draft; не се слива преди изрично решение на Крум.
 
 ## Основни документи
 
@@ -10,45 +10,48 @@
    Потвърдените корекции по FLOW-008, FLOW-025, D-07 и D-12–D-14.
 
 2. [Cross-FLOW Code Audit — 20.07.2026](CROSS_FLOW_AUDIT_2026-07-20.md)  
-   Двадесет находки от проверката на FLOW-001–049 срещу реалния backend/runtime код.
+   Проверка на FLOW-001–049 срещу реалния backend/runtime код.
 
 3. [Claude Cross-FLOW Logic Audit — 20.07.2026](CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)  
-   Независима проверка FLOW срещу FLOW: пари, материали, труд, AI, външен достъп и зависимости. Съдържа решенията C-01–C-08.
+   Независима проверка FLOW срещу FLOW: пари, материали, труд, AI, външен достъп и зависимости.
 
 4. [FLOW-010 Business Close — 21.07.2026](FLOW_010_BUSINESS_CLOSE_2026-07-21.md)  
-   Комуникация и AI summary, клиентски approval cards, verified bank accounts и финансов профил по обект/договор.
+   Комуникация, AI summary, client approval cards, verified bank accounts и финансов профил.
 
 5. [FLOW-025 Business Close — 21.07.2026](FLOW_025_BUSINESS_CLOSE_2026-07-21.md)  
-   Каноничните document requirement и lifecycle матрици преди актуване, фактуриране, плащане и project transitions.
+   Document requirements и lifecycle матрици преди актуване, фактуриране, плащане и project transitions.
 
 6. [FLOW-036 Business Close — 22.07.2026](FLOW_036_BUSINESS_CLOSE_2026-07-22.md)  
-   Read-only Object Timeline, project/subproject pause, blocked Work Packages/СМР, Pause Impact Assessment, filters, financial layer и AI summaries.
+   Object Timeline, project/subproject pause, blocked work, Pause Impact, filters, finance и AI summaries.
 
 7. [FLOW-040 Business Close — 21.07.2026](FLOW_040_BUSINESS_CLOSE_2026-07-21.md)  
-   AuditEvent retention classes, append-only/tamper-evident storage, legal hold и ролева видимост L0–L5.
+   AuditEvent retention, append-only/tamper-evident storage, legal hold и L0–L5 visibility.
 
-8. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
+8. [FLOW-046 Business Close — 23.07.2026](FLOW_046_BUSINESS_CLOSE_2026-07-23.md)  
+   Hybrid client access, corporate representatives, allowlist visibility, contextual communication и exact-version ApprovalReceipt.
+
+9. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
    Статус по всеки FLOW: foundation blocker, refactor, business-open, ready wave или legacy.
 
-9. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
-   Безопасен ред: Wave 0 Foundation → Commercial Core → Field Operations → AI → Portals/Marketplace.
+10. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
+    Безопасен ред: Wave 0 Foundation → Commercial Core → Field Operations → AI → Portals/Marketplace.
 
-10. [FLOW Documentation Index](../flows/README.md)  
-    Индекс към отделните документи FLOW-001–049.
+11. [FLOW Documentation Index](../flows/README.md)  
+    Индекс към FLOW-001–049.
 
-11. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
+12. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
     Бизнес готовност и оставащи решения.
 
-12. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
-    Синхронизираните решения D-01–D-14 и техните източници.
+13. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
+    Решения D-01–D-14 и източниците им.
 
 ## Текущ бизнес статус
 
 - Общо FLOW-ове: **49**
-- 100% Business Lock: **39**
-- Активни незавършени: **9**
+- 100% Business Lock: **40**
+- Активни незавършени: **8**
 - Legacy: **1** — FLOW-018 → FLOW-039
-- Оставащи конкретни решения: **43**
+- Оставащи конкретни решения: **40**
 
 Последните business-close pass-ове затвориха:
 
@@ -57,31 +60,29 @@
 - FLOW-035 — Work Package Engine;
 - FLOW-036 — Object Timeline;
 - FLOW-040 — AuditEvent / AI Audit Log;
-- FLOW-045 — AI Command Center.
+- FLOW-045 — AI Command Center;
+- FLOW-046 — Client Portal.
 
 И уточниха:
 
-- object-scoped internal/client communication;
-- AI summary с original-source traceability;
-- exact-version approval card и ApprovalReceipt в клиентския чат;
-- VerifiedBankAccount с два независими verification sources;
-- финансов профил `Контрагент → Обект → Договор → Роля` без automatic netting;
+- object-scoped internal/client communication и AI summaries със source links;
+- exact-version approval cards и ApprovalReceipt;
+- VerifiedBankAccount и финансов профил без automatic netting;
 - project/subproject `Временно спрян` срещу WorkPackage/СМР `Блокирано`;
-- Pause Impact Assessment, pause/resume и remobilization impact;
-- Object Timeline filters, financial layer и versioned AI summaries;
-- Interim Approval Receipt преди пълния Client Portal;
-- финансовото/KPI третиране на престоя;
-- management bonus line types и VAT-neutral formula;
-- Bootstrap QA Gate v0;
-- ExternalPrincipal/AccessGrant за magic links;
-- versioned document requirements, immutable snapshots и правилото за вече настъпило unallocated плащане;
-- R1–R6 audit retention, legal/incident hold, immutable disposition и L0–L5 visibility.
+- Pause Impact Assessment и Timeline summaries;
+- hybrid client access: secure link, persistent profile и corporate representatives;
+- allowlist client visibility и safe projections;
+- Comment / Question / DecisionRequest / OfficialNotice context threads;
+- `прочетено ≠ одобрено` и free-text `ОК` ≠ exact-version approval;
+- versioned document requirements и unallocated-payment rule;
+- R1–R6 audit retention, legal hold и L0–L5 visibility;
+- Bootstrap QA Gate v0 и ExternalPrincipal/AccessGrant foundations.
 
 ## Главен технически извод
 
-Документацията е по-зряла от общите runtime foundations. Съществуващият код има значителна работеща domain логика, която трябва да бъде запазена, но преди масово добавяне на features са нужни общи услуги за:
+Документацията е по-зряла от общите runtime foundations. Съществуващата domain логика трябва да се запази, но преди масово добавяне на features са нужни:
 
-- RoleAssignment, ExternalPrincipal и централизирани права;
+- RoleAssignment, ExternalPrincipal/client membership и централизирани права;
 - Master Data и migration map;
 - canonical append-only AuditEvent, retention, integrity и visibility;
 - soft-delete и idempotency;
@@ -104,16 +105,17 @@
 
 ## Следващ business-close приоритет
 
-1. FLOW-046 — 3 решения.
-2. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
-3. FLOW-038/039, FLOW-048 и FLOW-049.
+1. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
+2. FLOW-038 и FLOW-039 — по 5 решения.
+3. FLOW-048 — 6 решения.
+4. FLOW-049 — 8 решения.
 
 ## Правило за PR и release
 
 - PR #2 остава Draft до изрично решение на Крум.
 - Не променя приложния код или базата.
-- FLOW-001–049 имат стандартна секция `Източници / сесии`.
+- FLOW-001–049 имат секция `Източници / сесии`.
 - Master Flow Register, Decision Register и отделните FLOW файлове трябва да съвпадат преди merge.
 - След merge документацията ще стане обща основа за ChatGPT, Claude, Emergent и разработчиците.
-- Feature implementation не получава PASS без permission, migration, tests, audit, idempotency, DQ/Approval и rollback/restore план.
+- Feature implementation не получава PASS без permission, migration, tests, audit, idempotency, DQ/Approval и rollback/restore plan.
 - До пълния Test Center се използва Bootstrap QA Gate v0.
