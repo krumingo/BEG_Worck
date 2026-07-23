@@ -4,7 +4,7 @@
 > **Канон:** отделните FLOW документи + Master Flow Register + последващи изрични решения на Крум  
 > **Важно:** Business Lock и Implementation Gate са отделни статуси  
 > **Проследимост:** всеки FLOW файл съдържа стандартна секция `Източници / сесии`  
-> **Текущо:** 39 Business Locked, 9 активни незавършени, 1 legacy.
+> **Текущо:** 40 Business Locked, 8 активни незавършени, 1 legacy.
 
 ## Основни регистри
 
@@ -22,6 +22,7 @@
 - [FLOW-025 Business Close — 21.07.2026](../architecture/FLOW_025_BUSINESS_CLOSE_2026-07-21.md)
 - [FLOW-036 Business Close — 22.07.2026](../architecture/FLOW_036_BUSINESS_CLOSE_2026-07-22.md)
 - [FLOW-040 Business Close — 21.07.2026](../architecture/FLOW_040_BUSINESS_CLOSE_2026-07-21.md)
+- [FLOW-046 Business Close — 23.07.2026](../architecture/FLOW_046_BUSINESS_CLOSE_2026-07-23.md)
 - [Implementation Gate Matrix](../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../architecture/IMPLEMENTATION_WAVES.md)
 
