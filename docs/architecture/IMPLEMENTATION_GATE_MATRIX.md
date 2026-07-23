@@ -1,14 +1,14 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 22.07.2026  
+> **Дата:** 23.07.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-036 е 100%; Timeline event catalog, pause/resume hierarchy, financial layer, filters и AI summaries са заключени.
+> **Последен business-close pass:** FLOW-046 е 100%; hybrid access, allowlist client visibility, contextual communication и exact-version approvals са заключени.
 
 ## Легенда
 
 - **W0-BLOCKER** — cross-cutting foundation; започва първо.
 - **REFACTOR** — има работещ код, но е в конфликт с каноничния FLOW.
-- **READY-W1/W2/W3** — може да се разработва в посочената вълна след predecessor-ите.
+- **READY-W1/W2/W3/W4** — може да се разработва в посочената вълна след predecessor-ите.
 - **BUSINESS-OPEN** — остават бизнес решения; не се финализира кодът.
 - **LEGACY** — не се развива самостоятелно; мигрира/поглъща се.
 - **DOC/OPS** — документационен или инфраструктурен gate.
@@ -60,7 +60,7 @@
 | 043 | 100% | architecture documentation | **DOC PASS** | enforce D-01–D-14 through ADRs, lint/checklists and code review |
 | 044 | 100% | no proven standby/PITR/restore implementation | **OPS-W0** | version manifest, backups, immutable copy, restore drill |
 | 045 | 100% | no command-center runtime | **READY-W3 after W0** | same BEG Brain; versioned intent→data→draft→confirm→action catalog |
-| 046 | 80% | no client portal runtime | **BUSINESS-OPEN** | 3 decisions; ExternalPrincipal/AccessGrant; portal identity/visibility/communication. Interim Receipt allows Wave 1 approval |
+| 046 | 100% | no client portal runtime | **READY-W4 after W0/W1** | ExternalPrincipal/profile/membership; scoped AccessGrant; allowlist projections; context threads; message contracts; exact-version ApprovalReceipt; restricted finance/client Timeline |
 | 047 | 100% | no generic managed package/bonus fund runtime | **READY-W2 after 035** | WorkPackage agreement/version + VAT-neutral bonus calculation + Approval + FLOW-028 obligation |
 | 048 | 35% | resource cost model only, no assignment recommender | **BUSINESS-OPEN** | ranking/load/calendar/skill inputs/second manager/final authority |
 | 049 | 40% | no marketplace runtime | **BUSINESS-OPEN** | verification, auctions, budgets, reservation, rating, disputes, billing |
@@ -82,11 +82,11 @@
 
 ## Може да се развива паралелно само зад feature flags и migration adapters
 
-- FLOW-001, 003–011, 013–016, 019–021, 024–029, 035, 036 projection contracts, 045 и 047.
+- FLOW-001, 003–011, 013–016, 019–021, 024–029, 035, 036 projection contracts, 045, 046 portal contracts/UI mockups и 047.
 
 ## Не трябва да се финализира преди оставащите бизнес решения
 
-- FLOW-012, 037–039, 041–042, 046, 048 и 049.
+- FLOW-012, 037–039, 041–042, 048 и 049.
 
 ## Release правило
 
@@ -149,6 +149,22 @@
 - AI request→tools→draft→human confirmation→domain execution correlation;
 - rebuild на searchable index от immutable archive.
 
+За FLOW-046 допълнително се изискват:
+
+- ExternalPrincipal, persistent client profile и corporate-representative membership model;
+- scoped AccessGrant по tenant/project/resource/version/action/amount/expiry;
+- OTP/MFA, link expiry/revoke, session/device и tenant-isolation tests;
+- explicit contact-authority matrix и тест, че контакт ≠ automatic approver;
+- allowlist client visibility и safe projection layer;
+- forbidden data-leak tests за margin, payroll, internal chat, subcontractor data и други tenants;
+- отделни internal/client threads и Comment/Question/DecisionRequest/OfficialNotice contracts;
+- verified email/SMS ingress, exact context mapping и ambiguous-context confirmation;
+- exact-version ApprovalReceipt, new-version invalidation и read≠approve tests;
+- Decision Inbox, client-safe AI summary и permission-filtered client Timeline;
+- restricted financial read model, който сочи към FLOW-006 и не дублира ledger;
+- AuditEvent coverage за issue/use/read/reply/publish/approve/reject/revoke/denied;
+- accessibility, responsive/mobile, performance, rollback/revoke и support/break-glass tests.
+
 До пълния FLOW-042 Test Center доказателството се пази чрез Bootstrap QA Gate v0.
 
 ## Източници / сесии
@@ -160,3 +176,4 @@
 - FLOW-025 business-close pass, 21.07.2026.
 - FLOW-036 business-close pass, 22.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
+- FLOW-046 business-close pass, 23.07.2026.
