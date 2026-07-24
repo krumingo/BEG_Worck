@@ -1,7 +1,7 @@
 # BEG_Work — Implementation Waves
 
 > Цел: паралелно програмиране без нарушаване на FLOW зависимостите.  
-> Business-close pass 23.07.2026: FLOW-010, FLOW-025, FLOW-036, FLOW-040 и FLOW-046 са 100%; counterparty, document-control, Timeline, audit и Client Portal правилата са заключени.
+> Business-close pass 24.07.2026: FLOW-010, FLOW-012, FLOW-025, FLOW-036, FLOW-040 и FLOW-046 са 100%; counterparty, logistics, document-control, Timeline, audit и Client Portal правилата са заключени.
 
 # Wave 0 — Architecture Foundation Refactor
 
@@ -174,7 +174,7 @@ Wave 1 builds:
 
 - FLOW-009 warehouse/FIFO/movements;
 - FLOW-011 assets/QR/custody/repairs;
-- FLOW-012 logistics — after 4 business decisions;
+- FLOW-012 logistics / purchases / deliveries / courses — **100% Business Lock**;
 - FLOW-013 attendance;
 - FLOW-014 daily reports/side work/change requests/downtime;
 - FLOW-015 dashboards;
@@ -191,6 +191,29 @@ Wave 1 builds:
 - FLOW-039 quality/defects/warranty — after 5 business decisions;
 - FLOW-047 managed package/bonus fund.
 
+## Logistics / FLOW-012
+
+Wave 2 builds:
+
+- `PurchaseDeliveryRequest` and line-level max price, VAT basis, allowed equivalents, object/SMR/deadline and blocking priority;
+- `LogisticsTrip`, ordered stops, Loading List per stop, vehicle capacity and reverse loads;
+- driver mobile flow: today → purchase → load → current stop → unload → handoff → reverse load → close;
+- offline/idempotent queue through FLOW-037;
+- residual priority queue: unfulfilled quantity remains on the original line and moves to the next possible course;
+- official cancellation with reason and AuditEvent;
+- AI/OCR invoice-line matching and `РАЗЛИЧНО ОТ ЗАЯВКАТА` explanation workflow;
+- reusable-item intake: ID/QR, condition, location, one human responsible, return rule and warehouse reuse;
+- person/project/vehicle/kit custody with one accountable human;
+- QR physical-movement chain and explicit handover/acceptance before responsibility transfer;
+- separate requested, approved, purchased, loaded, unloaded, accepted, damaged, refused, returned, remaining and cancelled quantities;
+- missing-in-transport investigation without automatic blame;
+- quarantine/return/claim/repair/write-off path for damaged items;
+- acceptance roles and deadlines: immediate for assets, same workday for normal materials, up to 24h for large/technical checks;
+- no automatic acceptance after SLA expiry; reminder, escalation and substitute task;
+- controlled no-recipient delivery with photo, GPS, time, notice and temporary responsible;
+- multi-stop wrong-destination prevention and approved AI reverse-route suggestions;
+- monthly visibility for unassigned reusable purchases, missing returns and repeated purchases despite stock.
+
 ## Wave 2 exit criteria
 
 - one canonical attendance/report schema;
@@ -198,10 +221,18 @@ Wave 1 builds:
 - side work and downtime have separate time/cause/cost treatment;
 - productive productivity and total paid-labor efficiency are both visible;
 - project downtime cannot be hidden in firm overhead;
-- materials trace request→delivery→invoice→stock/object;
+- materials trace request→purchase/warehouse→trip→delivery→acceptance→invoice→stock/object;
+- max-price and VAT basis tests pass;
+- unfulfilled residual lines survive trip closure and retain priority/history;
+- unmatched invoice lines cannot close without explanation/classification;
+- reusable items cannot close without location and one human responsible;
+- QR scan alone cannot transfer responsibility;
+- partial/missing/damaged/refused/returned state-machine tests pass;
+- acceptance SLA never becomes silent auto-acceptance;
+- wrong-stop, duplicate/retry and offline conflict tests pass;
+- returned reusable items become available and are proposed before repurchase;
 - one generic WorkPackage supports internal/subcontractor/mixed;
 - PackageTemplate generation is idempotent and produces drafts/preview;
-- offline writes are idempotent and conflict-aware;
 - quality/defect cost affects package/project/rating;
 - paid labor, management bonus and subcontractor cash movements reconcile to the finance ledger;
 - VAT-neutral bonus calculation and source-unique obligation tests pass;
@@ -307,7 +338,8 @@ Wave 4 builds:
 - W0 permission, Master Data, File Registry, AuditEvent, tests and DR as coordinated workstreams;
 - UI mockups for W1/W2/W4 against versioned API contracts;
 - data migration inventory in parallel with business FLOW completion;
-- FLOW-010, FLOW-025, FLOW-035, FLOW-036 and FLOW-046 schema/UI contracts after agreement on shared IDs, permissions, Approval, File Registry and AuditEvent;
+- FLOW-010, FLOW-012, FLOW-025, FLOW-035, FLOW-036 and FLOW-046 schema/UI contracts after agreement on shared IDs, permissions, Approval, File Registry and AuditEvent;
+- FLOW-012 driver UI and purchase/delivery contracts before full offline runtime, using FLOW-037 interface contracts;
 - client portal safe-view templates and UI prototypes before full runtime, without production external access;
 - Interim ApprovalReceipt adapters before the full portal;
 - AuditEvent schema, archive, visibility tests and critical-write inventory as coordinated W0 streams.
@@ -320,6 +352,8 @@ Wave 4 builds:
 - free-text reply or `ОК` treated as exact-version approval;
 - Marketplace before generic WorkPackage and Counterparty Master;
 - FLOW-010 bank/payment guards before Payment Core and Approval;
+- FLOW-012 official inventory/asset movements before canonical FLOW-009/011 IDs and custody contracts;
+- FLOW-012 mobile/offline release before FLOW-037 sync/idempotency contracts;
 - final Timeline projection before source schemas and permissions;
 - payroll release before canonical daily reports and one payment service;
 - management bonus payment before FLOW-047 calculation + Approval + FLOW-028 obligation;
@@ -346,9 +380,11 @@ Wave 4 builds:
 13. Counterparty financial read model and no-netting tests.
 14. DocumentType/Family/Version + RequirementTemplate/Snapshot.
 15. Generic WorkPackage + PackageTemplate.
-16. TimelineEvent projection + PauseImpactAssessment + source adapters.
-17. Client Portal contracts: profile/membership, AccessGrant, visibility allowlist, threads/messages, Decision Inbox and client-safe projections.
-18. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
+16. FLOW-012 contracts: PurchaseDeliveryRequest/Line, Trip/Stop/LoadingList, DeliveryAcceptance, ResidualPriorityQueue, invoice matching and reusable-item custody.
+17. FLOW-012 driver UI, QR handover, multi-stop and acceptance SLA tests; offline adapter contract with FLOW-037.
+18. TimelineEvent projection + PauseImpactAssessment + source adapters.
+19. Client Portal contracts: profile/membership, AccessGrant, visibility allowlist, threads/messages, Decision Inbox and client-safe projections.
+20. Backup/version manifest, AuditEvent immutable copy and restore dry-run.
 
 ## Източници / сесии
 
@@ -356,6 +392,7 @@ Wave 4 builds:
 - Cross-FLOW code audit, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
 - FLOW-010 business-close pass, 21.07.2026.
+- FLOW-012 business-close pass, 24.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
 - FLOW-036 business-close pass, 22.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
