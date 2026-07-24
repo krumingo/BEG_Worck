@@ -18,44 +18,48 @@
 4. [FLOW-010 Business Close — 21.07.2026](FLOW_010_BUSINESS_CLOSE_2026-07-21.md)  
    Комуникация, AI summary, client approval cards, verified bank accounts и финансов профил.
 
-5. [FLOW-025 Business Close — 21.07.2026](FLOW_025_BUSINESS_CLOSE_2026-07-21.md)  
+5. [FLOW-012 Business Close — 24.07.2026](FLOW_012_BUSINESS_CLOSE_2026-07-24.md)  
+   Driver purchasing, max-price limits, residual priority queue, invoice matching, reusable-item custody, QR handover и acceptance SLA.
+
+6. [FLOW-025 Business Close — 21.07.2026](FLOW_025_BUSINESS_CLOSE_2026-07-21.md)  
    Document requirements и lifecycle матрици преди актуване, фактуриране, плащане и project transitions.
 
-6. [FLOW-036 Business Close — 22.07.2026](FLOW_036_BUSINESS_CLOSE_2026-07-22.md)  
+7. [FLOW-036 Business Close — 22.07.2026](FLOW_036_BUSINESS_CLOSE_2026-07-22.md)  
    Object Timeline, project/subproject pause, blocked work, Pause Impact, filters, finance и AI summaries.
 
-7. [FLOW-040 Business Close — 21.07.2026](FLOW_040_BUSINESS_CLOSE_2026-07-21.md)  
+8. [FLOW-040 Business Close — 21.07.2026](FLOW_040_BUSINESS_CLOSE_2026-07-21.md)  
    AuditEvent retention, append-only/tamper-evident storage, legal hold и L0–L5 visibility.
 
-8. [FLOW-046 Business Close — 23.07.2026](FLOW_046_BUSINESS_CLOSE_2026-07-23.md)  
+9. [FLOW-046 Business Close — 23.07.2026](FLOW_046_BUSINESS_CLOSE_2026-07-23.md)  
    Hybrid client access, corporate representatives, allowlist visibility, contextual communication и exact-version ApprovalReceipt.
 
-9. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
-   Статус по всеки FLOW: foundation blocker, refactor, business-open, ready wave или legacy.
+10. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)  
+    Статус по всеки FLOW: foundation blocker, refactor, business-open, ready wave или legacy.
 
-10. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
+11. [Implementation Waves](IMPLEMENTATION_WAVES.md)  
     Безопасен ред: Wave 0 Foundation → Commercial Core → Field Operations → AI → Portals/Marketplace.
 
-11. [FLOW Documentation Index](../flows/README.md)  
+12. [FLOW Documentation Index](../flows/README.md)  
     Индекс към FLOW-001–049.
 
-12. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
+13. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)  
     Бизнес готовност и оставащи решения.
 
-13. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
+14. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)  
     Решения D-01–D-14 и източниците им.
 
 ## Текущ бизнес статус
 
 - Общо FLOW-ове: **49**
-- 100% Business Lock: **40**
-- Активни незавършени: **8**
+- 100% Business Lock: **41**
+- Активни незавършени: **7**
 - Legacy: **1** — FLOW-018 → FLOW-039
-- Оставащи конкретни решения: **40**
+- Оставащи конкретни решения: **36**
 
 Последните business-close pass-ове затвориха:
 
 - FLOW-010 — Clients / Contacts / Counterparties;
+- FLOW-012 — Logistics / Deliveries / Courses;
 - FLOW-025 — Document Control;
 - FLOW-035 — Work Package Engine;
 - FLOW-036 — Object Timeline;
@@ -68,6 +72,13 @@
 - object-scoped internal/client communication и AI summaries със source links;
 - exact-version approval cards и ApprovalReceipt;
 - VerifiedBankAccount и финансов профил без automatic netting;
+- driver purchase orders с maximum price и VAT basis;
+- priority queue за неизпълнени артикули;
+- invoice-line matching и badge за различно от заявката;
+- reusable-item location, human responsibility, return и warehouse reuse;
+- QR physical movement срещу explicit handover/acceptance;
+- partial/missing/damaged/refused logistics state machine;
+- acceptance roles, same-day/24h SLA и no-auto-acceptance;
 - project/subproject `Временно спрян` срещу WorkPackage/СМР `Блокирано`;
 - Pause Impact Assessment и Timeline summaries;
 - hybrid client access: secure link, persistent profile и corporate representatives;
@@ -105,7 +116,7 @@
 
 ## Следващ business-close приоритет
 
-1. FLOW-012, FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
+1. FLOW-037, FLOW-041 и FLOW-042 — по 4 решения.
 2. FLOW-038 и FLOW-039 — по 5 решения.
 3. FLOW-048 — 6 решения.
 4. FLOW-049 — 8 решения.
