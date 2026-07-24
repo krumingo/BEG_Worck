@@ -1,8 +1,8 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 23.07.2026  
+> **Дата:** 24.07.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-046 е 100%; hybrid access, allowlist client visibility, contextual communication и exact-version approvals са заключени.
+> **Последен business-close pass:** FLOW-012 е 100%; driver purchase limits, residual priority queue, QR custody, partial/damaged rules и acceptance SLA са заключени.
 
 ## Легенда
 
@@ -26,7 +26,7 @@
 | 009 | 100% | warehouses, batches/FIFO, items, movements | **READY-W1** | FLOW-032 items/locations + transaction idempotency + cost recognition |
 | 010 | 100% | clients, counterparties, persons/companies foundations | **REFACTOR / READY-W1 after W0/032** | Master Organization/Person migration; scoped contacts; internal/client threads; AI summary source links; ApprovalReceipt; VerifiedBankAccount; contract-scoped financial read model |
 | 011 | 100% | asset items/units/custody/QR/repairs/intake | **READY-W1** | FLOW-032 asset type + FLOW-034 write-offs + File Registry |
-| 012 | 70% | procurement/warehouse/mobile fragments | **BUSINESS-OPEN** | driver UX, QR custody chain, partial/damaged delivery, acceptance SLA |
+| 012 | 100% | procurement/warehouse/mobile fragments | **READY-W2 after W0/009/011/020; mobile sync via 037** | Purchase/Delivery Request; max-price limits; residual priority queue; invoice matching; reusable-item custody; QR handover; partial/damaged state machine; acceptance SLA |
 | 013 | 100% | attendance + old/new report schemas | **W0/W1 REFACTOR** | canonical presence/report schema and hard validation |
 | 014 | 100% | work_reports, daily_reports, work_logs, media | **W0/W1 REFACTOR** | no report without presence/SMR/time; side-work/downtime/change flow; migration |
 | 015 | 100% | dashboard, pulse, alarms, morning briefing | **READY-W2** | sources 001–014/026 stable; read-only projection tests |
@@ -82,11 +82,11 @@
 
 ## Може да се развива паралелно само зад feature flags и migration adapters
 
-- FLOW-001, 003–011, 013–016, 019–021, 024–029, 035, 036 projection contracts, 045, 046 portal contracts/UI mockups и 047.
+- FLOW-001, 003–012, 013–016, 019–021, 024–029, 035, 036 projection contracts, 045, 046 portal contracts/UI mockups и 047.
 
 ## Не трябва да се финализира преди оставащите бизнес решения
 
-- FLOW-012, 037–039, 041–042, 048 и 049.
+- FLOW-037–039, FLOW-041–042, FLOW-048 и FLOW-049.
 
 ## Release правило
 
@@ -102,41 +102,56 @@
 8. проверен UI за Крум;
 9. rollback/restore план.
 
-За FLOW-010 допълнително се изискват:
+## Допълнителни условия за FLOW-010
 
 - един Master Organization/Person модел и controlled deduplication/merge;
 - role/scope/authority модел за контактите;
 - отделни вътрешни и клиентски communication threads;
 - versioned AI summary, source links, retention и permission masking;
 - exact-version ApprovalReceipt от клиентския чат;
-- VerifiedBankAccount registry и доказуеми два независими verification sources;
+- VerifiedBankAccount registry и два независими verification sources;
 - first-payment/new-IBAN block и invoice mismatch tests;
 - разграничение между bank verification и payment approval;
 - financial read model по counterparty→project→contract/package→role;
 - отделни receivables/payables и тест срещу automatic netting;
-- изходяща BEG фактура да допуска само active verified company IBAN.
+- изходяща BEG фактура допуска само active verified company IBAN.
 
-За FLOW-025 допълнително се изискват:
+## Допълнителни условия за FLOW-012
+
+- canonical Request, Order Line, Trip, Stop, Loading List, Delivery/Acceptance и Residual Queue модели;
+- max-price basis и тестове с/без ДДС;
+- mobile driver flow и offline/idempotent sync през FLOW-037;
+- неизпълнен остатък остава към оригиналния ред и влиза в приоритетната опашка;
+- официално cancellation/ отказване с причина и AuditEvent;
+- invoice-line matching, unmatched badge и explanation/classification workflow;
+- reusable-item classification, human responsible, location, return и inventory reuse;
+- QR handover chain и забрана за responsibility transfer без acceptance;
+- partial/missing/damaged/refused/returned state-machine tests;
+- acceptance role matrix, same-day/24h SLA, escalation и no-auto-acceptance;
+- multi-stop load-balance, wrong-stop prevention и approved reverse-route changes;
+- integrations с FLOW-009, 011, 020, 026, 033, 034, 037 и 040.
+
+## Допълнителни условия за FLOW-025
 
 - one-Current constraint по document family;
 - versioned requirement templates;
 - immutable requirement snapshots;
 - action-specific blocking tests;
-- доказан сценарий за вече настъпило, но unallocated плащане.
+- сценарий за вече настъпило, но unallocated плащане.
 
-За FLOW-036 допълнително се изискват:
+## Допълнителни условия за FLOW-036
 
 - canonical read-only TimelineEvent projection и stable source links;
 - project/subproject `Временно спрян` и WorkPackage/SMR `Блокирано` като различни състояния;
 - Pause Impact Assessment snapshot/versioning и resume checks;
-- source adapters за contract, offer, report, material, quality, finance, Approval и AuditEvent domains;
+- source adapters за contract, offer, report, material, quality, finance, Approval и AuditEvent;
 - financial/client/operational permission layers без data leakage;
 - delay overlap и causal-chain tests;
 - daily/weekly/immediate/period AI summaries със source links и version history;
 - test срещу duplicate financial records и Timeline write-through;
 - performance, pagination, timezone и correction propagation tests.
 
-За FLOW-040 допълнително се изискват:
+## Допълнителни условия за FLOW-040
 
 - append-only store и correction events вместо edit/delete;
 - hash chain или signed manifests и integrity verification;
@@ -149,7 +164,7 @@
 - AI request→tools→draft→human confirmation→domain execution correlation;
 - rebuild на searchable index от immutable archive.
 
-За FLOW-046 допълнително се изискват:
+## Допълнителни условия за FLOW-046
 
 - ExternalPrincipal, persistent client profile и corporate-representative membership model;
 - scoped AccessGrant по tenant/project/resource/version/action/amount/expiry;
@@ -173,6 +188,7 @@
 - Cross-FLOW code audit against `main`, 20.07.2026.
 - Claude Cross-FLOW logic audit and resolution pass, 20.07.2026.
 - FLOW-010 business-close pass, 21.07.2026.
+- FLOW-012 business-close pass, 24.07.2026.
 - FLOW-025 business-close pass, 21.07.2026.
 - FLOW-036 business-close pass, 22.07.2026.
 - FLOW-040 business-close pass, 21.07.2026.
