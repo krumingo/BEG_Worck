@@ -1,6 +1,6 @@
 # Master Flow Register — FLOW-001–049
 
-> **Актуално към:** 27.07.2026  
+> **Актуално към:** 28.07.2026  
 > **Показател:** бизнес готовност, не процент програмиран код  
 > **100%:** Business Lock; Implementation Gate се проверява отделно  
 > **Технически статус:** виж [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -8,10 +8,10 @@
 ## Обобщение
 
 - Общо FLOW-ове: **49**
-- На 100% Business Lock: **43**
-- Активни незавършени FLOW-ове: **5**
+- На 100% Business Lock: **44**
+- Активни незавършени FLOW-ове: **4**
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **28**
+- Общо оставащи конкретни бизнес решения: **24**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -56,7 +56,7 @@
 | FLOW-039 | Quality / Defects / Warranty | 40% | 5 |
 | FLOW-040 | AuditEvent / AI Audit Log | 100% | 0 |
 | FLOW-041 | Scenario / What-if Engine | 100% | 0 |
-| FLOW-042 | Release / QA / Test Center | 40% | 4 |
+| FLOW-042 | Release / QA / Test Center | 100% | 0 |
 | FLOW-043 | Architecture Decisions D-01–D-14 | 100% | 0 |
 | FLOW-044 | Disaster Recovery | 100% | 0 |
 | FLOW-045 | AI Command Center | 100% | 0 |
@@ -81,19 +81,27 @@
 - FLOW-037 — затворен на 100% на 25.07.2026: role-aware mobile home, assigned-project/contact/location/tool views, driver loading actions, offline/idempotent sync, scoped mobile rights, contextual questions, new-SMR drafts, media context, problem/Delay Impact и versioned corrections.
 - FLOW-040 — затворен на 100% на 21.07.2026: retention classes, append-only/tamper-evident storage, legal hold и role/scope visibility matrix.
 - FLOW-041 — затворен на 100% на 27.07.2026: седем MVP сценария, explicit assumptions/provenance/reliability, versioned baseline snapshots, сравнение до 5 варианта, sensitivity и ясно разделение Fact/Forecast/Scenario без direct write-through.
+- FLOW-042 — затворен на 100% на 28.07.2026: Test Case/Test Run/Business Acceptance, P0–P3 release blockers, Product Test Center, WEB TEST/STAGING, Tenant Acceptance Portal, Release Manifest, exact tenant/environment deployment и rollback chain.
 - FLOW-045 — затворен на 100%: същият BEG Brain + финална intent/action matrix.
 - FLOW-046 — затворен на 100% на 23.07.2026: hybrid external access, corporate client representatives, allowlist client visibility, context threads/message types и exact-version ApprovalReceipt.
 
 ## Следващ препоръчан ред за бизнес затваряне
 
-1. FLOW-042 — 4 решения;
-2. FLOW-038 и FLOW-039 — по 5 решения;
-3. FLOW-048 — 6 решения;
-4. FLOW-049 — 8 решения.
+1. FLOW-038 и FLOW-039 — по 5 решения;
+2. FLOW-048 — 6 решения;
+3. FLOW-049 — 8 решения.
+
+## Ново архитектурно откритие
+
+По време на FLOW-042 е установена нужда от бъдещ:
+
+`FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements`.
+
+FLOW-050 още не е включен в официалната бройка, докато не бъде формално създаден и обсъден.
 
 ## Важно техническо уточнение
 
-43 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
+44 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
 
 - [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
@@ -104,6 +112,7 @@
 - [FLOW-037 Business Close](../../architecture/FLOW_037_BUSINESS_CLOSE_2026-07-25.md)
 - [FLOW-040 Business Close](../../architecture/FLOW_040_BUSINESS_CLOSE_2026-07-21.md)
 - [FLOW-041 Business Close](../../architecture/FLOW_041_BUSINESS_CLOSE_2026-07-27.md)
+- [FLOW-042 Business Close](../../architecture/FLOW_042_BUSINESS_CLOSE_2026-07-28.md)
 - [FLOW-046 Business Close](../../architecture/FLOW_046_BUSINESS_CLOSE_2026-07-23.md)
 - [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
@@ -111,7 +120,7 @@
 ## Източници / сесии
 
 - Каноничен архив FLOW-001–043.
-- Последващи изрични решения на Крум от 15–27.07.2026.
+- Последващи изрични решения на Крум от 15–28.07.2026.
 - Корекционен и logic-audit pass по Draft PR #2: 20.07.2026.
 - FLOW-010 business-close pass: 21.07.2026.
 - FLOW-012 business-close pass: 24.07.2026.
@@ -120,5 +129,6 @@
 - FLOW-037 business-close pass: 25.07.2026.
 - FLOW-040 business-close pass: 21.07.2026.
 - FLOW-041 business-close pass: 27.07.2026.
+- FLOW-042 business-close pass: 28.07.2026.
 - FLOW-046 business-close pass: 23.07.2026.
 - Технически code audit срещу `main`: 20.07.2026.
