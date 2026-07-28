@@ -8,10 +8,10 @@
 ## Обобщение
 
 - Общо FLOW-ове: **49**
-- На 100% Business Lock: **45**
-- Активни незавършени FLOW-ове: **3**
+- На 100% Business Lock: **46**
+- Активни незавършени FLOW-ове: **2**
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **19**
+- Общо оставащи конкретни бизнес решения: **14**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -53,7 +53,7 @@
 | FLOW-036 | Object Timeline | 100% | 0 |
 | FLOW-037 | Mobile Field App 2.0 | 100% | 0 |
 | FLOW-038 | Procurement Agent | 100% | 0 |
-| FLOW-039 | Quality / Defects / Warranty | 40% | 5 |
+| FLOW-039 | Quality / Defects / Warranty | 100% | 0 |
 | FLOW-040 | AuditEvent / AI Audit Log | 100% | 0 |
 | FLOW-041 | Scenario / What-if Engine | 100% | 0 |
 | FLOW-042 | Release / QA / Test Center | 100% | 0 |
@@ -80,6 +80,7 @@
 - FLOW-036 — затворен на 100% на 22.07.2026: read-only event catalog, project/subproject pause и blocked-SMR hierarchy, Pause Impact Assessment, filters, financial layer и versioned AI summaries.
 - FLOW-037 — затворен на 100% на 25.07.2026: role-aware mobile home, assigned-project/contact/location/tool views, driver loading actions, offline/idempotent sync, scoped mobile rights, contextual questions, new-SMR drafts, media context, problem/Delay Impact и versioned corrections.
 - FLOW-038 — затворен на 100% на 28.07.2026: supplier rating by category/region, historical price normalization, standardized RFQ, AI/OCR offer parsing and aliases, basket optimization with Total Landed Cost, visible weights and Approval flow.
+- FLOW-039 — затворен на 100% на 28.07.2026: full defect lifecycle, warranty calendar, separated operational/probable/financial responsibility, versioned defect protocol, independent repair acceptance, gross/recovered/net cost, scoped deductions and rating impact.
 - FLOW-040 — затворен на 100% на 21.07.2026: retention classes, append-only/tamper-evident storage, legal hold и role/scope visibility matrix.
 - FLOW-041 — затворен на 100% на 27.07.2026: седем MVP сценария, explicit assumptions/provenance/reliability, versioned baseline snapshots, сравнение до 5 варианта, sensitivity и ясно разделение Fact/Forecast/Scenario без direct write-through.
 - FLOW-042 — затворен на 100% на 28.07.2026: Test Case/Test Run/Business Acceptance, P0–P3 release blockers, Product Test Center, WEB TEST/STAGING, Tenant Acceptance Portal, Release Manifest, exact tenant/environment deployment и rollback chain.
@@ -88,9 +89,8 @@
 
 ## Следващ препоръчан ред за бизнес затваряне
 
-1. FLOW-039 — 5 решения;
-2. FLOW-048 — 6 решения;
-3. FLOW-049 — 8 решения.
+1. FLOW-048 — 6 решения;
+2. FLOW-049 — 8 решения.
 
 ## Ново архитектурно откритие
 
@@ -102,7 +102,7 @@ FLOW-050 още не е включен в официалната бройка, �
 
 ## Важно техническо уточнение
 
-45 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
+46 FLOW-а са заключени на бизнес ниво, но cross-FLOW/code одитите установиха общи foundation blockers. За реалния код водещи са:
 
 - [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
@@ -112,6 +112,7 @@ FLOW-050 още не е включен в официалната бройка, �
 - [FLOW-036 Business Close](../../architecture/FLOW_036_BUSINESS_CLOSE_2026-07-22.md)
 - [FLOW-037 Business Close](../../architecture/FLOW_037_BUSINESS_CLOSE_2026-07-25.md)
 - [FLOW-038 Business Close](../../architecture/FLOW_038_BUSINESS_CLOSE_2026-07-28.md)
+- [FLOW-039 Business Close](../../architecture/FLOW_039_BUSINESS_CLOSE_2026-07-28.md)
 - [FLOW-040 Business Close](../../architecture/FLOW_040_BUSINESS_CLOSE_2026-07-21.md)
 - [FLOW-041 Business Close](../../architecture/FLOW_041_BUSINESS_CLOSE_2026-07-27.md)
 - [FLOW-042 Business Close](../../architecture/FLOW_042_BUSINESS_CLOSE_2026-07-28.md)
@@ -130,6 +131,7 @@ FLOW-050 още не е включен в официалната бройка, �
 - FLOW-036 business-close pass: 22.07.2026.
 - FLOW-037 business-close pass: 25.07.2026.
 - FLOW-038 business-close pass: 28.07.2026.
+- FLOW-039 business-close pass: 28.07.2026.
 - FLOW-040 business-close pass: 21.07.2026.
 - FLOW-041 business-close pass: 27.07.2026.
 - FLOW-042 business-close pass: 28.07.2026.
