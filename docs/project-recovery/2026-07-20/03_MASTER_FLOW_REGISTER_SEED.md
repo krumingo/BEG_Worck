@@ -11,7 +11,7 @@
 - На 100% Business Lock: **48**
 - Активни незавършени FLOW-ове: **1** — FLOW-050
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **12**
+- Общо оставащи конкретни бизнес решения: **10**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -64,7 +64,7 @@
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 100% | 0 |
 | FLOW-049 | Marketplace / отделен продукт и API интеграция | 100% | 0 |
-| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 20% | 12 |
+| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 35% | 10 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
@@ -75,52 +75,29 @@
 - FLOW-050 е формално създаден на 29.07.2026.
 - Точка 1 на FLOW-050 е заключена: **един tenant = една юридическа фирма**.
 - Точка 2 на FLOW-050 е заключена чрез D-15: database-per-tenant, Tenant Registry, Tenant Guard, Master Data per tenant, TenantMembership→RoleAssignments, no shared operational records, migration runner и controlled support access.
+- Пакетната рамка Start/Control/Pro/Enterprise и Feature Entitlement моделът са заключени.
+- Control включва получени фактури и разходна страна, но разходният резултат е изрично без труд като стойност и без режийни.
+- CORE enforcement работи във всички пакети; пълните Approval/DQ/Audit центрове могат да са Pro/Enterprise екрани.
+- Full/Field/External classification се извежда от FLOW-002 permissions.
+- При downgrade изключените модули остават read-only и исторически видими; нищо не се изтрива.
 
 ## Текущ приоритет за бизнес затваряне
 
 FLOW-050 — оставащи решения:
 
-1. Финални търговски пакети и имена.
-2. Feature Catalog, Plan Version и Tenant Entitlement модел.
-3. Full/Field/External user лимити и overages.
-4. Начални цени и годишна отстъпка.
-5. Месечно, годишно и Enterprise договорно плащане.
-6. Платежен оператор и фактуриране.
-7. Grace Period / Restricted / Suspended / restoration.
-8. Demo / Trial / Partner tenant.
-9. Tenant configuration / private extension / no client forks.
-10. Test/Staging/Production и Tenant Acceptance Environment.
-11. Прекратяване, export, retention и deletion.
-12. AuditEvent/Approval catalog за subscription, entitlements и support.
+1. Точни Full/Field/External user лимити и overages.
+2. Ограничен платежен интерфейс за Control, винаги върху FLOW-006 ledger.
+3. Начални цени и годишна отстъпка.
+4. Месечно, годишно и Enterprise договорно плащане.
+5. Платежен оператор и фактуриране.
+6. Grace / Restricted / Suspended / restoration.
+7. Demo / Trial / Partner tenant.
+8. Tenant configuration / private extension / no client forks.
+9. Test/Staging/Production и Tenant Acceptance Environment.
+10. Export/retention/deletion и финален AuditEvent/Approval catalog.
 
 ## Важно техническо уточнение
 
 48 FLOW-а са заключени на бизнес ниво, но Business Lock не означава Implementation Gate PASS.
 
-D-15 добавя задължителни Wave 0 foundations:
-
-- Tenant Registry;
-- Tenant Guard и database resolver;
-- TenantMembership ↔ RoleAssignment;
-- per-tenant Master Data и File Registry isolation;
-- per-tenant numbering/integrations/secrets;
-- migration runner + `schema_version`;
-- tenant isolation tests;
-- Support Access Request;
-- per-tenant backup/restore/export proof.
-
-Водещи технически документи:
-
-- [TENANCY_MODEL.md](../../architecture/TENANCY_MODEL.md)
-- [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
-- [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
-- [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
-- [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
-
-## Източници / сесии
-
-- Каноничен архив FLOW-001–043.
-- Последващи изрични решения на Крум от 15–29.07.2026.
-- Business-close passes FLOW-010, 012, 025, 036–042, 046, 048 и 049.
-- FLOW-050 / D-15 tenancy decision: 29.07.2026.
-- Технически code audit срещу `main`: 20.07.2026.
+D-15 добавя задължителни Wave 0 foundations: Tenant Registry, Tenant Guard/database resolver, TenantMembership↔RoleAssignment, per-tenant Master Data/File Registry/numbering/integrations, migration runner + `schema_version`, isolation tests, Support Access Request и per-tenant backup/restore/export proof.
