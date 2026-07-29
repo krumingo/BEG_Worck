@@ -1,10 +1,10 @@
 # BEG_Work — FLOW Documentation Index
 
-> **Обхват:** FLOW-001–FLOW-049  
+> **Обхват:** FLOW-001–FLOW-050  
 > **Канон:** отделните FLOW документи + Master Flow Register + последващи изрични решения на Крум  
 > **Важно:** Business Lock и Implementation Gate са отделни статуси  
-> **Проследимост:** всеки FLOW файл съдържа стандартна секция `Източници / сесии`  
-> **Текущо:** 41 Business Locked, 7 активни незавършени, 1 legacy.
+> **Проследимост:** всеки FLOW файл съдържа секция `Източници / сесии`  
+> **Текущо:** 48 Business Locked, 1 активен незавършен, 1 legacy.
 
 ## Основни регистри
 
@@ -15,15 +15,10 @@
 ## Архитектура и готовност за програмиране
 
 - [Architecture Index](../architecture/README.md)
+- [Tenancy & Isolation Model — D-15](../architecture/TENANCY_MODEL.md)
 - [Correction Pass — 20.07.2026](../architecture/CORRECTION_PASS_2026-07-20.md)
 - [Cross-FLOW Code Audit](../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
-- [FLOW-010 Business Close — 21.07.2026](../architecture/FLOW_010_BUSINESS_CLOSE_2026-07-21.md)
-- [FLOW-012 Business Close — 24.07.2026](../architecture/FLOW_012_BUSINESS_CLOSE_2026-07-24.md)
-- [FLOW-025 Business Close — 21.07.2026](../architecture/FLOW_025_BUSINESS_CLOSE_2026-07-21.md)
-- [FLOW-036 Business Close — 22.07.2026](../architecture/FLOW_036_BUSINESS_CLOSE_2026-07-22.md)
-- [FLOW-040 Business Close — 21.07.2026](../architecture/FLOW_040_BUSINESS_CLOSE_2026-07-21.md)
-- [FLOW-046 Business Close — 23.07.2026](../architecture/FLOW_046_BUSINESS_CLOSE_2026-07-23.md)
 - [Implementation Gate Matrix](../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../architecture/IMPLEMENTATION_WAVES.md)
 
@@ -79,17 +74,18 @@
 - [FLOW-039 — Quality / Defects / Warranty](FLOW-039.md)
 - [FLOW-040 — AuditEvent / AI Audit Log](FLOW-040.md)
 
-## FLOW-041–FLOW-049
+## FLOW-041–FLOW-050
 
 - [FLOW-041 — Scenario / What-if Engine](FLOW-041.md)
 - [FLOW-042 — Release / QA / Test Center](FLOW-042.md)
-- [FLOW-043 — Architecture Decisions D-01–D-14](FLOW-043.md)
+- [FLOW-043 — Architecture Decisions D-01–D-15](FLOW-043.md)
 - [FLOW-044 — Disaster Recovery](FLOW-044.md)
 - [FLOW-045 — AI Command Center](FLOW-045.md)
 - [FLOW-046 — Client Portal](FLOW-046.md)
 - [FLOW-047 — Managed Work Package / бонус](FLOW-047.md)
 - [FLOW-048 — Resource Assignment](FLOW-048.md)
-- [FLOW-049 — Marketplace / свободен капацитет](FLOW-049.md)
+- [FLOW-049 — Marketplace / отделен продукт и API интеграция](FLOW-049.md)
+- [FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements](FLOW-050.md)
 
 ## Правило за редакция
 
@@ -99,13 +95,12 @@
 2. секцията `Източници / сесии` в него;
 3. Master Flow Register;
 4. Decision Register, когато има ново архитектурно решение;
-5. Session Archive / audit note;
-6. Implementation/QA backlog, когато FLOW е готов за технически gate.
+5. архитектурните и Implementation/QA документи, когато има foundation impact.
 
 Преди merge се проверява:
 
-- непрекъсната серия FLOW-001–049;
-- `Източници / сесии` във всички 49 файла;
-- съвпадение на проценти и оставащи точки между регистъра и отделните FLOW файлове;
+- непрекъсната серия FLOW-001–050;
+- `Източници / сесии` във всички 50 файла;
+- съвпадение на проценти и оставащи точки;
 - съвпадение на D-решенията между FLOW-043 и Decision Register;
 - съвпадение на Gate Matrix/Waves с последния business-close pass.
