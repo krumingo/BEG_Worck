@@ -1,8 +1,8 @@
 # FLOW-050 — Partial Business Close / 29.07.2026
 
 > **Статус:** APPROVED PARTIAL BUSINESS CLOSE  
-> **Обхват:** Tenant identity + isolation + packages + entitlements  
-> **Решения:** D-15 + package boundary
+> **Обхват:** Tenant identity + isolation + packages + entitlements + Launch Pricing v1  
+> **Решения:** D-15 + package boundary + fixed tenant pricing
 
 ## Заключено — tenancy
 
@@ -30,29 +30,51 @@
 - разходният резултат в Control е само материали + подизпълнители + други разходи по фактури;
 - Control показва изрично, че резултатът е без труд като стойност и без режийни;
 - трудовите часове остават видими оперативно в Control;
-- CORE enforcement важи във всички пакети, независимо от видимите управленски екрани;
+- CORE enforcement важи във всички пакети;
 - entitlement моделът е Feature Catalog → Plan Version → Plan/Tenant Entitlement → Usage Limit/Feature Flag;
 - няма твърди `if plan == ...` проверки и няма client forks;
-- Full/Field/External classification се извежда от FLOW-002 permissions, не от ръчно billing означение;
-- основните и разширените справки са изрично разделени;
+- Full/Field/External classification се извежда от FLOW-002 permissions;
 - при downgrade изключените модули остават read-only и исторически видими; нищо не се изтрива.
+
+## Заключено — цена и потребители
+
+BEG_Work се продава с фиксирана цена на фирма/tenant:
+
+- без такса на потребител;
+- неограничени Full Users;
+- неограничени Field Users;
+- неограничени External Users;
+- неограничен брой обекти.
+
+Full/Field/External остават категории за права и интерфейс, но не участват в billing.
+
+Ограничения и add-ons могат да има само за ресурси с реална променлива себестойност: storage, AI, API integrations, отделни среди, SLA и tenant-specific extensions.
+
+### Launch Pricing v1 — без ДДС
+
+| Пакет | Месечно | Годишно |
+|---|---:|---:|
+| Start | 19,90 € | 199 € |
+| Control | 39,90 € | 399 € |
+| Pro | 79,90 € | 799 € |
+| Enterprise | от 149 € | индивидуално |
+
+Годишната цена е приблизително равна на 10 месечни такси. Launch Pricing v1 е версионирана стартова оферта, не вечна цена. Съществуващ клиент не се премества мълчаливо към нова ценова версия.
 
 ## Остава отворено
 
-1. Точни включени Full/Field/External user лимити и overages.
-2. Ограничен платежен интерфейс за Control, винаги върху FLOW-006 ledger.
-3. Цени и годишна отстъпка.
-4. Месечно, годишно и Enterprise договорно плащане.
-5. Payment provider и фактуриране.
-6. Grace/Restricted/Suspended/restoration.
-7. Demo/Trial/Partner tenant.
-8. Tenant configuration/extensions и no-fork operational rules.
-9. Test/Staging/Production и Tenant Acceptance Environment.
-10. Export/retention/deletion и финален billing/support AuditEvent/Approval catalog.
+1. Ограничен платежен интерфейс за Control, винаги върху FLOW-006 ledger.
+2. Storage, AI, integration и environment лимити/add-on цени.
+3. Месечно, годишно и Enterprise договорно плащане — operational lifecycle.
+4. Payment provider и фактуриране.
+5. Grace/Restricted/Suspended/restoration.
+6. Demo/Trial/Partner tenant.
+7. Tenant configuration/extensions и no-fork operational rules.
+8. Test/Staging/Production, Tenant Acceptance Environment, export/retention/deletion и финален billing/support AuditEvent/Approval catalog.
 
 ## Техническо отражение
 
-D-15 е Wave 0 blocker. Package enforcement не може да заобикаля FLOW-002, FLOW-006, FLOW-033/034 и FLOW-040. Downgrade и entitlement tests влизат във FLOW-042.
+D-15 е Wave 0 blocker. Package enforcement не може да заобикаля FLOW-002, FLOW-006, FLOW-033/034 и FLOW-040. Pricing, downgrade и entitlement tests влизат във FLOW-042.
 
 ## Източници
 
