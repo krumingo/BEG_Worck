@@ -1,6 +1,6 @@
 # Master Flow Register — FLOW-001–049
 
-> **Актуално към:** 28.07.2026  
+> **Актуално към:** 29.07.2026  
 > **Показател:** бизнес готовност, не процент програмиран код  
 > **100%:** Business Lock; Implementation Gate се проверява отделно  
 > **Технически статус:** виж [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -8,10 +8,10 @@
 ## Обобщение
 
 - Общо FLOW-ове: **49**
-- На 100% Business Lock: **47**
-- Активни незавършени FLOW-ове: **1**
+- На 100% Business Lock: **48**
+- Активни незавършени FLOW-ове: **0**
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **8**
+- Общо оставащи конкретни бизнес решения: **0**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -63,7 +63,7 @@
 | FLOW-046 | Client Portal | 100% | 0 |
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 100% | 0 |
-| FLOW-049 | Marketplace / свободен капацитет | 40% | 8 |
+| FLOW-049 | Marketplace boundary / API integration | 100% | 0 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
@@ -86,10 +86,17 @@
 - FLOW-045 — затворен на 100%.
 - FLOW-046 — затворен на 100% на 23.07.2026.
 - FLOW-048 — затворен на 100% на 28.07.2026: hard eligibility, visible ranking weights, Skill Match, current/future load, reservations/conflicts, one-main-manager rule, second manager/split-package logic и final rights matrix; само Крум назначава ръководители.
+- FLOW-049 — затворен на 100% на 29.07.2026: Marketplace като отделно приложение/база, Publication/Candidate/Offer snapshots, versioned protected API, market statistics към FLOW-022/023, no-duplicate handoff към Master Data и твърда data-isolation граница.
 
-## Следващ препоръчан ред за бизнес затваряне
+## Следваща фаза
 
-1. FLOW-049 — 8 решения.
+Всички официални FLOW-ове са затворени на бизнес ниво. Следва:
+
+1. финален cross-FLOW consistency audit;
+2. формално създаване и обсъждане на FLOW-050;
+3. финализиране на Implementation Gate Matrix и Implementation Waves;
+4. подготовка на Wave 0 foundation backlog;
+5. отделна Marketplace Business Specification.
 
 ## Ново архитектурно откритие
 
@@ -101,7 +108,7 @@ FLOW-050 още не е включен в официалната бройка, �
 
 ## Важно техническо уточнение
 
-47 FLOW-а са заключени на бизнес ниво, но Business Lock не означава Implementation Gate PASS. За реалния код водещи са:
+48 FLOW-а са заключени на бизнес ниво, но Business Lock не означава Implementation Gate PASS. За реалния код водещи са:
 
 - [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
@@ -117,13 +124,14 @@ FLOW-050 още не е включен в официалната бройка, �
 - [FLOW-042 Business Close](../../architecture/FLOW_042_BUSINESS_CLOSE_2026-07-28.md)
 - [FLOW-046 Business Close](../../architecture/FLOW_046_BUSINESS_CLOSE_2026-07-23.md)
 - [FLOW-048 Business Close](../../architecture/FLOW_048_BUSINESS_CLOSE_2026-07-28.md)
+- [FLOW-049 Business Close](../../architecture/FLOW_049_BUSINESS_CLOSE_2026-07-29.md)
 - [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
 
 ## Източници / сесии
 
 - Каноничен архив FLOW-001–043.
-- Последващи изрични решения на Крум от 15–28.07.2026.
+- Последващи изрични решения на Крум от 15–29.07.2026.
 - Корекционен и logic-audit pass по Draft PR #2: 20.07.2026.
-- Business-close passes: FLOW-010, 012, 025, 036, 037, 038, 039, 040, 041, 042, 046 и 048.
+- Business-close passes: FLOW-010, 012, 025, 036, 037, 038, 039, 040, 041, 042, 046, 048 и 049.
 - Технически code audit срещу `main`: 20.07.2026.
