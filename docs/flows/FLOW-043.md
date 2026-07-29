@@ -1,13 +1,13 @@
 # FLOW-043 — Architecture Decisions / Архитектурни решения
 
 > **Статус:** 100% — BUSINESS LOCK  
-> **Последна проверка:** 20.07.2026  
+> **Последна проверка:** 29.07.2026  
 > **Implementation Gate:** всяко решение се проверява технически чрез FLOW-042  
-> **Одобрени решения:** D-01–D-14
+> **Одобрени решения:** D-01–D-15
 
 ## Цел
 
-FLOW-043 е регистърът на решенията между модулите. Той предотвратява два FLOW-а да създадат различни източници на истина, двойни плащания, дублирани СМР, несъвместими права или паралелни архиви.
+FLOW-043 е регистърът на решенията между модулите. Той предотвратява два FLOW-а да създадат различни източници на истина, двойни плащания, дублирани СМР, несъвместими права, паралелни архиви или пробив между tenant-и.
 
 ## D-01 — Канон на FLOW документацията
 
@@ -62,8 +62,6 @@ AI може да активира ново СМР само когато едно
 
 Receipt-ът пази identity, version/hash, scope, quantity/specification, price/terms, timestamp, original `file_id` и AuditEvent. Свободно „ОК“ или устно одобрение не изпълнява условието на D-07.
 
-**Решение:** AI добавката остава. Тя е изрично потвърдена от Крум на 18.07.2026 с „да да може“, а след това е разширена и за ново клиентско СМР при верифицирано писмено одобрение.
-
 ## D-08 — Един общ AuditEvent
 
 Domain и AI действията използват един AuditEvent envelope. FLOW-040 е специализиран изглед, не отделна конкурентна история.
@@ -84,13 +82,9 @@ FLOW-016 е единният File Registry. Физическото хранил�
 
 AI и интернет не са единствена точка на отказ. Всеки основен процес има ръчен вход; критичните теренни процеси имат offline чернова/queue; Excel/PDF rescue вариант се поддържа, където е необходимо. Sync използва idempotency и conflict review.
 
-**Официално одобрение:** да — Крум приема модела на 16.07.2026 с „ок това е добре“.
-
 ## D-13 — Disaster Recovery Architecture
 
 Production, standby, replica/PITR, исторически backup, off-site immutable/offline копие и restore тестове са различни слоеве. Репликацията не заменя backup; standby не заменя immutable backup.
-
-**Официално одобрение:** да — Крум потвърждава на 16.07.2026 с „да“.
 
 ## D-14 — Category-Defining Product
 
@@ -110,7 +104,25 @@ BEG_Work се развива като `Construction Operating System`:
 
 Работно послание: **„От разговор на обекта до изпълнено и платено СМР.“**
 
-**Официално одобрение:** да — Крум потвърждава продуктовата посока на 16.07.2026 с „добре да направим тази система“ и изисква решението да се запази и свърже с FLOW архитектурата.
+## D-15 — Tenancy & Isolation Model
+
+Един tenant представлява точно една юридическа фирма. Всеки tenant използва един и същ BEG_Work core и FLOW-001–050, но има отделни данни, MongoDB база, файлово пространство, Master Data, номерации, интеграции, AI контекст, AuditEvent история, абонамент и настройки.
+
+Основни правила:
+
+- active tenant се определя от проверената сесия, не от свободно поле във формата;
+- всички заявки минават през централен Tenant Guard;
+- Tenant Registry пази техническата карта, deployment и `schema_version`;
+- `User → TenantMembership → RoleAssignments` е единният модел с FLOW-002;
+- Master Data по FLOW-032 е винаги per tenant; глобални са само технически справочници без бизнес стойност;
+- между tenant-и няма shared Project, Invoice, Payment, WorkPackage или друг оперативен запис;
+- свързани фирми работят помежду си като нормални контрагенти;
+- Group Dashboard е само read-only projection с изрично разрешени tenant-и;
+- database-per-tenant изисква централен migration runner с per-tenant lock, idempotency, validation, AuditEvent и recovery;
+- platform support няма свободен достъп до бизнес данните; използва временен Support Access Request;
+- tenant isolation се доказва с автоматични tests през FLOW-042.
+
+Пълната спецификация е в [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
 
 ## Общи забрани
 
@@ -119,7 +131,10 @@ BEG_Work се развива като `Construction Operating System`:
 - AI да изпълнява договорно/финансово действие без изисквано одобрение;
 - dashboard/timeline/chat да редактират официален запис без съответния FLOW;
 - hard delete на използвани записи;
-- програмният код да променя заключено бизнес решение мълчаливо.
+- програмният код да променя заключено бизнес решение мълчаливо;
+- cross-tenant read/write или shared operational record;
+- global Master Data с търговска стойност;
+- support достъп без причина, срок и AuditEvent.
 
 ## Какво трябва да вижда Крум
 
@@ -134,8 +149,7 @@ BEG_Work се развива като `Construction Operating System`:
 - Каноничен архитектурен архив и конфликтен регистър: FLOW-043 от архива FLOW-001–043.
 - D-01–D-10: одитът и решенията от 12.07.2026 и последващите синхронизации.
 - D-11: сесиите за Synology, Google Drive, S3 и сменяем storage provider от 15.07.2026.
-- D-12: сесия 16.07.2026 — работа без AI/интернет и ръчни/offline/Excel варианти.
-- D-13: сесия 16.07.2026 — Disaster Recovery / Backup / Standby.
-- D-14: сесия 16.07.2026 — Construction Operating System.
-- D-07 AI активиране: сесии 18.07.2026 — пряко активиране по предварително одобрени правила и клиентска верификация.
+- D-12–D-14: сесия 16.07.2026.
+- D-07 AI активиране: сесии 18.07.2026.
+- D-15: сесия 29.07.2026 — един tenant = една фирма, database-per-tenant, Tenant Guard, Master Data per tenant, membership/roles, забрана за shared records, migration runner и support access.
 - Claude Cross-FLOW Logic Audit, C-01: Interim Approval Receipt преди пълния Client Portal, 20.07.2026.
