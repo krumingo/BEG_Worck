@@ -11,7 +11,7 @@
 - На 100% Business Lock: **48**
 - Активни незавършени FLOW-ове: **1** — FLOW-050
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **10**
+- Общо оставащи конкретни бизнес решения: **8**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -64,7 +64,7 @@
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 100% | 0 |
 | FLOW-049 | Marketplace / отделен продукт и API интеграция | 100% | 0 |
-| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 35% | 10 |
+| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 45% | 8 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
@@ -73,28 +73,26 @@
 - FLOW-037–042, FLOW-048 и FLOW-049 са затворени на 100% Business Lock през 25–29.07.2026.
 - FLOW-049 е отделен Marketplace продукт и база; BEG_Work използва защитено API, Candidate/Offer snapshots и агрегирани статистики.
 - FLOW-050 е формално създаден на 29.07.2026.
-- Точка 1 на FLOW-050 е заключена: **един tenant = една юридическа фирма**.
-- Точка 2 на FLOW-050 е заключена чрез D-15: database-per-tenant, Tenant Registry, Tenant Guard, Master Data per tenant, TenantMembership→RoleAssignments, no shared operational records, migration runner и controlled support access.
+- Един tenant = една юридическа фирма; D-15 заключва database-per-tenant, Tenant Registry, Tenant Guard, Master Data per tenant, TenantMembership→RoleAssignments, no shared records, migration runner и controlled support access.
 - Пакетната рамка Start/Control/Pro/Enterprise и Feature Entitlement моделът са заключени.
 - Control включва получени фактури и разходна страна, но разходният резултат е изрично без труд като стойност и без режийни.
 - CORE enforcement работи във всички пакети; пълните Approval/DQ/Audit центрове могат да са Pro/Enterprise екрани.
-- Full/Field/External classification се извежда от FLOW-002 permissions.
 - При downgrade изключените модули остават read-only и исторически видими; нищо не се изтрива.
+- Ценообразуването е фиксирано на фирма, без такса за потребители и без лимит на обектите.
+- Launch Pricing v1 без ДДС: Start 19,90 €/месец или 199 €/година; Control 39,90 €/месец или 399 €/година; Pro 79,90 €/месец или 799 €/година; Enterprise от 149 €/месец по индивидуална оферта.
 
 ## Текущ приоритет за бизнес затваряне
 
 FLOW-050 — оставащи решения:
 
-1. Точни Full/Field/External user лимити и overages.
-2. Ограничен платежен интерфейс за Control, винаги върху FLOW-006 ledger.
-3. Начални цени и годишна отстъпка.
-4. Месечно, годишно и Enterprise договорно плащане.
-5. Платежен оператор и фактуриране.
-6. Grace / Restricted / Suspended / restoration.
-7. Demo / Trial / Partner tenant.
-8. Tenant configuration / private extension / no client forks.
-9. Test/Staging/Production и Tenant Acceptance Environment.
-10. Export/retention/deletion и финален AuditEvent/Approval catalog.
+1. Ограничен платежен интерфейс за Control, винаги върху FLOW-006 ledger.
+2. Storage, AI, integration и environment лимити/add-on цени.
+3. Месечно, годишно и Enterprise договорно плащане — operational lifecycle.
+4. Платежен оператор и фактуриране.
+5. Grace / Restricted / Suspended / restoration.
+6. Demo / Trial / Partner tenant.
+7. Tenant configuration / private extension / no client forks.
+8. Test/Staging/Production, Tenant Acceptance Environment, export/retention/deletion и финален AuditEvent/Approval catalog.
 
 ## Важно техническо уточнение
 
