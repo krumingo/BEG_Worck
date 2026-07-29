@@ -9,24 +9,27 @@
 1. [TENANCY_MODEL — D-15](TENANCY_MODEL.md)  
    Един tenant = една юридическа фирма; database-per-tenant, Tenant Guard, per-tenant Master Data, memberships/roles, migration runner и support access.
 
-2. [Wave 0 Tenancy Foundations](WAVE_0_TENANCY_FOUNDATIONS.md)  
+2. [FLOW-050 Tenancy Decision — 29.07.2026](FLOW_050_TENANCY_DECISION_2026-07-29.md)  
+   Частично business-close решение за tenant identity и isolation model.
+
+3. [Wave 0 Tenancy Foundations](WAVE_0_TENANCY_FOUNDATIONS.md)  
    Задължителен backlog за Tenant Registry, Guard, membership, DB/files/integrations, migrations, isolation QA и per-tenant restore/export.
 
-3. [Correction Pass — 20.07.2026](CORRECTION_PASS_2026-07-20.md)
+4. [Correction Pass — 20.07.2026](CORRECTION_PASS_2026-07-20.md)
 
-4. [Cross-FLOW Code Audit — 20.07.2026](CROSS_FLOW_AUDIT_2026-07-20.md)
+5. [Cross-FLOW Code Audit — 20.07.2026](CROSS_FLOW_AUDIT_2026-07-20.md)
 
-5. [Claude Cross-FLOW Logic Audit — 20.07.2026](CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
+6. [Claude Cross-FLOW Logic Audit — 20.07.2026](CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
 
-6. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)
+7. [Implementation Gate Matrix](IMPLEMENTATION_GATE_MATRIX.md)
 
-7. [Implementation Waves](IMPLEMENTATION_WAVES.md)
+8. [Implementation Waves](IMPLEMENTATION_WAVES.md)
 
-8. [FLOW Documentation Index](../flows/README.md)
+9. [FLOW Documentation Index](../flows/README.md)
 
-9. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)
+10. [Master Flow Register](../project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md)
 
-10. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)
+11. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)
 
 ## Текущ бизнес статус
 
