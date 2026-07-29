@@ -1,4 +1,4 @@
-# Master Flow Register — FLOW-001–049
+# Master Flow Register — FLOW-001–050
 
 > **Актуално към:** 29.07.2026  
 > **Показател:** бизнес готовност, не процент програмиран код  
@@ -7,11 +7,11 @@
 
 ## Обобщение
 
-- Общо FLOW-ове: **49**
+- Общо FLOW-ове: **50**
 - На 100% Business Lock: **48**
-- Активни незавършени FLOW-ове: **0**
+- Активни незавършени FLOW-ове: **1** — FLOW-050
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **0**
+- Общо оставащи конкретни бизнес решения: **12**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -57,81 +57,70 @@
 | FLOW-040 | AuditEvent / AI Audit Log | 100% | 0 |
 | FLOW-041 | Scenario / What-if Engine | 100% | 0 |
 | FLOW-042 | Release / QA / Test Center | 100% | 0 |
-| FLOW-043 | Architecture Decisions D-01–D-14 | 100% | 0 |
+| FLOW-043 | Architecture Decisions D-01–D-15 | 100% | 0 |
 | FLOW-044 | Disaster Recovery | 100% | 0 |
 | FLOW-045 | AI Command Center | 100% | 0 |
 | FLOW-046 | Client Portal | 100% | 0 |
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 100% | 0 |
-| FLOW-049 | Marketplace boundary / API integration | 100% | 0 |
+| FLOW-049 | Marketplace / отделен продукт и API интеграция | 100% | 0 |
+| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 20% | 12 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
 ## Последни бизнес корекции и затваряния
 
-- FLOW-003 и FLOW-005 — изрично заключени след 15.07.2026.
-- FLOW-008 — възстановен на 100% Business Lock.
-- FLOW-010 — затворен на 100% на 21.07.2026.
-- FLOW-012 — затворен на 100% на 24.07.2026.
-- FLOW-019/024 — заключено финансовото и KPI третиране на престоя.
-- FLOW-025 — затворен на 100% на 21.07.2026.
-- FLOW-035 — затворен на 100%: PackageTemplate, idempotent generation и финален Work Package екран.
-- FLOW-036 — затворен на 100% на 22.07.2026.
-- FLOW-037 — затворен на 100% на 25.07.2026.
-- FLOW-038 — затворен на 100% на 28.07.2026: supplier rating, historical normalization, RFQ, AI/OCR parsing, basket optimization и Approval flow.
-- FLOW-039 — затворен на 100% на 28.07.2026: defect lifecycle, warranty calendar, responsibility, versioned protocol, independent acceptance и financial/rating treatment.
-- FLOW-040 — затворен на 100% на 21.07.2026.
-- FLOW-041 — затворен на 100% на 27.07.2026.
-- FLOW-042 — затворен на 100% на 28.07.2026.
-- FLOW-045 — затворен на 100%.
-- FLOW-046 — затворен на 100% на 23.07.2026.
-- FLOW-048 — затворен на 100% на 28.07.2026: hard eligibility, visible ranking weights, Skill Match, current/future load, reservations/conflicts, one-main-manager rule, second manager/split-package logic и final rights matrix; само Крум назначава ръководители.
-- FLOW-049 — затворен на 100% на 29.07.2026: Marketplace като отделно приложение/база, Publication/Candidate/Offer snapshots, versioned protected API, market statistics към FLOW-022/023, no-duplicate handoff към Master Data и твърда data-isolation граница.
+- FLOW-037–042, FLOW-048 и FLOW-049 са затворени на 100% Business Lock през 25–29.07.2026.
+- FLOW-049 е отделен Marketplace продукт и база; BEG_Work използва защитено API, Candidate/Offer snapshots и агрегирани статистики.
+- FLOW-050 е формално създаден на 29.07.2026.
+- Точка 1 на FLOW-050 е заключена: **един tenant = една юридическа фирма**.
+- Точка 2 на FLOW-050 е заключена чрез D-15: database-per-tenant, Tenant Registry, Tenant Guard, Master Data per tenant, TenantMembership→RoleAssignments, no shared operational records, migration runner и controlled support access.
 
-## Следваща фаза
+## Текущ приоритет за бизнес затваряне
 
-Всички официални FLOW-ове са затворени на бизнес ниво. Следва:
+FLOW-050 — оставащи решения:
 
-1. финален cross-FLOW consistency audit;
-2. формално създаване и обсъждане на FLOW-050;
-3. финализиране на Implementation Gate Matrix и Implementation Waves;
-4. подготовка на Wave 0 foundation backlog;
-5. отделна Marketplace Business Specification.
-
-## Ново архитектурно откритие
-
-По време на FLOW-042 е установена нужда от бъдещ:
-
-`FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements`.
-
-FLOW-050 още не е включен в официалната бройка, докато не бъде формално създаден и обсъден.
+1. Финални търговски пакети и имена.
+2. Feature Catalog, Plan Version и Tenant Entitlement модел.
+3. Full/Field/External user лимити и overages.
+4. Начални цени и годишна отстъпка.
+5. Месечно, годишно и Enterprise договорно плащане.
+6. Платежен оператор и фактуриране.
+7. Grace Period / Restricted / Suspended / restoration.
+8. Demo / Trial / Partner tenant.
+9. Tenant configuration / private extension / no client forks.
+10. Test/Staging/Production и Tenant Acceptance Environment.
+11. Прекратяване, export, retention и deletion.
+12. AuditEvent/Approval catalog за subscription, entitlements и support.
 
 ## Важно техническо уточнение
 
-48 FLOW-а са заключени на бизнес ниво, но Business Lock не означава Implementation Gate PASS. За реалния код водещи са:
+48 FLOW-а са заключени на бизнес ниво, но Business Lock не означава Implementation Gate PASS.
 
-- [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
-- [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
-- [FLOW-010 Business Close](../../architecture/FLOW_010_BUSINESS_CLOSE_2026-07-21.md)
-- [FLOW-012 Business Close](../../architecture/FLOW_012_BUSINESS_CLOSE_2026-07-24.md)
-- [FLOW-025 Business Close](../../architecture/FLOW_025_BUSINESS_CLOSE_2026-07-21.md)
-- [FLOW-036 Business Close](../../architecture/FLOW_036_BUSINESS_CLOSE_2026-07-22.md)
-- [FLOW-037 Business Close](../../architecture/FLOW_037_BUSINESS_CLOSE_2026-07-25.md)
-- [FLOW-038 Business Close](../../architecture/FLOW_038_BUSINESS_CLOSE_2026-07-28.md)
-- [FLOW-039 Business Close](../../architecture/FLOW_039_BUSINESS_CLOSE_2026-07-28.md)
-- [FLOW-040 Business Close](../../architecture/FLOW_040_BUSINESS_CLOSE_2026-07-21.md)
-- [FLOW-041 Business Close](../../architecture/FLOW_041_BUSINESS_CLOSE_2026-07-27.md)
-- [FLOW-042 Business Close](../../architecture/FLOW_042_BUSINESS_CLOSE_2026-07-28.md)
-- [FLOW-046 Business Close](../../architecture/FLOW_046_BUSINESS_CLOSE_2026-07-23.md)
-- [FLOW-048 Business Close](../../architecture/FLOW_048_BUSINESS_CLOSE_2026-07-28.md)
-- [FLOW-049 Business Close](../../architecture/FLOW_049_BUSINESS_CLOSE_2026-07-29.md)
+D-15 добавя задължителни Wave 0 foundations:
+
+- Tenant Registry;
+- Tenant Guard и database resolver;
+- TenantMembership ↔ RoleAssignment;
+- per-tenant Master Data и File Registry isolation;
+- per-tenant numbering/integrations/secrets;
+- migration runner + `schema_version`;
+- tenant isolation tests;
+- Support Access Request;
+- per-tenant backup/restore/export proof.
+
+Водещи технически документи:
+
+- [TENANCY_MODEL.md](../../architecture/TENANCY_MODEL.md)
 - [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md)
+- [Cross-FLOW Code Audit](../../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
+- [Claude Cross-FLOW Logic Audit](../../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
 
 ## Източници / сесии
 
 - Каноничен архив FLOW-001–043.
 - Последващи изрични решения на Крум от 15–29.07.2026.
-- Корекционен и logic-audit pass по Draft PR #2: 20.07.2026.
-- Business-close passes: FLOW-010, 012, 025, 036, 037, 038, 039, 040, 041, 042, 046, 048 и 049.
+- Business-close passes FLOW-010, 012, 025, 036–042, 046, 048 и 049.
+- FLOW-050 / D-15 tenancy decision: 29.07.2026.
 - Технически code audit срещу `main`: 20.07.2026.
