@@ -1,8 +1,8 @@
 # FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements
 
-> **Статус:** 35% — BUSINESS DESIGN IN PROGRESS  
+> **Статус:** 45% — BUSINESS DESIGN IN PROGRESS  
 > **Последна проверка:** 29.07.2026  
-> **Оставащи решения:** 10  
+> **Оставащи решения:** 8  
 > **Implementation Gate:** W0-BLOCKER за multi-tenant основата; billing и entitlements се проверяват отделно  
 > **Свързани FLOW:** 002, 006, 008, 013, 014, 016, 019, 020, 021, 024, 028, 032, 033, 034, 040, 042, 043, 044, 045, 046, 049
 
@@ -53,20 +53,13 @@ FLOW-050 определя как BEG_Work се предоставя на отд�
 - отделен backup/restore и export scope;
 - отделен AI retrieval scope.
 
-Централен `Tenant Registry` пази само техническата карта на tenant-а: `tenant_id`, юридическа фирма, database location, storage location, status, subscription, deployment и `schema_version`.
+Централен `Tenant Registry` пази техническата карта на tenant-а: `tenant_id`, юридическа фирма, database location, storage location, status, subscription, deployment и `schema_version`.
 
 ## 5. Tenant Guard
 
 Всички API, background jobs, exports, search, files и AI tools минават през централен Tenant Guard.
 
-Tenant Guard проверява:
-
-- authenticated user;
-- active tenant session;
-- active TenantMembership;
-- RoleAssignments и scope;
-- принадлежността на искания ресурс към същия tenant;
-- забрана за cross-tenant read/write.
+Tenant Guard проверява authenticated user, active tenant session, active TenantMembership, RoleAssignments и scope, принадлежността на искания ресурс и забраната за cross-tenant read/write.
 
 `tenant_id` не се приема като свободно доверено поле от клиентската форма.
 
@@ -97,7 +90,7 @@ TenantMembership отговаря дали човекът има достъп д
 
 Не се допуска общ Project, обща фактура, общ Payment или общ Work Package, редактиран от два tenant-а.
 
-Group Dashboard е допустим само като отделна read-only управленска проекция с изрично избрани tenant-и. От него не се създават официални записи.
+Group Dashboard е допустим само като read-only управленска проекция с изрично избрани tenant-и. От него не се създават официални записи.
 
 ## 9. Migration runner и schema version
 
@@ -147,7 +140,7 @@ Marketplace остава отделен продукт и отделна биз�
 - склад и логистика;
 - оперативни трудови часове;
 - качество, дефекти и гаранции;
-- разходен резултат по обект в ограничения по-долу обхват.
+- ограничен разходен резултат по обект.
 
 ### Разходният резултат в Control е ограничен
 
@@ -159,13 +152,13 @@ Marketplace остава отделен продукт и отделна биз�
 
 Той е **БЕЗ труд като стойност** и **БЕЗ режийни**.
 
-Трудовите часове остават видими оперативно, но превръщането им в парична стойност чрез ставки, payroll данни и FLOW-019/028, както и разпределението на режийните по FLOW-024, изискват Pro.
+Трудовите часове остават видими оперативно, но превръщането им в стойност чрез ставки/payroll и разпределението на режийните изискват Pro.
 
-Всеки Control екран и справка, които показват разходен резултат, задължително носят ясно означение:
+Всеки Control екран и справка задължително показва:
 
 > `Разходен резултат без стойност на труда и без режийни.`
 
-Не се допуска стойността да бъде представяна като пълна себестойност или пълна печалба.
+Не се допуска стойността да се представя като пълна себестойност или пълна печалба.
 
 ### Pro добавя
 
@@ -186,21 +179,7 @@ Marketplace остава отделен продукт и отделна биз�
 
 Пакетите управляват достъпните работни екрани и търговски функции, но не могат да изключват системните инварианти.
 
-Следните правила са CORE за Start, Control, Pro и Enterprise:
-
-- Tenant Guard и tenant isolation;
-- Permission Service;
-- 2FA/MFA за Owner/Admin и чувствителни роли;
-- единен Payment ledger;
-- idempotency и защита от duplicate write/payment;
-- AuditEvent;
-- DQ blocking rules;
-- задължителните Approval проверки и dual approval, когато правилото го изисква;
-- акорд без одобрено количество не се допуска;
-- exact-version approval;
-- no hard delete на използвани записи;
-- File Registry и versioning;
-- AI не извършва критично действие без права и потвърждение.
+CORE за всички пакети са Tenant Guard, Permission Service, MFA за чувствителни роли, единен Payment ledger, idempotency, AuditEvent, DQ/Approval блокировки, exact-version approval, no hard delete, File Registry/versioning и забрана AI да извършва критично действие без права и потвърждение.
 
 Пълните Approval Center, Data Quality Center и Audit Center могат да са Pro/Enterprise екрани, но enforcement логиката работи във всички пакети.
 
@@ -226,7 +205,7 @@ Plan Version е immutable. Съществуващ клиент не губи д�
 
 Tenant-specific entitlement се реализира чрез конфигурация/feature flag, а не чрез private code fork.
 
-## 17. Full, Field и External User
+## 17. Full, Field и External User — само права, не цена
 
 ### Full User
 
@@ -240,11 +219,51 @@ Tenant-specific entitlement се реализира чрез конфигура�
 
 Клиент, инвеститор, проектант, подизпълнител, доставчик или консултант със scoped AccessGrant.
 
-Billing classification се извежда от реалните RoleAssignments и permissions по FLOW-002. Не може ръчно да се маркира Full User като по-евтин Field User.
+Full/Field/External classification се извежда от реалните RoleAssignments и permissions по FLOW-002, но **не участва в ценообразуването**.
 
-Точните включени бройки и overage цени остават отворено решение.
+## 18. Заключено решение: без таксуване на потребители и обекти
 
-## 18. Справки по пакети
+BEG_Work се продава с фиксирана цена на фирма/tenant.
+
+Всички пакети включват:
+
+- неограничени Full Users;
+- неограничени Field Users;
+- неограничени External Users;
+- неограничен брой обекти.
+
+Не се доплаща за нов работник, ръководител, офис служител, клиентски представител или подизпълнителски профил.
+
+Това правило цели клиентите да въвеждат всички реални хора и обекти, вместо да крият потребители заради цената.
+
+Ограничения и доплащане могат да се прилагат само към ресурси с реална променлива себестойност:
+
+- файлово пространство;
+- AI използване;
+- специални API интеграции;
+- отделни test/acceptance среди;
+- tenant-specific разработки и SLA услуги.
+
+Точните лимити и add-on цени за тези ресурси остават отделно решение.
+
+## 19. Заключено решение: Launch Pricing v1
+
+Работната стартова ценова рамка е без ДДС:
+
+| Пакет | Месечно | Годишно |
+|---|---:|---:|
+| **BEG Work Start** | **19,90 €** | **199 €** |
+| **BEG Work Control** | **39,90 €** | **399 €** |
+| **BEG Work Pro** | **79,90 €** | **799 €** |
+| **BEG Work Enterprise** | от **149 €** | индивидуално |
+
+Годишната цена е приблизително равна на 10 месечни такси.
+
+Цените се заключват като `Launch Pricing v1`, а не като вечни цени. Следваща ценова версия може да важи за нови клиенти или след договорено подновяване. Съществуващ клиент не се премества мълчаливо към нова цена.
+
+Enterprise цената започва от 149 € месечно, но крайният размер се определя индивидуално според изолация, SLA, интеграции, support и extensions.
+
+## 20. Справки по пакети
 
 ### Start — основни справки
 
@@ -294,35 +313,26 @@ Billing classification се извежда от реалните RoleAssignments
 - прогноза до приключване;
 - Scenario, Resource Assignment, Approval, DQ, Audit и AI анализи.
 
-## 19. Downgrade правило
+## 21. Downgrade правило
 
-При слизане към по-нисък пакет:
+При слизане към по-нисък пакет данните от изключените модули не се изтриват; съществуващите записи остават read-only и исторически видими; нови записи не могат да се създават; връзки, AuditEvent, файлове и финансови факти не се губят.
 
-- данните от изключените модули не се изтриват;
-- съществуващите записи остават read-only;
-- участват в историческите справки според правата;
-- не могат да се създават нови записи в изключените модули;
-- не се губят връзки, AuditEvent, файлове или финансови факти;
-- при повторно активиране на по-висок пакет работата продължава върху същите данни.
+При повторно активиране на по-висок пакет работата продължава върху същите данни.
 
-Downgrade никога не води до hard delete или скриване на историческата истина.
+## 22. Оставащи решения
 
-## 20. Оставащи решения
+1. Ограничен платежен интерфейс за Control: кои payment действия са достъпни, без да се създава втори ledger.
+2. Точни storage, AI, integration и environment лимити/add-on цени.
+3. Месечно, годишно и Enterprise договорно плащане — operational lifecycle и промени по договора.
+4. Избор на платежен оператор и фактуриране.
+5. Grace Period, Restricted, Suspended и restoration правила.
+6. Demo, Trial и Partner tenant режими.
+7. Tenant configuration срещу private extension и забрана за client forks.
+8. Test/Staging/Production, Tenant Acceptance Environment, прекратяване, export, retention, deletion и финален AuditEvent/Approval catalog.
 
-1. Точни включени Full/Field/External user лимити и overages.
-2. Ограничен платежен интерфейс за Control: кои payment действия са достъпни, без да се създава втори ledger.
-3. Начални цени и правила за годишна отстъпка.
-4. Месечно, годишно и Enterprise договорно плащане.
-5. Избор на платежен оператор и фактуриране.
-6. Grace Period, Restricted, Suspended и restoration правила.
-7. Demo, Trial и Partner tenant режими.
-8. Tenant configuration срещу private extension и забрана за client forks.
-9. Test/Staging/Production и Tenant Acceptance Environment.
-10. Прекратяване, export, retention, deletion и финален AuditEvent/Approval catalog.
-
-## 21. Източници / сесии
+## 23. Източници / сесии
 
 - FLOW-042 — exact tenant/environment Release Manifest и Tenant Acceptance Portal.
 - FLOW-043 — D-15 Tenancy & Isolation Model.
-- Сесия 29.07.2026 — tenant isolation, пакети Start/Control/Pro/Enterprise, Feature Entitlements, CORE enforcement, Full/Field/External classification, reporting boundaries, Control cost limitation и downgrade rule.
+- Сесия 29.07.2026 — tenant isolation, пакети Start/Control/Pro/Enterprise, Feature Entitlements, CORE enforcement, Control cost limitation, downgrade rule, фиксирана цена на фирма, неограничени потребители/обекти и Launch Pricing v1.
 - [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
