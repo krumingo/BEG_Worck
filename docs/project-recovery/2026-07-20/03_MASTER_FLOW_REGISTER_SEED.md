@@ -1,6 +1,6 @@
 # Master Flow Register — FLOW-001–050
 
-> **Актуално към:** 29.07.2026  
+> **Актуално към:** 30.07.2026  
 > **Показател:** бизнес готовност, не процент програмиран код  
 > **100%:** Business Lock; Implementation Gate се проверява отделно  
 > **Технически статус:** виж [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -11,7 +11,7 @@
 - На 100% Business Lock: **48**
 - Активни незавършени FLOW-ове: **1** — FLOW-050
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **8**
+- Общо оставащи конкретни бизнес решения: **7**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -64,7 +64,7 @@
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 100% | 0 |
 | FLOW-049 | Marketplace / отделен продукт и API интеграция | 100% | 0 |
-| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 45% | 8 |
+| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 55% | 7 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
@@ -74,10 +74,14 @@
 - FLOW-049 е отделен Marketplace продукт и база; BEG_Work използва защитено API, Candidate/Offer snapshots и агрегирани статистики.
 - FLOW-050 е формално създаден на 29.07.2026.
 - Един tenant = една юридическа фирма; D-15 заключва database-per-tenant, Tenant Registry, Tenant Guard, Master Data per tenant, TenantMembership→RoleAssignments, no shared records, migration runner и controlled support access.
-- Пакетната рамка Start/Control/Pro/Enterprise и Feature Entitlement моделът са заключени.
-- Control включва получени фактури и разходна страна, но разходният резултат е изрично без труд като стойност и без режийни.
-- CORE enforcement работи във всички пакети; пълните Approval/DQ/Audit центрове могат да са Pro/Enterprise екрани.
-- При downgrade изключените модули остават read-only и исторически видими; нищо не се изтрива.
+- Пакетите са по цели отделими модули; не се допуска половин модул.
+- Неотделимото ядро във всички пакети включва обекти, права, базови контрагенти, пълни финанси, единен Payment ledger, P&L, присъствие/отчети/труд като стойност, базов payroll, режийни, файлове и CORE enforcement.
+- Start / „Фирмата“ = „Знаеш резултата“.
+- Control / „Контролът“ = „Контролираш резултата“ и добавя оферти, договори, актуване, заявки/доставки, склад, логистика, подизпълнителски пакети, активи/QR, качество и Work Packages.
+- Pro / „Автопилотът“ = „Системата работи за теб“ и добавя AI, автоматизации, Scenario, Procurement, Resource Assignment, пълните DQ/Approval/Audit екрани, Client Portal и разширени прогнози.
+- Enterprise е Pro + договорени корпоративни услуги.
+- Материалните заявки и доставки остават в Control; в Start материалният разход влиза чрез получена фактура с редове към обект.
+- При downgrade отделимите модули остават read-only и исторически видими; неотделимото ядро и P&L не се изключват.
 - Ценообразуването е фиксирано на фирма, без такса за потребители и без лимит на обектите.
 - Launch Pricing v1 без ДДС: Start 19,90 €/месец или 199 €/година; Control 39,90 €/месец или 399 €/година; Pro 79,90 €/месец или 799 €/година; Enterprise от 149 €/месец по индивидуална оферта.
 
@@ -85,14 +89,13 @@
 
 FLOW-050 — оставащи решения:
 
-1. Ограничен платежен интерфейс за Control, винаги върху FLOW-006 ledger.
-2. Storage, AI, integration и environment лимити/add-on цени.
-3. Месечно, годишно и Enterprise договорно плащане — operational lifecycle.
-4. Платежен оператор и фактуриране.
-5. Grace / Restricted / Suspended / restoration.
-6. Demo / Trial / Partner tenant.
-7. Tenant configuration / private extension / no client forks.
-8. Test/Staging/Production, Tenant Acceptance Environment, export/retention/deletion и финален AuditEvent/Approval catalog.
+1. Storage, AI, integration и environment лимити/add-on цени.
+2. Месечно, годишно и Enterprise договорно плащане — operational lifecycle.
+3. Платежен оператор и фактуриране.
+4. Grace / Restricted / Suspended / restoration.
+5. Demo / Trial / Partner tenant.
+6. Tenant configuration / private extension / no client forks.
+7. Test/Staging/Production, Tenant Acceptance Environment, export/retention/deletion и финален AuditEvent/Approval catalog.
 
 ## Важно техническо уточнение
 
