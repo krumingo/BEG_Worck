@@ -1,35 +1,70 @@
 # FLOW-016 — Единен File Registry / файлове и документи
 
 > **Статус:** 100% — BUSINESS LOCK  
-> **Последна проверка:** 20.07.2026  
-> **Implementation Gate:** отделна техническа проверка по FLOW-042
+> **Последна проверка:** 03.08.2026  
+> **Implementation Gate:** W0-BLOCKER; отделна техническа проверка по FLOW-042  
+> **Архитектурно правило:** BEG_Work не хоства клиентските оригинални файлове
 
 ## Цел
 
-FLOW-016 е единната логическа и техническа основа за всички файлове в BEG_Work. Един физически файл има един стабилен `file_id`, а различните модули го използват чрез връзки, без независими копия.
+FLOW-016 е единната логическа и техническа основа за файловете в BEG_Work. Един физически файл има един стабилен `file_id`, а различните модули го използват чрез връзки, без независими копия.
 
-## Разделение на отговорностите
+## Канонично разделение на отговорностите
 
-- **FLOW-016** — физически файл, file_id, storage, общи metadata, версии, права и връзки.
+### Отговорност на клиента
+
+Всеки tenant задължително свързва собствен Storage Provider още при onboarding:
+
+- Google Drive / Shared Drive;
+- Synology / NAS;
+- S3-compatible storage;
+- собствен on-premise server;
+- друг provider чрез одобрен adapter.
+
+Без успешно свързан и проверен Primary Storage Provider tenant-ът не се активира.
+
+Оригиналните клиентски файлове физически се съхраняват при клиента, на негова сметка и договорна отговорност. Клиентът отговаря за капацитета, лиценза/абонамента към storage доставчика, основното съхранение и достъпността на оригиналите.
+
+### Отговорност на BEG_Work
+
+BEG_Work пази:
+
+- File Registry;
+- metadata и business relations;
+- document families и версии;
+- provider/account/object identifiers;
+- checksums и последна проверка;
+- AuditEvent история;
+- thumbnails, previews, OCR и друг ограничен технически кеш;
+- собствената приложна база данни.
+
+BEG_Work не продава клиентски GB, не определя архивния срок на оригиналите в клиентското хранилище и не изтрива клиентски оригинали поради достигане на SaaS лимит.
+
+Опционален бъдещ продукт `BEG Hosted Storage` може да се проектира отделно само при доказано търсене. Той не е част от текущия продукт и текущите пакети.
+
+## Разделение между FLOW-ове
+
+- **FLOW-016** — `file_id`, File Registry, provider adapters, metadata, версии, checksums, availability и relations.
 - **FLOW-025** — договорен документален контрол, подписи, валидност и checklist.
 - **FLOW-029** — фото/видео категории, тагове, галерия и медийна логика.
+- **FLOW-044** — backup/restore на BEG_Work базата, File Registry, AuditEvent и техническия кеш; не поема автоматично backup на клиентския Primary Storage.
 - Останалите модули сочат към съществуващ `file_id`.
 
 ## Един File Registry
 
 Всеки файл пази поне:
 
-- file_id и tenant_id;
-- original_name и display_name;
-- mime_type и size;
+- `file_id` и `tenant_id`;
+- `original_name` и `display_name`;
+- `mime_type` и `size`;
 - checksum/hash;
 - category/status;
 - document family/current version;
 - uploaded_by/uploaded_at;
-- archived_at;
 - чувствителност и права;
-- storage location(s);
-- relation(s) към business records.
+- storage provider/account/location/object ID;
+- availability state и `last_verified_at`;
+- relations към business records.
 
 ## Един файл, много връзки
 
@@ -50,44 +85,65 @@ FLOW-016 е единната логическа и техническа осно
 
 ## Storage Provider Abstraction
 
-BEG_Work не е обвързан с един доставчик. Всеки tenant избира:
-
-- Primary storage provider;
-- optional Backup provider;
-- бъдещи допълнителни копия/миграции.
-
-Поддържани чрез adapter:
-
-- Synology / NAS;
-- Google Drive / Shared Drive;
-- S3-compatible cloud storage;
-- customer on-premise server;
-- бъдещи providers.
-
 Всички модули използват `file_id`, а не физически път или постоянен provider URL.
 
-## Физически копия
+Каноничният модел съдържа:
 
-Един бизнес файл може да има:
+- задължителен Primary Storage Provider на tenant-а;
+- optional Backup Provider, когато клиентът го е конфигурирал;
+- provider adapter;
+- encrypted tenant-specific credentials/secrets;
+- provider account, bucket/share, path/object key и provider file ID;
+- checksum, sync/availability status и `last_verified_at`.
 
-- primary copy;
-- backup copy;
-- external-share copy.
+Browser-ът не получава постоянни storage credentials. Достъпът е чрез краткотрайни защитени upload/preview/download операции и FLOW-002 permission проверки.
 
-Всяко копие пази provider, account, bucket/share, path/object key, provider file ID, checksum, sync status и last_verified_at.
+## Onboarding gate
 
-## Миграция между providers
+Tenant activation изисква:
 
-Процес:
+1. избран provider adapter;
+2. валидни credentials;
+3. проверен read/write тест в tenant-specific root;
+4. записан Primary Storage в Tenant Registry;
+5. checksum round-trip тест с временен test object;
+6. AuditEvent за свързване и проверка;
+7. показано и прието договорно разграничение: оригиналите са отговорност на клиента, File Registry е отговорност на BEG_Work.
 
-1. Копиране към новия provider.
-2. Checksum проверка.
-3. Потвърждение на наличността.
-4. Новото копие става Primary.
-5. Старото временно остава Backup.
-6. Архивиране/премахване само по правилата.
+При прекъсната връзка tenant-ът не се деактивира автоматично, но upload/download действията се ограничават според риска и се създава критична аларма.
 
-`file_id` и бизнес връзките не се променят.
+## Периодична проверка на наличността и целостта
+
+BEG_Work извършва периодични проверки според риск, тип документ и последна проверка:
+
+- provider object съществува ли;
+- размерът съвпада ли;
+- checksum съвпада ли;
+- версията/ID-то съвпадат ли;
+- provider permission позволява ли необходимия достъп;
+- preview/cache може ли да бъде възстановен от оригинала.
+
+При липсващ или променен файл системата създава Data Quality/Alarm запис и AuditEvent с:
+
+- `file_id`;
+- provider и location;
+- очакван и установен checksum/status;
+- дата/час на проверката;
+- всички засегнати business records;
+- severity според връзките;
+- отговорник и действие за възстановяване.
+
+Засегнатите записи се показват изрично, например:
+
+- акт или протокол;
+- дефект/гаранционен запис;
+- дневен отчет;
+- фактура;
+- договор/анекс;
+- доставка;
+- актив/ремонт.
+
+Липсващ оригинал не се замества мълчаливо с thumbnail или preview. Техническият кеш може да помага за преглед и диагностика, но не става нов каноничен оригинал.
 
 ## Версиониране
 
@@ -96,18 +152,19 @@ BEG_Work не е обвързан с един доставчик. Всеки ten
 - Всички версии са в едно document family.
 - Само една версия е Current.
 - Старите версии са видими и read-only.
-- Одобрена/подписана версия не може да бъде физически заменена.
+- Одобрена/подписана версия не може да бъде заменена в File Registry без нова версия.
 - Нова версия пази кой, кога, причина и предходна версия.
 - Повторно качване със същия checksum предлага дубликат.
-
-Пример: Договор v1 Проект → v2 Коригиран → v3 Одобрен → v4 Подписан/Current.
+- Промяна на provider object извън BEG_Work се открива от checksum проверката и се третира като integrity problem, не като автоматична нова версия.
 
 ## Снимки и технически производни
 
-- original е непроменяем;
-- thumbnail, compressed, preview, OCR text/PDF preview са технически производни;
+- original е в клиентския storage;
+- thumbnail, compressed preview, OCR text и PDF preview са технически производни;
+- техническите производни могат да бъдат кеширани от BEG_Work;
 - производните не са отделни бизнес версии;
-- всички сочат към оригиналния file record.
+- всички сочат към оригиналния `file_id`;
+- кешът има техническа retention политика и може да бъде регенериран при наличен оригинал.
 
 ## Логическа структура
 
@@ -125,122 +182,99 @@ BEG_Work не е обвързан с един доставчик. Всеки ten
 - Безопасност и сертификати;
 - Други.
 
-Администратор/упълномощен Project Manager може да създава подкатегории в разрешения scope. Физическата папка не е бизнес истината — категорията и relations са.
+Физическата папка не е бизнес истината — категорията, версията и relations са.
 
-## Премахване на връзка
+## Премахване на връзка и изтриване
 
 Премахването от един екран изтрива само relation-а. Файлът остава към останалите записи. Действието се записва в AuditEvent.
 
-## Архивиране
+BEG_Work не трябва да представя изтриването на запис от File Registry като гарантирано физическо изтриване при клиента. Физическото изтриване в клиентския provider изисква отделно ясно действие, право, provider response и AuditEvent.
 
-Нормалното „Изтрий“ означава:
+Използван, подписан, одобрен или финансов документ не може да бъде премахнат от нормалния интерфейс без документалните и audit правила.
 
-`Архивирай / скрий от активните изгледи`.
-
-Файлът, версиите и историята остават достъпни за упълномощените потребители и могат да бъдат възстановени.
-
-## Физическо изтриване
-
-Допустимо само при:
-
-- грешно качен файл;
-- празен/повреден файл;
-- точен дубликат;
-- неизползвана чернова;
-
-и само когато няма активни връзки, одобрена/подписана версия, финансова/договорна история или значение за AuditEvent. Изисква право на Owner/Admin и audit.
-
-Използван, подписан, одобрен или финансов документ не се изтрива физически през нормалния интерфейс.
-
-## Права и видимост
+## Права и сигурност
 
 Прилагат се едновременно:
 
-1. достъпът до обекта/подобекта;
-2. достъпът до модула;
-3. чувствителността на категорията.
+1. достъпът до tenant-а;
+2. достъпът до обекта/подобекта;
+3. достъпът до модула;
+4. чувствителността на категорията;
+5. provider capability и наличност.
 
 По-ограниченото право има предимство. Достъп до обект не дава автоматично достъп до payroll, банкови, лични, комисионни или вътрешни финансови файлове.
 
-## Сигурност
+Задължително:
 
 - tenant-specific credentials;
 - encrypted secrets;
-- browser-ът не получава storage credentials;
-- краткотрайни защитени preview/download links;
+- краткотрайни защитени links;
 - няма публичен постоянен URL като право за достъп;
-- upload/open/download/share/archive/restore/version actions се записват в AuditEvent.
+- upload/open/download/share/unlink/version/provider-change/check actions се записват в AuditEvent;
+- provider credentials и object identifiers не изтичат към друг tenant.
 
-## Backup и здраве
+## Health Dashboard
 
-Крум/Admin вижда:
+Admin вижда:
 
-- Primary/Backup provider;
-- използвано/свободно пространство;
-- брой файлове;
-- последен успешен backup;
-- файлове без backup;
-- sync errors и недостъпно хранилище;
-- файлове/статус за миграция;
-- checksum/последна проверка.
+- Primary Provider и optional Backup Provider;
+- provider connection status;
+- брой регистрирани файлове;
+- последна успешна availability/checksum проверка;
+- липсващи файлове;
+- checksum mismatches;
+- permission errors;
+- засегнати актове, дефекти, отчети и други записи;
+- кеш/preview грешки;
+- provider migration status.
 
-FLOW-044 определя disaster-recovery политиката; FLOW-016 предоставя storage копията и health данните.
-
-## Какво трябва да вижда Крум
-
-### В обекта
-
-- всички файлове и категории;
-- текуща версия и история;
-- кой го е качил;
-- към какво е свързан;
-- кой има достъп;
-- статус, валидност и последна промяна.
-
-### При конкретен файл
-
-- preview;
-- original и технически производни;
-- primary/backup location;
-- checksum;
-- versions/document family;
-- всички relations;
-- права и AuditEvent история.
+BEG_Work не показва и не продава собствен клиентски storage quota. Капацитетът на клиентския provider може да се показва само информативно, когато provider API го предоставя.
 
 ## Какво НЕ трябва да позволява
 
+- активиране на tenant без проверен Primary Storage Provider;
+- качване на клиентски оригинали в неописано BEG_Work хранилище;
+- продажба на `+GB` като част от текущите пакети;
 - независими копия на един документ по модули;
 - provider path/URL да е бизнес ID;
 - стар документ да се презаписва без версия;
-- използван/подписан файл да се изтрива;
-- migration да счупи връзките;
-- Primary копие да се изтрие без проверен backup, когато политиката го изисква;
-- един tenant да вижда файлове на друг;
-- директен URL да заобикаля FLOW-002.
+- външно променен файл да се приеме без integrity alarm;
+- липсващ файл да остане без списък на засегнатите записи;
+- migration да счупи `file_id` и relations;
+- един tenant да вижда файлове или credentials на друг;
+- директен URL да заобикаля FLOW-002;
+- preview cache да се представя като каноничен оригинал.
+
+## Минимални тестове преди Implementation Gate
+
+- tenant activation е блокирана без проверен Primary Storage Provider;
+- onboarding read/write/checksum round-trip е успешен;
+- един `file_id` е видим в отчет, акт и дефект без копие;
+- нова версия не презаписва старата;
+- външно променен provider object създава checksum mismatch;
+- липсващ файл създава аларма, AuditEvent и списък на засегнатите записи;
+- provider permission failure се различава от физически липсващ файл;
+- unlink премахва само една relation;
+- provider migration запазва `file_id`;
+- потребител без module/sensitivity право не отваря файла;
+- tenant isolation пази credentials, metadata, previews и originals;
+- preview cache не замества липсващ оригинал.
 
 ## Връзки
 
 - FLOW-002 — права;
 - FLOW-014/029 — отчети и медии;
 - FLOW-025 — документален контрол;
-- FLOW-033/034 — проблеми и решения;
-- FLOW-044 — backup/disaster recovery;
-- FLOW-045/046 — AI и клиентски достъп.
-
-## Минимални тестове преди Implementation Gate
-
-- един file_id е видим в отчет, акт и дефект без копие;
-- нова версия не презаписва старата;
-- подписан файл не се изтрива;
-- unlink премахва само една relation;
-- provider migration запазва file_id;
-- потребител без module/sensitivity право не отваря файла;
-- checksum открива точен дубликат;
-- Primary failure използва провереното backup поведение.
+- FLOW-033/034 — проблеми, аларми и решения;
+- FLOW-040 — AuditEvent;
+- FLOW-042 — integration/isolation tests;
+- FLOW-044 — backup/disaster recovery на BEG_Work-managed data;
+- FLOW-045/046 — AI и клиентски достъп;
+- FLOW-050 — mandatory customer-managed storage и абонаментни entitlements.
 
 ## Източници / сесии
 
 - Каноничен архив: `BEG_Work_ALL_FLOWS_001-043_CANONICAL_FULL_2026-07-15.docx`.
 - Архитектурна рамка и cross-FLOW решения: FLOW-043.
-- Последващи изрични решения на Крум до 20.07.2026.
 - Recovery и корекционен проход: Draft PR #2, 20.07.2026.
+- Изрично решение на Крум от 03.08.2026: BEG_Work не хоства клиентски оригинални файлове; задължителен customer-managed Storage Provider при onboarding; BEG_Work пази File Registry, checksums, previews/cache и DB.
