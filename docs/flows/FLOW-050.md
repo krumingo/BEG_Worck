@@ -1,8 +1,8 @@
 # FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements
 
-> **Статус:** 55% — BUSINESS DESIGN IN PROGRESS  
-> **Последна проверка:** 30.07.2026  
-> **Оставащи решения:** 7  
+> **Статус:** 65% — BUSINESS DESIGN IN PROGRESS  
+> **Последна проверка:** 03.08.2026  
+> **Оставащи решения:** 6  
 > **Implementation Gate:** W0-BLOCKER за multi-tenant основата; billing и entitlements се проверяват отделно  
 > **Свързани FLOW:** 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 016, 019, 020, 021, 023, 024, 027, 028, 030, 031, 033, 034, 035, 038, 039, 040, 041, 042, 043, 044, 045, 046, 047, 048, 049
 
@@ -14,7 +14,7 @@ FLOW-050 определя как BEG_Work се предоставя на отд�
 
 Един tenant представлява точно една юридическа фирма.
 
-Всеки tenant използва един и същ core продукт и логика FLOW-001–050, но има напълно отделни оперативни и финансови данни, Master Data, memberships, роли, обекти, документи, фактури, плащания, каси, банки, складове, файлове, номерации, интеграции, AI контекст, AuditEvent история, абонамент и настройки.
+Всеки tenant използва един и същ core продукт и логика FLOW-001–050, но има напълно отделни оперативни и финансови данни, Master Data, memberships, роли, обекти, документи, фактури, плащания, каси, банки, складове, номерации, интеграции, AI контекст, AuditEvent история, абонамент и настройки.
 
 Потребителят не избира фирма във всяка форма. Tenant-ът се определя от активната проверена сесия.
 
@@ -33,9 +33,9 @@ TenantMembership определя дали човекът принадлежи �
 
 ## 4. Заключено решение: изолация на данните
 
-Всеки tenant има отделна MongoDB база, файлово пространство, номерации, integrations/credentials, backup/restore/export scope и AI retrieval scope.
+Всеки tenant има отделна MongoDB база, номерации, integrations/credentials, backup/restore/export scope и AI retrieval scope.
 
-Централен `Tenant Registry` пази техническата карта на tenant-а: `tenant_id`, юридическа фирма, database location, storage location, status, subscription, deployment и `schema_version`.
+Централен `Tenant Registry` пази техническата карта на tenant-а: `tenant_id`, юридическа фирма, database location, customer-managed storage provider, status, subscription, deployment и `schema_version`.
 
 Всички API, background jobs, exports, search, files и AI tools минават през централен Tenant Guard. `tenant_id` не се приема като свободно доверено поле от клиентската форма.
 
@@ -89,7 +89,7 @@ CORE за всички пакети са:
 - базов payroll и изплащане — FLOW-028;
 - режийни и резултат преди/след режийни — FLOW-024;
 - получени фактури с редове към обект;
-- файлове и документи — FLOW-016;
+- File Registry и връзки към клиентския Storage Provider — FLOW-016;
 - базови справки, аларми и мобилен достъп;
 - CORE DQ, Approval и AuditEvent enforcement.
 
@@ -129,7 +129,7 @@ Start съдържа цялото неотделимо ядро:
 - базов payroll;
 - режийни;
 - пълен P&L и печалба по обект;
-- файлове и базови клиенти/контрагенти;
+- File Registry и базови клиенти/контрагенти;
 - базови справки и аларми;
 - мобилен достъп.
 
@@ -206,7 +206,7 @@ Enterprise не е отделна модулна стъпка. Той е:
 
 > **Pro + договорени корпоративни услуги.**
 
-Според договора може да включва SSO, специални интеграции, отделни среди, Tenant Acceptance Environment, SLA, специални backup/retention правила, корпоративни exports, tenant-specific extensions без private fork и приоритетна поддръжка.
+Според договора може да включва SSO, специални интеграции, отделни среди, Tenant Acceptance Environment, SLA, специални backup/retention правила за BEG_Work-managed data, корпоративни exports, tenant-specific extensions без private fork и приоритетна поддръжка.
 
 Marketplace остава отделен продукт и отделна бизнес спецификация.
 
@@ -252,7 +252,9 @@ BEG_Work се продава с фиксирана цена на фирма/tena
 
 Всички пакети включват неограничени Full Users, Field Users, External Users и неограничен брой обекти.
 
-Ограничения и доплащане могат да се прилагат само към ресурси с реална променлива себестойност: файлово пространство, AI използване, специални API интеграции, отделни test/acceptance среди, SLA и tenant-specific разработки.
+Ограничения и доплащане могат да се прилагат само към ресурси с реална променлива себестойност: AI използване, специални API/имейл интеграции, отделни test/acceptance среди, SLA и tenant-specific разработки.
+
+Клиентски storage GB не са част от пакетите. Оригиналните файлове се пазят в задължително свързан Storage Provider на клиента. `BEG Hosted Storage` може да бъде бъдещ add-on само при доказано търсене и не е част от Launch Pricing v1.
 
 ## 11. Заключено решение: Launch Pricing v1
 
@@ -271,29 +273,62 @@ BEG_Work се продава с фиксирана цена на фирма/tena
 
 ## 12. Downgrade правило
 
-При слизане към по-нисък пакет данните от изключените отделими модули не се изтриват. Съществуващите записи остават read-only и исторически видими; нови записи не могат да се създават; връзки, AuditEvent, файлове и финансови факти не се губят.
+При слизане към по-нисък пакет данните от изключените отделими модули не се изтриват. Съществуващите записи остават read-only и исторически видими; нови записи не могат да се създават; връзки, AuditEvent, File Registry и финансови факти не се губят.
 
 Неотделимото ядро, финансовата истина и историческият P&L никога не се изключват при downgrade.
 
-## 13. Плащане за BEG_Work — работна рамка
+## 13. Заключено решение: customer-managed storage
+
+BEG_Work не хоства клиентските оригинални файлове.
+
+Всеки tenant задължително свързва собствен Primary Storage Provider при onboarding. Без валидни credentials, успешен read/write тест и checksum round-trip tenant-ът не се активира.
+
+Клиентът отговаря за физическото съхранение, капацитета и provider абонамента. BEG_Work отговаря за File Registry, metadata, relations, versions, checksums, availability status, thumbnails/preview/OCR cache и приложната база данни.
+
+Периодичната availability/checksum проверка е задължителна. Липсващ или променен original създава Alarm/Data Quality issue и AuditEvent с всички засегнати записи.
+
+Канонично подробно решение: [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
+
+## 14. Заключено решение: AI fair-use без клиентски брояч
+
+Клиентът никога не вижда брояч на AI заявки, токени или оставащ лимит. Ценовата страница използва само формулировката `включено разумно AI използване`.
+
+Вътрешни непублични прагове по пакет (`Start < Control < Pro`) служат само за cost monitoring, capacity planning и откриване на аномалии. Те се калибрират след реалните MVP разходи и не са автоматичен access blocker.
+
+Ескалацията е:
+
+1. трайно превишаване → вътрешно уведомление само към BEG_Work;
+2. ръчна преценка: нормален растеж → без действие; легитимна тежка употреба → предложение за по-висок пакет/AI add-on;
+3. временно ограничаване само при доказана злоупотреба, след ръчно решение, с изрично съобщение и AuditEvent.
+
+Злоупотреба означава системни автоматизирани заявки извън нормалната работа, scraping/източване, опити за достъп до чужди tenant данни или използване като външен AI gateway за цели извън строителното и фирменото управление.
+
+Основната работа — финанси, отчети, плащания, присъствие, операции и File Registry — никога не зависи от AI fair-use праг.
+
+Канонично подробно решение: [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
+
+## 15. Плащане за BEG_Work — работна рамка
 
 BEG_Work ще поддържа месечни, годишни и договорни Enterprise абонаменти. Външен платежен оператор обработва картата и payment status, но FLOW-050 е source of truth за Subscription, Plan, Entitlement, Grace Period и access state.
 
 Sandbox не е задължителен. Използва се само когато избраният оператор го предоставя и е необходим за безопасно интеграционно тестване.
 
-## 14. Оставащи решения
+## 16. Оставащи решения
 
-1. Точни storage, AI, integration и environment лимити/add-on цени.
+1. Лимити/add-on правила за имейл акаунти, външни интеграции и test/acceptance среди. AI има fair-use без клиентски брояч.
 2. Месечно, годишно и Enterprise договорно плащане — operational lifecycle и промени по договора.
 3. Избор на платежен оператор и фактуриране.
 4. Grace Period, Restricted, Suspended и restoration правила.
 5. Demo, Trial и Partner tenant режими.
-6. Tenant configuration срещу private extension и забрана за client forks.
-7. Test/Staging/Production, Tenant Acceptance Environment, прекратяване, export, retention, deletion и финален AuditEvent/Approval catalog.
+6. Tenant configuration срещу private extension, забрана за client forks, Test/Staging/Production, Tenant Acceptance Environment, прекратяване, export, retention, deletion и финален AuditEvent/Approval catalog.
 
-## 15. Източници / сесии
+## 17. Източници / сесии
 
+- FLOW-016 — customer-managed Storage Provider и File Registry.
 - FLOW-042 — exact tenant/environment Release Manifest и Tenant Acceptance Portal.
 - FLOW-043 — D-15 Tenancy & Isolation Model.
 - Сесия 29–30.07.2026 — tenant isolation, модулна преплетеност, Start/Control/Pro/Enterprise, пълно финансово ядро във всички пакети, Feature Entitlements, CORE enforcement, downgrade, фиксирана цена на фирма, неограничени потребители/обекти и Launch Pricing v1.
+- Сесия 03.08.2026 — customer-managed storage и AI fair-use без клиентски брояч.
 - [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
+- [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
+- [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
