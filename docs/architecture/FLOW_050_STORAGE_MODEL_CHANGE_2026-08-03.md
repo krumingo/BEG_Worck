@@ -1,6 +1,6 @@
 # FLOW-050 Storage Model Change — 03.08.2026
 
-> **Статус:** APPROVED BUSINESS DECISION  
+> **Статус:** APPROVED BUSINESS DECISION / authoritative addendum to FLOW-050  
 > **Засегнати FLOW:** 016, 042, 044, 050  
 > **Засегнати решения:** D-11 / F-02  
 > **PR:** Draft PR #2 — не се слива автоматично
@@ -126,6 +126,10 @@ Wave 0 трябва да включи:
 - preview cache не се представя като original;
 - пакетите и billing моделът не съдържат storage GB;
 - `BEG Hosted Storage` е disabled/not_entitled във всички Launch Pricing v1 планове.
+
+## Канонично предимство
+
+При конфликт между по-ранен текст във FLOW-050 и това решение, **този документ от 03.08.2026 има предимство**, докато FLOW-050 бъде консолидиран при финалния business-close pass.
 
 ## Източник
 
