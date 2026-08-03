@@ -1,8 +1,8 @@
 # FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements
 
-> **Статус:** 65% — BUSINESS DESIGN IN PROGRESS  
+> **Статус:** 75% — BUSINESS DESIGN IN PROGRESS  
 > **Последна проверка:** 03.08.2026  
-> **Оставащи решения:** 6  
+> **Оставащи решения:** 5  
 > **Implementation Gate:** W0-BLOCKER за multi-tenant основата; billing и entitlements се проверяват отделно  
 > **Свързани FLOW:** 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 016, 019, 020, 021, 023, 024, 027, 028, 030, 031, 033, 034, 035, 038, 039, 040, 041, 042, 043, 044, 045, 046, 047, 048, 049
 
@@ -206,7 +206,7 @@ Enterprise не е отделна модулна стъпка. Той е:
 
 > **Pro + договорени корпоративни услуги.**
 
-Според договора може да включва SSO, специални интеграции, отделни среди, Tenant Acceptance Environment, SLA, специални backup/retention правила за BEG_Work-managed data, корпоративни exports, tenant-specific extensions без private fork и приоритетна поддръжка.
+Според договора може да включва SSO, специални интеграции, отделни среди, Tenant Acceptance Environment, SLA, специални backup/retention правила за BEG_Work-managed data, корпоративни exports, tenant-specific extensions без private fork, BYOK и приоритетна поддръжка.
 
 Marketplace остава отделен продукт и отделна бизнес спецификация.
 
@@ -252,7 +252,7 @@ BEG_Work се продава с фиксирана цена на фирма/tena
 
 Всички пакети включват неограничени Full Users, Field Users, External Users и неограничен брой обекти.
 
-Ограничения и доплащане могат да се прилагат само към ресурси с реална променлива себестойност: AI използване, специални API/имейл интеграции, отделни test/acceptance среди, SLA и tenant-specific разработки.
+Ограничения и доплащане могат да се прилагат само към ресурси с реална променлива себестойност: AI действия, специални API/имейл интеграции, отделни test/acceptance среди, SLA и tenant-specific разработки.
 
 Клиентски storage GB не са част от пакетите. Оригиналните файлове се пазят в задължително свързан Storage Provider на клиента. `BEG Hosted Storage` може да бъде бъдещ add-on само при доказано търсене и не е част от Launch Pricing v1.
 
@@ -289,46 +289,92 @@ BEG_Work не хоства клиентските оригинални файл�
 
 Канонично подробно решение: [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
 
-## 14. Заключено решение: AI fair-use без клиентски брояч
+## 14. Заключено решение: План + AI
 
-Клиентът никога не вижда брояч на AI заявки, токени или оставащ лимит. Ценовата страница използва само формулировката `включено разумно AI използване`.
+Всеки план има конкретен месечен бюджет, измерен в разбираеми `AI действия`:
 
-Вътрешни непублични прагове по пакет (`Start < Control < Pro`) служат само за cost monitoring, capacity planning и откриване на аномалии. Те се калибрират след реалните MVP разходи и не са автоматичен access blocker.
+| План | AI действия / месец |
+|---|---:|
+| Start | 100 |
+| Control | 500 |
+| Pro | 2 000 |
+| Enterprise | договорени или BYOK |
 
-Ескалацията е:
+Едно AI действие е една видима клиентска операция — например OCR на една фактура, един въпрос към BEG Brain или една AI разбивка. Вътрешно се пазят токенова и доставна себестойност по действие.
 
-1. трайно превишаване → вътрешно уведомление само към BEG_Work;
-2. ръчна преценка: нормален растеж → без действие; легитимна тежка употреба → предложение за по-висок пакет/AI add-on;
-3. временно ограничаване само при доказана злоупотреба, след ръчно решение, с изрично съобщение и AuditEvent.
+Преди production launch лимитите се проверяват по себестойност така, че пълното им използване да не прави пакета губещ.
 
-Злоупотреба означава системни автоматизирани заявки извън нормалната работа, scraping/източване, опити за достъп до чужди tenant данни или използване като външен AI gateway за цели извън строителното и фирменото управление.
+### AI add-on пакети
 
-Основната работа — финанси, отчети, плащания, присъствие, операции и File Registry — никога не зависи от AI fair-use праг.
+| Add-on | Допълнителни действия | Цена без ДДС |
+|---|---:|---:|
+| AI+ | 500 | 9,90 €/месец |
+| AI Pro | 2 000 | 24,90 €/месец |
+| AI Max | 5 000 | 49,90 €/месец |
+
+Add-on се активира веднага и се начислява pro-rata за непълен период.
+
+Tenant Admin вижда текущо използване, оставащ бюджет, разбивка по функция, тенденция и препоръка за най-изгодна комбинация `план + AI add-on`.
+
+При 80% има предупреждение. При 100% AI функциите се поставят на пауза с ясно съобщение и бутон за добавяне на AI пакет. Основната не-AI работа никога не спира.
+
+Злоупотребата остава отделен security случай и може да доведе до ръчно ограничаване с причина и AuditEvent, независимо от оставащия платен бюджет.
+
+BYOK е допустим само за Enterprise.
 
 Канонично подробно решение: [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
 
-## 15. Плащане за BEG_Work — работна рамка
+## 15. Заключено решение: имейл акаунти и стандартни интеграции
 
-BEG_Work ще поддържа месечни, годишни и договорни Enterprise абонаменти. Външен платежен оператор обработва картата и payment status, но FLOW-050 е source of truth за Subscription, Plan, Entitlement, Grace Period и access state.
+Включените активни връзки са:
+
+| План | Имейл акаунти | Стандартни интеграции |
+|---|---:|---:|
+| Start | 2 | 2 |
+| Control | 10 | 10 |
+| Pro | 30 | 30 |
+| Enterprise | договорени | договорени |
+
+Add-on:
+
+```text
++5 имейл акаунта или стандартни интеграции
+→ 5 €/месец без ДДС
+```
+
+При достигане на лимита съществуващите връзки никога не спират. Блокира се само добавянето на нова връзка, докато стара не бъде премахната или не се активира add-on.
+
+Не се броят:
+
+- задължителният Storage Provider adapter;
+- системният изходящ email service на BEG_Work;
+- вътрешни технически връзки, които не са конфигурирани от клиента като бизнес интеграции.
+
+Специални или скъпи интеграции — например банков импорт, счетоводна система със специфична поддръжка, custom ERP/API connector — могат да бъдат отделен платен add-on независимо от включената бройка.
+
+Всяка integration entitlement/connection има tenant scope, owner, status, credentials reference, last health check и AuditEvent.
+
+## 16. Плащане за BEG_Work — работна рамка
+
+BEG_Work ще поддържа месечни, годишни и договорни Enterprise абонаменти. Външен платежен оператор обработва картата и payment status, но FLOW-050 е source of truth за Subscription, Plan, Entitlement, Usage Budget, Grace Period и access state.
 
 Sandbox не е задължителен. Използва се само когато избраният оператор го предоставя и е необходим за безопасно интеграционно тестване.
 
-## 16. Оставащи решения
+## 17. Оставащи решения
 
-1. Лимити/add-on правила за имейл акаунти, външни интеграции и test/acceptance среди. AI има fair-use без клиентски брояч.
-2. Месечно, годишно и Enterprise договорно плащане — operational lifecycle и промени по договора.
-3. Избор на платежен оператор и фактуриране.
-4. Grace Period, Restricted, Suspended и restoration правила.
-5. Demo, Trial и Partner tenant режими.
-6. Tenant configuration срещу private extension, забрана за client forks, Test/Staging/Production, Tenant Acceptance Environment, прекратяване, export, retention, deletion и финален AuditEvent/Approval catalog.
+1. Месечно, годишно и Enterprise договорно плащане — operational lifecycle, upgrade/downgrade и промени по договора.
+2. Избор на платежен оператор и фактуриране.
+3. Grace Period, Restricted, Suspended и restoration правила.
+4. Demo, Trial и Partner tenant режими.
+5. Tenant configuration срещу private extension, забрана за client forks, Test/Staging/Production, Tenant Acceptance Environment, прекратяване, export, retention, deletion и финален AuditEvent/Approval catalog.
 
-## 17. Източници / сесии
+## 18. Източници / сесии
 
 - FLOW-016 — customer-managed Storage Provider и File Registry.
 - FLOW-042 — exact tenant/environment Release Manifest и Tenant Acceptance Portal.
 - FLOW-043 — D-15 Tenancy & Isolation Model.
 - Сесия 29–30.07.2026 — tenant isolation, модулна преплетеност, Start/Control/Pro/Enterprise, пълно финансово ядро във всички пакети, Feature Entitlements, CORE enforcement, downgrade, фиксирана цена на фирма, неограничени потребители/обекти и Launch Pricing v1.
-- Сесия 03.08.2026 — customer-managed storage и AI fair-use без клиентски брояч.
+- Сесия 03.08.2026 — customer-managed storage; План + AI; лимити за имейл акаунти и интеграции.
 - [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
 - [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
 - [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
