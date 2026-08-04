@@ -2,14 +2,13 @@
 
 > **Дата:** 04.08.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-050 е 90%; tenancy, pricing, storage, Plan + AI, integrations, subscription lifecycle, Payment Provider Adapter, dunning, chargeback и no-deletion rule са заключени.
+> **Последен business-close pass:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.
 
 ## Легенда
 
 - **W0-BLOCKER** — cross-cutting foundation; започва първо.
 - **REFACTOR** — има работещ код, но е в конфликт с каноничния FLOW.
 - **READY-W1/W2/W3/W4** — може да се разработва след predecessor-ите.
-- **BUSINESS-OPEN** — остават бизнес решения.
 - **LEGACY** — не се развива самостоятелно.
 - **DOC/OPS** — документационен или инфраструктурен gate.
 
@@ -18,14 +17,14 @@
 | FLOW | Business | Implementation Gate | Критичен predecessor / действие |
 |---|---:|---|---|
 | 002 | 100% | **W0-BLOCKER** | RoleAssignment + ExternalPrincipal/AccessGrant + Permission Service + migration |
-| 006 | 100% | **W0/W1 REFACTOR** | one payment write service, obligations, idempotency, legacy retirement |
-| 016 | 100% | **W0-BLOCKER** | provider-neutral File Registry, customer-managed Storage Provider onboarding, checksums/availability alarms |
-| 032 | 100% | **W0-BLOCKER** | Master entities, aliases, merge, migration and uniqueness per tenant |
-| 033/034 | 100% | **W0/W1 FOUNDATION** | DQ issue model + Approval runtime |
-| 040 | 100% | **W0-BLOCKER / FOUNDATION** | canonical immutable AuditEvent, retention and visibility |
-| 042 | 100% | **W0 FOUNDATION** | Bootstrap QA Gate, acceptance/migration/isolation/billing tests |
-| 044 | 100% | **OPS-W0** | per-tenant DB restore and BEG_Work-managed data recovery |
-| 050 | 90% | **W0-BLOCKER / BUSINESS-OPEN** | Tenant Registry/Guard, DB resolver, Subscription/Billing state machine, Plan Version/Entitlements, AI Usage Ledger, Payment Provider Adapter, dunning 0/3/7, access states, chargeback case, no-deletion tests; остава Demo/Trial/Partner и final extensions/environments/export catalog |
+| 006 | 100% | **W0/W1 REFACTOR** | един Payment write service, obligations, idempotency, legacy retirement |
+| 016 | 100% | **W0-BLOCKER** | provider-neutral File Registry, mandatory customer Storage Provider onboarding, checksum/availability alarms |
+| 032 | 100% | **W0-BLOCKER** | Master entities, aliases, merge, migration и uniqueness per tenant |
+| 033/034 | 100% | **W0/W1 FOUNDATION** | Data Quality issue model + Approval runtime |
+| 040 | 100% | **W0-BLOCKER / FOUNDATION** | canonical immutable AuditEvent, retention, integrity и visibility |
+| 042 | 100% | **W0 FOUNDATION** | Bootstrap QA Gate, acceptance/migration/isolation/billing/environment tests |
+| 044 | 100% | **OPS-W0** | per-tenant DB restore и BEG_Work-managed data recovery |
+| 050 | 100% | **W0-BLOCKER** | Tenant Registry/Guard, DB resolver, Plan/Entitlements, AI Usage Ledger, Subscription/Billing, Payment Provider Adapter, dunning, environments, retention и controlled deletion |
 
 ## FLOW-050 задължителни implementation условия
 
@@ -33,21 +32,23 @@
 - TenantMembership → RoleAssignment;
 - immutable Plan Version и entitlement checks;
 - customer-managed Storage Provider activation gate;
-- AI Usage Ledger, budget allocation и add-on proration;
-- клиентски AI usage екран и 80%/100% rules;
+- File Registry, checksum/availability scheduler и affected-record alarms;
+- AI Usage Ledger, budget allocation, add-on proration и client usage view;
 - email/integration usage limits без прекъсване на съществуващите връзки;
 - Subscription/Billing Period state machine;
 - idempotent upgrade/downgrade/cancellation;
-- Payment Provider Adapter и подписани webhooks;
-- provider event deduplication;
+- Payment Provider Adapter, signed webhooks и provider-event deduplication;
 - invoice/credit-note linkage;
 - dunning scheduler за ден 0/3/7;
 - Owner + finance-admin notification routing;
-- GRACE / RESTRICTED / SUSPENDED permission matrix;
-- отделен `SUSPENDED_CHARGEBACK` state;
-- manual restore Approval + AuditEvent за chargeback;
-- тест, че billing state никога не задейства deletion;
-- отделен termination/export/retention/confirmation process.
+- GRACE / RESTRICTED / SUSPENDED и `SUSPENDED_CHARGEBACK` permission matrix;
+- Trial/Demo/Partner state and access rules;
+- common-code/no-private-fork enforcement;
+- Development/Test/Staging/Production Release Manifest;
+- exact-version Tenant Acceptance Environment;
+- termination → export → 90-day read-only retention → hold check → Approval → controlled deletion → signed manifest;
+- final Approval/AuditEvent catalog;
+- Modern Field Experience Wave 2 acceptance tests.
 
 ## Release правило
 
@@ -63,9 +64,12 @@
 8. проверен UI за Крум;
 9. rollback/restore план;
 10. tenant isolation tests;
-11. billing and entitlement reconciliation tests, когато FLOW използва subscription state.
+11. billing and entitlement reconciliation tests;
+12. environment/Release Manifest evidence;
+13. export/retention/hold/deletion tests;
+14. customer-managed storage integrity tests;
+15. no-private-fork compliance.
 
-## Следващ business-close приоритет
+## Бизнес статус
 
-1. Demo / Trial / Partner tenant режими.
-2. Tenant extensions/no-fork, environments, export/retention/deletion и финален AuditEvent/Approval catalog.
+Няма оставащи бизнес решения. Следващата стъпка е финална PR проверка, CLAUDE.md v15, табло, изрично merge решение и старт на Wave 0.
