@@ -1,10 +1,10 @@
 # BEG_Work — FLOW Documentation Index
 
 > **Обхват:** FLOW-001–FLOW-050  
-> **Канон:** отделните FLOW документи + Master Flow Register + последващи изрични решения на Крум  
+> **Канон:** отделните FLOW документи + Master Flow Register + последващите изрични решения на Крум  
 > **Важно:** Business Lock и Implementation Gate са отделни статуси  
 > **Проследимост:** всеки FLOW файл съдържа секция `Източници / сесии`  
-> **Текущо:** 48 Business Locked, 1 активен незавършен, 1 legacy.
+> **Текущо:** 49 Business Locked, 0 активни незавършени, 1 legacy — FLOW-018 → FLOW-039.
 
 ## Основни регистри
 
@@ -16,7 +16,8 @@
 
 - [Architecture Index](../architecture/README.md)
 - [Tenancy & Isolation Model — D-15](../architecture/TENANCY_MODEL.md)
-- [Correction Pass — 20.07.2026](../architecture/CORRECTION_PASS_2026-07-20.md)
+- [FLOW-050 Final Governance / Environments / Retention](../architecture/FLOW_050_FINAL_GOVERNANCE_ENVIRONMENTS_RETENTION_DECISION_2026-08-04.md)
+- [Modern Field Experience](../architecture/MODERN_FIELD_EXPERIENCE_2026-08-04.md)
 - [Cross-FLOW Code Audit](../architecture/CROSS_FLOW_AUDIT_2026-07-20.md)
 - [Claude Cross-FLOW Logic Audit](../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
 - [Implementation Gate Matrix](../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -92,15 +93,16 @@
 Всяка следваща сесия трябва да обновява:
 
 1. засегнатия FLOW документ;
-2. секцията `Източници / сесии` в него;
+2. секцията `Източници / сесии`;
 3. Master Flow Register;
-4. Decision Register, когато има ново архитектурно решение;
-5. архитектурните и Implementation/QA документи, когато има foundation impact.
+4. Decision Register при ново/изменено D-решение;
+5. Gate Matrix, Waves и архитектурните индекси при foundation impact.
 
 Преди merge се проверява:
 
 - непрекъсната серия FLOW-001–050;
 - `Източници / сесии` във всички 50 файла;
 - съвпадение на проценти и оставащи точки;
-- съвпадение на D-решенията между FLOW-043 и Decision Register;
-- съвпадение на Gate Matrix/Waves с последния business-close pass.
+- FLOW-043 = Decision Register;
+- Gate Matrix/Waves = последния business-close pass;
+- PR остава Draft до изрично решение на Крум.
