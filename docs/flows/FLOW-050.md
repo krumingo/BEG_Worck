@@ -1,44 +1,30 @@
 # FLOW-050 — Tenant Management / Абонаменти / Пакети / Feature Entitlements
 
-> **Статус:** 90% — BUSINESS DESIGN IN PROGRESS  
+> **Статус:** 95% — BUSINESS DESIGN IN PROGRESS  
 > **Последна проверка:** 04.08.2026  
-> **Оставащи решения:** 2  
-> **Implementation Gate:** W0-BLOCKER за multi-tenant основата; billing и entitlements се проверяват отделно  
+> **Оставащи решения:** 1  
+> **Implementation Gate:** W0-BLOCKER за multi-tenant основата; billing, environments и entitlements се проверяват отделно  
 > **Свързани FLOW:** 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 016, 019, 020, 021, 023, 024, 027, 028, 030, 031, 033, 034, 035, 038, 039, 040, 041, 042, 043, 044, 045, 046, 047, 048, 049
 
 ## 1. Цел
 
-FLOW-050 определя как BEG_Work се предоставя на отделни фирми като SaaS продукт: tenant модел, изолация, абонамент, модулни пакети, feature entitlements, плащане за системата, support access, среди, прекратяване и export.
+FLOW-050 определя как BEG_Work се предоставя на отделни фирми като SaaS продукт: tenant модел, изолация, абонамент, модулни пакети, feature entitlements, плащане, trial/demo/partner режими, support access, среди, прекратяване и export.
 
-## 2. Заключено решение: един tenant = една отделна фирма
+## 2. Tenant и изолация
 
-Един tenant представлява точно една юридическа фирма. Всеки tenant използва един и същ core продукт и логика FLOW-001–050, но има напълно отделни оперативни и финансови данни, Master Data, memberships, роли, обекти, документи, фактури, плащания, каси, банки, складове, номерации, интеграции, AI контекст, AuditEvent история, абонамент и настройки.
+- един tenant = една юридическа фирма;
+- една активна сесия работи с един проверен `tenant_id`;
+- един User може да има няколко `TenantMembership` записа;
+- правата идват от FLOW-002 `RoleAssignment`, без втори permission модел;
+- всеки tenant има отделна MongoDB база, номерации, integrations/credentials, AI context и AuditEvent история;
+- всички API, jobs, exports, search, files и AI tools минават през Tenant Guard;
+- между tenant-и няма shared operational records;
+- support достъпът е временен, scoped, одобрен и auditable;
+- migration runner-ът е idempotent и пази `schema_version` per tenant.
 
-Потребителят не избира фирма във всяка форма. Tenant-ът се определя от активната проверена сесия.
+## 3. CORE enforcement във всички пакети
 
-## 3. Един акаунт, няколко tenant membership-а
-
-Един User може да има достъп до няколко фирми, но всяка работна сесия има един активен `tenant_id`.
-
-```text
-User
-→ TenantMembership
-   → RoleAssignments от FLOW-002
-```
-
-TenantMembership определя дали човекът принадлежи към фирмата. RoleAssignment определя какво може да прави в нея.
-
-## 4. Заключено решение: изолация на данните
-
-Всеки tenant има отделна MongoDB база, номерации, integrations/credentials, backup/restore/export scope и AI retrieval scope.
-
-Централен `Tenant Registry` пази `tenant_id`, юридическа фирма, database location, customer-managed storage provider, status, subscription, deployment и `schema_version`.
-
-Всички API, background jobs, exports, search, files и AI tools минават през Tenant Guard. Между tenant-и няма shared operational records. Support достъпът е временен, scoped, одобрен и auditable.
-
-## 5. CORE enforcement важи за всички пакети
-
-CORE за всички пакети са:
+Пакетите не могат да изключат:
 
 - Tenant Guard и tenant isolation;
 - Permission Service и MFA;
@@ -46,25 +32,21 @@ CORE за всички пакети са:
 - idempotency;
 - AuditEvent;
 - DQ blocking rules;
-- задължителни Approval проверки;
+- задължителните Approval проверки;
 - exact-version approval;
 - no hard delete на използвани записи;
 - File Registry и versioning;
-- AI не извършва критично действие без права и потвърждение.
+- забраната AI да извършва критично действие без права и потвърждение.
 
-## 6. Заключен принцип: пакетите са по цели модули
+## 4. Пакети по цели модули
 
-Модул е отделим само ако финансовият резултат остава пълен без него, никое заключено правило не го изисква и данните му се вливат към задължителната финансова истина.
-
-Неотделимото ядро присъства във всички платени пакети: обекти, роли, базови контрагенти, пълни финанси, Payment ledger, P&L, присъствие/отчети/труд, payroll, режийни, получени фактури, File Registry, базови справки, аларми и мобилен достъп.
-
-## 7. Финална модулна карта
+Не се допуска половин модул. Неотделимото ядро присъства във всички платени пакети: обекти, роли, базови контрагенти, пълни финанси, Payment ledger, P&L, присъствие/отчети/труд, payroll, режийни, получени фактури, File Registry, базови справки, аларми и мобилен достъп.
 
 ### Start — „Фирмата“
 
 `Знаеш резултата.`
 
-Съдържа цялото неотделимо ядро и позволява малка фирма да управлява дейността си от начало до край и да знае реално печели ли.
+Цялото неотделимо ядро.
 
 ### Control — „Контролът“
 
@@ -80,9 +62,9 @@ Control плюс BEG Brain, AI Command Center, автоматично офери
 
 ### Enterprise
 
-Pro + договорени корпоративни услуги: SSO, специални интеграции, отделни среди, TAE, SLA, корпоративни exports, extensions без private fork, BYOK и приоритетна поддръжка.
+Pro + договорени корпоративни услуги: SSO, специални интеграции, отделни среди, Tenant Acceptance Environment, SLA, корпоративни exports, extensions без private fork, BYOK и приоритетна поддръжка.
 
-## 8. Feature Entitlements
+## 5. Feature Entitlements
 
 Каноничният модел е:
 
@@ -96,13 +78,13 @@ Usage Limit
 Feature Flag
 ```
 
-Runtime достъпът изисква едновременно tenant entitlement и user permission.
+Runtime достъпът изисква едновременно tenant entitlement и user permission. `Plan Version` е immutable. Downgrade не трие данни: изключените модули остават read-only и исторически видими.
 
-## 9. Без таксуване на потребители и обекти
+## 6. Цена и потребители
 
 BEG_Work се продава с фиксирана цена на tenant. Всички пакети включват неограничени Full/Field/External Users и неограничен брой обекти.
 
-## 10. Launch Pricing v1 — без ДДС
+### Launch Pricing v1 — без ДДС
 
 | Пакет | Месечно | Годишно |
 |---|---:|---:|
@@ -111,11 +93,7 @@ BEG_Work се продава с фиксирана цена на tenant. Вси�
 | Pro | 79,90 € | 799 € |
 | Enterprise | от 149 € | индивидуално |
 
-## 11. Downgrade правило
-
-При downgrade данните от изключените модули остават read-only и исторически видими. Неотделимото ядро, финансовата истина и историческият P&L никога не се изключват.
-
-## 12. Customer-managed storage
+## 7. Customer-managed storage
 
 BEG_Work не хоства клиентските оригинални файлове. Всеки tenant задължително свързва собствен Primary Storage Provider при onboarding. Без валидни credentials, read/write тест и checksum round-trip tenant-ът не се активира.
 
@@ -123,7 +101,7 @@ BEG_Work не хоства клиентските оригинални файл�
 
 Канонично решение: [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
 
-## 13. План + AI
+## 8. План + AI
 
 | План | Включени AI действия/месец |
 |---|---:|
@@ -142,7 +120,7 @@ AI add-ons:
 
 Канонично решение: [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
 
-## 14. Имейл акаунти и интеграции
+## 9. Имейл акаунти и интеграции
 
 | План | Имейл акаунти | Стандартни интеграции |
 |---|---:|---:|
@@ -153,94 +131,106 @@ AI add-ons:
 
 Add-on `+5` струва 5 €/месец. Съществуващите връзки не се спират при достигнат лимит. Storage adapter и системният изходящ email не се броят. Специални банкови, счетоводни и custom интеграции могат да имат отделна цена.
 
-## 15. Subscription lifecycle
+## 10. Subscription lifecycle
 
-### Месечен и годишен
-
-- плащане предварително;
+- месечен и годишен абонамент се плащат предварително;
 - автоматично подновяване;
 - отказът влиза в сила в края на платения период;
-- няма частично възстановяване при доброволно прекратяване, освен при доказана грешка на BEG_Work.
-
-### Upgrade / downgrade
-
+- няма частично възстановяване при доброволно прекратяване, освен при доказана грешка на BEG_Work;
 - Upgrade — веднага, с pro-rata доплащане;
 - Downgrade — от следващия billing период;
-- AI add-on — активира се веднага pro-rata, отказва се от следващ период;
+- AI add-on — веднага pro-rata, отказ от следващ период;
 - Enterprise промени — чрез договор/анекс и Approval.
 
-## 16. Payment Provider Adapter
+## 11. Payment Provider Adapter
 
 BEG_Work използва provider-neutral `Payment Provider Adapter`.
 
 - Start/Control/Pro: карта и автоматично подновяване;
 - Enterprise: фактура и банков превод;
 - BEG_Work не съхранява номера на карти;
-- операторът връща payment events, но FLOW-050 остава source of truth за Subscription, Plan, Billing Period, Entitlements и Access State;
+- FLOW-050 остава source of truth за Subscription, Plan, Billing Period, Entitlements и Access State;
 - операторът не включва/изключва tenant достъпа директно;
 - webhook-ите са подписани, идемпотентни и проверяват event ID, сума, валута, tenant и billing period;
 - фактурите се пазят във File Registry; корекциите са с кредитно известие.
 
-## 17. Dunning / Grace / Restricted / Suspended
+## 12. Dunning / Grace / Restricted / Suspended
 
-### Автоматични опити
+- автоматични повторни опити на ден 0, 3 и 7;
+- от ден 0 известията отиват до Owner, финансовия администратор и billing контактите;
+- ден 0–7: `GRACE`, системата работи нормално;
+- ден 8–14: `RESTRICTED`, ограничават се AI, нови интеграции, add-ons, нови обекти и нови покани, но текущите финанси и операции продължават;
+- след ден 14: `SUSPENDED`, основно read-only с плащане, export, важни документи и support;
+- нормално възстановяване след проверено плащане е автоматично и идемпотентно.
 
-Повторни опити за плащане се правят на ден 0, 3 и 7. Всеки опит създава Payment Attempt и AuditEvent.
-
-### Известия
-
-От ден 0 всички известия се изпращат задължително до Owner, финансовия администратор и договорените billing контакти.
-
-### Ден 0–7: GRACE
-
-Системата работи нормално.
-
-### Ден 8–14: RESTRICTED
-
-Ограничават се AI, нови интеграции, add-ons, нови обекти и нови покани. Не се блокират фактури, плащания, каса/банка, присъствие, дневни отчети, текущи операции, аварийни действия, export и support.
-
-### След ден 14: SUSPENDED
-
-Tenant-ът е основно read-only. Owner/Admin могат да влязат, да преглеждат данните, да платят, да export-нат, да свалят важни документи и да ползват support.
-
-### Restoration
-
-При нормално просрочие провереното плащане възстановява абонамента автоматично и идемпотентно.
-
-## 18. Chargeback — отделен път
-
-Chargeback не минава през 7/7/14 стълбицата. Tenant-ът преминава незабавно в `SUSPENDED_CHARGEBACK`. Възстановяване се допуска само с ръчно решение от упълномощен BEG_Work оператор, доказателства и AuditEvent.
-
-## 19. Желязно правило за данните
+Chargeback е отделен път: незабавно `SUSPENDED_CHARGEBACK`, а restoration е само с ръчно решение, доказателства и AuditEvent.
 
 > **Неплатен абонамент никога не изтрива данни.**
 
-Изтриването е отделен процес:
+Канонично решение: [FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md](../architecture/FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md).
+
+## 13. Trial tenant
+
+Trial е реален tenant със следните параметри:
+
+- срок: **14 дни**;
+- пакет: **Pro**;
+- AI бюджет: **500 AI действия общо**;
+- потребители: неограничени;
+- обекти: неограничени;
+- Primary Storage Provider: задължителен;
+- карта: не е задължителна;
+- един trial за едно ЕИК.
+
+Повторен trial за същото ЕИК и ръчно удължаване се допускат само с manual approval, причина и AuditEvent.
+
+При изтичане:
 
 ```text
-termination request
-→ export
-→ договорен retention период
-→ legal/incident hold проверки
-→ изрично потвърждение
-→ контролирано deletion/disposition
-→ AuditEvent / signed manifest
+TRIAL_ACTIVE — 14 дни
+→ TRIAL_READ_ONLY — 14 дни
+→ TRIAL_SUSPENDED
 ```
 
-Канонично подробно решение за секции 15–19: [FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md](../architecture/FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md).
+Данните не се изтриват автоматично. При платена активация се запазват същият tenant и същите данни, без миграция.
 
-## 20. Оставащи решения
+## 14. Demo tenant
 
-1. Demo / Trial / Partner tenant режими.
-2. Tenant configuration срещу private extension, no client forks, Test/Staging/Production, Tenant Acceptance Environment, export/retention/deletion и финален AuditEvent/Approval catalog.
+За launch Demo се използва само за търговски презентации, водени от BEG_Work.
 
-## 21. Източници / сесии
+- само шаблонни, несекретни данни;
+- без реални клиентски credentials и платежни методи;
+- периодичен reset;
+- никога не се превръща в production tenant;
+- per-visitor клониране не се разработва за launch.
+
+## 15. Partner tenant
+
+Partner tenant може да има безплатен или договорно намален абонамент, но няма автоматичен достъп до клиентски tenant-и.
+
+Достъп до клиент се дава само чрез изричен `Partner Access Grant`, който е tenant-scoped, time-limited, role/action/resource-scoped, revocable и auditable. Grant-ът изисква одобрение от клиента/Owner според матрицата на права.
+
+Канонично решение за Trial/Demo/Partner: [FLOW_050_TRIAL_DEMO_PARTNER_DECISION_2026-08-04.md](../architecture/FLOW_050_TRIAL_DEMO_PARTNER_DECISION_2026-08-04.md).
+
+## 16. Оставащо решение
+
+Финално обединено решение за:
+
+- tenant configuration срещу private extension;
+- забрана за client forks;
+- Test / Staging / Production;
+- Tenant Acceptance Environment;
+- termination, export, retention и controlled deletion;
+- финален AuditEvent / Approval catalog за billing, support и tenant lifecycle.
+
+## 17. Източници / сесии
 
 - FLOW-016 — customer-managed Storage Provider и File Registry.
-- FLOW-042 — exact tenant/environment Release Manifest и Tenant Acceptance Portal.
+- FLOW-042 — Release Manifest и Tenant Acceptance Portal.
 - FLOW-043 — D-15 Tenancy & Isolation Model.
-- Сесии 29.07–04.08.2026 — tenancy, packages, pricing, storage, Plan + AI, integrations, subscription lifecycle, Payment Provider Adapter, dunning, chargeback и no-deletion rule.
+- Сесии 29.07–04.08.2026 — tenancy, packages, pricing, storage, Plan + AI, integrations, subscription lifecycle, Payment Provider Adapter, dunning, chargeback, Trial/Demo/Partner и no-deletion rule.
 - [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
 - [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
 - [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
 - [FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md](../architecture/FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md).
+- [FLOW_050_TRIAL_DEMO_PARTNER_DECISION_2026-08-04.md](../architecture/FLOW_050_TRIAL_DEMO_PARTNER_DECISION_2026-08-04.md).
