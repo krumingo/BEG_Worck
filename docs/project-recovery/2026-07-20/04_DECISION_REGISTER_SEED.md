@@ -15,11 +15,11 @@
 | D-08 | Един общ AuditEvent envelope за domain и AI; FLOW-040 е изглед. | Одобрено |
 | D-09 | FLOW-018 е legacy/MVP; FLOW-039 е каноничният Quality/Defects/Warranty модул. | Одобрено |
 | D-10 | Business Lock е различен от Implementation Gate. | Одобрено |
-| D-11 | Един File Registry със сменяем storage provider. | Одобрено на 15.07.2026 |
+| D-11 | Един File Registry със сменяем provider adapter; оригиналите са в customer-managed storage, освен при отделна бъдеща hosted услуга. | Одобрено; уточнено на 03.08.2026 |
 | D-12 | AI/интернет не са single point of failure; има manual/offline/Excel rescue. | Одобрено на 16.07.2026 |
 | D-13 | Production, standby, replica/PITR, backups и restore tests са отделни DR слоеве. | Одобрено на 16.07.2026 |
 | D-14 | BEG_Work се развива като Construction Operating System. | Одобрено на 16.07.2026 |
-| D-15 | Един tenant = една юридическа фирма; database/file/Master Data isolation, Tenant Guard, TenantMembership→RoleAssignments, no shared operational records, per-tenant migrations и controlled support access. | Одобрено на 29.07.2026 |
+| D-15 | Един tenant = една юридическа фирма; database/Master Data/File Registry/credentials isolation, Tenant Guard, TenantMembership→RoleAssignments, no shared operational records, per-tenant migrations и controlled support access. | Одобрено на 29.07.2026; синхронизирано на 04.08.2026 |
 
 ## Допълнителни потвърдени продуктови правила
 
@@ -29,12 +29,14 @@
 - При съществена грешка в базовия бюджет се прави нова версия и предоговаряне.
 - Клиентско одобрение е писмено и е свързано с точна версия.
 - Всеки tenant използва един и същ core FLOW-001–050, но с напълно отделни фирмени данни и абонамент.
+- Един общ код и Release Manifest; няма private client forks.
+- Customer-managed originals не се изтриват от стандартния BEG_Work deletion process.
 
 ## Източници / сесии
 
 - Каноничен FLOW архив и архитектурен одит: 12.07.2026.
 - Storage abstraction: 15.07.2026.
 - Operational Resilience, Disaster Recovery и Category-Defining Product: 16.07.2026.
-- AI директно активиране по предварително одобрени правила: 18.07.2026.
-- Корекционен проход и синхронизация на регистрите: 20.07.2026.
-- D-15 Tenancy & Isolation Model: 29.07.2026; пълна спецификация в `docs/architecture/TENANCY_MODEL.md`.
+- AI директно активиране: 18.07.2026.
+- D-15 Tenancy & Isolation Model: 29.07.2026.
+- FLOW-050 storage/no-fork/environments/retention синхронизация: 03–04.08.2026.
