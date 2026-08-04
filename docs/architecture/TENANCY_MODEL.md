@@ -1,7 +1,7 @@
 # BEG_Work — Tenancy & Isolation Model
 
 > **Решение:** D-15  
-> **Дата:** 29.07.2026  
+> **Дата:** 29.07.2026; синхронизирано 04.08.2026  
 > **Статус:** APPROVED BUSINESS/ARCHITECTURE DECISION  
 > **Свързани FLOW:** 002, 016, 032, 040, 042, 043, 044, 050
 
@@ -9,33 +9,36 @@
 
 Един tenant представлява точно една юридическа фирма.
 
-Всеки tenant използва един и същ BEG_Work core и FLOW-001–050, но има напълно отделни данни, конфигурация, права, номерации, файлове, интеграции, AI контекст, AuditEvent история и абонамент.
+Всеки tenant използва един и същ BEG_Work core и FLOW-001–050, но има отделни данни, конфигурация, права, номерации, File Registry, provider credentials, интеграции, AI контекст, AuditEvent история и абонамент.
 
-Не се създава отделен code fork или физическо копие на FLOW логиката за всяка фирма.
+Няма private client fork. Отделен Enterprise deployment не означава отделна версия; всеки deployment използва общ Release Manifest.
 
 ## 2. Active tenant context
 
-Един User може да има membership в няколко tenant-а. Всяка работна сесия има един активен `tenant_id`.
+Един User може да има membership в няколко tenant-а. Всяка работна сесия има един активен `tenant_id`, определен server-side от проверената сесия.
 
-При превключване се сменя целият фирмен контекст. Формите не позволяват свободен избор на фирма за всеки запис; backend определя tenant-а от проверената сесия.
+```text
+User
+→ TenantMembership
+   → RoleAssignments
+```
+
+Роля в Tenant A не дава право в Tenant B.
 
 ## 3. Database per tenant
 
 Стандартният модел е:
 
-- общо приложение;
+- общо приложение и codebase;
 - централен Tenant Registry;
 - отделна MongoDB база per tenant;
-- отделно файлово пространство per tenant;
-- възможност Enterprise tenant да бъде насочен към отделен cluster/deployment.
-
-Това позволява отделни backup, restore, export, retention, migration и deletion операции.
+- customer-managed Primary Storage Provider per tenant;
+- отделни File Registry metadata, credentials, numbering, integrations и AI context;
+- възможност Enterprise tenant да бъде на отделен cluster/deployment, но със същия build/Release Manifest.
 
 ## 4. Tenant Registry
 
-Tenant Registry е централен технически регистър и не съдържа оперативните данни на фирмите.
-
-Минимални полета:
+Tenant Registry пази техническата карта, не оперативните данни:
 
 ```text
 tenant_id
@@ -45,17 +48,20 @@ status
 subscription_status
 plan_version_id
 database_name / database_location
-storage_location
+primary_storage_provider_type
+primary_storage_provider_reference
 deployment_id
+app_version
 schema_version
+configuration_version
+release_manifest_id
 migration_status
-last_migration_at
-last_successful_migration
-failed_migration
+retention_state
 created_at
 suspended_at
-retention_state
 ```
+
+Secrets и provider credentials са encrypted и tenant-scoped.
 
 ## 5. Tenant Guard
 
@@ -63,100 +69,67 @@ retention_state
 
 - REST/API;
 - background jobs;
-- file read/write;
-- search;
-- exports;
+- File Registry read/write;
+- search и exports;
 - notifications;
 - AI tools/retrieval;
 - webhooks и integrations;
 - support sessions.
 
-Guard-ът проверява User, active tenant, active membership, RoleAssignments, resource ownership и action scope. Cross-tenant read/write е denied by default.
+Guard-ът проверява User, active tenant, membership, RoleAssignments, resource ownership и action scope. Cross-tenant read/write е denied by default.
 
 ## 6. Master Data per tenant
 
-FLOW-032 е винаги per tenant.
+FLOW-032 е винаги per tenant. Това включва Person/Organization, контрагенти, контакти, СМР, материали, доставчици, aliases, договорени цени, Skill Matrix и business history.
 
-Per-tenant бизнес данни са:
+Глобални са само технически справочници без търговска стойност.
 
-- Master Person/Organization;
-- контрагенти и контакти;
-- СМР;
-- материали, артикули и aliases;
-- доставчици и договорени цени;
-- ценова история;
-- Skill Matrix;
-- business classifications и productivity history.
+## 7. Отделни номерации
 
-Глобални са само технически справочници без бизнес стойност: държави, валути, часови зони, system feature IDs, application/migration versions.
+Всеки tenant има собствени sequence-и за оферти, договори, фактури, плащания, Work Packages, дефекти, заявки, поръчки, доставки и други domain IDs.
 
-## 7. TenantMembership и FLOW-002
+## 8. Customer-managed storage и File Registry
 
-Няма втори permission engine.
+BEG_Work не хоства customer originals в Launch модела.
 
-```text
-User
-→ TenantMembership
-   → RoleAssignments
-```
+Всеки tenant задължително свързва собствен Primary Storage Provider:
 
-TenantMembership доказва достъп до фирмата. RoleAssignments от FLOW-002 определят role/action/module/project/location/resource/amount/validity scope вътре в конкретното membership.
+- Google Drive / Shared Drive;
+- Synology / NAS;
+- S3-compatible storage;
+- customer on-premise server;
+- бъдещ adapter по общия contract.
 
-Роля в Tenant A не дава никакво право в Tenant B.
+Tenant activation изисква валидни credentials, read/write test, checksum round-trip и AuditEvent.
 
-## 8. Отделни номерации
+BEG_Work пази:
 
-Всеки tenant има собствени sequence-и за:
+- File Registry;
+- metadata и business relations;
+- document families/versions;
+- checksums и availability status;
+- provider IDs и object paths;
+- thumbnails, previews и OCR cache.
 
-- оферти;
-- договори и анекси;
-- фактури;
-- плащания;
-- Work Packages;
-- дефекти;
-- заявки, поръчки, доставки и други domain IDs.
+Клиентът отговаря за физическото съхранение, provider capacity и provider subscription.
 
-Номерацията никога не се споделя между фирми.
+Периодичната проверка установява missing object, permission error, checksum mismatch и невъзможност за preview regeneration. Проблемът създава Alarm/DQ issue + AuditEvent с всички засегнати business records.
 
-## 9. Отделно файлово пространство
+## 9. Интеграции и secrets
 
-Файловете се адресират през FLOW-016 `file_id`, но физически и логически са tenant-scoped.
+Всеки tenant има отделни banking/accounting integrations, email channels, storage adapters, API keys, webhook secrets, payment-provider references и external portals.
 
-Пример:
+System-wide credentials се използват само от ограничени platform services и не дават свободен support access до business data.
 
-```text
-/tenants/{tenant_id}/...
-```
+## 10. AI isolation
 
-Директен storage URL/path не заобикаля Tenant Guard. File metadata, relations, checksum, versions и backup state носят tenant ownership.
+BEG Brain наследява active tenant и user scope. Search, summaries, recommendations и tools не могат да използват данни от друг tenant.
 
-## 10. Отделни интеграции и secrets
+Group Dashboard е отделна read-only projection с изрично право за всеки включен tenant.
 
-Всеки tenant има собствени:
+## 11. Междуфирмени отношения
 
-- банкови/счетоводни интеграции;
-- email channels;
-- storage adapters;
-- API keys;
-- webhook secrets;
-- payment-provider references;
-- external portals и communication channels.
-
-System-wide credentials се използват само от строго ограничени platform services и никога не дават на normal support user свободен достъп до всички tenant данни.
-
-## 11. AI isolation
-
-BEG Brain наследява active tenant и user scope.
-
-AI search, context, summaries, recommendations и tools не могат да използват данни от друг tenant. Cross-company Group Dashboard/analysis е отделна read-only projection, изисква изрично избрани tenant-и и право за всеки от тях.
-
-## 12. Междуфирмени отношения
-
-Две фирми, включително фирми на един собственик, работят помежду си като независими контрагенти.
-
-Не се допуска shared Project/Invoice/Payment/WorkPackage между tenant-и.
-
-Официалният модел е:
+Две фирми, включително свързани фирми, работят като независими контрагенти. Не се допуска shared Project/Invoice/Payment/WorkPackage.
 
 ```text
 Tenant A
@@ -164,110 +137,94 @@ Tenant A
 → contract/request/package/act/invoice/payment
 ```
 
-Group Dashboard е единственото разрешено обединяване и е read-only. Той не създава официални domain записи.
+## 12. Migration runner
 
-## 13. Migration runner
-
-Database-per-tenant изисква централен migration runner, който:
+Migration runner-ът:
 
 1. чете Tenant Registry;
-2. взема lock per tenant;
+2. взема per-tenant lock;
 3. сравнява `schema_version`;
-4. изпълнява липсващите migration steps;
+4. изпълнява липсващите steps;
 5. валидира post-conditions;
-6. записва per-tenant result и AuditEvent;
-7. поддържа retry/idempotency;
-8. прилага recovery/rollback plan при failure;
-9. позволява canary tenant и staged rollout;
+6. записва result и AuditEvent;
+7. поддържа idempotent retry;
+8. има recovery/rollback plan;
+9. позволява canary/staged rollout;
 10. блокира release при критична непълна миграция.
 
-Migration status не се отчита само глобално; всеки tenant има собствен резултат.
+## 13. Support Access Request
 
-## 14. Support Access Request
+Platform operator по подразбиране вижда само технически metadata.
 
-Platform operator по подразбиране вижда само технически metadata: tenant status, subscription, deployment health, storage/database size, errors и migration status.
+Достъп до business data изисква Support Access Request с tenant, reason, scope, access mode, approved_by, start/expiry, session и AuditEvent correlation.
 
-Достъп до бизнес данни изисква Support Access Request:
+Режими: metadata-only, read-only, restricted-write и emergency break-glass. Break-glass изисква двоен контрол, owner notification и последващ доклад.
 
-```text
-support_ticket_id
-tenant_id
-support_user
-reason
-scope
-access_mode
-approved_by
-start_at
-expires_at
-session_id
-AuditEvent correlation
-```
+## 14. Backup, restore, export, retention и deletion
 
-Поддържани режими:
-
-- metadata only;
-- read-only;
-- restricted write;
-- emergency break-glass.
-
-Break-glass изисква двоен контрол, автоматично известяване на tenant owner, кратък срок и последващ доклад.
-
-## 15. Backup, restore, export и deletion
-
-Всеки tenant трябва да може да бъде:
-
-- backup-нат;
-- възстановен;
-- export-нат;
-- архивиран;
-- преместен към друг deployment;
-- изтрит след retention и legal-hold проверки;
-
-без да се засягат останалите tenant-и.
+Всеки tenant трябва да може да бъде backup-нат, възстановен, export-нат, преместен и контролиранo изтрит без влияние върху други tenant-и.
 
 `Subscription ended` не означава `data deleted`.
 
-## 16. Задължителни isolation tests
+Стандартният termination path е:
 
-Bootstrap QA Gate v0 / FLOW-042 трябва да доказва поне:
+```text
+request
+→ export
+→ 90-day read-only retention
+→ legal/incident hold check
+→ explicit Approval
+→ controlled deletion
+→ signed disposition manifest
+```
 
-- Tenant A user не вижда Tenant B records;
-- guessed/modified ID не пробива tenant boundary;
-- files и signed links са tenant-scoped;
-- search, dashboards и exports не смесват данни;
-- AI retrieval/tools не използват чужд tenant;
+BEG_Work-managed deletion включва tenant DB, File Registry, caches, credentials, indexes, configuration и temporary exports. Customer-managed originals не се изтриват от стандартния процес.
+
+## 15. Задължителни isolation tests
+
+- Tenant A не вижда Tenant B records;
+- guessed/modified ID не пробива boundary;
+- File Registry, signed links и provider credentials са tenant-scoped;
+- search, dashboards, exports и AI не смесват данни;
 - RoleAssignment в една фирма не дава право в друга;
-- backup/restore и migration на един tenant не засягат друг;
+- migration/backup/restore на един tenant не засяга друг;
 - support access изтича и се audit-ва;
-- cross-tenant shared operational record е технически забранен;
-- migration retry е idempotent и version-correct.
+- customer Storage Provider activation и checksum alarms работят;
+- no-private-fork и Release Manifest rules се спазват;
+- deletion не засяга customer-managed originals.
 
-## 17. Wave 0 задължителни deliverables
+## 16. Wave 0 deliverables
 
 - Tenant Registry;
-- Tenant Guard и database resolver;
-- TenantMembership ↔ RoleAssignment integration;
-- per-tenant Master Data foundation;
-- per-tenant File Registry isolation;
-- sequence/numbering service per tenant;
+- Tenant Guard/database resolver;
+- TenantMembership ↔ RoleAssignment;
+- per-tenant Master Data;
+- customer-managed Storage Provider adapters и activation gate;
+- tenant-scoped File Registry;
+- numbering service;
 - integration/secret isolation;
-- migration runner + `schema_version`;
-- tenant-aware AuditEvent and idempotency;
-- isolation test suite;
-- Support Access Request и break-glass controls;
-- per-tenant backup/restore/export proof.
+- migration runner;
+- tenant-aware AuditEvent/idempotency;
+- isolation tests;
+- Support Access/Break-glass;
+- per-tenant backup/restore/export/retention/deletion proof;
+- common Release Manifest/no-fork enforcement.
 
-## 18. Забрани
+## 17. Забрани
 
 - общ operational collection без tenant boundary;
 - tenant от свободно поле във форма;
 - shared Project/Invoice/Payment между фирми;
-- global Master Data с търговски данни;
-- support staff да вижда бизнес данни без request;
+- global Master Data с търговска стойност;
+- support access без request;
 - migration без per-tenant version/result;
 - AI cross-tenant retrieval;
-- private client fork като стандартен tenancy механизъм.
+- private client fork;
+- customer originals в BEG_Work quota като Launch модел;
+- automatic deletion поради non-payment или изтекъл retention.
 
-## 19. Одобрение и проследимост
+## 18. Проследимост
 
-Решението е одобрено от Крум на 29.07.2026 след преглед на пълната 14-точкова tenancy спецификация и допълненията за Master Data per tenant, FLOW-002 membership model, междуфирмени отношения и migration runner.
+- D-15 е одобрено на 29.07.2026.
+- Customer-managed storage е заключено на 03.08.2026.
+- Common-code/no-fork, environments, retention и controlled deletion са заключени на 04.08.2026.
