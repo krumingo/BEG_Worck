@@ -1,6 +1,6 @@
 # Master Flow Register — FLOW-001–050
 
-> **Актуално към:** 03.08.2026  
+> **Актуално към:** 04.08.2026  
 > **Показател:** бизнес готовност, не процент програмиран код  
 > **100%:** Business Lock; Implementation Gate се проверява отделно  
 > **Технически статус:** виж [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -11,7 +11,7 @@
 - На 100% Business Lock: **48**
 - Активни незавършени FLOW-ове: **1** — FLOW-050
 - Legacy FLOW, който се поглъща от друг: **1** — FLOW-018 → FLOW-039
-- Общо оставащи конкретни бизнес решения: **5**
+- Общо оставащи конкретни бизнес решения: **2**
 
 | FLOW | Име | Готовност | Оставащи точки |
 |---|---|---:|---:|
@@ -64,7 +64,7 @@
 | FLOW-047 | Managed Work Package / бонус | 100% | 0 |
 | FLOW-048 | Resource Assignment | 100% | 0 |
 | FLOW-049 | Marketplace / отделен продукт и API интеграция | 100% | 0 |
-| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 75% | 5 |
+| FLOW-050 | Tenant Management / Абонаменти / Пакети / Feature Entitlements | 90% | 2 |
 
 \* FLOW-018 не се доразработва като конкурентен модул. Неговата логика се консолидира във FLOW-039.
 
@@ -80,29 +80,26 @@
 - Control / „Контролът“ = „Контролираш резултата“ и добавя оферти, договори, актуване, заявки/доставки, склад, логистика, подизпълнителски пакети, активи/QR, качество и Work Packages.
 - Pro / „Автопилотът“ = „Системата работи за теб“ и добавя AI, автоматизации, Scenario, Procurement, Resource Assignment, пълните DQ/Approval/Audit екрани, Client Portal и разширени прогнози.
 - Enterprise е Pro + договорени корпоративни услуги.
-- Материалните заявки и доставки остават в Control; в Start материалният разход влиза чрез получена фактура с редове към обект.
-- При downgrade отделимите модули остават read-only и исторически видими; неотделимото ядро и P&L не се изключват.
 - Ценообразуването е фиксирано на фирма, без такса за потребители и без лимит на обектите.
 - Launch Pricing v1 без ДДС: Start 19,90 €/месец или 199 €/година; Control 39,90 €/месец или 399 €/година; Pro 79,90 €/месец или 799 €/година; Enterprise от 149 €/месец по индивидуална оферта.
-- Customer-managed storage: tenant не се активира без собствен проверен Storage Provider; BEG_Work пази File Registry и integrity/availability контрола, но не продава storage GB.
-- План + AI: Start 100, Control 500 и Pro 2 000 AI действия месечно; AI add-ons 500/9,90 €, 2 000/24,90 € и 5 000/49,90 €; клиентът вижда usage и remaining; при 100% спират само AI функциите.
-- BYOK е Enterprise опция.
-- Имейл/стандартни интеграции: 2/10/30 по Start/Control/Pro; add-on +5 за 5 €/месец; съществуващите връзки не се прекъсват при достигане на лимита.
+- Customer-managed storage: tenant не се активира без собствен проверен Storage Provider; BEG_Work пази File Registry, не продава storage GB.
+- План + AI: Start 100, Control 500, Pro 2 000 AI действия; клиентски usage екран и AI add-ons; при 100% спират само AI функциите.
+- Имейл/интеграции: 2/10/30 по пакет и add-on +5 за 5 €/месец; съществуващите връзки не се прекъсват.
+- Subscription lifecycle: upgrade веднага pro-rata; downgrade от следващ период; отказ в края на платения период; Enterprise чрез договор/анекс.
+- Payment Provider Adapter: карта/auto-renew за стандартните планове, фактура/банков превод за Enterprise, signed/idempotent webhooks и BEG_Work като subscription source of truth.
+- Dunning: автоматични опити ден 0/3/7; Owner и финансов администратор се уведомяват от ден 0; Grace 0–7, Restricted 8–14, Suspended след ден 14.
+- Chargeback е отделен незабавен suspended път с ръчно възстановяване и AuditEvent.
+- Неплатен абонамент никога не изтрива данни; deletion е отделен termination → export → retention → confirmation процес.
 
 ## Текущ приоритет за бизнес затваряне
 
 FLOW-050 — оставащи решения:
 
-1. Месечно, годишно и Enterprise договорно плащане — operational lifecycle, upgrade/downgrade и промени по договора.
-2. Платежен оператор и фактуриране.
-3. Grace / Restricted / Suspended / restoration.
-4. Demo / Trial / Partner tenant.
-5. Tenant configuration / private extension / no client forks, среди, export/retention/deletion и финален AuditEvent/Approval catalog.
+1. Demo / Trial / Partner tenant режими.
+2. Tenant configuration / private extension / no client forks + Test/Staging/Production, Tenant Acceptance Environment, export/retention/deletion и финален AuditEvent/Approval catalog.
 
 ## Важно техническо уточнение
 
 48 FLOW-а са заключени на бизнес ниво, но Business Lock не означава Implementation Gate PASS.
 
-D-15 добавя задължителни Wave 0 foundations: Tenant Registry, Tenant Guard/database resolver, TenantMembership↔RoleAssignment, per-tenant Master Data/File Registry/numbering/integrations, migration runner + `schema_version`, isolation tests, Support Access Request и per-tenant backup/restore/export proof.
-
-FLOW-050 добавя AI Usage Ledger, immutable Plan Version budgets, add-on entitlements, usage reconciliation, customer usage projection, provider cost monitoring и core-operation tests при изчерпан AI бюджет.
+D-15 и FLOW-050 добавят задължителни Wave 0 foundations: Tenant Registry, Tenant Guard/database resolver, TenantMembership↔RoleAssignment, per-tenant Master Data/File Registry/numbering/integrations, migration runner + `schema_version`, AI Usage Ledger, Payment Provider Adapter, Subscription/Billing state machine, dunning scheduler, isolation tests, Support Access Request и per-tenant backup/restore/export proof.
