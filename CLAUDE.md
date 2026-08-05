@@ -170,6 +170,8 @@ Live Activities/App Clips са само бъдеща native фаза при от
 
 Планове: Start, Control, Pro, Enterprise. Фиксирана цена на tenant, неограничени потребители и обекти.
 
+Всеки план включва месечен AI бюджет — План+AI: Start 100 / Control 500 / Pro 2000 действия + add-on пакети (AI+ / AI Pro / AI Max).
+
 Billing:
 
 - provider-neutral Payment Provider Adapter;
@@ -293,3 +295,18 @@ Client Portal и отделния Marketplace продукт.
 - `docs/architecture/TENANCY_MODEL.md`
 - `docs/architecture/MODERN_FIELD_EXPERIENCE_2026-08-04.md`
 - `docs/architecture/FLOW_050_FINAL_GOVERNANCE_ENVIRONMENTS_RETENTION_DECISION_2026-08-04.md`
+
+## 18. Работен процес Claude / ChatGPT / Emergent
+
+Роли: Claude — чете кода, архитект, програмира промените, байтова верификация, одит; ChatGPT — документация, Release Manifest, втори архитектурен одит; Emergent — прилага промени в GitHub; Крум — единствен взема бизнес решения, тества на живо, одобрява merge.
+
+Процес за всяка кодова промяна:
+1. Крум описва със свои думи.
+2. Claude чете реалния код, прави карта на релациите + схема/mockup (визуално — Крум мисли визуално).
+3. Крум одобрява.
+4. Claude програмира → ZIP + diff + английски prompt за Emergent.
+5. Emergent прилага; Крум връща резултата.
+6. Claude сравнява байтово (cmp/diff) срещу очакваното. Самоотчет на агент никога не се приема без байтова проверка.
+7. Крум тества на живо; доказателство (скрийншот/видео) преди статус "Готово".
+
+Правила: технически аномалии в кода се записват като дълг, не се поправят без Крум да потвърди "боли ме в реални данни"; заключен FLOW не се променя без изрично решение на Крум, записано в канона; при конфликт между документи важи docs/flows/ + FLOW-043; сесиите започват с четене на CLAUDE.md → Gate Matrix → релевантните FLOW файлове.
