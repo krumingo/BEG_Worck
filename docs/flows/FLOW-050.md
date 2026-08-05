@@ -98,7 +98,7 @@ AI add-ons:
 
 Клиентът вижда used/remaining, разбивка по функция, тенденция и препоръка за план + AI пакет. При 80% има предупреждение; при 100% се паузират само AI функциите. Основната работа не спира.
 
-Канонично решение: [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
+Канонично решение: [FLOW_050_PLAN_PLUS_AI_DECISION_2026-08-03.md](../architecture/FLOW_050_PLAN_PLUS_AI_DECISION_2026-08-03.md).
 
 ## 9. Имейл акаунти и интеграции
 
@@ -299,7 +299,7 @@ DISPOSITION_MANIFEST_CREATED
 - Сесии 29.07–04.08.2026 — всички изрични решения на Крум по tenancy, packages, pricing, storage, AI, billing, trial/demo/partner, no-fork, environments, retention и controlled deletion.
 - [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
 - [FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md](../architecture/FLOW_050_STORAGE_MODEL_CHANGE_2026-08-03.md).
-- [FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md](../architecture/FLOW_050_AI_FAIR_USE_DECISION_2026-08-03.md).
+- [FLOW_050_PLAN_PLUS_AI_DECISION_2026-08-03.md](../architecture/FLOW_050_PLAN_PLUS_AI_DECISION_2026-08-03.md).
 - [FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md](../architecture/FLOW_050_SUBSCRIPTION_BILLING_DUNNING_DECISION_2026-08-04.md).
 - [FLOW_050_TRIAL_DEMO_PARTNER_DECISION_2026-08-04.md](../architecture/FLOW_050_TRIAL_DEMO_PARTNER_DECISION_2026-08-04.md).
 - [MODERN_FIELD_EXPERIENCE_2026-08-04.md](../architecture/MODERN_FIELD_EXPERIENCE_2026-08-04.md).
