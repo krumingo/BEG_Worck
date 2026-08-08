@@ -5,7 +5,7 @@
 # Какво прави:
 #   1. чете MONGO_URL от .env на инсталацията (никакви пароли в този файл);
 #   2. прави mongodump на цялата база (gzip архив) чрез контейнер mongo:7;
-#   3. проверява, че архивът е четим (mongorestore --dryRun) и не е празен;
+#   3. проверява, че архивът е цял и четим (gzip -t) и не е празен;
 #   4. трие архиви, по-стари от RETENTION_DAYS (по подразбиране 14);
 #   5. пише всичко в лог; при провал последният ред е "BACKUP FAILED".
 #
@@ -68,14 +68,12 @@ SIZE_BYTES=$(stat -c%s "$ARCHIVE_PATH" 2>/dev/null || stat -f%z "$ARCHIVE_PATH")
 [ "$SIZE_BYTES" -ge "$MIN_BYTES" ] || fail "архивът е подозрително малък: $SIZE_BYTES байта"
 log "архив: $SIZE_BYTES байта"
 
-# --- 3. Проверка за четимост (нищо не се възстановява) ---
-docker run --rm \
-    -v "$BACKUP_DIR":/backup \
-    "$MONGO_IMAGE" \
-    mongorestore --gzip --archive="/backup/$ARCHIVE_NAME" --dryRun \
-    >>"$LOG_FILE" 2>&1 \
-    || fail "архивът не преминава dryRun проверката — не е използваем"
-log "dryRun проверка: OK — архивът е четим"
+# --- 3. Проверка за цялост (офлайн, не изисква връзка към база) ---
+# gzip -t чете целия архив и потвърждава, че не е повреден/отрязан.
+# Пълната възстановимост се доказва с месечния restore-тест (README).
+gzip -t "$ARCHIVE_PATH" >>"$LOG_FILE" 2>&1 \
+    || fail "архивът е повреден или отрязан (gzip тест)"
+log "gzip проверка: OK — архивът е цял и четим"
 
 # --- 4. Ротация ---
 DELETED=$(find "$BACKUP_DIR" -name 'begwork_atlas_*.archive.gz' -mtime +"$RETENTION_DAYS" -print -delete | wc -l)
