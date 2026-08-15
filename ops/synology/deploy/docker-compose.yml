@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: ./repo
+      dockerfile: ../Dockerfile.backend
+    container_name: begwork-backend
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - ./uploads:/app/backend/uploads
+    expose:
+      - "8001"
+
+  frontend:
+    build:
+      context: ./repo
+      dockerfile: ../Dockerfile.frontend
+      args:
+        REACT_APP_BACKEND_URL: ${PUBLIC_URL}
+    container_name: begwork-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
