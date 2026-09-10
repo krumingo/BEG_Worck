@@ -14,6 +14,11 @@ from app.deps.auth import (
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
 from app.constants import ROLES
+from app.tenancy.guard import TenantContext
+from app.tenancy import registry
+from app.permissions.deps import require_permission, current_mode, MODE_OFF
+from app.permissions.audit_hooks import audit_permission_change
+from app.permissions.catalog import LEGACY_ROLE_MAP
 
 router = APIRouter(tags=["auth"])
 
@@ -180,9 +185,16 @@ async def list_users(user: dict = Depends(get_current_user)):
     return await db.users.find({"org_id": user["org_id"]}, {"_id": 0, "password_hash": 0}).to_list(1000)
 
 @router.post("/users", status_code=201)
-async def create_user(data: UserCreate, user: dict = Depends(require_admin)):
+async def create_user(
+    data: UserCreate,
+    ctx: TenantContext = Depends(require_permission(
+        "user.create", module="M0", scope="company", resource_type="user",
+        legacy_check=lambda user, request: user["role"] in ["Admin", "Owner"],
+    )),
+):
+    user = ctx.user
     await enforce_limit(user["org_id"], "users")
-    
+
     if await db.users.find_one({"email": data.email, "org_id": user["org_id"]}):
         raise HTTPException(status_code=400, detail="Email already exists in this organization")
     if data.role not in ROLES:
@@ -203,6 +215,31 @@ async def create_user(data: UserCreate, user: dict = Depends(require_admin)):
     }
     await db.users.insert_one(new_user)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "user", new_user["id"], {"email": data.email, "role": data.role})
+
+    # W0-02: keep the authoritative RoleAssignment in sync + canonical audit.
+    # Skipped entirely while mode is 'off', so a default deploy behaves as today.
+    if current_mode() != MODE_OFF:
+        tid = ctx.tenant_id
+        role_id = LEGACY_ROLE_MAP.get(data.role, data.role)
+        assignment = {
+            "id": f"ra_{new_user['id']}_{tid}_{role_id}_company",
+            "user_id": new_user["id"],
+            "tenant_id": tid,
+            "role_id": role_id,
+            "scope_type": "company",
+            "scope_id": None,
+            "module": None,
+            "permissions": [],
+            "max_amount": None,
+            "valid_from": now,
+            "valid_to": None,
+            "status": "active",
+            "created_by": user["id"],
+            "approved_by": user["id"],
+        }
+        stored = await registry.upsert_role_assignment(assignment)
+        await audit_permission_change(ctx, "granted", stored, before=None, after=stored,
+                                      reason=f"user created with role {data.role}")
     return {k: v for k, v in new_user.items() if k not in ("password_hash", "_id")}
 
 @router.put("/users/{user_id}")

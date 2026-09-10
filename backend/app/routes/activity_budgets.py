@@ -10,6 +10,8 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user, can_access_project, can_manage_project
 from app.utils.audit import log_audit
+from app.tenancy.guard import TenantContext
+from app.permissions.deps import require_permission
 
 router = APIRouter(tags=["Activity Budgets"])
 
@@ -58,16 +60,22 @@ async def get_activity_types(user: dict = Depends(get_current_user)):
 
 
 @router.get("/projects/{project_id}/activity-budgets")
-async def list_activity_budgets(project_id: str, user: dict = Depends(get_current_user)):
+async def list_activity_budgets(
+    project_id: str,
+    ctx: TenantContext = Depends(require_permission(
+        "budget.read", module="M2", scope="project",
+        scope_id_param="project_id", resource_type="activity_budget",
+        # Legacy behavior (used in off/shadow): project_team membership.
+        legacy_check=lambda user, request: can_access_project(user, request.path_params["project_id"]),
+    )),
+):
     """Get all activity budgets for a project."""
-    if not await can_access_project(user, project_id):
-        raise HTTPException(status_code=403, detail="Access denied")
-    
+    user = ctx.user
     budgets = await db.activity_budgets.find(
         {"org_id": user["org_id"], "project_id": project_id},
         {"_id": 0}
     ).sort([("type", 1), ("subtype", 1)]).to_list(100)
-    
+
     return {"items": budgets}
 
 

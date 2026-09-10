@@ -1,7 +1,7 @@
 """
 Authentication and authorization dependencies.
 """
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -49,7 +49,24 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-async def require_admin(user: dict = Depends(get_current_user)):
+async def require_admin(request: Request, user: dict = Depends(get_current_user)):
+    """Admin/Owner gate.
+
+    W0-02: flag-aware wrapper. In 'off'/'shadow' the behavior is IDENTICAL to
+    before (legacy role string). In 'enforce' the decision comes only from the
+    Permission Service via the Tenant Guard — no fallback to user["role"].
+    """
+    # Import inside the function to avoid an import cycle with app.permissions.
+    from app.permissions.deps import current_mode, MODE_ENFORCE
+    if current_mode() == MODE_ENFORCE:
+        from app.tenancy.guard import get_tenant_context
+        from app.permissions.service import evaluate_permission
+        ctx = await get_tenant_context(request, user)
+        decision = await evaluate_permission(ctx, "admin.access")
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return user
+    # off / shadow — unchanged legacy behavior.
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user

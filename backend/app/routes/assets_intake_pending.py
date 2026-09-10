@@ -17,6 +17,8 @@ from app.db import db
 from app.deps.auth import get_current_user, require_admin
 from app.routes.asset_item_types import all_type_keys, BUILTIN_TYPES
 from app.routes.assets_qr import _make_qr
+from app.tenancy.guard import TenantContext
+from app.permissions.deps import require_permission
 
 router = APIRouter(tags=["AssetIntakePending"])
 
@@ -151,8 +153,15 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
 
 
 @router.post("/assets/intake/{intake_id}/approve")
-async def approve_intake(intake_id: str, user: dict = Depends(require_admin)):
-    org = user["org_id"]
+async def approve_intake(
+    intake_id: str,
+    ctx: TenantContext = Depends(require_permission(
+        "asset_intake.approve", module="M8", scope="company", resource_type="asset_intake",
+        legacy_check=lambda user, request: user["role"] in REVIEW_ROLES,
+    )),
+):
+    user = ctx.user
+    org = user["org_id"]   # data path unchanged: record ownership stays on org_id (G1)
     rec = await db.asset_intake_pending.find_one({"id": intake_id, "org_id": org}, {"_id": 0})
     if not rec:
         raise HTTPException(status_code=404, detail="Not found")
