@@ -86,26 +86,34 @@ def upgrade_assignment(old: dict) -> dict:
     }
 
 
+# Canonical isolated-validation environment (Synology temp container). These are
+# BAKED IN — the guard compares the live env to THESE literals, never to a value
+# copied from the runtime env, so a wrong MONGO_URL can never satisfy its own check.
+VALIDATION_ENV = {
+    "MONGO_URL": "mongodb://begwork-w002-testmongo:27017",
+    "DB_NAME": "w002_op_test",
+    "BEG_SYSTEM_DB": "w002_sys_test",
+}
+
+
+def validation_problems(mongo_url: str, db_name: str, sys_db: str) -> list:
+    """Return the list of mismatches against the canonical validation env
+    (empty list => the target IS the sanctioned temp environment). Pure function
+    so it is unit-testable with arbitrary (wrong) values, no DB needed."""
+    checks = (("MONGO_URL", mongo_url), ("DB_NAME", db_name), ("BEG_SYSTEM_DB", sys_db))
+    return [f"{k}={v!r} != required {VALIDATION_ENV[k]!r}"
+            for k, v in checks if v != VALIDATION_ENV[k]]
+
+
 def _guard() -> None:
-    """Fail-closed: when BEG_EXPECT_* env vars are set (as the validation runbook
-    does), refuse to run unless the live target matches exactly and is not Atlas.
-    Inactive for normal prod use (no BEG_EXPECT_* set)."""
-    exp_url = os.environ.get("BEG_EXPECT_MONGO_URL")
-    exp_op = os.environ.get("BEG_EXPECT_DB_NAME")
-    exp_sys = os.environ.get("BEG_EXPECT_SYSTEM_DB")
-    if not (exp_url or exp_op or exp_sys):
+    """Fail-closed: only in explicit validation mode (BEG_VALIDATION_MODE=1) and
+    only when the live env EXACTLY matches the baked canonical values. Inactive
+    for normal prod use (mode unset)."""
+    if os.environ.get("BEG_VALIDATION_MODE") != "1":
         return
-    problems = []
-    if exp_url and exp_url != MONGO_URL:
-        problems.append(f"MONGO_URL={MONGO_URL!r} != expected {exp_url!r}")
-    if exp_op and exp_op != OPERATIONAL_DB:
-        problems.append(f"DB_NAME={OPERATIONAL_DB!r} != expected {exp_op!r}")
-    if exp_sys and exp_sys != SYSTEM_DB:
-        problems.append(f"BEG_SYSTEM_DB={SYSTEM_DB!r} != expected {exp_sys!r}")
-    if "mongodb+srv" in MONGO_URL or "atlas" in MONGO_URL.lower():
-        problems.append("refusing Atlas-looking MONGO_URL under guard")
+    problems = validation_problems(MONGO_URL, OPERATIONAL_DB, SYSTEM_DB)
     if problems:
-        print("FAIL-CLOSED GUARD — aborting, target does not match expected test env:")
+        print("FAIL-CLOSED GUARD (validation mode) — refusing; target is not the sanctioned temp env:")
         for p in problems:
             print("  -", p)
         sys.exit(3)

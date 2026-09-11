@@ -272,7 +272,18 @@ class TestDeniedAuditPolicy:
 import importlib.util
 from pathlib import Path
 
+# Single source of truth for the validation guard: reuse the migration script's
+# BAKED canonical env + checker, so the test suite and the script agree and the
+# expected values are never copied from the (possibly wrong) runtime env.
+_BOOT_PATH = Path(__file__).parent.parent / "scripts" / "w0_02_bootstrap_permissions.py"
+_bootspec = importlib.util.spec_from_file_location("w0_02_boot_shared", _BOOT_PATH)
+_bootmod = importlib.util.module_from_spec(_bootspec)
+_bootspec.loader.exec_module(_bootmod)
+VALIDATION_ENV = _bootmod.VALIDATION_ENV
+validation_problems = _bootmod.validation_problems
+
 REAL_MONGO = os.environ.get("W0_02_REAL_MONGO") == "1"
+W0_02_VALIDATION = os.environ.get("W0_02_VALIDATION") == "1"
 try:
     import mongomock_motor  # noqa: F401
     HAS_MONGOMOCK = True
@@ -285,14 +296,47 @@ _TEST_SYS_DB = os.environ.get("BEG_SYSTEM_DB", "w002_sys_test")
 
 
 def _guard_test_dbs():
-    """fail-closed: real-Mongo tests may touch ONLY clearly-named test DBs and
-    never an Atlas / srv URI."""
+    """fail-closed for real-Mongo runs, BEFORE any connection is made.
+    In validation mode (W0_02_VALIDATION=1) require the EXACT baked canonical
+    temp env; otherwise require w002_ test DBs and a non-Atlas URL."""
+    url = os.environ.get("MONGO_URL", "")
+    if W0_02_VALIDATION:
+        probs = validation_problems(url, _TEST_OP_DB, _TEST_SYS_DB)
+        assert not probs, "fail-closed (validation mode): " + "; ".join(probs)
+        return
     assert _TEST_OP_DB.startswith("w002_") and _TEST_SYS_DB.startswith("w002_"), (
         f"fail-closed: refusing real-Mongo run against non-test DBs "
         f"{_TEST_OP_DB}/{_TEST_SYS_DB}")
-    url = os.environ.get("MONGO_URL", "")
     assert "mongodb+srv" not in url and "atlas" not in url.lower(), (
         "fail-closed: refusing an Atlas-looking MONGO_URL for tests")
+
+
+class TestValidationGuard:
+    """Negative proof (pure, always runs): the validation guard admits ONLY the
+    canonical temp env and cannot be satisfied by copying a wrong runtime value.
+    Same checker backs both the test suite (_guard_test_dbs) and the migration
+    script (_guard), so these prove refusal for BOTH."""
+    OK = ("mongodb://begwork-w002-testmongo:27017", "w002_op_test", "w002_sys_test")
+
+    def test_exact_env_passes(self):
+        assert validation_problems(*self.OK) == []
+
+    def test_wrong_mongo_host_refused(self):            # (1)
+        assert validation_problems("mongodb://evil-host:27017", "w002_op_test", "w002_sys_test")
+
+    def test_wrong_db_name_refused(self):               # (2)
+        assert validation_problems("mongodb://begwork-w002-testmongo:27017", "begwork", "w002_sys_test")
+
+    def test_wrong_system_db_refused(self):             # (3)
+        assert validation_problems("mongodb://begwork-w002-testmongo:27017", "w002_op_test", "begwork_system")
+
+    def test_atlas_url_refused(self):
+        assert validation_problems("mongodb+srv://c.mongodb.net", "w002_op_test", "w002_sys_test")
+
+    def test_tautology_is_closed(self):
+        # A wrong runtime value cannot become its own "expected": expected is the
+        # baked canonical env, so a wrong MONGO_URL is still refused.
+        assert validation_problems("mongodb://wrong:27017", "w002_op_test", "w002_sys_test")
 
 
 def _make_client_dbs():
