@@ -272,15 +272,20 @@ class TestDeniedAuditPolicy:
 import importlib.util
 from pathlib import Path
 
-# Single source of truth for the validation guard: reuse the migration script's
-# BAKED canonical env + checker, so the test suite and the script agree and the
-# expected values are never copied from the (possibly wrong) runtime env.
-_BOOT_PATH = Path(__file__).parent.parent / "scripts" / "w0_02_bootstrap_permissions.py"
-_bootspec = importlib.util.spec_from_file_location("w0_02_boot_shared", _BOOT_PATH)
-_bootmod = importlib.util.module_from_spec(_bootspec)
-_bootspec.loader.exec_module(_bootmod)
-VALIDATION_ENV = _bootmod.VALIDATION_ENV
-validation_problems = _bootmod.validation_problems
+# Single source of truth for the validation guard. Imported from a motor-free
+# module, so this import CANNOT create a Mongo client (verified by
+# TestValidationGuard.test_helper_import_creates_no_client).
+from app.permissions.validation_env import (
+    VALIDATION_ENV, validation_problems, require_validation_env,
+)
+
+# Load the guarded seed helper (the real executable path). Loading it creates no
+# Mongo client — motor is imported only inside guarded_client(), after the guard.
+_SEED_PATH = Path(__file__).parent.parent / "scripts" / "w0_02_validation_seed.py"
+_seedspec = importlib.util.spec_from_file_location("w0_02_seed", _SEED_PATH)
+_seedmod = importlib.util.module_from_spec(_seedspec)
+_seedspec.loader.exec_module(_seedmod)
+guarded_client = _seedmod.guarded_client
 
 REAL_MONGO = os.environ.get("W0_02_REAL_MONGO") == "1"
 W0_02_VALIDATION = os.environ.get("W0_02_VALIDATION") == "1"
@@ -337,6 +342,40 @@ class TestValidationGuard:
         # A wrong runtime value cannot become its own "expected": expected is the
         # baked canonical env, so a wrong MONGO_URL is still refused.
         assert validation_problems("mongodb://wrong:27017", "w002_op_test", "w002_sys_test")
+
+    def test_require_env_exits_3_on_each_wrong(self):   # (1)(2)(3) as SystemExit(3)
+        for args in [
+            ("mongodb://evil:27017", "w002_op_test", "w002_sys_test"),
+            ("mongodb://begwork-w002-testmongo:27017", "begwork", "w002_sys_test"),
+            ("mongodb://begwork-w002-testmongo:27017", "w002_op_test", "begwork_system"),
+        ]:
+            with pytest.raises(SystemExit) as e:
+                require_validation_env(*args)
+            assert e.value.code == 3
+
+    def test_require_env_passes_on_exact(self):
+        assert require_validation_env(*self.OK) is None
+
+    def test_guarded_client_not_created_on_bad_env(self, monkeypatch):
+        # Prove the REAL executable path (guarded_client), not just the helper:
+        # on a bad env it exits(3) BEFORE any Mongo client is constructed.
+        import motor.motor_asyncio as mm
+        calls = []
+        monkeypatch.setattr(mm, "AsyncIOMotorClient", lambda *a, **k: calls.append(a) or object())
+        with pytest.raises(SystemExit) as e:
+            guarded_client("mongodb://evil:27017", "w002_op_test", "w002_sys_test")
+        assert e.value.code == 3 and calls == []          # client NOT created on bad env
+        guarded_client(*self.OK)
+        assert len(calls) == 1                             # created exactly once on good env
+
+    def test_helper_import_creates_no_client(self):
+        # The validation helper must not IMPORT motor/pymongo, so importing it can
+        # never construct a client as a side effect. (Check import statements, not
+        # mere word occurrences — the module docstring may mention the names.)
+        src = (Path(__file__).parent.parent / "app" / "permissions" / "validation_env.py").read_text(encoding="utf-8")
+        import re as _re
+        offenders = _re.findall(r"^\s*(?:import|from)\s+(?:motor|pymongo)\b", src, _re.MULTILINE)
+        assert offenders == [] and "motor_asyncio" not in src
 
 
 def _make_client_dbs():

@@ -42,6 +42,7 @@ from dotenv import load_dotenv
 from app.permissions.catalog import (
     LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
 )
+from app.permissions.validation_env import VALIDATION_ENV, validation_problems
 
 load_dotenv(Path(__file__).parent.parent / '.env')
 
@@ -84,25 +85,6 @@ def upgrade_assignment(old: dict) -> dict:
         "approved_by": old.get("approved_by"),
         "note": "W0-02 upgrade of legacy mirror. LEGACY_* = compat only, not FLOW-002 canon.",
     }
-
-
-# Canonical isolated-validation environment (Synology temp container). These are
-# BAKED IN — the guard compares the live env to THESE literals, never to a value
-# copied from the runtime env, so a wrong MONGO_URL can never satisfy its own check.
-VALIDATION_ENV = {
-    "MONGO_URL": "mongodb://begwork-w002-testmongo:27017",
-    "DB_NAME": "w002_op_test",
-    "BEG_SYSTEM_DB": "w002_sys_test",
-}
-
-
-def validation_problems(mongo_url: str, db_name: str, sys_db: str) -> list:
-    """Return the list of mismatches against the canonical validation env
-    (empty list => the target IS the sanctioned temp environment). Pure function
-    so it is unit-testable with arbitrary (wrong) values, no DB needed."""
-    checks = (("MONGO_URL", mongo_url), ("DB_NAME", db_name), ("BEG_SYSTEM_DB", sys_db))
-    return [f"{k}={v!r} != required {VALIDATION_ENV[k]!r}"
-            for k, v in checks if v != VALIDATION_ENV[k]]
 
 
 def _guard() -> None:
