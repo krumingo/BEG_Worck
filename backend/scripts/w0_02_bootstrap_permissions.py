@@ -24,11 +24,13 @@ Usage:
     python scripts/w0_02_bootstrap_permissions.py            # dry run
     python scripts/w0_02_bootstrap_permissions.py --apply    # write
     python scripts/w0_02_bootstrap_permissions.py --verify   # counts only
-    python scripts/w0_02_bootstrap_permissions.py --revert    # back to legacy mirror
+    python scripts/w0_02_bootstrap_permissions.py --revert          # dry-run of revert
+    python scripts/w0_02_bootstrap_permissions.py --revert --apply   # actually revert
 """
 import asyncio
 import sys
 import os
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -84,6 +86,31 @@ def upgrade_assignment(old: dict) -> dict:
     }
 
 
+def _guard() -> None:
+    """Fail-closed: when BEG_EXPECT_* env vars are set (as the validation runbook
+    does), refuse to run unless the live target matches exactly and is not Atlas.
+    Inactive for normal prod use (no BEG_EXPECT_* set)."""
+    exp_url = os.environ.get("BEG_EXPECT_MONGO_URL")
+    exp_op = os.environ.get("BEG_EXPECT_DB_NAME")
+    exp_sys = os.environ.get("BEG_EXPECT_SYSTEM_DB")
+    if not (exp_url or exp_op or exp_sys):
+        return
+    problems = []
+    if exp_url and exp_url != MONGO_URL:
+        problems.append(f"MONGO_URL={MONGO_URL!r} != expected {exp_url!r}")
+    if exp_op and exp_op != OPERATIONAL_DB:
+        problems.append(f"DB_NAME={OPERATIONAL_DB!r} != expected {exp_op!r}")
+    if exp_sys and exp_sys != SYSTEM_DB:
+        problems.append(f"BEG_SYSTEM_DB={SYSTEM_DB!r} != expected {exp_sys!r}")
+    if "mongodb+srv" in MONGO_URL or "atlas" in MONGO_URL.lower():
+        problems.append("refusing Atlas-looking MONGO_URL under guard")
+    if problems:
+        print("FAIL-CLOSED GUARD — aborting, target does not match expected test env:")
+        for p in problems:
+            print("  -", p)
+        sys.exit(3)
+
+
 async def build_backfill() -> list:
     """Project-scope assignments from active project_team memberships.
 
@@ -119,6 +146,7 @@ async def build_backfill() -> list:
 
 
 async def run(apply: bool, verify_only: bool, revert: bool) -> int:
+    _guard()
     olds = await sys_db.tenant_role_assignments.find(
         {"migrated_from": {"$ne": "project_team"}}, {"_id": 0}).to_list(10000)
     before = (await op_db.users.count_documents({}), await op_db.organizations.count_documents({}))
@@ -186,9 +214,29 @@ async def run(apply: bool, verify_only: bool, revert: bool) -> int:
     return 0
 
 
+def _parse_args(argv):
+    p = argparse.ArgumentParser(
+        prog="w0_02_bootstrap_permissions.py",
+        description=("W0-02: upgrade legacy RoleAssignment mirrors to the authoritative "
+                     "FLOW-002 shape and backfill project-scope assignments from project_team. "
+                     "Default is a DRY RUN; use --apply to write."),
+        epilog=("Examples:\n"
+                "  python w0_02_bootstrap_permissions.py            # dry-run\n"
+                "  python w0_02_bootstrap_permissions.py --apply    # write upgrades + backfill\n"
+                "  python w0_02_bootstrap_permissions.py --verify   # counts only\n"
+                "  python w0_02_bootstrap_permissions.py --revert          # dry-run of revert\n"
+                "  python w0_02_bootstrap_permissions.py --revert --apply  # actually revert\n"),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--apply", action="store_true",
+                   help="actually write (without it, everything is a dry run)")
+    p.add_argument("--verify", action="store_true",
+                   help="report how many assignments are already authoritative, then exit")
+    p.add_argument("--revert", action="store_true",
+                   help="revert mode; combine with --apply to actually strip W0-02 changes")
+    return p.parse_args(argv)
+
+
 if __name__ == "__main__":
-    sys.exit(asyncio.run(run(
-        apply="--apply" in sys.argv,
-        verify_only="--verify" in sys.argv,
-        revert="--revert" in sys.argv,
-    )))
+    args = _parse_args(sys.argv[1:])
+    sys.exit(asyncio.run(run(apply=args.apply, verify_only=args.verify, revert=args.revert)))

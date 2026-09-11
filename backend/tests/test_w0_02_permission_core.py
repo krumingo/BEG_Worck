@@ -263,30 +263,74 @@ class TestDeniedAuditPolicy:
 
 
 # --------------------------------------------------------------------------
-# Integration — real code paths against an in-memory Mongo (mongomock_motor).
-# Runs the actual registry / service / audit store / migration script, so it
-# needs no Docker or Atlas. Skipped only if mongomock_motor is not installed.
-#   pip install mongomock_motor
+# Integration — runs the ACTUAL registry / service / audit store / migration.
+# Default: in-process mongomock (no Docker). With W0_02_REAL_MONGO=1 the SAME
+# tests run against a real MongoDB at MONGO_URL, using the isolated test DBs
+# (fail-closed: refuses non-test DB names or an Atlas URI). Every test does all
+# DB work inside ONE run() loop, so a real motor client binds to a single loop.
 # --------------------------------------------------------------------------
+import importlib.util
+from pathlib import Path
+
+REAL_MONGO = os.environ.get("W0_02_REAL_MONGO") == "1"
 try:
     import mongomock_motor  # noqa: F401
     HAS_MONGOMOCK = True
 except Exception:
     HAS_MONGOMOCK = False
+_RUN_INTEG = REAL_MONGO or HAS_MONGOMOCK
 
-import importlib.util
-from pathlib import Path
+_TEST_OP_DB = os.environ.get("DB_NAME", "w002_op_test")
+_TEST_SYS_DB = os.environ.get("BEG_SYSTEM_DB", "w002_sys_test")
 
 
-def _mock_env():
-    """Patch the app's Mongo clients to a fresh in-memory database."""
+def _guard_test_dbs():
+    """fail-closed: real-Mongo tests may touch ONLY clearly-named test DBs and
+    never an Atlas / srv URI."""
+    assert _TEST_OP_DB.startswith("w002_") and _TEST_SYS_DB.startswith("w002_"), (
+        f"fail-closed: refusing real-Mongo run against non-test DBs "
+        f"{_TEST_OP_DB}/{_TEST_SYS_DB}")
+    url = os.environ.get("MONGO_URL", "")
+    assert "mongodb+srv" not in url and "atlas" not in url.lower(), (
+        "fail-closed: refusing an Atlas-looking MONGO_URL for tests")
+
+
+def _make_client_dbs():
+    """(client, sysdb, opdb): real motor client vs in-process mongomock."""
+    if REAL_MONGO:
+        _guard_test_dbs()
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        return client, client[_TEST_SYS_DB], client[_TEST_OP_DB]
     from mongomock_motor import AsyncMongoMockClient
+    client = AsyncMongoMockClient()
+    return client, client["sys_test"], client["op_test"]
+
+
+async def _reset(sysdb, opdb):
+    """Real Mongo only: drop all collections so each test starts clean."""
+    if REAL_MONGO:
+        for d in (sysdb, opdb):
+            for name in await d.list_collection_names():
+                await d[name].drop()
+
+
+def _load_boot(sysdb, opdb):
+    boot_path = Path(__file__).parent.parent / "scripts" / "w0_02_bootstrap_permissions.py"
+    spec = importlib.util.spec_from_file_location("w0_02_boot", boot_path)
+    boot = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(boot)
+    boot.op_db = opdb
+    boot.sys_db = sysdb
+    return boot
+
+
+async def _env():
+    """Create the client + patch registry/appdb + boot, INSIDE the running loop
+    (so a real motor client binds to this loop). For the direct-call tests."""
+    client, sysdb, opdb = _make_client_dbs()
     from app.tenancy import registry
     import app.db as appdb
-
-    mock = AsyncMongoMockClient()
-    sysdb = mock["sys_test"]
-    opdb = mock["op_test"]
     registry.system_db = sysdb
     registry.tenant_registry = sysdb.tenant_registry
     registry.tenant_memberships = sysdb.tenant_memberships
@@ -294,17 +338,11 @@ def _mock_env():
     appdb.db = opdb
     appdb.users = opdb.users
     appdb.organizations = opdb.organizations
-
-    boot_path = Path(__file__).parent.parent / "scripts" / "w0_02_bootstrap_permissions.py"
-    spec = importlib.util.spec_from_file_location("w0_02_boot", boot_path)
-    boot = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(boot)
-    boot.op_db = opdb
-    boot.sys_db = sysdb
-    return sysdb, opdb, boot
+    return sysdb, opdb, _load_boot(sysdb, opdb)
 
 
 async def _seed(sysdb, opdb):
+    await _reset(sysdb, opdb)
     await opdb.organizations.insert_one({"id": "T1", "name": "BEG"})
     roles = {"u_admin": "Admin", "u_view": "Viewer", "u_tech": "Technician", "u_sm": "SiteManager"}
     for uid, role in roles.items():
@@ -314,7 +352,7 @@ async def _seed(sysdb, opdb):
             "scope_type": "company", "scope_ids": [], "status": "active",
             "created_at": "2026-08-01T00:00:00+00:00", "migrated_from": "users.role",
         })
-    await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": "op_test", "status": "active"})
+    await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": _TEST_OP_DB, "status": "active"})
 
 
 class MCtx:
@@ -324,12 +362,11 @@ class MCtx:
         return self._db
 
 
-@pytest.mark.skipif(not HAS_MONGOMOCK, reason="pip install mongomock_motor to run integration")
+@pytest.mark.skipif(not _RUN_INTEG, reason="needs mongomock_motor or W0_02_REAL_MONGO=1")
 class TestMigrationIntegration:
     def test_apply_maps_and_leaves_operational_untouched(self):
-        sysdb, opdb, boot = _mock_env()
-
         async def go():
+            sysdb, opdb, boot = await _env()
             await _seed(sysdb, opdb)
             before = (await opdb.users.count_documents({}), await opdb.organizations.count_documents({}))
             await boot.run(apply=True, verify_only=False, revert=False)
@@ -343,9 +380,8 @@ class TestMigrationIntegration:
                        "u_tech": "LEGACY_TECHNICIAN", "u_sm": "site_manager"}
 
     def test_idempotent_then_revert(self):
-        sysdb, opdb, boot = _mock_env()
-
         async def go():
+            sysdb, opdb, boot = await _env()
             await _seed(sysdb, opdb)
             await boot.run(apply=True, verify_only=False, revert=False)
             n1 = await sysdb.tenant_role_assignments.count_documents({})
@@ -357,12 +393,11 @@ class TestMigrationIntegration:
         assert run(go()) == 0                                              # W0-02 fields stripped
 
 
-@pytest.mark.skipif(not HAS_MONGOMOCK, reason="pip install mongomock_motor to run integration")
+@pytest.mark.skipif(not _RUN_INTEG, reason="needs mongomock_motor or W0_02_REAL_MONGO=1")
 class TestServiceAndAuditIntegration:
     def test_evaluate_reads_authoritative_and_scope_isolation(self):
-        sysdb, opdb, boot = _mock_env()
-
         async def go():
+            sysdb, opdb, boot = await _env()
             await _seed(sysdb, opdb)
             await boot.run(apply=True, verify_only=False, revert=False)
             # admin (company) allowed to read a project budget; viewer denied (empty legacy role)
@@ -385,9 +420,8 @@ class TestServiceAndAuditIntegration:
         assert admin_ok and view_denied and p1 and not p2
 
     def test_audit_change_denied_policy_and_chain(self):
-        sysdb, opdb, boot = _mock_env()
-
         async def go():
+            sysdb, opdb, boot = await _env()
             await _seed(sysdb, opdb)
             await boot.run(apply=True, verify_only=False, revert=False)
             from app.permissions import audit_hooks
@@ -410,9 +444,8 @@ class TestServiceAndAuditIntegration:
     def test_role_change_and_membership_revoke_take_effect(self):
         """update_user role change + project removal update authoritative
         assignments so the next check reflects them (no diverging sources)."""
-        sysdb, opdb, boot = _mock_env()
-
         async def go():
+            sysdb, opdb, boot = await _env()
             await _seed(sysdb, opdb)
             await boot.run(apply=True, verify_only=False, revert=False)
             from app.permissions.sync import grant_company_role, sync_project_membership
@@ -442,23 +475,27 @@ class TestServiceAndAuditIntegration:
 
 
 # --------------------------------------------------------------------------
-# API tests — real FastAPI app via TestClient (mock DB). The permission and
-# tenant checks are NOT mocked; only identity (get_current_user) is injected
-# and non-authz side deps (enforce_limit, _materialize) are stubbed.
+# API tests — the REAL FastAPI app, driven by an in-loop httpx ASGI client so
+# ONE event loop owns both the app and the (real or mock) Mongo client. Only
+# identity (get_current_user) is injected; permission + tenant checks run for
+# real. Non-authz side deps (enforce_limit, _materialize) are stubbed.
 # --------------------------------------------------------------------------
 try:
-    from fastapi.testclient import TestClient
-    HAS_TESTCLIENT = True
+    import httpx  # noqa: F401
+    HAS_HTTPX = True
 except Exception:
-    HAS_TESTCLIENT = False
+    HAS_HTTPX = False
 
 
-def _patch_db_refs(sysdb, opdb):
+def _patch_full(sysdb, opdb):
     from app.tenancy import registry, resolver
     import app.db as appdb
     import app.routes.auth as r_auth
     import app.routes.activity_budgets as r_budg
     import app.routes.assets_intake_pending as r_intake
+    import app.utils.audit as uaudit
+    import app.deps.auth as dauth
+    import app.tenancy.guard as guard
     registry.system_db = sysdb
     registry.tenant_registry = sysdb.tenant_registry
     registry.tenant_memberships = sysdb.tenant_memberships
@@ -467,30 +504,25 @@ def _patch_db_refs(sysdb, opdb):
     r_auth.db = opdb
     r_budg.db = opdb
     r_intake.db = opdb
-    import app.utils.audit as uaudit
     uaudit.db = opdb            # log_audit holds a module-level db reference
-    import app.deps.auth as dauth
     dauth.db = opdb             # can_access_project (legacy check) uses this in off/shadow
 
     async def _get_db(tenant_id, require_operational=False):
         return opdb
     resolver.get_tenant_db = _get_db
-    # guard imported get_tenant_db by name at import time — patch that binding too,
-    # else TenantContext.db() (used by audit) would hit a real Mongo on localhost.
-    import app.tenancy.guard as guard
-    guard.get_tenant_db = _get_db
+    guard.get_tenant_db = _get_db   # TenantContext.db() binding used by audit
 
-    # non-authz side dependencies stubbed (entitlement gate / asset materialize)
-    async def _noop(*a, **k):
+    async def _noop(*a, **k):       # entitlement gate (not authz)
         return None
     r_auth.enforce_limit = _noop
 
-    async def _mat(*a, **k):
+    async def _mat(*a, **k):        # asset materialize (not authz)
         return {"item_id": "x"}
     r_intake._materialize = _mat
 
 
 async def _seed_api(sysdb, opdb, boot):
+    await _reset(sysdb, opdb)
     await opdb.organizations.insert_one({"id": "T1", "name": "BEG"})
     for uid, role in {"u_admin": "Admin", "u_view": "Viewer", "u_out": "Viewer"}.items():
         await opdb.users.insert_one({"id": uid, "org_id": "T1", "role": role,
@@ -501,7 +533,7 @@ async def _seed_api(sysdb, opdb, boot):
             "created_at": "2026-08-01T00:00:00+00:00", "migrated_from": "users.role"})
         await sysdb.tenant_memberships.insert_one({"id": f"tm_{uid}", "user_id": uid,
                                                    "tenant_id": "T1", "status": "active"})
-    await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": "op_test", "status": "active"})
+    await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": _TEST_OP_DB, "status": "active"})
     await opdb.projects.insert_one({"id": "P1", "org_id": "T1", "name": "P1"})
     await opdb.project_team.insert_one({"id": "pt1", "project_id": "P1", "user_id": "u_view",
                                         "role_in_project": "Worker", "active": True})
@@ -511,35 +543,34 @@ async def _seed_api(sysdb, opdb, boot):
     await boot.run(apply=True, verify_only=False, revert=False)
 
 
-def _build_api(mode):
+async def _api_env(mode):
+    """Build app + patched DB + seed, all inside the running loop."""
     os.environ["PERMISSION_SERVICE_MODE"] = mode
-    from mongomock_motor import AsyncMongoMockClient
+    client, sysdb, opdb = _make_client_dbs()
+    _patch_full(sysdb, opdb)
+    boot = _load_boot(sysdb, opdb)
+    await _seed_api(sysdb, opdb, boot)
+
     from fastapi import FastAPI
     from app.deps.auth import get_current_user
     import app.routes.auth as r_auth
     import app.routes.activity_budgets as r_budg
     import app.routes.assets_intake_pending as r_intake
-
-    mock = AsyncMongoMockClient()
-    sysdb, opdb = mock["s"], mock["o"]
-    bp = Path(__file__).parent.parent / "scripts" / "w0_02_bootstrap_permissions.py"
-    spec = importlib.util.spec_from_file_location(f"w0_02_boot_{mode}", bp)
-    boot = importlib.util.module_from_spec(spec); spec.loader.exec_module(boot)
-    boot.op_db = opdb; boot.sys_db = sysdb
-    _patch_db_refs(sysdb, opdb)
-    run(_seed_api(sysdb, opdb, boot))
-
     holder = {"user": None}
 
     async def fake_user():
         return holder["user"]
-
     app = FastAPI()
     app.include_router(r_auth.router)
     app.include_router(r_budg.router)
     app.include_router(r_intake.router)
     app.dependency_overrides[get_current_user] = fake_user
-    return TestClient(app), holder, opdb, sysdb
+    return app, holder, opdb, sysdb
+
+
+def _client(app):
+    from httpx import AsyncClient, ASGITransport
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://t")
 
 
 def _u(uid, role):
@@ -549,68 +580,80 @@ def _u(uid, role):
 NEWUSER = {"email": "n@t", "password": "Secret123!", "first_name": "N", "last_name": "N", "role": "Viewer", "phone": ""}
 
 
-@pytest.mark.skipif(not (HAS_MONGOMOCK and HAS_TESTCLIENT), reason="pip install mongomock_motor httpx")
+@pytest.mark.skipif(not (_RUN_INTEG and HAS_HTTPX), reason="needs httpx and (mongomock_motor or W0_02_REAL_MONGO=1)")
 class TestApiEndpoints:
-    def _created(self, opdb, email="n@t"):
-        return run(opdb.users.count_documents({"email": email}))
-
     def test_off_mode_matches_legacy(self):
-        client, holder, opdb, _ = _build_api("off")
-        holder["user"] = _u("u_view", "Viewer")
-        assert client.post("/users", json=NEWUSER).status_code == 403      # legacy: not admin
-        assert self._created(opdb) == 0                                    # no business change
-        holder["user"] = _u("u_admin", "Admin")
-        assert client.post("/users", json=NEWUSER).status_code == 201
-        assert self._created(opdb) == 1
+        async def go():
+            app, holder, opdb, _ = await _api_env("off")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_view", "Viewer")
+                assert (await ac.post("/users", json=NEWUSER)).status_code == 403
+                assert await opdb.users.count_documents({"email": "n@t"}) == 0
+                holder["user"] = _u("u_admin", "Admin")
+                assert (await ac.post("/users", json=NEWUSER)).status_code == 201
+                assert await opdb.users.count_documents({"email": "n@t"}) == 1
+        run(go())
 
     def test_enforce_create_denies_and_no_side_effect(self):
-        client, holder, opdb, _ = _build_api("enforce")
-        holder["user"] = _u("u_view", "Viewer")
-        r = client.post("/users", json=NEWUSER)
-        assert r.status_code == 403 and r.json()["detail"]["error_code"] == "PERMISSION_DENIED"
-        assert self._created(opdb) == 0                                    # NOT created
-        denied = run(opdb.audit_events.count_documents({"action": "permission.denied"}))
-        assert denied >= 1                                                 # significant denial audited
-        holder["user"] = _u("u_admin", "Admin")
-        assert client.post("/users", json=NEWUSER).status_code == 201
-        assert self._created(opdb) == 1
+        async def go():
+            app, holder, opdb, _ = await _api_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_view", "Viewer")
+                r = await ac.post("/users", json=NEWUSER)
+                assert r.status_code == 403 and r.json()["detail"]["error_code"] == "PERMISSION_DENIED"
+                assert await opdb.users.count_documents({"email": "n@t"}) == 0     # NOT created
+                assert await opdb.audit_events.count_documents({"action": "permission.denied"}) >= 1
+                holder["user"] = _u("u_admin", "Admin")
+                assert (await ac.post("/users", json=NEWUSER)).status_code == 201
+                assert await opdb.users.count_documents({"email": "n@t"}) == 1
+        run(go())
 
     def test_enforce_read_scope(self):
-        client, holder, opdb, _ = _build_api("enforce")
-        holder["user"] = _u("u_view", "Viewer")            # member of P1 (backfilled)
-        assert client.get("/projects/P1/activity-budgets").status_code == 200
-        holder["user"] = _u("u_out", "Viewer")             # not a member
-        assert client.get("/projects/P1/activity-budgets").status_code == 403
-        holder["user"] = _u("u_admin", "Admin")
-        assert client.get("/projects/P1/activity-budgets").status_code == 200
+        async def go():
+            app, holder, opdb, _ = await _api_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_view", "Viewer")          # member of P1 (backfilled)
+                assert (await ac.get("/projects/P1/activity-budgets")).status_code == 200
+                holder["user"] = _u("u_out", "Viewer")           # not a member
+                assert (await ac.get("/projects/P1/activity-budgets")).status_code == 403
+                holder["user"] = _u("u_admin", "Admin")
+                assert (await ac.get("/projects/P1/activity-budgets")).status_code == 200
+        run(go())
 
     def test_enforce_approve_denies_without_side_effect(self):
-        client, holder, opdb, _ = _build_api("enforce")
-        holder["user"] = _u("u_view", "Viewer")
-        assert client.post("/assets/intake/i1/approve").status_code == 403
-        assert run(opdb.asset_intake_pending.find_one({"id": "i1"}))["status"] == "pending"  # unchanged
-        holder["user"] = _u("u_admin", "Admin")
-        assert client.post("/assets/intake/i1/approve").status_code == 200
-        assert run(opdb.asset_intake_pending.find_one({"id": "i1"}))["status"] == "approved"
+        async def go():
+            app, holder, opdb, _ = await _api_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_view", "Viewer")
+                assert (await ac.post("/assets/intake/i1/approve")).status_code == 403
+                assert (await opdb.asset_intake_pending.find_one({"id": "i1"}))["status"] == "pending"
+                holder["user"] = _u("u_admin", "Admin")
+                assert (await ac.post("/assets/intake/i1/approve")).status_code == 200
+                assert (await opdb.asset_intake_pending.find_one({"id": "i1"}))["status"] == "approved"
+        run(go())
 
     def test_shadow_uses_legacy_and_runs_action_once(self):
-        client, holder, opdb, _ = _build_api("shadow")
-        holder["user"] = _u("u_view", "Viewer")
-        assert client.post("/users", json=NEWUSER).status_code == 403     # legacy decides
-        assert self._created(opdb) == 0
-        holder["user"] = _u("u_admin", "Admin")
-        assert client.post("/users", json=NEWUSER).status_code == 201
-        assert self._created(opdb) == 1                                   # executed exactly once
+        async def go():
+            app, holder, opdb, _ = await _api_env("shadow")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_view", "Viewer")
+                assert (await ac.post("/users", json=NEWUSER)).status_code == 403   # legacy decides
+                assert await opdb.users.count_documents({"email": "n@t"}) == 0
+                holder["user"] = _u("u_admin", "Admin")
+                assert (await ac.post("/users", json=NEWUSER)).status_code == 201
+                assert await opdb.users.count_documents({"email": "n@t"}) == 1      # once
+        run(go())
 
     def test_require_admin_scope_regression(self):
-        """require_admin is now flag-aware, so it affects EVERY require_admin
-        route in enforce (here: DELETE /users). Behavior stays admin/owner-only;
-        a denial must not perform the delete."""
-        client, holder, opdb, _ = _build_api("enforce")
-        alive = lambda: run(opdb.users.count_documents({"id": "u_out"}))
-        holder["user"] = _u("u_view", "Viewer")
-        assert client.delete("/users/u_out").status_code == 403
-        assert alive() == 1                                               # NOT deleted
-        holder["user"] = _u("u_admin", "Admin")
-        assert client.delete("/users/u_out").status_code == 200
-        assert alive() == 0
+        """require_admin is flag-aware -> affects EVERY require_admin route in
+        enforce (here DELETE /users). Denial must not perform the delete."""
+        async def go():
+            app, holder, opdb, _ = await _api_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_view", "Viewer")
+                assert (await ac.delete("/users/u_out")).status_code == 403
+                assert await opdb.users.count_documents({"id": "u_out"}) == 1       # NOT deleted
+                holder["user"] = _u("u_admin", "Admin")
+                assert (await ac.delete("/users/u_out")).status_code == 200
+                assert await opdb.users.count_documents({"id": "u_out"}) == 0
+        run(go())
