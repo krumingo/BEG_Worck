@@ -75,13 +75,16 @@ class TestEvaluate:
         assert not d.allowed and d.reason_code == REASON_ACTION_NOT_ALLOWED
 
     def test_deny_module_mismatch(self, monkeypatch):
-        patch_assignments(monkeypatch, [make_assignment(role_id="site_manager", module="M3")])
+        # explicit budget.read permission so the MODULE check is what fails
+        patch_assignments(monkeypatch, [make_assignment(
+            role_id="site_manager", module="M3", permissions=["budget.read"])])
         d = run(evaluate_permission(FakeCtx(), "budget.read", module="M2", scope_type="company"))
         assert not d.allowed and d.reason_code == REASON_MODULE_NOT_ALLOWED
 
     def test_deny_scope_project_vs_project(self, monkeypatch):
         patch_assignments(monkeypatch, [make_assignment(
-            role_id="site_manager", scope_type="project", scope_id="XOPark")])
+            role_id="site_manager", scope_type="project", scope_id="XOPark",
+            permissions=["budget.read"])])
         d = run(evaluate_permission(FakeCtx(), "budget.read", module="M2",
                                     scope_type="project", scope_id="Boyana"))
         assert not d.allowed and d.reason_code == REASON_SCOPE_MISMATCH
@@ -94,7 +97,8 @@ class TestEvaluate:
 
     def test_allow_project_scoped_member(self, monkeypatch):
         patch_assignments(monkeypatch, [make_assignment(
-            role_id="site_manager", scope_type="project", scope_id="XOPark")])
+            role_id="site_manager", scope_type="project", scope_id="XOPark",
+            permissions=["budget.read"])])
         d = run(evaluate_permission(FakeCtx(), "budget.read", module="M2",
                                     scope_type="project", scope_id="XOPark"))
         assert d.allowed
@@ -135,10 +139,11 @@ class TestEvaluate:
 
     def test_multi_role_union_scoped(self, monkeypatch):
         patch_assignments(monkeypatch, [
-            make_assignment(id="ra_view", role_id="viewer" if False else "office",
-                            scope_type="project", scope_id="Boyana"),
+            make_assignment(id="ra_view", role_id="office",
+                            scope_type="project", scope_id="Boyana", permissions=["budget.read"]),
             make_assignment(id="ra_mgr", role_id="site_manager",
-                            scope_type="project", scope_id="XOPark"),
+                            scope_type="project", scope_id="XOPark",
+                            permissions=["budget.read", "budget.write"]),
         ])
         # budget.write only where site_manager on XOPark
         assert run(has_permission(FakeCtx(), "budget.write", module="M2",
@@ -368,8 +373,9 @@ class TestServiceAndAuditIntegration:
             # a project-scope backfill grants the member; another project stays isolated
             from app.tenancy import registry
             await registry.upsert_role_assignment({
-                "id": "ra_uview_P1", "user_id": "u_view", "tenant_id": "T1", "role_id": "site_manager",
-                "scope_type": "project", "scope_id": "P1", "module": None, "permissions": [], "status": "active"})
+                "id": "ra_uview_P1", "user_id": "u_view", "tenant_id": "T1", "role_id": "LEGACY_VIEWER",
+                "scope_type": "project", "scope_id": "P1", "module": None,
+                "permissions": ["budget.read"], "status": "active"})
             p1 = await has_permission(MCtx("u_view", opdb), "budget.read", module="M2",
                                       scope_type="project", scope_id="P1")
             p2 = await has_permission(MCtx("u_view", opdb), "budget.read", module="M2",
@@ -400,3 +406,211 @@ class TestServiceAndAuditIntegration:
             return (sig is not None), (read is None), (xt is not None), ok, len(events)
         sig_stored, read_skipped, xt_stored, chain_ok, n = run(go())
         assert sig_stored and read_skipped and xt_stored and chain_ok and n == 3
+
+    def test_role_change_and_membership_revoke_take_effect(self):
+        """update_user role change + project removal update authoritative
+        assignments so the next check reflects them (no diverging sources)."""
+        sysdb, opdb, boot = _mock_env()
+
+        async def go():
+            await _seed(sysdb, opdb)
+            await boot.run(apply=True, verify_only=False, revert=False)
+            from app.permissions.sync import grant_company_role, sync_project_membership
+            from app.tenancy import registry
+            ctx = MCtx("u_admin", opdb)
+            # u_tech starts as LEGACY_TECHNICIAN (cannot user.read); promote to admin
+            before = await has_permission(MCtx("u_tech", opdb), "asset_intake.approve",
+                                          module="M8", scope_type="company")
+            await grant_company_role(ctx, "u_tech", "Admin", actor_id="u_admin")
+            after = await has_permission(MCtx("u_tech", opdb), "asset_intake.approve",
+                                         module="M8", scope_type="company")
+            # old company role (LEGACY_TECHNICIAN) must be revoked, not left active
+            actives = [a for a in await registry.list_role_assignments("u_tech", "T1")
+                       if a.get("scope_type") == "company" and a.get("status") == "active"]
+            # project membership grant then revoke
+            await sync_project_membership(ctx, "u_view", "LEGACY_VIEWER", "PX", "Worker", True, actor_id="u_admin")
+            granted = await has_permission(MCtx("u_view", opdb), "budget.read",
+                                           module="M2", scope_type="project", scope_id="PX")
+            await sync_project_membership(ctx, "u_view", "LEGACY_VIEWER", "PX", "Worker", False, actor_id="u_admin")
+            revoked = not await has_permission(MCtx("u_view", opdb), "budget.read",
+                                               module="M2", scope_type="project", scope_id="PX")
+            return before, after, len(actives), [a["role_id"] for a in actives], granted, revoked
+        before, after, n_active, active_roles, granted, revoked = run(go())
+        assert before is False and after is True          # promotion takes effect
+        assert n_active == 1 and active_roles == ["admin"]  # stale broad grant revoked
+        assert granted and revoked                        # membership grant then revoke both apply
+
+
+# --------------------------------------------------------------------------
+# API tests — real FastAPI app via TestClient (mock DB). The permission and
+# tenant checks are NOT mocked; only identity (get_current_user) is injected
+# and non-authz side deps (enforce_limit, _materialize) are stubbed.
+# --------------------------------------------------------------------------
+try:
+    from fastapi.testclient import TestClient
+    HAS_TESTCLIENT = True
+except Exception:
+    HAS_TESTCLIENT = False
+
+
+def _patch_db_refs(sysdb, opdb):
+    from app.tenancy import registry, resolver
+    import app.db as appdb
+    import app.routes.auth as r_auth
+    import app.routes.activity_budgets as r_budg
+    import app.routes.assets_intake_pending as r_intake
+    registry.system_db = sysdb
+    registry.tenant_registry = sysdb.tenant_registry
+    registry.tenant_memberships = sysdb.tenant_memberships
+    registry.tenant_role_assignments = sysdb.tenant_role_assignments
+    appdb.db = opdb
+    r_auth.db = opdb
+    r_budg.db = opdb
+    r_intake.db = opdb
+    import app.utils.audit as uaudit
+    uaudit.db = opdb            # log_audit holds a module-level db reference
+    import app.deps.auth as dauth
+    dauth.db = opdb             # can_access_project (legacy check) uses this in off/shadow
+
+    async def _get_db(tenant_id, require_operational=False):
+        return opdb
+    resolver.get_tenant_db = _get_db
+    # guard imported get_tenant_db by name at import time — patch that binding too,
+    # else TenantContext.db() (used by audit) would hit a real Mongo on localhost.
+    import app.tenancy.guard as guard
+    guard.get_tenant_db = _get_db
+
+    # non-authz side dependencies stubbed (entitlement gate / asset materialize)
+    async def _noop(*a, **k):
+        return None
+    r_auth.enforce_limit = _noop
+
+    async def _mat(*a, **k):
+        return {"item_id": "x"}
+    r_intake._materialize = _mat
+
+
+async def _seed_api(sysdb, opdb, boot):
+    await opdb.organizations.insert_one({"id": "T1", "name": "BEG"})
+    for uid, role in {"u_admin": "Admin", "u_view": "Viewer", "u_out": "Viewer"}.items():
+        await opdb.users.insert_one({"id": uid, "org_id": "T1", "role": role,
+                                     "is_active": True, "email": f"{uid}@t"})
+        await sysdb.tenant_role_assignments.insert_one({
+            "id": f"ra_{uid}_T1_legacy", "user_id": uid, "tenant_id": "T1", "role": role,
+            "scope_type": "company", "scope_ids": [], "status": "active",
+            "created_at": "2026-08-01T00:00:00+00:00", "migrated_from": "users.role"})
+        await sysdb.tenant_memberships.insert_one({"id": f"tm_{uid}", "user_id": uid,
+                                                   "tenant_id": "T1", "status": "active"})
+    await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": "op_test", "status": "active"})
+    await opdb.projects.insert_one({"id": "P1", "org_id": "T1", "name": "P1"})
+    await opdb.project_team.insert_one({"id": "pt1", "project_id": "P1", "user_id": "u_view",
+                                        "role_in_project": "Worker", "active": True})
+    await opdb.activity_budgets.insert_one({"id": "b1", "org_id": "T1", "project_id": "P1",
+                                            "type": "Общо", "subtype": ""})
+    await opdb.asset_intake_pending.insert_one({"id": "i1", "org_id": "T1", "status": "pending", "suggestion": {}})
+    await boot.run(apply=True, verify_only=False, revert=False)
+
+
+def _build_api(mode):
+    os.environ["PERMISSION_SERVICE_MODE"] = mode
+    from mongomock_motor import AsyncMongoMockClient
+    from fastapi import FastAPI
+    from app.deps.auth import get_current_user
+    import app.routes.auth as r_auth
+    import app.routes.activity_budgets as r_budg
+    import app.routes.assets_intake_pending as r_intake
+
+    mock = AsyncMongoMockClient()
+    sysdb, opdb = mock["s"], mock["o"]
+    bp = Path(__file__).parent.parent / "scripts" / "w0_02_bootstrap_permissions.py"
+    spec = importlib.util.spec_from_file_location(f"w0_02_boot_{mode}", bp)
+    boot = importlib.util.module_from_spec(spec); spec.loader.exec_module(boot)
+    boot.op_db = opdb; boot.sys_db = sysdb
+    _patch_db_refs(sysdb, opdb)
+    run(_seed_api(sysdb, opdb, boot))
+
+    holder = {"user": None}
+
+    async def fake_user():
+        return holder["user"]
+
+    app = FastAPI()
+    app.include_router(r_auth.router)
+    app.include_router(r_budg.router)
+    app.include_router(r_intake.router)
+    app.dependency_overrides[get_current_user] = fake_user
+    return TestClient(app), holder, opdb, sysdb
+
+
+def _u(uid, role):
+    return {"id": uid, "org_id": "T1", "role": role, "is_active": True, "email": f"{uid}@t"}
+
+
+NEWUSER = {"email": "n@t", "password": "Secret123!", "first_name": "N", "last_name": "N", "role": "Viewer", "phone": ""}
+
+
+@pytest.mark.skipif(not (HAS_MONGOMOCK and HAS_TESTCLIENT), reason="pip install mongomock_motor httpx")
+class TestApiEndpoints:
+    def _created(self, opdb, email="n@t"):
+        return run(opdb.users.count_documents({"email": email}))
+
+    def test_off_mode_matches_legacy(self):
+        client, holder, opdb, _ = _build_api("off")
+        holder["user"] = _u("u_view", "Viewer")
+        assert client.post("/users", json=NEWUSER).status_code == 403      # legacy: not admin
+        assert self._created(opdb) == 0                                    # no business change
+        holder["user"] = _u("u_admin", "Admin")
+        assert client.post("/users", json=NEWUSER).status_code == 201
+        assert self._created(opdb) == 1
+
+    def test_enforce_create_denies_and_no_side_effect(self):
+        client, holder, opdb, _ = _build_api("enforce")
+        holder["user"] = _u("u_view", "Viewer")
+        r = client.post("/users", json=NEWUSER)
+        assert r.status_code == 403 and r.json()["detail"]["error_code"] == "PERMISSION_DENIED"
+        assert self._created(opdb) == 0                                    # NOT created
+        denied = run(opdb.audit_events.count_documents({"action": "permission.denied"}))
+        assert denied >= 1                                                 # significant denial audited
+        holder["user"] = _u("u_admin", "Admin")
+        assert client.post("/users", json=NEWUSER).status_code == 201
+        assert self._created(opdb) == 1
+
+    def test_enforce_read_scope(self):
+        client, holder, opdb, _ = _build_api("enforce")
+        holder["user"] = _u("u_view", "Viewer")            # member of P1 (backfilled)
+        assert client.get("/projects/P1/activity-budgets").status_code == 200
+        holder["user"] = _u("u_out", "Viewer")             # not a member
+        assert client.get("/projects/P1/activity-budgets").status_code == 403
+        holder["user"] = _u("u_admin", "Admin")
+        assert client.get("/projects/P1/activity-budgets").status_code == 200
+
+    def test_enforce_approve_denies_without_side_effect(self):
+        client, holder, opdb, _ = _build_api("enforce")
+        holder["user"] = _u("u_view", "Viewer")
+        assert client.post("/assets/intake/i1/approve").status_code == 403
+        assert run(opdb.asset_intake_pending.find_one({"id": "i1"}))["status"] == "pending"  # unchanged
+        holder["user"] = _u("u_admin", "Admin")
+        assert client.post("/assets/intake/i1/approve").status_code == 200
+        assert run(opdb.asset_intake_pending.find_one({"id": "i1"}))["status"] == "approved"
+
+    def test_shadow_uses_legacy_and_runs_action_once(self):
+        client, holder, opdb, _ = _build_api("shadow")
+        holder["user"] = _u("u_view", "Viewer")
+        assert client.post("/users", json=NEWUSER).status_code == 403     # legacy decides
+        assert self._created(opdb) == 0
+        holder["user"] = _u("u_admin", "Admin")
+        assert client.post("/users", json=NEWUSER).status_code == 201
+        assert self._created(opdb) == 1                                   # executed exactly once
+
+    def test_require_admin_scope_regression(self):
+        """require_admin is now flag-aware, so it affects EVERY require_admin
+        route in enforce (here: DELETE /users). Behavior stays admin/owner-only;
+        a denial must not perform the delete."""
+        client, holder, opdb, _ = _build_api("enforce")
+        alive = lambda: run(opdb.users.count_documents({"id": "u_out"}))
+        holder["user"] = _u("u_view", "Viewer")
+        assert client.delete("/users/u_out").status_code == 403
+        assert alive() == 1                                               # NOT deleted
+        holder["user"] = _u("u_admin", "Admin")
+        assert client.delete("/users/u_out").status_code == 200
+        assert alive() == 0

@@ -85,11 +85,10 @@ def require_permission(
     async def dependency(request: Request,
                          user: dict = Depends(get_current_user)) -> TenantContext:
         mode = current_mode()
-        old_allow = await _run_legacy(legacy_check, user, request)
 
-        # OFF: behave exactly as before; the new service never blocks.
+        # OFF: behave exactly as before; the new service never runs/blocks.
         if mode == MODE_OFF:
-            if legacy_check is not None and old_allow is False:
+            if legacy_check is not None and (await _run_legacy(legacy_check, user, request)) is False:
                 raise HTTPException(status_code=403, detail="Access denied")
             return await _safe_ctx(request, user)
 
@@ -104,6 +103,8 @@ def require_permission(
         )
 
         if mode == MODE_SHADOW:
+            # The legacy check is consulted ONLY here (and in off), never in enforce.
+            old_allow = await _run_legacy(legacy_check, user, request)
             category = _shadow_category(old_allow, decision.allowed)
             if category in ("OLD_ALLOW_NEW_DENY", "OLD_DENY_NEW_ALLOW"):
                 logger.warning(

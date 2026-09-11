@@ -66,20 +66,31 @@ def is_significant_action(action: str) -> bool:
 # ---------------------------------------------------------------------------
 _ALL = set(ACTIONS)
 
+# SCOPE RULE (matches legacy `can_access_project`): only Owner/Admin get
+# project DATA actions (budget.read/write) company-wide. For every other role
+# access to a project's data comes ONLY from a PROJECT-scope assignment created
+# from project_team membership (see the migration backfill). So company-scope
+# non-admin roles do NOT list budget.* — otherwise a company role would read
+# every project, which is broader than today's membership-based access.
 CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
     "admin":           {"label_bg": "Администратор",          "actions": set(_ALL)},
-    "site_manager":    {"label_bg": "Технически ръководител", "actions": {"budget.read", "budget.write", "user.read", "asset_intake.submit"}},
-    "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"budget.read", "budget.write", "user.read", "asset_intake.submit"}},
-    "accountant":      {"label_bg": "Счетоводство",           "actions": {"budget.read", "user.read"}},
+    "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit"}},
+    "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit"}},
+    "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read"}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit"}},
     "procurement":     {"label_bg": "Снабдител",              "actions": {"asset_intake.submit"}},
-    "office":          {"label_bg": "Офис",                   "actions": {"user.read", "budget.read"}},
+    "office":          {"label_bg": "Офис",                   "actions": {"user.read"}},
     "worker":          {"label_bg": "Работник",               "actions": {"asset_intake.submit"}},
     "driver":          {"label_bg": "Шофьор",                 "actions": set()},
     # AI gets no blanket actions; it acts <= the delegating human (FLOW-002).
     "ai_service":      {"label_bg": "AI service role",        "actions": set()},
 }
+
+# Project data actions granted per project_team membership (explicit permissions
+# on a project-scope assignment). Reproduces can_access_project / can_manage_project.
+PROJECT_MEMBER_ACTIONS = ["budget.read"]
+PROJECT_MANAGER_ACTIONS = ["budget.read", "budget.write"]
 
 # ---------------------------------------------------------------------------
 # LEGACY compatibility roles — transitional only, NOT FLOW-002 canon.

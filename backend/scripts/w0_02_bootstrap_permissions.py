@@ -37,7 +37,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
-from app.permissions.catalog import LEGACY_ROLE_MAP
+from app.permissions.catalog import (
+    LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
+)
 
 load_dotenv(Path(__file__).parent.parent / '.env')
 
@@ -82,8 +84,43 @@ def upgrade_assignment(old: dict) -> dict:
     }
 
 
+async def build_backfill() -> list:
+    """Project-scope assignments from active project_team memberships.
+
+    Reproduces legacy membership access: any active member gets project
+    budget.read; a member whose role_in_project is SiteManager also gets
+    budget.write (matches can_access_project / can_manage_project). Admin/Owner
+    are skipped — they already have company-wide access.
+    """
+    users = {u["id"]: u for u in await op_db.users.find({}, {"_id": 0}).to_list(100000)}
+    members = await op_db.project_team.find({"active": True}, {"_id": 0}).to_list(100000)
+    out = []
+    for m in members:
+        u = users.get(m.get("user_id"))
+        if not u or u.get("role") in ("Admin", "Owner"):
+            continue
+        tid = u.get("org_id")
+        if not tid or not m.get("project_id"):
+            continue
+        is_mgr = m.get("role_in_project") == "SiteManager"
+        role_id = LEGACY_ROLE_MAP.get(u.get("role", ""), "LEGACY_" + str(u.get("role", "")).upper())
+        out.append({
+            "id": f"ra_{m['user_id']}_{tid}_proj_{m['project_id']}",
+            "user_id": m["user_id"], "tenant_id": tid,
+            "role_id": role_id,
+            "scope_type": "project", "scope_id": m["project_id"], "module": None,
+            "permissions": list(PROJECT_MANAGER_ACTIONS if is_mgr else PROJECT_MEMBER_ACTIONS),
+            "max_amount": None, "valid_from": now(), "valid_to": None,
+            "status": "active", "created_by": "system:migration", "approved_by": None,
+            "migrated_from": "project_team",
+            "note": "W0-02 project-scope backfill from project_team membership.",
+        })
+    return out
+
+
 async def run(apply: bool, verify_only: bool, revert: bool) -> int:
-    olds = await sys_db.tenant_role_assignments.find({}, {"_id": 0}).to_list(10000)
+    olds = await sys_db.tenant_role_assignments.find(
+        {"migrated_from": {"$ne": "project_team"}}, {"_id": 0}).to_list(10000)
     before = (await op_db.users.count_documents({}), await op_db.organizations.count_documents({}))
 
     print(f"System database    : {SYSTEM_DB}")
@@ -97,10 +134,17 @@ async def run(apply: bool, verify_only: bool, revert: bool) -> int:
         return 0
 
     if revert:
-        print("REVERT: stripping W0-02 fields back to legacy mirror.")
+        print("REVERT: removing project-scope backfill and stripping W0-02 fields.")
         if apply:
+            # Only migration-owned records are reverted:
+            #  - project-scope backfill rows are deleted (they did not exist before);
+            #  - the legacy-mirror upgrades are stripped back to the mirror shape.
+            # Assignments created LATER by the app (create_user grants, manual
+            # grants) carry a different migrated_from / created_by and are left
+            # untouched, so revert never overwrites subsequent legitimate changes.
+            await sys_db.tenant_role_assignments.delete_many({"migrated_from": "project_team"})
             await sys_db.tenant_role_assignments.update_many(
-                {}, {"$unset": {f: "" for f in ADDED_FIELDS}})
+                {"migrated_from": "users.role"}, {"$unset": {f: "" for f in ADDED_FIELDS}})
             for name in W0_02_INDEXES:
                 try:
                     await sys_db.tenant_role_assignments.drop_index(name)
@@ -112,6 +156,7 @@ async def run(apply: bool, verify_only: bool, revert: bool) -> int:
         return 0
 
     plan = [upgrade_assignment(o) for o in olds]
+    backfill = await build_backfill()
     print("Planned upgrades (role -> role_id):")
     seen = {}
     for o in plan:
@@ -119,12 +164,15 @@ async def run(apply: bool, verify_only: bool, revert: bool) -> int:
     for rid, n in sorted(seen.items()):
         tag = "" if rid in {"owner", "admin", "site_manager", "accountant", "warehouse", "driver"} else "  (transitional)"
         print(f"  - {rid}: {n}{tag}")
+    print(f"Planned project-scope backfill (from project_team): {len(backfill)}")
 
     if not apply:
         print("\nDRY RUN — nothing written. Re-run with --apply to write.")
         return 0
 
     for a in plan:
+        await sys_db.tenant_role_assignments.update_one({"id": a["id"]}, {"$set": a}, upsert=True)
+    for a in backfill:
         await sys_db.tenant_role_assignments.update_one({"id": a["id"]}, {"$set": a}, upsert=True)
 
     # Import the app's index helper so the definition lives in one place.

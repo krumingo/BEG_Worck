@@ -15,10 +15,8 @@ from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
-from app.tenancy import registry
 from app.permissions.deps import require_permission, current_mode, MODE_OFF
-from app.permissions.audit_hooks import audit_permission_change
-from app.permissions.catalog import LEGACY_ROLE_MAP
+from app.permissions.sync import grant_company_role
 
 router = APIRouter(tags=["auth"])
 
@@ -219,31 +217,19 @@ async def create_user(
     # W0-02: keep the authoritative RoleAssignment in sync + canonical audit.
     # Skipped entirely while mode is 'off', so a default deploy behaves as today.
     if current_mode() != MODE_OFF:
-        tid = ctx.tenant_id
-        role_id = LEGACY_ROLE_MAP.get(data.role, data.role)
-        assignment = {
-            "id": f"ra_{new_user['id']}_{tid}_{role_id}_company",
-            "user_id": new_user["id"],
-            "tenant_id": tid,
-            "role_id": role_id,
-            "scope_type": "company",
-            "scope_id": None,
-            "module": None,
-            "permissions": [],
-            "max_amount": None,
-            "valid_from": now,
-            "valid_to": None,
-            "status": "active",
-            "created_by": user["id"],
-            "approved_by": user["id"],
-        }
-        stored = await registry.upsert_role_assignment(assignment)
-        await audit_permission_change(ctx, "granted", stored, before=None, after=stored,
-                                      reason=f"user created with role {data.role}")
+        await grant_company_role(ctx, new_user["id"], data.role, actor_id=user["id"])
     return {k: v for k, v in new_user.items() if k not in ("password_hash", "_id")}
 
 @router.put("/users/{user_id}")
-async def update_user(user_id: str, data: UserUpdate, user: dict = Depends(require_admin)):
+async def update_user(
+    user_id: str,
+    data: UserUpdate,
+    ctx: TenantContext = Depends(require_permission(
+        "user.update", module="M0", scope="company", resource_type="user",
+        legacy_check=lambda u, r: u["role"] in ["Admin", "Owner"],
+    )),
+):
+    user = ctx.user
     target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -253,6 +239,10 @@ async def update_user(user_id: str, data: UserUpdate, user: dict = Depends(requi
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.users.update_one({"id": user_id}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "user", user_id, update)
+    # W0-02: a role change must update the authoritative assignment, else the
+    # Permission Service would keep using a stale role (two diverging sources).
+    if current_mode() != MODE_OFF and "role" in update:
+        await grant_company_role(ctx, user_id, update["role"], actor_id=user["id"])
     return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 @router.delete("/users/{user_id}")

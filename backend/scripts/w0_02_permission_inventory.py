@@ -25,6 +25,7 @@ ROUTE_RE = re.compile(r'@router\.(get|post|put|patch|delete)\(\s*[\'"]([^\'"]+)[
 # Routes already migrated to require_permission in PR-1.
 MIGRATED = {
     ("POST", "/users"),
+    ("PUT", "/users/{user_id}"),
     ("GET", "/projects/{project_id}/activity-budgets"),
     ("POST", "/assets/intake/{intake_id}/approve"),
 }

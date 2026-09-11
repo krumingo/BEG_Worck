@@ -407,6 +407,15 @@ async def add_team_member(project_id: str, data: TeamMemberAdd, user: dict = Dep
     }
     await db.project_team.insert_one(member)
     await log_audit(user["org_id"], user["id"], user["email"], "team_added", "project", project_id, {"member_id": data.user_id, "role": data.role_in_project})
+    # W0-02: mirror the new membership into a project-scope RoleAssignment so the
+    # Permission Service reflects it. Skipped while mode='off' (behavior unchanged).
+    from app.permissions.deps import current_mode, MODE_OFF
+    if current_mode() != MODE_OFF:
+        from app.permissions.sync import sync_project_membership, compat_ctx
+        from app.permissions.catalog import LEGACY_ROLE_MAP
+        rid = LEGACY_ROLE_MAP.get(target_user.get("role", ""), "LEGACY_" + str(target_user.get("role", "")).upper())
+        await sync_project_membership(compat_ctx(user), data.user_id, rid, project_id,
+                                      data.role_in_project, True, actor_id=user["id"])
     return {k: v for k, v in member.items() if k != "_id"}
 
 @router.delete("/projects/{project_id}/team/{member_id}")
@@ -416,10 +425,18 @@ async def remove_team_member(project_id: str, member_id: str, user: dict = Depen
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+    mem = await db.project_team.find_one({"id": member_id, "project_id": project_id})
     result = await db.project_team.update_one({"id": member_id, "project_id": project_id}, {"$set": {"active": False}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Team member not found")
     await log_audit(user["org_id"], user["id"], user["email"], "team_removed", "project", project_id, {"member_id": member_id})
+    # W0-02: revoke the mirrored project-scope assignment so the removed member
+    # loses project access on the next request (even with an unexpired JWT).
+    from app.permissions.deps import current_mode, MODE_OFF
+    if mem and current_mode() != MODE_OFF:
+        from app.permissions.sync import sync_project_membership, compat_ctx
+        await sync_project_membership(compat_ctx(user), mem["user_id"], mem.get("role_in_project", ""),
+                                      project_id, mem.get("role_in_project", ""), False, actor_id=user["id"])
     return {"ok": True}
 
 # Phase routes
