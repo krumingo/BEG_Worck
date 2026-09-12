@@ -36,23 +36,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
+from w0_02_validation_env import require_runtime_env
 
-from app.permissions.catalog import (
-    LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
-)
-from app.permissions.validation_env import VALIDATION_ENV, validation_problems
+# No dotenv, application import or client construction at module import time.
+client = op_db = sys_db = None
+MONGO_URL = OPERATIONAL_DB = SYSTEM_DB = None
 
-load_dotenv(Path(__file__).parent.parent / '.env')
 
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-OPERATIONAL_DB = os.environ.get('DB_NAME', 'begwork')
-SYSTEM_DB = os.environ.get('BEG_SYSTEM_DB', 'begwork_system')
+def _configure_databases():
+    global client, op_db, sys_db, MONGO_URL, OPERATIONAL_DB, SYSTEM_DB
+    _guard()  # must precede ALL dotenv / driver imports
+    if op_db is not None and sys_db is not None:
+        return  # explicitly injected DBs in unit/integration tests
+    if os.environ.get("BEG_VALIDATION_MODE") != "1":
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent.parent / ".env")
+    MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+    OPERATIONAL_DB = os.environ.get("DB_NAME", "begwork")
+    SYSTEM_DB = os.environ.get("BEG_SYSTEM_DB", "begwork_system")
+    _guard()
+    from motor.motor_asyncio import AsyncIOMotorClient
+    client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000,
+                               connectTimeoutMS=5000, socketTimeoutMS=15000)
+    op_db, sys_db = client[OPERATIONAL_DB], client[SYSTEM_DB]
 
-client = AsyncIOMotorClient(MONGO_URL)
-op_db = client[OPERATIONAL_DB]
-sys_db = client[SYSTEM_DB]
 
 # Fields W0-02 adds; used by --revert to strip back to the legacy mirror.
 ADDED_FIELDS = [
@@ -68,6 +75,7 @@ def now() -> str:
 
 
 def upgrade_assignment(old: dict) -> dict:
+    from app.permissions.catalog import LEGACY_ROLE_MAP
     role_id = LEGACY_ROLE_MAP.get(old.get("role", ""), "LEGACY_" + str(old.get("role", "UNKNOWN")).upper())
     scope_ids = old.get("scope_ids") or []
     return {
@@ -88,17 +96,8 @@ def upgrade_assignment(old: dict) -> dict:
 
 
 def _guard() -> None:
-    """Fail-closed: only in explicit validation mode (BEG_VALIDATION_MODE=1) and
-    only when the live env EXACTLY matches the baked canonical values. Inactive
-    for normal prod use (mode unset)."""
-    if os.environ.get("BEG_VALIDATION_MODE") != "1":
-        return
-    problems = validation_problems(MONGO_URL, OPERATIONAL_DB, SYSTEM_DB)
-    if problems:
-        print("FAIL-CLOSED GUARD (validation mode) — refusing; target is not the sanctioned temp env:")
-        for p in problems:
-            print("  -", p)
-        sys.exit(3)
+    if os.environ.get("BEG_VALIDATION_MODE") == "1":
+        require_runtime_env()  # validate LIVE inputs, not expected against itself
 
 
 async def build_backfill() -> list:
@@ -109,6 +108,9 @@ async def build_backfill() -> list:
     budget.write (matches can_access_project / can_manage_project). Admin/Owner
     are skipped — they already have company-wide access.
     """
+    from app.permissions.catalog import (
+        LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
+    )
     users = {u["id"]: u for u in await op_db.users.find({}, {"_id": 0}).to_list(100000)}
     members = await op_db.project_team.find({"active": True}, {"_id": 0}).to_list(100000)
     out = []
@@ -137,6 +139,7 @@ async def build_backfill() -> list:
 
 async def run(apply: bool, verify_only: bool, revert: bool) -> int:
     _guard()
+    _configure_databases()
     olds = await sys_db.tenant_role_assignments.find(
         {"migrated_from": {"$ne": "project_team"}}, {"_id": 0}).to_list(10000)
     before = (await op_db.users.count_documents({}), await op_db.organizations.count_documents({}))
@@ -229,4 +232,8 @@ def _parse_args(argv):
 
 if __name__ == "__main__":
     args = _parse_args(sys.argv[1:])
-    sys.exit(asyncio.run(run(apply=args.apply, verify_only=args.verify, revert=args.revert)))
+    try:
+        sys.exit(asyncio.run(run(apply=args.apply, verify_only=args.verify, revert=args.revert)))
+    finally:
+        if client is not None:
+            client.close()

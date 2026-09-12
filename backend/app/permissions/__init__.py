@@ -1,45 +1,23 @@
+"""W0-02 permission facade. Load DB-backed modules only when a public API is used.
+
+Importing the package, catalog or validation helper does not create a DB client.
+This changes import timing only; public service/dependency names are preserved.
 """
-W0-02 — Permission Service (FLOW-002).
+from importlib import import_module
 
-Central, authoritative authorization for BEG_Work. Authorization is read ONLY
-from the current RoleAssignment records (system DB), never from the JWT role.
+_EXPORTS = {'PermissionDecision': ('app.permissions.service', 'PermissionDecision'), 'evaluate_permission': ('app.permissions.service', 'evaluate_permission'), 'has_permission': ('app.permissions.service', 'has_permission'), 'filter_readable': ('app.permissions.service', 'filter_readable'), 'ALLOWED': ('app.permissions.service', 'ALLOWED'), 'REASON_NO_ASSIGNMENT': ('app.permissions.service', 'REASON_NO_ASSIGNMENT'), 'REASON_ACTION_NOT_ALLOWED': ('app.permissions.service', 'REASON_ACTION_NOT_ALLOWED'), 'REASON_MODULE_NOT_ALLOWED': ('app.permissions.service', 'REASON_MODULE_NOT_ALLOWED'), 'REASON_SCOPE_MISMATCH': ('app.permissions.service', 'REASON_SCOPE_MISMATCH'), 'REASON_ASSIGNMENT_EXPIRED': ('app.permissions.service', 'REASON_ASSIGNMENT_EXPIRED'), 'REASON_ASSIGNMENT_REVOKED': ('app.permissions.service', 'REASON_ASSIGNMENT_REVOKED'), 'REASON_CROSS_TENANT': ('app.permissions.service', 'REASON_CROSS_TENANT'), 'REASON_AMOUNT_LIMIT_EXCEEDED': ('app.permissions.service', 'REASON_AMOUNT_LIMIT_EXCEEDED'), 'require_permission': ('app.permissions.deps', 'require_permission'), 'current_mode': ('app.permissions.deps', 'current_mode')}
+__all__ = list(_EXPORTS)
 
-This package is additive. Existing routes keep working unchanged while
-PERMISSION_SERVICE_MODE is 'off' (the default). See deps.py for the three modes.
 
-Canon: FLOW-002. Predecessor: W0-01 Tenant Foundation (app/tenancy).
-"""
-from app.permissions.service import (
-    PermissionDecision,
-    evaluate_permission,
-    has_permission,
-    filter_readable,
-    ALLOWED,
-    REASON_NO_ASSIGNMENT,
-    REASON_ACTION_NOT_ALLOWED,
-    REASON_MODULE_NOT_ALLOWED,
-    REASON_SCOPE_MISMATCH,
-    REASON_ASSIGNMENT_EXPIRED,
-    REASON_ASSIGNMENT_REVOKED,
-    REASON_CROSS_TENANT,
-    REASON_AMOUNT_LIMIT_EXCEEDED,
-)
-from app.permissions.deps import require_permission, current_mode
+def __getattr__(name):
+    target = _EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module, member = target
+    value = getattr(import_module(module), member)
+    globals()[name] = value
+    return value
 
-__all__ = [
-    "PermissionDecision",
-    "evaluate_permission",
-    "has_permission",
-    "filter_readable",
-    "require_permission",
-    "current_mode",
-    "ALLOWED",
-    "REASON_NO_ASSIGNMENT",
-    "REASON_ACTION_NOT_ALLOWED",
-    "REASON_MODULE_NOT_ALLOWED",
-    "REASON_SCOPE_MISMATCH",
-    "REASON_ASSIGNMENT_EXPIRED",
-    "REASON_ASSIGNMENT_REVOKED",
-    "REASON_CROSS_TENANT",
-    "REASON_AMOUNT_LIMIT_EXCEEDED",
-]
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

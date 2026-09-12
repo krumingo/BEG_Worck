@@ -1,17 +1,17 @@
-"""
-W0-02 — Core Permission Model tests (FLOW-002).
+"""W0-02 core tests. Default: mongomock; W0_02_REAL_MONGO=1: isolated Mongo.
 
-The pure-logic tests need NO database: they monkeypatch the assignment loader,
-so they run anywhere with `pytest`. The integration tests (routes, migration,
-audit chain against Mongo) are guarded behind W0_02_INTEGRATION=1 and run on a
-dev / Synology test environment.
-
-Run (logic):        pytest tests/test_w0_02_permission_core.py -v
-Run (integration):  W0_02_INTEGRATION=1 pytest tests/test_w0_02_permission_core.py -v
+API cases are router-level HTTP tests with identity/resolver/materialize stubs;
+they do not prove full application lifespan/middleware or multi-tenant routing.
+The canonical validation runner sets explicit safe environment and modes.
 """
 import os
 import asyncio
 import pytest
+from w0_02_validation_env import require_runtime_env
+
+# Collection itself must refuse unsafe real targets before ANY app import.
+if os.environ.get("W0_02_REAL_MONGO") == "1" or os.environ.get("W0_02_VALIDATION") == "1":
+    require_runtime_env()
 
 from app.permissions import service
 from app.permissions.service import (
@@ -275,7 +275,7 @@ from pathlib import Path
 # Single source of truth for the validation guard. Imported from a motor-free
 # module, so this import CANNOT create a Mongo client (verified by
 # TestValidationGuard.test_helper_import_creates_no_client).
-from app.permissions.validation_env import (
+from w0_02_validation_env import (
     VALIDATION_ENV, validation_problems, require_validation_env,
 )
 
@@ -301,19 +301,7 @@ _TEST_SYS_DB = os.environ.get("BEG_SYSTEM_DB", "w002_sys_test")
 
 
 def _guard_test_dbs():
-    """fail-closed for real-Mongo runs, BEFORE any connection is made.
-    In validation mode (W0_02_VALIDATION=1) require the EXACT baked canonical
-    temp env; otherwise require w002_ test DBs and a non-Atlas URL."""
-    url = os.environ.get("MONGO_URL", "")
-    if W0_02_VALIDATION:
-        probs = validation_problems(url, _TEST_OP_DB, _TEST_SYS_DB)
-        assert not probs, "fail-closed (validation mode): " + "; ".join(probs)
-        return
-    assert _TEST_OP_DB.startswith("w002_") and _TEST_SYS_DB.startswith("w002_"), (
-        f"fail-closed: refusing real-Mongo run against non-test DBs "
-        f"{_TEST_OP_DB}/{_TEST_SYS_DB}")
-    assert "mongodb+srv" not in url and "atlas" not in url.lower(), (
-        "fail-closed: refusing an Atlas-looking MONGO_URL for tests")
+    require_runtime_env()
 
 
 class TestValidationGuard:
@@ -372,7 +360,7 @@ class TestValidationGuard:
         # The validation helper must not IMPORT motor/pymongo, so importing it can
         # never construct a client as a side effect. (Check import statements, not
         # mere word occurrences — the module docstring may mention the names.)
-        src = (Path(__file__).parent.parent / "app" / "permissions" / "validation_env.py").read_text(encoding="utf-8")
+        src = (Path(__file__).parent.parent / "w0_02_validation_env.py").read_text(encoding="utf-8")
         import re as _re
         offenders = _re.findall(r"^\s*(?:import|from)\s+(?:motor|pymongo)\b", src, _re.MULTILINE)
         assert offenders == [] and "motor_asyncio" not in src
