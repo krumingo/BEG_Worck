@@ -1,0 +1,5 @@
+# Shell scripts run on Linux (Synology): they must be committed, checked out and
+# exported with LF line endings. Without this rule, core.autocrlf=true on a
+# Windows PC converts LF->CRLF on checkout AND on `git archive`, and the CRLF
+# wrapper broke bash on Synology ("invalid option name").
+*.sh text eol=lf

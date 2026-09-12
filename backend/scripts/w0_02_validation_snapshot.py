@@ -50,6 +50,8 @@ def inspect_snapshot(parent, sha):
         name = p.name.lower()
         if ((name == ".env" or name.startswith(".env.")) and name not in ALLOW_ENV_EXAMPLES) or name.endswith((".pem", ".p12", ".pfx", ".key")):
             errors.append("secret-like file name: " + rel)
+        if name.endswith(".sh") and b"\r" in raw:
+            errors.append("CRLF line endings in shell script: " + rel)
         if b"\0" not in raw:
             text = raw.decode("utf-8", "replace")
             for label, pattern in PATTERNS.items():
