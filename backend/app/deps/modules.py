@@ -109,20 +109,27 @@ async def require_m5(user: dict = Depends(get_current_user)):
 async def require_m9(user: dict = Depends(get_current_user)):
     return await require_module("M9", user)
 
-async def get_plan_limits(org_id: str) -> dict:
+async def get_plan_limits(org_id: str, db_handle=None) -> dict:
     """Get the limits for an organization's current plan."""
-    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    _db = db if db_handle is None else db_handle
+    sub = await _db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
     if not sub:
         return SUBSCRIPTION_PLANS["free"]["limits"]
     plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
     return plan.get("limits", SUBSCRIPTION_PLANS["free"]["limits"])
 
-async def enforce_limit(org_id: str, resource_type: str):
-    """Enforce usage limits for creating resources."""
-    limits = await get_plan_limits(org_id)
+async def enforce_limit(org_id: str, resource_type: str, db_handle=None):
+    """Enforce usage limits for creating resources.
+
+    W0-02 PR-04: a migrated enforce route passes its tenant-resolved handle
+    (`db_handle`) so the count and the plan are read from the SAME tenant
+    database the write goes to. Default (None) is the legacy global handle.
+    """
+    _db = db if db_handle is None else db_handle
+    limits = await get_plan_limits(org_id, db_handle=_db)
     
     if resource_type == "users":
-        count = await db.users.count_documents({"org_id": org_id})
+        count = await _db.users.count_documents({"org_id": org_id})
         limit = limits.get("users", 3)
         if count >= limit:
             raise HTTPException(
@@ -130,7 +137,7 @@ async def enforce_limit(org_id: str, resource_type: str):
                 detail={"code": "LIMIT_USERS_EXCEEDED", "message": f"User limit ({limit}) reached. Please upgrade your plan.", "current": count, "limit": limit}
             )
     elif resource_type == "projects":
-        count = await db.projects.count_documents({"org_id": org_id})
+        count = await _db.projects.count_documents({"org_id": org_id})
         limit = limits.get("projects", 2)
         if count >= limit:
             raise HTTPException(
@@ -140,7 +147,7 @@ async def enforce_limit(org_id: str, resource_type: str):
     elif resource_type == "invoices":
         now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-        count = await db.invoices.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
+        count = await _db.invoices.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
         limit = limits.get("monthly_invoices", 5)
         if count >= limit:
             raise HTTPException(

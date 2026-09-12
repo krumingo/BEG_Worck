@@ -26,6 +26,9 @@ REASON_ASSIGNMENT_EXPIRED = "ASSIGNMENT_EXPIRED"
 REASON_ASSIGNMENT_REVOKED = "ASSIGNMENT_REVOKED"
 REASON_CROSS_TENANT = "CROSS_TENANT"
 REASON_AMOUNT_LIMIT_EXCEEDED = "AMOUNT_LIMIT_EXCEEDED"
+# PR-03: an assignment that is not demonstrably active/valid never grants.
+REASON_ASSIGNMENT_INACTIVE = "ASSIGNMENT_INACTIVE"      # inactive / missing / unknown status
+REASON_ASSIGNMENT_INVALID = "ASSIGNMENT_INVALID_DATA"   # malformed validity data
 
 
 @dataclass(frozen=True)
@@ -35,16 +38,39 @@ class PermissionDecision:
     effective_assignment_ids: List[str] = field(default_factory=list)
 
 
-def _parse(ts: Optional[str]) -> Optional[datetime]:
-    if not ts:
+class _InvalidValidity(ValueError):
+    """Non-empty but unparseable / wrong-typed / impossible validity data."""
+
+
+def _parse(ts) -> Optional[datetime]:
+    """Parse a validity bound.
+
+    None / "" is a LEGITIMATELY OPEN bound (canonical model). Anything else
+    must be an ISO-8601 string; a wrong type or unparseable text raises
+    _InvalidValidity so the assignment is treated as invalid, never as open.
+    """
+    if ts is None or ts == "":
         return None
-    try:
-        dt = datetime.fromisoformat(ts)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
-    except ValueError:
-        return None
+    if isinstance(ts, datetime):
+        dt = ts
+    elif isinstance(ts, str):
+        try:
+            dt = datetime.fromisoformat(ts)
+        except ValueError as exc:
+            raise _InvalidValidity(f"unparseable validity bound: {ts!r}") from exc
+    else:
+        raise _InvalidValidity(f"validity bound has wrong type: {type(ts).__name__}")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _validity_window(a: dict):
+    """(valid_from, valid_to) or raise _InvalidValidity (incl. reversed interval)."""
+    vf, vt = _parse(a.get("valid_from")), _parse(a.get("valid_to"))
+    if vf is not None and vt is not None and vf > vt:
+        raise _InvalidValidity("valid_from is after valid_to")
+    return vf, vt
 
 
 async def _load_assignments(user_id: str, tenant_id: str) -> List[dict]:
@@ -73,6 +99,48 @@ def _scope_covers(a_type: Optional[str], a_id: Optional[str],
     return a_type == req_type and a_id == req_id
 
 
+def _evaluate_one(a: dict, action: str, module, scope_type, scope_id, amount, now) -> str:
+    """Decide ONE assignment: ALLOWED or the denial reason. Raises on malformed data."""
+    if not isinstance(a, dict) or not isinstance(a.get("id"), str) or not a.get("id"):
+        return REASON_ASSIGNMENT_INVALID
+    # Only status == "active" is a candidate. revoked / inactive / missing /
+    # unknown statuses never grant anything.
+    status = a.get("status")
+    if status == "revoked":
+        return REASON_ASSIGNMENT_REVOKED
+    if status != "active":
+        return REASON_ASSIGNMENT_INACTIVE
+    # Non-empty invalid validity data is NOT an open bound.
+    try:
+        vf, vt = _validity_window(a)
+    except (_InvalidValidity, TypeError, ValueError):
+        return REASON_ASSIGNMENT_INVALID
+    if (vf and now < vf) or (vt and now > vt):
+        return REASON_ASSIGNMENT_EXPIRED
+
+    perms = a.get("permissions") or []
+    if not isinstance(perms, (list, tuple, set)):
+        return REASON_ASSIGNMENT_INVALID
+    allowed_actions = set(perms) or role_actions(a.get("role_id") or "")
+    if action not in allowed_actions:
+        return REASON_ACTION_NOT_ALLOWED
+
+    a_module = a.get("module")
+    if module and a_module and a_module != module:
+        return REASON_MODULE_NOT_ALLOWED
+
+    if not _scope_covers(a.get("scope_type"), a.get("scope_id"), scope_type, scope_id):
+        return REASON_SCOPE_MISMATCH
+
+    max_amount = a.get("max_amount")
+    if amount is not None and max_amount is not None:
+        if not isinstance(max_amount, (int, float)) or isinstance(max_amount, bool):
+            return REASON_ASSIGNMENT_INVALID
+        if amount > max_amount:
+            return REASON_AMOUNT_LIMIT_EXCEEDED
+    return ALLOWED
+
+
 async def evaluate_permission(
     ctx,
     action: str,
@@ -98,34 +166,17 @@ async def evaluate_permission(
     best_reason = REASON_ACTION_NOT_ALLOWED  # most informative denial seen
 
     for a in assignments:
-        if a.get("status") == "revoked":
-            best_reason = _prefer(best_reason, REASON_ASSIGNMENT_REVOKED)
-            continue
-        vf, vt = _parse(a.get("valid_from")), _parse(a.get("valid_to"))
-        if (vf and now < vf) or (vt and now > vt):
-            best_reason = _prefer(best_reason, REASON_ASSIGNMENT_EXPIRED)
-            continue
-
-        allowed_actions = set(a.get("permissions") or []) or role_actions(a.get("role_id", ""))
-        if action not in allowed_actions:
-            best_reason = _prefer(best_reason, REASON_ACTION_NOT_ALLOWED)
-            continue
-
-        a_module = a.get("module")
-        if module and a_module and a_module != module:
-            best_reason = _prefer(best_reason, REASON_MODULE_NOT_ALLOWED)
-            continue
-
-        if not _scope_covers(a.get("scope_type"), a.get("scope_id"), scope_type, scope_id):
-            best_reason = _prefer(best_reason, REASON_SCOPE_MISMATCH)
-            continue
-
-        max_amount = a.get("max_amount")
-        if amount is not None and max_amount is not None and amount > max_amount:
-            best_reason = _prefer(best_reason, REASON_AMOUNT_LIMIT_EXCEEDED)
-            continue
-
-        matched.append(a["id"])
+        # PR-03: one malformed assignment denies ITSELF only. It must neither
+        # grant nor crash the whole evaluation (another valid assignment may
+        # still allow under the union rule).
+        try:
+            reason = _evaluate_one(a, action, module, scope_type, scope_id, amount, now)
+        except Exception:
+            reason = REASON_ASSIGNMENT_INVALID
+        if reason is ALLOWED:
+            matched.append(a["id"])
+        else:
+            best_reason = _prefer(best_reason, reason)
 
     if matched:
         return PermissionDecision(True, ALLOWED, matched)
@@ -141,6 +192,8 @@ _REASON_RANK = {
     REASON_AMOUNT_LIMIT_EXCEEDED: 3,
     REASON_ASSIGNMENT_EXPIRED: 4,
     REASON_ASSIGNMENT_REVOKED: 5,
+    REASON_ASSIGNMENT_INACTIVE: 6,
+    REASON_ASSIGNMENT_INVALID: 7,
 }
 
 

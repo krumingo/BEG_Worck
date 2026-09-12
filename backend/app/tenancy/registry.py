@@ -122,6 +122,35 @@ async def get_role_assignment(assignment_id: str) -> Optional[Dict[str, Any]]:
     return await tenant_role_assignments.find_one({"id": assignment_id}, {"_id": 0})
 
 
+# The logical identity of an assignment (backed by the non-partial unique index
+# `uniq_assignment`). Two documents can never share it, whatever their status.
+ASSIGNMENT_KEY_FIELDS = ("user_id", "tenant_id", "role_id", "scope_type", "scope_id", "module")
+
+
+def assignment_key(a: Dict[str, Any]) -> Dict[str, Any]:
+    """Logical unique key of an assignment document (None-normalized)."""
+    return {f: a.get(f) for f in ASSIGNMENT_KEY_FIELDS}
+
+
+async def find_role_assignment_by_key(user_id: str, tenant_id: str, role_id: str,
+                                      scope_type: str, scope_id: Optional[str] = None,
+                                      module: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """The ONE document (any status) that owns this logical key, or None.
+
+    PR-02: identity is the logical key, never a freshly generated id. A record
+    migrated under an older id keeps that id for its whole life.
+    """
+    return await tenant_role_assignments.find_one(
+        {"user_id": user_id, "tenant_id": tenant_id, "role_id": role_id,
+         "scope_type": scope_type, "scope_id": scope_id, "module": module},
+        {"_id": 0},
+    )
+
+
+class ConcurrentAssignmentChange(RuntimeError):
+    """An optimistic (revision-guarded) update lost a race; caller must re-read."""
+
+
 async def upsert_role_assignment(a: Dict[str, Any]) -> Dict[str, Any]:
     """Create or replace an assignment by its stable id. Sets updated_at."""
     if not a.get("id"):
@@ -129,8 +158,43 @@ async def upsert_role_assignment(a: Dict[str, Any]) -> Dict[str, Any]:
     a = {**a, "updated_at": _now()}
     a.setdefault("created_at", a["updated_at"])
     a.setdefault("status", "active")
-    await tenant_role_assignments.update_one({"id": a["id"]}, {"$set": a}, upsert=True)
+    a.pop("revision", None)
+    await tenant_role_assignments.update_one(
+        {"id": a["id"]}, {"$set": a, "$setOnInsert": {"revision": 1}}, upsert=True)
+    return await get_role_assignment(a["id"]) or a
+
+
+async def insert_role_assignment(a: Dict[str, Any]) -> Dict[str, Any]:
+    """Create-only. Raises the driver's DuplicateKeyError when the logical key
+    (or id) already exists — the caller must then read the real record."""
+    if not a.get("id"):
+        raise ValueError("RoleAssignment requires a stable 'id'")
+    a = {**a, "updated_at": _now()}
+    a.setdefault("created_at", a["updated_at"])
+    a.setdefault("status", "active")
+    a.setdefault("revision", 1)
+    await tenant_role_assignments.insert_one(dict(a))
+    a.pop("_id", None)
     return a
+
+
+async def patch_role_assignment(assignment_id: str, patch: Dict[str, Any], *,
+                                expected_revision: Optional[int],
+                                unset: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Revision-guarded partial update. Only the given fields change; revision
+    is bumped. Lost race -> ConcurrentAssignmentChange (nothing written)."""
+    query: Dict[str, Any] = {"id": assignment_id}
+    if expected_revision is None:
+        query["revision"] = {"$exists": False}
+    else:
+        query["revision"] = expected_revision
+    update: Dict[str, Any] = {"$set": {**patch, "updated_at": _now()}, "$inc": {"revision": 1}}
+    if unset:
+        update["$unset"] = {f: "" for f in unset}
+    res = await tenant_role_assignments.update_one(query, update)
+    if res.matched_count != 1:
+        raise ConcurrentAssignmentChange(assignment_id)
+    return await get_role_assignment(assignment_id)
 
 
 async def revoke_role_assignment(assignment_id: str, *, by: str, reason: str) -> Optional[Dict[str, Any]]:
@@ -142,27 +206,32 @@ async def revoke_role_assignment(assignment_id: str, *, by: str, reason: str) ->
         "revoke_reason": reason,
         "updated_at": _now(),
     }
-    await tenant_role_assignments.update_one({"id": assignment_id}, {"$set": patch})
+    await tenant_role_assignments.update_one({"id": assignment_id}, {"$set": patch, "$inc": {"revision": 1}})
     return await get_role_assignment(assignment_id)
 
 
-async def ensure_permission_indexes() -> None:
-    """Indexes for the authoritative RoleAssignment collection (W0-02 §5)."""
-    # No two identical active grants.
-    await tenant_role_assignments.create_index(
+async def ensure_permission_indexes(collection=None) -> None:
+    """Indexes for the authoritative RoleAssignment collection (W0-02 §5).
+
+    `collection` lets the bootstrap script build them on ITS guarded handle;
+    default is the registry's own collection.
+    """
+    coll = tenant_role_assignments if collection is None else collection
+    # No two identical grants (non-partial: any status).
+    await coll.create_index(
         [("user_id", 1), ("tenant_id", 1), ("role_id", 1),
          ("scope_type", 1), ("scope_id", 1), ("module", 1)],
         unique=True, name="uniq_assignment",
     )
     # Hot path of has_permission(): all assignments of a user in a tenant.
-    await tenant_role_assignments.create_index(
+    await coll.create_index(
         [("user_id", 1), ("tenant_id", 1), ("status", 1)], name="lookup_active",
     )
     # Admin views.
-    await tenant_role_assignments.create_index(
+    await coll.create_index(
         [("tenant_id", 1), ("role_id", 1)], name="by_role",
     )
-    await tenant_role_assignments.create_index(
+    await coll.create_index(
         [("tenant_id", 1), ("scope_type", 1), ("scope_id", 1)], name="by_scope",
     )
     # NOTE: no TTL index — valid_to is logical validity, not deletion.

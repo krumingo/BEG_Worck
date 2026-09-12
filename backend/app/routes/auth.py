@@ -15,8 +15,11 @@ from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
-from app.permissions.deps import require_permission, current_mode, MODE_OFF
-from app.permissions.sync import grant_company_role
+from app.permissions.deps import require_permission, MODE_SHADOW, MODE_ENFORCE
+from app.permissions.sync import grant_company_role, shadow_sync
+from app.permissions.workflow import (
+    RecoverableWrite, fingerprint_without, ERROR_SYNC_FAILED, ERROR_WRITE_INCOMPLETE,
+)
 
 router = APIRouter(tags=["auth"])
 
@@ -191,34 +194,98 @@ async def create_user(
     )),
 ):
     user = ctx.user
-    await enforce_limit(user["org_id"], "users")
-
-    if await db.users.find_one({"email": data.email, "org_id": user["org_id"]}):
-        raise HTTPException(status_code=400, detail="Email already exists in this organization")
+    # W0-02 PR-04/PR-05: the mode was fixed by the dependency; org/db come from
+    # the SAME context (legacy user["org_id"] + global db in off/shadow, the
+    # registry-resolved active tenant in enforce).
+    org_id = ctx.org_id
+    tdb = await ctx.db()
     if data.role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {', '.join(ROLES)}")
-    now = datetime.now(timezone.utc).isoformat()
-    new_user = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "email": data.email,
-        "password_hash": hash_password(data.password),
-        "first_name": data.first_name,
-        "last_name": data.last_name,
-        "role": data.role,
-        "phone": data.phone,
-        "is_active": True,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.users.insert_one(new_user)
-    await log_audit(user["org_id"], user["id"], user["email"], "created", "user", new_user["id"], {"email": data.email, "role": data.role})
 
-    # W0-02: keep the authoritative RoleAssignment in sync + canonical audit.
-    # Skipped entirely while mode is 'off', so a default deploy behaves as today.
-    if current_mode() != MODE_OFF:
-        await grant_company_role(ctx, new_user["id"], data.role, actor_id=user["id"])
-    return {k: v for k, v in new_user.items() if k not in ("password_hash", "_id")}
+    def _public(u):
+        return {k: v for k, v in u.items() if k not in ("password_hash", "_id")}
+
+    def _new_user_doc():
+        now = datetime.now(timezone.utc).isoformat()
+        return {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "email": data.email,
+            "password_hash": hash_password(data.password),
+            "first_name": data.first_name,
+            "last_name": data.last_name,
+            "role": data.role,
+            "phone": data.phone,
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    if ctx.mode != MODE_ENFORCE:
+        # ---- legacy path (off / shadow): unchanged business behavior ----------
+        await enforce_limit(org_id, "users", db_handle=tdb)
+        if await tdb.users.find_one({"email": data.email, "org_id": org_id}):
+            raise HTTPException(status_code=400, detail="Email already exists in this organization")
+        new_user = _new_user_doc()
+        await tdb.users.insert_one(new_user)
+        await log_audit(org_id, user["id"], user["email"], "created", "user", new_user["id"],
+                        {"email": data.email, "role": data.role}, db_handle=tdb)
+        if ctx.mode == MODE_SHADOW:
+            # Shadow: the legacy write is the truth and stays done. The sync is
+            # observed only — a failure is reported, never turned into an
+            # error response or a pretended success.
+            await shadow_sync(ctx, tdb, "user.create", new_user["id"],
+                              lambda: grant_company_role(ctx, new_user["id"], data.role, actor_id=user["id"]))
+        return _public(new_user)
+
+    # ---- enforce: recoverable idempotent workflow (PR-05) ---------------------
+    existing = await tdb.users.find_one({"email": data.email, "org_id": org_id}, {"_id": 0})
+    try:
+        wf = await RecoverableWrite(
+            tdb, tenant_id=ctx.tenant_id, action="user.create",
+            key=f"user.create:{org_id}:{data.email.strip().lower()}",
+            fingerprint=fingerprint_without(data.model_dump(), "password")).begin()
+    except HTTPException as exc:
+        if exc.status_code == 409 and existing is not None:
+            # a DIFFERENT request for an email that already exists: legacy contract
+            raise HTTPException(status_code=400, detail="Email already exists in this organization")
+        raise
+    if existing is not None and not (wf.resumed and wf.step_refs.get("business") == existing["id"]):
+        # Legacy contract kept: a new request for an existing email is refused.
+        # (Only the retry of an interrupted attempt may continue with its user.)
+        if not wf.already_completed and not wf.resumed:
+            await wf.fail("EMAIL_EXISTS")
+        raise HTTPException(status_code=400, detail="Email already exists in this organization")
+    if wf.already_completed:
+        done = await tdb.users.find_one({"id": wf.completed_reference, "org_id": org_id}, {"_id": 0})
+        if done:
+            return _public(done)
+    if existing is None:
+        await enforce_limit(org_id, "users", db_handle=tdb)
+
+    try:
+        async def _business():
+            if existing is not None:
+                return existing["id"]
+            doc = _new_user_doc()
+            await tdb.users.insert_one(doc)
+            return doc["id"]
+        new_id = await wf.step("business", _business, reference=lambda r: r)
+        # Authoritative assignment (system DB). A failure here leaves a user with
+        # NO assignment => denied everywhere in enforce: the safe side.
+        await wf.step("sync", lambda: grant_company_role(ctx, new_id, data.role, actor_id=user["id"]))
+        await wf.step("legacy_audit", lambda: log_audit(
+            org_id, user["id"], user["email"], "created", "user", new_id,
+            {"email": data.email, "role": data.role}, db_handle=tdb))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await wf.fail(ERROR_SYNC_FAILED if "sync" not in wf.steps_done else ERROR_WRITE_INCOMPLETE)
+        raise wf.failure_response(
+            ERROR_SYNC_FAILED if "sync" not in wf.steps_done else ERROR_WRITE_INCOMPLETE, exc)
+    await wf.complete(new_id)
+    created = await tdb.users.find_one({"id": new_id, "org_id": org_id}, {"_id": 0})
+    return _public(created)
 
 @router.put("/users/{user_id}")
 async def update_user(
@@ -230,20 +297,54 @@ async def update_user(
     )),
 ):
     user = ctx.user
-    target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
+    org_id = ctx.org_id
+    tdb = await ctx.db()
+    target = await tdb.users.find_one({"id": user_id, **ctx.owner_filter()})
+    if not ctx.owns(target):
+        raise HTTPException(status_code=404, detail="User not found")   # foreign == missing
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     if "role" in update and update["role"] not in ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.users.update_one({"id": user_id}, {"$set": update})
-    await log_audit(user["org_id"], user["id"], user["email"], "updated", "user", user_id, update)
-    # W0-02: a role change must update the authoritative assignment, else the
-    # Permission Service would keep using a stale role (two diverging sources).
-    if current_mode() != MODE_OFF and "role" in update:
-        await grant_company_role(ctx, user_id, update["role"], actor_id=user["id"])
-    return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+
+    async def _business():
+        await tdb.users.update_one({"id": user_id, **ctx.owner_filter()}, {"$set": update})
+        return user_id
+
+    if ctx.mode != MODE_ENFORCE or "role" not in update:
+        # legacy behavior (off/shadow), or an enforce update without a role
+        # change (no assignment to sync; single business write + legacy audit).
+        await _business()
+        await log_audit(org_id, user["id"], user["email"], "updated", "user", user_id, update, db_handle=tdb)
+        if ctx.mode == MODE_SHADOW and "role" in update:
+            await shadow_sync(ctx, tdb, "user.update", user_id,
+                              lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
+        return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+
+    # ---- enforce + role change: authoritative assignment FIRST (PR-05) -------
+    # If the business write then fails, users.role is stale but the
+    # authoritative assignment already carries the NEW role: no stale broad
+    # grant can survive. The failed state is recorded; the same request retried
+    # finishes the remaining steps.
+    wf = await RecoverableWrite(
+        tdb, tenant_id=ctx.tenant_id, action="user.update",
+        key=f"user.update:{user_id}:{fingerprint_without(update, 'updated_at')}",
+        fingerprint=fingerprint_without(update, "updated_at")).begin()
+    if wf.already_completed:
+        return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    try:
+        await wf.step("sync", lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
+        await wf.step("business", _business, reference=lambda r: r)
+        await wf.step("legacy_audit", lambda: log_audit(
+            org_id, user["id"], user["email"], "updated", "user", user_id, update, db_handle=tdb))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        code = ERROR_SYNC_FAILED if "sync" not in wf.steps_done else ERROR_WRITE_INCOMPLETE
+        await wf.fail(code)
+        raise wf.failure_response(code, exc)
+    await wf.complete(user_id)
+    return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, user: dict = Depends(require_admin)):

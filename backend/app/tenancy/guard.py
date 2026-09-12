@@ -25,13 +25,31 @@ from app.tenancy.resolver import (
 
 
 class TenantContext:
-    """Everything a request needs to know about its tenant."""
+    """Everything a request needs to know about its tenant.
+
+    W0-02 (PR-04/PR-05): the context also fixes, ONCE per operation, which
+    data path the request is on:
+
+      * ``enforced`` is True for a registry-resolved context: authorization,
+        resource ownership, the database handle and the audit database are all
+        the SAME canonical active tenant (``db()`` / ``owner_filter()``).
+      * ``LegacyCompatContext`` (``enforced`` False) is the off/shadow context:
+        legacy identity (``user["org_id"]``) and the legacy global database,
+        with NO registry lookup. The permission service never decides there.
+
+    ``mode`` is the PERMISSION_SERVICE_MODE the dependency fixed for this
+    operation; handlers must use it instead of re-reading the environment, so
+    the semantics cannot flip between authorization and the business write.
+    """
+
+    enforced: bool = True
 
     def __init__(self, tenant: Dict[str, Any], user: Dict[str, Any],
-                 membership: Optional[Dict[str, Any]] = None):
+                 membership: Optional[Dict[str, Any]] = None, mode: Optional[str] = None):
         self.tenant = tenant
         self.user = user
         self.membership = membership or {}
+        self.mode = mode
 
     @property
     def tenant_id(self) -> str:
@@ -40,6 +58,32 @@ class TenantContext:
     @property
     def user_id(self) -> str:
         return self.user["id"]
+
+    @property
+    def org_id(self) -> str:
+        """The ``org_id`` value that THIS tenant's operational records carry.
+
+        Read from the registry mapping (W0-01 bootstrapped one tenant per
+        organization with the organization's id; a later registry record may
+        carry an explicit ``legacy_org_id``). It is deliberately NOT
+        ``user["org_id"]``: a user's legacy home organization and the active
+        tenant are two different notions (PR-04).
+        """
+        return self.tenant.get("legacy_org_id") or self.tenant["id"]
+
+    def owner_filter(self) -> Dict[str, Any]:
+        """Query predicate that restricts a collection to this tenant's records."""
+        return {"org_id": self.org_id}
+
+    async def data_path_matches(self, db_handle) -> bool:
+        """True when ``db_handle`` (a legacy global handle) IS this tenant's
+        resolved database, i.e. non-migrated helpers that still use the global
+        handle would read/write the right data. Unknown -> False (fail closed)."""
+        try:
+            resolved = await self.db()
+            return db_handle is not None and resolved.name == db_handle.name
+        except Exception:
+            return False
 
     @property
     def status(self) -> str:
@@ -57,12 +101,13 @@ class TenantContext:
         True only if the record demonstrably belongs to this tenant.
 
         A record with neither tenant_id nor org_id is treated as NOT owned:
-        unknown ownership is denied, never assumed.
+        unknown ownership is denied, never assumed. A record may carry either
+        the tenant id or the tenant's mapped legacy org_id.
         """
         if not record:
             return False
         owner = record.get("tenant_id") or record.get("org_id")
-        return owner == self.tenant_id
+        return owner is not None and owner in (self.tenant_id, self.org_id)
 
     def assert_owns(self, record: Optional[Dict[str, Any]], what: str = "record") -> Dict[str, Any]:
         """Raise 404 if the record is missing or belongs to another tenant.
@@ -73,6 +118,36 @@ class TenantContext:
         if not self.owns(record):
             raise HTTPException(status_code=404, detail=f"{what} not found")
         return record  # type: ignore[return-value]
+
+
+class LegacyCompatContext(TenantContext):
+    """off / shadow context: legacy identity + legacy global database.
+
+    Built from the session alone — NO registry lookup, NO tenant resolver —
+    so a default deploy (mode off) never touches the new permission service
+    (PR-05). ``org_id`` is the legacy ``user["org_id"]`` exactly as the routes
+    used it before W0-02. ``tenant_id`` is only a lookup aid for the shadow
+    evaluation (active tenant if the session has one, else org_id).
+    """
+
+    enforced = False
+
+    def __init__(self, user: Dict[str, Any], mode: Optional[str] = None):
+        tenant = {"id": user.get("active_tenant_id") or user.get("org_id"),
+                  "status": registry.TENANT_STATUS_ACTIVE, "compat": True}
+        super().__init__(tenant=tenant, user=user, membership=None, mode=mode)
+
+    @property
+    def org_id(self) -> str:
+        return self.user.get("org_id")
+
+    async def db(self, require_operational: bool = False):
+        from app.db import db as legacy_db
+        return legacy_db
+
+    async def data_path_matches(self, db_handle) -> bool:
+        from app.db import db as legacy_db
+        return db_handle is legacy_db
 
 
 async def _resolve_active_tenant_id(user: Dict[str, Any]) -> str:

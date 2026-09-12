@@ -101,9 +101,10 @@ class Harness:
         command = [sys.executable, "-m", "pytest", "--noconftest",
                    "-p", "no:cacheprovider", "-p", "scripts.w0_02_validation_pytest_plugin",
                    "-c", os.devnull, "--rootdir", str(BACKEND), "-o", "addopts=", "-v"]
-        # The mock suite collects the WHOLE file (new tests cannot silently disappear).
-        # Real suite receives explicit class selectors, not a fuzzy -k filter.
-        selectors = ["tests/test_w0_02_permission_core.py"] if mode == "mock" else sorted(
+        # The mock suite collects the WHOLE files named in the manifest (new tests
+        # cannot silently disappear). Real suite receives explicit class
+        # selectors, not a fuzzy -k filter.
+        selectors = sorted({n.split("::", 1)[0] for n in expected_nodes}) if mode == "mock" else sorted(
             {n.rsplit("::", 1)[0] for n in expected_nodes})
         self.command(mode + "-pytest", command + selectors, env={
             "W0_02_REAL_MONGO": "1" if mode == "real" else "0",

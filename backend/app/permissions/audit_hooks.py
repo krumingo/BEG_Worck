@@ -21,18 +21,15 @@ SOURCE_FLOW = "FLOW-002"
 
 
 async def _audit_db(ctx):
-    """Resolve the audit database for this tenant.
+    """Resolve the audit database for this tenant — the SAME database the
+    context authorizes and reads/writes against (PR-04).
 
-    In PR-1 the primary tenant's database is the operational database. Prefer
-    the tenant-resolved handle; fall back to the global operational handle when
-    the context is a compatibility context (off/shadow mode) that has no
-    registry-backed database_name yet.
+    There is deliberately NO fallback to the global operational handle: a
+    LegacyCompatContext (off/shadow) already returns the legacy database from
+    ``ctx.db()``, and an enforce context whose resolver fails must surface that
+    error rather than write the audit event into another tenant's database.
     """
-    try:
-        return await ctx.db()
-    except Exception:
-        from app.db import db as global_db
-        return global_db
+    return await ctx.db()
 
 
 def should_audit_denial(action: str, reason_code: str) -> bool:

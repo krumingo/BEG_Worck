@@ -57,7 +57,7 @@ async def require_admin(request: Request, user: dict = Depends(get_current_user)
     Permission Service via the Tenant Guard — no fallback to user["role"].
     """
     # Import inside the function to avoid an import cycle with app.permissions.
-    from app.permissions.deps import current_mode, MODE_ENFORCE
+    from app.permissions.deps import current_mode, MODE_ENFORCE, require_legacy_data_path
     if current_mode() == MODE_ENFORCE:
         from app.tenancy.guard import get_tenant_context
         from app.permissions.service import evaluate_permission
@@ -65,6 +65,18 @@ async def require_admin(request: Request, user: dict = Depends(get_current_user)
         decision = await evaluate_permission(ctx, "admin.access")
         if not decision.allowed:
             raise HTTPException(status_code=403, detail="Admin access required")
+        # W0-02 PR-04 §5: every require_admin route still reads/writes through
+        # the legacy GLOBAL handle with user["org_id"]. That is only correct
+        # when the active tenant's database IS that handle and the identity's
+        # legacy org is that tenant. Anything else would authorize against one
+        # tenant and touch another tenant's data -> refuse (409) before any
+        # write instead of silently activating an unsupported scenario.
+        await require_legacy_data_path(ctx, db)
+        if user.get("org_id") != ctx.org_id:
+            raise HTTPException(status_code=409, detail={
+                "error_code": "TENANT_DATA_PATH_NOT_MIGRATED",
+                "message": "This admin operation is not yet available when the active tenant "
+                           "differs from the identity's legacy organization"})
         return user
     # off / shadow — unchanged legacy behavior.
     if user["role"] not in ["Admin", "Owner"]:

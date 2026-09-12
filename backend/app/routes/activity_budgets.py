@@ -70,9 +70,11 @@ async def list_activity_budgets(
     )),
 ):
     """Get all activity budgets for a project."""
-    user = ctx.user
-    budgets = await db.activity_budgets.find(
-        {"org_id": user["org_id"], "project_id": project_id},
+    # W0-02 PR-04: read from the SAME tenant the request was authorized for
+    # (legacy compat context in off/shadow == user["org_id"] + global db).
+    tdb = await ctx.db()
+    budgets = await tdb.activity_budgets.find(
+        {**ctx.owner_filter(), "project_id": project_id},
         {"_id": 0}
     ).sort([("type", 1), ("subtype", 1)]).to_list(100)
 
