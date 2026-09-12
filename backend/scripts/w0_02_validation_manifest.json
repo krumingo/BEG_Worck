@@ -106,7 +106,14 @@
     "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_same_payload_is_retry_without_second_effect",
     "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_different_payload_is_conflict_without_write",
     "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_key_is_scoped_per_target_user_and_per_tenant_db",
-    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_interrupted_sync_then_retry_same_key_completes_once"
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_interrupted_sync_then_retry_same_key_completes_once",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_user_create_mirrors_to_legacy_org_not_active_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_user_update_role_mirrors_to_legacy_org_not_active_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_project_membership_mirrors_to_legacy_org_not_active_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_project_add_sync_failure_keeps_legacy_result_and_is_recorded",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_project_remove_sync_failure_keeps_legacy_result_and_is_recorded",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_enforce_still_mirrors_into_the_resolved_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_sync_refuses_when_the_legacy_write_has_no_org"
   ],
   "real": [
     "tests/test_w0_02_permission_core.py::TestMigrationIntegration::test_apply_maps_and_leaves_operational_untouched",
@@ -155,6 +162,13 @@
     "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_same_payload_is_retry_without_second_effect",
     "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_different_payload_is_conflict_without_write",
     "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_key_is_scoped_per_target_user_and_per_tenant_db",
-    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_interrupted_sync_then_retry_same_key_completes_once"
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_interrupted_sync_then_retry_same_key_completes_once",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_user_create_mirrors_to_legacy_org_not_active_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_user_update_role_mirrors_to_legacy_org_not_active_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_project_membership_mirrors_to_legacy_org_not_active_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_project_add_sync_failure_keeps_legacy_result_and_is_recorded",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_shadow_project_remove_sync_failure_keeps_legacy_result_and_is_recorded",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_enforce_still_mirrors_into_the_resolved_tenant",
+    "tests/test_w0_02_pr_fixes.py::TestPR06ShadowTenantBoundary::test_sync_refuses_when_the_legacy_write_has_no_org"
   ]
 }

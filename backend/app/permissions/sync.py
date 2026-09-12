@@ -57,6 +57,43 @@ def compat_ctx(user: dict) -> "_CompatCtx":
     return _CompatCtx(user)
 
 
+class SyncTenantUnresolved(RuntimeError):
+    """The tenant that owns the legacy business write cannot be determined."""
+
+
+def sync_tenant_id(ctx) -> str:
+    """The tenant that OWNS the business write this sync mirrors.
+
+    PR-06 (tenant boundary). In off/shadow the business write happens on the
+    LEGACY data path under ``user["org_id"]``, while ``ctx.tenant_id`` of a
+    LegacyCompatContext is only a lookup aid for the shadow EVALUATION and is
+    the selected ``active_tenant_id`` when the session has one. Mirroring under
+    that id would write authoritative permission state into a tenant that never
+    received the business write (legacy org A written, assignment created in
+    active tenant B) — exactly the cross-tenant contamination PR-04 forbids.
+
+    So the sync target is always the tenant of the business write:
+      * off/shadow (``enforced`` False) -> ``org_id``, the org the legacy write
+        used;
+      * enforce (resolved TenantContext) -> ``tenant_id``, which IS where the
+        business write went (that tenant's own database).
+
+    Shadow evaluation is untouched and keeps comparing the active tenant; only
+    the authoritative WRITE is pinned.
+    """
+    if getattr(ctx, "enforced", False):
+        return ctx.tenant_id
+    owner = getattr(ctx, "org_id", None)
+    if not owner:
+        # Refuse rather than fall back to tenant_id: an unknown owner must never
+        # be resolved to another tenant. In shadow this surfaces through
+        # shadow_sync (logged + recorded), never as a 5xx on a done legacy write.
+        raise SyncTenantUnresolved(
+            "the legacy business write has no org_id; refusing to mirror a "
+            "RoleAssignment into tenant_id=%r" % (getattr(ctx, "tenant_id", None),))
+    return owner
+
+
 def company_assignment_id(user_id: str, tenant_id: str, role_id: str) -> str:
     """Id for a NEW company assignment. Never used to look an existing one up."""
     return f"ra_{user_id}_{tenant_id}_{role_id}_company"
@@ -130,7 +167,7 @@ async def grant_company_role(ctx, user_id: str, legacy_role: str, *, actor_id: s
     create. Emits granted/revoked audit with before/after.
     """
     role_id = LEGACY_ROLE_MAP.get(legacy_role, legacy_role)
-    tid = ctx.tenant_id
+    tid = sync_tenant_id(ctx)          # PR-06: tenant of the business write
     reason = f"company role {role_id}"
 
     # 1. Identity by logical key, whatever the status (PR-02 §1).
@@ -211,7 +248,7 @@ async def sync_project_membership(ctx, user_id: str, member_role_id: str,
     the fields that actually follow the membership (status, permissions,
     role_id) change, and only when they differ.
     """
-    tid = ctx.tenant_id
+    tid = sync_tenant_id(ctx)          # PR-06: tenant of the business write
     existing = await _find_project_mirror(user_id, tid, member_role_id, project_id)
     reason = f"project {project_id} membership ({role_in_project})"
 
@@ -292,9 +329,12 @@ async def shadow_sync(ctx, tenant_db, action: str, reference: str, fn) -> bool:
         try:
             from app.audit.idempotency import begin_idempotent, fail_idempotent
             key = f"shadow-sync:{action}:{reference}"
-            await begin_idempotent(tenant_db, tenant_id=ctx.tenant_id, key=key,
+            # PR-06: the observation belongs to the tenant of the business write
+            # (the database it is written into), not to the active tenant.
+            rec_tid = sync_tenant_id(ctx)
+            await begin_idempotent(tenant_db, tenant_id=rec_tid, key=key,
                                    action="permission.shadow_sync")
-            await fail_idempotent(tenant_db, tenant_id=ctx.tenant_id, key=key,
+            await fail_idempotent(tenant_db, tenant_id=rec_tid, key=key,
                                   action="permission.shadow_sync", error_code=SHADOW_SYNC_FAILED)
         except Exception as exc2:  # reporting must never break the legacy path
             _shadow_log.warning("PERMISSION_%s_UNRECORDED action=%s reference=%s error=%s",

@@ -46,8 +46,14 @@ async def audit_permission_change(
     reason: Optional[str] = None,
     actor_type: str = ACTOR_HUMAN,
 ) -> Dict[str, Any]:
+    # PR-06: label the event with the tenant the assignment actually belongs to.
+    # In off/shadow ``ctx.tenant_id`` may be the selected active tenant while the
+    # assignment (and this event's database) belong to the legacy org of the
+    # business write; labelling it with the active tenant would attribute another
+    # tenant's permission history to it and chain it into that tenant's hashes.
+    # In enforce both are the same id, so this is a no-op there.
     event = build_event(
-        tenant_id=ctx.tenant_id,
+        tenant_id=assignment.get("tenant_id") or ctx.tenant_id,
         actor_type=actor_type,
         actor_id=ctx.user_id,
         action=f"permission.role_assignment.{kind}",

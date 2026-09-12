@@ -1164,3 +1164,179 @@ class TestPR05R1OperationIdentity:
         assert role_mid == "Viewer"                          # business write never ran before sync
         assert r2 == 200 and st2 == "completed" and role_end == "Admin"
         assert rows.get("admin") == "active" and granted == 1 and lg == 1 and n == 2
+
+
+# ==========================================================================
+# PR-06 — shadow/legacy sync must stay inside the tenant of the business write
+# ==========================================================================
+def _project_app(dba, holder):
+    """App with the (non-migrated) projects router on the legacy global handle."""
+    import app.routes.projects as r_proj
+    r_proj.db = dba
+    from fastapi import FastAPI
+    from app.deps.auth import get_current_user
+    app = FastAPI()
+    app.include_router(r_proj.router)
+
+    async def fake_user():
+        return holder["user"]
+    app.dependency_overrides[get_current_user] = fake_user
+    return app
+
+
+@pytest.mark.skipif(not (_RUN_INTEG and HAS_HTTPX), reason="needs httpx and (mongomock_motor or W0_02_REAL_MONGO=1)")
+class TestPR06ShadowTenantBoundary:
+    """OLD defect: LegacyCompatContext keeps the legacy business write on
+    user["org_id"] (tenant A) but exposes tenant_id = active_tenant_id (B), so
+    grant_company_role / sync_project_membership wrote the AUTHORITATIVE
+    RoleAssignment into tenant B — permission state for a tenant that never
+    received the business write (violates the PR-04 single-tenant invariant).
+
+    Second defect: a failed project-membership sync in SHADOW propagated after a
+    successful legacy write and turned it into a 5xx."""
+
+    @staticmethod
+    async def _assignments(sysdb, **q):
+        return [a async for a in sysdb.tenant_role_assignments.find(q, {"_id": 0})]
+
+    def test_shadow_user_create_mirrors_to_legacy_org_not_active_tenant(self):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("shadow")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Admin", "A", "B")   # legacy org A, active tenant B
+                r = await ac.post("/users", json=NEWUSER)
+                created = await _doc(dba, "users", email="n@t")
+                in_b = await dbb.users.count_documents({"email": "n@t"})
+                mirrors = await self._assignments(sysdb, user_id=created["id"])
+                return (r.status_code, created["org_id"], in_b,
+                        [(m["tenant_id"], m["scope_type"], m.get("sync_source")) for m in mirrors])
+        code, org, in_b, mirrors = run(go())
+        assert code == 201 and org == "A" and in_b == 0        # business write in A only
+        assert mirrors == [("A", "company", "users.role")]      # mirror in A only, NOTHING in B
+        assert not [m for m in mirrors if m[0] == "B"]
+
+    def test_shadow_user_update_role_mirrors_to_legacy_org_not_active_tenant(self):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("shadow")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Admin", "A", "B")
+                r = await ac.put("/users/u_target", json={"role": "SiteManager"},
+                                 headers={"Idempotency-Key": "op-pr06"})
+                a_doc = await _doc(dba, "users", id="u_target")
+                b_doc = await _doc(dbb, "users", id="u_target")
+                mirrors = await self._assignments(sysdb, user_id="u_target")
+                audit_b = await dbb.audit_events.count_documents({"entity_type": "role_assignment"})
+                audit_a = [e async for e in dba.audit_events.find(
+                    {"entity_type": "role_assignment"}, {"_id": 0, "tenant_id": 1})]
+                return (r.status_code, a_doc["role"], b_doc["role"],
+                        [(m["tenant_id"], m["role_id"]) for m in mirrors],
+                        audit_b, [e["tenant_id"] for e in audit_a])
+        code, role_a, role_b, mirrors, audit_b, audit_a_tenants = run(go())
+        assert code == 200 and role_a == "SiteManager" and role_b == "Viewer"   # only A changed
+        assert mirrors == [("A", "site_manager")]                               # mirror in A only
+        assert audit_b == 0 and audit_a_tenants == ["A"]     # the event belongs to A, not to B
+
+    def test_shadow_project_membership_mirrors_to_legacy_org_not_active_tenant(self):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("shadow")
+            papp = _project_app(dba, holder)
+            async with _client(papp) as ac:
+                holder["user"] = _u("u_multi", "Admin", "A", "B")
+                r = await ac.post("/projects/P1/team",
+                                  json={"user_id": "u_target", "role_in_project": "SiteManager"})
+                member = await _doc(dba, "project_team", project_id="P1", user_id="u_target")
+                mirrors = await self._assignments(sysdb, user_id="u_target", scope_type="project")
+                return (r.status_code, member is not None,
+                        [(m["id"], m["tenant_id"], m["scope_id"]) for m in mirrors])
+        code, member, mirrors = run(go())
+        assert code == 201 and member
+        assert mirrors == [("ra_u_target_A_proj_P1", "A", "P1")]   # A, never the active tenant B
+
+    def test_shadow_project_add_sync_failure_keeps_legacy_result_and_is_recorded(self, monkeypatch, caplog):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("shadow")
+            papp = _project_app(dba, holder)
+            from app.permissions import sync as psync
+
+            async def boom(*a, **k):
+                raise RuntimeError("system registry unreachable")
+            monkeypatch.setattr(psync, "sync_project_membership", boom)
+            # raise_app_exceptions=False: an unhandled error would be a 500 here,
+            # which is exactly the regression this test guards against.
+            async with _client(papp, raise_app_exceptions=False) as ac:
+                holder["user"] = _u("u_multi", "Admin", "A", "B")
+                with caplog.at_level("WARNING", logger="permissions.shadow"):
+                    r = await ac.post("/projects/P1/team",
+                                      json={"user_id": "u_target", "role_in_project": "Technician"})
+                member = await _doc(dba, "project_team", project_id="P1", user_id="u_target")
+                failed = await _doc(dba, "audit_idempotency", action="permission.shadow_sync",
+                                    status="failed")
+                assignments = await sysdb.tenant_role_assignments.count_documents(
+                    {"user_id": "u_target", "scope_type": "project"})
+                legacy_log = await _doc(dba, "audit_logs", action="team_added", entity_id="P1")
+                return (r.status_code, member, failed, assignments, legacy_log is not None)
+        code, member, failed, assignments, legacy_log = run(go())
+        assert code == 201                          # the successful legacy write stays successful
+        assert member and member["active"] is True and legacy_log     # business effect intact
+        assert assignments == 0                     # nothing mirrored anywhere (least of all in B)
+        assert failed and failed["error_code"] == "SHADOW_SYNC_FAILED"
+        assert failed["tenant_id"] == "A" and "project.team_add" in failed["key"]
+        assert "SHADOW_SYNC_FAILED" in caplog.text and "project.team_add" in caplog.text
+
+    def test_shadow_project_remove_sync_failure_keeps_legacy_result_and_is_recorded(self, monkeypatch, caplog):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("shadow")
+            await dba.project_team.insert_one({"id": "pt_x", "project_id": "P1", "user_id": "u_target",
+                                               "role_in_project": "Technician", "active": True})
+            papp = _project_app(dba, holder)
+            from app.permissions import sync as psync
+
+            async def boom(*a, **k):
+                raise RuntimeError("system registry unreachable")
+            monkeypatch.setattr(psync, "sync_project_membership", boom)
+            async with _client(papp, raise_app_exceptions=False) as ac:
+                holder["user"] = _u("u_multi", "Admin", "A", "B")
+                with caplog.at_level("WARNING", logger="permissions.shadow"):
+                    r = await ac.delete("/projects/P1/team/pt_x")
+                member = await _doc(dba, "project_team", id="pt_x")
+                failed = await _doc(dba, "audit_idempotency", action="permission.shadow_sync",
+                                    status="failed")
+                return r.status_code, member["active"], failed
+        code, active, failed = run(go())
+        assert code == 200 and active is False       # legacy removal done and reported as done
+        assert failed and failed["error_code"] == "SHADOW_SYNC_FAILED"
+        assert failed["tenant_id"] == "A" and "project.team_remove" in failed["key"]
+        assert "SHADOW_SYNC_FAILED" in caplog.text
+
+    def test_enforce_still_mirrors_into_the_resolved_tenant(self):
+        """Guard for the fix itself: in enforce the business write goes to the
+        resolved tenant's own database, so the assignment must stay on
+        ctx.tenant_id (B) — the PR-06 pinning must not move it to org_id (A)."""
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Viewer", "A", "B")   # admin in B via ra_multi_B
+                r = await ac.put("/users/u_target", json={"role": "SiteManager"},
+                                 headers={"Idempotency-Key": "op-pr06-enforce"})
+                mirrors = await self._assignments(sysdb, user_id="u_target")
+                b_doc = await _doc(dbb, "users", id="u_target")
+                a_doc = await _doc(dba, "users", id="u_target")
+                events = [e async for e in dbb.audit_events.find(
+                    {"entity_type": "role_assignment"}, {"_id": 0, "tenant_id": 1})]
+                return (r.status_code, [(m["tenant_id"], m["role_id"]) for m in mirrors],
+                        b_doc["role"], a_doc["role"], [e["tenant_id"] for e in events])
+        code, mirrors, role_b, role_a, event_tenants = run(go())
+        assert code == 200 and mirrors == [("B", "site_manager")]    # unchanged enforce behavior
+        assert role_b == "SiteManager" and role_a == "Viewer"        # write in B's own database
+        assert event_tenants == ["B"]
+
+    def test_sync_refuses_when_the_legacy_write_has_no_org(self):
+        """A context without org_id must never fall back to the active tenant."""
+        from app.permissions.sync import sync_tenant_id, SyncTenantUnresolved
+        from app.tenancy.guard import LegacyCompatContext
+        ctx = LegacyCompatContext({"id": "u", "active_tenant_id": "B"}, mode="shadow")
+        assert ctx.tenant_id == "B"
+        with pytest.raises(SyncTenantUnresolved):
+            sync_tenant_id(ctx)
+        ok = LegacyCompatContext({"id": "u", "org_id": "A", "active_tenant_id": "B"}, mode="shadow")
+        assert ok.tenant_id == "B" and sync_tenant_id(ok) == "A"

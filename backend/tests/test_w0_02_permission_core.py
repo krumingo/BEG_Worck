@@ -427,8 +427,16 @@ async def _seed(sysdb, opdb):
 
 
 class MCtx:
+    # Direct-call context as a migrated route builds it in enforce: ONE tenant,
+    # one operational database. ``enforced`` / ``org_id`` are part of the real
+    # TenantContext contract (primary tenant: tenant_id == org_id) and the sync
+    # helpers read them to pin the authoritative write to the tenant of the
+    # business write (PR-06).
+    enforced = True
+
     def __init__(self, uid, opdb):
         self.tenant_id = "T1"; self.user_id = uid; self._db = opdb
+        self.org_id = "T1"
     async def db(self):
         return self._db
 
