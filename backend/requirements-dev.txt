@@ -1,0 +1,13 @@
+# Test-only dependencies. Install together with requirements.txt:
+#     pip install -r requirements.txt -r requirements-dev.txt
+#
+# These are REQUIRED for the W0-02 integration and API tests. If they are
+# missing, those tests skip via importorskip — so the mandatory PR check must
+# install this file, otherwise integration coverage silently disappears.
+pytest>=8,<9.2
+mongomock-motor>=0.0.30
+httpx>=0.27
+# NOTE on bcrypt/passlib: the app pins compatible versions in requirements.txt.
+# On a fresh modern interpreter where only bcrypt is present, passlib 1.7.x needs
+# bcrypt<4 (bcrypt>=4 dropped the __about__ attribute passlib reads). Install
+# requirements.txt (which pins the working pair) rather than the latest bcrypt.

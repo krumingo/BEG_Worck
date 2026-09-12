@@ -2,7 +2,7 @@
 Pydantic models - Core (Auth, Users, Org).
 """
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 class LoginRequest(BaseModel):
     email: str
@@ -38,3 +38,29 @@ class OrgUpdate(BaseModel):
 class ModuleToggle(BaseModel):
     module_code: str
     enabled: bool
+
+
+# --- W0-02 Permission Service (FLOW-002) ----------------------------------
+class RoleAssignmentCreate(BaseModel):
+    user_id: str
+    role_id: str
+    scope_type: str = "company"          # company | project | object | module
+    scope_id: Optional[str] = None
+    module: Optional[str] = None         # M0..M9; None = all modules
+    permissions: List[str] = []          # explicit override; [] = inherit from role
+    max_amount: Optional[float] = None   # FLOW-002 scope "сума"; None = no limit
+    valid_from: Optional[str] = None     # None => now at write time
+    valid_to: Optional[str] = None       # None => open-ended
+
+class RoleAssignmentUpdate(BaseModel):
+    permissions: Optional[List[str]] = None
+    module: Optional[str] = None
+    max_amount: Optional[float] = None
+    valid_to: Optional[str] = None
+    status: Optional[str] = None         # "revoked" to withdraw
+
+class RoleAssignmentOut(RoleAssignmentCreate):
+    id: str
+    status: str
+    created_by: Optional[str] = None
+    approved_by: Optional[str] = None

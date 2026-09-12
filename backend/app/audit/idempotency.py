@@ -138,6 +138,23 @@ async def begin_idempotent(
     }
 
 
+async def mark_idempotent_step(
+    db, *, tenant_id: str, key: str, action: str, step: str, reference: Optional[str] = None
+) -> None:
+    """Record that one step of a multi-step write has been performed.
+
+    Bookkeeping for recoverable workflows (W0-02 PR-05): a retry of the same
+    key reads `steps_done` and skips what already happened instead of
+    performing it twice. `reference` (e.g. the id the step created) is kept
+    under `step_refs.<step>` so the retry can address the same record.
+    """
+    update: Dict[str, Any] = {"$addToSet": {"steps_done": step}}
+    if reference is not None:
+        update["$set"] = {f"step_refs.{step}": reference}
+    await db[IDEMPOTENCY_COLLECTION].update_one(
+        {"id": _record_id(tenant_id, action, key)}, update)
+
+
 async def complete_idempotent(
     db, *, tenant_id: str, key: str, action: str, result_reference: str
 ) -> None:

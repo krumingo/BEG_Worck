@@ -17,6 +17,8 @@ from app.db import db
 from app.deps.auth import get_current_user, require_admin
 from app.routes.asset_item_types import all_type_keys, BUILTIN_TYPES
 from app.routes.assets_qr import _make_qr
+from app.tenancy.guard import TenantContext
+from app.permissions.deps import require_permission
 
 router = APIRouter(tags=["AssetIntakePending"])
 
@@ -86,23 +88,28 @@ async def list_pending(user: dict = Depends(require_admin)):
     return {"items": recs, "count": len(recs)}
 
 
-async def _materialize(org: str, rec: dict, reviewer: dict):
-    """Създава реалния артикул + бройка + QR от одобрен pending запис."""
+async def _materialize(org: str, rec: dict, reviewer: dict, db_handle=None):
+    """Създава реалния артикул + бройка + QR от одобрен pending запис.
+
+    W0-02 PR-04: `db_handle` (tenant-resolved) makes every write of this helper
+    land in the caller's tenant database; default is the legacy global handle.
+    """
+    _db = db if db_handle is None else db_handle
     s = rec.get("suggestion", {})
     # тип
     type_key = s.get("type_key")
     if not type_key and s.get("type_label"):
         label = s["type_label"].strip()
-        keys = await all_type_keys(org)
+        keys = await all_type_keys(org, db_handle=_db)
         # съпоставяне по label
         label_map = {b["label_bg"].lower(): b["key"] for b in BUILTIN_TYPES}
-        async for t in db.asset_item_types.find({"org_id": org}, {"_id": 0, "key": 1, "label_bg": 1}):
+        async for t in _db.asset_item_types.find({"org_id": org}, {"_id": 0, "key": 1, "label_bg": 1}):
             label_map[(t["label_bg"] or "").lower()] = t["key"]
         type_key = label_map.get(label.lower())
         if not type_key:
             import re
             type_key = re.sub(r"[^a-z0-9а-я]+", "_", label.lower()).strip("_") or "tool"
-            await db.asset_item_types.insert_one({
+            await _db.asset_item_types.insert_one({
                 "id": str(uuid.uuid4()), "org_id": org, "key": type_key,
                 "label_bg": label, "created_by": reviewer["id"],
             })
@@ -113,7 +120,7 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
     item_id = rec.get("matched_item_id")
     if not item_id:
         item_id = str(uuid.uuid4())
-        await db.asset_items.insert_one({
+        await _db.asset_items.insert_one({
             "id": item_id, "org_id": org, "name": (s.get("name") or "").strip() or "Без име",
             "type": type_key, "group": s.get("group"), "brand": s.get("brand"), "model": s.get("model"),
             "article_no": s.get("article_no"), "unit": "бр",
@@ -129,13 +136,14 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
 
     # бройка + QR
     unit_id = str(uuid.uuid4())
-    item = await db.asset_items.find_one({"id": item_id, "org_id": org}, {"_id": 0})
+    item = await _db.asset_items.find_one({"id": item_id, "org_id": org}, {"_id": 0})
     code = (s.get("serial_no") or "").strip()
-    qr = await _make_qr(org, reviewer["id"], "asset_unit", unit_id, (item or {}).get("name", ""), code)
+    qr = await _make_qr(org, reviewer["id"], "asset_unit", unit_id, (item or {}).get("name", ""), code,
+                        db_handle=_db)
     loc_type = rec.get("location_type")
     loc_id = rec.get("location_id")
     # guest локация се пази като тип guest с името
-    await db.asset_units.insert_one({
+    await _db.asset_units.insert_one({
         "id": unit_id, "org_id": org, "item_id": item_id, "qr_id": qr["qr_id"],
         "serial_no": code or None, "inventory_no": None, "status": "available",
         "location_type": loc_type if loc_id or loc_type == "guest" else None,
@@ -151,16 +159,27 @@ async def _materialize(org: str, rec: dict, reviewer: dict):
 
 
 @router.post("/assets/intake/{intake_id}/approve")
-async def approve_intake(intake_id: str, user: dict = Depends(require_admin)):
-    org = user["org_id"]
-    rec = await db.asset_intake_pending.find_one({"id": intake_id, "org_id": org}, {"_id": 0})
-    if not rec:
-        raise HTTPException(status_code=404, detail="Not found")
+async def approve_intake(
+    intake_id: str,
+    ctx: TenantContext = Depends(require_permission(
+        "asset_intake.approve", module="M8", scope="company", resource_type="asset_intake",
+        legacy_check=lambda user, request: user["role"] in REVIEW_ROLES,
+    )),
+):
+    user = ctx.user
+    # W0-02 PR-04: ONE tenant for authorization, ownership and data. In
+    # off/shadow ctx is the legacy compat context (user["org_id"] + global db,
+    # exactly as before); in enforce it is the registry-resolved active tenant.
+    org = ctx.org_id
+    tdb = await ctx.db()
+    rec = await tdb.asset_intake_pending.find_one({"id": intake_id, **ctx.owner_filter()}, {"_id": 0})
+    if not ctx.owns(rec):
+        raise HTTPException(status_code=404, detail="Not found")   # foreign == missing
     if rec["status"] != "pending":
         raise HTTPException(status_code=400, detail="Already reviewed")
-    created = await _materialize(org, rec, user)
-    await db.asset_intake_pending.update_one(
-        {"id": intake_id, "org_id": org},
+    created = await _materialize(org, rec, user, db_handle=tdb)
+    await tdb.asset_intake_pending.update_one(
+        {"id": intake_id, **ctx.owner_filter()},
         {"$set": {"status": "approved", "reviewed_by": user["id"], "reviewed_at": _now(), "created_refs": created}},
     )
     return {"ok": True, **created}

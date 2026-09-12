@@ -30,9 +30,10 @@ def _slugify(text: str) -> str:
     return t.strip("_") or f"type_{uuid.uuid4().hex[:6]}"
 
 
-async def all_type_keys(org_id: str) -> set:
+async def all_type_keys(org_id: str, db_handle=None) -> set:
     keys = {t["key"] for t in BUILTIN_TYPES}
-    async for t in db.asset_item_types.find({"org_id": org_id}, {"_id": 0, "key": 1}):
+    _db = db if db_handle is None else db_handle
+    async for t in _db.asset_item_types.find({"org_id": org_id}, {"_id": 0, "key": 1}):
         keys.add(t["key"])
     return keys
 

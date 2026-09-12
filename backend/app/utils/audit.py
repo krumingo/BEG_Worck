@@ -48,7 +48,8 @@ def log_security_event(event_type: str, user: dict = None, payload: dict = None)
 
 
 async def log_audit(org_id: str, user_id: str, user_email: str, action: str, 
-                    entity_type: str, entity_id: str = None, changes: dict = None):
+                    entity_type: str, entity_id: str = None, changes: dict = None,
+                    db_handle=None):
     """
     Log an audit entry to the database.
     
@@ -72,4 +73,6 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
         "changes": changes,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    await db.audit_logs.insert_one(entry)
+    # W0-02 PR-04: a migrated enforce route passes its tenant-resolved handle so
+    # the legacy audit row lands in the SAME database as the business write.
+    await (db if db_handle is None else db_handle).audit_logs.insert_one(entry)

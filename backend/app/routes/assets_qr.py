@@ -30,9 +30,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _next_qr_id(org_id: str) -> str:
+async def _next_qr_id(org_id: str, db_handle=None) -> str:
     """Sequential, human-friendly QR id per organization (QR-000001)."""
-    doc = await db.asset_counters.find_one_and_update(
+    _db = db if db_handle is None else db_handle
+    doc = await _db.asset_counters.find_one_and_update(
         {"org_id": org_id, "name": "qr"},
         {"$inc": {"seq": 1}},
         upsert=True,
@@ -71,8 +72,11 @@ async def _resolve_name(org_id: str, entity_type: str, entity_id: Optional[str],
     raise HTTPException(status_code=400, detail="Invalid entity_type")
 
 
-async def _make_qr(org_id: str, created_by: str, entity_type: str, entity_id: str, name: str, code: str) -> dict:
-    qr_id = await _next_qr_id(org_id)
+async def _make_qr(org_id: str, created_by: str, entity_type: str, entity_id: str, name: str, code: str,
+                   db_handle=None) -> dict:
+    # W0-02 PR-04: db_handle lets a tenant-resolved caller write into ITS database.
+    _db = db if db_handle is None else db_handle
+    qr_id = await _next_qr_id(org_id, db_handle=_db)
     doc = {
         "id": str(uuid.uuid4()),
         "org_id": org_id,
@@ -86,7 +90,7 @@ async def _make_qr(org_id: str, created_by: str, entity_type: str, entity_id: st
         "created_by": created_by,
         "last_used_at": None,
     }
-    await db.asset_qr_codes.insert_one(doc)
+    await _db.asset_qr_codes.insert_one(doc)
     doc.pop("_id", None)
     return doc
 
