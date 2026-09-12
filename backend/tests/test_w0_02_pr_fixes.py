@@ -949,12 +949,16 @@ class TestPR05OffShadowFaults:
             monkeypatch.setattr(r_auth, "log_audit", flaky_log)
             async with _client(app) as ac:
                 holder["user"] = _u("u_multi", "Viewer", "A", "B")
-                r1 = await ac.put("/users/u_target", json={"role": "Viewer"})       # demotion
+                # PR-05-R1 contract: an interrupted command is retried under the SAME
+                # operation id; a request without an id would be a NEW command.
+                r1 = await ac.put("/users/u_target", json={"role": "Viewer"},
+                                  headers={"Idempotency-Key": "op-demote"})      # demotion
                 admin_after_fail = await has_permission(MCtx("u_target", dbb, "B"), "admin.access")
                 role_after_fail = (await _doc(dbb, "users", id="u_target"))["role"]
                 state1 = await _doc(dbb, "audit_idempotency", action="user.update")
                 fail["on"] = False
-                r2 = await ac.put("/users/u_target", json={"role": "Viewer"})       # retry
+                r2 = await ac.put("/users/u_target", json={"role": "Viewer"},
+                                  headers={"Idempotency-Key": "op-demote"})      # retry, SAME id
                 state2 = await _doc(dbb, "audit_idempotency", action="user.update")
                 logs = await dbb.audit_logs.count_documents({"entity_id": "u_target"})
                 revoked = await _doc(sysdb, "tenant_role_assignments", id="ra_target_admin")
@@ -1019,3 +1023,144 @@ class TestPR05OffShadowFaults:
                 return r.status_code, calls["n"], await dba.users.count_documents({"email": "n@t"})
         code, syncs, created = run(go())
         assert code == 201 and syncs == 0 and created == 1       # stayed on the 'off' path
+
+
+# ---------------------------------------------------------------------------
+# PR-05-R1 — operation identity is separate from the payload fingerprint
+# (route level: the real update_user through the ASGI app, enforce mode).
+#   same Idempotency-Key + same payload  -> retry / replay, no second effect
+#   same Idempotency-Key + other payload -> 409 conflict, no write
+#   new  Idempotency-Key + same payload  -> a NEW command that executes
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(not (_RUN_INTEG and HAS_HTTPX), reason="needs httpx and (mongomock_motor or W0_02_REAL_MONGO=1)")
+class TestPR05R1OperationIdentity:
+    @staticmethod
+    async def _company_rows(sysdb, uid, tenant="B"):
+        return {r["role_id"]: r["status"] async for r in sysdb.tenant_role_assignments.find(
+            {"user_id": uid, "tenant_id": tenant, "scope_type": "company"}, {"_id": 0})}
+
+    @staticmethod
+    async def _put_role(ac, uid, role, key):
+        return await ac.put(f"/users/{uid}", json={"role": role}, headers={"Idempotency-Key": key})
+
+    @staticmethod
+    def _ns(uid, tenant="B"):
+        from types import SimpleNamespace
+        return SimpleNamespace(tenant_id=tenant, user_id=uid)
+
+    async def _sequence(self, roles):
+        app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("enforce")
+        async with _client(app) as ac:
+            holder["user"] = _u("u_multi", "Viewer", "A", "B")
+            codes = [(await self._put_role(ac, "u_target", r, f"op-{i}")).status_code
+                     for i, r in enumerate(roles)]                       # a NEW id per command
+        role = (await _doc(dbb, "users", id="u_target"))["role"]
+        rows = await self._company_rows(sysdb, "u_target")
+        admin_ok = await has_permission(self._ns("u_target"), "admin.access")
+        return codes, role, rows, admin_ok
+
+    def test_admin_technician_admin_technician_ends_technician(self):
+        codes, role, rows, admin_ok = run(self._sequence(["Admin", "Technician", "Admin", "Technician"]))
+        assert codes == [200, 200, 200, 200]
+        assert role == "Technician"                                     # the last NEW command executed
+        assert rows == {"admin": "revoked", "LEGACY_TECHNICIAN": "active"}
+        assert not admin_ok                                             # no stale broad grant survives
+
+    def test_technician_admin_technician_admin_ends_admin(self):
+        codes, role, rows, admin_ok = run(self._sequence(["Technician", "Admin", "Technician", "Admin"]))
+        assert codes == [200, 200, 200, 200]
+        assert role == "Admin"
+        assert rows == {"LEGACY_TECHNICIAN": "revoked", "admin": "active"}
+        assert admin_ok
+
+    def test_same_key_same_payload_is_retry_without_second_effect(self):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Viewer", "A", "B")
+                r1 = await self._put_role(ac, "u_target", "Admin", "op-retry")
+                ev1 = await dbb.audit_events.count_documents({"entity_type": "role_assignment"})
+                lg1 = await dbb.audit_logs.count_documents({"action": "updated"})
+                u1 = await _doc(dbb, "users", id="u_target")
+                a1 = await _doc(sysdb, "tenant_role_assignments", user_id="u_target", role_id="admin")
+                r2 = await self._put_role(ac, "u_target", "Admin", "op-retry")   # same id, same payload
+                ev2 = await dbb.audit_events.count_documents({"entity_type": "role_assignment"})
+                lg2 = await dbb.audit_logs.count_documents({"action": "updated"})
+                u2 = await _doc(dbb, "users", id="u_target")
+                a2 = await _doc(sysdb, "tenant_role_assignments", user_id="u_target", role_id="admin")
+                rec = await _doc(dbb, "audit_idempotency", key="user.update:u_target:op-retry")
+            return (r1.status_code, r2.status_code, ev1, ev2, lg1, lg2,
+                    u1["updated_at"], u2["updated_at"], a1, a2, rec["status"])
+        r1, r2, ev1, ev2, lg1, lg2, up1, up2, a1, a2, st = run(go())
+        assert r1 == 200 and r2 == 200
+        assert ev2 == ev1 and lg2 == lg1                 # no second sync / audit effect
+        assert up1 == up2 and a1 == a2                   # no second business write
+        assert st == "completed"                          # completed history kept, not deleted
+
+    def test_same_key_different_payload_is_conflict_without_write(self):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("enforce")
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Viewer", "A", "B")
+                r1 = await self._put_role(ac, "u_target", "Admin", "op-conf")
+                rows1 = await self._company_rows(sysdb, "u_target")
+                ev1 = await dbb.audit_events.count_documents({})
+                r2 = await self._put_role(ac, "u_target", "Technician", "op-conf")  # same id, other payload
+                role = (await _doc(dbb, "users", id="u_target"))["role"]
+                rows2 = await self._company_rows(sysdb, "u_target")
+                ev2 = await dbb.audit_events.count_documents({})
+            return r1.status_code, r2.status_code, r2.json(), role, rows1, rows2, ev1, ev2
+        r1, r2, body, role, rows1, rows2, ev1, ev2 = run(go())
+        assert r1 == 200 and r2 == 409
+        assert body["detail"]["error_code"] == "IDEMPOTENCY_CONFLICT"
+        assert role == "Admin" and rows2 == rows1 and ev2 == ev1      # conflict: nothing written
+
+    def test_key_is_scoped_per_target_user_and_per_tenant_db(self):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("enforce")
+            await dbb.users.insert_one({"id": "u_other", "org_id": "B", "role": "Viewer",
+                                        "is_active": True, "email": "o@t"})
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Viewer", "A", "B")
+                r1 = await self._put_role(ac, "u_target", "Admin", "op-iso")
+                r2 = await self._put_role(ac, "u_other", "Admin", "op-iso")    # same id, other target
+                roles = ((await _doc(dbb, "users", id="u_target"))["role"],
+                         (await _doc(dbb, "users", id="u_other"))["role"])
+                recs_b = await dbb.audit_idempotency.count_documents({"action": "user.update"})
+                recs_a = await dba.audit_idempotency.count_documents({})
+            return r1.status_code, r2.status_code, roles, recs_b, recs_a
+        r1, r2, roles, recs_b, recs_a = run(go())
+        assert r1 == 200 and r2 == 200 and roles == ("Admin", "Admin")   # per-user identity
+        assert recs_b == 2 and recs_a == 0                               # per-tenant registry only
+
+    def test_interrupted_sync_then_retry_same_key_completes_once(self, monkeypatch):
+        async def go():
+            app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("enforce")
+            import app.routes.auth as r_auth
+            real = r_auth.grant_company_role
+            calls = {"n": 0}
+
+            async def flaky(*a, **k):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise RuntimeError("registry down")
+                return await real(*a, **k)
+            monkeypatch.setattr(r_auth, "grant_company_role", flaky)
+            async with _client(app) as ac:
+                holder["user"] = _u("u_multi", "Viewer", "A", "B")
+                r1 = await self._put_role(ac, "u_target", "Admin", "op-rec")
+                rec1 = await _doc(dbb, "audit_idempotency", key="user.update:u_target:op-rec")
+                role_mid = (await _doc(dbb, "users", id="u_target"))["role"]
+                r2 = await self._put_role(ac, "u_target", "Admin", "op-rec")       # same id: resume
+                rec2 = await _doc(dbb, "audit_idempotency", key="user.update:u_target:op-rec")
+                role_end = (await _doc(dbb, "users", id="u_target"))["role"]
+                granted = await dbb.audit_events.count_documents({"action": "permission.role_assignment.granted"})
+                rows = await self._company_rows(sysdb, "u_target")
+                lg = await dbb.audit_logs.count_documents({"action": "updated"})
+            return (r1.status_code, r1.json()["detail"]["error_code"], rec1["status"], role_mid,
+                    r2.status_code, rec2["status"], role_end, granted, rows, lg, calls["n"])
+        r1, code, st1, role_mid, r2, st2, role_end, granted, rows, lg, n = run(go())
+        assert r1 == 503 and code == "PERMISSION_SYNC_FAILED" and st1 == "failed"
+        assert role_mid == "Viewer"                          # business write never ran before sync
+        assert r2 == 200 and st2 == "completed" and role_end == "Admin"
+        assert rows.get("admin") == "active" and granted == 1 and lg == 1 and n == 2

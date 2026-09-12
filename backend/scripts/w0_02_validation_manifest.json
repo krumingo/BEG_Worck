@@ -100,7 +100,13 @@
     "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_enforce_sync_failure_after_business_write_is_recorded_and_recoverable",
     "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_enforce_role_change_sync_first_no_stale_broad_grant",
     "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_grant_and_revoke_work_after_recovery",
-    "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_mode_is_fixed_once_per_operation"
+    "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_mode_is_fixed_once_per_operation",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_admin_technician_admin_technician_ends_technician",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_technician_admin_technician_admin_ends_admin",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_same_payload_is_retry_without_second_effect",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_different_payload_is_conflict_without_write",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_key_is_scoped_per_target_user_and_per_tenant_db",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_interrupted_sync_then_retry_same_key_completes_once"
   ],
   "real": [
     "tests/test_w0_02_permission_core.py::TestMigrationIntegration::test_apply_maps_and_leaves_operational_untouched",
@@ -143,6 +149,12 @@
     "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_enforce_sync_failure_after_business_write_is_recorded_and_recoverable",
     "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_enforce_role_change_sync_first_no_stale_broad_grant",
     "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_grant_and_revoke_work_after_recovery",
-    "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_mode_is_fixed_once_per_operation"
+    "tests/test_w0_02_pr_fixes.py::TestPR05OffShadowFaults::test_mode_is_fixed_once_per_operation",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_admin_technician_admin_technician_ends_technician",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_technician_admin_technician_admin_ends_admin",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_same_payload_is_retry_without_second_effect",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_same_key_different_payload_is_conflict_without_write",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_key_is_scoped_per_target_user_and_per_tenant_db",
+    "tests/test_w0_02_pr_fixes.py::TestPR05R1OperationIdentity::test_interrupted_sync_then_retry_same_key_completes_once"
   ]
 }

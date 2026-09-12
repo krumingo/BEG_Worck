@@ -1,9 +1,10 @@
 """
 Authentication routes - /api/auth/*
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from datetime import datetime, timezone
+from typing import Optional
 import uuid
 
 from app.db import db
@@ -295,6 +296,8 @@ async def update_user(
         "user.update", module="M0", scope="company", resource_type="user",
         legacy_check=lambda u, r: u["role"] in ["Admin", "Owner"],
     )),
+    # PR-05-R1: the client's operation id. Absent => every request is a NEW command.
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     user = ctx.user
     org_id = ctx.org_id
@@ -326,9 +329,17 @@ async def update_user(
     # authoritative assignment already carries the NEW role: no stale broad
     # grant can survive. The failed state is recorded; the same request retried
     # finishes the remaining steps.
+    # PR-05-R1: the operation IDENTITY is the client's Idempotency-Key (or a
+    # fresh id when none is sent) — never the payload fingerprint. The
+    # fingerprint stays only to detect a CONFLICT:
+    #   same id + same payload      -> retry / replay, no second effect
+    #   same id + different payload -> 409 IDEMPOTENCY_CONFLICT, no write
+    #   new  id + same payload      -> a NEW command that must execute
+    # Completed history is kept; identity is not a timestamp.
+    op_id = (idempotency_key or "").strip()[:200] or str(uuid.uuid4())
     wf = await RecoverableWrite(
         tdb, tenant_id=ctx.tenant_id, action="user.update",
-        key=f"user.update:{user_id}:{fingerprint_without(update, 'updated_at')}",
+        key=f"user.update:{user_id}:{op_id}",
         fingerprint=fingerprint_without(update, "updated_at")).begin()
     if wf.already_completed:
         return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
