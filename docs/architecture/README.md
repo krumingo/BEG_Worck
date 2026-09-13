@@ -41,6 +41,8 @@
 
 17. [Decision Register](../project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md)
 
+18. [Табло за изпълнение — реален W0 статус](../project-recovery/2026-07-20/06_WAVE_STATUS_DASHBOARD.md)
+
 ## Текущ бизнес статус
 
 - Общо FLOW-ове: **50**
@@ -72,7 +74,7 @@ FLOW-050 заключва:
 
 ## Главен технически извод
 
-Документацията е бизнес завършена, но runtime foundations още не са. Преди масово feature development са нужни:
+Документацията е бизнес завършена, но runtime foundations още не са. Към 13.09.2026 има merge-нати ядра на W0-01 и W0-04 и W0-02 core в production (mode off); никой W0 item не е затворен. Преди масово feature development са нужни:
 
 - Tenant Registry, Tenant Guard и database resolver;
 - TenantMembership/RoleAssignment и ExternalPrincipal/AccessGrant;
@@ -90,6 +92,8 @@ FLOW-050 заключва:
 
 ## Wave 0 — задължителна основа
 
+> Списъкът е тематичен. Каноничната номерация W0-01…W0-11, реалният статус и договореният ред на изпълнение са в [Implementation Waves](IMPLEMENTATION_WAVES.md) и [таблото](../project-recovery/2026-07-20/06_WAVE_STATUS_DASHBOARD.md).
+
 1. D-15 / FLOW-050 — Tenant Registry, Guard, membership, database/master isolation, migrations, support access и isolation tests.
 2. FLOW-050 Billing Foundations — Subscription, Plan Version, Entitlement, AI Usage Ledger, Payment Provider Adapter, dunning, access states и chargeback.
 3. FLOW-050 Release/Data Lifecycle — common code, Release Manifest, environments, TAE, export, retention, holds и controlled deletion.
@@ -105,10 +109,10 @@ FLOW-050 заключва:
 ## Следваща стъпка
 
 ```text
-финална проверка на Draft PR #2
-→ CLAUDE.md v15 и таблото
-→ изрично решение за merge
-→ Wave 0 coding
+WAVE-PLAN-SYNC
+→ W0-09A Release Manifest / deploy / rollback core
+→ W0-10A isolated restore proof
+→ W0-03 Master Data
 ```
 
 ## Правило за PR и release

@@ -3,6 +3,7 @@
 > **Цел:** паралелно програмиране без нарушаване на FLOW зависимостите.  
 > **Business status:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.  
 > **Правило:** Business Lock не е Implementation Gate PASS.
+> **Implementation status:** синхронизиран на 13.09.2026 (WAVE-PLAN-SYNC); реалният статус по W0 items е в секция „Wave 0 — implementation status".
 
 # Wave 0 — Architecture Foundation
 
@@ -119,6 +120,55 @@ Wave 0 започва преди масово feature development.
 - backup/restore/export/retention/deletion are proven per tenant;
 - no private fork or hidden client version exists.
 
+## Wave 0 — implementation status (13.09.2026)
+
+Каноничната номерация е тази в този документ (W0-01…W0-11). Старата номерация в `06_WAVE_STATUS_DASHBOARD.md` от 05.08.2026 е отменена. Идентификаторите `W0-T01…T12` в `WAVE_0_TENANCY_FOUNDATIONS.md` са под-backlog, не отделни W0 items.
+
+| ID | Статус | Доказателство | Оставащ дълг |
+|---|---|---|---|
+| W0-01 Tenancy | **CORE MERGED** | PR #3 — `app/tenancy` (registry, guard, resolver); ползва се от W0-02 пътищата | Tenant Guard не е вързан към всички legacy routes/jobs/files/search/export/AI; migration runner; support access; per-tenant numbering/integrations; пълен isolation suite |
+| W0-02 Permission Service | **CORE DEPLOYED** | PR #9 → production `0b53bcd5` (12.09.2026); Synology real-Mongo/migration PASS; standard app regression без нови failures; automated + manual production smoke PASS; mode = off | W0-02 item не е затворен (решение на Крум 09.09.2026): 232 legacy проверки, 3 мигрирани, **229 остават** — миграция домейн по домейн; ExternalPrincipal/AccessGrant и MFA/passkeys не са започнати; shadow/enforce изискват отделно решение |
+| W0-03 Master Data | **NOT STARTED** — next major build | — | целият обхват |
+| W0-04 Audit / Lifecycle / Idempotency | **CORE MERGED** | PR #6 — `app/audit` (envelope, hash-chained store, correction/reversal/annotation, idempotency registry); ползва се от W0-02 | не покрива всички critical writes; retention enforcement, legal/incident hold, disposition, signed manifests, immutable archive, audit-of-audit → **W0-04B** |
+| W0-05 Payment Core | **NOT STARTED** | legacy finance routes, без единен payment write service | целият обхват |
+| W0-06 File Registry | **NOT STARTED** | legacy media uploads, без `file_id` registry | целият обхват |
+| W0-07 DQ + Approval | **NOT STARTED** | — | целият обхват |
+| W0-08 Subscription / Billing / Entitlements | **NOT STARTED** | legacy Stripe-mock billing, не е W0 canonical | целият обхват |
+| W0-09 Test / Release / Environments | **PARTIAL** | само W0-02-специфични артефакти: validation harness и ad-hoc guarded deploy/rollback (извън repo) | общ Release Manifest + deploy/rollback core → **W0-09A**; environments/TAE/no-fork/QA exit gate → **W0-09B** |
+| W0-10 Disaster Recovery | **PARTIAL** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh`; нощен backup работи | restore никога не е доказан → **W0-10A**; PITR, off-site immutable copy, per-tenant restore, drill → **W0-10B** |
+| W0-11 Export / Retention / Deletion | **NOT STARTED** | — | целият обхват |
+
+„CORE MERGED/DEPLOYED" не означава, че W0 item-ът е затворен или че свързаният FLOW има Implementation Gate PASS.
+
+## Roadmap split (без преномериране)
+
+Каноничните W0 items запазват номерата си. За изпълнение се ползват следните под-етапи:
+
+- **W0-09A** — Bootstrap Release / deploy / rollback foundation: общ Release Manifest, exact-version артефакт, записана deployed версия, rollback анкер, smoke gate.
+- **W0-10A** — изолиран restore proof: реален backup се възстановява в non-production среда и се проверява.
+- **W0-04B** — Audit lifecycle completion: retention/hold/disposition/archive/audit-of-audit и покритие на всички critical writes.
+- **W0-10B** — пълен Disaster Recovery по FLOW-044/D-13.
+- **W0-09B** — финален Wave 0 release/test/environment exit gate.
+
+## Договорен ред на изпълнение след W0-02
+
+```text
+1)  WAVE-PLAN-SYNC
+2)  W0-09A  Release Manifest / deploy / rollback core
+3)  W0-10A  isolated restore proof
+4)  W0-03   Master Data (A–E)
+5)  W0-06   File Registry (A–E)
+6)  W0-07   DQ + Approval
+7)  W0-05   Payment Core
+8)  W0-08   Billing / Entitlements
+9)  W0-04B  Audit lifecycle completion
+10) W0-10B  full DR
+11) W0-11   Export / Retention / Deletion
+12) W0-09B  full Wave 0 exit gate
+```
+
+Една implementation задача наведнъж: код → тестове → exact SHA → Draft PR → HANDOFF → STOP. Паралелната политика по-долу важи за планиране и договори, не за едновременни implementation PR-и.
+
 ---
 
 # Wave 1 — Commercial Core
@@ -190,8 +240,11 @@ FLOW-009, 011–015, 019–021, 024, 026–029, 035, 037, 039 и 047.
 - material requests, purchase limits and invoice matching;
 - warehouse/FIFO and direct-delivery cost rules;
 - logistics trips, stops, residual priority queue and acceptance SLA;
-- assets/QR/custody/returns/repairs;
-- subcontractor packages;
+- delivery receipt with ordered/delivered/accepted/damaged/rejected quantities and photo evidence as File Registry `file_id` relations (FLOW-012/020/016);
+- material readiness that distinguishes requested/ordered, delivered/unloaded, quantity-accepted, technically accepted and physically available at the project location for the СМР (FLOW-020/012/009);
+- assets/QR/custody/returns/repairs with two-phase transfer: `PENDING_ACCEPTANCE` → `ACCEPTED` (FLOW-011);
+- subcontractor packages with progress measured in КСС units: contracted/assigned vs executed vs approved-measured vs certified vs paid (FLOW-021/019, D-02);
+- canonical project schedule and readiness by СМР/WorkPackage — baseline, current plan, forecast, dependencies, latest-safe action dates, proactive reminders (FLOW-027/026/045; Wave 2.1);
 - generic WorkPackage and PackageTemplate;
 - quality/defect/warranty lifecycle;
 - payroll and management bonus obligations reconciled to finance.
@@ -201,11 +254,26 @@ FLOW-009, 011–015, 019–021, 024, 026–029, 035, 037, 039 и 047.
 - no report without presence/SMR/time;
 - no duplicate offline writes;
 - conflicts never resolve silently;
-- QR scan alone does not transfer responsibility;
+- QR scan alone does not transfer responsibility; custody changes only on `ACCEPTED`, a refused/problem transfer keeps history and the sender stays responsible (FLOW-011, 12.09.2026);
+- ordered or delivered material is never shown as ready for work until it is accepted and physically available at the project location;
+- delivery photo/GPS evidence proves the event but never replaces acceptance;
+- subcontractor progress is never a subjective percentage when a measurable КСС unit exists; obligations use approved measured quantity (D-02);
+- approved progress may move the schedule forecast, never the baseline; a forecast is never shown as the contractual date;
 - unmatched invoice lines require explanation;
 - reusable items always have location and one human responsible;
 - original audio/photo remains available when AI extraction is disputed;
 - Digital Twin Lite is not in scope.
+
+## Wave 2.1 — FLOW-027 schedule / readiness foundation (planned)
+
+Бизнес изискванията са в FLOW-027 (уточнение 12.09.2026), с вписани връзки във FLOW-011/012/020/021/026/045. Предложеният implementation договор е в **Draft PR #11** (issue #10) — не е merge-нат и не е канон до review и решение на Крум.
+
+Правила за Wave 2.1:
+
+- FLOW-027 е единственият source of truth за графика; готовността е изчислена проекция, не втори регистър за задачи, материали, подизпълнители или плащания;
+- графикът се генерира/управлява от СМР дейностите (WorkPackage/execution package идентичност, FLOW-003/035) с потвърждение от човек;
+- предстоящите СМР проверяват готовността и напомнят проактивно на отговорните хора (FLOW-026 условия, FLOW-045 целеви напомняния/ескалация, Action Inbox/Daily Digest);
+- runtime кодът има predecessors: **W0-03** (материал/СМР идентичност), **W0-06** (`file_id` за снимкови доказателства), **W0-07** (блокиращи въпроси/решения/одобрения), read-only достъп до **W0-05** за плащания като предпоставка, плюс W0-01/W0-02/W0-04. Докато те липсват, всеки W2.1 PR остава feature-off и чете legacy източници само през изрично маркирани read-only адаптери.
 
 ---
 
@@ -292,6 +360,8 @@ Live Activities and App Clips are not included; they require a later separate na
 
 # First programming backlog
 
+> Исторически backlog от 04.08.2026. Редът на изпълнение след W0-02 е заменен от „Договорен ред на изпълнение след W0-02" в секция Wave 0 (13.09.2026); точки 1 и 2 имат merge-нато ядро (W0-01, W0-02).
+
 1. Tenant Registry + database resolver + Tenant Guard.
 2. RoleAssignment / TenantMembership / ExternalPrincipal / AccessGrant.
 3. Master Data inventory and migration map.
@@ -317,3 +387,6 @@ Live Activities and App Clips are not included; they require a later separate na
 - Cross-FLOW code and logic audits.
 - FLOW-050 business-close decisions through 04.08.2026.
 - Modern Field Experience, 04.08.2026.
+- W0-02 production release `0b53bcd5` и smoke gate, 12.09.2026.
+- Уточнения на Крум от 12.09.2026: двуфазно QR/custody приемане (FLOW-011) и управленски изисквания за график/готовност/материали/доставки/снимки/КСС (FLOW-027 и свързаните FLOW).
+- WAVE-PLAN-SYNC (канонична W0 номерация, реален статус, roadmap split и договорен ред), 13.09.2026.
