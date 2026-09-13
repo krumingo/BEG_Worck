@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/krumingo/BEG_Worck/ops/release/release_manifest.schema.json",
+  "title": "BEG_Work release manifest (beg.release-manifest/v1) and deployment record (beg.deployment-record/v1)",
+  "description": "Enforced by ops/release/beg_release/manifest.py (stdlib validator, parity-tested against the required lists below). The release object is immutable after build and hashed into release_sha256; deploy/rollback facts live in separate deployment records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "release", "release_sha256"],
+  "properties": {
+    "schema": {"const": "beg.release-manifest/v1"},
+    "release": {"$ref": "#/$defs/release"},
+    "release_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"},
+    "release_id": {"type": "string", "pattern": "^rel-\\d{8}T\\d{6}Z-[0-9a-f]{12}$"},
+    "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "env_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$"},
+    "abs_path": {"type": "string", "pattern": "^/[A-Za-z0-9._/-]*$"},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_id", "app", "artifact", "environment", "deployment", "schema_version",
+                   "configuration", "feature_flags", "entitlements", "build", "services_to_rebuild",
+                   "previous", "rollback_target", "approvals", "smoke", "created_at", "created_by"],
+      "properties": {
+        "release_id": {"$ref": "#/$defs/release_id", "description": "rel-<UTC build time>-<first 12 hex of app.commit>"},
+        "app": {"$ref": "#/$defs/app"},
+        "artifact": {"$ref": "#/$defs/artifact"},
+        "environment": {"enum": ["development", "test", "staging", "production"]},
+        "deployment": {"$ref": "#/$defs/deployment"},
+        "schema_version": {"$ref": "#/$defs/schema_version"},
+        "configuration": {"$ref": "#/$defs/configuration"},
+        "feature_flags": {
+          "type": "object",
+          "description": "Expected flag values only — never secrets, never values read from .env.",
+          "propertyNames": {"$ref": "#/$defs/env_key"},
+          "additionalProperties": {
+            "type": "object", "additionalProperties": false, "required": ["expected", "source"],
+            "properties": {"expected": {"type": "string", "pattern": "^[A-Za-z0-9._:/@%+=,-]*$"}, "source": {"type": "string"}}
+          }
+        },
+        "entitlements": {"$ref": "#/$defs/entitlements"},
+        "build": {"$ref": "#/$defs/build"},
+        "services_to_rebuild": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/name"}},
+        "previous": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/release_ref"}]},
+        "rollback_target": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/release_ref"}], "description": "Must equal previous (immediate rollback target)."},
+        "approvals": {"type": "array", "items": {"$ref": "#/$defs/approval"}, "description": "production requires at least one type=deploy"},
+        "smoke": {"$ref": "#/$defs/smoke"},
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "created_by": {"$ref": "#/$defs/name"}
+      }
+    },
+    "app": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "commit", "tree", "commit_time", "reachable_from"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "commit": {"$ref": "#/$defs/sha1"},
+        "tree": {"$ref": "#/$defs/sha1"},
+        "commit_time": {"type": "integer", "minimum": 1},
+        "reachable_from": {"type": ["string", "null"]}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["format", "file", "sha256", "size_bytes", "file_count", "tree_verified", "legacy_extras"],
+      "properties": {
+        "format": {"const": "tar-pax-git-objects-v1"},
+        "file": {"const": "artifact.tar"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "file_count": {"type": "integer", "minimum": 1},
+        "tree_verified": {"const": true},
+        "legacy_extras": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha1"},
+                          "description": "Only for baseline (adoption) manifests: files present in the live tree on top of the Git tree, with exact blob ids."}
+      }
+    },
+    "deployment": {
+      "type": "object", "additionalProperties": false, "required": ["id", "layout", "tenant_scope"],
+      "properties": {
+        "id": {"$ref": "#/$defs/name"},
+        "layout": {"$ref": "#/$defs/name"},
+        "tenant_scope": {
+          "type": "object", "additionalProperties": false, "required": ["mode", "tenants"],
+          "properties": {"mode": {"enum": ["deployment-wide", "tenant-list"]},
+                         "tenants": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/name"}}}
+        }
+      }
+    },
+    "schema_version": {
+      "type": "object", "additionalProperties": false, "required": ["app_schema_version", "migrations"],
+      "properties": {
+        "app_schema_version": {"type": ["string", "null"]},
+        "migrations": {
+          "type": "object", "additionalProperties": false, "required": ["declared", "policy", "approval_ref"],
+          "properties": {
+            "declared": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/name"}},
+            "policy": {"const": "NOT_RUN_BY_DEFAULT"},
+            "approval_ref": {"type": ["string", "null"], "description": "required when declared is non-empty; the W0-09A deploy tool refuses declared migrations"}
+          }
+        }
+      }
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "layout_source_commit", "layout_files", "required_env_keys", "build_args"],
+      "properties": {
+        "version": {"$ref": "#/$defs/sha256"},
+        "layout_source_commit": {"$ref": "#/$defs/sha1"},
+        "layout_files": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/sha256"}},
+        "required_env_keys": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/env_key"}, "description": "key NAMES only"},
+        "build_args": {"type": "object"}
+      }
+    },
+    "entitlements": {
+      "type": "object", "additionalProperties": false, "required": ["status", "snapshot", "reference"],
+      "properties": {"status": {"enum": ["NOT_IMPLEMENTED", "SNAPSHOT"]}, "snapshot": {}, "reference": {"type": ["string", "null"]}}
+    },
+    "build": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tool", "python", "git", "services", "unpinned_base_images", "rebuild_reason", "tools_source_commit", "tools"],
+      "properties": {
+        "tool": {"type": "string"}, "python": {"type": "string"}, "git": {"type": "string"},
+        "services": {"type": "object", "minProperties": 1, "propertyNames": {"$ref": "#/$defs/name"}, "additionalProperties": {"$ref": "#/$defs/service"}},
+        "unpinned_base_images": {"type": "array", "items": {"type": "string"}},
+        "rebuild_reason": {"type": "string"},
+        "tools_source_commit": {"$ref": "#/$defs/sha1"},
+        "tools": {"type": "object", "minProperties": 1, "propertyNames": {"pattern": "^tools/[A-Za-z0-9._/-]+$"}, "additionalProperties": {"$ref": "#/$defs/sha256"}}
+      }
+    },
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "required": ["container", "dockerfile", "base_images", "copy_sources", "input_file_count", "fingerprint"],
+      "properties": {
+        "container": {"$ref": "#/$defs/name"}, "dockerfile": {"type": "string"},
+        "base_images": {"type": "array", "items": {"type": "string"}},
+        "copy_sources": {"type": "array", "items": {"type": "string"}},
+        "input_file_count": {"type": "integer", "minimum": 1},
+        "fingerprint": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "release_ref": {
+      "type": "object", "additionalProperties": false, "required": ["release_id", "commit", "tree", "release_sha256"],
+      "properties": {"release_id": {"$ref": "#/$defs/release_id"}, "commit": {"$ref": "#/$defs/sha1"},
+                     "tree": {"$ref": "#/$defs/sha1"}, "release_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "approval": {
+      "type": "object", "additionalProperties": false, "required": ["type", "ref"],
+      "properties": {"type": {"enum": ["merge", "review", "deploy", "validation"]}, "ref": {"type": "string", "minLength": 1}}
+    },
+    "smoke": {
+      "type": "object", "additionalProperties": false,
+      "required": ["base_url", "health_path", "http_paths", "containers", "health_timeout_sec", "restart_sample_sec", "log_service"],
+      "properties": {
+        "base_url": {"type": "string", "pattern": "^https?://[A-Za-z0-9.:-]+$"},
+        "health_path": {"$ref": "#/$defs/abs_path"},
+        "http_paths": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/abs_path"}},
+        "containers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
+        "health_timeout_sec": {"type": "integer", "minimum": 5},
+        "restart_sample_sec": {"type": "integer", "minimum": 0},
+        "log_service": {"$ref": "#/$defs/name"}
+      }
+    },
+    "record": {
+      "title": "beg.deployment-record/v1 (release-state/history/<stamp>-<action>-<pid>/record.json)",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "action", "status", "release_id", "release_sha256", "commit", "tree",
+                   "environment", "deployment_id", "started_at", "finished_at", "actor",
+                   "previous_release_id", "rollback_target_release_id", "services_rebuilt",
+                   "migrations", "verification", "smoke", "failure", "evidence_dir"],
+      "properties": {
+        "schema": {"const": "beg.deployment-record/v1"},
+        "action": {"enum": ["adopt", "deploy", "rollback"]},
+        "status": {"enum": ["ADOPTED", "DEPLOYED", "PRECHECK_FAILED", "ROLLED_BACK", "ROLLBACK_DONE", "ROLLBACK_FAILED"]},
+        "release_id": {"$ref": "#/$defs/release_id"},
+        "release_sha256": {"$ref": "#/$defs/sha256"},
+        "commit": {"$ref": "#/$defs/sha1"},
+        "tree": {"$ref": "#/$defs/sha1"},
+        "environment": {"enum": ["development", "test", "staging", "production"]},
+        "deployment_id": {"$ref": "#/$defs/name"},
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "finished_at": {"$ref": "#/$defs/timestamp"},
+        "actor": {"$ref": "#/$defs/name"},
+        "previous_release_id": {"type": "string"},
+        "rollback_target_release_id": {"type": "string"},
+        "services_rebuilt": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        "migrations": {"const": "NOT_RUN"},
+        "verification": {"enum": ["PASS", "FAIL", "SKIPPED"]},
+        "smoke": {"enum": ["PASS", "FAIL", "SKIPPED"]},
+        "failure": {"type": "string"},
+        "evidence_dir": {"type": "string"}
+      }
+    }
+  }
+}

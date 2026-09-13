@@ -120,6 +120,9 @@ sudo docker-compose up -d --build        # пусни наново след пр
 
 ## Обновяване на кода после
 
+> **Остаряло (W0-09A):** `repo/` в production не е git checkout, затова `git pull` не работи.
+> Обновяване и rollback — само по `ops/release/README.md` (exact-version bundle, precheck, smoke, auto-rollback).
+
 ```
 cd /volume1/docker/begwork/repo
 sudo git pull

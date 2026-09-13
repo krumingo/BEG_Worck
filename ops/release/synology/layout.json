@@ -1,0 +1,37 @@
+{
+  "layout": "synology-compose-repo-copy-v1",
+  "deployment_id": "synology-begwork",
+  "description": "Current production layout on /volume1/docker/begwork: compose + Dockerfiles in the layout root, application source copied (no .git) into ./repo, which is the build context of both services.",
+  "versioned_layout_dir": "ops/synology/deploy",
+  "layout_files": ["docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend"],
+  "source_dir": "repo",
+  "services": {
+    "backend": {
+      "container": "begwork-backend",
+      "context": "./repo",
+      "dockerfile": "../Dockerfile.backend",
+      "build_args": {}
+    },
+    "frontend": {
+      "container": "begwork-frontend",
+      "context": "./repo",
+      "dockerfile": "../Dockerfile.frontend",
+      "build_args": {"REACT_APP_BACKEND_URL": "${PUBLIC_URL}"}
+    }
+  },
+  "required_env_keys": ["MONGO_URL", "DB_NAME", "BEG_SYSTEM_DB", "PUBLIC_URL", "CORS_ORIGINS", "JWT_SECRET"],
+  "feature_flags": {"PERMISSION_SERVICE_MODE": "off"},
+  "smoke": {
+    "base_url": "http://127.0.0.1:8080",
+    "health_path": "/api/health",
+    "http_paths": ["/api/health", "/", "/api/roles", "/api/modules"],
+    "health_timeout_sec": 180,
+    "restart_sample_sec": 45,
+    "log_service": "backend"
+  },
+  "unused_layout_root_files": {
+    "nginx.conf": "left over from the manual setup; the frontend build reads nginx.conf from the ./repo build context, now tracked at the repository root",
+    "INSTRUKCII.md": "setup notes; its 'git pull' update section is superseded by ops/release (repo is not a git checkout)",
+    ".env.example": "template only"
+  }
+}
