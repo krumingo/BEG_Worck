@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# W0-09A test double for docker-compose (unit tests and the isolated Synology validation).
+# `up --build` creates a new image id and points the service's compose ref at it;
+# `up --no-build` recreates from whatever image the compose ref names now.
+# Hooks in $FAKE: on_up_<n> (script run at the n-th `up`), compose_fail_<n>, compose_output,
+# crash_<service> (container exits), no_recreate (containers are left untouched).
+echo "compose $*" >> "$FAKE/calls.log"
+[ "$1" = up ] || exit 0
+shift
+n=$(( $(cat "$FAKE/up_count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$FAKE/up_count"
+[ -f "$FAKE/compose_output" ] && cat "$FAKE/compose_output"
+[ -f "$FAKE/on_up_$n" ] && bash "$FAKE/on_up_$n"
+if [ -f "$FAKE/compose_fail_$n" ]; then echo "ERROR: build failed"; exit 1; fi
+build=0; nobuild=0; nodeps=0; svcs=()
+for a in "$@"; do
+  case "$a" in
+    -d|--force-recreate) ;;
+    --no-deps) nodeps=1 ;;
+    --build) build=1 ;;
+    --no-build) nobuild=1 ;;
+    -*) echo "fake compose: unexpected flag $a" >&2; exit 2 ;;
+    *) svcs+=("$a") ;;
+  esac
+done
+[ "$nodeps" = 1 ] || { echo "fake compose: services must be recreated with --no-deps" >&2; exit 2; }
+[ "$build" != "$nobuild" ] || { echo "fake compose: exactly one of --build/--no-build" >&2; exit 2; }
+esc() { printf '%s' "$1" | tr '/:' '%+'; }
+mkdir -p "$FAKE/images" "$FAKE/refs"
+for svc in "${svcs[@]}"; do
+  c="$(cat "$FAKE/svc_$svc")"; ref="$(cat "$FAKE/svcref_$svc")"
+  rf="$FAKE/refs/$(esc "$ref:latest")"
+  if [ "$build" = 1 ]; then
+    k=$(( $(cat "$FAKE/build_count" 2>/dev/null || echo 0) + 1 )); echo "$k" > "$FAKE/build_count"
+    id="sha256:$(printf 'b%063x' "$k")"
+    : > "$FAKE/images/${id#sha256:}"; printf '%s' "$id" > "$rf"
+    echo "build $svc $id" >> "$FAKE/builds.log"
+  else
+    id=""; [ -f "$rf" ] && id="$(cat "$rf")"
+    [ -n "$id" ] && [ -f "$FAKE/images/${id#sha256:}" ] || { echo "ERROR: no image for $ref and --no-build"; exit 1; }
+  fi
+  [ -f "$FAKE/no_recreate" ] && continue
+  status=running; [ -f "$FAKE/crash_$svc" ] && status=exited
+  printf '%s|0|%s\n' "$status" "$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)" > "$FAKE/c_$c"
+  printf '%s' "$id" > "$FAKE/cimg_$c"; printf '%s' "$ref" > "$FAKE/cref_$c"
+done
+exit 0

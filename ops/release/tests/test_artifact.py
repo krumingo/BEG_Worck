@@ -602,6 +602,8 @@ class RecordAndPlanTests(unittest.TestCase):
                 "environment": "production", "deployment_id": "synology-begwork", "started_at": "2026-09-13T10:00:00Z",
                 "finished_at": "2026-09-13T10:05:00Z", "actor": "krum", "previous_release_id": r["previous"]["release_id"],
                 "rollback_target_release_id": r["previous"]["release_id"], "services_rebuilt": ["backend"],
+                "runtime_images": {"backend": "sha256:" + "1" * 64, "frontend": "sha256:" + "2" * 64},
+                "runtime_rollback": "NOT_APPLICABLE", "verifier_image": "sha256:" + "3" * 64,
                 "migrations": "NOT_RUN", "verification": "PASS", "smoke": "PASS", "failure": "",
                 "evidence_dir": "/volume1/docker/begwork/release-state/history/20260913T100000Z-deploy-123"}
 
@@ -613,6 +615,13 @@ class RecordAndPlanTests(unittest.TestCase):
             ("secret in failure", {"failure": "auth failed mongodb://beg:%s@host" % SECRET_MONGO_PASSWORD}, "record.failure"),
             ("evidence dir", {"evidence_dir": "/tmp/x; rm -rf /"}, "record.evidence_dir"),
             ("unknown key", {"stdout": "x"}, "unknown keys ['stdout']"),
+            ("mutable image tag", {"runtime_images": {"backend": "python:3.11-slim"}}, "record.runtime_images.backend"),
+            ("no runtime images", {"runtime_images": {}}, "must record the running images"),
+            ("rollback without runtime verdict", {"status": "ROLLBACK_DONE", "action": "rollback"},
+             "must say EXACT_IMAGE or SOURCE_REBUILD"),
+            ("deploy claiming a runtime rollback", {"runtime_rollback": "EXACT_IMAGE"}, "must be NOT_APPLICABLE"),
+            ("unknown runtime verdict", {"runtime_rollback": "PROBABLY"}, "record.runtime_rollback"),
+            ("verifier by tag", {"verifier_image": "python:3.11-slim"}, "record.verifier_image"),
         ]
         for name, change, needle in cases:
             with self.subTest(name):
@@ -632,6 +641,7 @@ class RecordAndPlanTests(unittest.TestCase):
         self.assertEqual(plan["MIGRATIONS_DECLARED"], "0")
         self.assertEqual(plan["LEGACY_EXTRAS"], "NONE")
         self.assertEqual(plan["SERVICE_CONTAINERS"], "backend:begwork-backend,frontend:begwork-frontend")
+        self.assertEqual(plan["BASE_IMAGES"], "nginx:alpine,node:20-alpine,python:3.11-slim")
         self.assertEqual(mf.render_plan(doc0)["LEGACY_EXTRAS"], "nginx.conf=" + LIVE_NGINX_BLOB)
         for key, value in plan.items():
             self.assertRegex(key, r"^[A-Z][A-Z0-9_]*$")

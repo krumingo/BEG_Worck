@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # W0-09A — adopt the already-running deployment as the recorded current release.
-# Verification and state files only: no source swap, no container action.
+# Verification, state files and image tags only: no source swap, no container action.
 #
 #   sudo bash <baseline-bundle>/tools/synology/release_adopt.sh \
 #        [--previous-bundle <bundle-of-previous-release> --previous-tree-dir <dir under base>]
 #
 # Proves that $BASE/repo is exactly the baseline manifest tree (plus the declared legacy
 # extras, e.g. the hand-copied nginx.conf) and, optionally, that an existing anchor
-# directory is exactly the previous release, then writes release-state/current.env
-# (and previous.env). Refuses when state already exists.
+# directory is exactly the previous release, records the immutable image IDs the running
+# containers use (tagged $RELEASE_IMAGE_REPO/<service>:<release>), then writes
+# release-state/current.env (and previous.env). Refuses when state already exists.
 set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
@@ -54,16 +55,28 @@ if [ -n "$PREV_BUNDLE" ]; then
   PYV_BUNDLE="$PREV_BUNDLE" verify_tree "$PREV_DIR" "$Q_TREE" "$Q_LEGACY_EXTRAS" "$PREV_BUNDLE" || adopt_fail "$PREV_DIR is not the previous release"
 fi
 
+copy_prefix P S
+for c in ${P_CONTAINERS//,/ }; do
+  st="$(cstate "$c")"; [ "${st%%|*}" = running ] || adopt_fail "container $c is not running (${st%%|*}); its runtime image cannot be recorded"
+done
+runtime_snapshot || adopt_fail "$RUNTIME_FAIL"
+log "  running images recorded as the runtime of $P_RELEASE_ID: $SNAP_IMAGES"
+protect_images "$SNAP_IMAGES" "$P_RELEASE_ID" || adopt_fail "$RUNTIME_FAIL"
+
 printf 'DEPLOYMENT_ID=%s\nENVIRONMENT=%s\nLAYOUT=%s\n' "$P_DEPLOYMENT_ID" "$P_ENVIRONMENT" "$P_LAYOUT" > "$STATE/DEPLOYMENT"
 if [ -n "$PREV_BUNDLE" ]; then
-  dump_prefix Q "$STATE/previous.env" "TREE_DIR=$PREV_DIR" "SERVICES_REBUILT=" "DEPLOYED_AT=unknown-adopted" "BUNDLE_DIR=$PREV_BUNDLE"
+  # the runtime images of an adopted previous release are unknown: rolling back to it can only
+  # rebuild from its verified source tree (release_rollback.sh --allow-source-rebuild)
+  dump_prefix Q "$STATE/previous.env" "TREE_DIR=$PREV_DIR" "SERVICES_REBUILT=" "DEPLOYED_AT=unknown-adopted" \
+    "BUNDLE_DIR=$PREV_BUNDLE" "RUNTIME_IMAGES=" "RUNTIME_REFS="
   cp "$PREV_BUNDLE/manifest.json" "$STATE/manifests/$Q_RELEASE_ID.json"
   cp "$PREV_BUNDLE/manifest.json" "$STATE/previous.json"
 fi
-dump_prefix P "$STATE/current.env" "TREE_DIR=repo" "SERVICES_REBUILT=" "DEPLOYED_AT=adopted-$(now)" "BUNDLE_DIR=$BUNDLE"
+dump_prefix P "$STATE/current.env" "TREE_DIR=repo" "SERVICES_REBUILT=" "DEPLOYED_AT=adopted-$(now)" "BUNDLE_DIR=$BUNDLE" \
+  "RUNTIME_IMAGES=$SNAP_IMAGES" "RUNTIME_REFS=$SNAP_REFS"
 cp "$BUNDLE/manifest.json" "$STATE/manifests/$P_RELEASE_ID.json"
 cp "$BUNDLE/manifest.json" "$STATE/current.json"
-write_markers P "${Q_COMMIT:-NONE}" "${PREV_DIR:-NONE}"
-write_record adopt ADOPTED P "" PASS SKIPPED "" "${Q_RELEASE_ID:-NONE}" "${Q_RELEASE_ID:-NONE}"
+write_markers P "${Q_COMMIT:-NONE}" "${PREV_DIR:-NONE}" "$SNAP_IMAGES"
+write_record adopt ADOPTED P "" PASS SKIPPED "" "${Q_RELEASE_ID:-NONE}" "${Q_RELEASE_ID:-NONE}" "$SNAP_IMAGES" NOT_APPLICABLE
 log "=== ADOPTED $P_RELEASE_ID as current$( [ -n "$PREV_BUNDLE" ] && printf ' with rollback target %s at %s' "$Q_RELEASE_ID" "$PREV_DIR") ==="
 exit 0

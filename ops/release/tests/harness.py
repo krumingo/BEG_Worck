@@ -4,7 +4,8 @@
   (ops/synology/deploy/*), the REAL root nginx.conf and the REAL release tools from this
   checkout, so the code under test is exactly what a bundle ships;
 * a fake Synology layout root (compose, Dockerfiles, .env with sentinel secrets, repo/,
-  backups/) and fake docker / docker-compose / curl written in bash (no CRLF artefacts).
+  backups/) and the committed bash test doubles in tests/fakes (docker with an image/tag store,
+  docker-compose with builds and --no-build recreation, curl).
 """
 import gzip
 import hashlib
@@ -66,8 +67,14 @@ def _write(root, rel, data, mode=None):
         f.write(data if isinstance(data, bytes) else data.encode("utf-8"))
 
 
-def tool_files():
-    """Working-tree release tools (the code under test), LF-normalised like the Git blobs."""
+def tool_files(commit=None):
+    """Release tools (the code under test): from the working tree, LF-normalised like the Git
+    blobs, or — for the isolated Synology package — exactly the blobs of ``commit``."""
+    if commit:
+        entries = gitobj.ls_tree(REPO_ROOT, commit)
+        paths = [p for p in entries if p.startswith("ops/release/") and not p.startswith("ops/release/tests/")]
+        blobs = gitobj.read_blobs(REPO_ROOT, [entries[p][1] for p in paths])
+        return {p: blobs[entries[p][1]] for p in paths}
     files = {}
     for dirpath, _dirs, names in os.walk(RELEASE_DIR):
         if "__pycache__" in dirpath or os.sep + "tests" in dirpath[len(RELEASE_DIR):]:
@@ -82,10 +89,10 @@ def tool_files():
     return files
 
 
-def make_repo(root):
+def make_repo(root, tools=None):
     """Synthetic repo with commits:
        c0 legacy baseline (no tracked nginx.conf), c1 tracks nginx.conf + backend change,
-       c2 frontend change, c3 docs-only change."""
+       c2 frontend change, c3 docs-only change. ``tools``: {path: bytes} instead of the working tree."""
     os.makedirs(root)
     run_git(root, "init", "-q", "-b", "main")
     run_git(root, "config", "user.name", "tester")
@@ -104,7 +111,7 @@ def make_repo(root):
         "ops/synology/deploy/Dockerfile.backend": real_blob("ops/synology/deploy/Dockerfile.backend"),
         "ops/synology/deploy/Dockerfile.frontend": real_blob("ops/synology/deploy/Dockerfile.frontend"),
     }
-    base_files.update(tool_files())
+    base_files.update(tool_files() if tools is None else tools)
     for rel, data in base_files.items():
         _write(root, rel, data)
     run_git(root, "add", "-A")
@@ -148,84 +155,16 @@ def verify(*args):
                           capture_output=True, text=True)
 
 
-FAKE_DOCKER = r'''#!/usr/bin/env bash
-echo "docker $*" >> "$FAKE/calls.log"
-cmd="$1"; shift
-case "$cmd" in
-  inspect)
-    shift 2 2>/dev/null   # -f FORMAT
-    name="$1"; f="$FAKE/c_$name"
-    [ -f "$f" ] || exit 1
-    if [ -f "$FAKE/restart_loop_$name" ]; then
-      IFS='|' read -r st rc cr < "$f"; rc=$((rc + 1)); printf '%s|%s|%s\n' "$st" "$rc" "$cr" > "$f"
-    fi
-    cat "$f" ;;
-  logs)
-    name="${@: -1}"; [ -f "$FAKE/logs_$name" ] && cat "$FAKE/logs_$name"; exit 0 ;;
-  exec)
-    name="$1"; key="$3"; f="$FAKE/env_${name}_${key}"
-    [ -f "$f" ] && { cat "$f"; exit 0; }; exit 1 ;;
-  run)
-    # Simulates the production verifier container: enforces the isolation flags and read-only
-    # bundle mounts, maps container paths back to host paths and runs the local Python.
-    [ "${RELEASE_PY_MODE:-}" = docker ] || { echo "unexpected docker run in local verifier mode" >&2; exit 99; }
-    net=""; pull=""; maps=()
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        --rm) shift ;;
-        --pull) pull="$2"; shift 2 ;;
-        --network) net="$2"; shift 2 ;;
-        -v) maps+=("$2"); shift 2 ;;
-        -*) echo "fake docker: unexpected run option $1" >&2; exit 97 ;;
-        *) break ;;
-      esac
-    done
-    if [ "$net" != none ] || [ "$pull" != never ]; then echo "fake docker: verifier needs --network none --pull never" >&2; exit 98; fi
-    [ "$1" = python:3.11-slim ] && [ "$2" = python3 ] || { echo "fake docker: unexpected image/command $1 $2" >&2; exit 97; }
-    shift 2
-    for m in "${maps[@]}"; do
-      case "$m" in *:/bundle|*:/hint) echo "fake docker: $m must be mounted read-only" >&2; exit 97 ;; esac
-    done
-    args=()
-    for a in "$@"; do
-      for m in "${maps[@]}"; do
-        spec="${m%:ro}"; dst="${spec##*:}"; src="${spec%:*}"
-        case "$a" in "$dst"|"$dst"/*) a="$(cygpath -m "$src" 2>/dev/null || printf '%s' "$src")${a#"$dst"}"; break ;; esac
-      done
-      args+=("$a")
-    done
-    exec "$RELEASE_PYTHON" "${args[@]}" ;;
-  *) exit 0 ;;
-esac
-'''
+FAKES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fakes")
 
-FAKE_COMPOSE = r'''#!/usr/bin/env bash
-echo "compose $*" >> "$FAKE/calls.log"
-if [ "$1" = up ]; then
-  n=$(( $(cat "$FAKE/up_count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$FAKE/up_count"
-  [ -f "$FAKE/compose_output" ] && cat "$FAKE/compose_output"
-  [ -f "$FAKE/on_up_$n" ] && bash "$FAKE/on_up_$n"
-  if [ -f "$FAKE/compose_fail_$n" ]; then echo "ERROR: build failed"; exit 1; fi
-  shift; shift; shift   # up -d --build
-  for svc in "$@"; do
-    c="$(cat "$FAKE/svc_$svc")"
-    [ -f "$FAKE/no_recreate" ] && continue
-    status=running; [ -f "$FAKE/crash_$svc" ] && status=exited
-    printf '%s|0|%s\n' "$status" "$(date -u +%Y-%m-%dT%H:%M:%S.000000000Z)" > "$FAKE/c_$c"
-  done
-fi
-exit 0
-'''
 
-FAKE_CURL = r'''#!/usr/bin/env bash
-url="${@: -1}"; path="/${url#*://*/}"; [ "$url" = "${url#*://*/}" ] && path="/"
-echo "curl $path" >> "$FAKE/calls.log"
-code=200
-if [ -f "$FAKE/http_codes" ]; then
-  while read -r p c; do [ "$p" = "$path" ] && code="$c"; done < "$FAKE/http_codes"
-fi
-printf '%s' "$code"
-'''
+def image_id(tag, n):
+    return "sha256:%s%063x" % (tag, n)
+
+
+VERIFIER_IMAGE_ID = image_id("c", 0x311)
+INITIAL_IMAGES = {"backend": image_id("a", 0xB0), "frontend": image_id("a", 0xF0)}
+SERVICE_REFS = {"backend": "begwork-backend", "frontend": "begwork-frontend"}
 
 
 class Layout:
@@ -238,9 +177,9 @@ class Layout:
         self.bin = os.path.join(root, "bin")
         for d in (self.base, self.fake, self.bin):
             os.makedirs(d)
-        for name, data in (("docker", FAKE_DOCKER), ("docker-compose", FAKE_COMPOSE), ("curl", FAKE_CURL)):
-            with open(os.path.join(self.bin, name), "w", newline="\n") as f:
-                f.write(data)
+        for name in ("docker", "docker-compose", "curl"):
+            with open(os.path.join(self.bin, name), "wb") as f:
+                f.write(read_bytes(os.path.join(FAKES_DIR, name)).replace(b"\r\n", b"\n"))
             os.chmod(os.path.join(self.bin, name), 0o755)
         for name in ("docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend"):
             with open(os.path.join(self.base, name), "wb") as f:
@@ -256,10 +195,16 @@ class Layout:
         self.extract_commit(repo, commits["c0"], os.path.join(self.base, "repo"))
         with open(os.path.join(self.base, "repo", "nginx.conf"), "wb") as f:
             f.write(real_blob("nginx.conf"))
+        os.makedirs(os.path.join(self.fake, "images"))
+        os.makedirs(os.path.join(self.fake, "refs"))
+        self.add_image(VERIFIER_IMAGE_ID, "python:3.11-slim")
         for svc, c in (("backend", "begwork-backend"), ("frontend", "begwork-frontend")):
-            with open(os.path.join(self.fake, "svc_" + svc), "w", newline="\n") as f:
-                f.write(c)
+            self.fake_file("svc_" + svc, c)
+            self.fake_file("svcref_" + svc, SERVICE_REFS[svc])
+            self.add_image(INITIAL_IMAGES[svc], SERVICE_REFS[svc] + ":latest")
             self.set_container(c, "running", 0, "2026-01-01T00:00:00.000000000Z")
+            self.fake_file("cimg_" + c, INITIAL_IMAGES[svc])
+            self.fake_file("cref_" + c, SERVICE_REFS[svc])
 
     @staticmethod
     def extract_commit(repo, commit, dest):
@@ -280,6 +225,29 @@ class Layout:
         with open(os.path.join(self.fake, name), "w", newline="\n") as f:
             f.write(content)
 
+    def add_image(self, image, ref=None):
+        open(os.path.join(self.fake, "images", image.split(":", 1)[1]), "w").close()
+        if ref:
+            self.fake_file(os.path.join("refs", ref.replace("/", "%").replace(":", "+")), image)
+
+    def remove_image(self, image):
+        os.remove(os.path.join(self.fake, "images", image.split(":", 1)[1]))
+
+    def tags(self):
+        """{repo:tag: image id} known to the fake daemon."""
+        d = os.path.join(self.fake, "refs")
+        return {n.replace("%", "/").replace("+", ":"): read_text(os.path.join(d, n)) for n in os.listdir(d)}
+
+    def container_image(self, name):
+        return read_text(os.path.join(self.fake, "cimg_" + name))
+
+    def builds(self):
+        p = os.path.join(self.fake, "builds.log")
+        return read_text(p).splitlines() if os.path.exists(p) else []
+
+    def compose_ups(self):
+        return [line for line in self.calls().splitlines() if line.startswith("compose up")]
+
     def env(self, **extra):
         e = dict(os.environ)
         e.update({
@@ -287,6 +255,7 @@ class Layout:
             "BEGWORK_BASE": posix(self.base), "RELEASE_PY_MODE": "local", "RELEASE_PYTHON": PYTHON,
             "DOCKER": "docker", "CURL": "curl", "COMPOSE_BIN": "docker-compose", "SLEEP": "true",
             "FAKE": posix(self.fake), "REQUIRE_BACKUP": "1", "USER": "tester", "SUDO_USER": "tester",
+            "FAKE_DOCKER_RUN": "sim", "FAKE_VERIFY_IMAGE_ID": VERIFIER_IMAGE_ID,
         })
         e.update(extra)
         return e

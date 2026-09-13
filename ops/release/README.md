@@ -14,6 +14,7 @@
 | `nginx.conf` е скрит build вход (не е в Git, копира се на ръка) | tracked в корена на репото, байт-идентичен с live копието (blob `b87dfcda80a6fbcfd0fa18bd36a220b77a425607`); build-ът пада при всеки нетракнат `COPY` вход |
 | версията в production не е записана никъде | `release-state/current.env`, `DEPLOYED_COMMIT`, `DEPLOYED_VERSION.txt` извън `repo/` + manifest + deployment record |
 | rollback по ръчно написан SHA | `release_rollback.sh` връща **записания** rollback target след проверка на неговото дърво |
+| rollback с rebuild от mutable base image tag-ове дава друг runtime | при deploy се записват immutable image ID-тата на контейнерите; rollback пуска точно тях отново (re-tag + recreate без build) и го доказва по image ID |
 | ръчни проверки, без доказателства | evidence директория за всяка операция в `release-state/history/` |
 
 ## 2. Компоненти
@@ -30,9 +31,9 @@
 | `synology/release_adopt.sh` | еднократно: записва работещия production като current release (без container действия) |
 | `synology/release_deploy.sh` | precheck → stage → swap → rebuild само нужното → smoke → auto-rollback → record |
 | `synology/release_rollback.sh` | самостоятелен rollback към записания target (dry run по подразбиране) |
-| `synology/release_retention.sh` | почистване на стари дървета (dry run по подразбиране) |
+| `synology/release_retention.sh` | почистване на стари дървета и (с `--images`) стари release image tag-ове (dry run по подразбиране) |
 | `synology/lib.sh` | общи функции |
-| `tests/` | 71 теста (виж §12); не влизат в bundle-а |
+| `tests/` | unit тестове + изолиран Synology runner (виж §12); не влизат в bundle-а |
 
 ## 3. Release Manifest `beg.release-manifest/v1`
 
@@ -63,8 +64,9 @@ build се хваща (`manifest was modified`). Validator-ът отхвърля
 (`beg.deployment-record/v1`, `history/<stamp>-<action>-<pid>/record.json`): action, status
 (`ADOPTED/DEPLOYED/PRECHECK_FAILED/ROLLED_BACK/ROLLBACK_DONE/ROLLBACK_FAILED`), release,
 `release_sha256`, commit, tree, environment, started/finished, actor, previous и rollback
-target, `services_rebuilt`, `migrations=NOT_RUN`, verification, smoke, failure (санитизиран),
-evidence dir.
+target, `services_rebuilt`, `runtime_images` (service → immutable image ID), `runtime_rollback`
+(`NOT_APPLICABLE` / `EXACT_IMAGE` / `SOURCE_REBUILD` / `FAILED`), `verifier_image` (image ID на
+verifier-а), `migrations=NOT_RUN`, verification, smoke, failure (санитизиран), evidence dir.
 
 ## 4. Идентичност на артефакта
 
@@ -78,6 +80,40 @@ Exec битове: проверяват се от диска, когато фа�
 директорията). Където не ги пази (NTFS на Windows тестове, ACL-mapped share), пътищата и
 байтовете се проверяват пак изцяло, а exec битовете се вземат от артефакта на същия release —
 и това се пише изрично в detail реда.
+
+## 4a. Runtime images — точен runtime rollback
+
+Source дървото е точно, но image-ът, който реално върви, зависи и от mutable base image tag-ове
+(`python:3.11-slim`, `node:20-alpine`, `nginx:alpine`) и от `apt`/`pip`/`yarn` по време на build.
+Rebuild на същия commit може да даде различен image, затова rollback **не прави rebuild**, когато
+може да пусне записания image:
+
+1. Adoption и всеки успешен deploy записват за всеки service `docker inspect .Image` (immutable
+   `sha256:` ID) и `.Config.Image` (compose image ref) в `current.env` (`RUNTIME_IMAGES`,
+   `RUNTIME_REFS`), в record-а и в `DEPLOYED_VERSION.txt`.
+2. Тези image-и се tag-ват `beg-release/<service>:<release_id>`, за да не ги изчисти
+   dangling-image prune, докато са rollback target.
+3. Precheck на deploy/rollback: работещите image ID-та трябва да са точно записаните (иначе
+   `runtime drift`, exit 2, нищо не е променено).
+4. Rollback (auto и standalone): записаният image се re-tag-ва като compose ref-а и контейнерът се
+   пресъздава с `up -d --no-deps --no-build --force-recreate <service>`; след това
+   `docker inspect .Image` трябва да е точно записаното ID → `runtime_rollback=EXACT_IMAGE`.
+5. Ако записаният image липсва локално: auto-rollback (услугата е паднала) прави rebuild от вече
+   провереното дърво и записва `SOURCE_REBUILD` („source-exact, NOT runtime-exact“);
+   standalone rollback **отказва** (exit 2), освен с изрично `--allow-source-rebuild`.
+6. Services извън rebuild-а трябва да продължат да въртят записания си image (проверява се в smoke).
+
+Всички `compose up` са с `--no-deps` — deploy/rollback на един service не пресъздава и не
+rebuild-ва неговите зависимости.
+
+Verifier-ът: `VERIFY_IMAGE` (по подразбиране `python:3.11-slim`) се резолвира веднъж до image ID и
+всички `docker run` на операцията са по това ID (никога pull); ID-то е в record-а. По желание
+`VERIFY_IMAGE_ID=sha256:…` го pin-ва (при разлика — exit 3).
+
+Mounts на verifier контейнера: `--network none --pull never --read-only --security-opt
+no-new-privileges`; bundle, `$BASE` и hint bundle са **read-only**; писане има само в
+evidence директорията на операцията (`/evid`) и, по време на deploy, в staging директорията
+(`/stage`). Staged дървото е `repo.staging-<release>/tree` и се мести като `repo`.
 
 ## 5. Build входове
 
@@ -144,8 +180,11 @@ sudo bash /volume1/docker/begwork/releases/<baseline>/tools/synology/release_ado
 ```
 
 Adoption проверява bundle-а, layout файловете, имената на `.env` ключовете, flag-а и че `repo/`
-е точно baseline дървото + `nginx.conf`. Пише само `release-state/`, `DEPLOYED_COMMIT`,
-`DEPLOYED_VERSION.txt` (презаписва маркерите от W0-02 със същия commit). Без container действия.
+е точно baseline дървото + `nginx.conf`; контейнерите трябва да вървят, за да се запишат image
+ID-тата им. Пише `release-state/`, `DEPLOYED_COMMIT`, `DEPLOYED_VERSION.txt` (презаписва маркерите
+от W0-02 със същия commit) и tag-ва текущите image-и `beg-release/<service>:<baseline release>`.
+Без container действия. Runtime image-ите на adopt-нат previous release са неизвестни → rollback
+към него е възможен само с `--allow-source-rebuild` (не е runtime-exact).
 
 ### 7.3 Deploy
 
@@ -155,14 +194,15 @@ sudo bash /volume1/docker/begwork/releases/<release_id>/tools/synology/release_d
 
 | Фаза | Какво | При провал |
 |---|---|---|
-| A PRECHECK (read-only) | SHA256SUMS; manifest; tools; artifact sha256 + tree identity; без `.env` в артефакта; **без declared migrations**; layout файлове; `.env` съществува и има нужните имена; flag липсва или е равен на очакването; deployment/environment; target ≠ current; **manifest.previous = записания current** (иначе version mismatch); live `repo/` = записаното дърво; свободни имена за anchor/staging; контейнерите вървят; endpoint-ите отговарят 2xx/3xx; валиден backup (`gzip -t`) | exit 2, нищо не е променено, record `PRECHECK_FAILED` |
-| B DEPLOY | stage extract + tree identity; `repo` → `repo.rollback-<current>`; staging → `repo`; tree identity на новото `repo`; `docker-compose up -d --build <само services_to_rebuild>` | auto-rollback |
-| C SMOKE | health 200 в срок; всички контейнери running; rebuilt контейнерите са пресъздадени след началото на deploy-а (иначе version mismatch); restart count не расте за `restart_sample_sec`; HTTP paths 2xx/3xx (5xx = провал); backend лог без startup/config грешки (само брой, без съдържание); flag в контейнера липсва или е равен | auto-rollback |
-| D RECORD | стар rollback tree → `release-state/retired/`; `previous.env` = стария current; `current.env` = новия; manifests; маркери; record `DEPLOYED` | — |
+| A PRECHECK (read-only) | SHA256SUMS; manifest; tools; artifact sha256 + tree identity; без `.env` в артефакта; **без declared migrations**; layout файлове; `.env` съществува и има нужните имена; flag липсва или е равен на очакването; deployment/environment; target ≠ current; **manifest.previous = записания current** (иначе version mismatch); live `repo/` = записаното дърво; свободни имена за anchor/staging; контейнерите вървят; **работещите image ID-та = записания runtime**; endpoint-ите отговарят 2xx/3xx; валиден backup (`gzip -t`) | exit 2, нищо не е променено, record `PRECHECK_FAILED` |
+| B DEPLOY | stage extract + tree identity; tag на текущите runtime image-и; base image ID-та в evidence; `repo` → `repo.rollback-<current>`; staging → `repo`; tree identity на новото `repo`; `docker-compose up -d --no-deps --build <само services_to_rebuild>` | auto-rollback |
+| C SMOKE | health 200 в срок; всички контейнери running; rebuilt контейнерите са пресъздадени след началото на deploy-а (иначе version mismatch); останалите въртят записания си image; restart count не расте за `restart_sample_sec`; HTTP paths 2xx/3xx (5xx = провал); backend лог без startup/config грешки (само брой, без съдържание); flag в контейнера липсва или е равен | auto-rollback |
+| D RECORD | нови runtime image ID-та (+ tag `beg-release/<service>:<release>`); стар rollback tree → `release-state/retired/`; `previous.env` = стария current (с неговия runtime); `current.env` = новия; manifests; маркери; record `DEPLOYED` | — |
 
 Auto-rollback: провалилото се дърво → `repo.failed-<release>-<UTC>`, anchor обратно в `repo`,
-tree identity, rebuild на същите services, post-rollback smoke, state остава непроменен,
-record `ROLLED_BACK`, exit 1. Ако и rollback-ът се провали: exit 4, record `ROLLBACK_FAILED`,
+tree identity, **записаните image-и отново (без build, проверено по image ID)** за засегнатите
+services, post-rollback smoke, state остава непроменен, record `ROLLED_BACK` с
+`runtime_rollback=EXACT_IMAGE` (или `SOURCE_REBUILD`, ако image-ът липсва), exit 1. Ако и rollback-ът се провали: exit 4, record `ROLLBACK_FAILED`,
 двете дървета остават.
 
 Когато няма променени service входове (напр. docs-only), дървото се сменя без rebuild/restart.
@@ -170,27 +210,31 @@ record `ROLLED_BACK`, exit 1. Ако и rollback-ът се провали: exit 
 ### 7.4 Rollback
 
 ```bash
-sudo bash <bundle>/tools/synology/release_rollback.sh          # dry run
-sudo bash <bundle>/tools/synology/release_rollback.sh --yes    # изпълнение
+sudo bash <bundle>/tools/synology/release_rollback.sh                               # dry run: план
+sudo bash <bundle>/tools/synology/release_rollback.sh --yes                         # изпълнение
+sudo bash <bundle>/tools/synology/release_rollback.sh --yes --allow-source-rebuild  # само ако image-ът липсва
 ```
 
 Target-ът е `release-state/previous.env` (никога ръчен SHA). Преди каквото и да е движение
 дървото на target-а и live `repo/` се проверяват срещу записаните tree hash-ове (tampered/missing
-→ exit 2, нищо не е променено). Rebuild само на services, които върнатият release е rebuild-нал;
-smoke; `current.env` = target; `previous.env` се консумира (в evidence); record `ROLLBACK_DONE`.
+→ exit 2, нищо не е променено), работещите image-и = записания runtime. За всеки service,
+чийто записан image се различава, се пуска image-ът на target-а (без build, проверено по ID);
+smoke; `current.env` = target; `previous.env` се консумира (в evidence); record `ROLLBACK_DONE`
+с `runtime_rollback`.
 При провал: exit 4 и отпечатани ръчни стъпки за roll-forward.
 
 ### 7.5 Retention
 
 ```bash
-sudo bash <bundle>/tools/synology/release_retention.sh [--keep N]          # dry run
-sudo bash <bundle>/tools/synology/release_retention.sh --keep 1 --apply
+sudo bash <bundle>/tools/synology/release_retention.sh [--keep N] [--images]          # dry run
+sudo bash <bundle>/tools/synology/release_retention.sh --keep 1 --images --apply
 ```
 
 Политика:
 - **никога** не се трие: `repo`, current `TREE_DIR`, записаният rollback target (`previous.env` `TREE_DIR`), bundles, `release-state/manifests`, `release-state/history` (evidence);
 - кандидати: `repo.rollback-*`, `repo.failed-*`, `repo.rolledback-*`, `repo_before_*`, `repo.staging-*` (само без активен lock), `release-state/retired/*`;
-- пазят се най-новите N кандидата (по подразбиране 1); останалите се трият само с `--apply`.
+- пазят се най-новите N кандидата (по подразбиране 1); останалите се трият само с `--apply`;
+- `--images`: tag-овете `beg-release/<service>:<release>` на други releases се махат с `docker rmi <tag>` (без `-f`, без prune); tag-овете на current и previous се пазят винаги. Без `--images` Docker не се пипа.
 
 Exit кодове на скриптовете: 0 OK, 1 rolled back, 2 отказ/precheck (без промяна), 3 usage/lock/layout, 4 rollback провал.
 
@@ -201,12 +245,12 @@ Exit кодове на скриптовете: 0 OK, 1 rolled back, 2 отказ
   repo/                      активното дърво (build context)
   repo.rollback-<release>/   rollback anchor
   DEPLOYED_COMMIT            commit (извън repo/)
-  DEPLOYED_VERSION.txt       deployed, release_id, release_sha256, previous, rollback_dir, state, at
+  DEPLOYED_VERSION.txt       deployed, release_id, release_sha256, previous, rollback_dir, runtime_images, state, at
   releases/<release_id>/     bundles
   release-state/
     DEPLOYMENT  current.env  previous.env  current.json  previous.json
     manifests/<release_id>.json
-    history/<UTC>-<action>-<pid>/   <action>.log, verify.json, stage.json, plan.env, compose-*.log, record.json
+    history/<UTC>-<action>-<pid>/   <action>.log, verify.json, stage.json, plan.env, base-images.txt, compose-*.log, record.json
     retired/  lock/
 ```
 
@@ -235,7 +279,7 @@ migration е отделна одобрена стъпка (Approval + backup + r
 - Първият W0-09A deploy след adoption на `0b53bcd5` е с `services_to_rebuild = []` (доказано на реалното репо) → смяна на дървото без restart на контейнери.
 - Разделът „Обновяване на кода после“ в `ops/synology/deploy/INSTRUKCII.md` (`git pull`) не е валиден — `repo/` не е git checkout.
 
-**Не е проверено на NAS-а:** exec битове на ACL share-а, bash/tar/gzip версии на DSM, `docker run --pull never` поведение на Synology Docker, реалният restart/health timing. Първото използване трябва да е изолирана проверка (временна `BEGWORK_BASE`, фалшиви `DOCKER`/`COMPOSE_BIN`, без production контейнери), после adoption с одобрение.
+Изолираната Synology проверка (§12) пуска инструментите на самия NAS, без да пипа production; резултатите ѝ са в HANDOFF-а за съответния SHA, не в този файл.
 
 ## 12. Тестове
 
@@ -252,17 +296,41 @@ commit, previous не е предшественик, друга среда; tree
 артефакт, manifest без rehash, липсващ ред в SHA256SUMS, tampered tool, опасни tar членове;
 manifest/record validation; schema parity; shell-safe plan; без secrets.
 
-`test_deploy_tools` (bash + фалшиви docker/compose/curl, истински verifier): adoption; успешен
-deploy (само backend, маркери, record, редактиран compose изход); docs-only без rebuild; docker
-verifier режим с path mapping; 11 precheck провала без мутация; 8 auto-rollback тригера
-(compose провал, контейнер не стартира, health, restart loop, 5xx, startup грешка в лога,
-непресъздаден контейнер, flag mismatch); standalone rollback (dry run, успех, tampered target,
-липсващ target); втори deploy (retire); retention.
+`test_deploy_tools` (bash + `tests/fakes/`: docker с image/tag store, compose с build и
+`--no-build`, curl; истински verifier): adoption с runtime image-и; успешен deploy (само backend,
+маркери, record, tag-ове, редактиран compose изход); docs-only без rebuild; docker verifier режим
+(image ID, read-only base, писане само в `/evid`/`/stage`); липсващ/непин-нат verifier image;
+precheck провали без мутация (вкл. runtime drift); 8 auto-rollback тригера, всеки с проверка, че
+върви записаният image без втори build; auto-rollback без image → `SOURCE_REBUILD`; standalone
+rollback (dry run, exact image, tampered target, липсващ target, runtime drift, липсващ image →
+отказ / `--allow-source-rebuild`); втори deploy; retention на дървета и image tag-ове.
+
+`test_isolated_runner`: сглобява пакета за Synology от working tree-то и пуска
+`run_isolated.sh` в `sim` режим (без Docker) — проверява самия runner.
+
+### Изолирана Synology проверка
+
+```bash
+python ops/release/tests/synology/make_package.py --out <dir>        # от commit-нат, чист tree
+# копирай <dir>/w009a-isolated-<sha12> в \\bekr\docker\w009a-isolated\
+sudo bash /volume1/docker/w009a-isolated/w009a-isolated-<sha12>/runner/run_isolated.sh
+```
+
+Phase 1: всеки сценарий има временна `BEGWORK_BASE` в `runs/<stamp>/`, истинските инструменти от
+bundle-ите, фалшиви docker/compose/curl за контейнери/image-и/HTTP и **истинския verifier** в
+`python:3.11-slim` (по image ID, read-only mounts) върху файловата система на NAS-а: mode probe,
+adoption, deploy, precheck без мутация, всички auto-rollback тригери, standalone rollback,
+retention, secret-leak scan. Phase 2: истински Docker + docker-compose върху мини layout със
+собствени container имена (`w009a-rt-*`) — deploy, standalone rollback и auto-rollback на
+crash-ващ release, с доказателство по image ID. Production (`/volume1/docker/begwork`, неговите
+контейнери, image-и, `.env` metadata) се чете преди и след и трябва да е непроменен. Phase 2 махa
+само собствените си контейнери (`compose down`); image-ите остават (без `rmi`/prune).
 
 ## 13. Известни ограничения / рискове
 
 - Няма криптографски подпис на bundle-а — SHA256SUMS е integrity, не authenticity.
-- Base images не са pinned (`python:3.11-slim`, `node:20-alpine`, `nginx:alpine`) → rebuild може да даде различен image при същия commit. Записано в `unpinned_base_images`.
+- Base images не са pinned (`python:3.11-slim`, `node:20-alpine`, `nginx:alpine`) → **нов** build на същия commit може да даде различен image. Rollback не зависи от това, докато записаният image съществува (`EXACT_IMAGE`); `SOURCE_REBUILD` е изрично отбелязан като не runtime-exact. Base image ID-тата преди всеки build са в `base-images.txt`.
+- Image tag-овете `beg-release/*` задържат стари image-и до `release_retention.sh --images --apply`.
 - Compose няма `healthcheck`; restart loop се хваща чрез sample на restart count.
 - Backup-ът се проверява само с `gzip -t`; restore никога не е доказан (W0-10A).
 - Rollback връща кода, не данните.

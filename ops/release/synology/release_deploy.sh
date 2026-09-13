@@ -5,13 +5,17 @@
 #
 # A) PRECHECK — no mutation: bundle integrity + exact tree identity + layout/.env key names +
 #    flag expectations + no declared migrations + state/version match + live repo tree +
-#    free rollback/staging names + containers/health/endpoints + backup.      exit 2 on failure
-# B) DEPLOY — stage-extract and re-verify, rollback anchor repo.rollback-<current release>,
-#    guarded swap, rebuild ONLY manifest.services_to_rebuild, never run migrations.
-# C) SMOKE — health, running containers, recreated containers, restart-loop sample, endpoints,
-#    log scan, flag expectations. Any failure => automatic rollback.        exit 1 rolled back
+#    running images = recorded runtime + free rollback/staging names + containers/health/
+#    endpoints + backup.                                                  exit 2 on failure
+# B) DEPLOY — stage-extract and re-verify, protect the current runtime images, rollback anchor
+#    repo.rollback-<current release>, guarded swap, rebuild ONLY manifest.services_to_rebuild,
+#    never run migrations.
+# C) SMOKE — health, running containers, recreated containers, unchanged images of the other
+#    services, restart-loop sample, endpoints, log scan, flag expectations.
+#    Any failure => automatic rollback to the recorded source tree AND runtime images.
+#                                                                          exit 1 rolled back
 #                                                                          exit 4 rollback failed
-# D) RECORD — current/previous state, markers outside repo/, evidence.     exit 0 deployed
+# D) RECORD — runtime images, current/previous state, markers outside repo/, evidence. exit 0
 set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
@@ -23,7 +27,7 @@ PRE_FAIL=""
 precheck_fail() {
   log "PRECHECK FAILED: $1"
   log "NOTHING WAS CHANGED (no source swap, no container action)."
-  write_record deploy PRECHECK_FAILED P "" FAIL SKIPPED "$1" "${C_RELEASE_ID:-NONE}" "${C_RELEASE_ID:-NONE}"
+  write_record deploy PRECHECK_FAILED P "" FAIL SKIPPED "$1" "${C_RELEASE_ID:-NONE}" "${C_RELEASE_ID:-NONE}" "${C_RUNTIME_IMAGES:-}" NOT_APPLICABLE
   exit 2
 }
 
@@ -61,6 +65,11 @@ STAGE_DIR="repo.staging-$P_RELEASE_ID"
 for c in ${P_CONTAINERS//,/ }; do
   st="$(cstate "$c")"; [ "${st%%|*}" = running ] || precheck_fail "container $c is not running before deploy (${st%%|*})"
 done
+[ -n "${C_RUNTIME_IMAGES:-}" ] || precheck_fail "current release has no recorded runtime images (adopt with this tool version first)"
+runtime_snapshot || precheck_fail "$RUNTIME_FAIL"
+[ "$SNAP_IMAGES" = "$C_RUNTIME_IMAGES" ] \
+  || precheck_fail "runtime drift: running images [$SNAP_IMAGES] are not the recorded runtime of $C_RELEASE_ID [$C_RUNTIME_IMAGES]"
+log "  running images are the recorded runtime of $C_RELEASE_ID"
 for p in ${P_HTTP_PATHS//,/ }; do
   code="$(http_code "$p")"
   case "$code" in 2??|3??) ;; *) precheck_fail "pre-deploy GET $p returned $code" ;; esac
@@ -72,44 +81,59 @@ log "=== PRECHECK PASSED ==="
 # ============================================================== B) DEPLOY
 log "=== B) DEPLOY ==="
 DEPLOY_SINCE="$(now)"
-pyv bundle --bundle "$(vbundle)" --base "$(vbase)" --mode deploy --stage "$(vpath "$BASE/$STAGE_DIR")" \
-    --probe-dir "$(vpath "$EVID")" --report-out "$(vpath "$EVID/stage.json")" 2>&1 | tr -d '\r' | sed 's/^/    /'
-if ! grep -q '"result": "PASS"' "$EVID/stage.json" 2>/dev/null; then
+mkdir "$BASE/$STAGE_DIR" || precheck_fail "cannot create staging directory $STAGE_DIR"
+STAGE_HOST="$BASE/$STAGE_DIR"
+pyv bundle --bundle "$(vbundle)" --mode deploy --stage "$(vpath "$STAGE_HOST/tree")" \
+    --probe-dir "$(vpath "$STAGE_HOST")" --report-out "$(vpath "$EVID/stage.json")" 2>&1 | tr -d '\r' | sed 's/^/    /'
+STAGE_HOST=""
+if ! grep -q '"result": "PASS"' "$EVID/stage.json" 2>/dev/null || [ ! -d "$BASE/$STAGE_DIR/tree" ]; then
   rm -rf -- "${BASE:?}/$STAGE_DIR"
   precheck_fail "staged extraction did not verify against tree $P_TREE"
 fi
+protect_images "$C_RUNTIME_IMAGES" "$C_RELEASE_ID" || { rm -rf -- "${BASE:?}/$STAGE_DIR"; precheck_fail "$RUNTIME_FAIL"; }
+record_base_images
 
 auto_rollback() {
-  local reason="$1" failed="repo.failed-$P_RELEASE_ID-$(stamp)"
+  local reason="$1" failed="repo.failed-$P_RELEASE_ID-$(stamp)" rb_since
   log "!!! AUTO-ROLLBACK: $reason"
   copy_prefix C S
   if [ -d "$BASE/repo" ]; then mv "$BASE/repo" "$BASE/$failed" && log "  failed tree kept as $failed"; fi
   if ! mv "$BASE/$ROLLBACK_DIR" "$BASE/repo"; then
     log "ROLLBACK FAILED: cannot restore $ROLLBACK_DIR"
-    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; restore failed" "$C_RELEASE_ID" "$C_RELEASE_ID"; exit 4
+    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; restore failed" "$C_RELEASE_ID" "$C_RELEASE_ID" "" FAILED; exit 4
   fi
   if ! verify_tree repo "$C_TREE" "$C_LEGACY_EXTRAS" "${C_BUNDLE_DIR:-}"; then
-    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; restored tree mismatch" "$C_RELEASE_ID" "$C_RELEASE_ID"; exit 4
+    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; restored tree mismatch" "$C_RELEASE_ID" "$C_RELEASE_ID" "" FAILED; exit 4
   fi
-  local rb_since; rb_since="$(now)"
-  if ! compose_up "$P_SERVICES_TO_REBUILD" compose-rollback; then
-    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; rollback rebuild failed" "$C_RELEASE_ID" "$C_RELEASE_ID"; exit 4
+  rb_since="$(now)"
+  if ! restore_runtime C "$P_SERVICES_TO_REBUILD" compose-rollback 1; then
+    log "ROLLBACK FAILED: $RUNTIME_FAIL"
+    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; runtime restore: $RUNTIME_FAIL" "$C_RELEASE_ID" "$C_RELEASE_ID" "" FAILED; exit 4
   fi
   log "  post-rollback smoke:"
-  if ! smoke "$rb_since" "$P_SERVICES_TO_REBUILD"; then
+  if ! smoke "$rb_since" "$P_SERVICES_TO_REBUILD" "$C_RUNTIME_IMAGES"; then
     log "ROLLBACK FAILED: post-rollback smoke: $SMOKE_FAIL"
-    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; post-rollback smoke: $SMOKE_FAIL" "$C_RELEASE_ID" "$C_RELEASE_ID"; exit 4
+    write_record deploy ROLLBACK_FAILED P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason; post-rollback smoke: $SMOKE_FAIL" "$C_RELEASE_ID" "$C_RELEASE_ID" "" "$RUNTIME_ROLLBACK"; exit 4
+  fi
+  runtime_snapshot || true
+  if [ "$RUNTIME_ROLLBACK" = SOURCE_REBUILD ]; then
+    dump_prefix C "$STATE/current.env" "RUNTIME_IMAGES=$SNAP_IMAGES" "RUNTIME_REFS=$SNAP_REFS" \
+      && protect_images "$SNAP_IMAGES" "$C_RELEASE_ID" || true
+    log "ROLLED BACK (source-exact, NOT runtime-exact: recorded image was unavailable and ${P_SERVICES_TO_REBUILD} was rebuilt)"
+  else
+    log "ROLLED BACK (source-exact and runtime-exact: recorded images restored)"
   fi
   log "ROLLED BACK: live release is still $C_RELEASE_ID (${C_COMMIT:0:12}); state unchanged"
-  write_record deploy ROLLED_BACK P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason" "$C_RELEASE_ID" "$C_RELEASE_ID"
+  write_record deploy ROLLED_BACK P "$P_SERVICES_TO_REBUILD" PASS FAIL "$reason" "$C_RELEASE_ID" "$C_RELEASE_ID" "$SNAP_IMAGES" "$RUNTIME_ROLLBACK"
   exit 1
 }
 
 mv "$BASE/repo" "$BASE/$ROLLBACK_DIR" || { rm -rf -- "${BASE:?}/$STAGE_DIR"; precheck_fail "could not create rollback anchor"; }
-if ! mv "$BASE/$STAGE_DIR" "$BASE/repo"; then
+if ! mv "$BASE/$STAGE_DIR/tree" "$BASE/repo"; then
   mv "$BASE/$ROLLBACK_DIR" "$BASE/repo"; rm -rf -- "${BASE:?}/$STAGE_DIR"
   precheck_fail "source swap failed; original repo restored"
 fi
+rmdir "$BASE/$STAGE_DIR" 2>/dev/null || true
 log "  rollback anchor: $ROLLBACK_DIR; repo now holds $P_RELEASE_ID"
 verify_tree repo "$P_TREE" NONE "$BUNDLE" || auto_rollback "active source tree does not match manifest tree $P_TREE (version mismatch)"
 
@@ -118,8 +142,11 @@ compose_up "$P_SERVICES_TO_REBUILD" compose-deploy || auto_rollback "docker comp
 
 # ============================================================== C) SMOKE
 log "=== C) SMOKE ==="
-smoke "$DEPLOY_SINCE" "$P_SERVICES_TO_REBUILD" || auto_rollback "$SMOKE_FAIL"
-log "=== SMOKE PASSED ==="
+smoke "$DEPLOY_SINCE" "$P_SERVICES_TO_REBUILD" "$C_RUNTIME_IMAGES" || auto_rollback "$SMOKE_FAIL"
+runtime_snapshot || auto_rollback "cannot record the runtime images of the new release: $RUNTIME_FAIL"
+NEW_IMAGES="$SNAP_IMAGES"; NEW_REFS="$SNAP_REFS"
+protect_images "$NEW_IMAGES" "$P_RELEASE_ID" || auto_rollback "$RUNTIME_FAIL"
+log "=== SMOKE PASSED === runtime: $NEW_IMAGES"
 
 # ============================================================== D) RECORD
 if [ -f "$STATE/previous.env" ]; then
@@ -130,11 +157,12 @@ if [ -f "$STATE/previous.env" ]; then
 fi
 dump_prefix C "$STATE/previous.env" "TREE_DIR=$ROLLBACK_DIR"
 dump_prefix P "$STATE/current.env" "TREE_DIR=repo" "SERVICES_REBUILT=$P_SERVICES_TO_REBUILD" \
-  "DEPLOYED_AT=$(now)" "BUNDLE_DIR=$BUNDLE" "LEGACY_EXTRAS=NONE" "PREVIOUS_RELEASE_ID=$C_RELEASE_ID"
+  "DEPLOYED_AT=$(now)" "BUNDLE_DIR=$BUNDLE" "LEGACY_EXTRAS=NONE" "PREVIOUS_RELEASE_ID=$C_RELEASE_ID" \
+  "RUNTIME_IMAGES=$NEW_IMAGES" "RUNTIME_REFS=$NEW_REFS"
 cp "$BUNDLE/manifest.json" "$STATE/manifests/$P_RELEASE_ID.json"
 cp "$BUNDLE/manifest.json" "$STATE/current.json.tmp" && mv -f "$STATE/current.json.tmp" "$STATE/current.json"
 [ -f "$STATE/manifests/$C_RELEASE_ID.json" ] && cp "$STATE/manifests/$C_RELEASE_ID.json" "$STATE/previous.json"
-write_markers P "$C_COMMIT" "$ROLLBACK_DIR"
-write_record deploy DEPLOYED P "$P_SERVICES_TO_REBUILD" PASS PASS "" "$C_RELEASE_ID" "$C_RELEASE_ID"
-log "=== DEPLOYED $P_RELEASE_ID (${P_COMMIT}) — rollback target $C_RELEASE_ID kept at $ROLLBACK_DIR; migrations NOT_RUN ==="
+write_markers P "$C_COMMIT" "$ROLLBACK_DIR" "$NEW_IMAGES"
+write_record deploy DEPLOYED P "$P_SERVICES_TO_REBUILD" PASS PASS "" "$C_RELEASE_ID" "$C_RELEASE_ID" "$NEW_IMAGES" NOT_APPLICABLE
+log "=== DEPLOYED $P_RELEASE_ID (${P_COMMIT}) — rollback target $C_RELEASE_ID kept at $ROLLBACK_DIR (runtime $C_RUNTIME_IMAGES); migrations NOT_RUN ==="
 exit 0

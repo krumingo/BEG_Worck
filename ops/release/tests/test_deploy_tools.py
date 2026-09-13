@@ -9,9 +9,12 @@ import shutil
 import tempfile
 import unittest
 
-from harness import (BASH, read_json, read_text, LIVE_NGINX_BLOB, SECRET_JWT, SECRET_MONGO_PASSWORD, Layout, build, make_repo,
-                     run_git, tree_matches)
+from harness import (BASH, INITIAL_IMAGES, LIVE_NGINX_BLOB, SECRET_JWT, SECRET_MONGO_PASSWORD, VERIFIER_IMAGE_ID, Layout,
+                     build, make_repo, read_json, read_text, tree_matches)
 from beg_release import manifest as mf
+
+BUILD_BACKEND = "compose up -d --no-deps --build backend"
+EXACT_BACKEND = "compose up -d --no-deps --no-build --force-recreate backend"
 
 
 @unittest.skipUnless(BASH, "bash is required for the Synology tool tests")
@@ -31,6 +34,8 @@ class DeployToolTests(unittest.TestCase):
         assert cls.b2, p.stderr + p.stdout
         cls.m0 = read_json(os.path.join(cls.b0, "manifest.json"))["release"]
         cls.m1 = read_json(os.path.join(cls.b1, "manifest.json"))["release"]
+        cls.m2 = read_json(os.path.join(cls.b2, "manifest.json"))["release"]
+        cls.initial_runtime = "backend=%s,frontend=%s" % (INITIAL_IMAGES["backend"], INITIAL_IMAGES["frontend"])
 
     @classmethod
     def tearDownClass(cls):
@@ -56,18 +61,36 @@ class DeployToolTests(unittest.TestCase):
         self.assertNotIn(SECRET_MONGO_PASSWORD, blob)
 
     # ------------------------------------------------------------------ adopt
-    def test_adopt_records_live_release_without_container_actions(self):
+    def assert_runtime(self, backend, frontend):
+        self.assertEqual(self.lay.container_image("begwork-backend"), backend)
+        self.assertEqual(self.lay.container_image("begwork-frontend"), frontend)
+
+    def test_adopt_records_live_release_and_its_runtime_images_without_container_actions(self):
         p = self.adopt()
         cur = self.lay.state("current.env")
         self.assertEqual(cur["RELEASE_ID"], self.m0["release_id"])
         self.assertEqual(cur["TREE_DIR"], "repo")
         self.assertEqual(cur["LEGACY_EXTRAS"], "nginx.conf=" + LIVE_NGINX_BLOB)
+        self.assertEqual(cur["RUNTIME_IMAGES"], self.initial_runtime)
+        self.assertEqual(cur["RUNTIME_REFS"], "backend=begwork-backend,frontend=begwork-frontend")
+        tags = self.lay.tags()
+        self.assertEqual(tags["beg-release/backend:" + self.m0["release_id"]], INITIAL_IMAGES["backend"])
+        self.assertEqual(tags["beg-release/frontend:" + self.m0["release_id"]], INITIAL_IMAGES["frontend"])
         self.assertEqual(read_text(os.path.join(self.lay.base, "DEPLOYED_COMMIT")).strip(), self.c["c0"])
         self.assertNotIn("compose", self.lay.calls())
+        self.assertNotRegex(self.lay.calls(), r"docker (run|rmi|stop|start|restart|rm) ")
         rec = self.lay.records()[-1]
         self.assertEqual(rec["status"], "ADOPTED")
+        self.assertEqual(rec["runtime_images"], INITIAL_IMAGES)
         self.assertEqual(mf.validate_record(rec), [])
         self.assert_no_secrets(p.stdout, p.stderr)
+
+    def test_adopt_refuses_when_a_container_is_not_running(self):
+        self.lay.set_container("begwork-frontend", "exited", 0, "2026-01-01T00:00:00Z")
+        p = self.lay.run(self.b0, "release_adopt.sh")
+        self.assertEqual(p.returncode, 2, p.stdout)
+        self.assertIn("runtime image cannot be recorded", p.stdout)
+        self.assertIsNone(self.lay.state("current.env"))
 
     def test_adopt_refuses_when_live_tree_differs(self):
         with open(os.path.join(self.lay.base, "repo", "backend", "server.py"), "a") as f:
@@ -100,12 +123,27 @@ class DeployToolTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.lay.base, "repo", "DEPLOYED_COMMIT")))
 
         calls = self.lay.calls()
-        self.assertIn("compose up -d --build backend", calls)
-        self.assertNotIn("frontend", "\n".join(l for l in calls.splitlines() if l.startswith("compose up")))
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND])
         self.assertNotRegex(calls.lower(), r"bootstrap|migrat")
+        self.assertFalse([d for d in os.listdir(self.lay.base) if d.startswith("repo.staging-")])
+
+        new_backend = self.lay.builds()[0].split()[-1]
+        self.assert_runtime(new_backend, INITIAL_IMAGES["frontend"])
+        self.assertEqual(cur["RUNTIME_IMAGES"], "backend=%s,frontend=%s" % (new_backend, INITIAL_IMAGES["frontend"]))
+        self.assertEqual(prev["RUNTIME_IMAGES"], self.initial_runtime)
+        tags = self.lay.tags()
+        self.assertEqual(tags["beg-release/backend:" + self.m0["release_id"]], INITIAL_IMAGES["backend"])
+        self.assertEqual(tags["beg-release/backend:" + self.m1["release_id"]], new_backend)
+        self.assertEqual(tags["beg-release/frontend:" + self.m1["release_id"]], INITIAL_IMAGES["frontend"])
+
         rec = self.lay.records()[-1]
         self.assertEqual((rec["status"], rec["smoke"], rec["migrations"]), ("DEPLOYED", "PASS", "NOT_RUN"))
+        self.assertEqual((rec["runtime_images"]["backend"], rec["runtime_rollback"]), (new_backend, "NOT_APPLICABLE"))
+        self.assertEqual(rec["verifier_image"][:13], "local-python-")
         self.assertEqual(mf.validate_record(rec), [])
+        base_images = read_text(os.path.join(rec["evidence_dir"], "base-images.txt"))
+        self.assertIn("python:3.11-slim " + VERIFIER_IMAGE_ID, base_images)
+        self.assertIn("node:20-alpine absent", base_images)
         self.assertTrue(rec["evidence_dir"].replace("\\", "/").rstrip("/").split("/")[-3:-1] == ["release-state", "history"])
         self.assert_no_secrets(p.stdout, p.stderr)
         compose_log = read_text(os.path.join(rec["evidence_dir"], "compose-deploy.log"))
@@ -114,6 +152,7 @@ class DeployToolTests(unittest.TestCase):
         self.assertIn("deployed=%s\n" % self.c["c1"], marker)
         self.assertIn("release_id=%s\n" % self.m1["release_id"], marker)
         self.assertIn("rollback_dir=%s\n" % anchor, marker)
+        self.assertIn("runtime_images=%s\n" % cur["RUNTIME_IMAGES"], marker)
 
     def test_deploy_without_changed_service_inputs_restarts_nothing(self):
         self._deploy_b1()
@@ -130,8 +169,9 @@ class DeployToolTests(unittest.TestCase):
         self.assertEqual(self.lay.state("current.env")["COMMIT"], self.c["c3"])
 
     def test_docker_verifier_mode_adopt_deploy_rollback(self):
-        """Production runs the verifier as `docker run --network none --pull never` with the bundle
-        at /bundle (ro), the layout at /base and the rollback release artifact at /hint (ro)."""
+        """Production runs the verifier as `docker run --network none --pull never --read-only` by
+        immutable image ID, with bundle, base and hint READ-ONLY and only /evid and /stage writable.
+        The fake daemon refuses anything else (including a verifier write outside /evid,/stage)."""
         docker = {"RELEASE_PY_MODE": "docker"}
         p = self.lay.run(self.b0, "release_adopt.sh", **docker)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -144,10 +184,30 @@ class DeployToolTests(unittest.TestCase):
         self.assert_live_is_c0()
         runs = [l for l in self.lay.calls().splitlines() if l.startswith("docker run")]
         self.assertTrue(runs)
-        self.assertTrue(all(l.startswith("docker run --rm --pull never --network none") for l in runs), runs)
+        for line in runs:
+            self.assertTrue(line.startswith("docker run --rm --pull never --network none --read-only "
+                                            "--security-opt no-new-privileges"), line)
+            self.assertIn(":/base:ro ", line)
+            self.assertIn(":/bundle:ro ", line)
+            self.assertIn(" %s python3 " % VERIFIER_IMAGE_ID, line)
+            self.assertNotRegex(line, r":/base (?!:ro)")
+        self.assertTrue(any(":/stage " in l for l in runs), "staged extraction must use the narrow /stage mount")
         self.assertTrue(any(":/hint:ro" in l for l in runs), "rollback target tree must be verified with its own artifact")
-        self.assertEqual([r["status"] for r in self.lay.records()], ["ADOPTED", "DEPLOYED", "ROLLBACK_DONE"])
+        records = self.lay.records()
+        self.assertEqual([r["status"] for r in records], ["ADOPTED", "DEPLOYED", "ROLLBACK_DONE"])
+        self.assertTrue(all(r["verifier_image"] == VERIFIER_IMAGE_ID for r in records))
         self.assert_no_secrets(p.stdout, p.stderr)
+
+    def test_docker_verifier_image_must_exist_and_match_pin(self):
+        self.lay.remove_image(VERIFIER_IMAGE_ID)
+        p = self.lay.run(self.b0, "release_adopt.sh", RELEASE_PY_MODE="docker")
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("is not present locally (it is never pulled)", p.stdout)
+        self.lay.add_image(VERIFIER_IMAGE_ID)
+        p = self.lay.run(self.b0, "release_adopt.sh", RELEASE_PY_MODE="docker", VERIFY_IMAGE_ID="sha256:" + "0" * 64)
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("pinned VERIFY_IMAGE_ID", p.stdout)
+        self.assertIsNone(self.lay.state("current.env"))
 
     # ----------------------------------------------- precheck: fail closed, no mutation
     def _precheck_must_fail(self, bundle, needle, prepare):
@@ -226,6 +286,10 @@ class DeployToolTests(unittest.TestCase):
         self._precheck_must_fail(self.b1, "rollback anchor name",
                                  lambda: os.makedirs(os.path.join(self.lay.base, "repo.rollback-" + self.m0["release_id"])))
 
+    def test_precheck_runtime_drift_is_refused(self):
+        self._precheck_must_fail(self.b1, "runtime drift",
+                                 lambda: self.lay.fake_file("cimg_begwork-backend", "sha256:" + "d" * 64))
+
     def test_precheck_declared_migration_is_refused_and_never_run(self):
         p, bm = build(self.repo, self.c["c1"], os.path.join(self.root, "mig-bundles"),
                       "--previous-manifest", os.path.join(self.b0, "manifest.json"),
@@ -257,11 +321,16 @@ class DeployToolTests(unittest.TestCase):
         ok, detail = tree_matches(os.path.join(self.lay.base, failed[0]), self.repo, self.c["c1"])
         self.assertTrue(ok, detail)
         self.assertFalse(os.path.exists(os.path.join(self.lay.base, "repo.rollback-" + self.m0["release_id"])))
-        ups = [l for l in self.lay.calls().splitlines() if l.startswith("compose up")]
-        self.assertEqual(ups, ["compose up -d --build backend"] * 2)
+        # runtime-exact: the recorded image runs again, recreated without a second build
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND, EXACT_BACKEND])
+        self.assertLessEqual(len(self.lay.builds()), 1)
+        self.assert_runtime(INITIAL_IMAGES["backend"], INITIAL_IMAGES["frontend"])
+        self.assertEqual(self.lay.state("current.env")["RUNTIME_IMAGES"], self.initial_runtime)
+        self.assertIn("runtime-exact: recorded images restored", p.stdout)
         self.assertNotRegex(self.lay.calls().lower(), r"bootstrap|migrat")
         rec = self.lay.records()[-1]
         self.assertEqual((rec["status"], rec["smoke"], rec["migrations"]), ("ROLLED_BACK", "FAIL", "NOT_RUN"))
+        self.assertEqual((rec["runtime_rollback"], rec["runtime_images"]), ("EXACT_IMAGE", INITIAL_IMAGES))
         self.assertEqual(mf.validate_record(rec), [])
         self.assert_no_secrets(p.stdout, p.stderr)
         return p
@@ -300,6 +369,24 @@ class DeployToolTests(unittest.TestCase):
                                 "flag PERMISSION_SERVICE_MODE")
         self.assertNotIn("enforce", p.stdout)
 
+    def test_auto_rollback_without_the_recorded_image_rebuilds_and_says_it_is_not_runtime_exact(self):
+        self.adopt()
+        self.lay.fake_file("on_up_1", 'rm -f "$FAKE/images/%s"; echo "/api/health 502" > "$FAKE/http_codes"\n'
+                           % INITIAL_IMAGES["backend"].split(":")[1])
+        self.lay.fake_file("on_up_2", 'rm -f "$FAKE/http_codes"\n')
+        p = self.lay.run(self.b1, "release_deploy.sh")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("NOT runtime-exact", p.stdout)
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND, BUILD_BACKEND])
+        self.assert_live_is_c0()
+        rebuilt = self.lay.builds()[-1].split()[-1]
+        self.assert_runtime(rebuilt, INITIAL_IMAGES["frontend"])
+        self.assertEqual(self.lay.state("current.env")["RUNTIME_IMAGES"],
+                         "backend=%s,frontend=%s" % (rebuilt, INITIAL_IMAGES["frontend"]))
+        rec = self.lay.records()[-1]
+        self.assertEqual((rec["status"], rec["runtime_rollback"]), ("ROLLED_BACK", "SOURCE_REBUILD"))
+        self.assertEqual(mf.validate_record(rec), [])
+
     # ------------------------------------------------------------- standalone rollback
     def _deploy_b1(self):
         self.adopt()
@@ -325,12 +412,47 @@ class DeployToolTests(unittest.TestCase):
         self.assertEqual(len(rolled), 1)
         ok, detail = tree_matches(os.path.join(self.lay.base, rolled[0]), self.repo, self.c["c1"])
         self.assertTrue(ok, detail)
-        self.assertEqual([l for l in self.lay.calls().splitlines() if l.startswith("compose up")],
-                         ["compose up -d --build backend"] * 2)
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND, EXACT_BACKEND])
+        self.assertEqual(len(self.lay.builds()), 1, "rollback must not build")
+        self.assert_runtime(INITIAL_IMAGES["backend"], INITIAL_IMAGES["frontend"])
+        self.assertEqual(cur["RUNTIME_IMAGES"], self.initial_runtime)
+        self.assertIn("runtime plan: exact image restore [backend=%s]" % INITIAL_IMAGES["backend"], dry.stdout)
+        self.assertIn("source-exact and runtime-exact", p.stdout)
         rec = self.lay.records()[-1]
         self.assertEqual((rec["action"], rec["status"], rec["release_id"]), ("rollback", "ROLLBACK_DONE", self.m0["release_id"]))
+        self.assertEqual((rec["runtime_rollback"], rec["runtime_images"]), ("EXACT_IMAGE", INITIAL_IMAGES))
         self.assertEqual(mf.validate_record(rec), [])
         self.assert_no_secrets(p.stdout, p.stderr, dry.stdout)
+
+    def test_standalone_rollback_without_recorded_image_needs_explicit_source_rebuild(self):
+        self._deploy_b1()
+        self.lay.remove_image(INITIAL_IMAGES["backend"])
+        before = self.lay.snapshot()
+        p = self.lay.run(self.b1, "release_rollback.sh", "--yes")
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("exact runtime rollback is impossible", p.stdout)
+        self.assertEqual(self.lay.snapshot(), before)
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND])
+
+        p = self.lay.run(self.b1, "release_rollback.sh", "--yes", "--allow-source-rebuild")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assert_live_is_c0()
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND, BUILD_BACKEND])
+        self.assertIn("NOT runtime-exact", p.stdout)
+        rebuilt = self.lay.builds()[-1].split()[-1]
+        self.assert_runtime(rebuilt, INITIAL_IMAGES["frontend"])
+        rec = self.lay.records()[-1]
+        self.assertEqual((rec["status"], rec["runtime_rollback"]), ("ROLLBACK_DONE", "SOURCE_REBUILD"))
+        self.assertEqual(mf.validate_record(rec), [])
+
+    def test_standalone_rollback_refuses_runtime_drift(self):
+        self._deploy_b1()
+        self.lay.fake_file("cimg_begwork-frontend", "sha256:" + "e" * 64)
+        before = self.lay.snapshot()
+        p = self.lay.run(self.b1, "release_rollback.sh", "--yes")
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("runtime drift", p.stdout)
+        self.assertEqual(self.lay.snapshot(), before)
 
     def test_standalone_rollback_refuses_tampered_target(self):
         self._deploy_b1()
@@ -361,7 +483,10 @@ class DeployToolTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.lay.base, "repo.rollback-" + self.m0["release_id"])))
         retired = os.listdir(os.path.join(self.lay.base, "release-state", "retired"))
         self.assertTrue(any(r.startswith("repo.rollback-" + self.m0["release_id"]) for r in retired), retired)
-        self.assertIn("compose up -d --build frontend", self.lay.calls())
+        self.assertEqual(self.lay.compose_ups(), [BUILD_BACKEND, "compose up -d --no-deps --build frontend"])
+        backend_1 = self.lay.builds()[0].split()[-1]
+        self.assertEqual(prev["RUNTIME_IMAGES"], "backend=%s,frontend=%s" % (backend_1, INITIAL_IMAGES["frontend"]))
+        self.assertEqual(self.lay.container_image("begwork-backend"), backend_1, "backend must not be rebuilt")
 
     # ------------------------------------------------------------------- retention
     def test_retention_never_removes_active_tree_or_rollback_target(self):
@@ -390,6 +515,27 @@ class DeployToolTests(unittest.TestCase):
         # the recorded rollback still works after retention
         r = self.lay.run(self.b1, "release_rollback.sh")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_retention_of_release_image_tags_keeps_current_and_previous(self):
+        self._deploy_b1()
+        self.assertEqual(self.lay.run(self.b2, "release_deploy.sh").returncode, 0)
+        ids = {m["release_id"] for m in (self.m0, self.m1, self.m2)}
+        self.assertEqual({t.split(":", 1)[1] for t in self.lay.tags() if t.startswith("beg-release/")}, ids)
+        tags_before = self.lay.tags()
+        default = self.lay.run(self.b2, "release_retention.sh", "--keep", "0", "--apply")
+        self.assertEqual(default.returncode, 0, default.stdout)
+        self.assertEqual(self.lay.tags(), tags_before, "image tags are only touched with --images")
+        dry = self.lay.run(self.b2, "release_retention.sh", "--images")
+        self.assertIn("untag  : image tag beg-release/backend:" + self.m0["release_id"], dry.stdout)
+        self.assertEqual(self.lay.tags(), tags_before)
+        p = self.lay.run(self.b2, "release_retention.sh", "--images", "--apply")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        left = {t.split(":", 1)[1] for t in self.lay.tags() if t.startswith("beg-release/")}
+        self.assertEqual(left, {self.m1["release_id"], self.m2["release_id"]})
+        self.assertNotRegex(self.lay.calls(), r"docker rmi -|prune")
+        r = self.lay.run(self.b2, "release_rollback.sh")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("exact image restore [frontend=", r.stdout)
 
 
 if __name__ == "__main__":

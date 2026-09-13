@@ -170,6 +170,7 @@
       "required": ["schema", "action", "status", "release_id", "release_sha256", "commit", "tree",
                    "environment", "deployment_id", "started_at", "finished_at", "actor",
                    "previous_release_id", "rollback_target_release_id", "services_rebuilt",
+                   "runtime_images", "runtime_rollback", "verifier_image",
                    "migrations", "verification", "smoke", "failure", "evidence_dir"],
       "properties": {
         "schema": {"const": "beg.deployment-record/v1"},
@@ -187,6 +188,17 @@
         "previous_release_id": {"type": "string"},
         "rollback_target_release_id": {"type": "string"},
         "services_rebuilt": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        "runtime_images": {
+          "type": "object",
+          "description": "Immutable image IDs the containers run after the operation (docker inspect .Image).",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        },
+        "runtime_rollback": {
+          "enum": ["NOT_APPLICABLE", "EXACT_IMAGE", "SOURCE_REBUILD", "FAILED"],
+          "description": "EXACT_IMAGE: recorded image IDs run again (verified). SOURCE_REBUILD: rebuilt from the verified source tree because a recorded image was unavailable — source-exact, not runtime-exact."
+        },
+        "verifier_image": {"type": "string", "pattern": "^(sha256:[0-9a-f]{64}|local-python-[0-9]+\\.[0-9]+\\.[0-9]+[A-Za-z0-9.+-]*)$"},
         "migrations": {"const": "NOT_RUN"},
         "verification": {"enum": ["PASS", "FAIL", "SKIPPED"]},
         "smoke": {"enum": ["PASS", "FAIL", "SKIPPED"]},

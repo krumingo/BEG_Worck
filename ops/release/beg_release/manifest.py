@@ -16,9 +16,14 @@ ENVIRONMENTS = ("development", "test", "staging", "production")
 APPROVAL_TYPES = ("merge", "review", "deploy", "validation")
 RECORD_ACTIONS = ("adopt", "deploy", "rollback")
 RECORD_STATUSES = ("ADOPTED", "DEPLOYED", "PRECHECK_FAILED", "ROLLED_BACK", "ROLLBACK_DONE", "ROLLBACK_FAILED")
+# EXACT_IMAGE: the recorded immutable image IDs run again; SOURCE_REBUILD: rebuilt from the verified
+# source tree because a recorded image was unavailable (source-exact, not runtime-exact).
+RUNTIME_ROLLBACK = ("NOT_APPLICABLE", "EXACT_IMAGE", "SOURCE_REBUILD", "FAILED")
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+VERIFIER_IMAGE = re.compile(r"^(sha256:[0-9a-f]{64}|local-python-[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.+-]*)$")
 TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 RELEASE_ID = re.compile(r"^rel-\d{8}T\d{6}Z-[0-9a-f]{12}$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -61,6 +66,7 @@ REQUIRED = {
     "record": ["schema", "action", "status", "release_id", "release_sha256", "commit", "tree",
                "environment", "deployment_id", "started_at", "finished_at", "actor",
                "previous_release_id", "rollback_target_release_id", "services_rebuilt",
+               "runtime_images", "runtime_rollback", "verifier_image",
                "migrations", "verification", "smoke", "failure", "evidence_dir"],
 }
 
@@ -304,6 +310,21 @@ def validate_record(rec):
         if rec[key] != "NONE":
             v.match(rec[key], "record.%s" % key, RELEASE_ID, "a release id or NONE")
     v.str_list(rec["services_rebuilt"], "record.services_rebuilt", NAME, "a service name")
+    if not isinstance(rec["runtime_images"], dict):
+        v.err("record.runtime_images", "must be an object {service: image id}")
+    else:
+        for svc, image in rec["runtime_images"].items():
+            v.match(svc, "record.runtime_images", NAME, "keyed by service name")
+            v.match(image, "record.runtime_images.%s" % svc, IMAGE_ID, "an immutable image id sha256:<64 hex>")
+        if rec["status"] in ("ADOPTED", "DEPLOYED", "ROLLBACK_DONE") and not rec["runtime_images"]:
+            v.err("record.runtime_images", "must record the running images for status %s" % rec["status"])
+    if rec["runtime_rollback"] not in RUNTIME_ROLLBACK:
+        v.err("record.runtime_rollback", "must be one of %s" % (RUNTIME_ROLLBACK,))
+    elif rec["status"] in ("ROLLED_BACK", "ROLLBACK_DONE") and rec["runtime_rollback"] not in ("EXACT_IMAGE", "SOURCE_REBUILD"):
+        v.err("record.runtime_rollback", "a completed rollback must say EXACT_IMAGE or SOURCE_REBUILD")
+    elif rec["status"] in ("ADOPTED", "DEPLOYED", "PRECHECK_FAILED") and rec["runtime_rollback"] != "NOT_APPLICABLE":
+        v.err("record.runtime_rollback", "must be NOT_APPLICABLE for status %s" % rec["status"])
+    v.match(rec["verifier_image"], "record.verifier_image", VERIFIER_IMAGE, "a verifier image id or local-python-<version>")
     if rec["migrations"] != "NOT_RUN":
         v.err("record.migrations", "must be NOT_RUN (W0-09A never runs migrations)")
     for key in ("verification", "smoke"):
@@ -347,6 +368,7 @@ def render_plan(manifest, previous_state=None):
                          or "NONE",
         "FLAG_KEYS": ",".join(sorted(r["feature_flags"])),
         "MIGRATIONS_DECLARED": str(len(r["schema_version"]["migrations"]["declared"])),
+        "BASE_IMAGES": ",".join(sorted({img for svc in r["build"]["services"].values() for img in svc["base_images"]})),
     }
     for key, spec in sorted(r["feature_flags"].items()):
         plan["FLAG_EXPECT_" + key] = spec["expected"]
