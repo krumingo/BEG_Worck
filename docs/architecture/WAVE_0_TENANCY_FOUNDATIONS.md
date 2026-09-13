@@ -6,6 +6,21 @@
 
 Този backlog е задължителен predecessor за продаваем multi-tenant BEG_Work.
 
+## Съответствие с каноничната W0 номерация (13.09.2026)
+
+`W0-T01…T12` е под-backlog на tenancy изискванията, не отделни W0 items. Каноничните номера са в [Implementation Waves](IMPLEMENTATION_WAVES.md).
+
+| Под-backlog | Каноничен W0 item | Статус |
+|---|---|---|
+| W0-T01 Tenant Registry, W0-T02 Tenant Guard, W0-T04 DB/Master isolation (DB част), W0-T06 sequences/integrations, W0-T07 migration runner | W0-01 | CORE MERGED — registry/guard/resolver; guard не е на всички входни точки; migration runner и sequences не са направени |
+| W0-T03 TenantMembership + FLOW-002 | W0-02 | CORE DEPLOYED — ExternalPrincipal/AccessGrant не са направени |
+| W0-T04 Master Data per tenant | W0-03 | NOT STARTED |
+| W0-T05 customer-managed storage + File Registry | W0-06 | NOT STARTED |
+| W0-T08 Support / Partner Access | W0-01 / W0-02 | NOT STARTED |
+| W0-T09 Billing and entitlements | W0-08 | NOT STARTED |
+| W0-T10 Environments and no-fork, W0-T11 Tenant-aware QA | W0-09 (A/B) | PARTIAL |
+| W0-T12 Backup/Restore/Export/Retention/Deletion | W0-10 (A/B) и W0-11 | backup PARTIAL; restore/export/retention/deletion NOT STARTED |
+
 ## W0-T01 — Tenant Registry
 
 - canonical tenant identity;

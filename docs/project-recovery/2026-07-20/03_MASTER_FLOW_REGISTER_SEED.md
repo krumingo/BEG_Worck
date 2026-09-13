@@ -1,6 +1,6 @@
 # Master Flow Register — FLOW-001–050
 
-> **Актуално към:** 04.08.2026  
+> **Актуално към:** 13.09.2026 (WAVE-PLAN-SYNC)  
 > **Показател:** бизнес готовност, не процент програмиран код  
 > **100%:** Business Lock; Implementation Gate се проверява отделно  
 > **Технически статус:** виж [Implementation Gate Matrix](../../architecture/IMPLEMENTATION_GATE_MATRIX.md)
@@ -87,20 +87,20 @@
 - Един общ код за всички tenant-и; настройки → шаблони → flags/entitlements → общи extension points → общ продукт или „не“; няма private forks.
 - Development/Test/Staging/Production и exact-version Tenant Acceptance Environment използват общ Release Manifest.
 - Standard termination retention: 90 дни read-only; export преди deletion; няма автоматично deletion; legal/incident hold, Approval, verification и signed disposition manifest са задължителни.
+- 12.09.2026 — FLOW-011: предаването на актив е двуфазно — предаващият създава `PENDING_ACCEPTANCE`, получателят/отговорникът потвърждава `ACCEPTED`; custody и окончателната отговорност се сменят само при `ACCEPTED`; важи за служител, обект/отговорник и ГОСТ; отказ/проблем пази историята и не прехвърля отговорност.
+- 12.09.2026 — FLOW-027 е централният оперативен гръбнак: график, генериран и управляван от СМР дейностите, с baseline / текущ план / прогноза; предстоящите СМР проверяват готовността си и напомнят проактивно (FLOW-026/045).
+- 12.09.2026 — FLOW-020/012: материалът се различава като поръчан, доставен, приет по количество, технически приет и физически наличен на обекта; недостигът и най-късната безопасна дата за поръчка/прехвърляне се показват навреме; потвърждението на доставка поддържа снимки като `file_id` релации към приемането и историята.
+- 12.09.2026 — FLOW-021: подизпълнителският прогрес се измерва спрямо КСС количествата; задълженията се смятат от одобреното измерено количество (D-02).
+- Нов FLOW не е нужен: изискванията от 12.09.2026 попадат в съществуващите FLOW-011, 012, 020, 021, 026, 027 и 045; FLOW-014, 016, 019 и 029 вече ги покриват. Business Lock остава 100% за всички засегнати FLOW-ове.
 
 ## Бизнес затваряне
 
-FLOW-001–050 нямат оставащи бизнес решения. Следващата стъпка е:
-
-```text
-финална проверка на Draft PR #2
-→ синхронизация на CLAUDE.md v15 и таблото
-→ изрично решение за merge
-→ Wave 0 coding
-```
+FLOW-001–050 нямат оставащи бизнес решения. PR #2 е merge-нат и Wave 0 coding е започнал. Към 13.09.2026 следващата implementation стъпка е **W0-09A** (Release Manifest / deploy / rollback core); пълният договорен ред е в [Implementation Waves](../../architecture/IMPLEMENTATION_WAVES.md) и [таблото](06_WAVE_STATUS_DASHBOARD.md).
 
 ## Важно техническо уточнение
 
 49 FLOW-а са заключени на бизнес ниво, а FLOW-018 е legacy, погълнат от FLOW-039. Business Lock не означава Implementation Gate PASS.
 
 D-15 и FLOW-050 добавят задължителни Wave 0 foundations: Tenant Registry, Tenant Guard/database resolver, TenantMembership↔RoleAssignment, per-tenant Master Data/File Registry/numbering/integrations, migration runner + `schema_version`, AI Usage Ledger, Payment Provider Adapter, Subscription/Billing state machine, dunning scheduler, environment/Release Manifest governance, no-fork enforcement, isolation tests, Support Access Request и per-tenant backup/restore/export/retention/deletion proof.
+
+Implementation статус към 13.09.2026: W0-01 и W0-04 имат merge-нато ядро; W0-02 core е в production (`0b53bcd5`, mode off), но W0-02 item не е затворен, докато остават 229 legacy role проверки; W0-03, W0-05…W0-08 и W0-11 не са започнати; W0-09 и W0-10 са частични. Нито един FLOW няма Implementation Gate PASS.

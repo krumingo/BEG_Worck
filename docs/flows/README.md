@@ -22,6 +22,7 @@
 - [Claude Cross-FLOW Logic Audit](../architecture/CLAUDE_CROSS_FLOW_LOGIC_AUDIT_2026-07-20.md)
 - [Implementation Gate Matrix](../architecture/IMPLEMENTATION_GATE_MATRIX.md)
 - [Implementation Waves](../architecture/IMPLEMENTATION_WAVES.md)
+- [Табло за изпълнение — реален W0 статус](../project-recovery/2026-07-20/06_WAVE_STATUS_DASHBOARD.md)
 
 ## FLOW-001–FLOW-010
 
