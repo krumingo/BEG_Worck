@@ -3,3 +3,6 @@
 # Windows PC converts LF->CRLF on checkout AND on `git archive`, and the CRLF
 # wrapper broke bash on Synology ("invalid option name").
 *.sh text eol=lf
+
+# Test doubles executed by bash on Linux/Synology (no .sh extension).
+ops/release/tests/fakes/* text eol=lf

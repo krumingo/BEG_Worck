@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# W0-09A test double for the docker CLI (unit tests and the isolated Synology validation).
+#
+# State in $FAKE:
+#   c_<container>     status|restarts|created   cimg_<container>  image id   cref_<container>  image ref
+#   images/<hex>      image sha256:<hex> exists
+#   refs/<escaped>    tag repo:tag ('/'->'%', ':'->'+') -> image id
+#   restart_loop_<c>  every inspect bumps the restart count     logs_<c>  container log
+#   env_<c>_<KEY>     value printed by `exec <c> printenv KEY`
+#
+# `run` is only ever the verifier container. It must carry the isolation flags, an immutable
+# image ID, read-only /bundle /base /hint and may write only below /evid or /stage.
+#   FAKE_DOCKER_RUN=sim   map container paths back to host paths, run $RELEASE_PYTHON locally
+#   FAKE_DOCKER_RUN=real  hand the unchanged command to $REAL_DOCKER (sources must be below
+#                         $FAKE_ALLOWED_ROOT) — used on the NAS so the real Python 3.11 image runs
+echo "docker $*" >> "$FAKE/calls.log"
+
+esc()  { printf '%s' "$1" | tr '/:' '%+'; }
+norm() { case "${1##*/}" in *:*) printf '%s' "$1" ;; *) printf '%s:latest' "$1" ;; esac; }
+resolve() { # image ref or id -> id
+  local x="$1" id
+  case "$x" in
+    sha256:*) [ -f "$FAKE/images/${x#sha256:}" ] && { printf '%s' "$x"; return 0; }; return 1 ;;
+  esac
+  [ -f "$FAKE/refs/$(esc "$(norm "$x")")" ] || return 1
+  id="$(cat "$FAKE/refs/$(esc "$(norm "$x")")")"
+  [ -f "$FAKE/images/${id#sha256:}" ] || return 1
+  printf '%s' "$id"
+}
+die() { echo "fake docker: $*" >&2; exit 97; }
+
+cmd="$1"; shift
+case "$cmd" in
+  inspect)
+    [ "$1" = -f ] || die "inspect without -f"
+    fmt="$2"; name="$3"
+    [ -f "$FAKE/c_$name" ] || { echo "Error: No such object: $name" >&2; exit 1; }
+    case "$fmt" in
+      '{{.Image}}') cat "$FAKE/cimg_$name"; echo ;;
+      '{{.Config.Image}}') cat "$FAKE/cref_$name"; echo ;;
+      *)
+        if [ -f "$FAKE/restart_loop_$name" ]; then
+          IFS='|' read -r st rc cr < "$FAKE/c_$name"; rc=$((rc + 1)); printf '%s|%s|%s\n' "$st" "$rc" "$cr" > "$FAKE/c_$name"
+        fi
+        cat "$FAKE/c_$name" ;;
+    esac ;;
+  image)
+    [ "$1" = inspect ] && [ "$2" = -f ] && [ "$3" = '{{.Id}}' ] || die "unexpected image command"
+    resolve "$4" || { echo "Error: No such image: $4" >&2; exit 1; }
+    echo ;;
+  tag)
+    id="$(resolve "$1")" || { echo "Error response from daemon: No such image: $1" >&2; exit 1; }
+    mkdir -p "$FAKE/refs"; printf '%s' "$id" > "$FAKE/refs/$(esc "$(norm "$2")")" ;;
+  rmi)
+    case "$1" in -*) die "rmi options are not allowed" ;; esac
+    f="$FAKE/refs/$(esc "$(norm "$1")")"; [ -f "$f" ] || exit 1; rm -f "$f" ;;
+  images)
+    for f in "$FAKE"/refs/*; do [ -f "$f" ] && basename "$f" | tr '%+' '/:'; done; exit 0 ;;
+  logs)
+    name="${*: -1}"; [ -f "$FAKE/logs_$name" ] && cat "$FAKE/logs_$name"; exit 0 ;;
+  exec)
+    name="$1"; key="$3"; f="$FAKE/env_${name}_${key}"
+    [ -f "$f" ] && { cat "$f"; exit 0; }; exit 1 ;;
+  run)
+    orig=("$@"); net=""; pull=""; ro=0; nnp=0; maps=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --rm) shift ;;
+        --read-only) ro=1; shift ;;
+        --security-opt) [ "$2" = no-new-privileges ] && nnp=1; shift 2 ;;
+        -e) shift 2 ;;
+        --pull) pull="$2"; shift 2 ;;
+        --network) net="$2"; shift 2 ;;
+        -v) maps+=("$2"); shift 2 ;;
+        -*) die "unexpected run option $1" ;;
+        *) break ;;
+      esac
+    done
+    [ "$net" = none ] && [ "$pull" = never ] && [ "$ro" = 1 ] && [ "$nnp" = 1 ] \
+      || die "verifier needs --network none --pull never --read-only --security-opt no-new-privileges"
+    [[ "$1" =~ ^sha256:[0-9a-f]{64}$ ]] || die "verifier must run by immutable image id, got $1"
+    [ -z "${FAKE_VERIFY_IMAGE_ID:-}" ] || [ "$1" = "$FAKE_VERIFY_IMAGE_ID" ] || die "unexpected verifier image $1"
+    [ "$2" = python3 ] || die "unexpected command $2"
+    for m in "${maps[@]}"; do
+      spec="${m%:ro}"; dst="${spec##*:}"; src="${spec%:*}"
+      case "$dst" in
+        /bundle|/base|/hint) [ "$spec" != "$m" ] || die "$dst must be mounted read-only" ;;
+        /evid|/stage) [ "$spec" = "$m" ] || die "$dst must be writable" ;;
+        *) die "unexpected mount $dst" ;;
+      esac
+      if [ -n "${FAKE_ALLOWED_ROOT:-}" ]; then
+        case "$src" in "$FAKE_ALLOWED_ROOT"/*) ;; *) die "mount source outside the isolated root: $src" ;; esac
+      fi
+    done
+    shift 2
+    prev=""
+    for a in "$@"; do
+      case "$prev" in
+        --plan-out|--report-out|--out|--stage|--probe-dir)
+          case "$a" in /evid|/evid/*|/stage|/stage/*) ;; *) die "verifier write outside /evid,/stage: $prev $a" ;; esac ;;
+      esac
+      prev="$a"
+    done
+    if [ "${FAKE_DOCKER_RUN:-sim}" = real ]; then
+      exec "$REAL_DOCKER" run "${orig[@]}"
+    fi
+    args=()
+    for a in "$@"; do
+      for m in "${maps[@]}"; do
+        spec="${m%:ro}"; dst="${spec##*:}"; src="${spec%:*}"
+        case "$a" in "$dst"|"$dst"/*) a="$(cygpath -m "$src" 2>/dev/null || printf '%s' "$src")${a#"$dst"}"; break ;; esac
+      done
+      args+=("$a")
+    done
+    exec "$RELEASE_PYTHON" "${args[@]}" ;;
+  *) exit 0 ;;
+esac

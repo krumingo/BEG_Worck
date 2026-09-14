@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# W0-09A test double for curl: prints the HTTP code for the requested path from
+# $FAKE/http_codes ("<path> <code>" lines), 200 by default.
+url="${*: -1}"; path="/${url#*://*/}"; [ "$url" = "${url#*://*/}" ] && path="/"
+echo "curl $path" >> "$FAKE/calls.log"
+code=200
+if [ -f "$FAKE/http_codes" ]; then
+  while read -r p c; do [ "$p" = "$path" ] && code="$c"; done < "$FAKE/http_codes"
+fi
+printf '%s' "$code"
