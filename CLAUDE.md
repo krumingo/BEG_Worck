@@ -1,7 +1,7 @@
-# BEG_Work — CLAUDE.md v15
+# BEG_Work — CLAUDE.md v16
 
-> Версия: 15  
-> Дата: 05.08.2026  
+> Версия: 16  
+> Дата: 11.09.2026  
 > Статус: канонични инструкции за разработка след Business Lock на FLOW-001–050  
 > Канон: `docs/flows/FLOW-001.md` … `FLOW-050.md`, FLOW-043, Master Flow Register и архитектурните решения в `docs/architecture/`
 
@@ -275,6 +275,9 @@ Client Portal и отделния Marketplace продукт.
 ## 16. Забрани за агента
 
 - не merge-вай без изрично разрешение на Крум;
+- не deploy-вай в production без изрично разрешение на Крум;
+- не изпълнявай production DB migration/rollback без изрично разрешение на Крум;
+- не променяй production secrets/config без изрично разрешение на Крум;
 - не създавай втори ledger/registry/source of truth;
 - не използвай private client fork;
 - не заобикаляй Tenant Guard/Permission/DQ/Approval;
@@ -296,17 +299,207 @@ Client Portal и отделния Marketplace продукт.
 - `docs/architecture/MODERN_FIELD_EXPERIENCE_2026-08-04.md`
 - `docs/architecture/FLOW_050_FINAL_GOVERNANCE_ENVIRONMENTS_RETENTION_DECISION_2026-08-04.md`
 
-## 18. Работен процес Claude / ChatGPT / Emergent
+## 18. Работен процес Claude / GitHub / ChatGPT / Крум
 
-Роли: Claude — чете кода, архитект, програмира промените, байтова верификация, одит; ChatGPT — документация, Release Manifest, втори архитектурен одит; Emergent — прилага промени в GitHub; Крум — единствен взема бизнес решения, тества на живо, одобрява merge.
+### 18.1 Роли
 
-Процес за всяка кодова промяна:
-1. Крум описва със свои думи.
-2. Claude чете реалния код, прави карта на релациите + схема/mockup (визуално — Крум мисли визуално).
-3. Крум одобрява.
-4. Claude програмира → ZIP + diff + английски prompt за Emergent.
-5. Emergent прилага; Крум връща резултата.
-6. Claude сравнява байтово (cmp/diff) срещу очакваното. Самоотчет на агент никога не се приема без байтова проверка.
-7. Крум тества на живо; доказателство (скрийншот/видео) преди статус "Готово".
+- **Крум** — Product Owner и единствен взема бизнес решения; одобрява промяна на заключен FLOW, merge към `main`, production deploy и production data migration/rollback.
+- **Claude** — основен implementation agent: чете реалния код, анализира, програмира, тества, commit-ва, push-ва feature/fix branch и подготвя Draft Pull Request + HANDOFF REPORT.
+- **GitHub** — доказателствен слой и source за независим review: branch, commits, diff, PR, checks и история.
+- **ChatGPT** — независим reviewer/втори архитектурен одит: проверява реалния GitHub diff/PR и връща `APPROVE`, `CHANGES REQUIRED` или `BLOCKED/NEEDS EVIDENCE`.
+- **Emergent** — вече не е част от стандартния development workflow. Да не се генерира prompt/ZIP за Emergent, освен ако Крум изрично не възстанови този процес.
 
-Правила: технически аномалии в кода се записват като дълг, не се поправят без Крум да потвърди "боли ме в реални данни"; заключен FLOW не се променя без изрично решение на Крум, записано в канона; при конфликт между документи важи docs/flows/ + FLOW-043; сесиите започват с четене на CLAUDE.md → Gate Matrix → релевантните FLOW файлове.
+### 18.2 Локална работна среда
+
+Стандартното локално repository на Windows PC е:
+
+```text
+C:\BEG\BEG_Worck
+```
+
+Claude работи в това repository и използва същия Git metadata (`.git`) като GitHub Desktop. Не се прави втори clone за паралелна работа по същата задача.
+
+В началото на всяка сесия Claude задължително:
+
+1. чете `CLAUDE.md`;
+2. чете Gate Matrix и релевантните FLOW/D-решения;
+3. изпълнява `git status`;
+4. показва current branch и `git log --oneline -5`;
+5. проверява `origin` и дали branch-ът има upstream;
+6. потвърждава, че не работи директно в `main` за кодова промяна.
+
+### 18.3 Branch policy
+
+За всяка отделна задача/PR се използва отделен feature/fix branch.
+
+Пример:
+
+```text
+w0-02-pr1-core-permission
+fix/<topic>
+feature/<topic>
+docs/<topic>
+```
+
+Правила:
+
+- не се програмира директно в `main`;
+- един branch = една логическа промяна/PR;
+- несвързани промени не се смесват;
+- преди работа се записва base commit;
+- при открит страничен дефект Claude го докладва отделно; не го поправя мълчаливо;
+- technical debt се записва, освен ако Крум изрично не разреши включването му в текущия scope.
+
+### 18.4 Процес за всяка кодова промяна
+
+1. **Задача** — Крум описва целта със свои думи.
+2. **Анализ** — Claude чете реалния код, релевантните FLOW-ове, зависимости, source of truth, security/tenant/finance impact и прави план.
+3. **Одобрение на подхода** — при бизнес/архитектурна промяна Claude спира за потвърждение от Крум преди consequential implementation.
+4. **Implementation** — Claude прави минималната необходима промяна в отделния branch.
+5. **Тестове** — Claude пуска приложимите unit/integration/API/regression тестове и записва точния output. `importorskip`, mock и `--noconftest` винаги се декларират изрично.
+6. **Самопроверка** — `git diff`, security/tenant/permission review, migration/rollback review, проверка за secrets и случайни несвързани файлове.
+7. **Commit** — ако тестовете и самопроверката са приемливи, Claude commit-ва всички промени по задачата с ясен message.
+8. **Push** — Claude автоматично push-ва само текущия feature/fix branch към `origin`. Push към работен branch не изисква отделно разрешение.
+9. **Draft PR** — Claude създава или обновява Draft Pull Request към правилния base branch, по подразбиране `main`, освен ако задачата не изисква друго.
+10. **HANDOFF** — Claude дава стандартизирания отчет от §18.6 и спира. Не merge-ва и не deploy-ва.
+11. **Независим review** — Крум дава PR номера/линка и HANDOFF REPORT на ChatGPT. ChatGPT проверява реалния GitHub PR/diff, не само текста на Claude.
+12. **Решение** — ChatGPT връща `APPROVE`, `CHANGES REQUIRED` или `BLOCKED/NEEDS EVIDENCE` с конкретни основания.
+13. **Корекции** — при `CHANGES REQUIRED` Claude коригира в същия branch, тества, commit-ва, push-ва и обновява същия PR; следва нов review.
+14. **Merge** — само след изрично разрешение на Крум. Никой агент не приема липсата на възражение за разрешение.
+15. **Deploy** — отделно действие и отделно разрешение от Крум. Merge не означава автоматичен production deploy.
+16. **Post-deploy** — при production release се пазят version, migration state, approver, rollback target и резултат от smoke/post-deploy тестовете.
+
+### 18.5 Какво Claude може да прави автоматично
+
+Без допълнително разрешение, в рамките на одобрения scope:
+
+- read/search на repository;
+- edit на файлове в текущия feature/fix branch;
+- локални тестове и безопасни non-production проверки;
+- `git diff`, `git status`, `git log`;
+- commit към текущия branch;
+- push към текущия feature/fix branch;
+- създаване/обновяване на Draft PR;
+- добавяне на тестови доказателства и технически отчет в PR.
+
+Изисква изрично разрешение от Крум:
+
+- merge към `main` или друг protected/release branch;
+- production deploy;
+- production DB migration/rollback;
+- destructive data operation;
+- промяна на production secrets/config;
+- force-push към shared/protected branch;
+- промяна на заключено бизнес правило/FLOW;
+- изключване/заобикаляне на security, tenant, approval или audit контроли.
+
+### 18.6 Задължителен HANDOFF REPORT от Claude
+
+След всеки завършен работен цикъл Claude връща отчет в следния формат:
+
+```text
+HANDOFF — <TASK / PR NAME>
+
+STATUS: CODE READY FOR REVIEW | NEEDS DECISION | BLOCKED
+REPO: C:\BEG\BEG_Worck
+BASE BRANCH: <branch>
+WORK BRANCH: <branch>
+BASE COMMIT: <sha>
+HEAD COMMIT: <sha>
+PR: <number + link, или NOT CREATED>
+
+1. SCOPE
+- какво беше поискано
+- кои FLOW/D-решения са засегнати
+- какво нарочно НЕ е променяно
+
+2. CHANGED FILES
+- пълен списък на променените файлове
+- кратко предназначение на всяка промяна
+
+3. BEHAVIOR CHANGE
+- преди
+- след
+- business/security/tenant/finance impact
+
+4. TEST EVIDENCE
+- точните команди
+- точния резултат (passed/failed/skipped)
+- mock vs real services/DB
+- какво НЕ е тествано
+
+5. MIGRATION / DATA
+- има ли schema/data migration
+- dry-run/apply/verify/revert
+- production data докосвана ли е: YES/NO
+
+6. SECURITY / PERMISSIONS / AUDIT
+- permission changes
+- tenant isolation impact
+- audit events
+- denied-path tests
+
+7. RISKS / OPEN ITEMS
+- известни ограничения
+- regression risk
+- technical debt, открит извън scope
+
+8. ROLLBACK
+- как се връща кодът
+- как се връща schema/data, ако е приложимо
+- какво rollback НЕ възстановява
+
+9. GIT STATE
+- git status
+- upstream state
+- commits in scope
+- uncommitted/untracked files: YES/NO
+- pushed: YES/NO
+- merged: YES/NO
+- deployed: YES/NO
+
+10. REVIEW REQUEST
+- какво точно трябва ChatGPT да провери независимо
+```
+
+Claude не използва формулировка „готово“ само защото кодът е написан. До независим review статусът е **`CODE READY FOR REVIEW`**.
+
+### 18.7 Правила за независим review от ChatGPT
+
+ChatGPT трябва, когато GitHub PR е наличен:
+
+- да прочете PR metadata и реалния diff/changed files;
+- да сравни GitHub доказателствата с HANDOFF REPORT;
+- да провери за скрити scope промени, пропуснати tests, security/tenant/permission грешки, migration/rollback риск и несъвместимост с FLOW канона;
+- да не приема твърдение „tests passed“ като достатъчно доказателство, ако липсва output/check evidence;
+- при значим риск да поиска допълнителен тест или корекция преди merge;
+- да дава еднозначен резултат: `APPROVE`, `CHANGES REQUIRED` или `BLOCKED/NEEDS EVIDENCE`.
+
+### 18.8 Merge/deploy gate
+
+`Push` и `Draft PR` са част от нормалната автоматична работа. `Merge` и `Deploy` са отделни контролни точки.
+
+```text
+Claude implementation
+→ tests
+→ commit
+→ push feature branch
+→ Draft PR
+→ HANDOFF
+→ ChatGPT independent review
+→ Krum decision
+→ merge
+→ separate deploy approval
+→ post-deploy verification
+```
+
+Никога не се прави автоматичен merge след зелен тест. Никога не се прави автоматичен production deploy след merge, освен ако Крум изрично не въведе отделно правило за конкретен deployment pipeline.
+
+### 18.9 Допълнителни процесни правила
+
+- Самоотчет на агент никога не е достатъчен при наличен GitHub diff/PR — реалният код е доказателството.
+- Заключен FLOW не се променя без изрично решение на Крум, записано в канона.
+- При конфликт между документи важи `docs/flows/` + FLOW-043 и релевантните D-решения.
+- Сесиите започват с четене на `CLAUDE.md` → Gate Matrix → релевантните FLOW файлове.
+- При production риск, неясна бизнес логика или необратима операция Claude спира и иска решение, вместо да предполага.
+- GitHub Desktop е UI върху същото local repository; не е отделен source of truth и не изисква отделно „свързване“ с Claude.
