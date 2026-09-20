@@ -9,6 +9,10 @@
 #   verify_json         canned mongosh --file output        verify_rc   its exit code
 #   prod_<container>    the inspect line for a production container
 #   leak_container      `rm -f` refuses to remove, so cleanup verification must fail
+#   mutate_prod         touches a production container line while the restore runs
+#   kill_during_restore sends TERM to $W010A_RUN_PID mid-restore (interrupt drill)
+#   heat_on_verify      writes 70 into every $M2_GLOB sensor just before verification
+#   stall_on_verify     also sleeps, long enough for the temperature sampler to trip
 #   c_<name>            a running container      net_<name>      a network      vol_<name>  a volume
 #
 # Every invocation is appended to $FAKE/calls.log so tests can assert on the real flags
@@ -86,9 +90,19 @@ case "$cmd" in
       *" mongorestore "*)
         # knob: simulate something touching production while the proof runs
         [ -f "$FAKE/mutate_prod" ] && echo "MUTATED" >> "$FAKE/prod_begwork-backend"
+        if [ -f "$FAKE/kill_during_restore" ]; then
+          # interrupt drill: signal the runner, then leave so bash can service the trap
+          kill -TERM "${W010A_RUN_PID:-0}" 2>/dev/null
+          sleep 1
+          exit 0
+        fi
         cat "$FAKE/restore_out" 2>/dev/null
         exit "$(cat "$FAKE/restore_rc" 2>/dev/null || echo 0)" ;;
       *" --file "*)
+        if [ -f "$FAKE/heat_on_verify" ]; then
+          for sensor in ${M2_GLOB:-}; do [ -f "$sensor" ] && echo 70 > "$sensor"; done
+          [ -f "$FAKE/stall_on_verify" ] && sleep 7
+        fi
         cat "$FAKE/verify_json" 2>/dev/null
         exit "$(cat "$FAKE/verify_rc" 2>/dev/null || echo 0)" ;;
       *" --eval "*)

@@ -104,7 +104,7 @@ class RestoreProofTests(unittest.TestCase):
         with open(path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
 
-    def run_proof(self, *args):
+    def run_proof(self, *args, **env_extra):
         env = dict(os.environ)
         env.update(
             PROD=posix(self.prod),
@@ -118,8 +118,19 @@ class RestoreProofTests(unittest.TestCase):
             TEMP_ABORT="62",
             READY_TIMEOUT="9",
         )
+        env.update({k: str(v) for k, v in env_extra.items()})
         proc = subprocess.run([BASH, posix(SCRIPT), *args], env=env, capture_output=True, text=True)
         return proc
+
+    def foreign_objects(self):
+        """A parallel/older run's objects. Cleanup must never touch these."""
+        names = ("c_w010a-mongo-OLDRUN", "vol_w010a-vol-OLDRUN", "net_w010a-net-OLDRUN")
+        for n in names:
+            self.knob(n, "")
+        return names
+
+    def lock_dir(self):
+        return os.path.join(self.out_root, ".lock")
 
     def evidence_dir(self):
         dirs = sorted(os.listdir(self.out_root))
@@ -144,9 +155,13 @@ class RestoreProofTests(unittest.TestCase):
             return f.read()
 
     def assert_no_leftovers(self):
+        self.assert_no_leftovers_for_this_run()
+
+    def assert_no_leftovers_for_this_run(self):
+        """Objects of THIS run must be gone; foreign w010a-* ones are not our business."""
         left = [n for n in os.listdir(self.fake)
-                if n.startswith(("c_w010a", "net_w010a", "vol_w010a"))]
-        self.assertEqual([], left, "isolated objects survived cleanup: %s" % left)
+                if n.startswith(("c_w010a", "net_w010a", "vol_w010a")) and "OLDRUN" not in n]
+        self.assertEqual([], left, "this run's objects survived cleanup: %s" % left)
 
     # ---------------------------------------------------------------- happy path
     def test_passes_and_reports_the_assignment_fields(self):
@@ -310,6 +325,106 @@ class RestoreProofTests(unittest.TestCase):
         p = self.run_proof(os.path.basename(other))
         self.assertEqual(0, p.returncode)
         self.assertIn("BACKUP_FILE=" + os.path.basename(other), self.evidence("result.env"))
+
+
+    # ------------------------------------------------- BLOCKER 1: cleanup must be run-scoped
+    def test_foreign_w010a_objects_are_left_alone(self):
+        foreign = self.foreign_objects()
+        p = self.run_proof()
+        self.assertEqual(0, p.returncode, p.stdout + p.stderr)
+        for n in foreign:
+            self.assertTrue(os.path.exists(os.path.join(self.fake, n)),
+                            "cleanup destroyed another run's object: %s" % n)
+        self.assert_no_leftovers_for_this_run()
+
+    def test_cleanup_only_names_its_own_objects(self):
+        self.foreign_objects()
+        self.run_proof()
+        removals = [l for l in self.calls().splitlines()
+                    if l.startswith(("docker rm ", "docker volume rm", "docker network rm"))]
+        self.assertTrue(removals)
+        for line in removals:
+            self.assertNotIn("OLDRUN", line, "cleanup addressed a foreign object: %s" % line)
+
+    def test_parallel_run_is_refused_by_the_lock(self):
+        os.makedirs(self.lock_dir())
+        with open(os.path.join(self.lock_dir(), "owner"), "w") as f:
+            f.write("pid=1 stamp=OTHER"+chr(10))
+        p = self.run_proof()
+        self.assertEqual(2, p.returncode)
+        self.assertIn("another restore proof is already running", self.evidence("run.log"))
+        self.assertNotIn("network create", self.calls())
+        self.assertTrue(os.path.isdir(self.lock_dir()), "the other run's lock was removed")
+
+    def test_lock_is_released_after_a_successful_run(self):
+        self.assertEqual(0, self.run_proof().returncode)
+        self.assertFalse(os.path.exists(self.lock_dir()), "the lock outlived the run")
+
+    # ------------------------------------------------- BLOCKER 2: sensors are fail-closed
+    def test_missing_sensors_refuse_by_default(self):
+        empty = os.path.join(self.tmp, "no-sensors")
+        os.makedirs(empty)
+        p = self.run_proof(M2_GLOB=posix(empty) + "/nvme*/temperature")
+        self.assertEqual(2, p.returncode)
+        self.assertIn("no sensor found", self.evidence("run.log"))
+        self.assertNotIn("network create", self.calls())
+
+    def test_missing_sensors_need_an_explicit_override(self):
+        empty = os.path.join(self.tmp, "no-sensors")
+        os.makedirs(empty)
+        p = self.run_proof(M2_GLOB=posix(empty) + "/nvme*/temperature", M2_SENSORS_REQUIRED="0")
+        self.assertEqual(0, p.returncode, p.stdout + p.stderr)
+        self.assertIn("M2_SENSORS_REQUIRED=0 was set explicitly", self.evidence("run.log"))
+
+    def test_non_numeric_sensor_refuses(self):
+        self.write(os.path.join(self.m2, "nvme1n1", "temperature"), "n/a"+chr(10))
+        p = self.run_proof()
+        self.assertEqual(2, p.returncode)
+        self.assertIn("unreadable or non-numeric", self.evidence("run.log"))
+
+    def test_non_numeric_sensor_refuses_even_with_the_override(self):
+        self.write(os.path.join(self.m2, "nvme1n1", "temperature"), "n/a"+chr(10))
+        p = self.run_proof(M2_SENSORS_REQUIRED="0")
+        self.assertEqual(2, p.returncode)
+        self.assertIn("unreadable or non-numeric", self.evidence("run.log"))
+
+    def test_empty_sensor_file_refuses(self):
+        self.write(os.path.join(self.m2, "nvme0n1", "temperature"), "")
+        p = self.run_proof()
+        self.assertEqual(2, p.returncode)
+        self.assertIn("unreadable or non-numeric", self.evidence("run.log"))
+
+    # ------------------------------------------------- BLOCKER 3: a trip must block PASS
+    def test_hot_sensor_after_verification_blocks_pass(self):
+        self.knob("heat_on_verify", "")
+        p = self.run_proof()
+        self.assertEqual(3, p.returncode)
+        self.assertIn("W0-10A: BLOCKED", self.evidence("SUMMARY.txt"))
+        self.assertIn("after verification", self.evidence("run.log"))
+        self.assert_no_leftovers_for_this_run()
+
+    def test_sampler_trip_during_verification_blocks_pass(self):
+        self.knob("heat_on_verify", "")
+        self.knob("stall_on_verify", "")
+        p = self.run_proof()
+        self.assertEqual(3, p.returncode)
+        self.assertIn("W0-10A: BLOCKED", self.evidence("SUMMARY.txt"))
+        self.assertIn("temperature gate", self.evidence("run.log"))
+        self.assert_no_leftovers_for_this_run()
+
+    # ------------------------------------------------- BLOCKER 4: interrupt safety
+    def test_interrupted_run_cleans_up_and_releases_the_lock(self):
+        foreign = self.foreign_objects()
+        self.knob("kill_during_restore", "")
+        p = self.run_proof()
+        self.assertEqual(6, p.returncode, p.stdout + p.stderr)
+        self.assertIn("interrupted by signal", self.evidence("run.log"))
+        self.assertIn("INTERRUPTED: yes", self.evidence("SUMMARY.txt"))
+        self.assert_no_leftovers_for_this_run()
+        self.assertFalse(os.path.exists(self.lock_dir()), "the lock survived an interrupt")
+        for n in foreign:
+            self.assertTrue(os.path.exists(os.path.join(self.fake, n)),
+                            "an interrupt destroyed another run's object: %s" % n)
 
 
 if __name__ == "__main__":

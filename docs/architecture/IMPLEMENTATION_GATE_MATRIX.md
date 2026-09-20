@@ -1,8 +1,8 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 04.08.2026; implementation статус синхронизиран на 20.09.2026  
-> **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.
+> - **Дата:** 04.08.2026; implementation статус синхронизиран на 20.09.2026
+> - **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.
+> - **Последен business-close pass:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.
 
 ## Легенда
 
