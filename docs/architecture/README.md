@@ -109,10 +109,10 @@ FLOW-050 заключва:
 ## Следваща стъпка
 
 ```text
-WAVE-PLAN-SYNC
-→ W0-09A Release Manifest / deploy / rollback core
-→ W0-10A isolated restore proof
-→ W0-03 Master Data
+WAVE-PLAN-SYNC            ✔ DONE
+→ W0-09A Release Manifest / deploy / rollback core   ✔ MERGED (не е деплойван)
+→ W0-10A isolated restore proof                      ✔ PASS 20.09.2026
+→ W0-03 Master Data                                  ← следващ
 ```
 
 ## Правило за PR и release

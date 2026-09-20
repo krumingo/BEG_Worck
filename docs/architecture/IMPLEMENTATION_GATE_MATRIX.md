@@ -1,8 +1,8 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 04.08.2026; implementation статус синхронизиран на 13.09.2026  
-> **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
-> **Последен business-close pass:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.
+> - **Дата:** 04.08.2026; implementation статус синхронизиран на 20.09.2026
+> - **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.
+> - **Последен business-close pass:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.
 
 ## Легенда
 
@@ -26,7 +26,7 @@
 | 044 | 100% | **OPS-W0** | per-tenant DB restore и BEG_Work-managed data recovery |
 | 050 | 100% | **W0-BLOCKER** | Tenant Registry/Guard, DB resolver, Plan/Entitlements, AI Usage Ledger, Subscription/Billing, Payment Provider Adapter, dunning, environments, retention и controlled deletion |
 
-## Implementation статус на W0 gates — 13.09.2026
+## Implementation статус на W0 gates — 20.09.2026
 
 Класификацията по-горе не се сменя: gate-ът остава отворен, докато W0 item-ът не е доказан изцяло.
 
@@ -34,14 +34,14 @@
 |---|---|---|---|
 | 050 (tenancy / D-15) | W0-01 | CORE MERGED | Tenant Guard на всички входни точки, migration runner, support access, isolation suite |
 | 002 | W0-02 | CORE DEPLOYED (`0b53bcd5`, mode off) | 229 от 232 legacy role проверки не са мигрирани; ExternalPrincipal/AccessGrant; shadow/enforce решение |
-| 032 | W0-03 | NOT STARTED — следващ голям build след W0-09A/W0-10A | целият обхват |
+| 032 | W0-03 | NOT STARTED — **следващият implementation етап** (W0-09A и W0-10A са затворени) | целият обхват |
 | 040 | W0-04 | CORE MERGED | покритие на всички critical writes; retention/hold/archive/audit-of-audit (W0-04B) |
 | 006 | W0-05 | NOT STARTED | целият обхват |
 | 016 | W0-06 | NOT STARTED | целият обхват |
 | 033/034 | W0-07 | NOT STARTED | целият обхват |
 | 050 (billing) | W0-08 | NOT STARTED | целият обхват |
-| 042 / 050 (release) | W0-09 | PARTIAL | общ Release Manifest и deploy/rollback core (W0-09A); environments/TAE/QA exit gate (W0-09B) |
-| 044 | W0-10 | PARTIAL | restore proof (W0-10A); пълен DR (W0-10B) |
+| 042 / 050 (release) | W0-09 | PARTIAL — W0-09A MERGED, NOT DEPLOYED | W0-09A е в `main` (`fdf4d59e`, PR #14, 14.09.2026), но не е adopt-нат в production (`DEPLOYED_COMMIT` = `0b53bcd5`); environments/TAE/QA exit gate (W0-09B) |
+| 044 | W0-10 | PARTIAL — W0-10A DONE (PASS 20.09.2026) | restore е доказан изолирано (`docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`); gate-ът остава отворен за **W0-10B** — PITR, off-site immutable copy, per-tenant restore, drill; отделно стои хардуерният риск `docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md` |
 | 050 (retention) | W0-11 | NOT STARTED | целият обхват |
 
 Wave 2.1 (FLOW-027 график/готовност) не е W0 gate; runtime кодът ѝ изисква W0-03, W0-06, W0-07 и read-only достъп до W0-05 — виж [Implementation Waves](IMPLEMENTATION_WAVES.md).
@@ -92,4 +92,4 @@ Wave 2.1 (FLOW-027 график/готовност) не е W0 gate; runtime к�
 
 ## Бизнес статус
 
-Няма оставащи бизнес решения. Wave 0 coding е започнал; следващата implementation стъпка е **W0-09A**, после W0-10A и W0-03 (пълният ред е в [Implementation Waves](IMPLEMENTATION_WAVES.md)).
+Няма оставащи бизнес решения. Wave 0 coding е започнал; W0-09A и W0-10A са затворени (20.09.2026), а следващата implementation стъпка е **W0-03 Master Data** (пълният ред е в [Implementation Waves](IMPLEMENTATION_WAVES.md)).

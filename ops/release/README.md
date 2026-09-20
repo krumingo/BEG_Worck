@@ -332,6 +332,6 @@ crash-ващ release, с доказателство по image ID. Production (`
 - Base images не са pinned (`python:3.11-slim`, `node:20-alpine`, `nginx:alpine`) → **нов** build на същия commit може да даде различен image. Rollback не зависи от това, докато записаният image съществува (`EXACT_IMAGE`); `SOURCE_REBUILD` е изрично отбелязан като не runtime-exact. Base image ID-тата преди всеки build са в `base-images.txt`.
 - Image tag-овете `beg-release/*` задържат стари image-и до `release_retention.sh --images --apply`.
 - Compose няма `healthcheck`; restart loop се хваща чрез sample на restart count.
-- Backup-ът се проверява само с `gzip -t`; restore никога не е доказан (W0-10A).
+- Backup-ът се проверява с `gzip -t` при създаване; restore е доказан изолирано на 20.09.2026 (W0-10A, `ops/dr/`, `docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`) — но **не е доказвано възстановяване в production**.
 - Rollback връща кода, не данните.
 - Entitlements snapshot липсва (W0-08); tenant scope е deployment-wide.
