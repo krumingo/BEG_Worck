@@ -6,3 +6,7 @@
 
 # Test doubles executed by bash on Linux/Synology (no .sh extension).
 ops/release/tests/fakes/* text eol=lf
+ops/dr/tests/fakes/* text eol=lf
+
+# Mounted into a Linux container by the W0-10A restore proof.
+ops/dr/*.js text eol=lf
