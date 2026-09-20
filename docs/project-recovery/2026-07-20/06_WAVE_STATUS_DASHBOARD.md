@@ -4,7 +4,7 @@
 > - Статус на документацията: FLOW-001–050 Business Lock; уточнения на Крум от 12.09.2026 са вписани във FLOW-011/012/020/021/026/027/045
 > - Каноничната W0 номерация е в `docs/architecture/IMPLEMENTATION_WAVES.md`. Старата номерация на това табло от 05.08.2026 (12 точки с разменени Permission/Tenant и отделни QA/DR/Retention items) е **отменена**.
 > - Production: `0b53bcd5b977ee27de8d4cee363fed41dd897482` (Merge PR #9), `PERMISSION_SERVICE_MODE` = off
-> - Следващ етап: **W0-03 Master Data** — W0-09A (merge-нат `fdf4d59e`, PR #14, 14.09.2026, **не е деплойван**) и W0-10A (**PASS**, 20.09.2026) са затворени.
+> - Следващ етап: **W0-03 Master Data** — W0-09A (merge-нат `fdf4d59e`, PR #14, 14.09.2026, **не е деплойван**) и W0-10A (**PASS**, 20.09.2026) са затворени. Етап W0-03A (инвентар и contract) е в ревю; runtime не е започнат.
 > - Отворен риск, независим от горното: прегряващите M.2 NVMe кеш дискове на NAS-а (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`) — **не е отстранен**
 
 ## 1. Общ статус
@@ -28,7 +28,7 @@
 |---|---|---|---|---|
 | W0-01 | Tenancy / D-15 / FLOW-050 | **CORE MERGED** | PR #3 (`app/tenancy`: registry, guard, resolver); ползва се от W0-02 пътищата (`deps/auth`, `permissions/*`, `routes/auth`, `activity_budgets`, `assets_intake_pending`) | Tenant Guard не е вързан към всички legacy routes/jobs/files/search/export/AI; migration runner, support access, per-tenant numbering/integrations, пълен isolation suite |
 | W0-02 | Permission Service / FLOW-002 | **CORE DEPLOYED** | PR #9 → `0b53bcd5`; Synology real-Mongo 54 / mock 111 / migration PASS; standard app regression 0 нови failures; production deploy + automated smoke + manual login/dashboard smoke PASS (12.09.2026) | **W0-02 item НЕ е затворен** (решение на Крум 09.09.2026: не се затваря, докато има route, който заобикаля Permission Service). Инвентар в `main`: **232 legacy проверки, 3 мигрирани, 229 остават** (`backend/scripts/w0_02_permission_inventory.py`). Mode остава off; shadow/enforce изискват отделно решение. ExternalPrincipal/AccessGrant, MFA/passkeys — не са започнати |
-| W0-03 | Master Data / FLOW-032 | **NOT STARTED — NEXT MAJOR BUILD** | няма `app/master_data` | целият обхват (A–E) |
+| W0-03 | Master Data / FLOW-032 | **W0-03A CONTRACT IN REVIEW — RUNTIME NOT STARTED** | инвентар и contract (20.09.2026): `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md`; `app/master_data` все още не съществува | целият runtime обхват (B–E); contract-ът чака независимо ревю |
 | W0-04 | Audit / Lifecycle / Idempotency / FLOW-040 | **CORE MERGED** | PR #6 (`app/audit`: envelope, store с hash chain, correction/reversal/annotation, idempotency registry); ползва се от W0-02 permission audit/sync/workflow | Не покрива всички critical writes; R1–R6 retention enforcement, legal/incident hold, controlled disposition, signed manifests, immutable archive, audit-of-audit — **W0-04B** |
 | W0-05 | Payment Core / FLOW-006 | **NOT STARTED** | няма единен payment write service (legacy `routes/finance.py` съществува) | целият обхват |
 | W0-06 | File Registry / FLOW-016 | **NOT STARTED** | няма `file_id` registry (legacy `routes/media.py`, локален uploads път) | целият обхват (A–E), customer-managed provider onboarding |

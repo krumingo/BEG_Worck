@@ -128,7 +128,7 @@ Wave 0 започва преди масово feature development.
 |---|---|---|---|
 | W0-01 Tenancy | **CORE MERGED** | PR #3 — `app/tenancy` (registry, guard, resolver); ползва се от W0-02 пътищата | Tenant Guard не е вързан към всички legacy routes/jobs/files/search/export/AI; migration runner; support access; per-tenant numbering/integrations; пълен isolation suite |
 | W0-02 Permission Service | **CORE DEPLOYED** | PR #9 → production `0b53bcd5` (12.09.2026); Synology real-Mongo/migration PASS; standard app regression без нови failures; automated + manual production smoke PASS; mode = off | W0-02 item не е затворен (решение на Крум 09.09.2026): 232 legacy проверки, 3 мигрирани, **229 остават** — миграция домейн по домейн; ExternalPrincipal/AccessGrant и MFA/passkeys не са започнати; shadow/enforce изискват отделно решение |
-| W0-03 Master Data | **NOT STARTED** — next major build | — | целият обхват |
+| W0-03 Master Data | **W0-03A CONTRACT IN REVIEW — RUNTIME NOT STARTED** | инвентар и implementation contract: [W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md](W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md) (20.09.2026) — 15 идентичностни колекции, 0 уникални индекса върху master data, `persons`/`companies` с по два писача и различни схеми | целият runtime обхват; няма `app/master_data`; A–E разделянето чака независимо ревю и възлагане |
 | W0-04 Audit / Lifecycle / Idempotency | **CORE MERGED** | PR #6 — `app/audit` (envelope, hash-chained store, correction/reversal/annotation, idempotency registry); ползва се от W0-02 | не покрива всички critical writes; retention enforcement, legal/incident hold, disposition, signed manifests, immutable archive, audit-of-audit → **W0-04B** |
 | W0-05 Payment Core | **NOT STARTED** | legacy finance routes, без единен payment write service | целият обхват |
 | W0-06 File Registry | **NOT STARTED** | legacy media uploads, без `file_id` registry | целият обхват |
@@ -167,7 +167,7 @@ Wave 0 започва преди масово feature development.
 12) W0-09B  full Wave 0 exit gate
 ```
 
-**Статус на реда към 20.09.2026:** (1) WAVE-PLAN-SYNC — DONE; (2) W0-09A — **MERGED** (`fdf4d59e`, 14.09.2026), но **не е деплойван** в production; (3) W0-10A — **DONE, PASS** (20.09.2026): реален архив възстановен и проверен изолирано, production непроменен — [отчет](../ops/W0-10A_RESTORE_PROOF_2026-09-20.md). Следва **W0-03 Master Data**. Следващата implementation задача не започва преди това.
+**Статус на реда към 20.09.2026:** (1) WAVE-PLAN-SYNC — DONE; (2) W0-09A — **MERGED** (`fdf4d59e`, 14.09.2026), но **не е деплойван** в production; (3) W0-10A — **DONE, PASS** (20.09.2026): реален архив възстановен и проверен изолирано, production непроменен — [отчет](../ops/W0-10A_RESTORE_PROOF_2026-09-20.md). Следва **W0-03 Master Data**: етап **W0-03A** (инвентар и contract) е предложен за ревю — [документ](W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md); **runtime не е започнат**. W0-03B започва само след одобрен contract и отделна ASSIGNMENT.
 
 Една implementation задача наведнъж: код → тестове → exact SHA → Draft PR → HANDOFF → STOP. Паралелната политика по-долу важи за планиране и договори, не за едновременни implementation PR-и.
 
