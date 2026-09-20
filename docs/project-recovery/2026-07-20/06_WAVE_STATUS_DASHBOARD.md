@@ -4,7 +4,7 @@
 > Статус на документацията: FLOW-001–050 Business Lock; уточнения на Крум от 12.09.2026 са вписани във FLOW-011/012/020/021/026/027/045  
 > Каноничната W0 номерация е в `docs/architecture/IMPLEMENTATION_WAVES.md`. Старата номерация на това табло от 05.08.2026 (12 точки с разменени Permission/Tenant и отделни QA/DR/Retention items) е **отменена**.  
 > Production: `0b53bcd5b977ee27de8d4cee363fed41dd897482` (Merge PR #9), `PERMISSION_SERVICE_MODE` = off  
-> Следващ етап: **БЛОКИРАН** — W0-09A е merge-нат (`fdf4d59e`, PR #14, 14.09.2026), но **не е деплойван**; W0-10A — инструментът е готов и тестван (`ops/dr/`), чака прогон на NAS-а; отделно остава отворен хардуерният риск от прегряващите M.2 кеш дискове (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`)
+> Следващ етап: **БЛОКИРАН** — W0-09A е merge-нат (`fdf4d59e`, PR #14, 14.09.2026), но **не е деплойван**; **W0-03 Master Data** — W0-09A и W0-10A са затворени (W0-10A: PASS на 20.09.2026, `docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`); отделно остава отворен хардуерният риск от прегряващите M.2 кеш дискове (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`)
 
 ## 1. Общ статус
 
@@ -34,7 +34,7 @@
 | W0-07 | Data Quality + Approval / FLOW-033/034 | **NOT STARTED** | няма DQ/Approval runtime | целият обхват |
 | W0-08 | Subscription / Billing / Entitlements / FLOW-050 | **NOT STARTED** | legacy `routes/billing.py` (Stripe mock), не е W0 canonical | целият обхват |
 | W0-09 | Test / Release / Environments / FLOW-042/050 | **PARTIAL — W0-09A MERGED, NOT DEPLOYED** | `ops/release` (build от git обекти, adopt/deploy/rollback/retention) е в `main` чрез PR #14 → `fdf4d59e38fb17e9f566812d326258948a3459d7` (14.09.2026); independent re-review PASS на `e2d3d43d`, изолирана Synology валидация 172/172, committed tests 79/79 | **не е adopt-нат в production** — няма `release-state/` на NAS-а, `DEPLOYED_COMMIT` = `0b53bcd5`; adoption/deploy само с изрично разрешение на Крум. environments/TAE/no-fork/пълен QA gate — **W0-09B** |
-| W0-10 | Disaster Recovery / FLOW-044 | **PARTIAL — W0-10A READY TO RUN** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh` (PR #4/#5); нощен backup 03:10 работи, `gzip -t` OK, ротация 14 дни; **пропуснат backup за 14.09.2026** — NAS-ът е бил изключен | **Restore proof още липсва** — инструментът е разработен и тестван (`ops/dr/`, 21 теста), но прогонът на NAS-а не е изпълнен. Пуска се от Крум, с температурна граница заради отворения хардуерен риск (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`); PITR, off-site immutable copy, per-tenant restore, тримесечен drill — **W0-10B** |
+| W0-10 | Disaster Recovery / FLOW-044 | **PARTIAL — W0-10A DONE (PASS)** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh` (PR #4/#5); нощен backup 03:10 работи, `gzip -t` OK, ротация 14 дни; **пропуснат backup за 14.09.2026** — NAS-ът е бил изключен | **Restore proof е налице от 20.09.2026**: 2433 документа / 93 колекции възстановени и проверени изолирано, 0 неуспешни, tenant проверка PASS, production непроменен (`docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`). Остава **W0-10B** — PITR, off-site immutable copy, per-tenant restore, тримесечен drill; PITR, off-site immutable copy, per-tenant restore, тримесечен drill — **W0-10B** |
 | W0-11 | Export / Retention / Controlled Deletion / FLOW-050 | **NOT STARTED** | — | целият обхват |
 
 ## 3. Roadmap split — без преномериране на каноничните W0 items
@@ -42,7 +42,7 @@
 | Под-етап | Родител | Обхват | Кога |
 |---|---|---|---|
 | **W0-09A** | W0-09 | Bootstrap Release Manifest, exact-version deploy, rollback, deployed-version запис, smoke gate | **MERGED 14.09.2026** (`fdf4d59e`, PR #14) — не е деплойван |
-| **W0-10A** | W0-10 | изолиран restore proof на реален backup в non-production среда | **ИНСТРУМЕНТЪТ Е ГОТОВ** (`ops/dr/`) — чака прогон на NAS-а |
+| **W0-10A** | W0-10 | изолиран restore proof на реален backup в non-production среда | **ЗАВЪРШЕН — PASS, 20.09.2026** |
 | **W0-04B** | W0-04 | Audit lifecycle completion: retention/hold/disposition/archive/audit-of-audit, покритие на всички critical writes | по-късно |
 | **W0-10B** | W0-10 | пълен DR: PITR, off-site immutable copy, per-tenant restore, drill | по-късно |
 | **W0-09B** | W0-09 | финален Wave 0 release/test/environment exit gate | последен в Wave 0 |
@@ -100,7 +100,7 @@ Wave 0 не приключва, докато не са доказани:
 | Offline дубликати | idempotency keys + conflict review |
 | Автоматично изтриване при неплащане | Отделен termination/retention/deletion state machine |
 | Deploy без записана версия | W0-09A: exact-version артефакт + deployed-version запис + rollback анкер |
-| Backup без доказан restore | W0-10A преди W0-03 — инструментът е готов, чака прогон; restore остава недоказан дотогава |
+| Backup без доказан restore | **закрит на 20.09.2026** — W0-10A PASS; повторяем с една команда (`ops/dr/`) |
 | Отговорност, прехвърлена само със сканиране | FLOW-011: двуфазно предаване, custody се сменя само при `ACCEPTED` |
 
 ## 7. Производствени релийзи

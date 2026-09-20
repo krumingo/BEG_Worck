@@ -135,7 +135,7 @@ Wave 0 започва преди масово feature development.
 | W0-07 DQ + Approval | **NOT STARTED** | — | целият обхват |
 | W0-08 Subscription / Billing / Entitlements | **NOT STARTED** | legacy Stripe-mock billing, не е W0 canonical | целият обхват |
 | W0-09 Test / Release / Environments | **PARTIAL — W0-09A MERGED, NOT DEPLOYED** | `ops/release` е в `main` чрез PR #14 → merge commit `fdf4d59e38fb17e9f566812d326258948a3459d7` (14.09.2026); independent re-review PASS на `e2d3d43d`, изолирана Synology валидация 172/172, committed tests 79/79 | **W0-09A не е adopt-нат в production** — на NAS-а няма `release-state/`, `DEPLOYED_COMMIT` е още `0b53bcd5` (12.09.2026); adoption/deploy изискват отделно разрешение от Крум. environments/TAE/no-fork/QA exit gate → **W0-09B** |
-| W0-10 Disaster Recovery | **PARTIAL — W0-10A READY TO RUN** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh`; нощният backup работи — пропуснат е само 14.09.2026, когато NAS-ът е бил изключен | restore все още **не е доказан**. Инструментът за изолирано доказателство е готов и тестван — `ops/dr/` (временен MongoDB на `--internal` мрежа, архив монтиран само за четене, проверка на бази/колекции/индекси/броеве/tenant полета, доказано почистване и непроменен production; 21 теста срещу фалшив docker). Прогонът се пуска от Крум на NAS-а и е защитен с температурна граница заради [инцидента от 13–16.09](../ops/INCIDENT_2026-09-13_NAS_THERMAL.md) (прегряващи M.2 NVMe кеш дискове, хардуерът не е отстранен); PITR, off-site immutable copy, per-tenant restore, drill → **W0-10B** |
+| W0-10 Disaster Recovery | **PARTIAL — W0-10A DONE (PASS)** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh`; нощният backup работи — пропуснат е само 14.09.2026, когато NAS-ът е бил изключен | **restore е доказан на 20.09.2026**: реален нощен архив възстановен и проверен в изолирана среда — 2433 документа, 0 неуспешни, 93 колекции, 0 без `_id` индекс, tenant проверка PASS, почистване доказано, production непроменен ([отчет](../ops/W0-10A_RESTORE_PROOF_2026-09-20.md), инструмент `ops/dr/`, 22 теста). Остава **W0-10B**: PITR, off-site immutable copy, per-tenant restore, периодичен drill. Отделно остава отворен хардуерният риск от [инцидента 13–16.09](../ops/INCIDENT_2026-09-13_NAS_THERMAL.md); PITR, off-site immutable copy, per-tenant restore, drill → **W0-10B** |
 | W0-11 Export / Retention / Deletion | **NOT STARTED** | — | целият обхват |
 
 „CORE MERGED/DEPLOYED" не означава, че W0 item-ът е затворен или че свързаният FLOW има Implementation Gate PASS.
@@ -145,7 +145,7 @@ Wave 0 започва преди масово feature development.
 Каноничните W0 items запазват номерата си. За изпълнение се ползват следните под-етапи:
 
 - **W0-09A** — Bootstrap Release / deploy / rollback foundation: общ Release Manifest, exact-version артефакт, записана deployed версия, rollback анкер, smoke gate.
-- **W0-10A** — изолиран restore proof: реален backup се възстановява в non-production среда и се проверява.
+- **W0-10A** — изолиран restore proof: реален backup се възстановява в non-production среда и се проверява. **Завършен на 20.09.2026 (PASS).**
 - **W0-04B** — Audit lifecycle completion: retention/hold/disposition/archive/audit-of-audit и покритие на всички critical writes.
 - **W0-10B** — пълен Disaster Recovery по FLOW-044/D-13.
 - **W0-09B** — финален Wave 0 release/test/environment exit gate.
@@ -167,7 +167,7 @@ Wave 0 започва преди масово feature development.
 12) W0-09B  full Wave 0 exit gate
 ```
 
-**Статус на реда към 20.09.2026:** (1) WAVE-PLAN-SYNC — DONE; (2) W0-09A — **MERGED** (`fdf4d59e`, 14.09.2026), но **не е деплойван** в production; (3) W0-10A — инструментът е разработен и тестван (`ops/dr/`), **прогонът още не е изпълнен**, затова restore остава недоказан. Пуска се от Крум; температурната граница пази срещу [инцидента от 13–16.09](../ops/INCIDENT_2026-09-13_NAS_THERMAL.md). Следващата implementation задача не започва преди това.
+**Статус на реда към 20.09.2026:** (1) WAVE-PLAN-SYNC — DONE; (2) W0-09A — **MERGED** (`fdf4d59e`, 14.09.2026), но **не е деплойван** в production; (3) W0-10A — **DONE, PASS** (20.09.2026): реален архив възстановен и проверен изолирано, production непроменен — [отчет](../ops/W0-10A_RESTORE_PROOF_2026-09-20.md). Следва **W0-03 Master Data**. Следващата implementation задача не започва преди това.
 
 Една implementation задача наведнъж: код → тестове → exact SHA → Draft PR → HANDOFF → STOP. Паралелната политика по-долу важи за планиране и договори, не за едновременни implementation PR-и.
 
