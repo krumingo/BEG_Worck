@@ -1,6 +1,6 @@
 # BEG_Work — Implementation Gate Matrix
 
-> **Дата:** 04.08.2026; implementation статус синхронизиран на 13.09.2026  
+> **Дата:** 04.08.2026; implementation статус синхронизиран на 20.09.2026  
 > **Правило:** `100% Business Lock` не означава `Implementation Gate PASS`.  
 > **Последен business-close pass:** FLOW-001–050 са бизнес затворени; FLOW-018 е legacy и е погълнат от FLOW-039.
 
@@ -26,7 +26,7 @@
 | 044 | 100% | **OPS-W0** | per-tenant DB restore и BEG_Work-managed data recovery |
 | 050 | 100% | **W0-BLOCKER** | Tenant Registry/Guard, DB resolver, Plan/Entitlements, AI Usage Ledger, Subscription/Billing, Payment Provider Adapter, dunning, environments, retention и controlled deletion |
 
-## Implementation статус на W0 gates — 13.09.2026
+## Implementation статус на W0 gates — 20.09.2026
 
 Класификацията по-горе не се сменя: gate-ът остава отворен, докато W0 item-ът не е доказан изцяло.
 
@@ -40,8 +40,8 @@
 | 016 | W0-06 | NOT STARTED | целият обхват |
 | 033/034 | W0-07 | NOT STARTED | целият обхват |
 | 050 (billing) | W0-08 | NOT STARTED | целият обхват |
-| 042 / 050 (release) | W0-09 | PARTIAL | общ Release Manifest и deploy/rollback core (W0-09A); environments/TAE/QA exit gate (W0-09B) |
-| 044 | W0-10 | PARTIAL | restore proof (W0-10A); пълен DR (W0-10B) |
+| 042 / 050 (release) | W0-09 | PARTIAL — W0-09A MERGED, NOT DEPLOYED | W0-09A е в `main` (`fdf4d59e`, PR #14, 14.09.2026), но не е adopt-нат в production (`DEPLOYED_COMMIT` = `0b53bcd5`); environments/TAE/QA exit gate (W0-09B) |
+| 044 | W0-10 | PARTIAL — W0-10A BLOCKED | restore proof (W0-10A) е спрян заради термичния NAS инцидент 13–14.09.2026, root cause INCONCLUSIVE (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`); пълен DR (W0-10B) |
 | 050 (retention) | W0-11 | NOT STARTED | целият обхват |
 
 Wave 2.1 (FLOW-027 график/готовност) не е W0 gate; runtime кодът ѝ изисква W0-03, W0-06, W0-07 и read-only достъп до W0-05 — виж [Implementation Waves](IMPLEMENTATION_WAVES.md).

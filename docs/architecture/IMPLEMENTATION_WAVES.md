@@ -120,7 +120,7 @@ Wave 0 започва преди масово feature development.
 - backup/restore/export/retention/deletion are proven per tenant;
 - no private fork or hidden client version exists.
 
-## Wave 0 — implementation status (13.09.2026)
+## Wave 0 — implementation status (20.09.2026)
 
 Каноничната номерация е тази в този документ (W0-01…W0-11). Старата номерация в `06_WAVE_STATUS_DASHBOARD.md` от 05.08.2026 е отменена. Идентификаторите `W0-T01…T12` в `WAVE_0_TENANCY_FOUNDATIONS.md` са под-backlog, не отделни W0 items.
 
@@ -134,8 +134,8 @@ Wave 0 започва преди масово feature development.
 | W0-06 File Registry | **NOT STARTED** | legacy media uploads, без `file_id` registry | целият обхват |
 | W0-07 DQ + Approval | **NOT STARTED** | — | целият обхват |
 | W0-08 Subscription / Billing / Entitlements | **NOT STARTED** | legacy Stripe-mock billing, не е W0 canonical | целият обхват |
-| W0-09 Test / Release / Environments | **PARTIAL** | само W0-02-специфични артефакти: validation harness и ad-hoc guarded deploy/rollback (извън repo) | общ Release Manifest + deploy/rollback core → **W0-09A**; environments/TAE/no-fork/QA exit gate → **W0-09B** |
-| W0-10 Disaster Recovery | **PARTIAL** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh`; нощен backup работи | restore никога не е доказан → **W0-10A**; PITR, off-site immutable copy, per-tenant restore, drill → **W0-10B** |
+| W0-09 Test / Release / Environments | **PARTIAL — W0-09A MERGED, NOT DEPLOYED** | `ops/release` е в `main` чрез PR #14 → merge commit `fdf4d59e38fb17e9f566812d326258948a3459d7` (14.09.2026); independent re-review PASS на `e2d3d43d`, изолирана Synology валидация 172/172, committed tests 79/79 | **W0-09A не е adopt-нат в production** — на NAS-а няма `release-state/`, `DEPLOYED_COMMIT` е още `0b53bcd5` (12.09.2026); adoption/deploy изискват отделно разрешение от Крум. environments/TAE/no-fork/QA exit gate → **W0-09B** |
+| W0-10 Disaster Recovery | **PARTIAL — W0-10A BLOCKED** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh`; нощният backup работи — пропуснат е само 14.09.2026, когато NAS-ът е бил изключен | restore никога не е доказан → **W0-10A**, но е **спрян** заради термичните изключвания на NAS-а от 13–14.09.2026 (root cause INCONCLUSIVE) — виж [INCIDENT 2026-09-13](../ops/INCIDENT_2026-09-13_NAS_THERMAL.md); PITR, off-site immutable copy, per-tenant restore, drill → **W0-10B** |
 | W0-11 Export / Retention / Deletion | **NOT STARTED** | — | целият обхват |
 
 „CORE MERGED/DEPLOYED" не означава, че W0 item-ът е затворен или че свързаният FLOW има Implementation Gate PASS.
@@ -166,6 +166,8 @@ Wave 0 започва преди масово feature development.
 11) W0-11   Export / Retention / Deletion
 12) W0-09B  full Wave 0 exit gate
 ```
+
+**Статус на реда към 20.09.2026:** (1) WAVE-PLAN-SYNC — DONE; (2) W0-09A — **MERGED** (`fdf4d59e`, 14.09.2026), но **не е деплойван** в production; (3) W0-10A — **СПРЯН**, не е стартиран, до приключване на разследването на NAS инцидента от 13–14.09.2026 (виж [INCIDENT 2026-09-13](../ops/INCIDENT_2026-09-13_NAS_THERMAL.md)). Следващата implementation задача не започва преди това.
 
 Една implementation задача наведнъж: код → тестове → exact SHA → Draft PR → HANDOFF → STOP. Паралелната политика по-долу важи за планиране и договори, не за едновременни implementation PR-и.
 
@@ -390,3 +392,5 @@ Live Activities and App Clips are not included; they require a later separate na
 - W0-02 production release `0b53bcd5` и smoke gate, 12.09.2026.
 - Уточнения на Крум от 12.09.2026: двуфазно QR/custody приемане (FLOW-011) и управленски изисквания за график/готовност/материали/доставки/снимки/КСС (FLOW-027 и свързаните FLOW).
 - WAVE-PLAN-SYNC (канонична W0 номерация, реален статус, roadmap split и договорен ред), 13.09.2026.
+- W0-09A merge (PR #14 → `fdf4d59e`), 14.09.2026 — merge-нат, но не деплойван.
+- INCIDENT 2026-09-13/14 — термично изключване на Synology `bekr`; W0-10A е спрян (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`), 20.09.2026.
