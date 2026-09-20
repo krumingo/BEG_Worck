@@ -34,7 +34,7 @@
 |---|---|---|---|
 | 050 (tenancy / D-15) | W0-01 | CORE MERGED | Tenant Guard на всички входни точки, migration runner, support access, isolation suite |
 | 002 | W0-02 | CORE DEPLOYED (`0b53bcd5`, mode off) | 229 от 232 legacy role проверки не са мигрирани; ExternalPrincipal/AccessGrant; shadow/enforce решение |
-| 032 | W0-03 | **W0-03A CONTRACT IN REVIEW — RUNTIME NOT STARTED** | целият runtime обхват. Инвентарът (`W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md`) показва 15 идентичностни колекции, нула уникални индекса върху master data, дублирани писачи на `persons`/`companies` и седем нескоупнати изтривания |
+| 032 | W0-03 | **W0-03A MERGED — W0-03B1 IN PROGRESS** | целият runtime обхват. Инвентарът (`W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md`) показва 15 идентичностни колекции, нула уникални индекса върху master data, дублирани писачи на `persons`/`companies` и седем нескоупнати изтривания |
 | 040 | W0-04 | CORE MERGED | покритие на всички critical writes; retention/hold/archive/audit-of-audit (W0-04B) |
 | 006 | W0-05 | NOT STARTED | целият обхват |
 | 016 | W0-06 | NOT STARTED | целият обхват |
