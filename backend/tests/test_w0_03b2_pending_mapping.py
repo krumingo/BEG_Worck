@@ -46,6 +46,12 @@ def run(coro):
     return asyncio.run(coro)
 
 
+class UpdateResult:
+    def __init__(self, modified, upserted_id=None):
+        self.modified_count = modified
+        self.upserted_id = upserted_id
+
+
 class SpyCollection:
     def __init__(self, fail_on_insert=False):
         self.inserted = []
@@ -57,6 +63,10 @@ class SpyCollection:
             raise RuntimeError("simulated storage failure")
         self.inserted.append(doc)
 
+    def _match(self, query):
+        return [d for d in self.inserted
+                if all(d.get(k) == v for k, v in (query or {}).items())]
+
     async def find_one(self, query, projection=None, sort=None):
         """Match like a real collection: every key in the query must match.
 
@@ -65,11 +75,33 @@ class SpyCollection:
         crude fails the product for its own reasons.
         """
         self.queries.append(query)
-        matches = [d for d in self.inserted
-                   if all(d.get(k) == v for k, v in (query or {}).items())]
+        matches = self._match(query)
         if not matches:
             return None
         return matches[-1] if sort else matches[0]
+
+    async def update_one(self, query, update, upsert=False):
+        """Enough of Mongo's update semantics for the idempotent proposal:
+        an upsert builds the document from ``$setOnInsert`` and reports it as
+        upserted, not modified; a match is incremented in place."""
+        self.queries.append(query)
+        matches = self._match(query)
+        upserted = None
+        if not matches:
+            if not upsert:
+                return UpdateResult(0)
+            if self.fail_on_insert:
+                raise RuntimeError("simulated storage failure")
+            doc = dict(update.get("$setOnInsert", {}))
+            self.inserted.append(doc)
+            matches = [doc]
+            upserted = doc.get("id", True)
+        doc = matches[0]
+        for k, v in update.get("$set", {}).items():
+            doc[k] = v
+        for k, v in update.get("$inc", {}).items():
+            doc[k] = doc.get(k, 0) + v
+        return UpdateResult(0 if upserted is not None else 1, upserted_id=upserted)
 
 
 class SpyDb:

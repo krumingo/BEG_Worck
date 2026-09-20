@@ -63,18 +63,50 @@ class MasterDataRepository:
         coll = await self._collection(entity_type)
         return await coll.find_one(self._scope({"id": entity_id}), {"_id": 0})
 
-    async def create_pending(self, pending: Dict[str, Any]) -> Dict[str, Any]:
-        """Write one pending-mapping row. Pinned to this tenant like everything else."""
-        from app.master_data.pending import PENDING_COLLECTION, validate_pending
+    async def create_pending(self, pending: Dict[str, Any]) -> tuple:
+        """Record one pending-mapping row, idempotently.
+
+        While a proposal for the same normalized text is open in this tenant,
+        another sighting is **counted on that row** instead of opening a second
+        one. The condition lives in the filter of an upsert, so looking and
+        writing are one operation rather than a read-then-write that two
+        importers can interleave.
+
+        Returns ``(row, created)`` — ``created`` is False when the sighting was
+        counted on a proposal that was already waiting.
+        """
+        from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, validate_pending
         validate_pending(pending)
         if pending["tenant_id"] != self.tenant_id:
             raise MasterDataInvalid(
                 "refusing to write a pending record of tenant %s through the repository of tenant %s"
                 % (pending["tenant_id"], self.tenant_id)
             )
+        doc = dict(pending)
+        now = doc.get("last_seen_at") or doc.get("created_at")
+        # These are maintained by the update itself, so they must not also be
+        # handed to $setOnInsert — Mongo refuses a field in two operators.
+        for field in ("occurrences", "last_seen_at", "updated_at"):
+            doc.pop(field, None)
+
         handle = await self.db(require_operational=True)
-        await handle[PENDING_COLLECTION].insert_one(dict(pending))
-        return pending
+        result = await handle[PENDING_COLLECTION].update_one(
+            self._scope({"entity_type": pending["entity_type"],
+                         "normalized_value": pending["normalized_value"],
+                         "status": STATUS_PENDING}),
+            {"$setOnInsert": doc,
+             "$inc": {"occurrences": 1},
+             "$set": {"last_seen_at": now, "updated_at": now}},
+            upsert=True,
+        )
+        stored = await handle[PENDING_COLLECTION].find_one(
+            self._scope({"entity_type": pending["entity_type"],
+                         "normalized_value": pending["normalized_value"],
+                         "status": STATUS_PENDING}),
+            {"_id": 0},
+        )
+        created = getattr(result, "upserted_id", None) is not None
+        return (stored if stored is not None else pending), created
 
     async def get_pending(self, pending_id: str) -> Optional[Dict[str, Any]]:
         from app.master_data.pending import PENDING_COLLECTION
@@ -82,14 +114,42 @@ class MasterDataRepository:
         return await handle[PENDING_COLLECTION].find_one(self._scope({"id": pending_id}), {"_id": 0})
 
     async def list_pending(self, *, entity_type: Optional[str] = None,
-                           status: str = "pending", limit: int = 50) -> list:
+                           status: str = "pending", source_channel: Optional[str] = None,
+                           limit: int = 50) -> list:
         from app.master_data.pending import PENDING_COLLECTION
         query = self._scope({"status": status})
         if entity_type:
             query["entity_type"] = entity_type
+        if source_channel:
+            query["source_channel"] = source_channel
         handle = await self.db()
         cursor = handle[PENDING_COLLECTION].find(query, {"_id": 0})
         return await cursor.to_list(length=min(int(limit), 200))
+
+    async def search_by_text(self, entity_type: str, query: str, limit: int = 10) -> list:
+        """Records a PERSON may pick from, for text they typed themselves.
+
+        This is a lookup, not matching. Nothing here is ever used to link
+        anything automatically: it exists so the office can find the record it
+        already has in mind when the proposal's own text does not normalize
+        onto it. The automatic path stays exact — FLOW-032 Q7b forbids fuzzy
+        auto-matching, and showing options to a human is not that.
+        """
+        import re
+        from app.master_data.normalize import normalize_name
+
+        needle = normalize_name(query or "")
+        if not needle:
+            return []
+        pattern = {"$regex": re.escape(needle), "$options": "i"}
+        coll = await self._collection(entity_type)
+        cursor = coll.find(
+            self._scope({"status": "active",
+                         "$or": [{"normalized_name": pattern},
+                                 {"aliases.normalized": pattern}]}),
+            {"_id": 0},
+        )
+        return await cursor.to_list(length=min(int(limit), 50))
 
     async def claim_pending(self, pending_id: str, *, actor_id: str,
                             now: str) -> Optional[Dict[str, Any]]:

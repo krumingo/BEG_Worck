@@ -96,6 +96,7 @@ const NAV_GROUPS = [
   {
     id: "reference", icon: Archive, labelKey: "nav.reference",
     children: [
+      { to: "/data/master-data", icon: Inbox, labelKey: "nav.masterDataReview" },
       { to: "/data/counterparties", icon: Building2, labelKey: "nav.counterparties" },
       { to: "/data/clients", icon: Users, labelKey: "nav.clients" },
       { to: "/data/prices", icon: TrendingUp, labelKey: "nav.prices" },

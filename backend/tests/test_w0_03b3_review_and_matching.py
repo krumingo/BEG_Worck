@@ -51,8 +51,9 @@ def run(coro):
 
 
 class Result:
-    def __init__(self, modified):
+    def __init__(self, modified, upserted_id=None):
         self.modified_count = modified
+        self.upserted_id = upserted_id
 
 
 class Cursor:
@@ -70,8 +71,7 @@ class SpyCollection:
         self.fail_on_insert = fail_on_insert
 
     def _match(self, query):
-        return [d for d in self.docs
-                if all(_field_match(d, k, v) for k, v in (query or {}).items())]
+        return [d for d in self.docs if _doc_matches(d, query)]
 
     async def insert_one(self, doc):
         if self.fail_on_insert:
@@ -89,23 +89,57 @@ class SpyCollection:
         self.queries.append(query)
         return Cursor(self._match(query))
 
-    async def update_one(self, query, update):
+    async def update_one(self, query, update, upsert=False):
         found = self._match(query)
+        upserted = None
         if not found:
-            return Result(0)
+            if not upsert:
+                return Result(0)
+            if self.fail_on_insert:
+                raise RuntimeError("simulated storage failure")
+            # Mongo builds the new document from the operators, and reports it
+            # as upserted rather than modified.
+            doc = dict(update.get("$setOnInsert", {}))
+            self.docs.append(doc)
+            found = [doc]
+            upserted = doc.get("id", True)
         doc = found[0]
         for k, v in update.get("$set", {}).items():
             doc[k] = v
         for k, v in update.get("$push", {}).items():
             doc.setdefault(k, []).append(v)
-        return Result(1)
+        for k, v in update.get("$inc", {}).items():
+            doc[k] = doc.get(k, 0) + v
+        return Result(0 if upserted is not None else 1, upserted_id=upserted)
 
     @property
     def inserted(self):
         return self.docs
 
 
+def _doc_matches(doc, query):
+    for key, value in (query or {}).items():
+        if key == "$or":
+            if not any(_doc_matches(doc, clause) for clause in value):
+                return False
+            continue
+        if not _field_match(doc, key, value):
+            return False
+    return True
+
+
 def _field_match(doc, key, value):
+    if isinstance(value, dict) and "$regex" in value:
+        import re
+        flags = re.IGNORECASE if "i" in (value.get("$options") or "") else 0
+        pattern = re.compile(value["$regex"], flags)
+        if "." in key:
+            head, tail = key.split(".", 1)
+            return any(isinstance(i, dict) and isinstance(i.get(tail), str)
+                       and pattern.search(i[tail])
+                       for i in (doc.get(head) or []))
+        target = doc.get(key)
+        return isinstance(target, str) and bool(pattern.search(target))
     if isinstance(value, dict) and "$ne" in value:
         # Mongo semantics: for a dotted path, matches when NO element equals
         # the value — including a document with no such field at all.

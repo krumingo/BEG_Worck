@@ -3,8 +3,17 @@ const path = require("path");
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
-// Craco sets NODE_ENV=development for start, NODE_ENV=production for build
-const isDevServer = process.env.NODE_ENV !== "production";
+// Craco sets NODE_ENV=development for start, NODE_ENV=production for build,
+// and jest sets NODE_ENV=test. The visual-edit instrumentation wraps rendered
+// text in extra elements, which is fine in a browser and misleading in a test,
+// so it belongs to the dev server only.
+// DISABLE_VISUAL_EDITS=true turns the instrumentation off for a dev server
+// too — same opt-out shape as ENABLE_HEALTH_CHECK below. The plugin cannot
+// parse every Babel version, and when it cannot, nothing compiles.
+const isDevServer =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NODE_ENV !== "test" &&
+  process.env.DISABLE_VISUAL_EDITS !== "true";
 
 // Environment variable overrides
 const config = {
@@ -101,6 +110,18 @@ webpackConfig.devServer = (devServerConfig) => {
   }
 
   return devServerConfig;
+};
+
+// Tests resolve the same "@/..." alias the bundler does. CRA's own mappings
+// (CSS modules, static files) are kept — this only adds to them.
+webpackConfig.jest = {
+  configure: (jestConfig) => {
+    jestConfig.moduleNameMapper = {
+      "^@/(.*)$": "<rootDir>/src/$1",
+      ...(jestConfig.moduleNameMapper || {}),
+    };
+    return jestConfig;
+  },
 };
 
 module.exports = webpackConfig;

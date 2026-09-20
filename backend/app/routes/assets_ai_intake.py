@@ -20,6 +20,9 @@ router = APIRouter(tags=["AssetsAIIntake"])
 
 ADMIN_ROLES = ["Admin", "Owner", "SiteManager", "Accountant"]
 MAX_IMAGE_CHARS = 8_000_000  # ~6MB снимка в base64
+#: Named once: the recognition uses it and the AuditEvent has to report it
+#: (FLOW-040 §4.4 refuses an AI event without a model).
+AI_MODEL = "gpt-4.1-mini"
 
 SYSTEM_PROMPT = """Ти си експерт по строителна техника и инструменти в България.
 Получаваш снимка на машина или инструмент (понякога и втора снимка на типовата табелка).
@@ -73,11 +76,12 @@ async def ai_intake(data: AIIntakeRequest, user: dict = Depends(get_current_user
     if data.plate_image_base64:
         images.append(ImageContent(image_base64=data.plate_image_base64))
 
+    session_id = f"asset-intake-{uuid.uuid4().hex[:8]}"
     chat = LlmChat(
         api_key=api_key,
-        session_id=f"asset-intake-{uuid.uuid4().hex[:8]}",
+        session_id=session_id,
         system_message=SYSTEM_PROMPT,
-    ).with_model("openai", "gpt-4.1-mini")
+    ).with_model("openai", AI_MODEL)
 
     try:
         response = await chat.send_message(UserMessage(
@@ -96,7 +100,7 @@ async def ai_intake(data: AIIntakeRequest, user: dict = Depends(get_current_user
         except (TypeError, ValueError):
             return None
 
-    return {
+    suggestion = {
         "name": str(parsed.get("name") or "").strip(),
         "type": parsed.get("type") if parsed.get("type") in ("machine", "tool") else "tool",
         "group": (parsed.get("group") or None),
@@ -110,3 +114,11 @@ async def ai_intake(data: AIIntakeRequest, user: dict = Depends(get_current_user
         "consumables": [str(c).strip() for c in (parsed.get("consumables") or []) if str(c).strip()][:8],
         "confidence": int(_num(parsed.get("confidence")) or 0),
     }
+
+    # W0-03: the AI just invented a name for a kind of equipment. That name is
+    # a proposal for the office, never a Master record — this endpoint still
+    # writes nothing itself.
+    from app.master_data.intake_hooks import observe_ai_asset
+    await observe_ai_asset(user, suggestion, source_ref="assets-ai-intake:%s" % session_id,
+                           model_and_version="openai/%s" % AI_MODEL)
+    return suggestion

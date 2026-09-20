@@ -257,6 +257,12 @@ async def historical_import_confirm(data: dict, user: dict = Depends(require_m2)
         "rows_imported": saved, "created_at": now, "imported_by": user["id"],
     })
     
+    # W0-03: the historical rows keep their own raw SMR text; offer it for
+    # mapping so the same activity stops being three different strings.
+    from app.master_data.intake_hooks import observe_excel_historical_lines
+    await observe_excel_historical_lines(user, lines,
+                                         source_ref="historical-import:%s" % batch_id)
+
     return {"ok": True, "batch_id": batch_id, "rows_imported": saved}
 
 

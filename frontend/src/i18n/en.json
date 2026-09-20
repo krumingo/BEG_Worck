@@ -148,6 +148,7 @@
     "assetsQr": "QR base",
     "assetsBatchIntake": "Stock intake",
     "assetsIntakeReview": "Pending approval",
+    "masterDataReview": "Master Data review",
     "assetsItems": "Items",
     "assetsUnits": "Assets (QR)",
     "dashboard": "Dashboard",
