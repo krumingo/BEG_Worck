@@ -112,7 +112,7 @@ FLOW-050 заключва:
 WAVE-PLAN-SYNC            ✔ DONE
 → W0-09A Release Manifest / deploy / rollback core   ✔ MERGED (не е деплойван)
 → W0-10A isolated restore proof                      ✔ PASS 20.09.2026
-→ W0-03 Master Data                                  ← A: contract в ревю, runtime не е започнат
+→ W0-03 Master Data                                  ← A merge-нат; тече B1 (основа, off режим)
 ```
 
 ## Правило за PR и release

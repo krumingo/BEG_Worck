@@ -1,6 +1,8 @@
 # W0-03 Master Data (FLOW-032) — инвентар и implementation contract
 
-> **Статус:** `W0-03A CONTRACT IN REVIEW — RUNTIME NOT STARTED`
+> **Статус:** `W0-03A MERGED — W0-03B1 IN PROGRESS`
+> Contract-ът е merge-нат в `main` на 20.09.2026 (`d8a213a3`). Текстът му не се пренаписва от
+> имплементационните slice-ове; промяна в него изисква отделно решение.
 > **База:** `main` = `ddad542ed0d1de64b3ba9ae4639517dba03425c7`
 > **Дата:** 20.09.2026
 > **Метод:** само четене. Нито един runtime файл не е променян, нито една заявка не е
