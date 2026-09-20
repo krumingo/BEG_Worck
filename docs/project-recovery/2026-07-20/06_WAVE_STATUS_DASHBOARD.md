@@ -1,10 +1,11 @@
 # BEG_Work — Табло за изпълнение
 
-> Актуално към: 20.09.2026 (NAS инцидент — W0-10A спрян)  
-> Статус на документацията: FLOW-001–050 Business Lock; уточнения на Крум от 12.09.2026 са вписани във FLOW-011/012/020/021/026/027/045  
-> Каноничната W0 номерация е в `docs/architecture/IMPLEMENTATION_WAVES.md`. Старата номерация на това табло от 05.08.2026 (12 точки с разменени Permission/Tenant и отделни QA/DR/Retention items) е **отменена**.  
-> Production: `0b53bcd5b977ee27de8d4cee363fed41dd897482` (Merge PR #9), `PERMISSION_SERVICE_MODE` = off  
-> Следващ етап: **БЛОКИРАН** — W0-09A е merge-нат (`fdf4d59e`, PR #14, 14.09.2026), но **не е деплойван**; **W0-03 Master Data** — W0-09A и W0-10A са затворени (W0-10A: PASS на 20.09.2026, `docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`); отделно остава отворен хардуерният риск от прегряващите M.2 кеш дискове (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`)
+> - Актуално към: 20.09.2026 (W0-10A затворен с PASS; хардуерният NVMe риск остава ОТВОРЕН)
+> - Статус на документацията: FLOW-001–050 Business Lock; уточнения на Крум от 12.09.2026 са вписани във FLOW-011/012/020/021/026/027/045
+> - Каноничната W0 номерация е в `docs/architecture/IMPLEMENTATION_WAVES.md`. Старата номерация на това табло от 05.08.2026 (12 точки с разменени Permission/Tenant и отделни QA/DR/Retention items) е **отменена**.
+> - Production: `0b53bcd5b977ee27de8d4cee363fed41dd897482` (Merge PR #9), `PERMISSION_SERVICE_MODE` = off
+> - Следващ етап: **W0-03 Master Data** — W0-09A (merge-нат `fdf4d59e`, PR #14, 14.09.2026, **не е деплойван**) и W0-10A (**PASS**, 20.09.2026) са затворени.
+> - Отворен риск, независим от горното: прегряващите M.2 NVMe кеш дискове на NAS-а (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`) — **не е отстранен**
 
 ## 1. Общ статус
 
@@ -34,7 +35,7 @@
 | W0-07 | Data Quality + Approval / FLOW-033/034 | **NOT STARTED** | няма DQ/Approval runtime | целият обхват |
 | W0-08 | Subscription / Billing / Entitlements / FLOW-050 | **NOT STARTED** | legacy `routes/billing.py` (Stripe mock), не е W0 canonical | целият обхват |
 | W0-09 | Test / Release / Environments / FLOW-042/050 | **PARTIAL — W0-09A MERGED, NOT DEPLOYED** | `ops/release` (build от git обекти, adopt/deploy/rollback/retention) е в `main` чрез PR #14 → `fdf4d59e38fb17e9f566812d326258948a3459d7` (14.09.2026); independent re-review PASS на `e2d3d43d`, изолирана Synology валидация 172/172, committed tests 79/79 | **не е adopt-нат в production** — няма `release-state/` на NAS-а, `DEPLOYED_COMMIT` = `0b53bcd5`; adoption/deploy само с изрично разрешение на Крум. environments/TAE/no-fork/пълен QA gate — **W0-09B** |
-| W0-10 | Disaster Recovery / FLOW-044 | **PARTIAL — W0-10A DONE (PASS)** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh` (PR #4/#5); нощен backup 03:10 работи, `gzip -t` OK, ротация 14 дни; **пропуснат backup за 14.09.2026** — NAS-ът е бил изключен | **Restore proof е налице от 20.09.2026**: 2433 документа / 93 колекции възстановени и проверени изолирано, 0 неуспешни, tenant проверка PASS, production непроменен (`docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`). Остава **W0-10B** — PITR, off-site immutable copy, per-tenant restore, тримесечен drill; PITR, off-site immutable copy, per-tenant restore, тримесечен drill — **W0-10B** |
+| W0-10 | Disaster Recovery / FLOW-044 | **PARTIAL — W0-10A DONE (PASS)** | `ops/synology/atlas_backup.sh` + `atlas_restore.sh` (PR #4/#5); нощен backup 03:10 работи, `gzip -t` OK, ротация 14 дни; **пропуснат backup за 14.09.2026** — NAS-ът е бил изключен | **Restore proof е налице от 20.09.2026**: 2433 документа / 93 колекции възстановени и проверени изолирано, 0 неуспешни, tenant проверка PASS, production непроменен (`docs/ops/W0-10A_RESTORE_PROOF_2026-09-20.md`). Остава **W0-10B** — PITR, off-site immutable copy, per-tenant restore, тримесечен drill |
 | W0-11 | Export / Retention / Controlled Deletion / FLOW-050 | **NOT STARTED** | — | целият обхват |
 
 ## 3. Roadmap split — без преномериране на каноничните W0 items
@@ -102,6 +103,7 @@ Wave 0 не приключва, докато не са доказани:
 | Deploy без записана версия | W0-09A: exact-version артефакт + deployed-version запис + rollback анкер |
 | Backup без доказан restore | **закрит на 20.09.2026** — W0-10A PASS; повторяем с една команда (`ops/dr/`) |
 | Отговорност, прехвърлена само със сканиране | FLOW-011: двуфазно предаване, custody се сменя само при `ACCEPTED` |
+| **Хардуер: M.2 NVMe кеш дисковете прегряват и гасят NAS-а (ОТВОРЕН)** | Пет изключвания 13–16.09.2026, две от тях при вентилатор HIGH/FULL; в покой 54/57 °C при праг 70 °C. Доказаният restore на 780 KB **не закрива този риск**. Мерки в `docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md` §5: сваляне/преминаване на кеша в read-only, охлаждане, подмяна на M.2, аларма при 60 °C |
 
 ## 7. Производствени релийзи
 
