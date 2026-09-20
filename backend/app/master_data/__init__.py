@@ -49,6 +49,21 @@ from app.master_data.models import (  # noqa: F401
     new_legacy_ref,
     validate_entity,
 )
+from app.master_data.pending import (  # noqa: F401
+    PENDING_COLLECTION,
+    PENDING_SOURCES,
+    SOURCE_AI,
+    SOURCE_EXCEL,
+    SOURCE_IMPORT,
+    SOURCE_OCR,
+    STATUS_PENDING,
+    PendingOutcome,
+    build_pending,
+    build_suggestion,
+    get_pending,
+    propose,
+    validate_pending,
+)
 from app.master_data.service import (  # noqa: F401
     PERSON_CREATION_SOURCES,
     SOURCE_EXPLICIT_CONFIRMATION,
@@ -73,4 +88,8 @@ __all__ = [
     "MasterDataOutcome", "MasterDataRefused", "MasterDataAuditFailed",
     "create_entity", "get_entity", "SOURCE_FLOW",
     "SOURCE_EXPLICIT_CONFIRMATION", "PERSON_CREATION_SOURCES",
+    "PENDING_COLLECTION", "PENDING_SOURCES", "STATUS_PENDING",
+    "SOURCE_AI", "SOURCE_OCR", "SOURCE_EXCEL", "SOURCE_IMPORT",
+    "PendingOutcome", "propose", "get_pending",
+    "build_pending", "validate_pending", "build_suggestion",
 ]

@@ -63,6 +63,24 @@ class MasterDataRepository:
         coll = await self._collection(entity_type)
         return await coll.find_one(self._scope({"id": entity_id}), {"_id": 0})
 
+    async def create_pending(self, pending: Dict[str, Any]) -> Dict[str, Any]:
+        """Write one pending-mapping row. Pinned to this tenant like everything else."""
+        from app.master_data.pending import PENDING_COLLECTION, validate_pending
+        validate_pending(pending)
+        if pending["tenant_id"] != self.tenant_id:
+            raise MasterDataInvalid(
+                "refusing to write a pending record of tenant %s through the repository of tenant %s"
+                % (pending["tenant_id"], self.tenant_id)
+            )
+        handle = await self.db(require_operational=True)
+        await handle[PENDING_COLLECTION].insert_one(dict(pending))
+        return pending
+
+    async def get_pending(self, pending_id: str) -> Optional[Dict[str, Any]]:
+        from app.master_data.pending import PENDING_COLLECTION
+        handle = await self.db()
+        return await handle[PENDING_COLLECTION].find_one(self._scope({"id": pending_id}), {"_id": 0})
+
     async def create(self, entity: Dict[str, Any]) -> Dict[str, Any]:
         validate_entity(entity)
         if entity["tenant_id"] != self.tenant_id:
