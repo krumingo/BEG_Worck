@@ -41,7 +41,7 @@
 | 033/034 | W0-07 | NOT STARTED | целият обхват |
 | 050 (billing) | W0-08 | NOT STARTED | целият обхват |
 | 042 / 050 (release) | W0-09 | PARTIAL — W0-09A MERGED, NOT DEPLOYED | W0-09A е в `main` (`fdf4d59e`, PR #14, 14.09.2026), но не е adopt-нат в production (`DEPLOYED_COMMIT` = `0b53bcd5`); environments/TAE/QA exit gate (W0-09B) |
-| 044 | W0-10 | PARTIAL — W0-10A BLOCKED (UNSAFE) | restore proof (W0-10A) е спрян: M.2 NVMe кеш дисковете прегряват и изключват NAS-а при 70 °C (пет изключвания 13–16.09.2026, root cause установен 20.09.2026, хардуерът не е отстранен) — `docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`; пълен DR (W0-10B) |
+| 044 | W0-10 | PARTIAL — W0-10A READY TO RUN | инструментът за изолиран restore proof е в `ops/dr/` (тестван, температурно защитен), но **прогонът не е изпълнен** — restore остава недоказан; отделно стои отвореният хардуерен риск `docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`; пълен DR (W0-10B) |
 | 050 (retention) | W0-11 | NOT STARTED | целият обхват |
 
 Wave 2.1 (FLOW-027 график/готовност) не е W0 gate; runtime кодът ѝ изисква W0-03, W0-06, W0-07 и read-only достъп до W0-05 — виж [Implementation Waves](IMPLEMENTATION_WAVES.md).

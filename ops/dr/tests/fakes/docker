@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# W0-10A test double for the docker CLI.
+#
+# State in $FAKE:
+#   image_ok            the mongo image is present locally
+#   image_id            what `image inspect -f {{.Id}}` prints
+#   mongo_ready         the temporary mongod answers ping
+#   restore_out         canned mongorestore output          restore_rc  its exit code
+#   verify_json         canned mongosh --file output        verify_rc   its exit code
+#   prod_<container>    the inspect line for a production container
+#   leak_container      `rm -f` refuses to remove, so cleanup verification must fail
+#   c_<name>            a running container      net_<name>      a network      vol_<name>  a volume
+#
+# Every invocation is appended to $FAKE/calls.log so tests can assert on the real flags
+# (read-only mount, --internal network, no published port).
+echo "docker $*" >> "$FAKE/calls.log"
+
+cmd="${1:-}"; shift 2>/dev/null || true
+
+case "$cmd" in
+  image)
+    [ "${1:-}" = inspect ] || exit 1
+    shift
+    [ -f "$FAKE/image_ok" ] || exit 1
+    if [ "${1:-}" = -f ]; then cat "$FAKE/image_id" 2>/dev/null || echo "sha256:deadbeef"; fi
+    exit 0
+    ;;
+
+  inspect)
+    # production container inspection used by the before/after snapshot
+    name=""
+    for a in "$@"; do name="$a"; done
+    if [ -f "$FAKE/prod_$name" ]; then cat "$FAKE/prod_$name"; exit 0; fi
+    echo "Error: No such object: $name" >&2; exit 1
+    ;;
+
+  network)
+    sub="${1:-}"; shift 2>/dev/null || true
+    case "$sub" in
+      create)
+        n=""; for a in "$@"; do n="$a"; done
+        : > "$FAKE/net_$n"; echo "$n"; exit 0 ;;
+      rm)
+        n=""; for a in "$@"; do n="$a"; done
+        rm -f "$FAKE/net_$n"; exit 0 ;;
+      ls)
+        for f in "$FAKE"/net_*; do [ -f "$f" ] && basename "$f" | sed 's/^net_//'; done; exit 0 ;;
+    esac
+    exit 1 ;;
+
+  volume)
+    sub="${1:-}"; shift 2>/dev/null || true
+    case "$sub" in
+      create)
+        n=""; for a in "$@"; do n="$a"; done
+        : > "$FAKE/vol_$n"; echo "$n"; exit 0 ;;
+      rm)
+        n=""; for a in "$@"; do n="$a"; done
+        rm -f "$FAKE/vol_$n"; exit 0 ;;
+      ls)
+        for f in "$FAKE"/vol_*; do [ -f "$f" ] && basename "$f" | sed 's/^vol_//'; done; exit 0 ;;
+    esac
+    exit 1 ;;
+
+  ps)
+    for f in "$FAKE"/c_*; do [ -f "$f" ] && basename "$f" | sed 's/^c_//'; done; exit 0 ;;
+
+  rm)
+    [ -f "$FAKE/leak_container" ] && exit 0   # pretend success, leave the container behind
+    for a in "$@"; do case "$a" in -f|--force) ;; *) rm -f "$FAKE/c_$a" ;; esac; done
+    exit 0 ;;
+
+  run)
+    detached=0; name=""; prev=""
+    for a in "$@"; do
+      [ "$prev" = --name ] && name="$a"
+      [ "$a" = -d ] && detached=1
+      prev="$a"
+    done
+    if [ "$detached" = 1 ]; then
+      [ -n "$name" ] && : > "$FAKE/c_$name"
+      echo "fake-container-id"; exit 0
+    fi
+    # one-off client containers: decide by the command that follows the image
+    case " $* " in
+      *" mongorestore "*)
+        # knob: simulate something touching production while the proof runs
+        [ -f "$FAKE/mutate_prod" ] && echo "MUTATED" >> "$FAKE/prod_begwork-backend"
+        cat "$FAKE/restore_out" 2>/dev/null
+        exit "$(cat "$FAKE/restore_rc" 2>/dev/null || echo 0)" ;;
+      *" --file "*)
+        cat "$FAKE/verify_json" 2>/dev/null
+        exit "$(cat "$FAKE/verify_rc" 2>/dev/null || echo 0)" ;;
+      *" --eval "*)
+        [ -f "$FAKE/mongo_ready" ] || exit 1
+        echo 1; exit 0 ;;
+    esac
+    exit 0 ;;
+esac
+exit 0
