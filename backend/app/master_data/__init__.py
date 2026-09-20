@@ -31,6 +31,7 @@ from app.master_data.deps import (  # noqa: F401
     validate_mode,
 )
 from app.master_data.models import (  # noqa: F401
+    new_alias,
     ENTITY_ACTIVITY,
     ENTITY_ASSET_TYPE,
     ENTITY_ITEM,
@@ -64,6 +65,24 @@ from app.master_data.pending import (  # noqa: F401
     propose,
     validate_pending,
 )
+from app.master_data.matching import (  # noqa: F401
+    MATCH_ALIAS,
+    MATCH_EXACT_NORMALIZED,
+    find_candidates,
+    find_duplicates,
+)
+from app.master_data.normalize import (  # noqa: F401
+    NORMALIZATION_VERSION,
+    normalize_identifier,
+    normalize_name,
+)
+from app.master_data.review import (  # noqa: F401
+    ReviewOutcome,
+    approve,
+    list_pending,
+    reject,
+    suggest_matches,
+)
 from app.master_data.service import (  # noqa: F401
     PERSON_CREATION_SOURCES,
     SOURCE_EXPLICIT_CONFIRMATION,
@@ -84,12 +103,15 @@ __all__ = [
     "ENTITY_ITEM", "ENTITY_ASSET_TYPE", "ENTITY_PHYSICAL_ASSET", "ENTITY_UNIT",
     "ENTITY_LOCATION", "ENTITY_TAG",
     "STATUS_ACTIVE", "STATUS_MERGED", "STATUS_ARCHIVED",
-    "MasterDataInvalid", "build_entity", "validate_entity", "new_legacy_ref",
+    "MasterDataInvalid", "build_entity", "validate_entity", "new_legacy_ref", "new_alias",
     "MasterDataOutcome", "MasterDataRefused", "MasterDataAuditFailed",
     "create_entity", "get_entity", "SOURCE_FLOW",
     "SOURCE_EXPLICIT_CONFIRMATION", "PERSON_CREATION_SOURCES",
     "PENDING_COLLECTION", "PENDING_SOURCES", "STATUS_PENDING",
     "SOURCE_AI", "SOURCE_OCR", "SOURCE_EXCEL", "SOURCE_IMPORT",
     "PendingOutcome", "propose", "get_pending",
+    "normalize_name", "normalize_identifier", "NORMALIZATION_VERSION",
+    "find_candidates", "find_duplicates", "MATCH_EXACT_NORMALIZED", "MATCH_ALIAS",
+    "ReviewOutcome", "approve", "reject", "list_pending", "suggest_matches",
     "build_pending", "validate_pending", "build_suggestion",
 ]

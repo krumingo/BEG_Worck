@@ -45,9 +45,14 @@ SOURCE_EXCEL = "excel"
 SOURCE_IMPORT = "import"
 PENDING_SOURCES = frozenset({SOURCE_AI, SOURCE_OCR, SOURCE_EXCEL, SOURCE_IMPORT})
 
-#: The only status this slice can create. ``resolved`` / ``rejected`` arrive
-#: with the human workflow in W0-03B3 and are deliberately not writable here.
+#: Lifecycle of a pending row. Only ``pending`` may be *created*; the rest are
+#: reached through the human review workflow (W0-03B3, ``review.py``) and never
+#: by an automated channel.
 STATUS_PENDING = "pending"
+STATUS_RESOLVING = "resolving"      # claimed by one approver; a compare-and-set
+STATUS_RESOLVED = "resolved"
+STATUS_REJECTED = "rejected"
+PENDING_STATUSES = frozenset({STATUS_PENDING, STATUS_RESOLVING, STATUS_RESOLVED, STATUS_REJECTED})
 CREATABLE_STATUSES = frozenset({STATUS_PENDING})
 
 PENDING_COLLECTION = "md_pending_mapping"

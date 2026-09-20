@@ -81,6 +81,93 @@ class MasterDataRepository:
         handle = await self.db()
         return await handle[PENDING_COLLECTION].find_one(self._scope({"id": pending_id}), {"_id": 0})
 
+    async def list_pending(self, *, entity_type: Optional[str] = None,
+                           status: str = "pending", limit: int = 50) -> list:
+        from app.master_data.pending import PENDING_COLLECTION
+        query = self._scope({"status": status})
+        if entity_type:
+            query["entity_type"] = entity_type
+        handle = await self.db()
+        cursor = handle[PENDING_COLLECTION].find(query, {"_id": 0})
+        return await cursor.to_list(length=min(int(limit), 200))
+
+    async def claim_pending(self, pending_id: str, *, actor_id: str,
+                            now: str) -> Optional[Dict[str, Any]]:
+        """Atomically take a pending row out of ``pending``.
+
+        This is the whole concurrency story: the transition ``pending ->
+        resolving`` is a compare-and-set, so of two simultaneous approvals only
+        one can proceed and only one canonical record can ever be created.
+        Returns None when somebody else got there first.
+        """
+        from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, STATUS_RESOLVING
+        handle = await self.db(require_operational=True)
+        result = await handle[PENDING_COLLECTION].update_one(
+            self._scope({"id": pending_id, "status": STATUS_PENDING}),
+            {"$set": {"status": STATUS_RESOLVING, "claimed_by": actor_id,
+                      "claimed_at": now, "updated_at": now}},
+        )
+        if getattr(result, "modified_count", 0) != 1:
+            return None
+        return await handle[PENDING_COLLECTION].find_one(
+            self._scope({"id": pending_id}), {"_id": 0})
+
+    async def release_pending(self, pending_id: str, *, now: str) -> None:
+        """Give a claimed row back after a failure, so it stays workable."""
+        from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, STATUS_RESOLVING
+        handle = await self.db(require_operational=True)
+        await handle[PENDING_COLLECTION].update_one(
+            self._scope({"id": pending_id, "status": STATUS_RESOLVING}),
+            {"$set": {"status": STATUS_PENDING, "claimed_by": None,
+                      "claimed_at": None, "updated_at": now}},
+        )
+
+    async def finish_pending(self, pending_id: str, *, entity_id: str, actor_id: str,
+                             now: str) -> bool:
+        from app.master_data.pending import PENDING_COLLECTION, STATUS_RESOLVED, STATUS_RESOLVING
+        handle = await self.db(require_operational=True)
+        result = await handle[PENDING_COLLECTION].update_one(
+            self._scope({"id": pending_id, "status": STATUS_RESOLVING}),
+            {"$set": {"status": STATUS_RESOLVED, "resolved_entity_id": entity_id,
+                      "resolved_by": actor_id, "resolved_at": now, "updated_at": now}},
+        )
+        return getattr(result, "modified_count", 0) == 1
+
+    async def reject_pending(self, pending_id: str, *, reason: str, actor_id: str,
+                             now: str) -> bool:
+        from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, STATUS_REJECTED
+        handle = await self.db(require_operational=True)
+        result = await handle[PENDING_COLLECTION].update_one(
+            self._scope({"id": pending_id, "status": STATUS_PENDING}),
+            {"$set": {"status": STATUS_REJECTED, "rejection_reason": reason,
+                      "resolved_by": actor_id, "resolved_at": now, "updated_at": now}},
+        )
+        return getattr(result, "modified_count", 0) == 1
+
+    async def find_by_normalized(self, entity_type: str, normalized: str,
+                                 limit: int = 10) -> list:
+        coll = await self._collection(entity_type)
+        cursor = coll.find(self._scope({"normalized_name": normalized,
+                                        "status": "active"}), {"_id": 0})
+        return await cursor.to_list(length=min(int(limit), 100))
+
+    async def find_by_alias(self, entity_type: str, normalized: str,
+                            limit: int = 10) -> list:
+        coll = await self._collection(entity_type)
+        cursor = coll.find(self._scope({"aliases.normalized": normalized,
+                                        "status": "active"}), {"_id": 0})
+        return await cursor.to_list(length=min(int(limit), 100))
+
+    async def add_alias(self, entity_type: str, entity_id: str,
+                        alias: Dict[str, Any], now: str) -> bool:
+        """Attach a human-confirmed spelling variant. Never called automatically."""
+        coll = await self._collection(entity_type, require_operational=True)
+        result = await coll.update_one(
+            self._scope({"id": entity_id}),
+            {"$push": {"aliases": alias}, "$set": {"updated_at": now}},
+        )
+        return getattr(result, "modified_count", 0) == 1
+
     async def create(self, entity: Dict[str, Any]) -> Dict[str, Any]:
         validate_entity(entity)
         if entity["tenant_id"] != self.tenant_id:

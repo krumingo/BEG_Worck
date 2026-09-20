@@ -314,6 +314,11 @@ api_router.include_router(financial_results_router)
 from app.routes.ocr_invoice import router as ocr_invoice_router
 api_router.include_router(ocr_invoice_router)
 
+# W0-03 Master Data (FLOW-032). Inert while MASTER_DATA_MODE=off, which is the
+# default and the deployed state: the endpoints answer that it is off.
+from app.routes.master_data import router as master_data_router
+api_router.include_router(master_data_router)
+
 from app.routes.all_reports import router as all_reports_router
 api_router.include_router(all_reports_router)
 

@@ -11,6 +11,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.ocr_invoice import create_ocr_intake
+from app.master_data.intake_hooks import observe_ocr_supplier
 from pathlib import Path
 
 router = APIRouter(tags=["OCR Invoice"])
@@ -75,6 +76,10 @@ async def upload_invoice(
         project_id=project_id, supplier_id=supplier_id,
         source_type="upload", file_name=file.filename,
     )
+    # W0-03: offer the OCR-detected supplier to pending mapping. A no-op while
+    # MASTER_DATA_MODE=off, and unable to raise - the intake already succeeded.
+    await observe_ocr_supplier(user, intake.get("detected_data"),
+                               source_ref="ocr-intake:%s" % intake.get("id"))
     return intake
 
 
@@ -89,6 +94,10 @@ async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
         project_id=data.project_id, supplier_id=data.supplier_id,
         source_type="photo", file_name=media.get("filename", ""),
     )
+    # W0-03: offer the OCR-detected supplier to pending mapping. A no-op while
+    # MASTER_DATA_MODE=off, and unable to raise - the intake already succeeded.
+    await observe_ocr_supplier(user, intake.get("detected_data"),
+                               source_ref="ocr-intake:%s" % intake.get("id"))
     return intake
 
 
