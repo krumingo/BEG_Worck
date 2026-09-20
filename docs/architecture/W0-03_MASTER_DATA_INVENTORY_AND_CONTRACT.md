@@ -1,6 +1,6 @@
 # W0-03 Master Data (FLOW-032) — инвентар и implementation contract
 
-> **Статус:** `W0-03A MERGED — W0-03B1 IN PROGRESS`
+> **Статус:** `W0-03B1 MERGED — B2/B3/C(min) IN REVIEW`
 > Contract-ът е merge-нат в `main` на 20.09.2026 (`d8a213a3`). Текстът му не се пренаписва от
 > имплементационните slice-ове; промяна в него изисква отделно решение.
 > **База:** `main` = `ddad542ed0d1de64b3ba9ae4639517dba03425c7`

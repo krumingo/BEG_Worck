@@ -40,6 +40,14 @@ ACTIONS: Set[str] = {
     "budget.write",
     "asset_intake.submit",
     "asset_intake.approve",
+    # W0-03 Master Data (FLOW-032 "Права"): the field proposes, the office maps
+    # and corrects, the administrator merges and archives, the Owner approves
+    # what carries financial or historical weight.
+    "master_data.pending.propose",
+    "master_data.pending.read",
+    "master_data.pending.approve",
+    "master_data.pending.reject",
+    "master_data.entity.read",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited
@@ -75,13 +83,31 @@ _ALL = set(ACTIONS)
 CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
     "admin":           {"label_bg": "Администратор",          "actions": set(_ALL)},
-    "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit"}},
-    "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit"}},
-    "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read"}},
-    "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit"}},
-    "procurement":     {"label_bg": "Снабдител",              "actions": {"asset_intake.submit"}},
-    "office":          {"label_bg": "Офис",                   "actions": {"user.read"}},
-    "worker":          {"label_bg": "Работник",               "actions": {"asset_intake.submit"}},
+    "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit",
+                                                                      "master_data.pending.propose",
+                                                                      "master_data.pending.read",
+                                                                      "master_data.entity.read"}},
+    "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
+                                                                      "master_data.pending.propose",
+                                                                      "master_data.pending.read",
+                                                                      "master_data.entity.read"}},
+    "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read",
+                                                                      "master_data.pending.read",
+                                                                      "master_data.entity.read"}},
+    "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
+                                                                      "master_data.pending.propose",
+                                                                      "master_data.entity.read"}},
+    "procurement":     {"label_bg": "Снабдител",              "actions": {"asset_intake.submit",
+                                                                      "master_data.pending.propose",
+                                                                      "master_data.entity.read"}},
+    "office":          {"label_bg": "Офис",                   "actions": {"user.read",
+                                                                      "master_data.pending.propose",
+                                                                      "master_data.pending.read",
+                                                                      "master_data.pending.approve",
+                                                                      "master_data.pending.reject",
+                                                                      "master_data.entity.read"}},
+    "worker":          {"label_bg": "Работник",               "actions": {"asset_intake.submit",
+                                                                      "master_data.pending.propose"}},
     "driver":          {"label_bg": "Шофьор",                 "actions": set()},
     # AI gets no blanket actions; it acts <= the delegating human (FLOW-002).
     "ai_service":      {"label_bg": "AI service role",        "actions": set()},

@@ -213,6 +213,7 @@ async def create_entity(
     source: Optional[str] = None,
     legacy_refs: Optional[List[Dict[str, Any]]] = None,
     payload: Optional[Dict[str, Any]] = None,
+    entity_id: Optional[str] = None,
     mode: Any = None,
     repository=None,
 ) -> MasterDataOutcome:
@@ -221,6 +222,9 @@ async def create_entity(
     ``off`` returns an inert outcome before touching anything. ``shadow``
     returns an observation and writes nothing. Only ``enforce`` writes, and
     only with a canonical AuditEvent.
+
+    ``entity_id`` lets a caller that can derive an identifier deterministically
+    make its own operation retry-safe; when omitted a fresh one is generated.
     """
     effective = resolve_mode(mode)          # fail-closed, before everything else
 
@@ -237,6 +241,7 @@ async def create_entity(
                 entity_type=entity_type,
                 display_name=display_name,
                 legacy_refs=legacy_refs,
+                entity_id=entity_id,
             )
             _require_actor(validated)
         return _observe(MODE_SHADOW, _check)
@@ -252,6 +257,9 @@ async def create_entity(
         entity_type=entity_type,
         display_name=display_name,
         legacy_refs=legacy_refs,
+        # Supplied only by a caller that can derive it deterministically, so an
+        # interrupted operation can be retried without a second record.
+        entity_id=entity_id,
     )
 
     repo = repository if repository is not None else _repository_for(ctx)

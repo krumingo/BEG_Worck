@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import uuid
 
+from app.master_data.normalize import NORMALIZATION_VERSION, normalize_name
+
 # --- the nine canonical types of FLOW-032 "Златно правило" -----------------
 ENTITY_PERSON = "person"
 ENTITY_ORGANIZATION = "organization"
@@ -52,6 +54,27 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def new_alias(value: str, added_by: str, source: str = "human_confirmation",
+              now: Optional[str] = None) -> Dict[str, Any]:
+    """One confirmed spelling variant.
+
+    ``added_by`` is required: FLOW-032 allows an alias to be reused
+    automatically *after* a human confirmed it, so the record must say who.
+    """
+    if not value or not isinstance(value, str) or not value.strip():
+        raise MasterDataInvalid("alias value is required")
+    if not added_by or not isinstance(added_by, str):
+        raise MasterDataInvalid("an alias must record the human who confirmed it")
+    return {
+        "value": value.strip(),
+        "normalized": normalize_name(value),
+        "normalization_version": NORMALIZATION_VERSION,
+        "added_by": added_by,
+        "source": source,
+        "added_at": now or _now(),
+    }
+
+
 def new_legacy_ref(collection: str, legacy_id: str, org_id: Optional[str] = None) -> Dict[str, Any]:
     """One entry of the migration bridge: where this identity came from.
 
@@ -66,6 +89,30 @@ def new_legacy_ref(collection: str, legacy_id: str, org_id: Optional[str] = None
     if org_id:
         ref["org_id"] = org_id
     return ref
+
+
+#: Namespace for identifiers this package derives instead of inventing. Fixed
+#: and reproducible: uuid5 over a constant URL, so the same input always yields
+#: the same identifier on every machine and in every process.
+DERIVED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://beg.work/master-data")
+
+
+def derived_entity_id(tenant_id: str, pending_id: str) -> str:
+    """The identifier a Master record created by approving *this* pending row
+    will have — the same one on every attempt.
+
+    This is what makes an interrupted approval safe to retry. An approval that
+    created the record and then failed before it could close the pending row
+    leaves the record behind; the retry computes the same identifier, finds it,
+    and finishes the job instead of creating a second official record. No
+    compensating deletion, and no reliance on a unique index that does not
+    exist yet.
+    """
+    if not tenant_id or not isinstance(tenant_id, str):
+        raise MasterDataInvalid("a derived id needs a resolved tenant_id")
+    if not pending_id or not isinstance(pending_id, str):
+        raise MasterDataInvalid("a derived id needs the pending record id")
+    return str(uuid.uuid5(DERIVED_NAMESPACE, "%s:%s" % (tenant_id, pending_id)))
 
 
 def build_entity(
@@ -93,11 +140,19 @@ def build_entity(
         raise MasterDataInvalid("display_name is required")
 
     stamp = now or _now()
+    clean_name = display_name.strip()
     doc = {
         "id": entity_id or str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "entity_type": entity_type,
-        "display_name": display_name.strip(),
+        "display_name": clean_name,
+        # W0-03C: deterministic comparison key. Stored with the version that
+        # produced it, so a later rule change can be applied deliberately.
+        "normalized_name": normalize_name(clean_name),
+        "normalization_version": NORMALIZATION_VERSION,
+        # Spelling and supplier variants that a HUMAN confirmed point here.
+        # Nothing in this package adds one automatically.
+        "aliases": [],
         "status": STATUS_ACTIVE,
         "merged_into": None,          # W0-03D fills this; never a hard delete
         "legacy_refs": list(legacy_refs or []),
@@ -123,6 +178,14 @@ def validate_entity(doc: Dict[str, Any]) -> None:
         raise MasterDataInvalid("a merged entity must point at its canonical target")
     if doc["status"] != STATUS_MERGED and doc.get("merged_into"):
         raise MasterDataInvalid("merged_into is only valid for a merged entity")
+    if doc.get("normalized_name") is not None and not isinstance(doc["normalized_name"], str):
+        raise MasterDataInvalid("normalized_name must be a string")
+    aliases = doc.get("aliases", [])
+    if not isinstance(aliases, list):
+        raise MasterDataInvalid("aliases must be a list")
+    for alias in aliases:
+        if not isinstance(alias, dict) or not alias.get("value") or not alias.get("added_by"):
+            raise MasterDataInvalid("each alias needs a value and the human who added it")
     refs = doc.get("legacy_refs", [])
     if not isinstance(refs, list):
         raise MasterDataInvalid("legacy_refs must be a list")
