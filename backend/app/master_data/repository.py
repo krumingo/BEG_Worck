@@ -122,6 +122,23 @@ class MasterDataRepository:
                       "claimed_at": None, "updated_at": now}},
         )
 
+    async def resume_pending(self, pending_id: str, *,
+                             actor_id: str) -> Optional[Dict[str, Any]]:
+        """Take back a row this same reviewer already claimed.
+
+        An approval that wrote something and then failed before it could close
+        the pending row can leave it in ``resolving``. Handing such a row back
+        to the queue is not always right — when the evidence failed rather than
+        the write, it must stay claimed — so the reviewer who owns it may pick
+        it up again. Read-only: the row is already theirs, nothing is taken
+        from anybody, and a row claimed by somebody else is not returned.
+        """
+        from app.master_data.pending import PENDING_COLLECTION, STATUS_RESOLVING
+        handle = await self.db()
+        return await handle[PENDING_COLLECTION].find_one(
+            self._scope({"id": pending_id, "status": STATUS_RESOLVING,
+                         "claimed_by": actor_id}), {"_id": 0})
+
     async def finish_pending(self, pending_id: str, *, entity_id: str, actor_id: str,
                              now: str) -> bool:
         from app.master_data.pending import PENDING_COLLECTION, STATUS_RESOLVED, STATUS_RESOLVING
@@ -160,13 +177,34 @@ class MasterDataRepository:
 
     async def add_alias(self, entity_type: str, entity_id: str,
                         alias: Dict[str, Any], now: str) -> bool:
-        """Attach a human-confirmed spelling variant. Never called automatically."""
+        """Attach a human-confirmed spelling variant. Never called automatically.
+
+        Idempotent by the normalized spelling: the same variant added twice —
+        by a retried approval, a double click, or two people confirming the
+        same text — leaves exactly one entry. The filter carries the condition,
+        so the check and the write are one atomic operation rather than a
+        read-then-write that two callers can interleave.
+
+        Returns True when the record ends up carrying the spelling, including
+        when it already did; False only when the record is not in this tenant.
+        """
+        normalized = (alias or {}).get("normalized")
+        if not normalized:
+            raise MasterDataInvalid("an alias must carry its normalized form")
         coll = await self._collection(entity_type, require_operational=True)
         result = await coll.update_one(
-            self._scope({"id": entity_id}),
+            self._scope({"id": entity_id, "aliases.normalized": {"$ne": normalized}}),
             {"$push": {"aliases": alias}, "$set": {"updated_at": now}},
         )
-        return getattr(result, "modified_count", 0) == 1
+        if getattr(result, "modified_count", 0) == 1:
+            return True
+        # Nothing was written. Either the spelling is already there — which is
+        # the end state the caller asked for — or the record is not ours.
+        doc = await coll.find_one(self._scope({"id": entity_id}), {"_id": 0})
+        if not doc:
+            return False
+        return any((a or {}).get("normalized") == normalized
+                   for a in (doc.get("aliases") or []))
 
     async def create(self, entity: Dict[str, Any]) -> Dict[str, Any]:
         validate_entity(entity)

@@ -106,6 +106,10 @@ class SpyCollection:
 
 
 def _field_match(doc, key, value):
+    if isinstance(value, dict) and "$ne" in value:
+        # Mongo semantics: for a dotted path, matches when NO element equals
+        # the value — including a document with no such field at all.
+        return not _field_match(doc, key, value["$ne"])
     if "." in key:                      # e.g. aliases.normalized
         head, tail = key.split(".", 1)
         items = doc.get(head) or []

@@ -91,6 +91,30 @@ def new_legacy_ref(collection: str, legacy_id: str, org_id: Optional[str] = None
     return ref
 
 
+#: Namespace for identifiers this package derives instead of inventing. Fixed
+#: and reproducible: uuid5 over a constant URL, so the same input always yields
+#: the same identifier on every machine and in every process.
+DERIVED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://beg.work/master-data")
+
+
+def derived_entity_id(tenant_id: str, pending_id: str) -> str:
+    """The identifier a Master record created by approving *this* pending row
+    will have — the same one on every attempt.
+
+    This is what makes an interrupted approval safe to retry. An approval that
+    created the record and then failed before it could close the pending row
+    leaves the record behind; the retry computes the same identifier, finds it,
+    and finishes the job instead of creating a second official record. No
+    compensating deletion, and no reliance on a unique index that does not
+    exist yet.
+    """
+    if not tenant_id or not isinstance(tenant_id, str):
+        raise MasterDataInvalid("a derived id needs a resolved tenant_id")
+    if not pending_id or not isinstance(pending_id, str):
+        raise MasterDataInvalid("a derived id needs the pending record id")
+    return str(uuid.uuid5(DERIVED_NAMESPACE, "%s:%s" % (tenant_id, pending_id)))
+
+
 def build_entity(
     *,
     tenant_id: str,
