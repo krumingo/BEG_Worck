@@ -18,13 +18,17 @@ cannot prove any of them:
     failure is injected between "the Master record was written" and "the pending
     row was closed" — the exact window that makes duplicates — and the retry is
     then required to finish the job, create nothing new, and leave an audit
-    trail that says what actually happened.
+    trail that says what actually happened. The same window is also driven
+    *concurrently*, by two in-flight approvals from the same reviewer, because
+    a double click is two callers and the claim must treat it as two.
 
 No database and no live application: a FastAPI app carrying only this router,
 plus the spies from the W0-03B3 suite.
 
 Run:  pytest tests/test_w0_03b4_routes_and_authorization.py -v --noconftest
 """
+import asyncio
+
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -515,39 +519,78 @@ def test_a_failure_between_the_record_and_the_pending_row_creates_no_second_mast
     assert "reused" in (outcome.reason or "")
 
 
-def test_the_retry_completes_an_audit_trail_the_first_attempt_could_not_write():
-    """The other half of the window: the record was written and its creation
-    event was not. The retry must not point an approval at a record whose
-    creation no event describes — and must not claim it was created twice."""
-    db = SpyDb()
-    ctx = Ctx("tenant-a", user_id="office-1", db=db)
-    repo = MasterDataRepository("tenant-a", db=db)
-    pending_id = _proposed(db, ctx, repo)
+class PausedAtTheWrite:
+    """Holds one caller at the insert, after it has already looked and found
+    nothing — the interleaving in which two callers would both write."""
 
-    db["audit_events"].fail_on_insert = True
-    with pytest.raises(MasterDataAuditFailed):
-        run(approve(ctx, pending_id=pending_id, confirmation=True, create_new=True,
-                    mode="enforce", repository=repo))
+    def __init__(self, inner):
+        self.inner = inner
+        self.reached = asyncio.Event()
+        self.release = asyncio.Event()
+        self.first = True
 
-    assert len(db.master(ORG).docs) == 1
-    assert _actions(db).count("master_data.organization.created") == 0
-    # Evidence failed, not the write: the row stays claimed rather than being
-    # handed back as if nothing had happened.
-    row = db[PENDING_COLLECTION].docs[0]
-    assert row["status"] == STATUS_RESOLVING and row["claimed_by"] == "office-1"
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
 
-    db["audit_events"].fail_on_insert = False
-    outcome = run(approve(ctx, pending_id=pending_id, confirmation=True, create_new=True,
-                          mode="enforce", repository=repo))
+    async def create(self, *args, **kwargs):
+        if self.first:
+            self.first = False
+            self.reached.set()
+            await self.release.wait()
+        return await self.inner.create(*args, **kwargs)
 
-    assert outcome.performed is True
-    assert len(db.master(ORG).docs) == 1
+
+def test_two_in_flight_approvals_by_the_same_reviewer_create_one_record():
+    """A double click is two callers, not one.
+
+    The claim must not make an exception for the reviewer who already holds it:
+    there is no way to tell a request that died from one that is still working,
+    so recognising the actor would put both inside the body at once — and both
+    would look for the record, both would find nothing, and both would write.
+    """
+    async def scenario():
+        db = SpyDb()
+        ctx = Ctx("tenant-a", user_id="office-1", db=db)
+        repo = MasterDataRepository("tenant-a", db=db)
+        pending = (await propose(ctx, entity_type=ORG, raw_value="Баумит ЕООД",
+                                 source_channel=SOURCE_OCR, mode="enforce",
+                                 repository=repo)).pending
+        paused = PausedAtTheWrite(repo)
+
+        first = asyncio.ensure_future(approve(
+            ctx, pending_id=pending["id"], confirmation=True, create_new=True,
+            mode="enforce", repository=paused))
+        await paused.reached.wait()          # claimed, looked, found nothing
+
+        second = asyncio.ensure_future(approve(
+            ctx, pending_id=pending["id"], confirmation=True, create_new=True,
+            mode="enforce", repository=repo))
+        for _ in range(50):                  # let it run as far as it can get
+            await asyncio.sleep(0)
+        paused.release.set()
+        return db, await asyncio.gather(first, second, return_exceptions=True)
+
+    db, outcomes = run(scenario())
+
+    assert len(db.master(ORG).docs) == 1, "a second in-flight approval created another record"
     assert _actions(db).count("master_data.organization.created") == 1
     assert _actions(db).count("master_data.pending.approved") == 1
     assert db[PENDING_COLLECTION].docs[0]["status"] == STATUS_RESOLVED
 
+    refused = [o for o in outcomes if isinstance(o, MasterDataRefused)]
+    succeeded = [o for o in outcomes if not isinstance(o, Exception)]
+    assert len(refused) == 1 and len(succeeded) == 1
+    assert "another reviewer" in str(refused[0])
 
-def test_only_the_reviewer_who_claimed_a_row_may_pick_it_up_again():
+
+def test_an_attempt_whose_evidence_failed_keeps_the_row_and_creates_nothing_more():
+    """The record was written and its creation event was not.
+
+    The row stays claimed rather than going back to the queue, and no later
+    approval — by this reviewer or any other — can act on it. Reconciling an
+    unaudited record is W0-04B/W0-03E work; a retry must not paper over it by
+    quietly writing the missing event and declaring success.
+    """
     db = SpyDb()
     ctx = Ctx("tenant-a", user_id="office-1", db=db)
     repo = MasterDataRepository("tenant-a", db=db)
@@ -559,11 +602,35 @@ def test_only_the_reviewer_who_claimed_a_row_may_pick_it_up_again():
                     mode="enforce", repository=repo))
     db["audit_events"].fail_on_insert = False
 
-    other = Ctx("tenant-a", user_id="office-2", db=db)
-    with pytest.raises(MasterDataRefused):
-        run(approve(other, pending_id=pending_id, confirmation=True, create_new=True,
-                    mode="enforce", repository=repo))
     assert len(db.master(ORG).docs) == 1
+    assert _actions(db).count("master_data.organization.created") == 0
+    row = db[PENDING_COLLECTION].docs[0]
+    assert row["status"] == STATUS_RESOLVING and row["claimed_by"] == "office-1"
+
+    for reviewer in (ctx, Ctx("tenant-a", user_id="office-2", db=db)):
+        with pytest.raises(MasterDataRefused):
+            run(approve(reviewer, pending_id=pending_id, confirmation=True, create_new=True,
+                        mode="enforce", repository=repo))
+
+    assert len(db.master(ORG).docs) == 1, "a refused approval still wrote something"
+    assert _actions(db).count("master_data.pending.approved") == 0
+
+
+def test_only_the_holder_of_a_claim_can_release_or_close_it():
+    """Defence in depth around the one door: the claim decides who may act."""
+    db = SpyDb()
+    ctx = Ctx("tenant-a", user_id="office-1", db=db)
+    repo = MasterDataRepository("tenant-a", db=db)
+    pending_id = _proposed(db, ctx, repo)
+    run(repo.claim_pending(pending_id, actor_id="office-1", now="t1"))
+
+    assert run(repo.finish_pending(pending_id, entity_id="e-1",
+                                   actor_id="office-2", now="t2")) is False
+    run(repo.release_pending(pending_id, actor_id="office-2", now="t2"))
+    assert db[PENDING_COLLECTION].docs[0]["status"] == STATUS_RESOLVING
+
+    run(repo.release_pending(pending_id, actor_id="office-1", now="t3"))
+    assert db[PENDING_COLLECTION].docs[0]["status"] == STATUS_PENDING
 
 
 def test_the_identifier_of_a_retried_approval_is_derived_not_invented():

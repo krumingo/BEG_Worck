@@ -19,6 +19,14 @@ canonical records. The transition ``pending -> resolving`` is a compare-and-set
 in the database; whoever loses it is refused. Everything after the claim is
 done by exactly one caller.
 
+That claim is the **only** way in, and it does not make an exception for the
+reviewer who already holds it. Two requests from the same person — a double
+click, or a client retrying a slow response — are two callers, and a claim that
+let the second one in because it recognised the actor would put both inside the
+body at once. A row in ``resolving`` is therefore never re-entered; it is either
+released back to the queue by the attempt that failed, or it stays claimed and
+becomes reconciliation work.
+
 The other half of the same problem is a *partial* failure: an approval that
 created the official record and then failed before it could close the pending
 row. The record cannot be deleted to compensate — FLOW-032 forbids hard-deleting
@@ -26,7 +34,8 @@ Master records — so instead the identifier of a record created by approving a
 given pending row is **derived from that row** (``models.derived_entity_id``).
 A retry therefore computes the same identifier, finds the record already there,
 and finishes the job. No second official record, no compensating deletion, and
-no dependence on a unique index that does not exist yet.
+no dependence on a unique index that does not exist yet — the exclusion comes
+from the claim above, which is what keeps the retry sequential.
 """
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -51,7 +60,6 @@ from app.master_data.service import (
     SOURCE_FLOW,
     MasterDataAuditFailed,
     MasterDataRefused,
-    _audit_created,
     _require_actor,
     create_entity,
 )
@@ -135,24 +143,6 @@ async def _audit(ctx: Any, *, action: str, pending: Dict[str, Any], actor_id: st
     return await record_event(db, event)
 
 
-async def _creation_event_recorded(ctx: Any, entity: Dict[str, Any]) -> bool:
-    """Does the canonical creation event for this record already exist?
-
-    Asked only on the retry path. ``record_event`` appends — it does not
-    de-duplicate — so a retry must look before it writes, or the chain would
-    claim the same record was created twice.
-    """
-    from app.audit.store import AUDIT_COLLECTION
-    db = await ctx.db()
-    found = await db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": ctx.tenant_id,
-         "action": "master_data.%s.created" % entity["entity_type"],
-         "entity_id": entity["id"]},
-        {"_id": 0},
-    )
-    return found is not None
-
-
 async def list_pending(
     ctx: Any,
     *,
@@ -232,10 +222,6 @@ async def approve(
     # --- the compare-and-set that makes concurrent approvals safe ----------
     claimed = await repo.claim_pending(pending_id, actor_id=actor_id, now=now)
     if claimed is None:
-        # Not open — but it may be a row this same reviewer already claimed and
-        # could not finish. Only their own row comes back.
-        claimed = await repo.resume_pending(pending_id, actor_id=actor_id)
-    if claimed is None:
         raise MasterDataRefused(
             "pending record %s is not open for approval — another reviewer resolved or "
             "claimed it first" % pending_id)
@@ -249,21 +235,13 @@ async def approve(
             created_master = True
             existing = await repo.get(claimed["entity_type"], entity_id)
             if existing is not None:
-                # An earlier attempt got this far and then failed. Finish its
-                # work rather than duplicating it.
+                # An earlier attempt wrote the record, was audited, and then
+                # failed to close the row. Finish its work rather than
+                # duplicating it. A record whose creation event failed cannot
+                # arrive here: that attempt keeps the row claimed and is
+                # reconciliation work (W0-04B/W0-03E), not something a retry
+                # papers over.
                 reused_record = True
-                if not await _creation_event_recorded(ctx, existing):
-                    # It wrote the record but not its evidence; complete the
-                    # trail now, so the approval never points at a record whose
-                    # creation no event describes.
-                    try:
-                        await _audit_created(ctx, existing, SOURCE_EXPLICIT_CONFIRMATION,
-                                             actor_id)
-                    except Exception as exc:                  # noqa: BLE001
-                        raise MasterDataAuditFailed(
-                            "master data record %s exists from an interrupted approval but "
-                            "its creation AuditEvent could not be written (%s); the "
-                            "operation is NOT successful" % (entity_id, exc)) from exc
             else:
                 outcome = await create_entity(
                     ctx,
@@ -299,7 +277,7 @@ async def approve(
         raise
     except Exception:
         # Hand the row back so a person can retry; nothing is left half-claimed.
-        await repo.release_pending(pending_id, now=now)
+        await repo.release_pending(pending_id, actor_id=actor_id, now=now)
         raise
 
     try:

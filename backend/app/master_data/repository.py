@@ -95,10 +95,17 @@ class MasterDataRepository:
                             now: str) -> Optional[Dict[str, Any]]:
         """Atomically take a pending row out of ``pending``.
 
-        This is the whole concurrency story: the transition ``pending ->
-        resolving`` is a compare-and-set, so of two simultaneous approvals only
-        one can proceed and only one canonical record can ever be created.
-        Returns None when somebody else got there first.
+        This is the whole concurrency story, and it is the ONLY way into the
+        body of an approval: the transition ``pending -> resolving`` is a
+        compare-and-set, so of two simultaneous approvals only one can proceed
+        and only one canonical record can ever be created. Returns None when
+        somebody else got there first.
+
+        A row already in ``resolving`` is never re-entered — not even by the
+        reviewer who claimed it. There is no way to tell a caller that died from
+        one that is still working, so letting a second request in on the grounds
+        that it carries the same actor would put two callers inside the body at
+        once, which is precisely what this compare-and-set exists to prevent.
         """
         from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, STATUS_RESOLVING
         handle = await self.db(require_operational=True)
@@ -112,39 +119,30 @@ class MasterDataRepository:
         return await handle[PENDING_COLLECTION].find_one(
             self._scope({"id": pending_id}), {"_id": 0})
 
-    async def release_pending(self, pending_id: str, *, now: str) -> None:
-        """Give a claimed row back after a failure, so it stays workable."""
+    async def release_pending(self, pending_id: str, *, actor_id: str, now: str) -> None:
+        """Give a claimed row back after a failure, so it stays workable.
+
+        Only the holder of the claim can release it. Nothing in this package can
+        currently reach this with somebody else's row, and that is exactly why
+        the condition is written down: it keeps the claim the single thing that
+        decides who may act on a row.
+        """
         from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, STATUS_RESOLVING
         handle = await self.db(require_operational=True)
         await handle[PENDING_COLLECTION].update_one(
-            self._scope({"id": pending_id, "status": STATUS_RESOLVING}),
+            self._scope({"id": pending_id, "status": STATUS_RESOLVING,
+                         "claimed_by": actor_id}),
             {"$set": {"status": STATUS_PENDING, "claimed_by": None,
                       "claimed_at": None, "updated_at": now}},
         )
-
-    async def resume_pending(self, pending_id: str, *,
-                             actor_id: str) -> Optional[Dict[str, Any]]:
-        """Take back a row this same reviewer already claimed.
-
-        An approval that wrote something and then failed before it could close
-        the pending row can leave it in ``resolving``. Handing such a row back
-        to the queue is not always right — when the evidence failed rather than
-        the write, it must stay claimed — so the reviewer who owns it may pick
-        it up again. Read-only: the row is already theirs, nothing is taken
-        from anybody, and a row claimed by somebody else is not returned.
-        """
-        from app.master_data.pending import PENDING_COLLECTION, STATUS_RESOLVING
-        handle = await self.db()
-        return await handle[PENDING_COLLECTION].find_one(
-            self._scope({"id": pending_id, "status": STATUS_RESOLVING,
-                         "claimed_by": actor_id}), {"_id": 0})
 
     async def finish_pending(self, pending_id: str, *, entity_id: str, actor_id: str,
                              now: str) -> bool:
         from app.master_data.pending import PENDING_COLLECTION, STATUS_RESOLVED, STATUS_RESOLVING
         handle = await self.db(require_operational=True)
         result = await handle[PENDING_COLLECTION].update_one(
-            self._scope({"id": pending_id, "status": STATUS_RESOLVING}),
+            self._scope({"id": pending_id, "status": STATUS_RESOLVING,
+                         "claimed_by": actor_id}),
             {"$set": {"status": STATUS_RESOLVED, "resolved_entity_id": entity_id,
                       "resolved_by": actor_id, "resolved_at": now, "updated_at": now}},
         )
