@@ -142,7 +142,7 @@ if have journalctl; then
   run 80-boots-since-incident sh -c "journalctl --list-boots --no-pager | tail -n 20"
   run 81-journal-post-thermal sh -c "journalctl --since '$POST_FROM' --no-pager | grep -iE 'therm|temperat|overheat|fan|shutdown|power.?off|reboot|halt|oom|killed process|smart|I/O error|critical' | tail -n 800"
 fi
-run 82-docker-events-post sh -c "docker events --since '$(iso "2026-09-15 00:00:00")' --until '$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\([0-9][0-9]\)$/:/')' --filter type=container --filter type=daemon 2>&1 | tail -n 500"
+run 82-docker-events-post sh -c "docker events --since '$(iso "2026-09-15 00:00:00")' --until '$(iso "$(date "+%Y-%m-%d %H:%M:%S")")' --filter type=container --filter type=daemon 2>&1 | tail -n 500"
 run 83-container-uptimes docker ps --format '{{.Names}} | {{.Status}} | {{.RunningFor}}'
 
 # ---------------------------------------------------------------- app / backup side effects
