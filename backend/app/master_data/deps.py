@@ -35,25 +35,53 @@ class MasterDataTenantContextMissing(Exception):
     """No server-side tenant context — the operation is refused."""
 
 
+def validate_mode(value: Any, origin: str = ENV_MODE) -> str:
+    """Normalise one mode value or raise.
+
+    The single validator for every source of a mode — the environment and an
+    explicit argument alike. An explicit value that skipped this function was
+    the review blocker: ``mode="offf"`` used to sail straight into the write
+    path because it was merely truthy.
+    """
+    if not isinstance(value, str):
+        raise MasterDataConfigError(
+            "invalid %s=%r — a mode must be a string, got %s; refusing rather than guessing"
+            % (origin, value, type(value).__name__)
+        )
+    mode = value.strip().lower()
+    if mode not in VALID_MODES:
+        raise MasterDataConfigError(
+            "invalid %s=%r — only %s are allowed; refusing rather than guessing"
+            % (origin, value, "/".join(VALID_MODES))
+        )
+    return mode
+
+
 def current_mode(env: Optional[dict] = None) -> str:
     """Return the configured mode.
 
-    Unset -> ``off``. Set to anything that is not a valid mode -> raise; note
-    that ``MASTER_DATA_MODE=""`` is a value an operator set, not an absent one,
-    so it is refused rather than defaulted (the ``${VAR-default}`` lesson from
-    the W0-10A tooling).
+    Unset -> ``off``. Set to anything else -> validated, and refused when
+    invalid; note that ``MASTER_DATA_MODE=""`` is a value an operator set, not
+    an absent one, so it is refused rather than defaulted (the
+    ``${VAR-default}`` lesson from the W0-10A tooling).
     """
     source = os.environ if env is None else env
     if ENV_MODE not in source:
         return MODE_OFF
-    raw = source[ENV_MODE]
-    mode = raw.strip().lower() if isinstance(raw, str) else raw
-    if mode not in VALID_MODES:
-        raise MasterDataConfigError(
-            "invalid %s=%r — only %s are allowed; refusing rather than guessing"
-            % (ENV_MODE, raw, "/".join(VALID_MODES))
-        )
-    return mode
+    return validate_mode(source[ENV_MODE])
+
+
+def resolve_mode(mode: Any = None) -> str:
+    """The one way to decide the mode of an operation.
+
+    ``None`` means "read the environment"; anything else is an explicit value
+    and goes through exactly the same fail-closed validation. Absence is tested
+    with ``is None``, never with truthiness, so ``""`` cannot masquerade as
+    "not supplied".
+    """
+    if mode is None:
+        return current_mode()
+    return validate_mode(mode, origin="mode argument")
 
 
 def validate_config(env: Optional[dict] = None) -> str:
@@ -61,8 +89,13 @@ def validate_config(env: Optional[dict] = None) -> str:
     return current_mode(env)
 
 
-def is_off(mode: Optional[str] = None) -> bool:
-    return (mode or current_mode()) == MODE_OFF
+def is_off(mode: Any = None) -> bool:
+    """True when the effective mode is ``off``.
+
+    An explicit value is validated here too: previously ``is_off("offf")``
+    answered False and let a caller believe the feature was on.
+    """
+    return resolve_mode(mode) == MODE_OFF
 
 
 def require_tenant_context(ctx: Any) -> Any:
