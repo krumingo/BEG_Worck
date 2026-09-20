@@ -12,6 +12,7 @@ Exit codes under test: 0 PASS · 2 preflight refusal · 3 restore/verification f
 import gzip
 import hashlib
 import os
+import time
 import shutil
 import subprocess
 import tempfile
@@ -104,7 +105,7 @@ class RestoreProofTests(unittest.TestCase):
         with open(path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
 
-    def run_proof(self, *args, **env_extra):
+    def _env(self, **env_extra):
         env = dict(os.environ)
         env.update(
             PROD=posix(self.prod),
@@ -119,8 +120,53 @@ class RestoreProofTests(unittest.TestCase):
             READY_TIMEOUT="9",
         )
         env.update({k: str(v) for k, v in env_extra.items()})
-        proc = subprocess.run([BASH, posix(SCRIPT), *args], env=env, capture_output=True, text=True)
-        return proc
+        if env.pop("_FAKE_CLOCK", None):
+            env["PATH"] = posix(os.path.join(HERE, "fakes")) + os.pathsep + env.get("PATH", "")
+        return env
+
+    def run_proof(self, *args, **env_extra):
+        env = self._env(**env_extra)
+        return subprocess.run([BASH, posix(SCRIPT), *args], env=env, capture_output=True, text=True)
+
+    def popen_proof(self, *args, **env_extra):
+        env = self._env(**env_extra)
+        return subprocess.Popen([BASH, posix(SCRIPT), *args], env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def out_dirs(self):
+        return sorted(d for d in os.listdir(self.out_root) if d.startswith("out-"))
+
+    def evidence_of(self, out_dir, name):
+        path = os.path.join(self.out_root, out_dir, name)
+        if not os.path.exists(path):
+            return ""
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+
+    def run_id_of(self, out_dir):
+        for line in self.evidence_of(out_dir, "result.env").splitlines():
+            if line.startswith("RUN_ID="):
+                return line.split("=", 1)[1]
+        return ""
+
+    def calls_of(self, fake_dir):
+        path = os.path.join(fake_dir, "calls.log")
+        if not os.path.exists(path):
+            return ""
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+
+    def second_fake(self):
+        """An independent fake-docker state, so the two runs' call logs stay separable."""
+        d = os.path.join(self.tmp, "fake2")
+        os.makedirs(d, exist_ok=True)
+        for n in os.listdir(self.fake):
+            if n == "calls.log":
+                continue
+            src, dst = os.path.join(self.fake, n), os.path.join(d, n)
+            if os.path.isfile(src):
+                shutil.copyfile(src, dst)
+        return d
 
     def foreign_objects(self):
         """A parallel/older run's objects. Cleanup must never touch these."""
@@ -133,7 +179,7 @@ class RestoreProofTests(unittest.TestCase):
         return os.path.join(self.out_root, ".lock")
 
     def evidence_dir(self):
-        dirs = sorted(os.listdir(self.out_root))
+        dirs = self.out_dirs()          # the lock directory is not evidence
         self.assertTrue(dirs, "no evidence directory was created")
         return os.path.join(self.out_root, dirs[-1])
 
@@ -425,6 +471,90 @@ class RestoreProofTests(unittest.TestCase):
         for n in foreign:
             self.assertTrue(os.path.exists(os.path.join(self.fake, n)),
                             "an interrupt destroyed another run's object: %s" % n)
+
+
+    # ------------------------------------------------- re-review: same-second concurrency
+    def test_two_runs_in_the_same_second_do_not_share_anything(self):
+        """The fake clock pins both runs to one instant; uniqueness must come from pid+mktemp."""
+        fake2 = self.second_fake()
+        self.knob("stall_on_restore", "8")          # run A holds the lock while B tries
+
+        a = self.popen_proof(_FAKE_CLOCK=1)
+        try:
+            for _ in range(150):                     # wait until A actually owns the lock
+                if os.path.isdir(self.lock_dir()):
+                    break
+                time.sleep(0.1)
+            self.assertTrue(os.path.isdir(self.lock_dir()), "run A never took the lock")
+            a_dir = self.out_dirs()[0]
+
+            b = self.run_proof(_FAKE_CLOCK=1, FAKE=posix(fake2))
+            self.assertEqual(2, b.returncode, b.stdout + b.stderr)
+
+            dirs = self.out_dirs()
+            self.assertEqual(2, len(dirs), "the two runs did not get separate evidence directories")
+            b_dir = [d for d in dirs if d != a_dir][0]
+            self.assertNotEqual(a_dir, b_dir)
+
+            a_id, b_id = self.run_id_of(a_dir), self.run_id_of(b_dir)
+            self.assertTrue(a_id and b_id)
+            self.assertNotEqual(a_id, b_id, "two runs produced the same RUN_ID")
+            self.assertTrue(a_id.startswith("20260920T120000000Z"), a_id)
+            self.assertTrue(b_id.startswith("20260920T120000000Z"), b_id)
+
+            self.assertIn("another restore proof is already running", self.evidence_of(b_dir, "run.log"))
+            self.assertTrue(os.path.isdir(self.lock_dir()), "the refused run removed the active lock")
+            self.assertNotIn(a_id, self.calls_of(fake2), "the refused run addressed the other run's objects")
+            self.assertNotIn("network create", self.calls_of(fake2))
+            self.assertEqual("", self.evidence_of(b_dir, "restore.out"))
+
+            # nothing of run B leaked into run A's evidence
+            for name in ("run.log", "result.env"):
+                self.assertNotIn(b_id, self.evidence_of(a_dir, name))
+        finally:
+            a.communicate(timeout=120)      # also closes the pipes (no ResourceWarning)
+
+        self.assertEqual(0, a.returncode, "run A did not finish cleanly")
+        self.assertIn("W0-10A: PASS", self.evidence_of(a_dir, "SUMMARY.txt"))
+        self.assertIn("w010a-mongo-" + a_id, self.evidence_of(a_dir, "SUMMARY.txt"))
+        self.assertFalse(os.path.exists(self.lock_dir()), "run A did not release the lock")
+
+    def test_run_id_is_unique_across_back_to_back_runs_on_a_frozen_clock(self):
+        first = self.run_proof(_FAKE_CLOCK=1)
+        self.assertEqual(0, first.returncode, first.stdout + first.stderr)
+        second = self.run_proof(_FAKE_CLOCK=1)
+        self.assertEqual(0, second.returncode, second.stdout + second.stderr)
+        dirs = self.out_dirs()
+        self.assertEqual(2, len(dirs))
+        self.assertNotEqual(self.run_id_of(dirs[0]), self.run_id_of(dirs[1]))
+
+    # ------------------------------------------------- re-review: configuration guards
+    def test_invalid_sensor_switch_refuses(self):
+        for bad in ("yes", "2", "", "1 "):
+            p = self.run_proof(M2_SENSORS_REQUIRED=bad)
+            self.assertEqual(2, p.returncode, "M2_SENSORS_REQUIRED=%r was accepted" % bad)
+            self.assertIn("invalid M2_SENSORS_REQUIRED", self.evidence("run.log"))
+            shutil.rmtree(self.out_root); os.makedirs(self.out_root)
+
+    def test_invalid_temp_abort_refuses(self):
+        for bad in ("hot", "0", "-5", "62.5", ""):
+            p = self.run_proof(TEMP_ABORT=bad)
+            self.assertEqual(2, p.returncode, "TEMP_ABORT=%r was accepted" % bad)
+            self.assertIn("invalid TEMP_ABORT", self.evidence("run.log"))
+            shutil.rmtree(self.out_root); os.makedirs(self.out_root)
+
+    def test_invalid_ready_timeout_refuses(self):
+        for bad in ("soon", "0", "-1", ""):
+            p = self.run_proof(READY_TIMEOUT=bad)
+            self.assertEqual(2, p.returncode, "READY_TIMEOUT=%r was accepted" % bad)
+            self.assertIn("invalid READY_TIMEOUT", self.evidence("run.log"))
+            shutil.rmtree(self.out_root); os.makedirs(self.out_root)
+
+    def test_config_guards_run_before_any_docker_call(self):
+        p = self.run_proof(TEMP_ABORT="hot")
+        self.assertEqual(2, p.returncode)
+        self.assertNotIn("network create", self.calls())
+        self.assertFalse(os.path.exists(self.lock_dir()), "a rejected configuration still took the lock")
 
 
 if __name__ == "__main__":

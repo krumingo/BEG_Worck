@@ -13,6 +13,7 @@
 #   kill_during_restore sends TERM to $W010A_RUN_PID mid-restore (interrupt drill)
 #   heat_on_verify      writes 70 into every $M2_GLOB sensor just before verification
 #   stall_on_verify     also sleeps, long enough for the temperature sampler to trip
+#   stall_on_restore    seconds to sleep during the restore, so the run holds its lock
 #   c_<name>            a running container      net_<name>      a network      vol_<name>  a volume
 #
 # Every invocation is appended to $FAKE/calls.log so tests can assert on the real flags
@@ -90,6 +91,8 @@ case "$cmd" in
       *" mongorestore "*)
         # knob: simulate something touching production while the proof runs
         [ -f "$FAKE/mutate_prod" ] && echo "MUTATED" >> "$FAKE/prod_begwork-backend"
+        # knob: hold the run (and therefore the lock) open while another run tries to start
+        if [ -f "$FAKE/stall_on_restore" ]; then sleep "$(cat "$FAKE/stall_on_restore")"; fi
         if [ -f "$FAKE/kill_during_restore" ]; then
           # interrupt drill: signal the runner, then leave so bash can service the trap
           kill -TERM "${W010A_RUN_PID:-0}" 2>/dev/null

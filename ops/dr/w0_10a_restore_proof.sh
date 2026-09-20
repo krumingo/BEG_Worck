@@ -14,7 +14,13 @@
 #   * production `.env` is never read, only hashed;
 #   * object names are `w010a-*` and production names are refused outright — but cleanup
 #     touches ONLY the three objects this run created, never another run's;
-#   * an atomic lock directory refuses a second concurrent run;
+#   * the evidence directory is created with mktemp, so two processes started in the same
+#     second cannot share it — RUN_ID (stamp + pid + random suffix) also names the Docker
+#     objects, so their names cannot collide either;
+#   * an atomic lock directory refuses a second concurrent run, taken before anything that
+#     could affect another run;
+#   * TEMP_ABORT, READY_TIMEOUT and M2_SENSORS_REQUIRED are validated — a typo refuses the
+#     run instead of quietly disabling a guard;
 #   * the M.2 temperature gate is fail-closed: a missing or unreadable sensor refuses the
 #     start (the NAS powers itself off at 70 C — see
 #     docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md). `M2_SENSORS_REQUIRED=0` is the only way
@@ -32,28 +38,38 @@ PROD="${PROD:-/volume1/docker/begwork}"
 BACKUP_DIR="${BACKUP_DIR:-$PROD/backups}"
 OUT_ROOT="${OUT_ROOT:-/volume1/docker/w010a-restore-proof}"
 MONGO_IMAGE="${MONGO_IMAGE:-mongo:7}"
-TEMP_ABORT="${TEMP_ABORT:-62}"        # C; refuse to start / abort mid-run at or above this
-READY_TIMEOUT="${READY_TIMEOUT:-90}"  # s to wait for mongod
+TEMP_ABORT="${TEMP_ABORT-62}"         # C; refuse to start / abort mid-run at or above this
+READY_TIMEOUT="${READY_TIMEOUT-90}"   # s to wait for mongod
 DOCKER="${DOCKER:-docker}"
 M2_GLOB="${M2_GLOB:-/run/synostorage/disks/nvme*/temperature}"
-M2_SENSORS_REQUIRED="${M2_SENSORS_REQUIRED:-1}"   # 1 = refuse when no sensor is readable
+M2_SENSORS_REQUIRED="${M2_SENSORS_REQUIRED-1}"    # 1 = refuse when no sensor is readable;
+                                                  # note the missing colon: a value set to the
+                                                  # empty string is an operator mistake, not a
+                                                  # request for the default, and is refused
 LOCK_DIR="${LOCK_DIR:-$OUT_ROOT/.lock}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERIFY_JS="${VERIFY_JS:-$HERE/verify_restore.js}"
 
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-NET="w010a-net-$STAMP"
-VOL="w010a-vol-$STAMP"
-MONGO_C="w010a-mongo-$STAMP"
-OUT="$OUT_ROOT/out-$STAMP"
+# RUN_ID must be unique even for two processes started in the same second, because it names
+# the evidence directory AND the Docker objects. Resolution alone is not enough, so the
+# directory is created with mktemp: the creation itself is the atomic uniqueness guarantee.
+STAMP="$(date -u +%Y%m%dT%H%M%S%3NZ 2>/dev/null)"
+case "$STAMP" in ''|*N*|*%*) STAMP="$(date -u +%Y%m%dT%H%M%SZ)" ;; esac   # no %N on this date(1)
+mkdir -p "$OUT_ROOT" 2>/dev/null || { echo "cannot create $OUT_ROOT" >&2; exit 2; }
+OUT="$(mktemp -d "$OUT_ROOT/out-$STAMP-p$$-XXXXXX" 2>/dev/null)"   || { echo "cannot create an evidence directory under $OUT_ROOT" >&2; exit 2; }
+RUN_ID="$(basename "$OUT")"; RUN_ID="${RUN_ID#out-}"
+case "$RUN_ID" in
+  *[!A-Za-z0-9._-]*|'') echo "refusing: unusable RUN_ID '$RUN_ID'" >&2; rmdir "$OUT" 2>/dev/null; exit 2 ;;
+esac
+NET="w010a-net-$RUN_ID"
+VOL="w010a-vol-$RUN_ID"
+MONGO_C="w010a-mongo-$RUN_ID"
 SAMPLER_PID=""
 CREATED_NET=0 CREATED_VOL=0 CREATED_C=0
 LOCK_HELD=0 CLEANUP_DONE=0 CLEANUP_RC=0 FINISHED=0 INTERRUPTED=0
 M2_FOUND=0 M2_INVALID=0 M2_TEMPS=""
 
 export W010A_RUN_PID=$$   # so a child process can address this run (diagnostics, interrupt drills)
-
-mkdir -p "$OUT" 2>/dev/null || { echo "cannot create $OUT" >&2; exit 2; }
 
 log()  { printf '[%s] %s\n' "$(date -u +%H:%M:%SZ)" "$*" | tee -a "$OUT/run.log"; }
 step() { printf '\n[%s] === %s ===\n' "$(date -u +%H:%M:%SZ)" "$*" | tee -a "$OUT/run.log"; }
@@ -78,6 +94,20 @@ finish() {
   log "verdict=$VERDICT exit=$code evidence=$OUT"
   release_lock
   exit "$code"
+}
+
+# ---------------------------------------------------------------- configuration guards
+# A fail-closed switch is worthless if a typo silently disables it, so the knobs are validated
+# before anything else happens.
+is_positive_int() { case "${1:-}" in ''|*[!0-9]*) return 1 ;; esac; [ "$1" -gt 0 ]; }
+validate_config() {
+  case "$M2_SENSORS_REQUIRED" in
+    0|1) ;;
+    *) fail 2 "invalid M2_SENSORS_REQUIRED='$M2_SENSORS_REQUIRED' — only 0 or 1; refusing rather than guessing" ;;
+  esac
+  is_positive_int "$TEMP_ABORT"     || fail 2 "invalid TEMP_ABORT='$TEMP_ABORT' — must be a positive integer"
+  is_positive_int "$READY_TIMEOUT"     || fail 2 "invalid READY_TIMEOUT='$READY_TIMEOUT' — must be a positive integer"
+  log "configuration: TEMP_ABORT=${TEMP_ABORT}C READY_TIMEOUT=${READY_TIMEOUT}s M2_SENSORS_REQUIRED=$M2_SENSORS_REQUIRED"
 }
 
 # ---------------------------------------------------------------- single-run lock
@@ -173,9 +203,9 @@ snapshot() { # snapshot FILE — everything that must be identical before and af
     echo "# backups"
     ls -la --time-style=full-iso "$BACKUP_DIR" 2>/dev/null | grep 'archive.gz' | awk '{print $5, $6, $7, $9}'
     echo "# foreign w010a-* objects — they must survive this run untouched"
-    $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep '^w010a' | grep -vx "$MONGO_C" || true
-    $DOCKER volume ls --format '{{.Name}}' 2>/dev/null | grep '^w010a' | grep -vx "$VOL" || true
-    $DOCKER network ls --format '{{.Name}}' 2>/dev/null | grep '^w010a' | grep -vx "$NET" || true
+    $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep '^w010a' | grep -Fvx "$MONGO_C" || true
+    $DOCKER volume ls --format '{{.Name}}' 2>/dev/null | grep '^w010a' | grep -Fvx "$VOL" || true
+    $DOCKER network ls --format '{{.Name}}' 2>/dev/null | grep '^w010a' | grep -Fvx "$NET" || true
   } > "$FILE_OUT" 2>&1
 }
 take_snapshot() { FILE_OUT="$1"; snapshot; }
@@ -193,13 +223,13 @@ cleanup() {
   [ "$CREATED_NET" = 1 ] && $DOCKER network rm "$NET"   >>"$OUT/cleanup.log" 2>&1
 
   local leftover=""
-  if [ "$CREATED_C" = 1 ] && $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$MONGO_C"; then
+  if [ "$CREATED_C" = 1 ] && $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -Fqx "$MONGO_C"; then
     leftover="$leftover container:$MONGO_C"
   fi
-  if [ "$CREATED_VOL" = 1 ] && $DOCKER volume ls --format '{{.Name}}' 2>/dev/null | grep -qx "$VOL"; then
+  if [ "$CREATED_VOL" = 1 ] && $DOCKER volume ls --format '{{.Name}}' 2>/dev/null | grep -Fqx "$VOL"; then
     leftover="$leftover volume:$VOL"
   fi
-  if [ "$CREATED_NET" = 1 ] && $DOCKER network ls --format '{{.Name}}' 2>/dev/null | grep -qx "$NET"; then
+  if [ "$CREATED_NET" = 1 ] && $DOCKER network ls --format '{{.Name}}' 2>/dev/null | grep -Fqx "$NET"; then
     leftover="$leftover network:$NET"
   fi
   if [ -n "$leftover" ]; then
@@ -268,7 +298,11 @@ summary() {
 # ================================================================ 1. preflight
 step "preflight"
 say STARTED_AT "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+say RUN_ID "$RUN_ID"
 say RUN_PID "$$"
+log "run id $RUN_ID (evidence directory created atomically, so no other run can share it)"
+
+validate_config
 
 case "$MONGO_C$NET$VOL" in
   *begwork*|*kpo-photo*|*beg-raboti*) fail 2 "refusing: a production name leaked into the isolated object names" ;;
@@ -277,6 +311,9 @@ for n in "$MONGO_C" "$NET" "$VOL"; do
   case "$n" in w010a-*) ;; *) fail 2 "refusing: object name '$n' is not w010a-prefixed" ;; esac
 done
 
+# Nothing above touches Docker or any shared state. The lock is taken before the first
+# operation that could affect another run; a refusal writes only into this run's own
+# evidence directory and never removes the other run's lock.
 acquire_lock || fail 2 "another restore proof is already running (lock $LOCK_DIR)"
 
 command -v "$DOCKER" >/dev/null 2>&1 || fail 2 "docker not found"

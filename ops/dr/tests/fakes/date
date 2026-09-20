@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Test double for date(1): always answers with the SAME instant, so two runs started at
+# different real times still collide on the second. That is exactly the condition the
+# concurrency test needs — uniqueness must then come from the pid and mktemp, not the clock.
+case "$*" in
+  *%3N*)              echo "20260920T120000000Z" ;;
+  *%H:%M:%SZ*)        echo "12:00:00Z" ;;
+  *%Y-%m-%dT%H:%M:%SZ*) echo "2026-09-20T12:00:00Z" ;;
+  *)                  echo "20260920T120000Z" ;;
+esac
