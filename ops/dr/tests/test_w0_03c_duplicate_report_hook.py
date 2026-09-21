@@ -58,24 +58,48 @@ def tag(tenant, name, tid, status="active"):
             "normalized_name": name.strip().lower(), "status": status, "aliases": []}
 
 
-def export(databases):
+#: What begwork_beg held in the restored copy of 20.09.2026 (W0-10A verify.json) — the
+#: hook's default expectations. A fixture that stands for a real restore carries them.
+EXPECTED = ("companies", "clients", "counterparties", "persons", "items", "asset_units")
+
+
+def export(databases, scanned=None):
     return json.dumps({"schema": "beg.master-data-uniqueness-export/v1",
                        "exported_at": "2026-09-21T10:00:00.000Z",
-                       "scanned_databases": sorted(databases), "databases": databases},
+                       "scanned_databases": sorted(scanned if scanned is not None else
+                                                   list(databases) + ["begwork_system"]),
+                       "databases": databases},
                       ensure_ascii=False)
 
 
-CLEAN_EXPORT = export({"begwork_beg": {"collections": {
-    "md_tag": [tag("t1", "спешно", "g1")],
-    "companies": [{"id": "c1", "org_id": "o1", "name": "Строй ЕООД", "eik": "123456789"},
-                  {"id": "c2", "org_id": "o1", "name": "Строй", "eik": "123 456 789"}],
-    "persons": [{"id": "p1", "org_id": "o1", "first_name": "Иван", "egn": EGN},
-                {"id": "p2", "org_id": "o1", "first_name": "Иван", "egn": EGN}],
-}}})
+def begwork_beg(**collections):
+    """begwork_beg as restored: every expected collection present (empty unless given)."""
+    colls = {c: [] for c in EXPECTED}
+    colls.update(collections)
+    return {"collections": colls}
 
-BLOCKED_EXPORT = export({"begwork_beg": {"collections": {
-    "md_tag": [tag("t1", "спешно", "g1"), tag("t1", "Спешно", "g2")],
-}}})
+
+CLEAN_EXPORT = export({"begwork_beg": begwork_beg(
+    md_tag=[tag("t1", "спешно", "g1")],
+    companies=[{"id": "c1", "org_id": "o1", "name": "Строй ЕООД", "eik": "123456789"},
+               {"id": "c2", "org_id": "o1", "name": "Строй", "eik": "123 456 789"}],
+    persons=[{"id": "p1", "org_id": "o1", "first_name": "Иван", "egn": EGN},
+             {"id": "p2", "org_id": "o1", "first_name": "Иван", "egn": EGN}],
+)})
+
+BLOCKED_EXPORT = export({"begwork_beg": begwork_beg(
+    md_tag=[tag("t1", "спешно", "g1"), tag("t1", "Спешно", "g2")],
+)})
+
+#: Exports that prove nothing. EMPTY_EXPORT is literally the case of the review of
+#: 25394418; the others are what w0_03c_export.js writes for a restore that lacks data.
+EMPTY_EXPORT = json.dumps({"databases": {}})
+NOTHING_SCANNED_EXPORT = export({}, scanned=[])
+NO_PLANNED_COLLECTION_EXPORT = export({}, scanned=["begwork_beg", "begwork_system"])   # scanned, nothing planned
+NOT_RESTORED_EXPORT = export({"tenant_two": {"collections": {"md_tag": []}}},
+                             scanned=["begwork_system", "tenant_two"])
+MISSING_COLLECTION_EXPORT = export({"begwork_beg": {"collections": {
+    c: [] for c in EXPECTED if c != "companies"}}})
 
 
 class _Base(unittest.TestCase):
@@ -156,6 +180,86 @@ class HookTests(_Base):
         groups = [g for i in rep["databases"][0]["canonical"]["indexes"] for g in i["blocking_groups"]]
         self.assertEqual({"g1", "g2"}, {r["id"] for g in groups for r in g["records"]})
         self.assert_export_gone()
+
+    # ---------------------------------------------------------------- an export that proves nothing
+    def assert_incomplete(self, p, why):
+        self.assertEqual(1, p.returncode, p.stdout + p.stderr)
+        result = self.result()
+        self.assertIn("W003C_REPORT=INCOMPLETE", result)
+        self.assertIn("W003C_RESULT=FAIL", result)
+        self.assertIn("W003C_REPORT_EXIT=5", result)
+        self.assertNotIn("W003C_RESULT=PASS", result)
+        self.assertNotIn("W003C_REPORT=BLOCKED", result)
+        self.assertNotIn("W003C_REPORT=CLEAN", result)
+        self.assertIn(why, result)
+        self.assert_export_gone()
+        rep = self.report()                      # kept, so the reason can be read
+        self.assertEqual("INCOMPLETE", rep["verdict"])
+        self.assertFalse(rep["evidence"]["complete"])
+
+    def test_an_empty_export_fails_it_is_not_duplicates(self):
+        self.knob("export_json", EMPTY_EXPORT)
+        self.assert_incomplete(self.run_hook(), "no database with a planned collection")
+
+    def test_an_export_that_scanned_nothing_fails(self):
+        self.knob("export_json", NOTHING_SCANNED_EXPORT)
+        self.assert_incomplete(self.run_hook(), "names no scanned database")
+
+    def test_a_restored_database_without_any_planned_collection_fails(self):
+        self.knob("export_json", NO_PLANNED_COLLECTION_EXPORT)
+        self.assert_incomplete(self.run_hook(), "expected database begwork_beg holds none of the planned collections")
+
+    def test_a_copy_without_the_tenant_database_fails(self):
+        self.knob("export_json", NOT_RESTORED_EXPORT)
+        self.assert_incomplete(self.run_hook(), "expected database begwork_beg was not found in the restored copy")
+
+    def test_a_missing_expected_collection_fails(self):
+        self.knob("export_json", MISSING_COLLECTION_EXPORT)
+        self.assert_incomplete(self.run_hook(), "expected collection begwork_beg.companies is missing")
+
+    def test_expectations_are_recorded_and_can_be_narrowed_explicitly(self):
+        self.knob("export_json", MISSING_COLLECTION_EXPORT)
+        p = self.run_hook(W003C_EXPECT_COLLECTIONS="begwork_beg.clients")
+        self.assertEqual(0, p.returncode, p.stdout + p.stderr)
+        self.assertIn("W003C_EXPECT_COLLECTIONS=begwork_beg.clients", self.result())
+        self.assertIn("W003C_REPORT=CLEAN", self.result())
+
+    def test_an_empty_database_expectation_is_refused(self):
+        p = self.run_hook(W003C_EXPECT_DBS="")
+        self.assertEqual(1, p.returncode)
+        self.assertIn("W003C_EXPECT_DBS is empty", p.stdout)
+        self.assertNotIn(" run ", self.calls())
+
+    def test_an_unsafe_expectation_is_refused_before_any_container(self):
+        for extra in ({"W003C_EXPECT_DBS": "begwork_beg;rm"},
+                      {"W003C_EXPECT_COLLECTIONS": "begwork_beg.companies$(id)"},
+                      {"W003C_EXPECT_COLLECTIONS": "companies"},
+                      {"W003C_EXPECT_COLLECTIONS": "begwork_beg..companies"}):
+            p = self.run_hook(**extra)
+            self.assertEqual(1, p.returncode, extra)
+            self.assertIn("invalid W003C_EXPECT", p.stdout)
+        self.assertNotIn(" run ", self.calls())
+
+    # ---------------------------------------------------------------- the exit code alone is not trusted
+    def canned(self, rc, report):
+        os.remove(os.path.join(self.fake, "report_python"))
+        self.knob("report_rc", str(rc))
+        self.knob("report_json", json.dumps(report, indent=2))
+
+    def test_exit_1_without_a_blocked_verdict_fails(self):
+        self.canned(1, {"verdict": "INCOMPLETE", "clean": False})
+        p = self.run_hook()
+        self.assertEqual(1, p.returncode)
+        self.assertIn("they must agree", p.stdout)
+        self.assertNotIn("W003C_REPORT=BLOCKED", self.result())
+        self.assert_export_gone()
+
+    def test_exit_0_with_a_report_that_is_not_clean_fails(self):
+        self.canned(0, {"verdict": "INCOMPLETE", "clean": False})
+        p = self.run_hook()
+        self.assertEqual(1, p.returncode)
+        self.assertIn("they must agree", p.stdout)
+        self.assertNotIn("W003C_RESULT=PASS", self.result())
 
     def test_egn_never_reaches_the_evidence(self):
         p = self.run_hook()
@@ -396,6 +500,45 @@ class RunnerWithHookTests(_Base):
             shutil.rmtree(self.out_root); os.makedirs(self.out_root)
 
     # ---------------------------------------------------------------- end to end with the real hook
+    def assert_proof_blocked_by_an_incomplete_export(self, why):
+        p = self.run_proof(POST_VERIFY_HOOK=bash_path(HOOK))
+        self.assertEqual(3, p.returncode, p.stdout + p.stderr)
+        summary = self.evidence("SUMMARY.txt")
+        self.assertIn("W0-10A: BLOCKED", summary)
+        self.assertIn("POST_VERIFY_HOOK: FAIL", summary)
+        self.assertIn("CLEANUP: PASS", summary)
+        self.assertIn("PRODUCTION_CHANGED: NO", summary)
+        self.assertIn("post-verify hook exited 1", self.evidence("run.log"))
+        hook_dir = os.path.join(self.evidence_dir(), "hook")
+        hook_result = self.read(os.path.join(hook_dir, "result.env"))
+        self.assertIn("W003C_REPORT=INCOMPLETE", hook_result)
+        self.assertIn("W003C_RESULT=FAIL", hook_result)
+        self.assertIn(why, hook_result)
+        self.assertEqual("INCOMPLETE", json.loads(self.read(os.path.join(hook_dir, "report.json")))["verdict"])
+        self.assertFalse([n for n in os.listdir(hook_dir) if ".sensitive" in n])
+        self.assert_no_leftovers()
+
+    def test_restore_proof_is_blocked_by_an_empty_export(self):
+        self.knob("export_json", EMPTY_EXPORT)
+        self.assert_proof_blocked_by_an_incomplete_export("no database with a planned collection")
+
+    def test_restore_proof_is_blocked_by_a_database_without_planned_collections(self):
+        self.knob("export_json", NO_PLANNED_COLLECTION_EXPORT)
+        self.assert_proof_blocked_by_an_incomplete_export(
+            "expected database begwork_beg holds none of the planned collections")
+
+    def test_restore_proof_is_blocked_by_a_missing_expected_collection(self):
+        self.knob("export_json", MISSING_COLLECTION_EXPORT)
+        self.assert_proof_blocked_by_an_incomplete_export("expected collection begwork_beg.companies is missing")
+
+    def test_restore_proof_with_a_clean_complete_copy_passes(self):
+        self.knob("export_json", CLEAN_EXPORT)
+        p = self.run_proof(POST_VERIFY_HOOK=bash_path(HOOK))
+        self.assertEqual(0, p.returncode, p.stdout + p.stderr)
+        self.assertIn("W0-10A: PASS", self.evidence("SUMMARY.txt"))
+        hook_dir = os.path.join(self.evidence_dir(), "hook")
+        self.assertIn("W003C_REPORT=CLEAN", self.read(os.path.join(hook_dir, "result.env")))
+
     def test_restore_proof_with_the_real_duplicate_report_hook(self):
         self.knob("export_json", BLOCKED_EXPORT)
         p = self.run_proof(POST_VERIFY_HOOK=bash_path(HOOK))
@@ -479,20 +622,10 @@ class ExportScriptTests(unittest.TestCase):
                       "bulkWrite", "replaceOne", "findOneAnd", "renameCollection", "$out", "$merge"):
             self.assertNotIn(write, code)
 
-    @unittest.skipUnless(NODE, "node is required to execute the export script")
-    def test_the_export_reads_only_planned_collections_and_fields(self):
-        harness = r"""
+    HARNESS = r"""
 const fs = require('fs'), vm = require('vm');
 const reads = [];
-const data = {
-  begwork_beg: {
-    companies: [{id: 'c1', org_id: 'o', name: 'А', eik: '1', iban: 'BG00SECRET', _id: 'x'}],
-    md_tag: [{id: 't1', tenant_id: 't', status: 'active', normalized_name: 'a', notes: 'secret'}],
-    payments: [{id: 'pay1', amount: 5}],
-  },
-  begwork_system: { tenant_registry: [{id: 't'}] },
-  admin: { companies: [{id: 'should-not-be-read'}] },
-};
+const data = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 function project(doc, proj) {
   const out = {};
   for (const k of Object.keys(proj)) {
@@ -518,14 +651,40 @@ const ctx = {db, print: (s) => { printed = s; }, quit: (c) => { throw new Error(
 vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), ctx);
 process.stdout.write(JSON.stringify({printed: JSON.parse(printed), reads}));
 """
+
+    def run_export(self, data):
+        """Execute w0_03c_export.js under node against a stand-in server holding ``data``."""
         with tempfile.TemporaryDirectory() as tmp:
-            path = os.path.join(tmp, "harness.js")
+            path, src = os.path.join(tmp, "harness.js"), os.path.join(tmp, "data.json")
             with open(path, "w", encoding="utf-8") as f:
-                f.write(harness)
-            p = subprocess.run([NODE, path, EXPORT_JS], capture_output=True, text=True, encoding="utf-8")
+                f.write(self.HARNESS)
+            with open(src, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            p = subprocess.run([NODE, path, EXPORT_JS, src], capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(0, p.returncode, p.stderr)
         result = json.loads(p.stdout)
-        out, reads = result["printed"], result["reads"]
+        return result["printed"], result["reads"]
+
+    def report_of(self, exported, **expect):
+        sys.path.insert(0, BACKEND)
+        try:
+            from app.master_data.uniqueness import report_set_from_export
+        finally:
+            sys.path.remove(BACKEND)
+        return report_set_from_export(exported, **expect)
+
+    @unittest.skipUnless(NODE, "node is required to execute the export script")
+    def test_the_export_reads_only_planned_collections_and_fields(self):
+        out, reads = self.run_export({
+            "begwork_beg": {
+                "companies": [{"id": "c1", "org_id": "o", "name": "А", "eik": "1", "iban": "BG00SECRET", "_id": "x"}],
+                "md_tag": [{"id": "t1", "tenant_id": "t", "status": "active", "normalized_name": "a",
+                            "notes": "secret"}],
+                "payments": [{"id": "pay1", "amount": 5}],
+            },
+            "begwork_system": {"tenant_registry": [{"id": "t"}]},
+            "admin": {"companies": [{"id": "should-not-be-read"}]},
+        })
         self.assertEqual(["begwork_beg", "begwork_system"], out["scanned_databases"])
         self.assertEqual(["begwork_beg"], list(out["databases"]))
         self.assertEqual({"companies", "md_tag"}, set(out["databases"]["begwork_beg"]["collections"]))
@@ -538,6 +697,29 @@ process.stdout.write(JSON.stringify({printed: JSON.parse(printed), reads}));
         self.assertNotIn("BG00SECRET", text)
         self.assertNotIn("secret", text)
         self.assertNotIn("pay1", text)
+
+    @unittest.skipUnless(NODE, "node is required to execute the export script")
+    def test_what_the_export_writes_for_a_restore_without_planned_collections_is_incomplete(self):
+        """The real export script, then the real report: a restored begwork_beg that holds
+        none of the planned collections (or no restored tenant database at all) comes out
+        INCOMPLETE — never CLEAN, never BLOCKED."""
+        for data in ({"begwork_beg": {"payments": [{"id": 1}]}, "begwork_system": {"tenant_registry": []}},
+                     {"begwork_system": {"tenant_registry": []}},
+                     {}):
+            out, _ = self.run_export(data)
+            rs = self.report_of(out, expected_databases=["begwork_beg"])
+            self.assertEqual("INCOMPLETE", rs["verdict"], data)
+
+    @unittest.skipUnless(NODE, "node is required to execute the export script")
+    def test_what_the_export_writes_for_a_complete_restore_is_evidence(self):
+        out, _ = self.run_export({
+            "begwork_beg": {c: [] for c in EXPECTED},
+            "begwork_system": {"tenant_registry": []},
+        })
+        rs = self.report_of(out, expected_databases=["begwork_beg"],
+                            expected_collections=["begwork_beg." + c for c in EXPECTED])
+        self.assertEqual("CLEAN", rs["verdict"])
+        self.assertEqual([], rs["evidence"]["problems"])
 
 
 if __name__ == "__main__":

@@ -49,6 +49,12 @@ from app.master_data.normalize import NORMALIZATION_VERSION
 REPORT_SCHEMA = "beg.master-data-duplicate-report/v1"
 REPORT_SET_SCHEMA = "beg.master-data-duplicate-report-set/v1"
 EXPORT_SCHEMA = "beg.master-data-uniqueness-export/v1"
+
+#: The three answers a report set can give. INCOMPLETE is not "duplicates": it means the
+#: export does not prove that the data was read at all, so nothing can be concluded.
+VERDICT_CLEAN = "CLEAN"
+VERDICT_BLOCKED = "BLOCKED"
+VERDICT_INCOMPLETE = "INCOMPLETE"
 INDEX_PREFIX = "md_uq_"
 
 #: The pending-mapping queue (W0-03B2). Kept as literals so this module stays importable
@@ -484,31 +490,111 @@ def report_from_export(export: Dict[str, Any], *, now: Optional[str] = None) -> 
                         now=now)
 
 
-def report_set_from_export(export: Dict[str, Any], *, now: Optional[str] = None) -> Dict[str, Any]:
-    """A report per database of a multi-database export
-    (``{"schema", "exported_at", "databases": {name: {"collections": {...}}}}``).
+def export_problems(export: Any, *, expected_databases: Sequence[str] = (),
+                    expected_collections: Sequence[str] = ()) -> List[str]:
+    """Why ``export`` is NOT evidence — ``[]`` when it is.
 
-    Every tenant has its own database (TENANCY_MODEL §3), so each is judged on its own and
-    the set is clean only when every database is. A single-database export is accepted too.
+    An export proves something only if it says which databases it scanned, holds at least
+    one database with a planned collection, and — for what the operator expects from the
+    restored copy — contains those databases and ``<database>.<collection>`` pairs. An
+    empty or partial export must never read as "clean" or as "duplicates"."""
+    if not isinstance(export, dict):
+        return ["the export is not a JSON object"]
+    problems = []
+    if export.get("schema") != EXPORT_SCHEMA:
+        problems.append("export schema %r is not %r" % (export.get("schema"), EXPORT_SCHEMA))
+    scanned = export.get("scanned_databases")
+    if not isinstance(scanned, list) or not scanned:
+        problems.append("the export names no scanned database, so it does not prove any data was read")
+        scanned = []
+    databases = export.get("databases")
+    if not isinstance(databases, dict) or not databases:
+        problems.append("the export holds no database with a planned collection")
+        databases = {}
+    planned = set(canonical_collections()) | set(legacy_collections())
+    for name, body in sorted(databases.items()):
+        colls = body.get("collections") if isinstance(body, dict) else None
+        if name not in scanned:
+            problems.append("database %s is in the export but not among the scanned databases" % name)
+        if not isinstance(colls, dict) or not set(colls) & planned:
+            problems.append("database %s holds none of the planned collections" % name)
+            continue
+        for coll, docs in sorted(colls.items()):
+            if coll not in planned:
+                problems.append("%s.%s is not a planned collection" % (name, coll))
+            elif not isinstance(docs, list):
+                problems.append("%s.%s is not a list of documents" % (name, coll))
+            elif not all(isinstance(d, dict) for d in docs):
+                problems.append("%s.%s holds entries that are not documents" % (name, coll))
+    for name in expected_databases:
+        if name not in scanned:
+            problems.append("expected database %s was not found in the restored copy" % name)
+        elif name not in databases:
+            problems.append("expected database %s holds none of the planned collections" % name)
+    for spec in expected_collections:
+        name, _, coll = spec.partition(".")
+        if not name or not coll:
+            problems.append("expected collection %r is not <database>.<collection>" % spec)
+            continue
+        body = databases.get(name)
+        colls = body.get("collections") if isinstance(body, dict) else None
+        if not isinstance(colls, dict) or coll not in colls:
+            problems.append("expected collection %s is missing from the export" % spec)
+    return problems
+
+
+def _documents_only(collections: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    return {c: [d for d in docs if isinstance(d, dict)]
+            for c, docs in collections.items() if isinstance(docs, list)}
+
+
+def report_set_from_export(export: Dict[str, Any], *, expected_databases: Sequence[str] = (),
+                           expected_collections: Sequence[str] = (),
+                           now: Optional[str] = None) -> Dict[str, Any]:
+    """A report per database of a W0-03C export
+    (``{"schema", "exported_at", "scanned_databases", "databases": {name: {"collections"}}}``).
+
+    Every tenant has its own database (TENANCY_MODEL §3), so each is judged on its own. The
+    verdict is INCOMPLETE whenever ``export_problems`` finds anything — an empty or partial
+    export is not evidence and is never reported as CLEAN or as BLOCKED. Otherwise it is
+    CLEAN when every database's canonical report is clean, BLOCKED when any is not.
     """
-    if "databases" not in export:
-        single = report_from_export(export, now=now)
-        databases = [single]
+    problems = export_problems(export, expected_databases=expected_databases,
+                               expected_collections=expected_collections)
+    export = export if isinstance(export, dict) else {}
+    raw = export.get("databases") if isinstance(export.get("databases"), dict) else {}
+    # a malformed part is already a problem above; it is left out of the reports so that
+    # reading it can never crash or mislead them
+    databases = [report_from_export({"database": name, "exported_at": export.get("exported_at"),
+                                     "collections": _documents_only(body["collections"])}, now=now)
+                 for name, body in sorted(raw.items())
+                 if isinstance(body, dict) and isinstance(body.get("collections"), dict)]
+    if problems:
+        verdict = VERDICT_INCOMPLETE
+    elif all(r["canonical"]["clean"] for r in databases):
+        verdict = VERDICT_CLEAN
     else:
-        if export.get("schema") not in (None, EXPORT_SCHEMA):
-            raise ValueError("unknown export schema %r" % export.get("schema"))
-        databases = [report_from_export(dict(body or {}, database=name,
-                                             exported_at=export.get("exported_at")), now=now)
-                     for name, body in sorted((export.get("databases") or {}).items())]
+        verdict = VERDICT_BLOCKED
     return {
         "schema": REPORT_SET_SCHEMA,
         "generated_at": now or _now(),
         "exported_at": export.get("exported_at"),
         "normalization_version": NORMALIZATION_VERSION,
-        "clean": bool(databases) and all(r["canonical"]["clean"] for r in databases),
+        "verdict": verdict,
+        "clean": verdict == VERDICT_CLEAN,
+        "evidence": {
+            "complete": not problems,
+            "problems": problems,
+            "scanned_databases": export.get("scanned_databases"),
+            "expected_databases": list(expected_databases),
+            "expected_collections": list(expected_collections),
+            "collections_exported": {name: sorted(body["collections"]) for name, body in sorted(raw.items())
+                                     if isinstance(body, dict) and isinstance(body.get("collections"), dict)},
+        },
         "summary": [summarize(r) for r in databases],
         "databases": databases,
-        "rule": "read-only: nothing is merged, fixed or deleted; a blocked index is not built",
+        "rule": "read-only: nothing is merged, fixed or deleted; a blocked index is not built; "
+                "an incomplete export proves nothing",
     }
 
 

@@ -17,14 +17,29 @@ The order is the contract (docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CON
   4. **build** — each missing index in plan order. If any build fails (for example a
      duplicate written after the report), the indexes THIS run created are dropped again
      and the run reports ``FAILED_ROLLED_BACK``: no half-built plan is left behind.
-  5. **rollback plan** — the exact indexes this run created, and nothing else, so undoing
-     it cannot touch an index that existed before.
+  5. **rollback** — driven by the run ledger, not by a file.
 
-Nothing here reads or writes documents: the report reads, the bootstrap only creates and
-drops indexes named ``md_uq_*`` from ``uniqueness.CANONICAL_KEYS``.
+The run ledger (``md_uniqueness_runs``, in the same disposable database) is the only
+document this module writes. An ``apply`` opens one entry before it builds and records
+every index right after the server confirms it, so the ledger — not the JSON handed back
+to the operator — is the source of truth for "what did run X create". ``rollback(run_id)``
+drops only what that entry records; a saved plan, if given, must match the entry exactly,
+so an edited plan is refused instead of obeyed.
+
+MongoDB keeps no identity or creation time for an index, so two cases are resolved from
+the ledger alone:
+  * the same index claimed by two runs (a concurrent apply, or a later run that rebuilt an
+    index dropped in between): the LATER run owns the instance that exists now. Rolling
+    back the earlier run releases its claim without dropping anything; rolling back the
+    later run drops it.
+  * **the honest limit:** an index dropped and re-created OUTSIDE this tool, with the same
+    name and definition, cannot be told apart from the one the run created — rolling that
+    run back drops it. ``test_w0_03c_uniqueness`` pins this boundary.
 """
+import time
+import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from app.master_data.uniqueness import CANONICAL_KEYS, INDEX_PREFIX, UniqueKey, duplicate_report
 
@@ -37,6 +52,15 @@ STATUS_REFUSED_CONFLICT = "REFUSED_CONFLICT"
 STATUS_FAILED_ROLLED_BACK = "FAILED_ROLLED_BACK"
 STATUS_ROLLBACK_FAILED = "ROLLBACK_FAILED"
 STATUS_ROLLED_BACK = "ROLLED_BACK"
+
+#: The run ledger — the only documents this module writes, and only in the disposable
+#: database the guard accepted.
+LEDGER_COLLECTION = "md_uniqueness_runs"
+RUN_BUILDING = "building"                          # entry opened, indexes being built
+RUN_APPLIED = "applied"
+RUN_FAILED = "failed_rolled_back"                  # the build failed and undid itself
+RUN_ROLLBACK_INCOMPLETE = "rollback_incomplete"    # some claims could not be released
+RUN_ROLLED_BACK = "rolled_back"
 
 #: Database names that are production by definition: the legacy default, the first
 #: tenant's database (``begwork_beg``, what W0-10A restores) and the system database. The
@@ -169,6 +193,19 @@ async def bootstrap(db, *, database: str, apply: bool = False,
     if not run["to_create"]:
         return dict(run, status=STATUS_ALREADY_APPLIED, reason="every planned index is present")
 
+    run_id = uuid.uuid4().hex
+    run["run_id"] = run_id
+    ledger = db[LEDGER_COLLECTION]
+    try:
+        await ledger.insert_one({
+            "_id": run_id, "run_id": run_id, "database": database, "status": RUN_BUILDING,
+            "started_at": _now(), "started_ns": time.time_ns(),
+            "planned": list(run["to_create"]), "created": [], "released": [],
+        })
+    except Exception as exc:                            # noqa: BLE001 — nothing built yet
+        return dict(run, status=STATUS_FAILED_ROLLED_BACK,
+                    reason="could not open the run ledger (%s); nothing was built" % exc)
+
     created: List[UniqueKey] = []
     for key in keys:
         if "%s.%s" % (key.collection, key.name) not in run["to_create"]:
@@ -179,20 +216,40 @@ async def bootstrap(db, *, database: str, apply: bool = False,
             if "partialFilterExpression" in spec:
                 options["partialFilterExpression"] = spec["partialFilterExpression"]
             await db[key.collection].create_index(spec["keys"], **options)
+            created.append(key)
+            # recorded the moment the server confirms it: a crash after this line still
+            # leaves a ledger that names every index the run built
+            await ledger.update_one({"_id": run_id}, {"$set": {"created": _claims(created)}})
         except Exception as exc:                        # noqa: BLE001 — reported and undone
             undone = await _drop(db, created)
+            left = [k for k, u in zip(reversed(created), undone) if u["result"] != "dropped"]
+            await _ledger_set(ledger, run_id, {
+                "status": RUN_FAILED if not left else RUN_ROLLBACK_INCOMPLETE,
+                "created": _claims(list(reversed(left))), "undone": undone,
+                "finished_at": _now(), "failure": str(exc)})
             run["created"] = ["%s.%s" % (k.collection, k.name) for k in created]
             run["undone"] = undone
-            failed = [u for u in undone if u["result"] != "dropped"]
-            return dict(run, status=STATUS_ROLLBACK_FAILED if failed else STATUS_FAILED_ROLLED_BACK,
+            return dict(run, status=STATUS_ROLLBACK_FAILED if left else STATUS_FAILED_ROLLED_BACK,
                         reason="building %s.%s failed (%s); %d index(es) created by this run were "
                                "dropped again" % (key.collection, key.name, exc,
                                                   sum(1 for u in undone if u["result"] == "dropped")))
-        created.append(key)
 
+    await _ledger_set(ledger, run_id, {"status": RUN_APPLIED, "finished_at": _now()})
     run["created"] = ["%s.%s" % (k.collection, k.name) for k in created]
     run["rollback_plan"] = [_rollback_entry(k) for k in created]
-    return dict(run, status=STATUS_APPLIED, reason="%d index(es) created" % len(created))
+    return dict(run, status=STATUS_APPLIED,
+                reason="%d index(es) created (run %s)" % (len(created), run_id))
+
+
+def _claims(keys: Sequence[UniqueKey]) -> List[Dict[str, str]]:
+    return [{"collection": k.collection, "index": k.name} for k in keys]
+
+
+async def _ledger_set(ledger, run_id: str, fields: Dict[str, Any]) -> None:
+    try:
+        await ledger.update_one({"_id": run_id}, {"$set": fields})
+    except Exception:                                   # noqa: BLE001 — best effort, see result
+        pass
 
 
 async def _drop(db, created: Sequence[UniqueKey]) -> List[Dict[str, Any]]:
@@ -206,15 +263,25 @@ async def _drop(db, created: Sequence[UniqueKey]) -> List[Dict[str, Any]]:
     return out
 
 
-async def rollback(db, plan: Sequence[Dict[str, Any]], *, database: str,
+async def _ledger_entries(db) -> List[Dict[str, Any]]:
+    return await db[LEDGER_COLLECTION].find({}).to_list(length=None)
+
+
+def _pairs(entries: Iterable[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    return sorted((str(e.get("collection")), str(e.get("index"))) for e in entries)
+
+
+async def rollback(db, run_id: str, *, database: str,
                    target: Optional[Dict[str, Any]] = None,
+                   plan: Optional[Sequence[Dict[str, Any]]] = None,
                    keys: Sequence[UniqueKey] = CANONICAL_KEYS,
                    env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """Undo an ``APPLIED`` run: drop exactly the indexes in its rollback plan.
+    """Undo run ``run_id``: drop exactly what its ledger entry records, nothing else.
 
-    Only names that are both ``md_uq_*`` and part of ``keys`` for that collection are
-    touched, so a plan edited by hand cannot drop an unrelated index. A missing index is
-    reported as already absent — running the rollback twice is safe.
+    ``plan`` is the ``rollback_plan`` the operator saved. When given it must name exactly
+    the indexes the ledger records for that run, so an edited file is refused, never
+    obeyed. Claims are released one by one: a second rollback is safe, a partial one can
+    be retried.
     """
     try:
         check_target(database=database, hosts=(target or {}).get("hosts", []),
@@ -222,25 +289,67 @@ async def rollback(db, plan: Sequence[Dict[str, Any]], *, database: str,
                      confirm_database=(target or {}).get("confirm_database"), env=env)
     except TargetRefused as exc:
         return {"status": STATUS_REFUSED_TARGET, "reason": str(exc), "results": []}
-    allowed = {(k.collection, k.name) for k in keys}
+
+    entries = await _ledger_entries(db)
+    mine = next((e for e in entries if e.get("_id") == run_id), None)
+    if mine is None or mine.get("database") != database:
+        return {"status": STATUS_REFUSED_TARGET, "results": [],
+                "reason": "run %r is not in the run ledger of %r — nothing to undo" % (run_id, database)}
+    claims = list(mine.get("created") or [])
+    released = list(mine.get("released") or [])
+    if plan is not None and _pairs(plan) != _pairs(claims + released):
+        return {"status": STATUS_REFUSED_TARGET, "results": [],
+                "reason": "the saved plan does not match what run %s recorded in the ledger "
+                          "(edited?) — nothing dropped" % run_id}
+    if not claims:
+        return {"status": STATUS_ROLLED_BACK, "run_id": run_id, "results": [],
+                "reason": "run %s holds no index any more (ledger status %s) — nothing to undo"
+                          % (run_id, mine.get("status"))}
+
+    planned = {(k.collection, k.name): k for k in keys}
+    mine_order = (mine.get("started_ns") or 0, str(run_id))
+    later: Dict[Tuple[str, str], str] = {}
+    for e in entries:
+        if e.get("_id") != run_id and (e.get("started_ns") or 0, str(e.get("_id"))) > mine_order:
+            for c in e.get("created") or []:
+                later.setdefault((c.get("collection"), c.get("index")), e.get("_id"))
     present = set(await db.list_collection_names())
-    results = []
-    for entry in plan:
-        coll, name = entry.get("collection"), entry.get("index")
-        if (coll, name) not in allowed or not str(name).startswith(INDEX_PREFIX):
-            results.append({"index": "%s.%s" % (coll, name), "result": "refused: not a planned index"})
+
+    results, kept = [], []
+    for claim in claims:
+        coll, name = claim.get("collection"), claim.get("index")
+        label = "%s.%s" % (coll, name)
+        key = planned.get((coll, name))
+        if key is None or not str(name).startswith(INDEX_PREFIX):
+            results.append({"index": label, "result": "refused: not a planned index"})
+            kept.append(claim)
             continue
-        info = await _index_information(db, coll, present)
-        if name not in info:
-            results.append({"index": "%s.%s" % (coll, name), "result": "already absent"})
-            continue
-        try:
-            await db[coll].drop_index(name)
-            results.append({"index": "%s.%s" % (coll, name), "result": "dropped"})
-        except Exception as exc:                        # noqa: BLE001
-            results.append({"index": "%s.%s" % (coll, name), "result": "failed: %s" % exc})
-    bad = [r for r in results if r["result"].startswith(("failed", "refused"))]
-    return {"status": STATUS_ROLLBACK_FAILED if bad else STATUS_ROLLED_BACK,
-            "reason": "%d dropped, %d issue(s)" % (sum(1 for r in results if r["result"] == "dropped"),
-                                                   len(bad)),
+        if (coll, name) in later:
+            outcome = "released: rebuilt later by run %s, which owns it now — not dropped" % later[(coll, name)]
+        else:
+            info = await _index_information(db, coll, present)
+            if name not in info:
+                outcome = "already absent"
+            elif _existing_spec(info[name]) != _wanted_spec(key):
+                results.append({"index": label, "result": "refused: its definition changed since the run"})
+                kept.append(claim)
+                continue
+            else:
+                try:
+                    await db[coll].drop_index(name)
+                    outcome = "dropped"
+                except Exception as exc:                # noqa: BLE001
+                    results.append({"index": label, "result": "failed: %s" % exc})
+                    kept.append(claim)
+                    continue
+        results.append({"index": label, "result": outcome})
+        released.append({"collection": coll, "index": name, "result": outcome, "at": _now()})
+
+    await _ledger_set(db[LEDGER_COLLECTION], run_id, {
+        "created": kept, "released": released,
+        "status": RUN_ROLLED_BACK if not kept else RUN_ROLLBACK_INCOMPLETE})
+    dropped = sum(1 for r in results if r["result"] == "dropped")
+    return {"status": STATUS_ROLLBACK_FAILED if kept else STATUS_ROLLED_BACK, "run_id": run_id,
+            "reason": "%d dropped, %d released without a drop, %d kept"
+                      % (dropped, len(results) - dropped - len(kept), len(kept)),
             "results": results}

@@ -192,6 +192,13 @@ Runner-ът приема **по избор** `POST_VERIFY_HOOK` — абсолю
 - В `hook/result.env`: `W003C_REPORT=CLEAN` или `W003C_REPORT=BLOCKED`.
 - В `hook/report.json`: пълният отчет. ЕГН е маскирано.
 - **Дубликатите са резултат, не провал** — hook-ът излиза с 0.
+- **Празен или непълен export е провал:** `W003C_REPORT=INCOMPLETE`, изход 1, W0-10A е BLOCKED, а почистването пак минава. Непълен е export, който е празен, не е сканирал нищо или няма очаквана база или колекция.
+- **Очаквания по подразбиране:**
+  - `W003C_EXPECT_DBS=begwork_beg`;
+  - `W003C_EXPECT_COLLECTIONS` = `companies`, `clients`, `counterparties`, `persons`, `items` и `asset_units` в `begwork_beg`.
+
+  Точно тези колекции е имало възстановеното копие на 20.09.2026.
+- **Hook-ът минава само ако изходният код, редът `verdict=` и `report.json` казват едно и също.**
 
 **Пакет за NAS-а** — от точен commit, с LF и sha256 на всеки файл:
 
@@ -202,7 +209,7 @@ bash ops/dr/w0_03c_make_bundle.sh <commit> <изходна папка>
 **Пускане на NAS-а** (след разархивиране в `/volume1/docker/w003c/`):
 
 ```bash
-sudo POST_VERIFY_HOOK=/volume1/docker/w003c/<sha12>/ops/dr/w0_03c_duplicate_report_hook.sh bash /volume1/docker/w003c/<sha12>/ops/dr/w0_10a_restore_proof.sh
+sudo env POST_VERIFY_HOOK=/volume1/docker/w003c/<sha12>/ops/dr/w0_03c_duplicate_report_hook.sh bash /volume1/docker/w003c/<sha12>/ops/dr/w0_10a_restore_proof.sh
 ```
 
 **Нужни образи:** `mongo:7` и `python:3.11-slim` трябва да са налични локално. Прогонът не тегли нищо.

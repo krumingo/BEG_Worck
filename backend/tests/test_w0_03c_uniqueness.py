@@ -70,6 +70,8 @@ class IndexCollection:
         self.calls.append("insert_one")
         doc = copy.deepcopy(doc)
         doc.setdefault("_id", "oid-%d" % self.db.next_oid())
+        if any(d.get("_id") == doc["_id"] for d in self.docs):
+            raise DuplicateKeyError("E11000 duplicate key error collection: %s index: _id_" % self.name)
         for name, info in self.indexes.items():
             if name == "_id_" or not info.get("unique"):
                 continue
@@ -81,6 +83,16 @@ class IndexCollection:
                                             % (self.name, name))
         self.docs.append(doc)
         self.db.touch(self.name)
+
+    async def update_one(self, filter, update):
+        """Equality on ``_id`` and ``$set`` — all the run ledger needs."""
+        self.calls.append("update_one")
+        if self.name in self.db.fail_update:
+            raise OperationFailure("write to %s refused" % self.name)
+        for d in self.docs:
+            if all(d.get(k) == v for k, v in filter.items()):
+                d.update(copy.deepcopy(update.get("$set", {})))
+                return
 
     async def create_index(self, keys, name=None, unique=False, partialFilterExpression=None):
         self.calls.append("create_index:%s" % name)
@@ -129,6 +141,7 @@ class IndexDb:
         self.present = set()
         self.fail_on = set()
         self.fail_drop = set()
+        self.fail_update = set()
         self._oid = 0
 
     def next_oid(self):
@@ -445,17 +458,25 @@ def test_legacy_egn_is_masked_and_only_listed_fields_are_read():
 
 # ---------------------------------------------------------------- report from an export (NAS path)
 
+def restored(databases, scanned=None):
+    """An export the way w0_03c_export.js writes it."""
+    return {"schema": uq.EXPORT_SCHEMA, "exported_at": NOW,
+            "scanned_databases": sorted(scanned if scanned is not None else databases),
+            "databases": {n: {"collections": c} for n, c in databases.items()}}
+
+
 def test_report_from_a_multi_database_export():
-    export = {"schema": uq.EXPORT_SCHEMA, "exported_at": NOW, "databases": {
-        "begwork_beg": {"collections": {
+    export = restored({
+        "begwork_beg": {
             "md_tag": [tag(T_A, "спешно"), tag(T_A, "СПЕШНО")],
             "companies": [{"id": "c1", "org_id": "o", "eik": "1"}, {"id": "c2", "org_id": "o", "eik": "1"}],
-        }},
-        "tenant_two": {"collections": {"md_tag": [tag(T_B, "спешно")]}},
-    }}
+        },
+        "tenant_two": {"md_tag": [tag(T_B, "спешно")]},
+    })
     rs = uq.report_set_from_export(export, now=NOW)
     assert rs["schema"] == uq.REPORT_SET_SCHEMA
-    assert rs["clean"] is False
+    assert rs["verdict"] == uq.VERDICT_BLOCKED and rs["clean"] is False
+    assert rs["evidence"]["complete"] is True
     by_db = {s["database"]: s for s in rs["summary"]}
     assert by_db["begwork_beg"]["blocked_indexes"] == ["md_tag.md_uq_name"]
     assert by_db["tenant_two"]["canonical_clean"] is True
@@ -463,8 +484,62 @@ def test_report_from_a_multi_database_export():
     assert legacy["organization.eik"]["within_collection_groups"] == 1
 
 
-def test_an_empty_export_is_not_clean():
-    assert uq.report_set_from_export({"databases": {}}, now=NOW)["clean"] is False
+def test_a_complete_export_without_duplicates_is_clean():
+    rs = uq.report_set_from_export(restored({"begwork_beg": {"companies": [], "md_tag": []}},
+                                            scanned=["begwork_beg", "begwork_system"]),
+                                   expected_databases=["begwork_beg"],
+                                   expected_collections=["begwork_beg.companies"], now=NOW)
+    assert rs["verdict"] == uq.VERDICT_CLEAN and rs["clean"] is True
+
+
+@pytest.mark.parametrize("export, why", [
+    ({"databases": {}}, "no scanned database"),
+    ({}, "no scanned database"),
+    (restored({}, scanned=["begwork_beg", "begwork_system"]), "no database with a planned collection"),
+    (restored({}, scanned=[]), "no scanned database"),
+    (dict(restored({"begwork_beg": {"companies": []}}), schema="something/else"), "schema"),
+    (restored({"begwork_beg": {"payments": [{"id": 1}]}}), "none of the planned collections"),
+    (restored({"begwork_beg": {"companies": {"not": "a list"}}}), "not a list"),
+    (restored({"begwork_beg": {"companies": []}}, scanned=["other"]), "not among the scanned"),
+    (restored({"begwork_beg": {"companies": ["x", 1]}}), "not documents"),
+])
+def test_an_empty_or_malformed_export_is_incomplete_never_clean_or_blocked(export, why):
+    rs = uq.report_set_from_export(export, now=NOW)
+    assert rs["verdict"] == uq.VERDICT_INCOMPLETE
+    assert rs["clean"] is False and rs["evidence"]["complete"] is False
+    assert any(why in p for p in rs["evidence"]["problems"]), rs["evidence"]["problems"]
+
+
+def test_a_restored_database_without_any_planned_collection_is_incomplete():
+    # what w0_03c_export.js writes when begwork_beg was restored but holds none of the
+    # planned collections: it is scanned, but absent from "databases"
+    export = restored({"tenant_two": {"md_tag": []}}, scanned=["begwork_beg", "begwork_system", "tenant_two"])
+    rs = uq.report_set_from_export(export, expected_databases=["begwork_beg"], now=NOW)
+    assert rs["verdict"] == uq.VERDICT_INCOMPLETE
+    assert rs["evidence"]["problems"] == ["expected database begwork_beg holds none of the planned collections"]
+
+
+def test_an_expected_database_that_was_not_restored_is_incomplete():
+    rs = uq.report_set_from_export(restored({"tenant_two": {"md_tag": []}}),
+                                   expected_databases=["begwork_beg"], now=NOW)
+    assert rs["verdict"] == uq.VERDICT_INCOMPLETE
+    assert "expected database begwork_beg was not found in the restored copy" in rs["evidence"]["problems"]
+
+
+def test_a_missing_expected_collection_is_incomplete_even_if_the_rest_has_duplicates():
+    export = restored({"begwork_beg": {"md_tag": [tag(T_A, "x"), tag(T_A, "X")], "clients": []}})
+    rs = uq.report_set_from_export(export, expected_databases=["begwork_beg"],
+                                   expected_collections=["begwork_beg.companies", "begwork_beg.clients"],
+                                   now=NOW)
+    assert rs["verdict"] == uq.VERDICT_INCOMPLETE          # not BLOCKED: the evidence is partial
+    assert rs["evidence"]["problems"] == ["expected collection begwork_beg.companies is missing from the export"]
+    assert rs["summary"][0]["blocked_indexes"] == ["md_tag.md_uq_name"]    # still shown, for reading
+
+
+def test_an_empty_but_present_collection_is_evidence():
+    rs = uq.report_set_from_export(restored({"begwork_beg": {"companies": [], "items": []}}),
+                                   expected_collections=["begwork_beg.items"], now=NOW)
+    assert rs["verdict"] == uq.VERDICT_CLEAN
 
 
 def test_the_export_plan_lists_every_field_a_key_or_partial_needs():
@@ -724,66 +799,263 @@ def test_a_dry_run_needs_no_target_because_it_only_reads():
     assert set(db.all_calls()) <= {"find", "index_information"}
 
 
-# ---------------------------------------------------------------- rollback plan
+# ---------------------------------------------------------------- rollback: the run ledger decides
 
-def test_rollback_plan_drops_exactly_what_the_run_created():
+def ledger_of(db, run_id):
+    return [d for d in db[ib.LEDGER_COLLECTION].docs if d["_id"] == run_id][0]
+
+
+def undo(db, applied, plan="saved", **kw):
+    kw.setdefault("target", LOCAL)
+    kw.setdefault("env", NO_ENV)
+    if plan == "saved":
+        plan = applied["rollback_plan"]
+    return run(ib.rollback(db, applied["run_id"], database=SCRATCH, plan=plan, **kw))
+
+
+def md_tag_key(name):
+    return [k for k in uq.CANONICAL_KEYS if k.collection == "md_tag" and k.name == name][0]
+
+
+def prebuild(db, key):
+    spec = key.index_spec()
+    opts = {"partialFilterExpression": spec["partialFilterExpression"]} if "partialFilterExpression" in spec else {}
+    run(db[key.collection].create_index(spec["keys"], name=key.name, unique=True, **opts))
+
+
+def test_apply_records_every_created_index_in_the_run_ledger():
     db = IndexDb()
-    key = [k for k in uq.CANONICAL_KEYS if k.collection == "md_tag" and k.name == "md_uq_id"][0]
-    run(db["md_tag"].create_index(key.index_spec()["keys"], name=key.name, unique=True))
+    applied = boot(db, apply=True, target=LOCAL)
+    entry = ledger_of(db, applied["run_id"])
+    assert entry["status"] == ib.RUN_APPLIED and entry["database"] == SCRATCH
+    assert len(entry["created"]) == 25
+    assert {(c["collection"], c["index"]) for c in entry["created"]} == \
+        {(e["collection"], e["index"]) for e in applied["rollback_plan"]}
+
+
+def test_only_apply_writes_the_ledger():
+    db = IndexDb()
+    boot(db)                                                             # dry run
+    seed(db, "md_tag", tag(T_A, "x"), tag(T_A, "X"))
+    boot(db, apply=True, target=LOCAL)                                   # refused: duplicates
+    assert ib.LEDGER_COLLECTION not in db.collections
+
+
+def test_rollback_drops_exactly_what_the_run_created():
+    db = IndexDb()
+    prebuild(db, md_tag_key("md_uq_id"))
     run(db["md_tag"].create_index([("display_name", 1)], name="unrelated"))
     applied = boot(db, apply=True, target=LOCAL)
     assert applied["status"] == ib.STATUS_APPLIED
-    plan = applied["rollback_plan"]
-    assert len(plan) == 24
+    assert len(applied["rollback_plan"]) == 24
     assert all(e["command"] == "db.getCollection(%r).dropIndex(%r)" % (e["collection"], e["index"])
-               for e in plan)
-    json.dumps(plan)                                   # the plan is saved as JSON by the CLI
+               for e in applied["rollback_plan"])
+    json.dumps(applied)                                   # the CLI saves it as JSON
 
-    rb = run(ib.rollback(db, plan, database=SCRATCH, target=LOCAL, env=NO_ENV))
+    rb = undo(db, applied)
     assert rb["status"] == ib.STATUS_ROLLED_BACK
     assert sum(1 for x in rb["results"] if x["result"] == "dropped") == 24
-    assert db.indexes("md_tag") == {"_id_", "md_uq_id", "unrelated"}    # what existed before stays
+    assert db.indexes("md_tag") == {"_id_", "md_uq_id", "unrelated"}     # what existed before stays
     assert db.indexes("md_organization") == {"_id_"}
+    entry = ledger_of(db, applied["run_id"])
+    assert entry["status"] == ib.RUN_ROLLED_BACK and entry["created"] == [] and len(entry["released"]) == 24
+
+
+def test_a_saved_plan_with_another_planned_name_is_refused():
+    """Review of 25394418: an APPLIED JSON could name a planned md_uq_* index the run did NOT
+    create (here one that existed before and was only kept). The ledger now decides; the
+    edited plan is refused and nothing is dropped."""
+    db = IndexDb()
+    prebuild(db, md_tag_key("md_uq_id"))                  # not this run's index
+    applied = boot(db, apply=True, target=LOCAL)
+    forged = applied["rollback_plan"] + [{"collection": "md_tag", "index": "md_uq_id",
+                                          "command": "db.getCollection('md_tag').dropIndex('md_uq_id')"}]
+    before = {c: db.indexes(c) for c in db.collections}
+    rb = undo(db, applied, plan=forged)
+    assert rb["status"] == ib.STATUS_REFUSED_TARGET
+    assert "does not match" in rb["reason"]
+    assert {c: db.indexes(c) for c in db.collections} == before
+    assert ledger_of(db, applied["run_id"])["status"] == ib.RUN_APPLIED
+
+
+def test_a_saved_plan_with_a_name_removed_or_foreign_is_refused():
+    db = IndexDb()
+    run(db["users"].create_index([("email", 1)], name="email_1", unique=True))
+    applied = boot(db, apply=True, target=LOCAL)
+    for forged in (applied["rollback_plan"][1:],
+                   applied["rollback_plan"] + [{"collection": "users", "index": "email_1"}],
+                   [{"collection": "users", "index": "email_1"}]):
+        rb = undo(db, applied, plan=forged)
+        assert rb["status"] == ib.STATUS_REFUSED_TARGET
+    assert db.indexes("users") == {"_id_", "email_1"}
+    assert len([c for c in db.collections if "md_uq_id" in db.indexes(c)]) == 9
+
+
+def test_a_run_id_that_is_not_in_the_ledger_is_refused():
+    db = IndexDb()
+    applied = boot(db, apply=True, target=LOCAL)
+    rb = run(ib.rollback(db, "0" * 32, database=SCRATCH, target=LOCAL, env=NO_ENV))
+    assert rb["status"] == ib.STATUS_REFUSED_TARGET and "not in the run ledger" in rb["reason"]
+    assert "md_uq_id" in db.indexes("md_organization")
+    other = dict(applied, run_id="0" * 32)
+    assert undo(db, other)["status"] == ib.STATUS_REFUSED_TARGET
+
+
+def test_a_ledger_entry_of_another_database_is_refused():
+    """A scratch database copied or restored under another name carries the ledger of
+    the original; its runs did not build anything in THIS database."""
+    db = IndexDb()
+    applied = boot(db, apply=True, target=LOCAL)
+    ledger_of(db, applied["run_id"])["database"] = "w003c_original"
+    rb = undo(db, applied)
+    assert rb["status"] == ib.STATUS_REFUSED_TARGET and "not in the run ledger" in rb["reason"]
+    assert "md_uq_id" in db.indexes("md_organization")
+
+
+def test_without_a_saved_plan_the_ledger_alone_is_enough():
+    db = IndexDb()
+    applied = boot(db, apply=True, target=LOCAL)
+    assert undo(db, applied, plan=None)["status"] == ib.STATUS_ROLLED_BACK
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections if c != ib.LEDGER_COLLECTION)
 
 
 def test_rollback_twice_is_safe():
     db = IndexDb()
-    plan = boot(db, apply=True, target=LOCAL)["rollback_plan"]
-    run(ib.rollback(db, plan, database=SCRATCH, target=LOCAL, env=NO_ENV))
-    again = run(ib.rollback(db, plan, database=SCRATCH, target=LOCAL, env=NO_ENV))
+    applied = boot(db, apply=True, target=LOCAL)
+    undo(db, applied)
+    again = undo(db, applied)
     assert again["status"] == ib.STATUS_ROLLED_BACK
-    assert {x["result"] for x in again["results"]} == {"already absent"}
+    assert again["results"] == [] and "nothing to undo" in again["reason"]
 
 
-def test_a_hand_edited_plan_cannot_drop_other_indexes():
+def test_an_index_rebuilt_by_a_later_run_is_released_not_dropped():
+    """Run A built md_tag.md_uq_name; it was dropped; run B built it again. The instance
+    that exists now is B's: undoing A must leave it, undoing B must drop it."""
     db = IndexDb()
-    run(db["md_tag"].create_index([("display_name", 1)], name="unrelated"))
-    run(db["users"].create_index([("email", 1)], name="email_1", unique=True))
-    plan = [{"collection": "md_tag", "index": "unrelated"},
-            {"collection": "users", "index": "email_1"},
-            {"collection": "md_tag", "index": "_id_"},
-            {"collection": "users", "index": "md_uq_id"}]
-    rb = run(ib.rollback(db, plan, database=SCRATCH, target=LOCAL, env=NO_ENV))
+    a = boot(db, apply=True, target=LOCAL)
+    run(db["md_tag"].drop_index("md_uq_name"))
+    b = boot(db, apply=True, target=LOCAL)
+    assert b["created"] == ["md_tag.md_uq_name"]
+
+    rb_a = undo(db, a)
+    assert rb_a["status"] == ib.STATUS_ROLLED_BACK
+    released = [r for r in rb_a["results"] if r["index"] == "md_tag.md_uq_name"][0]
+    assert released["result"].startswith("released: rebuilt later by run %s" % b["run_id"])
+    assert "md_uq_name" in db.indexes("md_tag")
+    assert sum(1 for r in rb_a["results"] if r["result"] == "dropped") == 24
+
+    rb_b = undo(db, b)
+    assert rb_b["results"] == [{"index": "md_tag.md_uq_name", "result": "dropped"}]
+    assert "md_uq_name" not in db.indexes("md_tag")
+
+
+def test_two_runs_that_raced_on_the_same_indexes_drop_them_exactly_once():
+    """A concurrent apply: run B checked before run A's indexes existed, so its
+    createIndex calls were no-ops on A's indexes (MongoDB accepts an identical re-create).
+    Both ledgers claim all 25. The later run owns them: undoing A drops nothing,
+    undoing B drops each exactly once."""
+    db = IndexDb()
+    a = boot(db, apply=True, target=LOCAL)
+    original = ib._index_information
+
+    async def saw_nothing_yet(db_, collection, present):
+        return {}
+
+    ib._index_information = saw_nothing_yet
+    try:
+        b = boot(db, apply=True, target=LOCAL)
+    finally:
+        ib._index_information = original
+    assert b["status"] == ib.STATUS_APPLIED and len(b["created"]) == 25
+
+    rb_a = undo(db, a)
+    assert rb_a["status"] == ib.STATUS_ROLLED_BACK
+    assert all(r["result"].startswith("released: rebuilt later by run %s" % b["run_id"]) for r in rb_a["results"])
+    assert len([c for c in db.collections if "md_uq_id" in db.indexes(c)]) == 9
+    rb_b = undo(db, b)
+    assert sum(1 for r in rb_b["results"] if r["result"] == "dropped") == 25
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections if c != ib.LEDGER_COLLECTION)
+
+
+def test_a_changed_definition_is_kept_and_reported():
+    db = IndexDb()
+    applied = boot(db, apply=True, target=LOCAL)
+    run(db["md_unit"].drop_index("md_uq_name"))
+    run(db["md_unit"].create_index([("tenant_id", 1), ("normalized_name", 1)], name="md_uq_name", unique=True))
+    rb = undo(db, applied)
     assert rb["status"] == ib.STATUS_ROLLBACK_FAILED
-    assert {x["result"] for x in rb["results"]} == {"refused: not a planned index"}
-    assert db.indexes("md_tag") == {"_id_", "unrelated"}
-    assert db.indexes("users") == {"_id_", "email_1"}
+    assert [r for r in rb["results"] if r["index"] == "md_unit.md_uq_name"][0]["result"] == \
+        "refused: its definition changed since the run"
+    assert "md_uq_name" in db.indexes("md_unit")
+    entry = ledger_of(db, applied["run_id"])
+    assert entry["status"] == ib.RUN_ROLLBACK_INCOMPLETE
+    assert entry["created"] == [{"collection": "md_unit", "index": "md_uq_name"}]
+
+
+def test_limit_an_index_recreated_outside_the_tool_cannot_be_told_apart():
+    """THE HONEST BOUNDARY. MongoDB keeps no identity or creation time for an index. If
+    an index the run created is dropped and re-created by hand with the same name and
+    definition — not through the bootstrap, so not in the ledger — rolling the run back
+    drops the hand-made one. The ledger cannot see it; nothing in the server can."""
+    db = IndexDb()
+    applied = boot(db, apply=True, target=LOCAL)
+    run(db["md_tag"].drop_index("md_uq_name"))
+    prebuild(db, md_tag_key("md_uq_name"))                # by hand, outside the tool
+    rb = undo(db, applied)
+    assert [r for r in rb["results"] if r["index"] == "md_tag.md_uq_name"][0]["result"] == "dropped"
+    assert "md_uq_name" not in db.indexes("md_tag")
+
+
+def test_a_ledger_that_cannot_be_opened_builds_nothing():
+    db = IndexDb()
+    original = IndexCollection.insert_one
+
+    async def refuse(self, doc):
+        if self.name == ib.LEDGER_COLLECTION:
+            raise OperationFailure("not authorized")
+        return await original(self, doc)
+
+    IndexCollection.insert_one = refuse
+    try:
+        r = boot(db, apply=True, target=LOCAL)
+    finally:
+        IndexCollection.insert_one = original
+    assert r["status"] == ib.STATUS_FAILED_ROLLED_BACK and "nothing was built" in r["reason"]
+    assert not any(c.startswith("create_index") for c in db.all_calls())
+
+
+def test_a_ledger_that_stops_recording_undoes_the_build():
+    db = IndexDb()
+    db.fail_update.add(ib.LEDGER_COLLECTION)
+    r = boot(db, apply=True, target=LOCAL)
+    assert r["status"] == ib.STATUS_FAILED_ROLLED_BACK
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+
+
+def test_a_failed_build_leaves_a_ledger_with_nothing_claimed():
+    db = IndexDb()
+    db.fail_on.add("md_uq_open_pending")
+    r = boot(db, apply=True, target=LOCAL)
+    entry = ledger_of(db, r["run_id"])
+    assert entry["status"] == ib.RUN_FAILED and entry["created"] == []
+    assert len(entry["undone"]) == 24
 
 
 def test_rollback_is_guarded_like_apply():
     db = IndexDb()
-    plan = boot(db, apply=True, target=LOCAL)["rollback_plan"]
+    applied = boot(db, apply=True, target=LOCAL)
     atlas = {"hosts": ["cluster0.abcde.mongodb.net"], "scheme": "mongodb+srv", "confirm_database": SCRATCH}
-    rb = run(ib.rollback(db, plan, database=SCRATCH, target=atlas, env=NO_ENV))
+    rb = undo(db, applied, target=atlas)
     assert rb["status"] == ib.STATUS_REFUSED_TARGET
     assert "md_uq_id" in db.indexes("md_organization")
 
 
 def test_after_rollback_a_clean_rerun_builds_again():
     db = IndexDb()
-    plan = boot(db, apply=True, target=LOCAL)["rollback_plan"]
-    run(ib.rollback(db, plan, database=SCRATCH, target=LOCAL, env=NO_ENV))
-    assert boot(db, apply=True, target=LOCAL)["status"] == ib.STATUS_APPLIED
+    applied = boot(db, apply=True, target=LOCAL)
+    undo(db, applied)
+    again = boot(db, apply=True, target=LOCAL)
+    assert again["status"] == ib.STATUS_APPLIED and len(again["created"]) == 25
 
 
 # ---------------------------------------------------------------- after apply: the database enforces it
@@ -883,34 +1155,82 @@ def test_cli_refuses_before_opening_any_connection(argv, monkeypatch, capsys):
 def test_cli_report_from_export_exit_codes_and_masking(tmp_path, capsys):
     person = build_entity(tenant_id=T_A, entity_type="person", display_name="Иван", now=NOW)
     person["identifiers"] = [new_identifier("person", "egn", "8001011234")]
-    clean = {"schema": uq.EXPORT_SCHEMA, "databases": {"begwork_beg": {"collections": {
+    export = restored({"begwork_beg": {
         "md_person": [person], "persons": [{"id": "p", "org_id": "o", "egn": "8001011234"},
-                                           {"id": "q", "org_id": "o", "egn": "8001011234"}]}}}}
+                                           {"id": "q", "org_id": "o", "egn": "8001011234"}]}})
     src, out = tmp_path / "export.json", tmp_path / "report.json"
-    src.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
-    assert cli.main(["report", "--from-export", str(src), "--out", str(out)]) == 0
-    text = out.read_text(encoding="utf-8")
-    assert "8001011234" not in text and "8001011234" not in capsys.readouterr().err
+    args = ["report", "--from-export", str(src), "--out", str(out), "--expect-db", "begwork_beg",
+            "--expect-collection", "begwork_beg.persons"]
+    src.write_text(json.dumps(export, ensure_ascii=False), encoding="utf-8")
+    assert cli.main(args) == 0
+    err = capsys.readouterr().err
+    assert "verdict=CLEAN" in err and "8001011234" not in err
+    assert "8001011234" not in out.read_text(encoding="utf-8")
 
     dup = copy.deepcopy(person)
-    dup["id"] = "другo"
-    clean["databases"]["begwork_beg"]["collections"]["md_person"].append(dup)
-    src.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
-    assert cli.main(["report", "--from-export", str(src), "--out", str(out)]) == 1
-    assert "md_person.md_uq_identifier" in capsys.readouterr().err
+    dup["id"] = "p-2"
+    export["databases"]["begwork_beg"]["collections"]["md_person"].append(dup)
+    src.write_text(json.dumps(export, ensure_ascii=False), encoding="utf-8")
+    assert cli.main(args) == 1
+    err = capsys.readouterr().err
+    assert "md_person.md_uq_identifier" in err and "verdict=BLOCKED" in err
 
     src.write_text("{broken", encoding="utf-8")
-    assert cli.main(["report", "--from-export", str(src), "--out", str(out)]) == 2
+    assert cli.main(args) == 2
+
+
+@pytest.mark.parametrize("export, extra", [
+    ({"databases": {}}, []),
+    (restored({}, scanned=["begwork_beg", "begwork_system"]), ["--expect-db", "begwork_beg"]),
+    (restored({"tenant_two": {"md_tag": []}}), ["--expect-db", "begwork_beg"]),
+    (restored({"begwork_beg": {"clients": []}}), ["--expect-collection", "begwork_beg.companies"]),
+])
+def test_cli_an_incomplete_export_exits_5_not_1(export, extra, tmp_path, capsys):
+    src, out = tmp_path / "export.json", tmp_path / "report.json"
+    src.write_text(json.dumps(export), encoding="utf-8")
+    assert cli.main(["report", "--from-export", str(src), "--out", str(out)] + extra) == 5
+    err = capsys.readouterr().err
+    assert "verdict=INCOMPLETE" in err and "not evidence:" in err
+    assert json.loads(out.read_text(encoding="utf-8"))["verdict"] == "INCOMPLETE"
+
+
+def test_cli_expectations_are_for_exports_only(capsys):
+    assert cli.main(["report", "--mongo-url", "mongodb://localhost:27017", "--db", SCRATCH,
+                     "--expect-db", "x"]) == 2
 
 
 def test_cli_rollback_needs_an_applied_run_of_the_same_database(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "_connect", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("connected")))
     plan = tmp_path / "run.json"
-    for saved in ({"status": ib.STATUS_PLANNED, "database": SCRATCH, "rollback_plan": []},
-                  {"status": ib.STATUS_APPLIED, "database": "w003c_other", "rollback_plan": []}):
+    for saved in ({"status": ib.STATUS_PLANNED, "database": SCRATCH, "run_id": "r", "rollback_plan": []},
+                  {"status": ib.STATUS_APPLIED, "database": "w003c_other", "run_id": "r", "rollback_plan": []},
+                  {"status": ib.STATUS_APPLIED, "database": SCRATCH, "rollback_plan": []}):
         plan.write_text(json.dumps(saved), encoding="utf-8")
         assert cli.main(["rollback", "--mongo-url", "mongodb://localhost:27017", "--db", SCRATCH,
                          "--plan", str(plan), "--confirm-db", SCRATCH]) == 2
+
+
+def test_cli_rollback_passes_the_run_id_and_the_saved_plan_to_the_ledger_check(tmp_path, monkeypatch):
+    db = IndexDb()
+    applied = boot(db, apply=True, target=LOCAL)
+
+    class Client:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "_connect", lambda url, name: (Client(), db))
+    for var in ("DB_NAME", "BEG_SYSTEM_DB"):
+        monkeypatch.delenv(var, raising=False)
+    plan = tmp_path / "run.json"
+    forged = dict(applied, rollback_plan=applied["rollback_plan"] + [{"collection": "md_tag", "index": "md_uq_x"}])
+    plan.write_text(json.dumps(forged), encoding="utf-8")
+    base = ["rollback", "--mongo-url", "mongodb://localhost:27017", "--db", SCRATCH, "--plan", str(plan),
+            "--confirm-db", SCRATCH]
+    assert cli.main(base) == 2
+    assert "md_uq_id" in db.indexes("md_organization")
+    plan.write_text(json.dumps(applied), encoding="utf-8")
+    assert cli.main(base) == 0
+    assert db.indexes("md_organization") == {"_id_"}
 
 
 def test_cli_exit_code_for_every_status():

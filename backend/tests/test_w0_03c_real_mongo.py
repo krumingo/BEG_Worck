@@ -15,7 +15,8 @@ server itself:
   * the duplicate report agrees with the server: for every tricky fixture the report
     says "blocked" exactly when the server refuses to build the unique index;
   * the bootstrap: apply, re-run (the definitions the server hands back must compare
-    equal), enforcement of each key, conflict, rollback plan.
+    equal), enforcement of each key, conflict, and a rollback driven by the run ledger
+    (an edited plan is refused; an index rebuilt by a later run survives the earlier undo).
 
 Safety: the URL must pass the same local-only guard as the bootstrap (no Atlas, no NAS,
 no ``mongodb+srv``). Each test works in its own database ``w003c_realmongo_<random>``
@@ -250,12 +251,36 @@ def test_apply_rerun_enforce_and_roll_back_on_a_real_server():
         await db["md_organization"].insert_one(_org("t2", "Строй ЕООД", eik="123456789", aliases=["Строй"]))
         await db["md_organization"].insert_one(_org("t", "Стара", eik="123456789", status="archived"))
 
-        rb = await ib.rollback(db, applied["rollback_plan"], database=name, target=target(name), env={})
-        assert rb["status"] == ib.STATUS_ROLLED_BACK
+        entry = await db[ib.LEDGER_COLLECTION].find_one({"_id": applied["run_id"]})
+        assert entry["status"] == ib.RUN_APPLIED and len(entry["created"]) == 25
+
+        forged = applied["rollback_plan"] + [{"collection": "md_tag", "index": "md_uq_x"}]
+        refused = await ib.rollback(db, applied["run_id"], database=name, plan=forged,
+                                    target=target(name), env={})
+        assert refused["status"] == ib.STATUS_REFUSED_TARGET
+        assert "md_uq_id" in await db["md_organization"].index_information()
+
+        rb = await ib.rollback(db, applied["run_id"], database=name, plan=applied["rollback_plan"],
+                               target=target(name), env={})
+        assert rb["status"] == ib.STATUS_ROLLED_BACK, rb
         left = set(await db["md_organization"].index_information())
         assert left == {"_id_"}
-        rb2 = await ib.rollback(db, applied["rollback_plan"], database=name, target=target(name), env={})
-        assert {r["result"] for r in rb2["results"]} == {"already absent"}
+        rb2 = await ib.rollback(db, applied["run_id"], database=name, plan=applied["rollback_plan"],
+                                target=target(name), env={})
+        assert rb2["status"] == ib.STATUS_ROLLED_BACK and rb2["results"] == []
+    scratch(t)
+
+
+def test_an_index_rebuilt_by_a_later_run_survives_the_earlier_rollback_on_a_real_server():
+    async def t(db, name):
+        a = await ib.bootstrap(db, database=name, apply=True, target=target(name), env={})
+        await db["md_tag"].drop_index("md_uq_name")
+        b = await ib.bootstrap(db, database=name, apply=True, target=target(name), env={})
+        assert b["created"] == ["md_tag.md_uq_name"]
+        await ib.rollback(db, a["run_id"], database=name, target=target(name), env={})
+        assert "md_uq_name" in await db["md_tag"].index_information()
+        await ib.rollback(db, b["run_id"], database=name, target=target(name), env={})
+        assert "md_uq_name" not in await db["md_tag"].index_information()
     scratch(t)
 
 
