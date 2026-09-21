@@ -112,9 +112,10 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
 
     from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
+    session_id = f"batch-intake-{uuid.uuid4().hex[:8]}"
     chat = LlmChat(
         api_key=api_key,
-        session_id=f"batch-intake-{uuid.uuid4().hex[:8]}",
+        session_id=session_id,
         system_message=SYSTEM_PROMPT,
     ).with_model("openai", "gpt-4.1")
 
@@ -164,6 +165,13 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
         "consumables": [str(c).strip() for c in (parsed.get("consumables") or []) if str(c).strip()][:8],
         "confidence": int(_num(parsed.get("confidence")) or 0),
     }
+    # W0-03: same rule as the single-photo path. `matched_item` above is a
+    # suggestion for the form, and it stays one — nothing here links, aliases
+    # or merges anything in Master Data.
+    from app.master_data.intake_hooks import observe_ai_asset
+    await observe_ai_asset(user, suggestion, source_ref="assets-batch-intake:%s" % session_id,
+                           model_and_version="openai/gpt-4.1")
+
     return {
         "suggestion": suggestion,
         "matched_item": ({"id": matched["id"], "name": matched["name"],

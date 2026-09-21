@@ -148,30 +148,44 @@ async def list_pending(
     *,
     entity_type: Optional[str] = None,
     status: str = STATUS_PENDING,
+    source_channel: Optional[str] = None,
     limit: int = 50,
     mode: Any = None,
     repository=None,
 ) -> List[Dict[str, Any]]:
     """The review queue. ``off`` and ``shadow`` return nothing, without a read."""
+    from app.master_data.pending import PENDING_SOURCES
+
     effective = resolve_mode(mode)
     if effective in (MODE_OFF, MODE_SHADOW):
         return []
     ctx = require_tenant_context(ctx)
     if entity_type is not None and entity_type not in models.ENTITY_TYPES:
         raise MasterDataInvalid("unknown entity_type: %s" % entity_type)
+    if source_channel is not None and source_channel not in PENDING_SOURCES:
+        raise MasterDataInvalid("unknown source_channel: %s" % source_channel)
     return await _repo(ctx, repository).list_pending(
-        entity_type=entity_type, status=status, limit=limit)
+        entity_type=entity_type, status=status, source_channel=source_channel, limit=limit)
 
 
 async def suggest_matches(
     ctx: Any,
     *,
     pending_id: str,
+    query: Optional[str] = None,
     limit: int = 10,
     mode: Any = None,
     repository=None,
 ) -> List[Dict[str, Any]]:
-    """Candidates for one pending row. Read-only; links nothing."""
+    """Candidates for one pending row. Read-only; links nothing.
+
+    Without ``query`` these are the deterministic candidates for the proposal's
+    own text: the same normalized form, or a confirmed alias. With ``query``
+    they are records a **person** looked up by typing a spelling themselves —
+    still only shown, never applied, and never fed back into the automatic
+    path. FLOW-032 Q7b bars fuzzy auto-matching; it does not bar the office
+    from searching for the record it already has in mind.
+    """
     effective = resolve_mode(mode)
     if effective in (MODE_OFF, MODE_SHADOW):
         return []
@@ -180,6 +194,12 @@ async def suggest_matches(
     row = await repo.get_pending(pending_id)
     if not row:
         raise MasterDataRefused("pending record %s not found in this tenant" % pending_id)
+    if query and query.strip():
+        found = await repo.search_by_text(row["entity_type"], query, limit=limit)
+        return [{"entity_id": d["id"], "display_name": d.get("display_name"),
+                 "match_type": "human_lookup", "score": None,
+                 "note": "found by a person; not an automatic match"}
+                for d in found]
     return await matching.find_candidates(
         repo, entity_type=row["entity_type"], raw_value=row["raw_value"], limit=limit)
 

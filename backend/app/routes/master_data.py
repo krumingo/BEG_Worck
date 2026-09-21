@@ -211,6 +211,7 @@ async def create_pending(body: ProposeBody, gate: Gate = Depends(_guard(ACTION_P
 async def list_pending(
     entity_type: Optional[str] = Query(default=None),
     status: str = Query(default=pending_mod.STATUS_PENDING),
+    source_channel: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     gate: Gate = Depends(_guard(ACTION_PENDING_READ)),
 ):
@@ -220,7 +221,8 @@ async def list_pending(
                 "detail": _off_payload(gate.mode)["detail"]}
     try:
         items = await review.list_pending(gate.ctx, entity_type=entity_type, status=status,
-                                          limit=limit, mode=gate.mode)
+                                          source_channel=source_channel, limit=limit,
+                                          mode=gate.mode)
     except Exception as exc:                            # noqa: BLE001
         raise _handle(exc)
     return {"mode": gate.mode, "count": len(items), "items": items}
@@ -229,17 +231,20 @@ async def list_pending(
 @router.get("/pending/{pending_id}/matches")
 async def pending_matches(
     pending_id: str,
+    q: Optional[str] = Query(default=None, max_length=200),
     limit: int = Query(default=10, ge=1, le=50),
     gate: Gate = Depends(_guard(ACTION_PENDING_READ)),
 ):
     """Candidate Master records for one proposal.
 
-    Read-only and non-binding: an exact match is shown, never applied.
+    Read-only and non-binding: an exact match is shown, never applied. ``q``
+    turns this into a lookup for a person typing a spelling themselves; the
+    automatic path stays exact either way.
     """
     if gate.off:
         return {"mode": gate.mode, "count": 0, "candidates": []}
     try:
-        candidates = await review.suggest_matches(gate.ctx, pending_id=pending_id,
+        candidates = await review.suggest_matches(gate.ctx, pending_id=pending_id, query=q,
                                                   limit=limit, mode=gate.mode)
     except Exception as exc:                            # noqa: BLE001
         raise _handle(exc)

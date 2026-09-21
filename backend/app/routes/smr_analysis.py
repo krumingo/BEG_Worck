@@ -668,6 +668,12 @@ async def import_excel(
     }
     await db.smr_analyses.insert_one(analysis)
 
+    # W0-03: the spreadsheet carried activity and unit names as free text.
+    # Offer them for mapping; the import above is unaffected either way.
+    from app.master_data.intake_hooks import observe_excel_kss_lines
+    await observe_excel_kss_lines(user, result["lines"],
+                                  source_ref="smr-analysis:%s" % analysis["id"])
+
     return {
         "analysis_id": analysis["id"],
         "lines_imported": result["lines_count"],

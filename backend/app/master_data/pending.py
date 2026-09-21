@@ -13,6 +13,11 @@ What this slice deliberately does NOT do:
 
 A suggestion is a suggestion. Nothing here turns one into a link.
 
+Repeated input is **idempotent**: while a proposal for the same normalized text
+is open, another sighting is counted on that row rather than opening a second
+one. Re-running an import, re-sending a photo or retrying a request therefore
+leaves the office one thing to decide, not a queue full of copies.
+
 Canon: FLOW-032, TENANCY_MODEL.md §2/§6 (D-15),
 docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md §4.2.
 """
@@ -56,6 +61,11 @@ PENDING_STATUSES = frozenset({STATUS_PENDING, STATUS_RESOLVING, STATUS_RESOLVED,
 CREATABLE_STATUSES = frozenset({STATUS_PENDING})
 
 PENDING_COLLECTION = "md_pending_mapping"
+#: One small document per open text — ``(tenant, type, normalized value)`` —
+#: naming the single row that is open for it. Its ``_id`` is derived from that
+#: key, so concurrent writers are serialised by Mongo's built-in unique ``_id``
+#: index; no new index and no migration (see ``repository.create_pending``).
+PENDING_SLOT_COLLECTION = "md_pending_slots"
 
 #: ``source_ref`` is a reference, never the payload: an import row, a file id,
 #: an OCR job. Bounded so a caller cannot smuggle a document — or a secret —
@@ -73,15 +83,19 @@ class PendingOutcome:
     ``would_perform`` is what shadow reports.
     """
 
-    __slots__ = ("mode", "performed", "pending", "reason", "would_perform")
+    __slots__ = ("mode", "performed", "pending", "reason", "would_perform", "deduplicated")
 
     def __init__(self, mode: str, performed: bool, pending: Optional[Dict[str, Any]] = None,
-                 reason: Optional[str] = None, would_perform: Optional[bool] = None):
+                 reason: Optional[str] = None, would_perform: Optional[bool] = None,
+                 deduplicated: bool = False):
         self.mode = mode
         self.performed = performed
         self.pending = pending
         self.reason = reason
         self.would_perform = would_perform
+        #: True when the same text was already waiting and this sighting was
+        #: counted on the open row instead of opening a second one.
+        self.deduplicated = deduplicated
 
     def __repr__(self) -> str:                                   # pragma: no cover
         return ("PendingOutcome(mode=%r, performed=%r, would_perform=%r, reason=%r)"
@@ -157,8 +171,20 @@ def build_pending(
         "tenant_id": tenant_id,
         "entity_type": entity_type,
         "raw_value": raw_value.strip(),
+        # The deterministic comparison key, stored with the version that
+        # produced it — the same rule Master records carry, so "already
+        # waiting" and "already exists" are decided by one rule, not two.
+        "normalized_value": models.normalize_name(raw_value),
+        "normalization_version": models.NORMALIZATION_VERSION,
+        # The FIRST sighting. A text seen again while the proposal is open is
+        # counted on this row, so the other channels and the latest reference
+        # are kept next to it rather than lost: the office sees every channel
+        # that proposed the text, and a source filter finds it under each.
         "source_channel": source_channel,
         "source_ref": ref,
+        "source_channels": [source_channel],
+        "last_source_channel": source_channel,
+        "last_source_ref": ref,
         "suggested_matches": suggestions,
         "status": STATUS_PENDING,
         # Never set by this slice. They exist so the shape is stable for
@@ -167,6 +193,12 @@ def build_pending(
         "resolved_by": None,
         "resolved_at": None,
         "created_by": created_by,
+        # How many times an automated channel has seen this text while the
+        # proposal was open. A re-imported spreadsheet or a re-sent photo must
+        # not leave the office the same decision twice.
+        "occurrences": 1,
+        "first_seen_at": stamp,
+        "last_seen_at": stamp,
         "created_at": stamp,
         "updated_at": stamp,
     }
@@ -202,6 +234,10 @@ def validate_pending(doc: Dict[str, Any]) -> None:
             raise MasterDataInvalid("missing required field: %s" % field)
     if doc["entity_type"] not in models.ENTITY_TYPES:
         raise MasterDataInvalid("unknown entity_type: %s" % doc["entity_type"])
+    if not doc.get("normalized_value"):
+        raise MasterDataInvalid(
+            "normalized_value is required: it is what makes a repeated sighting "
+            "idempotent instead of a second row")
     if doc["source_channel"] not in PENDING_SOURCES:
         raise MasterDataInvalid("unknown source_channel: %s" % doc["source_channel"])
     if doc["status"] not in CREATABLE_STATUSES:
@@ -339,17 +375,29 @@ async def propose(
                                  suggested_matches, payload, model_and_version)
 
     repo = repository if repository is not None else _repository_for(ctx)
-    await repo.create_pending(doc)
+    stored, created = await repo.create_pending(doc)
+
+    if not created:
+        # The same text is already waiting for the office. The sighting was
+        # counted on the open row; no second row, and no second AuditEvent —
+        # re-running an import is not a new business fact, and one event per
+        # repeated row would drown the chain. The row itself carries
+        # ``occurrences`` and ``last_seen_at`` as the record of the repeat.
+        return PendingOutcome(
+            MODE_ENFORCE, True, stored,
+            reason="the same text is already waiting for review; this sighting was counted "
+                   "on the open proposal (%d so far)" % stored.get("occurrences", 1),
+            deduplicated=True)
 
     try:
-        await _audit_proposed(ctx, doc, actor_id, model_and_version)
+        await _audit_proposed(ctx, stored, actor_id, model_and_version)
     except Exception as exc:                          # noqa: BLE001 — re-raised below
         raise MasterDataAuditFailed(
             "pending record %s was written but its canonical AuditEvent failed (%s); "
-            "the operation is NOT successful" % (doc["id"], exc)
+            "the operation is NOT successful" % (stored["id"], exc)
         ) from exc
 
-    return PendingOutcome(MODE_ENFORCE, True, doc)
+    return PendingOutcome(MODE_ENFORCE, True, stored)
 
 
 async def get_pending(

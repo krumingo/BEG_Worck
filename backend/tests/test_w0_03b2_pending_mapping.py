@@ -25,6 +25,7 @@ from app.master_data.deps import (
 from app.master_data.models import MasterDataInvalid
 from app.master_data.pending import (
     PENDING_COLLECTION,
+    PENDING_SLOT_COLLECTION,
     SOURCE_AI,
     SOURCE_EXCEL,
     SOURCE_IMPORT,
@@ -46,16 +47,39 @@ def run(coro):
     return asyncio.run(coro)
 
 
+class UpdateResult:
+    def __init__(self, modified, upserted_id=None, matched=None):
+        self.modified_count = modified
+        self.matched_count = modified if matched is None else matched
+        self.upserted_id = upserted_id
+
+
 class SpyCollection:
     def __init__(self, fail_on_insert=False):
         self.inserted = []
         self.queries = []
         self.fail_on_insert = fail_on_insert
 
+    def _check_unique_id(self, doc):
+        # Like every Mongo collection: ``_id`` is unique, nothing else is.
+        if "_id" in doc and any(d.get("_id") == doc["_id"] for d in self.inserted):
+            from pymongo.errors import DuplicateKeyError
+            raise DuplicateKeyError("E11000 duplicate key error collection: _id %r" % (doc["_id"],))
+
     async def insert_one(self, doc):
         if self.fail_on_insert:
             raise RuntimeError("simulated storage failure")
+        self._check_unique_id(doc)
         self.inserted.append(doc)
+
+    def _match(self, query):
+        def field(d, k, v):
+            target = d.get(k)
+            if isinstance(target, list) and not isinstance(v, list):
+                return v in target      # Mongo: a scalar matches an array element
+            return target == v
+        return [d for d in self.inserted
+                if all(field(d, k, v) for k, v in (query or {}).items())]
 
     async def find_one(self, query, projection=None, sort=None):
         """Match like a real collection: every key in the query must match.
@@ -65,11 +89,45 @@ class SpyCollection:
         crude fails the product for its own reasons.
         """
         self.queries.append(query)
-        matches = [d for d in self.inserted
-                   if all(d.get(k) == v for k, v in (query or {}).items())]
+        matches = self._match(query)
         if not matches:
             return None
-        return matches[-1] if sort else matches[0]
+        doc = matches[-1] if sort else matches[0]
+        if projection and projection.get("_id") == 0 and "_id" in doc:
+            return {k: v for k, v in doc.items() if k != "_id"}
+        return doc
+
+    async def update_one(self, query, update, upsert=False):
+        """Enough of Mongo's update semantics for the idempotent proposal:
+        an upsert builds the document from ``$setOnInsert`` and reports it as
+        upserted, not modified; a match is incremented in place."""
+        self.queries.append(query)
+        matches = self._match(query)
+        upserted = None
+        if not matches:
+            if not upsert:
+                return UpdateResult(0)
+            if self.fail_on_insert:
+                raise RuntimeError("simulated storage failure")
+            # Mongo seeds the new document with the filter's equality fields,
+            # then applies the operators. ``_id`` stays unique.
+            doc = {k: v for k, v in (query or {}).items() if not k.startswith("$")}
+            doc.update(update.get("$setOnInsert", {}))
+            self._check_unique_id(doc)
+            self.inserted.append(doc)
+            matches = [doc]
+            upserted = doc.get("id", doc.get("_id", True))
+        doc = matches[0]
+        for k, v in update.get("$set", {}).items():
+            doc[k] = v
+        for k, v in update.get("$addToSet", {}).items():
+            items = doc.setdefault(k, [])
+            if v not in items:
+                items.append(v)
+        for k, v in update.get("$inc", {}).items():
+            doc[k] = doc.get(k, 0) + v
+        return UpdateResult(0 if upserted is not None else 1, upserted_id=upserted,
+                            matched=0 if upserted is not None else 1)
 
 
 class SpyDb:
@@ -83,7 +141,9 @@ class SpyDb:
         return self.collections[name]
 
     def master_collections(self):
-        return [n for n in self.collections if n.startswith("md_") and n != PENDING_COLLECTION]
+        # The pending queue and its open-slot index are not Master Data.
+        return [n for n in self.collections
+                if n.startswith("md_") and n not in (PENDING_COLLECTION, PENDING_SLOT_COLLECTION)]
 
 
 class ExplodingDb:

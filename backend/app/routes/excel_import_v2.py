@@ -184,6 +184,12 @@ async def commit_import(
     }
     await db.smr_analyses.insert_one(analysis)
 
+    # W0-03: same as the v1 path — the identities the spreadsheet named are
+    # offered for mapping, never written into Master Data here.
+    from app.master_data.intake_hooks import observe_excel_kss_lines
+    await observe_excel_kss_lines(user, result["lines"],
+                                  source_ref="excel-import-v2:%s" % analysis["id"])
+
     return {
         "analysis_id": analysis["id"],
         "lines_imported": result["lines_count"],

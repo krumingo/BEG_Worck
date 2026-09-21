@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useActiveProject } from "@/contexts/ProjectContext";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { canReadMasterData } from "@/lib/masterDataAccess";
 import {
   LayoutDashboard, Users, Building2, Blocks, ScrollText, LogOut, KeyRound,
   ChevronRight, ChevronDown, HardHat, FolderKanban, CalendarCheck,
@@ -96,6 +97,7 @@ const NAV_GROUPS = [
   {
     id: "reference", icon: Archive, labelKey: "nav.reference",
     children: [
+      { to: "/data/master-data", icon: Inbox, labelKey: "nav.masterDataReview" },
       { to: "/data/counterparties", icon: Building2, labelKey: "nav.counterparties" },
       { to: "/data/clients", icon: Users, labelKey: "nav.clients" },
       { to: "/data/prices", icon: TrendingUp, labelKey: "nav.prices" },
@@ -117,6 +119,10 @@ const PLATFORM_ADMIN_CHILDREN = [
   { to: "/modules", icon: Blocks, labelKey: "nav.modules" },
   { to: "/audit-log", icon: ScrollText, labelKey: "nav.auditLog" },
 ];
+
+// The Master Data review screen for a role that may read the queue but does
+// not get the grouped admin navigation — the office (see MasterDataRoute).
+const MASTER_DATA_NAV_ITEM = { to: "/data/master-data", icon: Inbox, labelKey: "nav.masterDataReview" };
 
 const WORKER_NAV = [
   { to: "/tech", icon: ClipboardList, labelKey: "nav.techDashboard" },
@@ -227,6 +233,7 @@ export default function DashboardLayout({ children }) {
   const isProfileRoute = location.pathname === "/profile";
   const isPlatformAdmin = user?.is_platform_admin === true;
   const isAdmin = ["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role);
+  const workerNav = canReadMasterData(user?.role) ? [...WORKER_NAV, MASTER_DATA_NAV_ITEM] : WORKER_NAV;
 
   const isTabActive = (tabPath) => tabPath === "/" ? location.pathname === "/" : location.pathname.startsWith(tabPath);
 
@@ -317,7 +324,7 @@ export default function DashboardLayout({ children }) {
         )}
 
         <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
-          {isAdmin ? renderGroupedNav() : WORKER_NAV.map(item => renderNavItem(item))}
+          {isAdmin ? renderGroupedNav() : workerNav.map(item => renderNavItem(item))}
         </nav>
 
         <Separator />
@@ -377,7 +384,7 @@ export default function DashboardLayout({ children }) {
                       ))}
                     </div>
                   );
-                }) : WORKER_NAV.map(item => (
+                }) : workerNav.map(item => (
                   <SheetClose asChild key={item.to}>
                     <NavLink to={item.to} end={item.to === "/"} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
                       <item.icon className="w-4 h-4 shrink-0" /><span className="truncate">{t(item.labelKey)}</span>

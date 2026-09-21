@@ -51,8 +51,10 @@ def run(coro):
 
 
 class Result:
-    def __init__(self, modified):
+    def __init__(self, modified, upserted_id=None, matched=None):
         self.modified_count = modified
+        self.matched_count = modified if matched is None else matched
+        self.upserted_id = upserted_id
 
 
 class Cursor:
@@ -70,12 +72,18 @@ class SpyCollection:
         self.fail_on_insert = fail_on_insert
 
     def _match(self, query):
-        return [d for d in self.docs
-                if all(_field_match(d, k, v) for k, v in (query or {}).items())]
+        return [d for d in self.docs if _doc_matches(d, query)]
+
+    def _check_unique_id(self, doc):
+        # Like every Mongo collection: ``_id`` is unique, nothing else is.
+        if "_id" in doc and any(d.get("_id") == doc["_id"] for d in self.docs):
+            from pymongo.errors import DuplicateKeyError
+            raise DuplicateKeyError("E11000 duplicate key error collection: _id %r" % (doc["_id"],))
 
     async def insert_one(self, doc):
         if self.fail_on_insert:
             raise RuntimeError("simulated storage failure")
+        self._check_unique_id(doc)
         self.docs.append(dict(doc))
 
     async def find_one(self, query, projection=None, sort=None):
@@ -83,29 +91,73 @@ class SpyCollection:
         found = self._match(query)
         if not found:
             return None
-        return found[-1] if sort else found[0]
+        return _project(found[-1] if sort else found[0], projection)
 
     def find(self, query, projection=None):
         self.queries.append(query)
-        return Cursor(self._match(query))
+        return Cursor([_project(d, projection) for d in self._match(query)])
 
-    async def update_one(self, query, update):
+    async def update_one(self, query, update, upsert=False):
         found = self._match(query)
+        upserted = None
         if not found:
-            return Result(0)
+            if not upsert:
+                return Result(0)
+            if self.fail_on_insert:
+                raise RuntimeError("simulated storage failure")
+            # Mongo builds the new document from the filter's equality fields
+            # and then the operators, and reports it as upserted rather than
+            # modified. ``_id`` stays unique.
+            doc = {k: v for k, v in (query or {}).items()
+                   if not k.startswith("$") and not (isinstance(v, dict) and any(
+                       str(op).startswith("$") for op in v))}
+            doc.update(update.get("$setOnInsert", {}))
+            self._check_unique_id(doc)
+            self.docs.append(doc)
+            found = [doc]
+            upserted = doc.get("id", doc.get("_id", True))
         doc = found[0]
         for k, v in update.get("$set", {}).items():
             doc[k] = v
         for k, v in update.get("$push", {}).items():
             doc.setdefault(k, []).append(v)
-        return Result(1)
+        for k, v in update.get("$addToSet", {}).items():
+            items = doc.setdefault(k, [])
+            if v not in items:
+                items.append(v)
+        for k, v in update.get("$inc", {}).items():
+            doc[k] = doc.get(k, 0) + v
+        return Result(0 if upserted is not None else 1, upserted_id=upserted,
+                      matched=0 if upserted is not None else 1)
 
     @property
     def inserted(self):
         return self.docs
 
 
+def _doc_matches(doc, query):
+    for key, value in (query or {}).items():
+        if key == "$or":
+            if not any(_doc_matches(doc, clause) for clause in value):
+                return False
+            continue
+        if not _field_match(doc, key, value):
+            return False
+    return True
+
+
 def _field_match(doc, key, value):
+    if isinstance(value, dict) and "$regex" in value:
+        import re
+        flags = re.IGNORECASE if "i" in (value.get("$options") or "") else 0
+        pattern = re.compile(value["$regex"], flags)
+        if "." in key:
+            head, tail = key.split(".", 1)
+            return any(isinstance(i, dict) and isinstance(i.get(tail), str)
+                       and pattern.search(i[tail])
+                       for i in (doc.get(head) or []))
+        target = doc.get(key)
+        return isinstance(target, str) and bool(pattern.search(target))
     if isinstance(value, dict) and "$ne" in value:
         # Mongo semantics: for a dotted path, matches when NO element equals
         # the value — including a document with no such field at all.
@@ -114,7 +166,18 @@ def _field_match(doc, key, value):
         head, tail = key.split(".", 1)
         items = doc.get(head) or []
         return any(isinstance(i, dict) and i.get(tail) == value for i in items)
-    return doc.get(key) == value
+    target = doc.get(key)
+    if isinstance(target, list) and not isinstance(value, list):
+        return value in target          # Mongo: a scalar matches an array element
+    return target == value
+
+
+def _project(doc, projection):
+    """Honour ``{"_id": 0}`` the way Mongo does: the caller gets a copy without
+    ``_id``. Documents without ``_id`` are returned as they are."""
+    if doc is not None and projection and projection.get("_id") == 0 and "_id" in doc:
+        return {k: v for k, v in doc.items() if k != "_id"}
+    return doc
 
 
 class SpyDb:
