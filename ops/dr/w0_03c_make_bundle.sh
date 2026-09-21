@@ -47,7 +47,7 @@ fi
 } > "$STAGE/$SHORT/BUNDLE_MANIFEST.txt"
 
 NAME="w0_03c_bundle_$SHORT.tar.gz"
-tar -C "$STAGE" -czf "$OUT_DIR/$NAME" "$SHORT"
-(cd "$OUT_DIR" && sha256sum "$NAME" > "$NAME.sha256")
+# written from inside OUT_DIR: GNU tar would read a "C:/..." archive path as a remote host
+(cd "$OUT_DIR" && tar -C "$STAGE" -czf "$NAME" "$SHORT" && sha256sum "$NAME" > "$NAME.sha256")
 echo "$OUT_DIR/$NAME"
 cat "$OUT_DIR/$NAME.sha256"
