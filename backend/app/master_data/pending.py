@@ -61,6 +61,11 @@ PENDING_STATUSES = frozenset({STATUS_PENDING, STATUS_RESOLVING, STATUS_RESOLVED,
 CREATABLE_STATUSES = frozenset({STATUS_PENDING})
 
 PENDING_COLLECTION = "md_pending_mapping"
+#: One small document per open text — ``(tenant, type, normalized value)`` —
+#: naming the single row that is open for it. Its ``_id`` is derived from that
+#: key, so concurrent writers are serialised by Mongo's built-in unique ``_id``
+#: index; no new index and no migration (see ``repository.create_pending``).
+PENDING_SLOT_COLLECTION = "md_pending_slots"
 
 #: ``source_ref`` is a reference, never the payload: an import row, a file id,
 #: an OCR job. Bounded so a caller cannot smuggle a document — or a secret —
@@ -171,8 +176,15 @@ def build_pending(
         # waiting" and "already exists" are decided by one rule, not two.
         "normalized_value": models.normalize_name(raw_value),
         "normalization_version": models.NORMALIZATION_VERSION,
+        # The FIRST sighting. A text seen again while the proposal is open is
+        # counted on this row, so the other channels and the latest reference
+        # are kept next to it rather than lost: the office sees every channel
+        # that proposed the text, and a source filter finds it under each.
         "source_channel": source_channel,
         "source_ref": ref,
+        "source_channels": [source_channel],
+        "last_source_channel": source_channel,
+        "last_source_ref": ref,
         "suggested_matches": suggestions,
         "status": STATUS_PENDING,
         # Never set by this slice. They exist so the shape is stable for

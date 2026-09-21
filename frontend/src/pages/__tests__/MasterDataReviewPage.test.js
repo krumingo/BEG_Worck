@@ -26,6 +26,13 @@ jest.mock("@/lib/api", () => ({
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
+// The session's role decides which controls the screen shows. The tests above
+// the "who may do what" block run as the office, which holds every right here.
+let mockRole = "office";
+jest.mock("@/contexts/AuthContext", () => ({
+  __esModule: true,
+  useAuth: () => ({ user: { id: "u-1", role: mockRole }, loading: false }),
+}));
 
 import API from "@/lib/api";
 import { toast } from "sonner";
@@ -56,6 +63,7 @@ function httpError(status, detail) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockRole = "office";
   API.get.mockResolvedValue(queue([]));
   API.post.mockResolvedValue({ data: { performed: true } });
 });
@@ -309,4 +317,77 @@ test("a decided proposal offers no decision buttons", async () => {
 
   expect(screen.queryByTestId("md-create-btn")).not.toBeInTheDocument();
   expect(screen.queryByTestId("md-reject-btn")).not.toBeInTheDocument();
+});
+
+// ------------------------------------------------------------------ who may do what
+
+const CANDIDATE = { entity_id: "e-1", display_name: "Баумит България ЕООД", match_type: "exact_normalized", score: 1.0 };
+
+async function openPanelAs(role) {
+  mockRole = role;
+  const user = userEvent.setup();
+  API.get.mockImplementation((url) => {
+    if (url === "/master-data/pending") return Promise.resolve(queue([PENDING_ROW]));
+    return Promise.resolve(matches([CANDIDATE]));
+  });
+  render(<MasterDataReviewPage />);
+  await user.click(await screen.findByTestId("md-expand-p-1"));
+  await screen.findByTestId("md-candidate-e-1");
+  return user;
+}
+
+test.each(["office", "Admin", "Owner"])(
+  "%s, who may approve and reject, gets every decision control", async (role) => {
+    await openPanelAs(role);
+
+    expect(screen.getByTestId("md-link-e-1")).toBeInTheDocument();
+    expect(screen.getByTestId("md-create-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("md-reject-btn")).toBeInTheDocument();
+    expect(screen.queryByTestId("md-readonly")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("md-panel-readonly")).not.toBeInTheDocument();
+  });
+
+test.each(["SiteManager", "Accountant"])(
+  "%s may read the queue and the candidates but is offered no decision", async (role) => {
+    const user = await openPanelAs(role);
+
+    expect(screen.getByTestId("md-readonly")).toBeInTheDocument();
+    expect(screen.getByTestId("md-candidate-e-1")).toBeInTheDocument();
+    expect(screen.getByTestId("md-search-input")).toBeInTheDocument();
+    expect(screen.queryByTestId("md-link-e-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("md-create-btn")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("md-reject-btn")).not.toBeInTheDocument();
+    expect(screen.getByTestId("md-panel-readonly")).toBeInTheDocument();
+
+    // reading is still possible: the lookup goes out, nothing is ever posted
+    await user.type(screen.getByTestId("md-search-input"), "Баумит");
+    await user.click(screen.getByTestId("md-search-btn"));
+    await waitFor(() => expect(API.get.mock.calls.some((c) => c[1]?.params?.q === "Баумит")).toBe(true));
+    expect(API.post).not.toHaveBeenCalled();
+  });
+
+// ------------------------------------------------------------------ one row, every source
+
+test("a proposal seen by several channels shows every channel and its latest reference", async () => {
+  await renderQueue(queue([{
+    ...PENDING_ROW,
+    source_channels: ["ocr", "excel"],
+    source_ref: "ocr-intake:inv-1",
+    last_source_channel: "excel",
+    last_source_ref: "kss-import:f-1:r-3",
+    last_seen_at: "2026-09-21T09:30:00+00:00",
+  }]));
+
+  const sources = screen.getByTestId("md-sources-p-1");
+  expect(within(sources).getByText("OCR")).toBeInTheDocument();
+  expect(within(sources).getByText("Excel")).toBeInTheDocument();
+  expect(screen.getByTestId("md-row-p-1")).toHaveTextContent("ocr-intake:inv-1");
+  expect(screen.getByTestId("md-lastref-p-1")).toHaveTextContent("kss-import:f-1:r-3");
+});
+
+test("a proposal seen once shows its one source and no second reference", async () => {
+  await renderQueue(queue([PENDING_ROW]));
+
+  expect(within(screen.getByTestId("md-sources-p-1")).getByText("OCR")).toBeInTheDocument();
+  expect(screen.queryByTestId("md-lastref-p-1")).not.toBeInTheDocument();
 });

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { canApproveMasterData, canRejectMasterData } from "@/lib/masterDataAccess";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,14 @@ function detailText(err) {
 }
 
 export default function MasterDataReviewPage() {
+  // Кой какво може решава сървърът при всяка заявка; тук само не показваме
+  // бутони, които ролята няма право да натисне (канонични права, FLOW-032).
+  const { user } = useAuth();
+  const rights = {
+    canApprove: canApproveMasterData(user?.role),
+    canReject: canRejectMasterData(user?.role),
+  };
+  const readOnly = !rights.canApprove && !rights.canReject;
   const [items, setItems] = useState([]);
   const [mode, setMode] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -109,6 +119,11 @@ export default function MasterDataReviewPage() {
             Текст от OCR, Excel и AI, който още не е свързан с официален запис.
             Машината предлага — решава човек.
           </p>
+          {readOnly && (
+            <p className="text-xs text-amber-500 mt-1" data-testid="md-readonly">
+              Само преглед: свързването, създаването и отказът са за офиса и администраторите.
+            </p>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={load} data-testid="md-refresh">
           <RefreshCw className="w-4 h-4 mr-1" />Обнови
@@ -184,6 +199,7 @@ export default function MasterDataReviewPage() {
               expanded={expanded === it.id}
               onToggle={() => setExpanded(expanded === it.id ? null : it.id)}
               onResolved={() => onResolved(it.id)}
+              rights={rights}
             />
           ))}
         </div>
@@ -202,8 +218,11 @@ function StateBox({ testId, icon: Icon, title, children }) {
   );
 }
 
-function PendingRow({ row, expanded, onToggle, onResolved }) {
+function PendingRow({ row, expanded, onToggle, onResolved, rights }) {
   const open = row.status === "pending";
+  // Един ред събира всички срещания на текста: пазим всеки канал, който го е
+  // видял, и първия и последния източник, за да не подвежда филтърът.
+  const channels = row.source_channels?.length ? row.source_channels : [row.source_channel];
   return (
     <div className="rounded-2xl border border-border bg-card" data-testid={`md-row-${row.id}`}>
       <button
@@ -220,7 +239,11 @@ function PendingRow({ row, expanded, onToggle, onResolved }) {
               {row.raw_value}
             </span>
             <Badge variant="outline" className="text-[10px]">{labelOf(ENTITY_TYPES, row.entity_type)}</Badge>
-            <Badge variant="outline" className="text-[10px]">{labelOf(SOURCES, row.source_channel)}</Badge>
+            <span className="flex gap-1" data-testid={`md-sources-${row.id}`}>
+              {channels.map((ch) => (
+                <Badge key={ch} variant="outline" className="text-[10px]">{labelOf(SOURCES, ch)}</Badge>
+              ))}
+            </span>
             {row.occurrences > 1 && (
               <Badge className="bg-amber-500/20 text-amber-500 text-[10px]"
                      data-testid={`md-occurrences-${row.id}`}>
@@ -230,12 +253,18 @@ function PendingRow({ row, expanded, onToggle, onResolved }) {
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {row.source_ref || "без източник"} · {(row.created_at || "").slice(0, 16).replace("T", " ")}
+            {row.last_source_ref && row.last_source_ref !== row.source_ref && (
+              <span data-testid={`md-lastref-${row.id}`}>
+                {" "}· последно: {row.last_source_ref}
+                {row.last_seen_at ? ` (${row.last_seen_at.slice(0, 16).replace("T", " ")})` : ""}
+              </span>
+            )}
           </p>
           {!open && <ResolutionLine row={row} />}
         </div>
       </button>
 
-      {expanded && open && <ReviewPanel row={row} onResolved={onResolved} />}
+      {expanded && open && <ReviewPanel row={row} onResolved={onResolved} rights={rights} />}
     </div>
   );
 }
@@ -265,7 +294,8 @@ function ResolutionLine({ row }) {
   return null;
 }
 
-function ReviewPanel({ row, onResolved }) {
+function ReviewPanel({ row, onResolved, rights = {} }) {
+  const { canApprove = false, canReject = false } = rights;
   const [candidates, setCandidates] = useState([]);
   const [loadingCandidates, setLoadingCandidates] = useState(true);
   const [query, setQuery] = useState("");
@@ -362,11 +392,13 @@ function ReviewPanel({ row, onResolved }) {
                       : `${c.match_type || "съвпадение"}${c.score != null ? ` · ${c.score}` : ""}`}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" disabled={busy}
-                        onClick={() => linkTo(c.entity_id)}
-                        data-testid={`md-link-${c.entity_id}`}>
-                  <Link2 className="w-4 h-4 mr-1" />Свържи
-                </Button>
+                {canApprove && (
+                  <Button size="sm" variant="outline" disabled={busy}
+                          onClick={() => linkTo(c.entity_id)}
+                          data-testid={`md-link-${c.entity_id}`}>
+                    <Link2 className="w-4 h-4 mr-1" />Свържи
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -383,6 +415,7 @@ function ReviewPanel({ row, onResolved }) {
         </div>
       </section>
 
+      {canApprove && (
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Създай нов официален запис</h3>
         <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)}
@@ -404,7 +437,9 @@ function ReviewPanel({ row, onResolved }) {
             : <><PlusCircle className="w-4 h-4 mr-1" />Създай нов</>}
         </Button>
       </section>
+      )}
 
+      {canReject && (
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Откажи</h3>
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)}
@@ -416,6 +451,13 @@ function ReviewPanel({ row, onResolved }) {
           <X className="w-4 h-4 mr-1" />Откажи
         </Button>
       </section>
+      )}
+
+      {!canApprove && !canReject && (
+        <p className="text-xs text-muted-foreground" data-testid="md-panel-readonly">
+          Можете да разгледате кандидатите; решението е за офиса и администраторите.
+        </p>
+      )}
 
       <p className="text-[11px] text-muted-foreground flex items-center gap-1">
         <Check className="w-3 h-3" />

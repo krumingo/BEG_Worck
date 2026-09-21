@@ -1,0 +1,21 @@
+{
+  "_source": "backend/app/permissions/catalog.py — CANONICAL_ROLES / LEGACY_ROLES / LEGACY_ROLE_MAP, restricted to the actions of the Master Data review screen. Parity is enforced by backend/tests/test_w0_03c_access_concurrency_sources.py; edit the catalog first, then this file.",
+  "legacy_role_map": {
+    "Owner": "owner",
+    "Admin": "admin",
+    "SiteManager": "site_manager",
+    "Accountant": "accountant",
+    "Warehousekeeper": "warehouse",
+    "Driver": "driver",
+    "Technician": "LEGACY_TECHNICIAN",
+    "Viewer": "LEGACY_VIEWER"
+  },
+  "role_actions": {
+    "owner": ["master_data.pending.approve", "master_data.pending.read", "master_data.pending.reject"],
+    "admin": ["master_data.pending.approve", "master_data.pending.read", "master_data.pending.reject"],
+    "office": ["master_data.pending.approve", "master_data.pending.read", "master_data.pending.reject"],
+    "site_manager": ["master_data.pending.read"],
+    "project_manager": ["master_data.pending.read"],
+    "accountant": ["master_data.pending.read"]
+  }
+}

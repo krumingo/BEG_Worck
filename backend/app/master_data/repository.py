@@ -18,6 +18,27 @@ from app.master_data.models import ENTITY_TYPES, MasterDataInvalid, validate_ent
 
 COLLECTION_PREFIX = "md_"
 
+#: How many times ``create_pending`` re-reads the open slot before giving up.
+#: Contention settles in one or two passes; the bound only stops a livelock.
+_MAX_SLOT_ATTEMPTS = 8
+
+
+def _pending_slot_id(tenant_id: str, entity_type: str, normalized_value: str) -> str:
+    """The ``_id`` of the open slot for one text. Deterministic, so every
+    concurrent writer addresses the same document and Mongo's built-in unique
+    ``_id`` index decides who created it — no new index is needed."""
+    import hashlib
+    key = "\x1f".join((tenant_id, entity_type, normalized_value)).encode("utf-8")
+    return "pending-slot:" + hashlib.sha256(key).hexdigest()
+
+
+def _is_duplicate_key(exc: BaseException) -> bool:
+    """A duplicate ``_id`` (E11000), recognised without importing pymongo here —
+    the same test the W0-04 idempotency store uses."""
+    return (type(exc).__name__ == "DuplicateKeyError"
+            or getattr(exc, "code", None) == 11000
+            or "duplicate key" in str(exc).lower())
+
 
 def collection_name(entity_type: str) -> str:
     """``person`` -> ``md_person``. Type-specific collections keep the future
@@ -64,49 +85,114 @@ class MasterDataRepository:
         return await coll.find_one(self._scope({"id": entity_id}), {"_id": 0})
 
     async def create_pending(self, pending: Dict[str, Any]) -> tuple:
-        """Record one pending-mapping row, idempotently.
+        """Record one pending-mapping row, idempotently — also under concurrency.
 
         While a proposal for the same normalized text is open in this tenant,
         another sighting is **counted on that row** instead of opening a second
-        one. The condition lives in the filter of an upsert, so looking and
-        writing are one operation rather than a read-then-write that two
-        importers can interleave.
+        one: ``occurrences`` grows, ``last_seen_at`` and the ``last_source_*``
+        fields move, and every channel that saw the text is kept in
+        ``source_channels`` (the first sighting stays in ``source_channel`` /
+        ``source_ref``).
 
-        Returns ``(row, created)`` — ``created`` is False when the sighting was
-        counted on a proposal that was already waiting.
+        **Why not a plain upsert.** An upsert whose filter is not covered by a
+        unique index is not atomic: two importers can both find nothing and
+        both insert. W0-03 adds no index (that is C), so the only uniqueness
+        this code may rely on is the one every Mongo collection already has —
+        ``_id``. Two steps use it:
+
+          1. an *open slot* per ``(tenant, type, normalized value)`` in
+             ``md_pending_slots``, whose ``_id`` is derived from that key,
+             names the one row that is open for it. The first writer's id wins;
+             everybody else reads the same answer;
+          2. the row itself is written **by that ``_id``**, so of any number of
+             concurrent writers exactly one inserts it and the rest can only
+             count their sighting on it.
+
+        When the named row is no longer ``pending`` (resolved, rejected, or
+        being resolved) the slot is stale and is moved to a new row with a
+        compare-and-set, so a text seen again after a decision opens a fresh
+        proposal — the same behaviour as before, without the race.
+
+        Returns ``(row, created)`` — ``created`` is True for exactly one writer.
         """
-        from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, validate_pending
+        from app.master_data.pending import (
+            PENDING_COLLECTION, PENDING_SLOT_COLLECTION, STATUS_PENDING, validate_pending)
         validate_pending(pending)
         if pending["tenant_id"] != self.tenant_id:
             raise MasterDataInvalid(
                 "refusing to write a pending record of tenant %s through the repository of tenant %s"
                 % (pending["tenant_id"], self.tenant_id)
             )
-        doc = dict(pending)
-        now = doc.get("last_seen_at") or doc.get("created_at")
-        # These are maintained by the update itself, so they must not also be
-        # handed to $setOnInsert — Mongo refuses a field in two operators.
-        for field in ("occurrences", "last_seen_at", "updated_at"):
-            doc.pop(field, None)
+        now = pending.get("last_seen_at") or pending.get("created_at")
+        channel = pending["source_channel"]
+        insert_doc = dict(pending)
+        # Maintained by the update operators on every sighting, so they must
+        # not also be handed to $setOnInsert — Mongo refuses a path in two
+        # operators.
+        for field in ("occurrences", "last_seen_at", "updated_at", "source_channels",
+                      "last_source_channel", "last_source_ref"):
+            insert_doc.pop(field, None)
+        sighting = {
+            "$inc": {"occurrences": 1},
+            "$set": {"last_seen_at": now, "updated_at": now,
+                     "last_source_channel": channel,
+                     "last_source_ref": pending.get("source_ref")},
+            "$addToSet": {"source_channels": channel},
+        }
 
         handle = await self.db(require_operational=True)
-        result = await handle[PENDING_COLLECTION].update_one(
-            self._scope({"entity_type": pending["entity_type"],
-                         "normalized_value": pending["normalized_value"],
-                         "status": STATUS_PENDING}),
-            {"$setOnInsert": doc,
-             "$inc": {"occurrences": 1},
-             "$set": {"last_seen_at": now, "updated_at": now}},
-            upsert=True,
-        )
-        stored = await handle[PENDING_COLLECTION].find_one(
-            self._scope({"entity_type": pending["entity_type"],
-                         "normalized_value": pending["normalized_value"],
-                         "status": STATUS_PENDING}),
-            {"_id": 0},
-        )
-        created = getattr(result, "upserted_id", None) is not None
-        return (stored if stored is not None else pending), created
+        slots = handle[PENDING_SLOT_COLLECTION]
+        rows = handle[PENDING_COLLECTION]
+        slot_id = _pending_slot_id(self.tenant_id, pending["entity_type"],
+                                   pending["normalized_value"])
+
+        for _attempt in range(_MAX_SLOT_ATTEMPTS):
+            # 1. which row is open for this text? The first writer names it.
+            try:
+                await slots.update_one(
+                    self._scope({"_id": slot_id}),
+                    {"$setOnInsert": {"pending_id": pending["id"],
+                                      "entity_type": pending["entity_type"],
+                                      "normalized_value": pending["normalized_value"],
+                                      "created_at": now}},
+                    upsert=True,
+                )
+            except Exception as exc:                  # noqa: BLE001 — only a duplicate is expected
+                if not _is_duplicate_key(exc):
+                    raise
+            slot = await slots.find_one(self._scope({"_id": slot_id}))
+            if not slot or not slot.get("pending_id"):
+                continue
+            owner = slot["pending_id"]
+
+            # 2. count this sighting on that row — or create it, by _id.
+            row_doc = dict(insert_doc, id=owner)
+            try:
+                result = await rows.update_one(
+                    self._scope({"_id": owner, "status": STATUS_PENDING}),
+                    dict(sighting, **{"$setOnInsert": row_doc}),
+                    upsert=True,
+                )
+            except Exception as exc:                  # noqa: BLE001 — only a duplicate is expected
+                if not _is_duplicate_key(exc):
+                    raise
+                existing = await rows.find_one(self._scope({"_id": owner}), {"_id": 0})
+                if existing is not None and existing.get("status") != STATUS_PENDING:
+                    # The slot names a row that is already decided: move it to
+                    # a fresh one. Only one writer's compare-and-set succeeds;
+                    # the others read the new owner on the next pass.
+                    await slots.update_one(
+                        self._scope({"_id": slot_id, "pending_id": owner}),
+                        {"$set": {"pending_id": pending["id"], "replaced_at": now}},
+                    )
+                continue          # a concurrent insert of the same row: count on it now
+            stored = await rows.find_one(self._scope({"_id": owner}), {"_id": 0})
+            created = getattr(result, "upserted_id", None) is not None
+            return (stored if stored is not None else row_doc), created
+
+        raise MasterDataInvalid(
+            "could not settle the open pending row for this text after %d attempts"
+            % _MAX_SLOT_ATTEMPTS)
 
     async def get_pending(self, pending_id: str) -> Optional[Dict[str, Any]]:
         from app.master_data.pending import PENDING_COLLECTION
@@ -121,7 +207,11 @@ class MasterDataRepository:
         if entity_type:
             query["entity_type"] = entity_type
         if source_channel:
-            query["source_channel"] = source_channel
+            # Every channel that saw the text, not only the first one: a row
+            # first seen by OCR and then by an Excel import is an Excel
+            # proposal too, and filtering by Excel must not hide it.
+            query["$or"] = [{"source_channels": source_channel},
+                            {"source_channel": source_channel}]
         handle = await self.db()
         cursor = handle[PENDING_COLLECTION].find(query, {"_id": 0})
         return await cursor.to_list(length=min(int(limit), 200))

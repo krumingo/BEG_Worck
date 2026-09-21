@@ -27,7 +27,8 @@ from fastapi.testclient import TestClient
 from app.deps.auth import get_current_user
 from app.master_data import intake_hooks, models, pending as pending_mod, review, service
 from app.master_data.deps import ENV_MODE
-from app.master_data.pending import PENDING_COLLECTION, STATUS_PENDING, STATUS_RESOLVED
+from app.master_data.pending import (
+    PENDING_COLLECTION, PENDING_SLOT_COLLECTION, STATUS_PENDING, STATUS_RESOLVED)
 from app.master_data.repository import MasterDataRepository
 from app.routes import master_data as routes
 
@@ -93,8 +94,9 @@ def master_docs(db, entity_type):
 
 
 def no_master_anywhere(db):
+    # The pending queue and its open-slot index are not Master Data.
     return [name for name in db.collections
-            if name.startswith("md_") and name != PENDING_COLLECTION
+            if name.startswith("md_") and name not in (PENDING_COLLECTION, PENDING_SLOT_COLLECTION)
             and db.collections[name].docs]
 
 
