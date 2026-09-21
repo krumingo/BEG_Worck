@@ -29,6 +29,14 @@
 #   * INT/TERM and any unexpected exit still clean up this run's objects and release the lock;
 #   * cleanup is verified, and a production snapshot taken before and after must match.
 #
+# Optional POST_VERIFY_HOOK (absolute path to a bash script; unset = unchanged behaviour):
+# run after verification and BEFORE cleanup, against the restored copy, with W010A_NET,
+# W010A_MONGO_HOST, W010A_MONGO_IMAGE, W010A_HOOK_OUT and DOCKER in its environment and
+# HOOK_TIMEOUT seconds to finish. A failing, hanging or overheating hook blocks PASS, and
+# cleanup still runs; any *.sensitive* file the hook leaves in $OUT/hook is removed by
+# cleanup. W0-03C uses it for the Master Data duplicate report
+# (ops/dr/w0_03c_duplicate_report_hook.sh).
+#
 # Exit codes: 0 PASS · 2 preflight/guard refusal · 3 restore or verification failure ·
 #             4 cleanup failure · 5 production changed · 6 interrupted
 set -u
@@ -49,6 +57,8 @@ M2_SENSORS_REQUIRED="${M2_SENSORS_REQUIRED-1}"    # 1 = refuse when no sensor is
 LOCK_DIR="${LOCK_DIR:-$OUT_ROOT/.lock}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERIFY_JS="${VERIFY_JS:-$HERE/verify_restore.js}"
+POST_VERIFY_HOOK="${POST_VERIFY_HOOK:-}"
+HOOK_TIMEOUT="${HOOK_TIMEOUT-900}"    # s the post-verify hook may take
 
 # RUN_ID must be unique even for two processes started in the same second, because it names
 # the evidence directory AND the Docker objects. Resolution alone is not enough, so the
@@ -108,6 +118,13 @@ validate_config() {
   is_positive_int "$TEMP_ABORT"     || fail 2 "invalid TEMP_ABORT='$TEMP_ABORT' — must be a positive integer"
   is_positive_int "$READY_TIMEOUT"     || fail 2 "invalid READY_TIMEOUT='$READY_TIMEOUT' — must be a positive integer"
   log "configuration: TEMP_ABORT=${TEMP_ABORT}C READY_TIMEOUT=${READY_TIMEOUT}s M2_SENSORS_REQUIRED=$M2_SENSORS_REQUIRED"
+  if [ -n "$POST_VERIFY_HOOK" ]; then
+    case "$POST_VERIFY_HOOK" in /*) ;; *) fail 2 "invalid POST_VERIFY_HOOK='$POST_VERIFY_HOOK' — must be an absolute path" ;; esac
+    [ -f "$POST_VERIFY_HOOK" ] && [ -r "$POST_VERIFY_HOOK" ] || fail 2 "POST_VERIFY_HOOK not readable: $POST_VERIFY_HOOK"
+    is_positive_int "$HOOK_TIMEOUT" || fail 2 "invalid HOOK_TIMEOUT='$HOOK_TIMEOUT' — must be a positive integer"
+    command -v timeout >/dev/null 2>&1 || fail 2 "timeout(1) not found — a post-verify hook never runs without a time limit"
+    log "post-verify hook: $POST_VERIFY_HOOK (limit ${HOOK_TIMEOUT}s)"
+  fi
 }
 
 # ---------------------------------------------------------------- single-run lock
@@ -223,6 +240,12 @@ cleanup() {
   [ "$CREATED_NET" = 1 ] && $DOCKER network rm "$NET"   >>"$OUT/cleanup.log" 2>&1
 
   local leftover=""
+  if [ -d "$OUT/hook" ]; then       # a hook's raw extracts never outlive the run
+    rm -f "$OUT/hook/"*.sensitive* 2>/dev/null
+    if ls "$OUT/hook/"*.sensitive* >/dev/null 2>&1; then
+      leftover="$leftover sensitive-hook-output:$OUT/hook"
+    fi
+  fi
   if [ "$CREATED_C" = 1 ] && $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -Fqx "$MONGO_C"; then
     leftover="$leftover container:$MONGO_C"
   fi
@@ -287,6 +310,7 @@ summary() {
     echo "VERIFICATION: ${R_VERIFY:-NOT_RUN}"
     echo "TENANT_CHECK: ${R_TENANT:-NOT_RUN}"
     echo "CLEANUP: ${R_CLEANUP:-NOT_RUN}"
+    [ -n "$POST_VERIFY_HOOK" ] && echo "POST_VERIFY_HOOK: ${R_HOOK:-NOT_RUN}"
     echo "PRODUCTION_CHANGED: ${R_PRODCHANGED:-UNKNOWN}"
     echo "INTERRUPTED: $([ "$INTERRUPTED" = 1 ] && echo yes || echo no)"
     echo "M2_TEMP_MAX_DURING_RUN: $(awk -F'max=' 'NF>1{split($2,a,"\t"); if(a[1]+0>m)m=a[1]+0}END{print m+0}' "$OUT/m2-temps.tsv" 2>/dev/null)C"
@@ -435,6 +459,25 @@ log "verification PASS (counts agree, every collection has _id index, sample rea
 
 # a trip during verification, or a hot sensor now, must block PASS
 assert_cool "after verification"
+
+# ================================================================ 4b. optional post-verify hook
+if [ -n "$POST_VERIFY_HOOK" ]; then
+  step "post-verify hook"
+  mkdir -p "$OUT/hook" || fail 3 "cannot create $OUT/hook"
+  say POST_VERIFY_HOOK "$POST_VERIFY_HOOK"
+  say POST_VERIFY_HOOK_SHA256 "$(sha256sum "$POST_VERIFY_HOOK" | awk '{print $1}')"
+  W010A_NET="$NET" W010A_MONGO_HOST="$MONGO_C" W010A_MONGO_IMAGE="$MONGO_IMAGE"     W010A_HOOK_OUT="$OUT/hook" DOCKER="$DOCKER"     timeout "$HOOK_TIMEOUT" bash "$POST_VERIFY_HOOK" > "$OUT/hook/hook.log" 2>&1
+  rc=$?
+  tail -n 20 "$OUT/hook/hook.log" | tee -a "$OUT/run.log"
+  if [ "$rc" = 124 ]; then
+    R_HOOK=FAIL; say POST_VERIFY_HOOK_RESULT TIMEOUT
+    fail 3 "post-verify hook did not finish in ${HOOK_TIMEOUT}s"
+  fi
+  [ "$rc" = 0 ] || { R_HOOK=FAIL; say POST_VERIFY_HOOK_RESULT FAIL; fail 3 "post-verify hook exited $rc (see hook/hook.log)"; }
+  R_HOOK=PASS; say POST_VERIFY_HOOK_RESULT PASS
+  log "post-verify hook PASS"
+  assert_cool "after the post-verify hook"
+fi
 
 # ================================================================ 5. cleanup and production proof
 cleanup || { prod_check; finish 4; }

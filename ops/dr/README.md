@@ -163,3 +163,46 @@ production.
   не адресира обектите на първия, не маха неговия lock и не пипа неговите доказателства;
 - **невалидна конфигурация** (`M2_SENSORS_REQUIRED=yes`, `TEMP_ABORT=hot`, `READY_TIMEOUT=0`…)
   отказва старта преди каквото и да е обръщение към Docker и преди вземането на lock-а.
+
+## W0-03C — Master Data duplicate report като `POST_VERIFY_HOOK`
+
+Runner-ът приема **по избор** `POST_VERIFY_HOOK` — абсолютен път до bash скрипт.
+
+**Как работи hook-ът:**
+- Пуска се след проверката и **преди** почистването, срещу вече възстановеното копие.
+- Получава в средата си `W010A_NET`, `W010A_MONGO_HOST`, `W010A_MONGO_IMAGE`, `W010A_HOOK_OUT` (= `$OUT/hook`) и `DOCKER`.
+- Има `HOOK_TIMEOUT` секунди, по подразбиране 900.
+
+**Кога блокира PASS** (изход 3; почистването пак се изпълнява):
+- hook-ът се проваля;
+- hook-ът не свърши навреме;
+- температурата се вдигне по време на hook-а.
+
+**Какво чисти почистването:** всеки `*.sensitive*` файл, който hook-ът е оставил, дори ако hook-ът е бил убит.
+
+**Без hook** поведението е същото като преди: в `SUMMARY.txt`, `result.env` и `run.log` няма нов ред, а 40-те стари теста минават без промяна.
+
+`w0_03c_duplicate_report_hook.sh` прави duplicate report-а на W0-03C ([бележка](../../docs/architecture/W0-03C_UNIQUENESS_READINESS.md)):
+
+1. **export:** `mongosh` на изолираната мрежа чете само планираните колекции и полета (`w0_03c_export.js`). Файлът е mode 600 и се казва `export.sensitive.json`.
+2. **report:** stdlib-only Python в `python:3.11-slim` с `--network none` и `--read-only`. Кодът е монтиран само за четене.
+3. **изтриване:** суровият export се изтрива веднага щом има отчет. Остават `W003C_EXPORT_SHA256` и `W003C_EXPORT_BYTES`.
+
+**Резултат:**
+- В `hook/result.env`: `W003C_REPORT=CLEAN` или `W003C_REPORT=BLOCKED`.
+- В `hook/report.json`: пълният отчет. ЕГН е маскирано.
+- **Дубликатите са резултат, не провал** — hook-ът излиза с 0.
+
+**Пакет за NAS-а** — от точен commit, с LF и sha256 на всеки файл:
+
+```bash
+bash ops/dr/w0_03c_make_bundle.sh <commit> <изходна папка>
+```
+
+**Пускане на NAS-а** (след разархивиране в `/volume1/docker/w003c/`):
+
+```bash
+sudo POST_VERIFY_HOOK=/volume1/docker/w003c/<sha12>/ops/dr/w0_03c_duplicate_report_hook.sh bash /volume1/docker/w003c/<sha12>/ops/dr/w0_10a_restore_proof.sh
+```
+
+**Нужни образи:** `mongo:7` и `python:3.11-slim` трябва да са налични локално. Прогонът не тегли нищо.

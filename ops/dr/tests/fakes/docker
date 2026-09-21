@@ -15,6 +15,13 @@
 #   stall_on_verify     also sleeps, long enough for the temperature sampler to trip
 #   stall_on_restore    seconds to sleep during the restore, so the run holds its lock
 #   c_<name>            a running container      net_<name>      a network      vol_<name>  a volume
+#   absent_<image>      `image inspect` fails for that image (':' and '/' written as '_')
+#   export_json         canned output of the W0-03C export (mongosh --file /w003c_export.js)
+#   export_rc           its exit code
+#   report_python       run the W0-03C report container's command with THIS local python,
+#                       container paths mapped back to their host mounts
+#   report_json         otherwise: canned report written to the /out mount
+#   report_rc           its exit code
 #
 # Every invocation is appended to $FAKE/calls.log so tests can assert on the real flags
 # (read-only mount, --internal network, no published port).
@@ -27,6 +34,7 @@ case "$cmd" in
     [ "${1:-}" = inspect ] || exit 1
     shift
     [ -f "$FAKE/image_ok" ] || exit 1
+    for a in "$@"; do [ -f "$FAKE/absent_$(printf '%s' "$a" | tr '/:' '__')" ] && exit 1; done
     if [ "${1:-}" = -f ]; then cat "$FAKE/image_id" 2>/dev/null || echo "sha256:deadbeef"; fi
     exit 0
     ;;
@@ -101,6 +109,37 @@ case "$cmd" in
         fi
         cat "$FAKE/restore_out" 2>/dev/null
         exit "$(cat "$FAKE/restore_rc" 2>/dev/null || echo 0)" ;;
+      *"/w003c_export.js "*)
+        cat "$FAKE/export_json" 2>/dev/null
+        exit "$(cat "$FAKE/export_rc" 2>/dev/null || echo 0)" ;;
+      *" /w003c/scripts/"*)
+        # map container paths back to the host directories mounted with -v
+        srcs=(); dsts=(); prev=""; start=0; i=0; all=("$@")
+        for a in "$@"; do
+          if [ "$prev" = -v ]; then
+            drive=""; spec="$a"
+            case "$spec" in [A-Za-z]:/*) drive="${spec:0:2}"; spec="${spec:2}" ;; esac   # C:/... on Windows
+            srcs+=("$drive${spec%%:*}"); rest="${spec#*:}"; dsts+=("${rest%%:*}")
+          fi
+          [ "$a" = python ] && [ "$start" = 0 ] && start=$i
+          prev="$a"; i=$((i + 1))
+        done
+        cmdline=()
+        for a in "${all[@]:$((start + 1))}"; do
+          for j in "${!dsts[@]}"; do
+            d="${dsts[$j]}"
+            case "$a" in "$d"|"$d"/*) a="${srcs[$j]}${a#"$d"}"; break ;; esac
+          done
+          cmdline+=("$a")
+        done
+        if [ -f "$FAKE/report_python" ]; then
+          "$(cat "$FAKE/report_python")" "${cmdline[@]}"
+          exit $?
+        fi
+        outdir=""
+        for j in "${!dsts[@]}"; do [ "${dsts[$j]}" = /out ] && outdir="${srcs[$j]}"; done
+        [ -f "$FAKE/report_json" ] && [ -n "$outdir" ] && cp "$FAKE/report_json" "$outdir/report.json"
+        exit "$(cat "$FAKE/report_rc" 2>/dev/null || echo 0)" ;;
       *" --file "*)
         if [ -f "$FAKE/heat_on_verify" ]; then
           for sensor in ${M2_GLOB:-}; do [ -f "$sensor" ] && echo 70 > "$sensor"; done
