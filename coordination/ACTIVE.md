@@ -1,12 +1,25 @@
 # BEG_Work Claude assignment queue
 
-Status: IDLE
-Task-ID: NONE
-Base-branch: main
-Base-SHA: NONE
+Status: CHANGES_REQUESTED
+Task-ID: W0-03C
+Base-branch: feat/w0-03c-uniqueness-readiness
+Base-SHA: be8cd207c94388e81b24173af6d690d69abcea00
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/20
+PR-Head: be8cd207c94388e81b24173af6d690d69abcea00
+Review: coordination/REVIEWS/W0-03C.md
+Correction-cycle: 1-of-1
 
-This branch is a coordination mailbox, not a runtime branch. Only an explicit assignment with Status: READY and a unique Task-ID authorizes one bounded implementation run. Never infer work from old PRs, suggestions, or this IDLE template.
+## Human purpose
+Make the already-drafted unique-index bootstrap honest and recoverable after interruption, and repair the NAS command that failed before running. No new feature.
 
-For a READY assignment include: human purpose, FLOW and D-decision references, prerequisites, exact scope and exclusions, acceptance tests, evidence required, and stop conditions. The assigned agent must read CLAUDE.md and the relevant canonical files. One implementation task at a time. Deliver a Draft PR and HANDOFF with exact SHA, then stop. No merge, deploy, production/NAS/Atlas writes, migration, secrets, or changes to business-locked FLOWs without Krum's separate explicit decision.
+## Canonical authority and prerequisites
+Read CLAUDE.md, docs/architecture/IMPLEMENTATION_GATE_MATRIX.md, IMPLEMENTATION_WAVES.md, W0-03C_UNIQUENESS_READINESS.md, and relevant FLOW-001–050 Master Data decisions. This is a correction inside PR #20, not a business-rule change. The exact PR head and independent review above are mandatory.
 
-Codex reviews actual diff and evidence independently. Krum decides business changes and merge/deploy.
+## In scope
+Correct only findings 1–3 in the review. Ensure an interruption between create_index and ledger claim does not strand an untracked index, and final ledger-write failure cannot return APPLIED. Add fault-injection positive/forbidden tests. Fix the documented sudo/PATH or explicit Docker path command in the runbook and hook header. Keep all work on PR #20's existing branch.
+
+## Excluded
+No new implementation slice, no NEXT task, no merge, deploy, production/NAS/Atlas write, real index build, migration, secrets, or change to locked FLOW decisions. Do not mark W0-03C or Wave 0 complete.
+
+## Acceptance and evidence
+Re-run focused tests plus appropriate regression. Demonstrate the two failure windows, recovery/rollback behavior and truthful final status. Show actual diff, exact new head SHA, test commands/results and limits in an updated HANDOFF. Keep Draft PR. STOP for independent Codex re-review. If the correction cannot be safe in one bounded cycle, report BLOCKED.
