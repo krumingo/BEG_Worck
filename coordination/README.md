@@ -1,0 +1,11 @@
+# Claude–Codex implementation loop
+
+This branch is a coordination mailbox, separate from runtime code. `coordination/ACTIVE.md` is the only dispatch pointer; `coordination/REVIEWS/` holds independent Codex verdicts. The default state is IDLE.
+
+Cycle: Codex selects one bounded task from the canonical FLOW and Implementation Waves documents, checks predecessors and exact base SHA, writes READY with a unique Task-ID. Claude works only that assignment, publishes an exact-SHA Draft PR and HANDOFF, then stops. Codex checks the real diff, runs relevant tests independently in an isolated checkout, distinguishes code evidence from external data evidence, and records PASS, CHANGES_REQUESTED or BLOCKED. A failed review gets one bounded correction assignment to the same Task-ID; repeated or unsafe failure stops for Krum. A verified task may lead to another task only if its prerequisites are proven. Never dispatch two READY tasks concurrently.
+
+A Draft PR is not merged code. A successor may be stacked on a verified exact head only when its assignment explicitly names that head and the dependency; it must remain a separate Draft PR. Do not call a stack integration into main, release, deployment, or Implementation Gate PASS. Codex must not update progress percentages from PR self-reports alone.
+
+Krum is asked only for a new or changed business rule, an unresolved choice that changes scope, security/access or credentials, production/NAS/Atlas operations, destructive migration, live acceptance, merge into main, or deployment. Technical implementation inside locked FLOW scope does not need a repeated copy/paste approval. The older per-change manual transfer in CLAUDE.md section 18 is superseded for this coordination loop by Krum's explicit 22 Sep 2026 instruction; its business and merge/deploy safeguards remain.
+
+Automations and routine runs consume usage. If the Claude trigger cannot be reached or evidence cannot be verified, stop with BLOCKED; never infer success from a green run status.
