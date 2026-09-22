@@ -89,15 +89,22 @@ class IndexCollection:
         self.calls.append("update_one")
         if self.name in self.db.fail_update:
             raise OperationFailure("write to %s refused" % self.name)
+        fields = update.get("$set", {})
+        if "status" in fields and fields["status"] in self.db.fail_status_writes:
+            raise OperationFailure("write to %s refused (status=%s)" % (self.name, fields["status"]))
         for d in self.docs:
             if all(d.get(k) == v for k, v in filter.items()):
-                d.update(copy.deepcopy(update.get("$set", {})))
+                d.update(copy.deepcopy(fields))
                 return
 
     async def create_index(self, keys, name=None, unique=False, partialFilterExpression=None):
         self.calls.append("create_index:%s" % name)
         if name in self.db.fail_on:
             raise OperationFailure("index build of %s interrupted" % name)
+        if name in self.db.interrupt_before:
+            # a crash before the server ever saw the build (or before it processed it):
+            # nothing physically built, unlike interrupt_on below
+            raise KeyboardInterrupt("crash before %s reached the server" % name)
         info = {"key": list(keys), "v": 2}
         if unique:
             info["unique"] = True
@@ -110,6 +117,10 @@ class IndexCollection:
                                         % (self.name, name))
         self.indexes[name] = info
         self.db.touch(self.name)
+        if name in self.db.interrupt_on:
+            # a crash right after the server confirmed the build, before control returns
+            # to the caller: the index is real, but create_index() never gets to return
+            raise KeyboardInterrupt("crash right after %s was built on the server" % name)
         return name
 
     async def drop_index(self, name):
@@ -142,6 +153,9 @@ class IndexDb:
         self.fail_on = set()
         self.fail_drop = set()
         self.fail_update = set()
+        self.fail_status_writes = set()
+        self.interrupt_on = set()
+        self.interrupt_before = set()
         self._oid = 0
 
     def next_oid(self):
@@ -1058,6 +1072,71 @@ def test_after_rollback_a_clean_rerun_builds_again():
     assert again["status"] == ib.STATUS_APPLIED and len(again["created"]) == 25
 
 
+# ---------------------------------------------------------------- fault injection: a killed process,
+# not just a caught exception (W0-03C review of PR #20, findings 1 and 2)
+
+def test_a_crash_right_after_the_server_confirms_the_index_still_lets_rollback_find_it():
+    """The window the review named: create_index succeeds on the server, then the run is
+    killed before it would have recorded that. The claim must already be in the ledger,
+    or rollback can never find this index again."""
+    db = IndexDb()
+    db.interrupt_on.add("md_uq_open_pending")           # the last index in plan order
+    with pytest.raises(KeyboardInterrupt):
+        boot(db, apply=True, target=LOCAL)
+
+    entry = db[ib.LEDGER_COLLECTION].docs[0]
+    assert entry["status"] == ib.RUN_BUILDING            # the crash pre-empted the final write
+    assert len(entry["created"]) == 25
+    assert {"collection": PENDING_COLLECTION, "index": "md_uq_open_pending"} in entry["created"]
+    assert "md_uq_open_pending" in db.indexes(PENDING_COLLECTION)     # real, on the server
+
+    rb = run(ib.rollback(db, entry["_id"], database=SCRATCH, plan=None, target=LOCAL, env=NO_ENV))
+    assert rb["status"] == ib.STATUS_ROLLED_BACK
+    assert "md_uq_open_pending" not in db.indexes(PENDING_COLLECTION)
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+
+
+def test_a_crash_before_the_build_ever_reached_the_server_still_rolls_back_cleanly():
+    """The claim is written before create_index is even called. If the crash happens
+    before that call reaches the server, the claimed index was never built — rollback
+    must find it already absent, not fail trying to drop something that never existed."""
+    db = IndexDb()
+    db.interrupt_before.add("md_uq_open_pending")
+    with pytest.raises(KeyboardInterrupt):
+        boot(db, apply=True, target=LOCAL)
+
+    entry = db[ib.LEDGER_COLLECTION].docs[0]
+    assert entry["status"] == ib.RUN_BUILDING
+    assert len(entry["created"]) == 25                   # claimed optimistically before the call
+    assert "md_uq_open_pending" not in db.indexes(PENDING_COLLECTION)  # never actually built
+
+    rb = run(ib.rollback(db, entry["_id"], database=SCRATCH, plan=None, target=LOCAL, env=NO_ENV))
+    assert rb["status"] == ib.STATUS_ROLLED_BACK
+    label = "%s.md_uq_open_pending" % PENDING_COLLECTION
+    assert [r for r in rb["results"] if r["index"] == label][0]["result"] == "already absent"
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+
+
+def test_a_failed_final_status_write_does_not_report_applied():
+    """Every index really got built; only the ledger's closing ``status: applied`` write
+    failed. That must never come back as plain APPLIED — the caller has to be told the
+    ledger could not confirm it, even though nothing needs to be undone."""
+    db = IndexDb()
+    db.fail_status_writes.add(ib.RUN_APPLIED)
+    r = boot(db, apply=True, target=LOCAL)
+    assert r["status"] == ib.STATUS_APPLIED_UNCONFIRMED
+    assert len(r["created"]) == 25
+    assert len(r["rollback_plan"]) == 25
+
+    entry = ledger_of(db, r["run_id"])
+    assert entry["status"] == ib.RUN_BUILDING            # the final write never landed
+    assert len(entry["created"]) == 25                   # but every claim is there
+
+    rb = undo(db, r)                                     # still recoverable from the ledger alone
+    assert rb["status"] == ib.STATUS_ROLLED_BACK
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+
+
 # ---------------------------------------------------------------- after apply: the database enforces it
 
 def test_after_apply_the_index_refuses_what_the_report_would_flag():
@@ -1231,6 +1310,26 @@ def test_cli_rollback_passes_the_run_id_and_the_saved_plan_to_the_ledger_check(t
     plan.write_text(json.dumps(applied), encoding="utf-8")
     assert cli.main(base) == 0
     assert db.indexes("md_organization") == {"_id_"}
+
+
+def test_cli_exit_6_when_the_final_ledger_status_write_fails(tmp_path, monkeypatch):
+    db = IndexDb()
+    db.fail_status_writes.add(ib.RUN_APPLIED)
+
+    class Client:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "_connect", lambda url, name: (Client(), db))
+    for var in ("DB_NAME", "BEG_SYSTEM_DB"):
+        monkeypatch.delenv(var, raising=False)
+    out = tmp_path / "run.json"
+    rc = cli.main(["bootstrap", "--mongo-url", "mongodb://localhost:27017", "--db", SCRATCH,
+                   "--apply", "--confirm-db", SCRATCH, "--out", str(out)])
+    assert rc == 6
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert result["status"] == ib.STATUS_APPLIED_UNCONFIRMED
+    assert len(result["created"]) == 25
 
 
 def test_cli_exit_code_for_every_status():

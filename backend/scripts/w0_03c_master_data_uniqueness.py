@@ -38,6 +38,9 @@ Exit codes:
     4  ROLLBACK_FAILED — something could not be undone; read the output
     5  INCOMPLETE — the export is empty or lacks what was expected: NOT evidence, neither
        clean nor duplicates
+    6  APPLIED_LEDGER_UNCONFIRMED — every planned index was built, but the run ledger's
+       final "applied" write failed, so the run cannot be confirmed done from the ledger
+       alone: read the output, confirm by hand, then correct the ledger or roll back
 """
 import argparse
 import asyncio
@@ -60,6 +63,7 @@ EXIT_BY_STATUS = {
     ib.STATUS_REFUSED_TARGET: 2, ib.STATUS_REFUSED_CONFLICT: 2,
     ib.STATUS_FAILED_ROLLED_BACK: 3,
     ib.STATUS_ROLLBACK_FAILED: 4,
+    ib.STATUS_APPLIED_UNCONFIRMED: 6,
 }
 
 

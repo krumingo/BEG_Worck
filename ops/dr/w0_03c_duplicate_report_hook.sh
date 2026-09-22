@@ -3,8 +3,15 @@
 #
 # A POST_VERIFY_HOOK for the W0-10A restore proof. It is never run on its own:
 #
-#   sudo env POST_VERIFY_HOOK=/volume1/docker/w003c/<sha>/ops/dr/w0_03c_duplicate_report_hook.sh \
+#   sudo env DOCKER=/usr/local/bin/docker \
+#        POST_VERIFY_HOOK=/volume1/docker/w003c/<sha>/ops/dr/w0_03c_duplicate_report_hook.sh \
 #        bash /volume1/docker/w003c/<sha>/ops/dr/w0_10a_restore_proof.sh
+#
+#   DOCKER=/usr/local/bin/docker is required on DSM: sudo does not carry the operator's
+#   PATH, and DSM's docker binary is outside sudo's secure_path, so without it the runner
+#   fails "docker not found" (exit 2) before the restore even starts. Confirm the path
+#   with `which docker` (no sudo) if the Docker/Container Manager package is installed
+#   elsewhere.
 #
 # The runner calls it after the restore is verified and BEFORE cleanup, with:
 #   W010A_NET          the --internal network of this run

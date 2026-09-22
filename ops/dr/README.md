@@ -209,7 +209,9 @@ bash ops/dr/w0_03c_make_bundle.sh <commit> <изходна папка>
 **Пускане на NAS-а** (след разархивиране в `/volume1/docker/w003c/`):
 
 ```bash
-sudo env POST_VERIFY_HOOK=/volume1/docker/w003c/<sha12>/ops/dr/w0_03c_duplicate_report_hook.sh bash /volume1/docker/w003c/<sha12>/ops/dr/w0_10a_restore_proof.sh
+sudo env DOCKER=/usr/local/bin/docker POST_VERIFY_HOOK=/volume1/docker/w003c/<sha12>/ops/dr/w0_03c_duplicate_report_hook.sh bash /volume1/docker/w003c/<sha12>/ops/dr/w0_10a_restore_proof.sh
 ```
+
+`sudo` на DSM не носи потребителския `PATH`, а `docker` на DSM е в `/usr/local/bin`, не в `sudo`-вия `secure_path` — без изричния `DOCKER=` sudo не намира `docker` и прогонът приключва с изход 2 преди restore (както при първия опит на 22.09). Ако инсталацията на Docker/Container Manager е на друг път, провери с `which docker` (без `sudo`) и подай точно него.
 
 **Нужни образи:** `mongo:7` и `python:3.11-slim` трябва да са налични локално. Прогонът не тегли нищо.

@@ -20,11 +20,17 @@ The order is the contract (docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CON
   5. **rollback** — driven by the run ledger, not by a file.
 
 The run ledger (``md_uniqueness_runs``, in the same disposable database) is the only
-document this module writes. An ``apply`` opens one entry before it builds and records
-every index right after the server confirms it, so the ledger — not the JSON handed back
-to the operator — is the source of truth for "what did run X create". ``rollback(run_id)``
-drops only what that entry records; a saved plan, if given, must match the entry exactly,
-so an edited plan is refused instead of obeyed.
+document this module writes. An ``apply`` opens one entry before it builds and, for each
+index, claims the name in the ledger BEFORE asking the server to build it — not after.
+A crash (killed process, not just a caught exception) between the server confirming an
+index and the run's next line of Python still leaves that claim in the ledger, so
+``rollback(run_id)`` finds it instead of stranding an untracked index; a claim whose
+index was never actually built is later found absent and skipped, not treated as an
+error. The final ``status: applied`` write is best-effort like any ledger update: if it
+fails, ``bootstrap`` does not report ``APPLIED`` — it reports ``APPLIED_LEDGER_UNCONFIRMED``
+instead, because the indexes are real but the ledger cannot confirm the run finished.
+``rollback(run_id)`` drops only what the entry records; a saved plan, if given, must
+match the entry exactly, so an edited plan is refused instead of obeyed.
 
 MongoDB keeps no identity or creation time for an index, so two cases are resolved from
 the ledger alone:
@@ -45,6 +51,7 @@ from app.master_data.uniqueness import CANONICAL_KEYS, INDEX_PREFIX, UniqueKey, 
 
 STATUS_PLANNED = "PLANNED"                      # dry run: what an apply would do
 STATUS_APPLIED = "APPLIED"
+STATUS_APPLIED_UNCONFIRMED = "APPLIED_LEDGER_UNCONFIRMED"  # built; final ledger write failed
 STATUS_ALREADY_APPLIED = "ALREADY_APPLIED"      # a re-run: every index already there
 STATUS_REFUSED_TARGET = "REFUSED_TARGET"
 STATUS_REFUSED_DUPLICATES = "REFUSED_DUPLICATES"
@@ -211,16 +218,38 @@ async def bootstrap(db, *, database: str, apply: bool = False,
         if "%s.%s" % (key.collection, key.name) not in run["to_create"]:
             continue
         spec = key.index_spec()
+        # claimed BEFORE the build is attempted: a crash during create_index (a killed
+        # process, not merely a caught exception) still leaves the ledger naming this
+        # index, so rollback finds it instead of stranding it untracked. If create_index
+        # then turns out to have failed or never run, the claim is retracted below — the
+        # window this closes is the one AFTER the server confirms the build.
+        try:
+            await ledger.update_one({"_id": run_id}, {"$set": {"created": _claims(created + [key])}})
+        except Exception as exc:                        # noqa: BLE001 — nothing built for this key
+            undone = await _drop(db, created)
+            left = [k for k, u in zip(reversed(created), undone) if u["result"] != "dropped"]
+            await _ledger_set(ledger, run_id, {
+                "status": RUN_FAILED if not left else RUN_ROLLBACK_INCOMPLETE,
+                "created": _claims(list(reversed(left))), "undone": undone,
+                "finished_at": _now(), "failure": str(exc)})
+            run["created"] = ["%s.%s" % (k.collection, k.name) for k in created]
+            run["undone"] = undone
+            return dict(run, status=STATUS_ROLLBACK_FAILED if left else STATUS_FAILED_ROLLED_BACK,
+                        reason="could not claim %s.%s in the run ledger (%s); %d index(es) created "
+                               "by this run were dropped again"
+                               % (key.collection, key.name, exc,
+                                  sum(1 for u in undone if u["result"] == "dropped")))
         try:
             options = {"name": spec["name"], "unique": True}
             if "partialFilterExpression" in spec:
                 options["partialFilterExpression"] = spec["partialFilterExpression"]
             await db[key.collection].create_index(spec["keys"], **options)
             created.append(key)
-            # recorded the moment the server confirms it: a crash after this line still
-            # leaves a ledger that names every index the run built
-            await ledger.update_one({"_id": run_id}, {"$set": {"created": _claims(created)}})
         except Exception as exc:                        # noqa: BLE001 — reported and undone
+            # this key was never built: retract its optimistic claim before undoing the
+            # ones that came before it, so the ledger never claims an index that does not
+            # exist and was not even attempted
+            await _ledger_set(ledger, run_id, {"created": _claims(created)})
             undone = await _drop(db, created)
             left = [k for k, u in zip(reversed(created), undone) if u["result"] != "dropped"]
             await _ledger_set(ledger, run_id, {
@@ -234,9 +263,20 @@ async def bootstrap(db, *, database: str, apply: bool = False,
                                "dropped again" % (key.collection, key.name, exc,
                                                   sum(1 for u in undone if u["result"] == "dropped")))
 
-    await _ledger_set(ledger, run_id, {"status": RUN_APPLIED, "finished_at": _now()})
     run["created"] = ["%s.%s" % (k.collection, k.name) for k in created]
     run["rollback_plan"] = [_rollback_entry(k) for k in created]
+    try:
+        await ledger.update_one({"_id": run_id}, {"$set": {"status": RUN_APPLIED, "finished_at": _now()}})
+    except Exception as exc:                            # noqa: BLE001 — built, but not confirmed
+        # fail closed: every index is real and rollback(run_id) still works from the
+        # claims already recorded per index, but this run never reports plain APPLIED
+        # unless the ledger itself says so
+        return dict(run, status=STATUS_APPLIED_UNCONFIRMED,
+                    reason="%d index(es) created (run %s) but the final ledger status write "
+                           "failed (%s); the ledger still shows '%s' — the indexes exist and "
+                           "rollback(%s) still works from the recorded claims; confirm and "
+                           "correct the ledger status by hand"
+                           % (len(created), run_id, exc, RUN_BUILDING, run_id))
     return dict(run, status=STATUS_APPLIED,
                 reason="%d index(es) created (run %s)" % (len(created), run_id))
 
