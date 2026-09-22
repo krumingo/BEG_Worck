@@ -1,6 +1,8 @@
 # BEG_Work Claude assignment queue
 
 Status: CHANGES_REQUESTED
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/epitaxy/session_0121FURkAfgZYfT9dqwqsyvc
 Task-ID: W0-03C
 Base-branch: feat/w0-03c-uniqueness-readiness
 Base-SHA: be8cd207c94388e81b24173af6d690d69abcea00
