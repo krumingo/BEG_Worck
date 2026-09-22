@@ -1,6 +1,8 @@
 # ACTIVE assignment template
 
 Status: IDLE
+Dispatch-State: NONE
+Dispatch-Run: NONE
 Task-ID: NONE
 Base-branch: main
 Base-SHA: NONE
