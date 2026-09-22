@@ -2,6 +2,8 @@
 
 This branch is a coordination mailbox, separate from runtime code. `coordination/ACTIVE.md` is the only dispatch pointer; `coordination/REVIEWS/` holds independent Codex verdicts. The default state is IDLE.
 
+Dispatch protocol: Codex writes Dispatch-State: PENDING only after validating one ACTIVE task. Claude executes only PENDING. After Codex observes the run start, Codex changes it to RUNNING and records Dispatch-Run. A scheduled Claude run seeing RUNNING must stop as IDLE, not repeat work. Codex alone returns it to PENDING for a new bounded correction or next Task-ID, or to NONE after review. The state field prevents duplicate delivery; a run status alone does not prove code completion.
+
 Cycle: Codex selects one bounded task from the canonical FLOW and Implementation Waves documents, checks predecessors and exact base SHA, writes READY with a unique Task-ID. Claude works only that assignment, publishes an exact-SHA Draft PR and HANDOFF, then stops. Codex checks the real diff, runs relevant tests independently in an isolated checkout, distinguishes code evidence from external data evidence, and records PASS, CHANGES_REQUESTED or BLOCKED. A failed review gets one bounded correction assignment to the same Task-ID; repeated or unsafe failure stops for Krum. A verified task may lead to another task only if its prerequisites are proven. Never dispatch two READY tasks concurrently.
 
 A Draft PR is not merged code. A successor may be stacked on a verified exact head only when its assignment explicitly names that head and the dependency; it must remain a separate Draft PR. Do not call a stack integration into main, release, deployment, or Implementation Gate PASS. Codex must not update progress percentages from PR self-reports alone.
