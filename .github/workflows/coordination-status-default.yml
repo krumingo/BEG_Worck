@@ -1,0 +1,36 @@
+name: Coordination status — default-branch events (draft definition)
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, closed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: read
+
+jobs:
+  project-status:
+    if: >-
+      github.repository == 'krumingo/BEG_Worck' &&
+      (github.event_name == 'issue_comment' ||
+       github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # This workflow can become live only after a separate owner-approved
+      # main integration. Never checkout or execute the untrusted PR head.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Project verified PR or HANDOFF transition
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_TRUSTED_ACTORS: krumingo
+        run: python tools/coordination_status_events.py
