@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BEG_WORK control">
+  <rect width="64" height="64" rx="12" fill="#0d1117"/>
+  <rect x="6" y="6" width="52" height="52" rx="9" fill="none" stroke="#22303f" stroke-width="2"/>
+  <!-- Three pipeline nodes: architect, tech lead, implementer. -->
+  <circle cx="18" cy="26" r="5.5" fill="#388bfd"/>
+  <circle cx="32" cy="26" r="5.5" fill="#a371f7"/>
+  <circle cx="46" cy="26" r="5.5" fill="#2ea043"/>
+  <path d="M23.5 26h3M37.5 26h3" stroke="#6b7d91" stroke-width="2" stroke-linecap="round"/>
+  <rect x="14" y="40" width="36" height="5" rx="2.5" fill="#31435a"/>
+  <rect x="14" y="40" width="14" height="5" rx="2.5" fill="#d29922"/>
+</svg>

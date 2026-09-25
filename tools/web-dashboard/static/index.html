@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BEG_WORK Control</title>
+<meta name="description" content="Read-only projection of the BEG_WORK ChatGPT / Codex / Claude control protocol.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<noscript class="noscript">
+  This dashboard renders a JSON projection in the browser, so it needs JavaScript.
+  The same data is available without it at <a href="/api/state">/api/state</a>.
+</noscript>
+
+<!--
+  Every value below is filled from /api/state. Nothing is hardcoded, and no element
+  starts out claiming a state: the shell loads as UNKNOWN / connecting, so a failed
+  first round cannot leave a stale-looking status on screen.
+-->
+<header class="topbar" id="topbar">
+  <div class="topbar__identity">
+    <span class="wordmark">BEG_WORK</span>
+    <span class="wordmark__sub">control projection</span>
+  </div>
+
+  <dl class="ident" aria-label="Current assignment">
+    <div class="ident__item"><dt>Wave</dt><dd id="f-wave">—</dd></div>
+    <div class="ident__item"><dt>Flow</dt><dd id="f-flow">—</dd></div>
+    <div class="ident__item"><dt>Task-ID</dt><dd id="f-task">—</dd></div>
+    <div class="ident__item"><dt>Cycle-ID</dt><dd id="f-cycle">—</dd></div>
+    <div class="ident__item"><dt>Stage</dt><dd id="f-stage">—</dd></div>
+  </dl>
+
+  <div class="topbar__state">
+    <span class="bigstate" id="f-state" data-state="UNKNOWN">CONNECTING</span>
+    <span class="verified" id="f-verified">awaiting first verified round</span>
+  </div>
+</header>
+
+<!--
+  Two indicators, never merged. The control state has a protocol status; the dashboard
+  has a link state. A network outage must not read as a protocol conflict, and a real
+  CONFLICT must not be excused as a connectivity blip.
+-->
+<section class="statusbar" aria-label="Verification and connection">
+  <div class="chip chip--status" id="f-status" data-status="UNKNOWN">
+    <span class="chip__glyph" id="f-status-glyph" aria-hidden="true">…</span>
+    <span class="chip__label">CONTROL STATE</span>
+    <strong class="chip__value" id="f-status-value">UNKNOWN</strong>
+  </div>
+  <div class="chip chip--link" id="f-link" data-link="OFFLINE">
+    <span class="chip__glyph" aria-hidden="true">◍</span>
+    <span class="chip__label">LINK</span>
+    <strong class="chip__value" id="f-link-value">OFFLINE</strong>
+  </div>
+  <div class="chip chip--quiet">
+    <span class="chip__label">LAST VERIFIED</span>
+    <strong class="chip__value" id="f-verified-at">never</strong>
+    <span class="chip__aside" id="f-age"></span>
+  </div>
+  <div class="chip chip--quiet">
+    <span class="chip__label">NEXT READ</span>
+    <strong class="chip__value" id="f-next">—</strong>
+  </div>
+  <div class="chip chip--krum" id="f-krum" data-required="false">
+    <span class="chip__glyph" aria-hidden="true">⚑</span>
+    <span class="chip__label">KRUM ACTION</span>
+    <strong class="chip__value" id="f-krum-value">NONE</strong>
+  </div>
+</section>
+
+<p class="krum-reason" id="f-krum-reason" hidden></p>
+
+<p class="snapshot-caveat">
+  <strong>Snapshot, not live truth.</strong> A verified round means the bytes read this
+  round agreed with each other. Recheck source blobs, PR head and the independent review
+  before any consequential action. This surface never writes to GitHub or to operational
+  state.
+</p>
+
+<main class="grid">
+  <section class="panel panel--agents" aria-labelledby="h-agents">
+    <h2 id="h-agents" class="panel__title">Agents</h2>
+    <p class="panel__note">
+      Read from <code>agent_states</code> only. History below is evidence, never a status source.
+    </p>
+    <div class="agents" id="f-agents"></div>
+  </section>
+
+  <section class="panel panel--pipeline" aria-labelledby="h-pipeline">
+    <h2 id="h-pipeline" class="panel__title">Pipeline</h2>
+    <ol class="pipeline" id="f-pipeline"></ol>
+  </section>
+
+  <section class="panel panel--task" aria-labelledby="h-task">
+    <h2 id="h-task" class="panel__title">Task</h2>
+    <dl class="kv" id="f-task-kv"></dl>
+    <div class="progress" id="f-progress"></div>
+  </section>
+
+  <section class="panel panel--findings" aria-labelledby="h-findings">
+    <h2 id="h-findings" class="panel__title">Verification findings</h2>
+    <ul class="findings" id="f-findings"></ul>
+  </section>
+
+  <section class="panel panel--evidence" aria-labelledby="h-evidence">
+    <h2 id="h-evidence" class="panel__title">Evidence</h2>
+    <ul class="evidence" id="f-evidence"></ul>
+  </section>
+
+  <section class="panel panel--history" aria-labelledby="h-history">
+    <h2 id="h-history" class="panel__title">Recent activity</h2>
+    <p class="panel__note">Newest first. Append-only; a mapped cycle is an explicit mapping, not rewritten history.</p>
+    <ol class="history" id="f-history"></ol>
+  </section>
+</main>
+
+<footer class="footer">
+  <p class="gate" id="f-gate">—</p>
+  <p class="footer__meta">
+    <span id="f-repo">—</span>
+    <span class="dot" aria-hidden="true">·</span>
+    <span id="f-branch">—</span>
+    <span class="dot" aria-hidden="true">·</span>
+    <span id="f-protocol">—</span>
+    <span class="dot" aria-hidden="true">·</span>
+    <span id="f-token">—</span>
+  </p>
+  <p class="footer__meta footer__meta--quiet" id="f-error"></p>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

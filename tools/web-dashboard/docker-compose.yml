@@ -1,0 +1,57 @@
+# Synology Container Manager / docker compose deployment.
+#
+# Container Manager's "Project" feature reads this file directly. See README.md for the
+# click-by-click DSM steps.
+#
+# NOT DEPLOYED by the change that introduced this file. Deploying to the NAS is Krum's
+# decision and is outside the scope of the implementation cycle that added it.
+
+services:
+  begwork-dashboard:
+    build: .
+    # Pin a tag once the image is built on the NAS, so a rebuild is an explicit act.
+    image: begwork-dashboard:0.2.0-c02
+    container_name: begwork-dashboard
+    restart: unless-stopped
+
+    # The GitHub token is supplied here, server-side, and never reaches the browser.
+    # Keep the real values in .env next to this file; .env is git-ignored.
+    env_file:
+      - .env
+
+    ports:
+      # Host 8787 keeps clear of DSM's own services. Reachable at http://<nas>:8787/
+      - "8787:8080"
+
+    # Hardening: the app writes nothing, so nothing needs to be writable.
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # Sized from the measured footprint (see docs/ISSUE-26-C02-IMPLEMENTATION.md). The
+    # limit is generous relative to what was observed, so a slow GitHub response cannot
+    # get the container OOM-killed.
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+    logging:
+      # Bounded logs: an all-day dashboard must not fill a NAS volume.
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
