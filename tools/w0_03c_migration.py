@@ -222,6 +222,13 @@ def build_state(active_text: str, review_text: str, pr: dict, handoff: dict, can
         "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
         "task_id": "W0-03C", "cycle_id": "C02", "cycle_origin": "MIGRATED",
         "current_agent": "CODEX", "current_role": "TECH_LEAD_QA",
+        "agent_states": {
+            "GPT": {"state": "NOT_ACTIVE", "work_id": None, "waiting_for": None, "updated_at": updated_at},
+            "CODEX": {"state": "BLOCKED", "work_id": "W0-03C/C02/CX",
+                      "waiting_for": "Explicit technical correction cycle or design decision from Krum",
+                      "updated_at": updated_at},
+            "CLAUDE": {"state": "NOT_ACTIVE", "work_id": None, "waiting_for": None, "updated_at": updated_at},
+        },
         "current_work_id": "W0-03C/C02/CX", "state": "BLOCKED", "pipeline_step": "REVIEW", "next_agent": "KRUM",
         "waiting_for": "Explicit technical correction cycle or design decision from Krum",
         "wave": "W0", "flow": "FLOW-032", "pr_number": 20,

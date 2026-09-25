@@ -1,7 +1,7 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v1
-ACTIVE source updated: 2026-09-22T06:17:02Z · CONTROL STATE: **VALID** as of 2026-09-25T17:29:21Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-22T06:17:02Z · CONTROL STATE: **VALID** as of 2026-09-25T17:38:29Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03C / C02 (migrated) / CODEX / **BLOCKED**
@@ -26,7 +26,17 @@ WAITING_FOR: Explicit technical correction cycle or design decision from Krum
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03C | C02 (migrated) | — | BLOCKED | HANDOFF | CODEX | Explicit technical correction cycle or design decision from Krum | BLOCKED |
+| W0-03C | C02 (migrated) | NOT_ACTIVE | BLOCKED | NOT_ACTIVE | CODEX | Explicit technical correction cycle or design decision from Krum | BLOCKED |
+
+## Agent cards
+
+Current agent state is explicit in `agent_states`; history below is evidence, not a status source.
+
+| Agent | State | Work-ID | Waiting for | Updated at (UTC) |
+|---|---|---|---|---|
+| GPT | NOT_ACTIVE | — | — | 2026-09-22T06:17:02Z |
+| CODEX | BLOCKED | W0-03C/C02/CX | Explicit technical correction cycle or design decision from Krum | 2026-09-22T06:17:02Z |
+| CLAUDE | NOT_ACTIVE | — | — | 2026-09-22T06:17:02Z |
 
 GPT → Codex → Claude → **Codex (BLOCKED)** → GPT
 

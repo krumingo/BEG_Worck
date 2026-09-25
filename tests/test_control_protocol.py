@@ -144,10 +144,17 @@ class ControlProtocolTests(unittest.TestCase):
             ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB,
             ACTIVE_COMMIT, "0" * 40, REVIEW_BLOB))
 
-    def test_generic_nonblocked_synthetic_task_without_pr(self):
+    def synthetic_state(self):
         state = self.state()
         state.update(task_id="W2-07A", cycle_id="C01", cycle_origin="NATIVE",
                      current_agent="CLAUDE", current_role="IMPLEMENTER",
+                     agent_states={
+                         "GPT": {"state": "WAITING", "work_id": "W2-07A/C01/GPT",
+                                 "waiting_for": "Claude implementation", "updated_at": "2026-09-23T00:00:00Z"},
+                         "CODEX": {"state": "WAITING", "work_id": "W2-07A/C01/CX",
+                                   "waiting_for": "Claude HANDOFF", "updated_at": "2026-09-23T00:00:00Z"},
+                         "CLAUDE": {"state": "WORKING", "work_id": "W2-07A/C01/CL",
+                                    "waiting_for": None, "updated_at": "2026-09-23T00:00:00Z"}},
                      current_work_id="W2-07A/C01/CL", state="WORKING",
                      pipeline_step="IMPLEMENTATION", next_agent="CODEX",
                      waiting_for=None, wave="W2", flow="FLOW-101",
@@ -164,6 +171,10 @@ class ControlProtocolTests(unittest.TestCase):
                                "actor": "CLAUDE", "kind": "DISPATCH", "state_after": "WORKING",
                                "head_sha": None, "source_url": "https://example.test/run/1",
                                "source_commit_sha": None, "summary": "Synthetic implementation started."}])
+        return state
+
+    def test_generic_nonblocked_synthetic_task_without_pr(self):
+        state = self.synthetic_state()
         engine.validate_state(state)
         board = engine.render_board(state)
         engine.validate_board(state, board)
@@ -177,6 +188,48 @@ class ControlProtocolTests(unittest.TestCase):
         self.assert_status("INVALID", lambda: cp.validate_sources(
             state, self.active, self.review, self.pr, self.handoff,
             self.canonical, ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB))
+
+    def test_claude_working_agent_cards_are_explicit(self):
+        state = self.synthetic_state()
+        board = engine.render_board(state)
+        self.assertIn("| W2-07A | C01 | WAITING | WAITING | WORKING | CLAUDE |", board)
+        self.assertIn("| GPT | WAITING | W2-07A/C01/GPT | Claude implementation |", board)
+        self.assertIn("| CODEX | WAITING | W2-07A/C01/CX | Claude HANDOFF |", board)
+        self.assertIn("| CLAUDE | WORKING | W2-07A/C01/CL | — |", board)
+        changed = copy.deepcopy(state)
+        changed["agent_states"]["CODEX"]["state"] = "REVIEW"
+        self.assert_status("INVALID", lambda: engine.validate_state(changed))
+
+    def test_codex_review_with_claude_handoff(self):
+        state = self.synthetic_state()
+        state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
+                     current_work_id="W2-07A/C01/CX", state="REVIEW",
+                     pipeline_step="REVIEW", waiting_for=None)
+        state["agent_states"]["CODEX"].update(state="REVIEW", waiting_for=None)
+        state["agent_states"]["CLAUDE"].update(state="HANDOFF", waiting_for="Codex review")
+        board = engine.render_board(state)
+        self.assertIn("| W2-07A | C01 | WAITING | REVIEW | HANDOFF | CODEX |", board)
+        self.assertIn("| CLAUDE | HANDOFF | W2-07A/C01/CL | Codex review |", board)
+        self.assertIn("**Codex (REVIEW)**", board)
+
+    def test_old_blocked_history_does_not_override_explicit_waiting(self):
+        state = self.synthetic_state()
+        state["history"].append({"event_id": "old-gpt-block", "occurred_at": "2026-09-22T23:00:00Z",
+                                 "task_id": "W2-07A", "cycle_id": "C00", "mapped_cycle": None,
+                                 "actor": "GPT", "kind": "REVIEW", "state_after": "BLOCKED",
+                                 "head_sha": None, "source_url": "https://example.test/old",
+                                 "source_commit_sha": None, "summary": "Historical blocker only."})
+        board = engine.render_board(state)
+        self.assertIn("| W2-07A | C01 | WAITING | WAITING | WORKING | CLAUDE |", board)
+        cards = board.split("## Agent cards", 1)[1].split("## Evidence", 1)[0]
+        self.assertIn("| GPT | WAITING | W2-07A/C01/GPT |", cards)
+        self.assertNotIn("| GPT | BLOCKED |", cards)
+        self.assertIn("| GPT | BLOCKED |", board.split("## Append-only history", 1)[1])
+
+    def test_current_agent_record_must_match_top_level(self):
+        state = self.synthetic_state()
+        state["agent_states"]["CLAUDE"]["work_id"] = "W2-07A/C02/CL"
+        self.assert_status("CONFLICT", lambda: engine.validate_state(state))
 
     def test_idle_none_are_explicitly_unsupported_in_v1(self):
         state = self.state()

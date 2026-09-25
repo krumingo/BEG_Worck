@@ -94,7 +94,8 @@ def validate_state(state: dict) -> None:
         raise ControlError("INVALID", "unknown validation mode")
     if dt.datetime.fromisoformat(state["validated_at"].replace("Z", "+00:00")) < dt.datetime.fromisoformat(state["updated_at"].replace("Z", "+00:00")):
         raise ControlError("INVALID", "validation predates source update")
-    suffix = {"GPT": "GPT", "CODEX": "CX", "CLAUDE": "CL"}[state["current_agent"]]
+    suffixes = {"GPT": "GPT", "CODEX": "CX", "CLAUDE": "CL"}
+    suffix = suffixes[state["current_agent"]]
     if state["current_work_id"] != f"{state['task_id']}/{state['cycle_id']}/{suffix}":
         raise ControlError("INVALID", "Work-ID does not match Task/Cycle/current agent")
     role = {"GPT": "ARCHITECT", "CODEX": "TECH_LEAD_QA", "CLAUDE": "IMPLEMENTER"}
@@ -105,6 +106,28 @@ def validate_state(state: dict) -> None:
     step_agent = {"ARCHITECT": "GPT", "ASSIGNMENT": "CODEX", "IMPLEMENTATION": "CLAUDE", "REVIEW": "CODEX", "ARCHITECT_FEEDBACK": "GPT"}
     if state["current_agent"] != step_agent[state["pipeline_step"]]:
         raise ControlError("INVALID", "pipeline step/agent mismatch")
+    agents = state["agent_states"]
+    current = agents[state["current_agent"]]
+    if (current["state"] != state["state"] or
+            current["work_id"] != state["current_work_id"] or
+            current["waiting_for"] != state["waiting_for"]):
+        raise ControlError("CONFLICT", "current agent state/work/waiting does not match snapshot")
+    active = [name for name, item in agents.items() if item["state"] in {"WORKING", "REVIEW"}]
+    if active != ([state["current_agent"]] if state["state"] in {"WORKING", "REVIEW"} else []):
+        raise ControlError("INVALID", "WORKING/REVIEW must belong only to current pipeline agent")
+    validated = dt.datetime.fromisoformat(state["validated_at"].replace("Z", "+00:00"))
+    for name, item in agents.items():
+        observed = dt.datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00"))
+        if observed > validated:
+            raise ControlError("INVALID", f"{name} agent state updated after validation")
+        if item["state"] == "NOT_ACTIVE" and (item["work_id"] is not None or item["waiting_for"] is not None):
+            raise ControlError("INVALID", f"{name} NOT_ACTIVE must have null work and waiting")
+        if item["state"] == "WAITING" and not (item["waiting_for"] or "").strip():
+            raise ControlError("INVALID", f"{name} WAITING needs explicit waiting_for")
+        if item["work_id"] is not None:
+            expected = f"{state['task_id']}/{state['cycle_id']}/{suffixes[name]}"
+            if item["work_id"] != expected:
+                raise ControlError("INVALID", f"{name} work_id does not match current task/cycle")
     if state["requires_krum"] and not (state["requires_krum_reason"] or "").strip():
         raise ControlError("INVALID", "requires_krum has no reason")
     if state["state"] in {"WAITING", "BLOCKED"} and not (state["waiting_for"] or "").strip():
@@ -153,11 +176,7 @@ def render_board(state: dict) -> str:
     validate_state(state)
     def cell(value) -> str:
         return str(value if value is not None else "—").replace("|", "\\|").replace("\n", " ")
-    agent_status = {agent: "—" for agent in ("GPT", "CODEX", "CLAUDE")}
-    for item in state["history"]:
-        if item["actor"] in agent_status and item["state_after"]:
-            agent_status[item["actor"]] = item["state_after"]
-    agent_status[state["current_agent"]] = state["state"]
+    agent_status = state["agent_states"]
     route = [("ARCHITECT", "GPT"), ("ASSIGNMENT", "Codex"), ("IMPLEMENTATION", "Claude"),
              ("REVIEW", "Codex"), ("ARCHITECT_FEEDBACK", "GPT")]
     pipeline = " → ".join(f"**{name} ({state['state']})**" if step == state["pipeline_step"] else name
@@ -180,8 +199,15 @@ def render_board(state: dict) -> str:
              f"WAITING_FOR: {state['waiting_for'] or 'NONE'}", "```", "",
              "| Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |",
              "|---|---|---|---|---|---|---|---|",
-             f"| {cell(state['task_id'])} | {cell(cycle)} | {cell(agent_status['GPT'])} | {cell(agent_status['CODEX'])} | {cell(agent_status['CLAUDE'])} | {cell(state['current_agent'])} | {cell(state['waiting_for'])} | {cell(state['state'])} |", "",
-             pipeline, "", "## Evidence", "",
+             f"| {cell(state['task_id'])} | {cell(cycle)} | {cell(agent_status['GPT']['state'])} | {cell(agent_status['CODEX']['state'])} | {cell(agent_status['CLAUDE']['state'])} | {cell(state['current_agent'])} | {cell(state['waiting_for'])} | {cell(state['state'])} |", "",
+             "## Agent cards", "",
+             "Current agent state is explicit in `agent_states`; history below is evidence, not a status source.", "",
+             "| Agent | State | Work-ID | Waiting for | Updated at (UTC) |",
+             "|---|---|---|---|---|"]
+    for name in ("GPT", "CODEX", "CLAUDE"):
+        item = agent_status[name]
+        lines.append(f"| {name} | {cell(item['state'])} | {cell(item['work_id'])} | {cell(item['waiting_for'])} | {cell(item['updated_at'])} |")
+    lines += ["", pipeline, "", "## Evidence", "",
              f"- ACTIVE: `{refs['active_path']}` · source commit `{state['active_source_commit_sha']}` · blob `{refs['active_blob_sha']}`"]
     if state["last_review"]:
         review = state["last_review"]

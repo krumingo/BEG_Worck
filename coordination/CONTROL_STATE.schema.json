@@ -8,7 +8,7 @@
   "required": [
     "protocol_version", "control_state_status", "repository", "branch", "producer",
     "active_source_commit_sha", "control_state_commit_sha", "generated_from", "validated_at", "validation_mode",
-    "task_id", "cycle_id", "cycle_origin", "current_agent", "current_role",
+    "task_id", "cycle_id", "cycle_origin", "current_agent", "current_role", "agent_states",
     "current_work_id", "state", "pipeline_step", "next_agent", "waiting_for", "wave", "flow",
     "pr_number", "pr_head_sha", "pr_draft", "dispatch_state", "dispatch_run_url",
     "last_handoff", "last_review", "requires_krum", "requires_krum_reason",
@@ -34,6 +34,15 @@
     "cycle_origin": { "enum": ["NATIVE", "MIGRATED"] },
     "current_agent": { "enum": ["GPT", "CODEX", "CLAUDE"] },
     "current_role": { "enum": ["ARCHITECT", "TECH_LEAD_QA", "IMPLEMENTER"] },
+    "agent_states": {
+      "type": "object", "additionalProperties": false,
+      "required": ["GPT", "CODEX", "CLAUDE"],
+      "properties": {
+        "GPT": { "$ref": "#/$defs/agent_state" },
+        "CODEX": { "$ref": "#/$defs/agent_state" },
+        "CLAUDE": { "$ref": "#/$defs/agent_state" }
+      }
+    },
     "current_work_id": { "type": "string", "minLength": 1 },
     "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED"] },
     "pipeline_step": { "enum": ["ARCHITECT", "ASSIGNMENT", "IMPLEMENTATION", "REVIEW", "ARCHITECT_FEEDBACK"] },
@@ -57,6 +66,16 @@
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "agent_state": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "work_id", "waiting_for", "updated_at"],
+      "properties": {
+        "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED", "NOT_ACTIVE"] },
+        "work_id": { "type": ["string", "null"], "minLength": 1 },
+        "waiting_for": { "type": ["string", "null"] },
+        "updated_at": { "type": "string", "format": "date-time", "pattern": "Z$" }
+      }
+    },
     "handoff": {
       "type": "object", "additionalProperties": false,
       "required": ["url", "head_sha", "at"],
