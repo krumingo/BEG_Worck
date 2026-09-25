@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/CONTROL_STATE.schema.json",
+  "title": "BEG_WORK control state v1",
+  "$comment": "v1 represents active tasks only: IDLE/NONE and no-active-task are unsupported. VALID is an as-of validated_at snapshot, never live verification without source recheck.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version", "control_state_status", "repository", "branch", "producer",
+    "active_source_commit_sha", "control_state_commit_sha", "generated_from", "validated_at", "validation_mode",
+    "task_id", "cycle_id", "cycle_origin", "current_agent", "current_role", "agent_states",
+    "current_work_id", "state", "pipeline_step", "next_agent", "waiting_for", "wave", "flow",
+    "pr_number", "pr_head_sha", "pr_draft", "dispatch_state", "dispatch_run_url",
+    "last_handoff", "last_review", "requires_krum", "requires_krum_reason",
+    "progress", "source_refs", "updated_at", "history"
+  ],
+  "properties": {
+    "protocol_version": { "const": 1 },
+    "control_state_status": { "enum": ["VALID", "STALE", "CONFLICT", "INVALID"] },
+    "validated_at": { "type": "string", "format": "date-time" },
+    "validation_mode": { "enum": ["LIVE_GITHUB", "SYNTHETIC_TEST"] },
+    "repository": { "const": "krumingo/BEG_Worck" },
+    "branch": { "const": "codex/claude-queue" },
+    "producer": { "const": "CODEX" },
+    "active_source_commit_sha": { "$ref": "#/$defs/sha" },
+    "control_state_commit_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+    "generated_from": {
+      "type": "array", "uniqueItems": true,
+      "items": { "enum": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"] },
+      "minItems": 1, "maxItems": 4
+    },
+    "task_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "cycle_id": { "type": "string", "pattern": "^C[0-9]{2,}$" },
+    "cycle_origin": { "enum": ["NATIVE", "MIGRATED"] },
+    "current_agent": { "enum": ["GPT", "CODEX", "CLAUDE"] },
+    "current_role": { "enum": ["ARCHITECT", "TECH_LEAD_QA", "IMPLEMENTER"] },
+    "agent_states": {
+      "type": "object", "additionalProperties": false,
+      "required": ["GPT", "CODEX", "CLAUDE"],
+      "properties": {
+        "GPT": { "$ref": "#/$defs/agent_state" },
+        "CODEX": { "$ref": "#/$defs/agent_state" },
+        "CLAUDE": { "$ref": "#/$defs/agent_state" }
+      }
+    },
+    "current_work_id": { "type": "string", "minLength": 1 },
+    "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED"] },
+    "pipeline_step": { "enum": ["ARCHITECT", "ASSIGNMENT", "IMPLEMENTATION", "REVIEW", "ARCHITECT_FEEDBACK"] },
+    "next_agent": { "enum": ["GPT", "CODEX", "CLAUDE", "KRUM", "NONE"] },
+    "waiting_for": { "type": ["string", "null"] },
+    "wave": { "type": "string", "pattern": "^W[0-9]+$" },
+    "flow": { "type": "string", "pattern": "^FLOW-[0-9]{3}$" },
+    "pr_number": { "type": ["integer", "null"], "minimum": 1 },
+    "pr_head_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+    "pr_draft": { "type": ["boolean", "null"] },
+    "dispatch_state": { "enum": ["NONE", "PENDING", "RUNNING", "BLOCKED"] },
+    "dispatch_run_url": { "type": ["string", "null"], "format": "uri" },
+    "last_handoff": { "anyOf": [{ "$ref": "#/$defs/handoff" }, { "type": "null" }] },
+    "last_review": { "anyOf": [{ "$ref": "#/$defs/review" }, { "type": "null" }] },
+    "requires_krum": { "type": "boolean" },
+    "requires_krum_reason": { "type": ["string", "null"] },
+    "progress": { "$ref": "#/$defs/progress" },
+    "source_refs": { "$ref": "#/$defs/source_refs" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "history": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "agent_state": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "work_id", "waiting_for", "updated_at"],
+      "properties": {
+        "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED", "NOT_ACTIVE"] },
+        "work_id": { "type": ["string", "null"], "minLength": 1 },
+        "waiting_for": { "type": ["string", "null"] },
+        "updated_at": { "type": "string", "format": "date-time", "pattern": "Z$" }
+      }
+    },
+    "handoff": {
+      "type": "object", "additionalProperties": false,
+      "required": ["url", "head_sha", "at"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "head_sha": { "$ref": "#/$defs/sha" },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "review": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "blob_sha", "reviewed_head_sha", "verdict"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^coordination/REVIEWS/" },
+        "blob_sha": { "$ref": "#/$defs/sha" },
+        "reviewed_head_sha": { "$ref": "#/$defs/sha" },
+        "verdict": { "enum": ["PASS", "CHANGES_REQUESTED", "BLOCKED"] }
+      }
+    },
+    "progress": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "stage", "completed", "total", "percent"],
+      "properties": {
+        "mode": { "enum": ["STAGE_ONLY", "EVIDENCE_COUNT"] },
+        "stage": { "enum": ["SPEC", "ASSIGNMENT", "IMPLEMENTATION", "HANDOFF", "REVIEW", "CORRECTION", "PASS", "MERGED", "DEPLOYED", "GATE_PASS"] },
+        "completed": { "type": ["integer", "null"], "minimum": 0 },
+        "total": { "type": ["integer", "null"], "minimum": 1 },
+        "percent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 }
+      }
+    },
+    "source_refs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["active_path", "active_blob_sha"],
+      "properties": {
+        "active_path": { "const": "coordination/ACTIVE.md" },
+        "active_blob_sha": { "$ref": "#/$defs/sha" },
+        "review_path": { "type": "string", "pattern": "^coordination/REVIEWS/" },
+        "review_blob_sha": { "$ref": "#/$defs/sha" },
+        "handoff_comment_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "canonical_docs": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["path", "blob_sha"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "blob_sha": { "$ref": "#/$defs/sha" }
+            }
+          }
+        }
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event_id", "occurred_at", "task_id", "cycle_id", "mapped_cycle", "actor", "kind", "state_after", "head_sha", "source_url", "source_commit_sha", "summary"],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "task_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "cycle_id": { "type": ["string", "null"], "pattern": "^C[0-9]{2,}$" },
+        "mapped_cycle": { "type": ["string", "null"], "pattern": "^C[0-9]{2,}$" },
+        "actor": { "enum": ["GPT", "CODEX", "CLAUDE", "KRUM", "UNKNOWN"] },
+        "kind": { "enum": ["HANDOFF", "EVIDENCE", "REVIEW", "ASSIGNMENT", "DISPATCH", "CONTROL_UPDATE"] },
+        "state_after": { "type": ["string", "null"], "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED", null] },
+        "head_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+        "source_url": { "type": "string", "format": "uri" },
+        "source_commit_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,246 @@
+{
+  "protocol_version": 1,
+  "control_state_status": "VALID",
+  "validated_at": "2026-09-25T17:38:29Z",
+  "validation_mode": "LIVE_GITHUB",
+  "repository": "krumingo/BEG_Worck",
+  "branch": "codex/claude-queue",
+  "producer": "CODEX",
+  "active_source_commit_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
+  "control_state_commit_sha": "6dafcf0b5e525dbf2014b84684e8589a9ead3244",
+  "generated_from": [
+    "ACTIVE",
+    "REVIEW",
+    "PR/HANDOFF",
+    "CANONICAL_DOCS"
+  ],
+  "task_id": "W0-03C",
+  "cycle_id": "C02",
+  "cycle_origin": "MIGRATED",
+  "current_agent": "CODEX",
+  "current_role": "TECH_LEAD_QA",
+  "agent_states": {
+    "GPT": {
+      "state": "NOT_ACTIVE",
+      "work_id": null,
+      "waiting_for": null,
+      "updated_at": "2026-09-22T06:17:02Z"
+    },
+    "CODEX": {
+      "state": "BLOCKED",
+      "work_id": "W0-03C/C02/CX",
+      "waiting_for": "Explicit technical correction cycle or design decision from Krum",
+      "updated_at": "2026-09-22T06:17:02Z"
+    },
+    "CLAUDE": {
+      "state": "NOT_ACTIVE",
+      "work_id": null,
+      "waiting_for": null,
+      "updated_at": "2026-09-22T06:17:02Z"
+    }
+  },
+  "current_work_id": "W0-03C/C02/CX",
+  "state": "BLOCKED",
+  "pipeline_step": "REVIEW",
+  "next_agent": "KRUM",
+  "waiting_for": "Explicit technical correction cycle or design decision from Krum",
+  "wave": "W0",
+  "flow": "FLOW-032",
+  "pr_number": 20,
+  "pr_head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+  "pr_draft": true,
+  "dispatch_state": "BLOCKED",
+  "dispatch_run_url": "https://claude.ai/epitaxy/session_0121FURkAfgZYfT9dqwqsyvc",
+  "last_handoff": {
+    "url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130",
+    "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+    "at": "2026-09-22T06:03:35Z"
+  },
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-03C.md",
+    "blob_sha": "730736763991e2b1486c6ef0829d1d5f88017117",
+    "reviewed_head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+    "verdict": "BLOCKED"
+  },
+  "requires_krum": true,
+  "requires_krum_reason": "Correction cycle 1-of-1 is exhausted; authorize a new technical cycle or decide ambiguous create_index handling.",
+  "progress": {
+    "mode": "STAGE_ONLY",
+    "stage": "REVIEW",
+    "completed": null,
+    "total": null,
+    "percent": null
+  },
+  "source_refs": {
+    "active_path": "coordination/ACTIVE.md",
+    "active_blob_sha": "4bd7800657b9c7d60eab5b5b7560ecbfe46540da",
+    "review_path": "coordination/REVIEWS/W0-03C.md",
+    "review_blob_sha": "730736763991e2b1486c6ef0829d1d5f88017117",
+    "handoff_comment_sha256": "63e68cf85a3ddb5f986b958c6ac585f10362e3d97e88ce93f08ad2acf55c6a79",
+    "canonical_docs": [
+      {
+        "path": "CLAUDE.md",
+        "blob_sha": "e91d3230b74be5807ecf1c86a4219a6a71ef7a92"
+      },
+      {
+        "path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md",
+        "blob_sha": "3ad2670d66fa2a528a1c44984c13edd5f2d74bb1"
+      },
+      {
+        "path": "docs/architecture/IMPLEMENTATION_WAVES.md",
+        "blob_sha": "3e43105bf5c338ca54ad0cf3960f64e5a46b3bca"
+      },
+      {
+        "path": "docs/architecture/W0-03C_UNIQUENESS_READINESS.md",
+        "blob_sha": "238049e5610b41d78f959dbbbbbee5d94a6713a6"
+      },
+      {
+        "path": "docs/flows/FLOW-032.md",
+        "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"
+      }
+    ]
+  },
+  "updated_at": "2026-09-22T06:17:02Z",
+  "history": [
+    {
+      "event_id": "pr20-comment-5764513929",
+      "occurred_at": "2026-09-21T17:13:38Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C01",
+      "actor": "UNKNOWN",
+      "kind": "HANDOFF",
+      "state_after": "HANDOFF",
+      "head_sha": "25394418b118449db389066ec1c4ef0ae663ab20",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5764513929",
+      "source_commit_sha": null,
+      "summary": "Initial Draft PR implementation HANDOFF; not an independent PASS."
+    },
+    {
+      "event_id": "pr20-comment-5765042461",
+      "occurred_at": "2026-09-21T17:54:07Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C01",
+      "actor": "UNKNOWN",
+      "kind": "HANDOFF",
+      "state_after": "HANDOFF",
+      "head_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5765042461",
+      "source_commit_sha": null,
+      "summary": "Pre-protocol repair HANDOFF after an earlier blocked review claim."
+    },
+    {
+      "event_id": "pr20-comment-5765269841",
+      "occurred_at": "2026-09-21T18:11:51Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C01",
+      "actor": "UNKNOWN",
+      "kind": "EVIDENCE",
+      "state_after": null,
+      "head_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5765269841",
+      "source_commit_sha": null,
+      "summary": "Real-Mongo test evidence for the earlier exact head; not proof for a later head."
+    },
+    {
+      "event_id": "pr20-comment-5771473368",
+      "occurred_at": "2026-09-22T05:04:44Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C01",
+      "actor": "UNKNOWN",
+      "kind": "EVIDENCE",
+      "state_after": null,
+      "head_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771473368",
+      "source_commit_sha": null,
+      "summary": "NAS restore-copy report evidence for the earlier exact head/data snapshot."
+    },
+    {
+      "event_id": "review-ef006594",
+      "occurred_at": "2026-09-22T05:46:10Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C01",
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/ef00659423e899265a0c39657ebd0c97c1011e73",
+      "source_commit_sha": "ef00659423e899265a0c39657ebd0c97c1011e73",
+      "summary": "Independent review requested three bounded corrections."
+    },
+    {
+      "event_id": "queue-2a86eefb",
+      "occurred_at": "2026-09-22T05:46:36Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C02",
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/2a86eefb1a38b200e0842d9b6b18f36e22f5905c",
+      "source_commit_sha": "2a86eefb1a38b200e0842d9b6b18f36e22f5905c",
+      "summary": "One-of-one correction assignment on the existing PR branch."
+    },
+    {
+      "event_id": "queue-554109c4",
+      "occurred_at": "2026-09-22T05:50:41Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C02",
+      "actor": "CODEX",
+      "kind": "DISPATCH",
+      "state_after": null,
+      "head_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/554109c4332b13a5da90310d9674419f9a5eb1eb",
+      "source_commit_sha": "554109c4332b13a5da90310d9674419f9a5eb1eb",
+      "summary": "Claude correction session recorded as RUNNING; not completion."
+    },
+    {
+      "event_id": "pr20-comment-5771922130",
+      "occurred_at": "2026-09-22T06:03:35Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C02",
+      "actor": "CLAUDE",
+      "kind": "HANDOFF",
+      "state_after": "HANDOFF",
+      "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130",
+      "source_commit_sha": null,
+      "summary": "Correction HANDOFF for exact Draft PR head; awaiting independent review."
+    },
+    {
+      "event_id": "review-3b991fae",
+      "occurred_at": "2026-09-22T06:16:16Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C02",
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "BLOCKED",
+      "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/3b991fae892f7a22fdeb3e9d0f0920aa71841f19",
+      "source_commit_sha": "3b991fae892f7a22fdeb3e9d0f0920aa71841f19",
+      "summary": "Independent re-review found an untracked-index ambiguous-result defect; correction exhausted."
+    },
+    {
+      "event_id": "queue-4ddea223",
+      "occurred_at": "2026-09-22T06:17:02Z",
+      "task_id": "W0-03C",
+      "cycle_id": null,
+      "mapped_cycle": "C02",
+      "actor": "CODEX",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "BLOCKED",
+      "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
+      "source_commit_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
+      "summary": "ACTIVE and Dispatch-State blocked; no next task or C03 authorized."
+    }
+  ]
+}
