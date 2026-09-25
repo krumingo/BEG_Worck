@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>BegWork.Dashboard.Preview</AssemblyName>
+    <RootNamespace>BegWork.Dashboard.Preview</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BegWork.Dashboard.Core/BegWork.Dashboard.Core.csproj" />
+  </ItemGroup>
+
+</Project>
