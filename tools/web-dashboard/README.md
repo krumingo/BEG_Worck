@@ -207,7 +207,7 @@ Every setting is an environment variable; see `.env.example` for the annotated l
 | `BEGWORK_REFRESH_SECONDS` | `15` | Clamped to 10–30. |
 | `BEGWORK_STALE_AFTER_SECONDS` | `120` | Age of the last successful read at which it is shown as AGED. |
 | `BEGWORK_BACKOFF_INITIAL_SECONDS` | `10` | Backoff runs 10 → 20 → 40 → 80 → 120 s. |
-| `BEGWORK_BACKOFF_MAX_SECONDS` | `120` | `Retry-After` is honoured but still capped here. |
+| `BEGWORK_BACKOFF_MAX_SECONDS` | `120` | A server `Retry-After` is honoured — it may extend the wait, never shorten it — and is still capped here. |
 | `BEGWORK_VERIFY_PULL_REQUEST` | `true` | Switching it off reports the PR head as unverified rather than hiding it. |
 | `BEGWORK_PORT` / `BEGWORK_HOST` | `8080` / `0.0.0.0` | Inside the container. |
 
@@ -228,7 +228,7 @@ No virtualenv and no dependencies are needed to run it: Python 3.11+ is enough.
 ```bash
 cd tools/web-dashboard
 python3 -m pip install pytest playwright      # test-only dependencies
-python3 -m pytest tests/ -q
+python3 -m pytest tests/ -q      # 229 tests
 ```
 
 The browser tests skip themselves if no Chromium is available; set `BEGWORK_CHROME` to

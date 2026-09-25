@@ -187,9 +187,12 @@ def test_a_deterministic_evidence_count_progress_is_passed_through(
     assert payload["header"]["progress"] == {
         "mode": "EVIDENCE_COUNT",
         "stage": "REVIEW",
+        "stage_verified": True,
         "completed": 3,
         "total": 8,
         "percent": 37,
+        "numbers_withheld": False,
+        "withheld_reason": None,
     }
 
 

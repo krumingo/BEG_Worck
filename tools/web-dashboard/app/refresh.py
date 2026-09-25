@@ -126,6 +126,10 @@ class Refresher:
         self._last_success_at: dt.datetime | None = None
         self._last_attempt_at: dt.datetime | None = None
         self._last_error: str | None = None
+        # The server's own Retry-After hint from the most recent failed round, if it gave
+        # one. Kept so the backoff can honour it: parsing the header and then ignoring it
+        # means a 429 is retried on the local schedule and the rate limit is hit again.
+        self._last_retry_after: float | None = None
         self._failures = 0
         self._rounds = 0
 
@@ -152,7 +156,13 @@ class Refresher:
                 # and an upstream 401 body can quote the Authorization header back at us.
                 self._last_error = redact(str(error), self._settings.token)
                 self._last_attempt_at = attempted_at
-            LOGGER.warning("refresh failed (%s consecutive): %s", self._failures, error)
+                self._last_retry_after = error.retry_after
+            LOGGER.warning(
+                "refresh failed (%s consecutive, retry_after=%s): %s",
+                self._failures,
+                error.retry_after,
+                error,
+            )
             return self.current()
         except Exception as error:  # noqa: BLE001 - one bad round must not kill the loop
             with self._lock:
@@ -161,6 +171,8 @@ class Refresher:
                 self._link = Link.OFFLINE
                 self._last_error = redact(f"{error.__class__.__name__}: {error}", self._settings.token)
                 self._last_attempt_at = attempted_at
+                # An unexpected failure carries no server hint; fall back to plain backoff.
+                self._last_retry_after = None
             LOGGER.exception("refresh raised unexpectedly")
             return self.current()
 
@@ -174,6 +186,7 @@ class Refresher:
             self._last_attempt_at = attempted_at
             self._last_error = None
             self._failures = 0
+            self._last_retry_after = None
             self._rounds += 1
         LOGGER.info(
             "refresh ok: status=%s findings=%s requests=%s",
@@ -201,8 +214,14 @@ class Refresher:
     def _delay_locked(self) -> float:
         if self._failures == 0:
             return float(self._settings.refresh_seconds)
-        retry_after = None
-        return self._backoff.next(self._failures, retry_after)
+        # Honoured when the server asked for longer than the current step, and still
+        # capped by the policy's maximum so an hour-long hint cannot park the dashboard.
+        return self._backoff.next(self._failures, self._last_retry_after)
+
+    @property
+    def last_retry_after(self) -> float | None:
+        with self._lock:
+            return self._last_retry_after
 
     @property
     def delay_seconds(self) -> float:

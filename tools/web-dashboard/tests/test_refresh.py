@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
+import time
 
 import pytest
 from app.github import TransportError
@@ -238,3 +239,150 @@ def test_the_refresh_loop_thread_starts_and_stops_cleanly(client, settings):
         loop.stop(timeout=2)
     assert loop._thread is None  # noqa: SLF001
     assert refresher.current().rounds >= 1
+
+
+# ------------------------------------------- Retry-After, at the loop level
+
+"""Regression suite for the C02 review finding.
+
+``TransportError`` carried ``retry_after`` and ``BackoffPolicy.next()`` accepted it, but
+``Refresher._delay_locked`` passed ``retry_after=None``, so the hint was parsed and then
+discarded: a 429 asking for 45 s was retried after 10 s. A unit test of the policy could
+not catch that, because the policy was never the broken part. These tests drive whole
+rounds through the Refresher.
+"""
+
+
+def _rate_limited(fake_github, status, retry_after):
+    fake_github.fail_everything = TransportError(
+        f"HTTP {status} rate limited", status=status, retry_after=retry_after
+    )
+
+
+def test_a_429_retry_after_is_honoured_by_the_refresh_loop(client, settings, fake_github):
+    """The exact reported case: a 429 asking for 45 s must not be retried after 10 s."""
+    refresher = Refresher(client, settings)
+    refresher.tick()
+    assert refresher.delay_seconds == settings.refresh_seconds
+
+    _rate_limited(fake_github, 429, 45.0)
+    state = refresher.tick()
+
+    assert state.link is Link.OFFLINE
+    assert refresher.last_retry_after == 45.0
+    assert refresher.delay_seconds == 45.0, "the server's Retry-After was discarded"
+    # And it is visible to the browser, so the countdown on screen is truthful.
+    assert project(state)["next_attempt_in"] == pytest.approx(45.0)
+
+
+def test_a_secondary_rate_limit_403_retry_after_is_honoured(client, settings, fake_github):
+    """GitHub signals secondary limits with 403 plus Retry-After, not only 429."""
+    refresher = Refresher(client, settings)
+    _rate_limited(fake_github, 403, 75.0)
+    refresher.tick()
+    assert refresher.delay_seconds == 75.0
+
+
+def test_an_absurd_retry_after_is_still_capped_by_the_policy(client, settings, fake_github):
+    """Honouring the hint must not let a server park the dashboard for an hour."""
+    refresher = Refresher(client, settings)
+    _rate_limited(fake_github, 429, 3600.0)
+    refresher.tick()
+    assert refresher.delay_seconds == settings.backoff_maximum_seconds == 120
+
+
+def test_a_retry_after_shorter_than_the_current_step_does_not_shorten_the_backoff(
+    client, settings, fake_github
+):
+    """Bounded backoff is retained: the hint may extend the wait, never shrink it."""
+    refresher = Refresher(client, settings)
+    _rate_limited(fake_github, 429, 1.0)
+    for expected in (10, 20, 40):
+        refresher.tick()
+        assert refresher.delay_seconds == expected
+
+
+def test_a_failure_without_a_hint_falls_back_to_plain_backoff(client, settings, fake_github):
+    refresher = Refresher(client, settings)
+    fake_github.fail_everything = TransportError("network down")
+    refresher.tick()
+    assert refresher.last_retry_after is None
+    assert refresher.delay_seconds == 10
+
+
+def test_a_stale_hint_does_not_outlive_the_failure_that_carried_it(client, settings, fake_github):
+    """A later failure with no hint must not keep honouring the previous one."""
+    refresher = Refresher(client, settings)
+    _rate_limited(fake_github, 429, 90.0)
+    refresher.tick()
+    assert refresher.delay_seconds == 90.0
+
+    fake_github.fail_everything = TransportError("network down")
+    refresher.tick()
+    assert refresher.last_retry_after is None
+    assert refresher.delay_seconds == 20  # second consecutive failure, plain backoff
+
+
+def test_recovery_clears_the_hint_as_well_as_the_failure_count(client, settings, fake_github):
+    refresher = Refresher(client, settings)
+    _rate_limited(fake_github, 429, 60.0)
+    refresher.tick()
+    assert refresher.delay_seconds == 60.0
+
+    fake_github.fail_everything = None
+    refresher.tick()
+    assert refresher.last_retry_after is None
+    assert refresher.delay_seconds == settings.refresh_seconds
+
+
+def test_an_unexpected_exception_carries_no_hint(client, settings, fake_github):
+    def explode(method, url, headers, timeout):
+        raise RuntimeError("not a transport error")
+
+    fake_github.request = explode
+    refresher = Refresher(client, settings)
+    refresher.tick()
+    assert refresher.last_retry_after is None
+    assert refresher.delay_seconds == 10
+
+
+def test_an_x_ratelimit_reset_header_becomes_a_retry_after_hint():
+    """GitHub's primary limit uses an absolute reset rather than a delay."""
+    import time
+
+    from app.github import _retry_after
+
+    assert _retry_after({"Retry-After": "30"}) == 30.0
+    computed = _retry_after({"X-RateLimit-Reset": str(int(time.time()) + 50)})
+    assert computed is not None
+    assert 45 <= computed <= 55
+    assert _retry_after({"Retry-After": "not-a-number"}) is None
+    assert _retry_after({}) is None
+
+
+def test_the_refresh_loop_waits_the_hinted_delay(client, settings, fake_github, monkeypatch):
+    """The loop thread must ask the refresher for the delay, not use a fixed cadence."""
+    from app.refresh import RefreshLoop
+
+    _rate_limited(fake_github, 429, 45.0)
+    refresher = Refresher(client, settings)
+    waits = []
+
+    loop = RefreshLoop(refresher)
+    real_wait = loop._stop.wait  # noqa: SLF001
+
+    def record(timeout=None):
+        waits.append(timeout)
+        return real_wait(0.01)
+
+    monkeypatch.setattr(loop._stop, "wait", record)  # noqa: SLF001
+    loop.start()
+    try:
+        deadline = time.monotonic() + 5
+        while not waits and time.monotonic() < deadline:
+            time.sleep(0.01)
+    finally:
+        loop.stop(timeout=2)
+
+    assert waits, "the loop never waited"
+    assert waits[0] == 45.0

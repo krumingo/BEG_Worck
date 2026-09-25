@@ -10,8 +10,15 @@ where the safety rules are enforced rather than hoped for:
   round's verdict is VALID. The UI renders an unverified state with an explicit
   UNVERIFIED qualifier, so a stored ``PASS`` that failed verification reads as
   "PASS (UNVERIFIED)" and never as a pass.
-* **No percentage is invented.** ``progress.percent`` is copied only from a validated
-  ``progress`` object. Under ``STAGE_ONLY`` it stays null and the UI draws no bar.
+* **No percentage is invented, and none survives an unverified round.**
+  ``progress.percent`` is emitted only when this round verified *and* the mode is
+  ``EVIDENCE_COUNT``. Under ``STAGE_ONLY`` it stays null. On any INVALID, STALE, CONFLICT
+  or otherwise unverified round the counts and the percentage are withheld even when the
+  file carries them, because an unverified number is not evidence of anything -- a state
+  claiming ``3 of 8, 90%`` fails ``PROGRESS_NOT_DETERMINISTIC``, and forwarding 90 would
+  put an arithmetically impossible figure and a 90%-full bar on the wall. The stage is
+  kept, labelled unverified, and ``withheld_reason`` says in words why no number is
+  shown.
 * **Agent cards come from ``agent_states``, never from history.** History is evidence
   about what happened; it is not a status source. Deriving a card from the newest event
   would show CLAUDE as HANDOFF when its card says NOT_ACTIVE.
@@ -118,7 +125,16 @@ def _unavailable_header(state: DashboardState) -> dict:
         "state": None,
         "state_verified": False,
         "state_display": "CONTROL STATE NOT AVAILABLE",
-        "progress": {"mode": None, "stage": None, "completed": None, "total": None, "percent": None},
+        "progress": {
+            "mode": None,
+            "stage": None,
+            "stage_verified": False,
+            "completed": None,
+            "total": None,
+            "percent": None,
+            "numbers_withheld": True,
+            "withheld_reason": "No snapshot has been read, so there is no progress to report.",
+        },
         "krum_action": {"required": False, "reason": None},
         "repository": state.settings.repository,
         "branch": state.settings.branch,
@@ -153,6 +169,24 @@ def _header(control: dict, state: DashboardState, is_verified: bool) -> dict:
     stage_only = mode == "STAGE_ONLY"
     requires_krum = control.get("requires_krum") is True
 
+    # Numbers are shown only when this round verified AND the protocol proves a
+    # proportion. Either condition failing withholds them; the stage still shows.
+    show_numbers = is_verified and mode == "EVIDENCE_COUNT"
+    if stage_only:
+        withheld_reason = (
+            "STAGE_ONLY: the protocol proves a stage, not a proportion. "
+            "No percentage is shown because none is proven."
+        )
+    elif not is_verified:
+        withheld_reason = (
+            "This round did not verify, so any count in the file is unconfirmed. "
+            "No numbers or bar are shown; the stage below is UNVERIFIED."
+        )
+    elif mode != "EVIDENCE_COUNT":
+        withheld_reason = f"Unknown progress mode {mode!r}: no number is shown."
+    else:
+        withheld_reason = None
+
     return {
         "product": "BEG_WORK",
         "task_id": control.get("task_id"),
@@ -167,9 +201,12 @@ def _header(control: dict, state: DashboardState, is_verified: bool) -> dict:
         "progress": {
             "mode": mode,
             "stage": progress.get("stage"),
-            "completed": None if stage_only else progress.get("completed"),
-            "total": None if stage_only else progress.get("total"),
-            "percent": None if stage_only else progress.get("percent"),
+            "stage_verified": is_verified,
+            "completed": progress.get("completed") if show_numbers else None,
+            "total": progress.get("total") if show_numbers else None,
+            "percent": progress.get("percent") if show_numbers else None,
+            "numbers_withheld": not show_numbers,
+            "withheld_reason": withheld_reason,
         },
         "krum_action": {
             "required": requires_krum,

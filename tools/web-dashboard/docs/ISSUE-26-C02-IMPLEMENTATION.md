@@ -58,7 +58,7 @@ this host. The claim is structural rather than a convention to be maintained.
 dependency tree to track for advisories. Measured at 26.3 MiB peak RSS (§5).
 
 The cost of this decision is that PR #28's 100 C# tests are not carried forward as code.
-They were re-expressed as 189 Python tests covering the same properties plus the ones its
+They were re-expressed as 229 Python tests covering the same properties plus the ones its
 review raised.
 
 ---
@@ -78,7 +78,7 @@ all under `tools/dashboard/`), together with the Codex `CHANGES_REQUESTED` revie
 | `Validation/VerificationModel.cs` | `app/status.py` | The `INVALID > CONFLICT > STALE > VALID` lattice and the merge-of-findings model |
 | `Sources/GitObjectId.cs` | `app/gitblob.py` | Re-hashing fetched bytes as a Git blob instead of trusting the API's reported SHA |
 | `Sources/ReadOnlyGuardHandler.cs` | `app/github.py` | Putting the write prohibition in the transport so no call site can bypass it |
-| `Refresh/BackoffPolicy.cs` | `app/refresh.py` | Bounded 10 → 20 → 40 → 80 → 120 s, `Retry-After` honoured but capped |
+| `Refresh/BackoffPolicy.cs` | `app/refresh.py` | Bounded 10 → 20 → 40 → 80 → 120 s, `Retry-After` honoured but capped (wired through the Refresher in the C02 correction — see §4a) |
 | `Logging/RedactingLog.cs` | `app/redact.py` | Redacting the configured value *and* known credential shapes |
 | `Rendering/DashboardHtmlRenderer.cs` | `static/app.css`, `static/app.js` | Status colour families, agent-card composition, evidence and history layout, the "snapshot only" caveat |
 | Staleness semantics | `app/refresh.py` | Measuring age from the last successful read, not from `validated_at` |
@@ -159,6 +159,90 @@ Each was found by a test that was written to assert a requirement, not by inspec
 
 ---
 
+## 4a. C02 correction cycle — the three findings from the independent review
+
+Codex reviewed head `5770ab8c88452bd5793dc0f79dbb595ce872f1ce` and returned
+CHANGES_REQUESTED with three findings. All three were reproduced here before being
+fixed, and each now has a regression suite. No fail-closed verification was relaxed.
+
+### 1. A traceback could carry the configured token into the process log
+
+`app/refresh.py` logs an unexpected round failure with `LOGGER.exception(...)`, which
+attaches the live exception as `exc_info`. The *formatter* renders that traceback long
+after every filter has run, so `RedactingFilter` — which sanitised only `msg` and `args`
+— never saw it. Reproduced: an injected `ValueError("unexpected failure carrying
+<token>")` gave `token_in_log = True` while `token_in_last_error = False`, exactly as
+reported. The browser was protected; the log was not.
+
+**Fix** (`app/redact.py`), in three layers:
+
+* `RedactingFilter` now *flattens* the record: it renders the message (applying `args`),
+  formats the traceback and any `stack_info`, redacts the three together into `msg`, and
+  clears `exc_info` / `exc_text` / `stack_info` so no later formatter can re-render the
+  originals. It is idempotent, which matters because it is installed on both the logger
+  and its handlers.
+* `RedactingFormatter` redacts its own complete output, covering a handler attached by
+  embedding code or a future change that drops the filter.
+* `install_excepthooks()` sets `sys.excepthook` and `threading.excepthook`, because an
+  exception that escapes a thread bypasses `logging` entirely and is written straight to
+  stderr by the interpreter — which in a container is a process log like any other.
+
+The diagnostic is not lost: the traceback still appears, with the credential replaced by
+`***REDACTED***`. Verified after the fix: `token_in_log = False`, `Traceback` present,
+`***REDACTED***` present.
+
+### 2. Unverified numeric progress reached the browser
+
+The verifier correctly marked `EVIDENCE_COUNT {completed: 3, total: 8, percent: 90}`
+INVALID with `PROGRESS_NOT_DETERMINISTIC` — `100*3//8` is 37, not 90 — but
+`app/projection.py` forwarded `percent: 90` whenever the mode was not `STAGE_ONLY`, and
+`static/app.js` drew "3 of 8 verified milestones · 90%" with a 90%-full bar. A number the
+verifier has just rejected is not evidence of anything, and putting it on a wall display
+is the invented progress Issue #26 forbids.
+
+**Fix**, enforced in both places so neither alone is load-bearing:
+
+* `app/projection.py` emits counts and a percentage only when `is_verified` **and** the
+  mode is `EVIDENCE_COUNT`. Otherwise they are `None`, `numbers_withheld` is `true`, and
+  `withheld_reason` states in words why. The stage is kept and `stage_verified` marks it.
+* `static/app.js` draws a number or a bar only when the server permits it, never
+  recomputing or inferring one, and labels the stage chip `UNVERIFIED` with a dashed
+  amber border — a cue that does not depend on colour alone.
+
+An arithmetically *correct* count is withheld too when the round did not verify: correct
+arithmetic over unverified bytes still proves nothing. A verified `EVIDENCE_COUNT` is
+unaffected and shows its justified figure; `STAGE_ONLY` remains stage-only. A cached
+snapshot that verified when it was read keeps its numbers while `OFFLINE`, with its age
+on screen — withholding there would destroy information rather than protect anyone.
+
+### 3. `Retry-After` was parsed and then discarded
+
+`app/github.py` populated `TransportError.retry_after`, `BackoffPolicy.next()` accepted
+it and `README.md` promised it was honoured — but `Refresher._delay_locked` passed
+`retry_after=None`. Reproduced: a 429 with `retry_after=45` scheduled the next attempt
+after **10.0 s**. A unit test of the policy could not catch this, because the policy was
+never the broken part.
+
+**Fix** (`app/refresh.py`): the `Refresher` stores the hint from the failing round
+(`_last_retry_after`), clears it on success and on an unexpected non-transport
+exception, exposes it as `last_retry_after`, and passes it to the policy. Bounded backoff
+is retained — the hint may extend the wait, never shorten it, and is still capped at
+`backoff_maximum_seconds`. Measured after the fix: 45 → 45.0 s; 3600 → 120.0 s (capped);
+5 → 10.0 s (below the step, ignored); no hint → 10.0 s.
+
+### Not changed
+
+Codex also observed that `test_sigterm_shuts_the_process_down_promptly` fails on Windows,
+because `subprocess.send_signal(SIGTERM)` there maps to `TerminateProcess` and the handler
+never runs (exit code 1, not 0). Codex classified this as a test-portability issue and did
+not list it among the required corrections, and this correction cycle was authorised for
+those three only, so it is left alone. The one-line change, if a future cycle authorises
+it, is a `@pytest.mark.skipif(os.name != "posix", ...)` guard on that single test; the
+property it asserts holds on the Linux container the image actually runs on, where the
+measured result is rc=0 in 1.52 s.
+
+---
+
 ## 5. Evidence
 
 Environment: Linux 6.18, Python 3.11.15, pytest 9.1.1, Playwright 1.63.0 driving
@@ -171,18 +255,20 @@ cd tools/web-dashboard
 python3 -m pytest tests/ -q
 ```
 
-**189 passed in 21.68s.** Coverage by file:
+**229 passed in 25.71s.** Coverage by file:
 
 | File | Tests | Covers |
 |---|---|---|
+| `test_log_redaction.py` | 13 | Traceback, chained-exception and `stack_info` redaction; the filter clearing `exc_info`; idempotence; formatter-only defence; uncaught main-thread and worker-thread hooks; end-to-end round |
+| `test_unverified_progress.py` | 13 | Numeric progress withheld on INVALID/STALE/CONFLICT/aged and on an impossible percentage; kept for a verified EVIDENCE_COUNT and for a cached verified snapshot while OFFLINE |
 | `test_canonical_engine.py` | 41 | Drift against `tools/control_engine.py`: soundness, completeness, severity agreement on 16 single-defect mutations, board byte-identity, the deliberate SYNTHETIC_TEST divergence |
 | `test_blob_and_pr.py` | 17 | Cited blob match and mismatch, CRLF rejection, unreadable and mis-pathed sources, transport integrity, oversized blob, moved PR head, draft and merged mismatch, repo/branch mismatch, unparsable state |
-| `test_status_matrix.py` | 19 | VALID/STALE/CONFLICT/INVALID end to end, worst-of precedence, forged PASS never promoted, producer `VALID` claim insufficient, STAGE_ONLY, deterministic and non-deterministic percentages, aged snapshot |
+| `test_status_matrix.py` | 17 | VALID/STALE/CONFLICT/INVALID end to end, worst-of precedence, forged PASS never promoted, producer `VALID` claim insufficient, STAGE_ONLY, deterministic and non-deterministic percentages, aged snapshot |
 | `test_readonly.py` | 26 | Every non-read method refused, GET-with-body refused, guard wraps the production transport, a full round is six GETs to six expected URLs, token reaches GitHub but not the projection, redaction cases |
-| `test_refresh.py` | 22 | Cadence clamping, `If-None-Match` and 304 byte reuse, ETag invalidation, backoff escalation and cap, `Retry-After`, recovery, offline cache retention, OFFLINE vs STALE separation, loop thread lifecycle |
+| `test_refresh.py` | 33 | Cadence clamping, `If-None-Match` and 304 byte reuse, ETag invalidation, backoff escalation and cap, **loop-level `Retry-After` on 429 and secondary-limit 403**, recovery, offline cache retention, OFFLINE vs STALE separation, loop thread lifecycle |
 | `test_projection.py` | 22 | Header fields, migrated cycle label, KRUM action, three agent cards from `agent_states` not history, five-step pipeline, task area, evidence links with cited *and* observed identity, history ordering |
-| `test_server.py` | 23 | `/api/state`, `/healthz` liveness under outage, every declared static asset served, allowlist routing and 404s, no source reachable, security headers, no token in any response, HEAD, SIGTERM |
-| `test_ui.py` | 19 | Real Chromium: rendering, agent cards, pipeline, STAGE_ONLY drawing no bar, evidence links, each status on screen, OFFLINE, forged PASS, unavailable state, three form factors with no horizontal overflow, both themes, PWA manifest and icons |
+| `test_server.py` | 24 | `/api/state`, `/healthz` liveness under outage, every declared static asset served, allowlist routing and 404s, no source reachable, security headers, no token in any response, HEAD, SIGTERM |
+| `test_ui.py` | 23 | Real Chromium: rendering, agent cards, pipeline, STAGE_ONLY drawing no bar, evidence links, each status on screen, OFFLINE, forged PASS, unavailable state, three form factors with no horizontal overflow, both themes, PWA manifest and icons, **withheld progress on unverified rounds** |
 
 ### A live read against real GitHub
 

@@ -407,3 +407,97 @@ def test_the_manifest_and_icons_make_the_page_installable(browser, served):
     )
     assert set(statuses) == {200}
     page.close()
+
+
+# ------------------------------- unverified progress must not reach the screen
+
+
+def test_an_impossible_percentage_draws_no_number_and_no_bar(browser, served, published_state, mutate):
+    """The C02 review finding, asserted where it was visible: in the browser.
+
+    A state claiming ``3 of 8 · 90%`` is INVALID (100*3//8 is 37). Before the fix the page
+    rendered "3 of 8 verified milestones · 90%" with a 90%-full bar.
+    """
+    served.github.set_state(
+        mutate(
+            published_state,
+            lambda s: s.__setitem__(
+                "progress",
+                {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 90},
+            ),
+        )
+    )
+    served.refresher.tick()
+
+    page, errors = open_page(browser, served)
+    page.wait_for_function(
+        "document.getElementById('f-status-value').textContent === 'INVALID'", timeout=10_000
+    )
+
+    progress_text = page.inner_text("#f-progress")
+    assert page.locator(".progress__bar").count() == 0, "a progress bar was drawn for an unverified round"
+    assert "%" not in progress_text
+    assert "90" not in progress_text
+    assert "verified milestones" not in progress_text
+    # The stage survives, explicitly labelled.
+    assert "REVIEW" in progress_text
+    assert "UNVERIFIED" in progress_text
+    assert "did not verify" in progress_text
+
+    shoot(page, "progress-unverified-withheld")
+    assert errors == []
+    page.close()
+
+
+@pytest.mark.parametrize("status", ["STALE", "CONFLICT"])
+def test_no_bar_is_drawn_on_any_unverified_status(status, browser, served, published_state, mutate):
+    """Even an arithmetically correct count is withheld when the round did not verify."""
+    deterministic = {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 37}
+    served.github.set_state(mutate(published_state, lambda s: s.__setitem__("progress", dict(deterministic))))
+    if status == "STALE":
+        served.github.set_file("coordination/ACTIVE.md", b"moved on\n")
+    else:
+        board = served.github.files["coordination/CONTROL_BOARD.md"].decode("utf-8")
+        served.github.set_file(
+            "coordination/CONTROL_BOARD.md", board.replace("## Evidence", "## Evidence altered").encode("utf-8")
+        )
+    served.refresher.tick()
+
+    page, errors = open_page(browser, served)
+    page.wait_for_function(
+        f"document.getElementById('f-status-value').textContent === '{status}'", timeout=10_000
+    )
+    assert page.locator(".progress__bar").count() == 0
+    text = page.inner_text("#f-progress")
+    assert "37%" not in text
+    assert "UNVERIFIED" in text
+    assert errors == []
+    page.close()
+
+
+def test_a_verified_evidence_count_does_draw_its_justified_bar(browser, served, published_state, mutate):
+    """The suppression must not swallow a proven figure."""
+    served.github.set_state(
+        mutate(
+            published_state,
+            lambda s: s.__setitem__(
+                "progress",
+                {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 37},
+            ),
+        )
+    )
+    served.refresher.tick()
+
+    page, errors = open_page(browser, served)
+    page.wait_for_function(
+        "document.getElementById('f-status-value').textContent === 'VALID'", timeout=10_000
+    )
+    assert page.locator(".progress__bar").count() == 1
+    text = page.inner_text("#f-progress")
+    assert "3 of 8 verified milestones · 37%" in text
+    assert "UNVERIFIED" not in text
+    width = page.evaluate("() => document.querySelector('.progress__fill').style.width")
+    assert width == "37%"
+    shoot(page, "progress-verified-evidence-count")
+    assert errors == []
+    page.close()

@@ -235,20 +235,25 @@ function renderProgress(data) {
   const progress = (data.header || {}).progress || {};
   if (!progress.mode) return;
 
-  host.appendChild(make('span', 'progress__stage', `${progress.stage || DASH} · ${progress.mode}`));
+  /*
+   * The stage is always safe to show, but it must carry its own verification status:
+   * a stage read from a round that did not verify is a claim, not a fact.
+   */
+  const verified = progress.stage_verified === true;
+  const stageLabel = `${progress.stage || DASH} · ${progress.mode}${verified ? '' : ' · UNVERIFIED'}`;
+  const stage = make('span', 'progress__stage', stageLabel);
+  if (!verified) stage.classList.add('progress__stage--unverified');
+  host.appendChild(stage);
 
-  if (progress.mode === 'STAGE_ONLY') {
-    /*
-     * STAGE_ONLY means the protocol has not proven a countable denominator. No bar and
-     * no number is drawn — inventing one is exactly what the protocol forbids.
-     */
+  /*
+   * Numbers and the bar are drawn only when the server says they may be. The server
+   * withholds them on STAGE_ONLY and on any unverified round, so a state claiming an
+   * arithmetically impossible "3 of 8 · 90%" cannot put a 90%-full bar on the wall.
+   * The browser never recomputes or infers a figure of its own.
+   */
+  if (progress.numbers_withheld || progress.percent === null || progress.percent === undefined) {
     host.appendChild(make('p', 'progress__note',
-      'STAGE_ONLY: the protocol proves a stage, not a proportion. No percentage is shown because none is proven.'));
-    return;
-  }
-
-  if (progress.percent === null || progress.percent === undefined) {
-    host.appendChild(make('p', 'progress__note', 'No proven percentage is published for this task.'));
+      progress.withheld_reason || 'No proven percentage is published for this task.'));
     return;
   }
 

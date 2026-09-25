@@ -413,6 +413,13 @@ body {
   background: var(--bg-sunken);
 }
 
+/* Dashed, like the OFFLINE chip: an unverified reading is marked by more than colour. */
+.progress__stage--unverified {
+  border-style: dashed;
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
 .progress__note { margin: 8px 0 0; font-size: 12px; color: var(--text-faint); }
 
 .progress__bar {
