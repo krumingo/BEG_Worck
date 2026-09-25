@@ -1,7 +1,8 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v1
-ACTIVE source updated: 2026-09-22T06:17:02Z · CONTROL STATE: **VALID**
+ACTIVE source updated: 2026-09-22T06:17:02Z · CONTROL STATE: **VALID** as of 2026-09-25T17:29:21Z (LIVE_GITHUB)
+**Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03C / C02 (migrated) / CODEX / **BLOCKED**
 NEXT: KRUM
@@ -10,7 +11,7 @@ WAITING FOR: Explicit technical correction cycle or design decision from Krum
 
 ## Required agent banner
 
-All three agents must read the control state before consequential work. If its status is STALE, CONFLICT or INVALID: **STOP**.
+All three agents must read the control state and recheck live evidence before consequential work. STALE, CONFLICT or INVALID: **STOP**.
 
 ```text
 BEG_WORK
@@ -25,7 +26,7 @@ WAITING_FOR: Explicit technical correction cycle or design decision from Krum
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03C | C02 | — | BLOCKED | HANDOFF | Codex | Explicit technical correction cycle or design decision from Krum | BLOCKED |
+| W0-03C | C02 (migrated) | — | BLOCKED | HANDOFF | CODEX | Explicit technical correction cycle or design decision from Krum | BLOCKED |
 
 GPT → Codex → Claude → **Codex (BLOCKED)** → GPT
 
@@ -33,16 +34,17 @@ GPT → Codex → Claude → **Codex (BLOCKED)** → GPT
 
 - ACTIVE: `coordination/ACTIVE.md` · source commit `4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1` · blob `4bd7800657b9c7d60eab5b5b7560ecbfe46540da`
 - Review: `coordination/REVIEWS/W0-03C.md` · blob `730736763991e2b1486c6ef0829d1d5f88017117` · verdict **BLOCKED** on `ed588e9420e241f58c14146de6f0c890b38b3743`
-- Draft PR: [#20](https://github.com/krumingo/BEG_Worck/pull/20) · exact head `ed588e9420e241f58c14146de6f0c890b38b3743` · HANDOFF [comment](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130)
+- Draft PR: [#20](https://github.com/krumingo/BEG_Worck/pull/20) · exact head `ed588e9420e241f58c14146de6f0c890b38b3743`
+- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130) · head `ed588e9420e241f58c14146de6f0c890b38b3743`
 - Dispatch session: https://claude.ai/epitaxy/session_0121FURkAfgZYfT9dqwqsyvc · dispatch state **BLOCKED**
 - HANDOFF comment SHA-256: `63e68cf85a3ddb5f986b958c6ac585f10362e3d97e88ce93f08ad2acf55c6a79`
 - Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `3ad2670d`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `3e43105b`, `docs/architecture/W0-03C_UNIQUENESS_READINESS.md` @ `238049e5`, `docs/flows/FLOW-032.md` @ `94f6be34`
 - Wave/Flow: `W0` / `FLOW-032` · progress: **REVIEW / STAGE_ONLY** (no proven percentage)
-- `control_state_commit_sha` names the previous published state commit; `null` on first bootstrap. The GitHub commit containing this file cannot self-reference its own SHA.
+- `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
 
-Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit migration mapping, not a rewritten historical claim.
+Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, not a rewritten historical claim.
 
 | UTC | Original cycle | Mapped cycle | Event | Agent | State after | Exact head | Source |
 |---|---|---|---|---|---|---|---|
@@ -57,4 +59,4 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit migration
 | 2026-09-22T06:16:16Z | — | C02 | REVIEW | CODEX | BLOCKED | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/commit/3b991fae892f7a22fdeb3e9d0f0920aa71841f19) |
 | 2026-09-22T06:17:02Z | — | C02 | CONTROL_UPDATE | CODEX | BLOCKED | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/commit/4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1) |
 
-**Gate:** W0-03C is BLOCKED. No C03, next implementation task, PASS, merge or deploy is authorized by this read-model.
+**Gate:** W0-03C is BLOCKED. No new cycle, PASS, merge or deploy is authorized by this read-model.

@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import control_protocol as cp  # noqa: E402
+import control_engine as engine  # noqa: E402
 
 
 HEAD = "ed588e9420e241f58c14146de6f0c890b38b3743"
@@ -142,6 +143,55 @@ class ControlProtocolTests(unittest.TestCase):
         self.assert_status("STALE", lambda: cp.verify_remote_queue_sources(
             ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB,
             ACTIVE_COMMIT, "0" * 40, REVIEW_BLOB))
+
+    def test_generic_nonblocked_synthetic_task_without_pr(self):
+        state = self.state()
+        state.update(task_id="W2-07A", cycle_id="C01", cycle_origin="NATIVE",
+                     current_agent="CLAUDE", current_role="IMPLEMENTER",
+                     current_work_id="W2-07A/C01/CL", state="WORKING",
+                     pipeline_step="IMPLEMENTATION", next_agent="CODEX",
+                     waiting_for=None, wave="W2", flow="FLOW-101",
+                     pr_number=None, pr_head_sha=None, pr_draft=None,
+                     last_handoff=None, last_review=None,
+                     dispatch_state="RUNNING", dispatch_run_url="https://example.test/run/1",
+                     requires_krum=False, requires_krum_reason=None,
+                     validation_mode="SYNTHETIC_TEST", generated_from=["ACTIVE"],
+                     progress={"mode": "STAGE_ONLY", "stage": "IMPLEMENTATION",
+                               "completed": None, "total": None, "percent": None},
+                     source_refs={"active_path": "coordination/ACTIVE.md", "active_blob_sha": ACTIVE_BLOB},
+                     history=[{"event_id": "synthetic-start", "occurred_at": "2026-09-23T00:00:00Z",
+                               "task_id": "W2-07A", "cycle_id": "C01", "mapped_cycle": None,
+                               "actor": "CLAUDE", "kind": "DISPATCH", "state_after": "WORKING",
+                               "head_sha": None, "source_url": "https://example.test/run/1",
+                               "source_commit_sha": None, "summary": "Synthetic implementation started."}])
+        engine.validate_state(state)
+        board = engine.render_board(state)
+        engine.validate_board(state, board)
+        self.assertIn("W2-07A / C01 / CLAUDE / **WORKING**", board)
+        self.assertIn("**Claude (WORKING)**", board)
+        self.assertIn("| WORKING |", board)
+        self.assertNotIn("W0-03C", board)
+        self.assertNotIn("pull/20", board)
+        self.assertNotIn("No C03", board)
+        self.assertNotIn("(migrated)", board)
+        self.assert_status("INVALID", lambda: cp.validate_sources(
+            state, self.active, self.review, self.pr, self.handoff,
+            self.canonical, ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB))
+
+    def test_idle_none_are_explicitly_unsupported_in_v1(self):
+        state = self.state()
+        state.update(state="IDLE", current_agent="NONE", current_role="NONE")
+        self.assert_status("INVALID", lambda: engine.validate_state(state))
+
+    def test_validation_metadata_required_and_not_live_by_label(self):
+        state = self.state()
+        for field in ("validated_at", "validation_mode"):
+            changed = copy.deepcopy(state)
+            changed.pop(field)
+            self.assert_status("INVALID", lambda: engine.validate_state(changed))
+        board = engine.render_board(state)
+        self.assertIn("Snapshot only", board)
+        self.assertIn("as of ", board)
 
 
 if __name__ == "__main__":

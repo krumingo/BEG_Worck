@@ -1,11 +1,13 @@
 {
   "protocol_version": 1,
   "control_state_status": "VALID",
+  "validated_at": "2026-09-25T17:29:21Z",
+  "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
   "active_source_commit_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
-  "control_state_commit_sha": null,
+  "control_state_commit_sha": "3729061596c3674ae8e859f093f612ec8232889e",
   "generated_from": [
     "ACTIVE",
     "REVIEW",
@@ -19,6 +21,7 @@
   "current_role": "TECH_LEAD_QA",
   "current_work_id": "W0-03C/C02/CX",
   "state": "BLOCKED",
+  "pipeline_step": "REVIEW",
   "next_agent": "KRUM",
   "waiting_for": "Explicit technical correction cycle or design decision from Krum",
   "wave": "W0",
