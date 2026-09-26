@@ -1,30 +1,39 @@
 # BEG_Work Claude assignment queue
 
-Status: BLOCKED
-Dispatch-State: BLOCKED
-Dispatch-Run: https://claude.ai/epitaxy/session_0121FURkAfgZYfT9dqwqsyvc
+Status: READY
+Dispatch-State: PENDING
+Dispatch-Run: NONE
 Task-ID: W0-03C
+Cycle-ID: C03
 Base-branch: feat/w0-03c-uniqueness-readiness
-Base-SHA: be8cd207c94388e81b24173af6d690d69abcea00
+Base-SHA: ed588e9420e241f58c14146de6f0c890b38b3743
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/20
 PR-Head: ed588e9420e241f58c14146de6f0c890b38b3743
 Review: coordination/REVIEWS/W0-03C.md
-Correction-cycle: 1-of-1
+Authorization: https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847103313
+Correction-cycle: C03 (new explicit bounded authorization; C02 remains BLOCKED in history)
 
 ## Human purpose
-Make the already-drafted unique-index bootstrap honest and recoverable after interruption, and repair the NAS command that failed before running. No new feature.
+Resolve only the ambiguous `create_index` result exposed by the independent C02 review. An exception after the server creates an index must not be reported as successful rollback while the index survives. No new feature or business rule.
 
 ## Canonical authority and prerequisites
-Read CLAUDE.md, docs/architecture/IMPLEMENTATION_GATE_MATRIX.md, IMPLEMENTATION_WAVES.md, W0-03C_UNIQUENESS_READINESS.md, and relevant FLOW-001–050 Master Data decisions. This is a correction inside PR #20, not a business-rule change. The exact PR head and independent review above are mandatory.
+Read `CLAUDE.md`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `docs/architecture/W0-03C_UNIQUENESS_READINESS.md`, and the applicable locked FLOW-032/D decisions. The exact C02 review in `coordination/REVIEWS/W0-03C.md` is the defect evidence, not a PASS. Verify that Draft PR #20 still has exact head `ed588e9420e241f58c14146de6f0c890b38b3743` before editing. Work only in the existing PR branch.
 
 ## In scope
-Correct only findings 1–3 in the review. Ensure an interruption between create_index and ledger claim does not strand an untracked index, and final ledger-write failure cannot return APPLIED. Add fault-injection positive/forbidden tests. Fix the documented sudo/PATH or explicit Docker path command in the runbook and hook header. Keep all work on PR #20's existing branch.
+Correct the `create_index` exception path in `backend/app/master_data/index_bootstrap.py` and focused tests for it. Reconcile actual server index state, including name, keys, uniqueness and relevant options/signature, before deciding claim or rollback status:
+
+1. Expected index present with matching definition: retain this run's ledger claim and report an explicit ambiguous/applied-unconfirmed outcome, not `FAILED_ROLLED_BACK`; preserve evidence for deterministic later rollback/recovery.
+2. Index provably absent: retract only this run's optimistic claim, then apply the existing safe failure/rollback behavior.
+3. Reconciliation unavailable (including connection loss): fail closed, retain the claim and report an explicit ambiguous/reconciliation-required outcome.
+4. Conflicting definition: retain evidence/claim, report `BLOCKED`/`CONFLICT` for human review, and never auto-delete that index.
+
+Review rollback behavior only as needed to keep these four outcomes safe; never drop an index with a foreign or conflicting definition.
 
 ## Excluded
-No new implementation slice, no NEXT task, no merge, deploy, production/NAS/Atlas write, real index build, migration, secrets, or change to locked FLOW decisions. Do not mark W0-03C or Wave 0 complete.
+No other W0-03C slice, no new Task-ID, no next implementation wave, no merge, deploy, migration, production/NAS/Atlas write, real index build outside disposable local scratch, secrets, or locked FLOW/D changes. Do not touch unrelated files or PRs. Keep PR #20 Draft.
 
 ## Acceptance and evidence
-Re-run focused tests plus appropriate regression. Demonstrate the two failure windows, recovery/rollback behavior and truthful final status. Show actual diff, exact new head SHA, test commands/results and limits in an updated HANDOFF. Keep Draft PR. STOP for independent Codex re-review. If the correction cannot be safe in one bounded cycle, report BLOCKED.
+Add fault-injection tests for create-then-raise with matching definition, provably absent, unreachable reconciliation, conflicting definition, rollback after recoverable cases, and refusal to delete foreign/conflicting indexes. Re-run focused regression and safe local-only real-Mongo tests where available; distinguish unavailable external tests from PASS. Publish exact new head SHA, actual diff, commands/results, status/ledger evidence and limitations in a final HANDOFF on PR #20. STOP the Claude session for independent Codex review on the stable exact head. An intermediate push, green CI, or PR body is not completion.
 
-## Independent re-review outcome
-The Claude session completed; exact PR head ed588e9420e241f58c14146de6f0c890b38b3743 remains Draft. Review coordination/REVIEWS/W0-03C.md is BLOCKED: an acknowledged server-side index followed by a client exception is retracted from the ledger and survives despite FAILED_ROLLED_BACK. Correction cycle 1-of-1 is exhausted. Do not dispatch a next task or merge/deploy; obtain a new explicit technical correction cycle or design decision from Krum.
+## Historical review outcome
+C02 was `BLOCKED` on exact PR head `ed588e9420e241f58c14146de6f0c890b38b3743`: an acknowledged server-side index followed by a client exception is retracted from the ledger and survives despite `FAILED_ROLLED_BACK`. The new C03 authorization above supersedes the old dispatch block only for this narrow correction; it does not rewrite or pass the C02 review.
