@@ -1,6 +1,7 @@
 # BEG_Work Claude assignment queue
 
 Status: PASS
+Gate-validation: PASS (W0-03C / C03 exact-head real-Mongo, pre-merge only)
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_012DCBdX2BRA6U2UR5zkdkPe
 Task-ID: W0-03C
@@ -39,4 +40,7 @@ Add fault-injection tests for create-then-raise with matching definition, provab
 C02 was `BLOCKED` on exact PR head `ed588e9420e241f58c14146de6f0c890b38b3743`: an acknowledged server-side index followed by a client exception is retracted from the ledger and survives despite `FAILED_ROLLED_BACK`. The new C03 authorization above supersedes the old dispatch block only for this narrow correction; it does not rewrite or pass the C02 review.
 
 ## C03 independent outcome
-Claude's final [HANDOFF](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847481878) and a stable Draft PR head both identify `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`. Independent Codex review of that exact head is `PASS` for the bounded C03 correction; evidence and limitations are in `coordination/REVIEWS/W0-03C.md`. This is **not** a W0-03C gate PASS: real-Mongo tests on this head and the owner-controlled NAS/production steps remain unperformed. STOP before merge, deployment, migration or any index build outside disposable local scratch. No next implementation task is dispatched.
+Claude's final [HANDOFF](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847481878) and a stable Draft PR head both identify `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`. Independent Codex review of that exact head was `PASS` for the bounded C03 correction; evidence and limitations are in `coordination/REVIEWS/W0-03C.md`. At that review point, this was **not yet** a W0-03C gate PASS because real-Mongo tests on this head were still unperformed. The later gate validation is recorded below. STOP before merge, deployment, migration or any index build outside disposable local scratch. No next implementation task is dispatched.
+
+## Exact-head real-Mongo gate validation
+After that code review, Codex ran the complete `backend/tests/test_w0_03c_real_mongo.py` suite against a new, temporary MongoDB Community 8.0.30 instance bound only to `127.0.0.1`: **20 collected, 20 passed, 0 skipped**. The three C03 real-server cases (create-then-raise/matching reconciliation, read-back of all 25 planned definitions and provable absence, foreign-definition rollback refusal) passed. The temporary server was stopped and its test-only directory removed. [PR #20 evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847810160) and the appended review section record the exact commands, cleanup and limits. The earlier restored-copy duplicate report was CLEAN for the 22 September archive; its snapshot boundary remains explicit. W0-03C **pre-merge gate validation is PASS** on the exact head above, but this authorizes no merge, deployment, production index build or next implementation task. Final PR #20 merge decision belongs to Krum.
