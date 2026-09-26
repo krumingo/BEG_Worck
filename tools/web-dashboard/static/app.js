@@ -177,7 +177,7 @@ function renderRelay(data) {
     return;
   }
   text(el('f-relay-headline'),
-    `${relay.last_agent_name} — ${relay.last_action}${relay.verified ? '' : ' (UNVERIFIED)'}`);
+    `LAST: ${relay.last_agent} — ${relay.last_action}${relay.verified ? '' : ' (UNVERIFIED)'}`);
   row(host, 'relay__fact', 'Last updated', relay.last_updated);
   row(host, 'relay__fact', 'Relay', relay.status_display);
   row(host, 'relay__fact', 'Now', relay.now);

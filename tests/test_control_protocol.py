@@ -217,6 +217,10 @@ class ControlProtocolTests(unittest.TestCase):
         engine.validate_state(state)
         self.assertIn("NEXT: GPT", engine.render_board(state))
         self.assert_status("INVALID", lambda: engine.validate_state({**state, "next_agent": "KRUM"}))
+        state["relay"].update(status="SENT_WAITING_RECEIVER", required_by_krum=False)
+        state.update(requires_krum=False, requires_krum_reason=None, waiting_for="GPT acknowledgement")
+        state["agent_states"]["CODEX"]["waiting_for"] = state["waiting_for"]
+        engine.validate_state(state)
 
     def test_received_relay_moves_current_to_gpt_without_krum_action(self):
         state = self.relay_state()
@@ -231,12 +235,10 @@ class ControlProtocolTests(unittest.TestCase):
         state.update(state="HANDOFF", next_agent="CODEX", waiting_for="Krum to relay GPT instructions",
                      requires_krum=True, requires_krum_reason="Copy GPT instructions to Codex")
         state["agent_states"]["GPT"].update(state="HANDOFF", waiting_for=state["waiting_for"])
-        state["relay"].update(last_agent="GPT", last_event="Next-stage instructions",
-                              last_result="HANDOFF", from_="GPT")
-        state["relay"]["from"] = "GPT"
-        state["relay"].update(to="CODEX", status="NOT_SENT", required_by_krum=True,
-                              instruction="Copy GPT instructions to Codex")
-        state["relay"].pop("from_", None)
+        state["relay"].update({"last_agent": "GPT", "last_event": "Next-stage instructions",
+                               "last_result": "HANDOFF", "from": "GPT", "to": "CODEX",
+                               "status": "NOT_SENT", "required_by_krum": True,
+                               "instruction": "Copy GPT instructions to Codex"})
         engine.validate_state(state)
         self.assertIn("RELAY: NOT_SENT · GPT → CODEX", engine.render_board(state))
 

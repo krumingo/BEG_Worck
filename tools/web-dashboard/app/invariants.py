@@ -217,11 +217,16 @@ def _krum(state: dict, findings: list[Finding]) -> None:
     if not isinstance(relay, dict):
         _add(findings, Status.INVALID, "RELAY_MISSING", "Explicit relay state is required.")
         return
+    relay_at = parse_timestamp(relay.get("updated_at"))
+    validated_at = parse_timestamp(state.get("validated_at"))
+    if relay_at is not None and validated_at is not None and relay_at > validated_at:
+        _add(findings, Status.INVALID, "RELAY_AFTER_VALIDATION", "Relay changed after validation.")
     status = relay.get("status")
-    pending = status in {"NOT_SENT", "SENT_WAITING_RECEIVER"}
-    if relay.get("required_by_krum") is not pending:
+    needs_send = status == "NOT_SENT"
+    awaiting_receiver = status in {"NOT_SENT", "SENT_WAITING_RECEIVER"}
+    if relay.get("required_by_krum") is not needs_send:
         _add(findings, Status.CONFLICT, "RELAY_RESPONSIBILITY", "Relay status and manual responsibility disagree.")
-    if pending and (requires is not True or relay.get("from") == relay.get("to")
+    if awaiting_receiver and ((needs_send and requires is not True) or relay.get("from") == relay.get("to")
                     or relay.get("to") != state.get("next_agent")):
         _add(findings, Status.CONFLICT, "RELAY_NEXT_AGENT", "Pending relay must target the next agent.")
     if status == "RECEIVED" and (relay.get("from") == relay.get("to")

@@ -21,9 +21,9 @@ from app.status import Status
 from conftest import CONTROL_BOARD_PATH
 
 # A percentage that is arithmetically impossible for its own numerator and denominator.
-IMPOSSIBLE = {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 90}
+IMPOSSIBLE = {"mode": "EVIDENCE_COUNT", "stage": "MERGED", "completed": 3, "total": 8, "percent": 90}
 # One that is correct: 100 * 3 // 8 == 37.
-DETERMINISTIC = {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 37}
+DETERMINISTIC = {"mode": "EVIDENCE_COUNT", "stage": "MERGED", "completed": 3, "total": 8, "percent": 37}
 
 
 def project_round(client, settings):
@@ -73,7 +73,7 @@ def test_an_impossible_percentage_is_rejected_and_not_forwarded(
     assert progress["numbers_withheld"] is True
     assert progress["withheld_reason"]
     # The stage survives, marked unverified.
-    assert progress["stage"] == "REVIEW"
+    assert progress["stage"] == "MERGED"
     assert progress["stage_verified"] is False
     # And 90 appears nowhere in the payload the browser receives.
     import json
@@ -105,7 +105,7 @@ def test_no_numbers_on_any_unverified_status(
     assert reported["completed"] is None
     assert reported["total"] is None
     assert reported["numbers_withheld"] is True
-    assert reported["stage"] == "REVIEW"
+    assert reported["stage"] == "MERGED"
 
 
 def test_an_aged_round_also_withholds_numbers(fake_github, client, published_state, mutate):
@@ -117,7 +117,7 @@ def test_an_aged_round_also_withholds_numbers(fake_github, client, published_sta
 
     fake_github.set_state(mutate(published_state, lambda s: s.__setitem__("progress", dict(DETERMINISTIC))))
     settings = Settings(repository="krumingo/BEG_Worck", branch="codex/claude-queue", stale_after_seconds=30)
-    base = dt.datetime(2026, 9, 25, 18, 0, 0, tzinfo=dt.timezone.utc)
+    base = dt.datetime(2026, 9, 26, 17, 0, 0, tzinfo=dt.timezone.utc)
     now = {"at": base}
     refresher = Refresher(client, settings, clock=lambda: now["at"])
     refresher.tick()
@@ -172,14 +172,14 @@ def test_a_verified_evidence_count_still_shows_its_justified_numbers(
     progress = payload["header"]["progress"]
     assert progress == {
         "mode": "EVIDENCE_COUNT",
-        "stage": "REVIEW",
+        "stage": "MERGED",
         "stage_verified": True,
         "completed": 3,
         "total": 8,
         "percent": 37,
         "numbers_withheld": False,
         "withheld_reason": None,
-        "workflow_position": {"index": 4, "total": 6, "label": "REVIEW"},
+        "workflow_position": {"index": 5, "total": 6, "label": "DECISION"},
     }
 
 
@@ -188,7 +188,7 @@ def test_stage_only_remains_stage_only_even_when_verified(client, settings, publ
     payload = project_round(client, settings)
     progress = payload["header"]["progress"]
     assert payload["verified"] is True
-    assert progress["stage"] == "REVIEW"
+    assert progress["stage"] == "MERGED"
     assert progress["percent"] is None
     assert progress["numbers_withheld"] is True
     assert "STAGE_ONLY" in progress["withheld_reason"]

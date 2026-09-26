@@ -129,14 +129,18 @@ def shoot(page, name):
 def test_the_dashboard_renders_the_control_state_with_no_script_errors(browser, served):
     page, errors = open_page(browser, served)
     assert page.inner_text("#f-task") == "W0-03C"
-    assert page.inner_text("#f-cycle") == "C02 (migrated)"
+    assert page.inner_text("#f-cycle") == "C03"
     assert page.inner_text("#f-wave") == "W0"
     assert page.inner_text("#f-flow") == "FLOW-032"
-    assert page.inner_text("#f-stage") == "REVIEW"
-    assert page.inner_text("#f-state") == "BLOCKED"
+    assert page.inner_text("#f-stage") == "MERGED"
+    assert page.inner_text("#f-state") == "WORKING"
     assert page.inner_text("#f-status-value") == "VALID"
     assert page.inner_text("#f-link-value") == "LIVE"
-    assert page.inner_text("#f-krum-value") == "KRUM ACTION REQUIRED"
+    assert page.locator("#f-krum").is_hidden()
+    assert "LAST: CODEX — PR #20 MERGED / PASS" in page.inner_text("#f-relay")
+    assert "RECEIVED BY ChatGPT" in page.inner_text("#f-relay")
+    assert "ChatGPT deciding next W0-03C stage" in page.inner_text("#f-relay")
+    assert "Pending ChatGPT decision" in page.inner_text("#f-relay")
     assert page.inner_text("#f-repo") == "krumingo/BEG_Worck"
     assert errors == []
     page.close()
@@ -151,13 +155,13 @@ def test_the_three_agent_cards_render_their_protocol_state(browser, served):
         "Codex",
         "Claude",
     ]
-    assert cards.nth(0).get_attribute("data-state") == "NOT_ACTIVE"
-    assert cards.nth(1).get_attribute("data-state") == "BLOCKED"
-    assert cards.nth(2).get_attribute("data-state") == "NOT_ACTIVE"
+    assert cards.nth(0).get_attribute("data-state") == "WORKING"
+    assert cards.nth(1).get_attribute("data-state") == "PASS"
+    assert cards.nth(2).get_attribute("data-state") == "HANDOFF"
     # The Codex card carries its Work-ID, waiting_for and timestamp.
     codex = cards.nth(1).inner_text()
-    assert "W0-03C/C02/CX" in codex
-    assert "2026-09-22T06:17:02Z" in codex
+    assert "W0-03C/C03/CX" in codex
+    assert "2026-09-26T16:29:12Z" in codex
     page.close()
 
 
@@ -194,8 +198,8 @@ def test_the_workflow_shows_the_six_presentation_steps_with_review_current(brows
     # Exactly one current step, and it is the canonical pipeline_step.
     current = page.locator('.wf__step[data-relative="current"]')
     assert current.count() == 1
-    assert "REVIEW" in current.inner_text()
-    assert "BLOCKED" in current.inner_text()
+    assert "DECISION" in current.inner_text()
+    assert "WORKING" in current.inner_text()
 
     # NEXT is flagged derived; no other step is.
     assert page.locator(".wf__derived").count() == 1
@@ -212,11 +216,11 @@ def test_the_task_table_shows_only_the_single_proven_row(browser, served):
     cells = [rows.nth(0).locator("td").nth(i).inner_text() for i in range(7)]
     assert cells[0] == "W0-03C"
     assert cells[1] == "W0 · FLOW-032"
-    assert cells[2] == "BLOCKED"
+    assert cells[2] == "WORKING"
     assert "stage only" in cells[3]
-    assert cells[4] == "Codex"
-    assert cells[5] == "C02 (migrated)"
-    assert cells[6] == "2026-09-22T06:17:02Z"
+    assert cells[4] == "ChatGPT"
+    assert cells[5] == "C03"
+    assert cells[6] == "2026-09-26T16:45:12Z"
     assert "exactly one row is proven" in page.inner_text("#f-tasks-note")
     page.close()
 
@@ -224,9 +228,8 @@ def test_the_task_table_shows_only_the_single_proven_row(browser, served):
 def test_the_next_steps_panel_reports_the_protocol_fields(browser, served):
     page, _ = open_page(browser, served)
     steps = page.inner_text("#f-next-steps")
-    assert "KRUM" in steps
-    assert "Explicit technical correction cycle" in steps
-    assert "BLOCKED" in page.inner_text("#f-gate")
+    assert "ChatGPT" in steps
+    assert "MERGED / PASS" in page.inner_text("#f-gate")
     page.close()
 
 
@@ -320,9 +323,9 @@ def test_offline_is_shown_as_its_own_state_alongside_the_cached_snapshot(browser
         "document.getElementById('f-link-value').textContent === 'OFFLINE'", timeout=10_000
     )
     assert page.locator("#f-link").get_attribute("data-feed") == "OFFLINE"
-    # The snapshot is still there and still says BLOCKED.
+    # The snapshot is still there and still says GPT is deciding.
     assert page.inner_text("#f-task") == "W0-03C"
-    assert page.inner_text("#f-state") == "BLOCKED"
+    assert page.inner_text("#f-state") == "WORKING"
     # And the status verdict is not rewritten into a protocol problem by the outage.
     assert page.inner_text("#f-status-value") == "VALID"
     open_diagnostics(page)
@@ -428,13 +431,12 @@ def test_the_layout_works_at_each_form_factor_without_horizontal_scrolling(
     page.close()
 
 
-def test_the_phone_layout_keeps_the_blocker_and_krum_action_visible(browser, served):
-    """Narrow screens may compress, but must not hide the two things that need action."""
+def test_the_phone_layout_keeps_received_relay_visible_without_krum_action(browser, served):
+    """Narrow screens must show the received relay and not invent a Krum action."""
     page, _ = open_page(browser, served, "phone")
-    assert page.locator("#f-krum").is_visible()
-    assert page.inner_text("#f-krum-value") == "KRUM ACTION REQUIRED"
-    assert page.locator("#f-krum-reason").is_visible()
-    assert "correction cycle" in page.inner_text("#f-krum-reason").lower()
+    assert page.locator("#f-krum").is_hidden()
+    assert page.locator("#f-relay").is_visible()
+    assert "RECEIVED BY ChatGPT" in page.inner_text("#f-relay")
     assert page.locator("#f-state").is_visible()
     page.close()
 
@@ -494,7 +496,7 @@ def test_an_impossible_percentage_draws_no_number_and_no_bar(browser, served, pu
             published_state,
             lambda s: s.__setitem__(
                 "progress",
-                {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 90},
+                {"mode": "EVIDENCE_COUNT", "stage": "MERGED", "completed": 3, "total": 8, "percent": 90},
             ),
         )
     )
@@ -511,7 +513,7 @@ def test_an_impossible_percentage_draws_no_number_and_no_bar(browser, served, pu
     assert "90" not in progress_text
     assert "verified milestones" not in progress_text
     # The stage survives, explicitly labelled.
-    assert "REVIEW" in progress_text
+    assert "MERGED" in progress_text
     assert "UNVERIFIED" in progress_text
     assert "did not verify" in progress_text
 
@@ -523,7 +525,7 @@ def test_an_impossible_percentage_draws_no_number_and_no_bar(browser, served, pu
 @pytest.mark.parametrize("status", ["STALE", "CONFLICT"])
 def test_no_bar_is_drawn_on_any_unverified_status(status, browser, served, published_state, mutate):
     """Even an arithmetically correct count is withheld when the round did not verify."""
-    deterministic = {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 37}
+    deterministic = {"mode": "EVIDENCE_COUNT", "stage": "MERGED", "completed": 3, "total": 8, "percent": 37}
     served.github.set_state(mutate(published_state, lambda s: s.__setitem__("progress", dict(deterministic))))
     if status == "STALE":
         served.github.set_file("coordination/ACTIVE.md", b"moved on\n")
@@ -553,7 +555,7 @@ def test_a_verified_evidence_count_does_draw_its_justified_bar(browser, served, 
             published_state,
             lambda s: s.__setitem__(
                 "progress",
-                {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 37},
+                {"mode": "EVIDENCE_COUNT", "stage": "MERGED", "completed": 3, "total": 8, "percent": 37},
             ),
         )
     )

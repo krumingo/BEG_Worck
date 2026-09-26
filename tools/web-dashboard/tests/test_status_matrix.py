@@ -78,7 +78,7 @@ def test_each_status_reaches_the_projection_verbatim(expected, fake_github, clie
 def test_the_worst_finding_wins_when_several_coexist(fake_github, client, settings, published_state, mutate):
     """Precedence INVALID > CONFLICT > STALE > VALID, so nothing is masked by a milder issue."""
     fake_github.set_file("coordination/ACTIVE.md", b"moved on\n")            # STALE
-    fake_github.pull_requests[published_state["pr_number"]]["draft"] = False  # CONFLICT
+    fake_github.pull_requests[published_state["pr_number"]]["draft"] = True  # CONFLICT
     fake_github.set_state(mutate(published_state, lambda s: s.__setitem__("wave", "nope")))  # INVALID
 
     result = round_verdict(client, settings)
@@ -147,7 +147,7 @@ def test_stage_only_progress_shows_a_stage_and_no_numbers(client, settings, publ
     payload = project_round(client, settings)
     progress = payload["header"]["progress"]
     assert progress["mode"] == "STAGE_ONLY"
-    assert progress["stage"] == "REVIEW"
+    assert progress["stage"] == "MERGED"
     assert progress["percent"] is None
     assert progress["completed"] is None
     assert progress["total"] is None
@@ -178,7 +178,7 @@ def test_a_deterministic_evidence_count_progress_is_passed_through(
             published_state,
             lambda s: s.__setitem__(
                 "progress",
-                {"mode": "EVIDENCE_COUNT", "stage": "REVIEW", "completed": 3, "total": 8, "percent": 37},
+                {"mode": "EVIDENCE_COUNT", "stage": "MERGED", "completed": 3, "total": 8, "percent": 37},
             ),
         )
     )
@@ -186,14 +186,14 @@ def test_a_deterministic_evidence_count_progress_is_passed_through(
     assert payload["control_state_status"] == "VALID"
     assert payload["header"]["progress"] == {
         "mode": "EVIDENCE_COUNT",
-        "stage": "REVIEW",
+        "stage": "MERGED",
         "stage_verified": True,
         "completed": 3,
         "total": 8,
         "percent": 37,
         "numbers_withheld": False,
         "withheld_reason": None,
-        "workflow_position": {"index": 4, "total": 6, "label": "REVIEW"},
+        "workflow_position": {"index": 5, "total": 6, "label": "DECISION"},
     }
 
 

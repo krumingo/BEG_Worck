@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from app.projection import AGENT_ORDER, project
+from app.projection import AGENT_ORDER, _relay, project
 from app.refresh import Refresher
 
 
@@ -31,21 +31,53 @@ def test_the_header_carries_every_field_the_issue_requires(payload):
     assert header["wave"] == "W0"
     assert header["flow"] == "FLOW-032"
     assert header["task_id"] == "W0-03C"
-    assert header["cycle_id"] == "C02"
-    assert header["progress"]["stage"] == "REVIEW"
+    assert header["cycle_id"] == "C03"
+    assert header["progress"]["stage"] == "MERGED"
     assert payload["last_verified_at"] is not None
-    assert header["krum_action"]["required"] is True
+    assert header["krum_action"]["required"] is False
 
 
-def test_a_migrated_cycle_is_labelled_as_migrated(payload):
+def test_a_native_cycle_is_not_labelled_as_migrated(payload):
     """The distinction is in the protocol, so it belongs on screen."""
-    assert payload["header"]["cycle_label"] == "C02 (migrated)"
+    assert payload["header"]["cycle_label"] == "C03"
 
 
-def test_krum_action_required_carries_the_reason(payload):
+def test_received_relay_clears_krum_action(payload):
     krum = payload["header"]["krum_action"]
-    assert krum["required"] is True
-    assert "correction cycle" in krum["reason"].lower()
+    assert krum == {"required": False, "reason": None}
+    assert payload["relay"]["status_display"] == "RECEIVED BY ChatGPT"
+    assert payload["relay"]["send_to"] == "NONE"
+    assert payload["relay"]["now"] == "ChatGPT deciding next W0-03C stage"
+    assert payload["relay"]["next_execution_agent"] == "Pending ChatGPT decision"
+
+
+def test_codex_pass_pending_relay_displays_chatgpt_as_recipient(published_state, mutate):
+    state = mutate(published_state, lambda s: s["relay"].update(
+        status="NOT_SENT", required_by_krum=True, instruction="Copy Codex PASS result to ChatGPT"))
+    relay = _relay(state, True)
+    assert (relay["status"], relay["send_to"], relay["krum_next_action"]) == (
+        "NOT_SENT", "ChatGPT", "Copy Codex PASS result to ChatGPT")
+
+
+def test_gpt_instructions_pending_relay_displays_codex_as_recipient(published_state, mutate):
+    state = mutate(published_state, lambda s: s["relay"].update({
+        "last_agent": "GPT", "from": "GPT", "to": "CODEX", "status": "NOT_SENT",
+        "required_by_krum": True, "instruction": "Copy GPT instructions to Codex"}))
+    relay = _relay(state, True)
+    assert (relay["status"], relay["send_to"], relay["krum_next_action"]) == (
+        "NOT_SENT", "Codex", "Copy GPT instructions to Codex")
+
+
+def test_codex_acknowledgement_displays_no_krum_action(published_state, mutate):
+    state = mutate(published_state, lambda s: s["relay"].update(
+        last_agent="GPT", to="CODEX", status="RECEIVED", required_by_krum=False,
+        instruction="Codex acknowledged instructions"))
+    state.update(current_agent="CODEX", state="WORKING", pipeline_step="ASSIGNMENT",
+                 next_agent="CLAUDE")
+    state["relay"]["from"] = "GPT"
+    relay = _relay(state, True)
+    assert (relay["now"], relay["krum_next_action"], relay["send_to"]) == (
+        "Codex WORKING", "NONE", "NONE")
 
 
 def test_krum_action_none_carries_no_reason(fake_github, client, settings, published_state, mutate):
@@ -79,11 +111,11 @@ def test_each_card_carries_state_work_id_waiting_for_and_updated_at(payload):
     for agent in payload["agents"]:
         assert set(agent) >= {"state", "work_id", "waiting_for", "updated_at", "is_current"}
     codex = next(agent for agent in payload["agents"] if agent["key"] == "CODEX")
-    assert codex["state"] == "BLOCKED"
-    assert codex["work_id"] == "W0-03C/C02/CX"
-    assert codex["waiting_for"].startswith("Explicit technical correction")
-    assert codex["updated_at"] == "2026-09-22T06:17:02Z"
-    assert codex["is_current"] is True
+    assert codex["state"] == "PASS"
+    assert codex["work_id"] == "W0-03C/C03/CX"
+    assert codex["waiting_for"] is None
+    assert codex["updated_at"] == "2026-09-26T16:29:12Z"
+    assert codex["is_current"] is False
 
 
 def test_cards_come_from_agent_states_and_never_from_history(payload, published_state):
@@ -99,8 +131,8 @@ def test_cards_come_from_agent_states_and_never_from_history(payload, published_
     assert claude_events and claude_events[-1]["kind"] == "HANDOFF"
 
     claude = next(agent for agent in payload["agents"] if agent["key"] == "CLAUDE")
-    assert claude["state"] == "NOT_ACTIVE"
-    assert claude["work_id"] is None
+    assert claude["state"] == "HANDOFF"
+    assert claude["work_id"] == "W0-03C/C03/CL"
     assert claude["waiting_for"] is None
 
 
@@ -131,8 +163,8 @@ def test_the_pipeline_is_the_five_step_canonical_route(payload):
 def test_exactly_one_pipeline_step_is_active_and_it_is_the_protocol_step(payload, published_state):
     active = [step for step in payload["pipeline"] if step["active"]]
     assert len(active) == 1
-    assert active[0]["step"] == published_state["pipeline_step"] == "REVIEW"
-    assert active[0]["badge"] == "BLOCKED"
+    assert active[0]["step"] == published_state["pipeline_step"] == "ARCHITECT_FEEDBACK"
+    assert active[0]["badge"] == "WORKING"
 
 
 def test_inactive_steps_carry_no_badge(payload):
@@ -145,17 +177,17 @@ def test_inactive_steps_carry_no_badge(payload):
 def test_the_task_area_carries_current_next_and_waiting_for(payload):
     task = payload["task"]
     assert task["task_id"] == "W0-03C"
-    assert task["current_agent_name"] == "Codex"
-    assert task["current_role"] == "TECH_LEAD_QA"
-    assert task["current_work_id"] == "W0-03C/C02/CX"
-    assert task["next_agent"] == "KRUM"
-    assert task["waiting_for"].startswith("Explicit technical correction")
-    assert task["dispatch_state"] == "BLOCKED"
+    assert task["current_agent_name"] == "ChatGPT"
+    assert task["current_role"] == "ARCHITECT"
+    assert task["current_work_id"] == "W0-03C/C03/GPT"
+    assert task["next_agent"] == "GPT"
+    assert task["waiting_for"] is None
+    assert task["dispatch_state"] == "NONE"
 
 
-def test_the_gate_line_refuses_progression_while_blocked(payload):
-    assert "BLOCKED" in payload["gate"]
-    assert "No new cycle, PASS, merge or deploy is authorized" in payload["gate"]
+def test_the_gate_line_preserves_merged_pass_without_next_dispatch(payload):
+    assert "MERGED / PASS" in payload["gate"]
+    assert "does not authorize the next implementation task or deployment" in payload["gate"]
 
 
 # ----------------------------------------------------------------- evidence
@@ -165,7 +197,7 @@ def test_evidence_links_every_cited_artefact(payload):
     evidence = payload["evidence"]
     assert evidence["active"]["path"] == "coordination/ACTIVE.md"
     assert evidence["active"]["url"].endswith("/blob/codex/claude-queue/coordination/ACTIVE.md")
-    assert evidence["review"]["verdict"] == "BLOCKED"
+    assert evidence["review"]["verdict"] == "PASS"
     assert evidence["pull_request"]["number"] == 20
     assert evidence["pull_request"]["url"] == "https://github.com/krumingo/BEG_Worck/pull/20"
     assert evidence["handoff"]["url"].startswith("https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-")
@@ -178,7 +210,7 @@ def test_evidence_shows_both_the_cited_and_the_observed_identity(payload):
     assert active["blob_sha"] == active["observed_blob_sha"]
     pr = payload["evidence"]["pull_request"]
     assert pr["cited_head_sha"] == pr["observed_head_sha"]
-    assert pr["observed_draft"] is True
+    assert pr["observed_draft"] is False
 
 
 def test_a_divergence_is_visible_in_the_evidence_not_only_in_the_findings(

@@ -572,6 +572,8 @@ def _history(control: dict) -> list[dict]:
 def _gate(control: dict) -> str:
     task = control.get("task_id")
     state = control.get("state")
+    if (control.get("progress") or {}).get("stage") == "MERGED" and (control.get("last_review") or {}).get("verdict") == "PASS":
+        return f"{task} implementation is MERGED / PASS; the current {control.get('current_agent')} feedback step does not authorize the next implementation task or deployment."
     if state == "BLOCKED":
         return f"{task} is BLOCKED. No new cycle, PASS, merge or deploy is authorized by this read-model."
     return (

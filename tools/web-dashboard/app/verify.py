@@ -328,12 +328,13 @@ def _pull_request(state: dict, snapshot: Snapshot, settings: Settings) -> Verdic
         findings.append(Finding(Status.CONFLICT, "PR_MERGED",
                                 f"PR #{pr.number} merge status disagrees with the control stage."))
     elif pr.merged:
-        active_text = snapshot.active.text if snapshot.active is not None else ""
-        fields = dict(line.split(":", 1) for line in active_text.splitlines()
-                      if line.startswith(("Integration-State:", "Merge-Base:", "Merge-SHA:")))
-        if (fields.get("Integration-State", "").strip() != "MERGED"
-                or fields.get("Merge-Base", "").strip() != pr.base_ref
-                or not sha_equal(fields.get("Merge-SHA", "").strip(), pr.merge_commit_sha)):
-            findings.append(Finding(Status.CONFLICT, "PR_MERGE_EVIDENCE",
-                                    "ACTIVE merge base/SHA does not match live PR metadata."))
+        cited_active = (state.get("source_refs") or {}).get("active_blob_sha")
+        if snapshot.active is not None and sha_equal(snapshot.active.blob_sha, cited_active):
+            fields = dict(line.split(":", 1) for line in snapshot.active.text.splitlines()
+                          if line.startswith(("Integration-State:", "Merge-Base:", "Merge-SHA:")))
+            if (fields.get("Integration-State", "").strip() != "MERGED"
+                    or fields.get("Merge-Base", "").strip() != pr.base_ref
+                    or not sha_equal(fields.get("Merge-SHA", "").strip(), pr.merge_commit_sha)):
+                findings.append(Finding(Status.CONFLICT, "PR_MERGE_EVIDENCE",
+                                        "ACTIVE merge base/SHA does not match live PR metadata."))
     return Verdict(findings)

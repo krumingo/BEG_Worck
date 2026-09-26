@@ -56,12 +56,12 @@ SINGLE_DEFECT_CASES = [
     ),
     (
         "not_active_agent_still_carries_work",
-        lambda s: s["agent_states"]["GPT"].__setitem__("work_id", "W0-03C/C02/GPT"),
+        lambda s: s["agent_states"]["CLAUDE"].__setitem__("state", "NOT_ACTIVE"),
         Status.INVALID,
     ),
     (
         "requires_krum_without_a_reason",
-        lambda s: s.__setitem__("requires_krum_reason", "   "),
+        lambda s: (s.__setitem__("requires_krum", True), s.__setitem__("requires_krum_reason", "   ")),
         Status.INVALID,
     ),
     (
@@ -70,8 +70,9 @@ SINGLE_DEFECT_CASES = [
         # canonical engine reports that one first, so the case would no longer be
         # testing what it names.
         "blocked_without_waiting_for",
-        lambda s: (s.__setitem__("waiting_for", ""),
-                   s["agent_states"]["CODEX"].__setitem__("waiting_for", "")),
+        lambda s: (s.__setitem__("state", "BLOCKED"), s.__setitem__("waiting_for", ""),
+                   s["agent_states"]["GPT"].__setitem__("state", "BLOCKED"),
+                   s["agent_states"]["GPT"].__setitem__("waiting_for", "")),
         Status.INVALID,
     ),
     (
@@ -106,12 +107,14 @@ SINGLE_DEFECT_CASES = [
     ),
     (
         "state_contradicts_the_review_verdict",
-        lambda s: (s.__setitem__("state", "PASS"), s["agent_states"]["CODEX"].__setitem__("state", "PASS")),
+        lambda s: (s.__setitem__("state", "BLOCKED"), s.__setitem__("waiting_for", "blocked"),
+                   s["agent_states"]["GPT"].__setitem__("state", "BLOCKED"),
+                   s["agent_states"]["GPT"].__setitem__("waiting_for", "blocked")),
         Status.CONFLICT,
     ),
     (
         "current_agent_card_disagrees_with_the_snapshot",
-        lambda s: s["agent_states"]["CODEX"].__setitem__("waiting_for", "something else entirely"),
+        lambda s: s["agent_states"]["GPT"].__setitem__("waiting_for", "something else entirely"),
         Status.CONFLICT,
     ),
     (

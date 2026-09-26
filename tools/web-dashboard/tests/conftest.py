@@ -203,14 +203,20 @@ def fake_github(canonical_bytes, published_state) -> FakeGitHub:
     inherited from whatever the live PR happens to be today, which keeps the suite
     deterministic and offline.
     """
+    active = canonical_bytes[ACTIVE_PATH].decode("utf-8")
+    active_fields = dict(line.split(":", 1) for line in active.splitlines()
+                         if line.startswith(("Merge-Base:", "Merge-SHA:")))
+    merged = published_state["progress"]["stage"] == "MERGED"
     return FakeGitHub(
         files=dict(canonical_bytes),
         pull_requests={
             published_state["pr_number"]: {
                 "number": published_state["pr_number"],
                 "draft": published_state["pr_draft"],
-                "state": "open",
-                "merged": False,
+                "state": "closed" if merged else "open",
+                "merged": merged,
+                "merge_commit_sha": active_fields.get("Merge-SHA", "").strip() if merged else None,
+                "base": {"ref": active_fields.get("Merge-Base", "").strip()} if merged else {},
                 "html_url": f"https://github.com/krumingo/BEG_Worck/pull/{published_state['pr_number']}",
                 "head": {"sha": published_state["pr_head_sha"]},
             }

@@ -173,22 +173,30 @@ def test_a_moved_pr_head_is_reported_stale(fake_github, client, settings, publis
     assert "PR_HEAD_STALE" in result.verdict.codes()
 
 
-def test_a_pr_that_left_draft_is_a_conflict(fake_github, client, settings, published_state):
+def test_a_merged_pr_that_reverted_to_draft_is_a_conflict(fake_github, client, settings, published_state):
     number = published_state["pr_number"]
-    fake_github.pull_requests[number]["draft"] = False
+    fake_github.pull_requests[number]["draft"] = True
     result = round_verdict(client, settings)
     assert result.status is Status.CONFLICT
     assert "PR_DRAFT_MISMATCH" in result.verdict.codes()
 
 
-def test_a_merged_pr_contradicts_a_snapshot_describing_work_in_progress(
+def test_an_unmerged_pr_contradicts_the_published_merged_stage(
     fake_github, client, settings, published_state
 ):
     number = published_state["pr_number"]
-    fake_github.pull_requests[number]["merged"] = True
+    fake_github.pull_requests[number]["merged"] = False
     result = round_verdict(client, settings)
     assert result.status is Status.CONFLICT
     assert "PR_MERGED" in result.verdict.codes()
+
+
+def test_a_wrong_merge_commit_is_rejected(fake_github, client, settings, published_state):
+    number = published_state["pr_number"]
+    fake_github.pull_requests[number]["merge_commit_sha"] = "0" * 40
+    result = round_verdict(client, settings)
+    assert result.status is Status.CONFLICT
+    assert "PR_MERGE_EVIDENCE" in result.verdict.codes()
 
 
 def test_unreadable_pr_metadata_leaves_the_head_unverified(fake_github, client, settings, published_state):

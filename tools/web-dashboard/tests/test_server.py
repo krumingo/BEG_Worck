@@ -219,6 +219,9 @@ def test_sigterm_shuts_the_process_down_promptly(tmp_path):
     import time
     import urllib.request
 
+    if os.name == "nt":
+        pytest.skip("Docker SIGTERM semantics are Linux-specific; Windows send_signal terminates with code 1")
+
     root = pathlib.Path(__file__).resolve().parents[1]
     environment = dict(
         os.environ,

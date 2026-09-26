@@ -136,11 +136,12 @@ def validate_state(state: dict) -> None:
     relay_time = dt.datetime.fromisoformat(relay["updated_at"].replace("Z", "+00:00"))
     if relay_time > validated:
         raise ControlError("INVALID", "relay updated after validation")
-    pending = relay["status"] in {"NOT_SENT", "SENT_WAITING_RECEIVER"}
-    if relay["required_by_krum"] != pending:
+    needs_send = relay["status"] == "NOT_SENT"
+    awaiting_receiver = relay["status"] in {"NOT_SENT", "SENT_WAITING_RECEIVER"}
+    if relay["required_by_krum"] != needs_send:
         raise ControlError("CONFLICT", "relay status and manual responsibility disagree")
-    if pending:
-        if (not state["requires_krum"] or relay["from"] is None or relay["to"] is None
+    if awaiting_receiver:
+        if ((needs_send and not state["requires_krum"]) or relay["from"] is None or relay["to"] is None
                 or relay["from"] == relay["to"] or relay["to"] != state["next_agent"]):
             raise ControlError("CONFLICT", "pending relay must target the real next agent")
     elif relay["status"] == "RECEIVED":
