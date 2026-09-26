@@ -129,6 +129,7 @@ def project(state: DashboardState) -> dict:
             "note": "No verified snapshot, so no task row can be shown.",
         }
         payload["next_steps"] = None
+        payload["relay"] = None
         payload["task"] = None
         payload["evidence"] = None
         payload["history"] = []
@@ -142,6 +143,7 @@ def project(state: DashboardState) -> dict:
     payload["workflow"] = _workflow(control, is_verified)
     payload["task_table"] = _task_table(control, is_verified)
     payload["next_steps"] = _next_steps(control)
+    payload["relay"] = _relay(control, is_verified)
     payload["agents"] = [_agent(control, name) for name in AGENT_ORDER]
     payload["pipeline"] = _pipeline(control, is_verified)
     payload["task"] = _task(control)
@@ -380,6 +382,37 @@ def _next_steps(control: dict) -> dict:
         "krum_reason": control.get("requires_krum_reason") if requires_krum else None,
         "dispatch_state": control.get("dispatch_state"),
         "blocked": control.get("state") == "BLOCKED",
+    }
+
+
+def _relay(control: dict, is_verified: bool) -> dict:
+    """Project the explicit manual relay separately from the next execution agent."""
+    relay = control.get("relay") or {}
+    current = control.get("current_agent")
+    step = control.get("pipeline_step")
+    if current == "GPT" and step == "ARCHITECT_FEEDBACK" and control.get("state") == "WORKING":
+        now = f"ChatGPT deciding next {control.get('task_id')} stage"
+        next_execution = "Pending ChatGPT decision"
+    else:
+        now = f"{AGENT_DISPLAY.get(str(current), current)} {control.get('state')}"
+        next_execution = AGENT_DISPLAY.get(str(control.get("next_agent")), control.get("next_agent"))
+    status = relay.get("status")
+    recipient = AGENT_DISPLAY.get(str(relay.get("to")), relay.get("to"))
+    return {
+        "verified": is_verified,
+        "last_agent": relay.get("last_agent"),
+        "last_agent_name": AGENT_DISPLAY.get(str(relay.get("last_agent")), relay.get("last_agent")),
+        "last_action": f"{relay.get('last_event')} / {relay.get('last_result')}",
+        "last_updated": relay.get("updated_at"),
+        "now": now,
+        "from": relay.get("from"),
+        "to": relay.get("to"),
+        "send_to": recipient if status in {"NOT_SENT", "SENT_WAITING_RECEIVER"} else "NONE",
+        "status": status,
+        "status_display": f"RECEIVED BY {recipient}" if status == "RECEIVED" else status,
+        "krum_next_action": relay.get("instruction") if relay.get("required_by_krum") else "NONE",
+        "next_execution_agent": next_execution,
+        "source_url": relay.get("source_url"),
     }
 
 

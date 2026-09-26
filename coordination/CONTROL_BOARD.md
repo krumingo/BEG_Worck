@@ -1,13 +1,16 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v1
-ACTIVE source updated: 2026-09-26T16:29:12Z · CONTROL STATE: **VALID** as of 2026-09-26T16:29:54Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-26T16:45:12Z · CONTROL STATE: **VALID** as of 2026-09-26T16:45:34Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03C / C03 / CODEX / **PASS**
-NEXT: KRUM
-KRUM ACTION: REQUIRED — PR #20 is merged and accepted; wait for ChatGPT/Krum authorization before any next W0-03 stage. No deploy or production index build is authorized.
-WAITING FOR: ChatGPT/Krum authorization for the next W0-03 stage; no automatic dispatch
+CURRENT: W0-03C / C03 / GPT / **WORKING**
+LAST: CODEX — PR #20 MERGED / PASS
+RELAY: RECEIVED · CODEX → GPT
+NOW: GPT WORKING · ARCHITECT_FEEDBACK
+NEXT: GPT
+KRUM ACTION: NONE
+WAITING FOR: —
 
 ## Required agent banner
 
@@ -19,14 +22,14 @@ TASK: W0-03C
 CYCLE: C03
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: PASS
-NEXT: KRUM
-WAITING_FOR: ChatGPT/Krum authorization for the next W0-03 stage; no automatic dispatch
+STATE: WORKING
+NEXT: GPT
+WAITING_FOR: NONE
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03C | C03 | NOT_ACTIVE | PASS | HANDOFF | CODEX | ChatGPT/Krum authorization for the next W0-03 stage; no automatic dispatch | PASS |
+| W0-03C | C03 | WORKING | PASS | HANDOFF | GPT | — | MERGED / PASS |
 
 ## Agent cards
 
@@ -34,15 +37,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | NOT_ACTIVE | — | — | 2026-09-26T15:40:32Z |
-| CODEX | PASS | W0-03C/C03/CX | ChatGPT/Krum authorization for the next W0-03 stage; no automatic dispatch | 2026-09-26T16:29:12Z |
+| GPT | WORKING | W0-03C/C03/GPT | — | 2026-09-26T16:45:12Z |
+| CODEX | PASS | W0-03C/C03/CX | — | 2026-09-26T16:29:12Z |
 | CLAUDE | HANDOFF | W0-03C/C03/CL | — | 2026-09-26T15:29:30Z |
 
-GPT → Codex → Claude → **Codex (PASS)** → GPT
+GPT → Codex → Claude → Codex → **GPT (WORKING)**
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `6a7611eeb3928c6a2a4e4dd03ce8e17f513204be` · blob `f44dc33b0c0266e3d64f0c85212facc5a57caf4f`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `4b2ee790c0de419f6025b394161e0b4ea3a2c602` · blob `093a1e1a2567fa780f684a711185d085d85145bd`
 - Review: `coordination/REVIEWS/W0-03C.md` · blob `4b87939057c1d573279b07879739691af9dc4da0` · verdict **PASS** on `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`
 - PR: [#20](https://github.com/krumingo/BEG_Worck/pull/20) · exact head `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847481878) · head `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`
@@ -77,5 +80,7 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-09-26T16:17:48Z | C03 | — | CONTROL_UPDATE | CODEX | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/2980d354430ebed75b2fbd3de340709ec8d2102c) |
 | 2026-09-26T16:26:58Z | C03 | — | CONTROL_UPDATE | KRUM | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/4f46212486e7f2704007cece774939230e0a51f0) |
 | 2026-09-26T16:29:48Z | C03 | — | EVIDENCE | CODEX | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847906756) |
+| 2026-09-26T16:37:03Z | C03 | — | EVIDENCE | KRUM | WORKING | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/issues/26#issuecomment-5847959264) |
+| 2026-09-26T16:45:12Z | C03 | — | CONTROL_UPDATE | CODEX | WORKING | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/4b2ee790c0de419f6025b394161e0b4ea3a2c602) |
 
-**Gate:** W0-03C is PASS. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-03C implementation is MERGED / PASS; the current GPT feedback step does not authorize the next implementation task or deployment.

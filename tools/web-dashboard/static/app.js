@@ -168,6 +168,24 @@ function renderAlerts(data) {
   }
 }
 
+function renderRelay(data) {
+  const relay = data.relay;
+  const host = el('f-relay-facts');
+  host.textContent = '';
+  if (!relay) {
+    text(el('f-relay-headline'), 'No verified relay snapshot');
+    return;
+  }
+  text(el('f-relay-headline'),
+    `${relay.last_agent_name} — ${relay.last_action}${relay.verified ? '' : ' (UNVERIFIED)'}`);
+  row(host, 'relay__fact', 'Last updated', relay.last_updated);
+  row(host, 'relay__fact', 'Relay', relay.status_display);
+  row(host, 'relay__fact', 'Now', relay.now);
+  row(host, 'relay__fact', 'Krum next action', relay.krum_next_action);
+  row(host, 'relay__fact', 'Send to', relay.send_to);
+  row(host, 'relay__fact', 'Next execution agent', relay.next_execution_agent);
+}
+
 /* ----------------------------------------------------------- agent cards */
 
 function renderAgents(data) {
@@ -567,6 +585,7 @@ function renderFeedDetail(data) {
 function render(data) {
   renderSynthetic(data);
   renderMasthead(data);
+  renderRelay(data);
   renderAlerts(data);
   renderAgents(data);
   renderFocus(data);

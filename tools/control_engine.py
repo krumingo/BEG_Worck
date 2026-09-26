@@ -132,8 +132,21 @@ def validate_state(state: dict) -> None:
         raise ControlError("INVALID", "requires_krum has no reason")
     if state["state"] in {"WAITING", "BLOCKED"} and not (state["waiting_for"] or "").strip():
         raise ControlError("INVALID", "waiting/blocked state has no waiting_for")
-    if state["next_agent"] == "KRUM" and not state["requires_krum"]:
-        raise ControlError("INVALID", "next Krum action needs explicit reason")
+    relay = state["relay"]
+    relay_time = dt.datetime.fromisoformat(relay["updated_at"].replace("Z", "+00:00"))
+    if relay_time > validated:
+        raise ControlError("INVALID", "relay updated after validation")
+    pending = relay["status"] in {"NOT_SENT", "SENT_WAITING_RECEIVER"}
+    if relay["required_by_krum"] != pending:
+        raise ControlError("CONFLICT", "relay status and manual responsibility disagree")
+    if pending:
+        if (not state["requires_krum"] or relay["from"] is None or relay["to"] is None
+                or relay["from"] == relay["to"] or relay["to"] != state["next_agent"]):
+            raise ControlError("CONFLICT", "pending relay must target the real next agent")
+    elif relay["status"] == "RECEIVED":
+        if (relay["from"] is None or relay["to"] is None or relay["from"] == relay["to"]
+                or relay["to"] != state["current_agent"]):
+            raise ControlError("CONFLICT", "received relay must belong to the current agent")
     if state["pr_number"] is None:
         if state["pr_head_sha"] is not None or state["pr_draft"] is not None or state["last_handoff"] is not None or state["last_review"] is not None:
             raise ControlError("INVALID", "PR evidence is incomplete")
@@ -182,12 +195,16 @@ def render_board(state: dict) -> str:
     pipeline = " → ".join(f"**{name} ({state['state']})**" if step == state["pipeline_step"] else name
                           for step, name in route)
     cycle = state["cycle_id"] + (" (migrated)" if state["cycle_origin"] == "MIGRATED" else "")
+    outcome = "MERGED / PASS" if state["progress"]["stage"] == "MERGED" and state["last_review"] and state["last_review"]["verdict"] == "PASS" else state["state"]
     refs = state["source_refs"]
     lines = ["# BEG_WORK control board", "",
              f"Source: `coordination/CONTROL_STATE.json` · branch: `{state['branch']}` · protocol v{state['protocol_version']}",
              f"ACTIVE source updated: {state['updated_at']} · CONTROL STATE: **{state['control_state_status']}** as of {state['validated_at']} ({state['validation_mode']})",
              "**Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.", "",
              f"CURRENT: {state['task_id']} / {cycle} / {state['current_agent']} / **{state['state']}**",
+             f"LAST: {state['relay']['last_agent']} — {state['relay']['last_event']} / {state['relay']['last_result']}",
+             f"RELAY: {state['relay']['status']} · {state['relay']['from'] or '—'} → {state['relay']['to'] or '—'}",
+             f"NOW: {state['current_agent']} {state['state']} · {state['pipeline_step']}",
              f"NEXT: {state['next_agent']}",
              f"KRUM ACTION: {'REQUIRED — ' + state['requires_krum_reason'] if state['requires_krum'] else 'NONE'}",
              f"WAITING FOR: {state['waiting_for'] or '—'}", "", "## Required agent banner", "",
@@ -199,7 +216,7 @@ def render_board(state: dict) -> str:
              f"WAITING_FOR: {state['waiting_for'] or 'NONE'}", "```", "",
              "| Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |",
              "|---|---|---|---|---|---|---|---|",
-             f"| {cell(state['task_id'])} | {cell(cycle)} | {cell(agent_status['GPT']['state'])} | {cell(agent_status['CODEX']['state'])} | {cell(agent_status['CLAUDE']['state'])} | {cell(state['current_agent'])} | {cell(state['waiting_for'])} | {cell(state['state'])} |", "",
+             f"| {cell(state['task_id'])} | {cell(cycle)} | {cell(agent_status['GPT']['state'])} | {cell(agent_status['CODEX']['state'])} | {cell(agent_status['CLAUDE']['state'])} | {cell(state['current_agent'])} | {cell(state['waiting_for'])} | {cell(outcome)} |", "",
              "## Agent cards", "",
              "Current agent state is explicit in `agent_states`; history below is evidence, not a status source.", "",
              "| Agent | State | Work-ID | Waiting for | Updated at (UTC) |",
@@ -229,7 +246,9 @@ def render_board(state: dict) -> str:
     for item in state["history"]:
         head = item["head_sha"][:8] if item["head_sha"] else "—"
         lines.append(f"| {cell(item['occurred_at'])} | {cell(item['cycle_id'])} | {cell(item['mapped_cycle'])} | {cell(item['kind'])} | {cell(item['actor'])} | {cell(item['state_after'])} | `{head}` | [evidence]({item['source_url']}) |")
-    if state["state"] == "BLOCKED":
+    if outcome == "MERGED / PASS":
+        gate = f"{state['task_id']} implementation is MERGED / PASS; the current {state['current_agent']} feedback step does not authorize the next implementation task or deployment."
+    elif state["state"] == "BLOCKED":
         gate = f"{state['task_id']} is BLOCKED. No new cycle, PASS, merge or deploy is authorized by this read-model."
     else:
         gate = f"{state['task_id']} is {state['state']}. Progression requires independent evidence and the relevant owner approval; this board grants none."

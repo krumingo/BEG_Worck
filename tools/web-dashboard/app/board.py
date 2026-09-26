@@ -49,6 +49,7 @@ def render_board(state: dict) -> str:
         for step, name in _ROUTE
     )
     cycle = state["cycle_id"] + (" (migrated)" if state["cycle_origin"] == "MIGRATED" else "")
+    outcome = "MERGED / PASS" if state["progress"]["stage"] == "MERGED" and state["last_review"] and state["last_review"]["verdict"] == "PASS" else state["state"]
     refs = state["source_refs"]
     lines = [
         "# BEG_WORK control board",
@@ -58,6 +59,9 @@ def render_board(state: dict) -> str:
         "**Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.",
         "",
         f"CURRENT: {state['task_id']} / {cycle} / {state['current_agent']} / **{state['state']}**",
+        f"LAST: {state['relay']['last_agent']} — {state['relay']['last_event']} / {state['relay']['last_result']}",
+        f"RELAY: {state['relay']['status']} · {state['relay']['from'] or '—'} → {state['relay']['to'] or '—'}",
+        f"NOW: {state['current_agent']} {state['state']} · {state['pipeline_step']}",
         f"NEXT: {state['next_agent']}",
         f"KRUM ACTION: {'REQUIRED — ' + state['requires_krum_reason'] if state['requires_krum'] else 'NONE'}",
         f"WAITING FOR: {state['waiting_for'] or '—'}",
@@ -79,7 +83,7 @@ def render_board(state: dict) -> str:
         "",
         "| Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |",
         "|---|---|---|---|---|---|---|---|",
-        f"| {_cell(state['task_id'])} | {_cell(cycle)} | {_cell(agent_status['GPT']['state'])} | {_cell(agent_status['CODEX']['state'])} | {_cell(agent_status['CLAUDE']['state'])} | {_cell(state['current_agent'])} | {_cell(state['waiting_for'])} | {_cell(state['state'])} |",
+        f"| {_cell(state['task_id'])} | {_cell(cycle)} | {_cell(agent_status['GPT']['state'])} | {_cell(agent_status['CODEX']['state'])} | {_cell(agent_status['CLAUDE']['state'])} | {_cell(state['current_agent'])} | {_cell(state['waiting_for'])} | {_cell(outcome)} |",
         "",
         "## Agent cards",
         "",
@@ -143,7 +147,9 @@ def render_board(state: dict) -> str:
         lines.append(
             f"| {_cell(item['occurred_at'])} | {_cell(item['cycle_id'])} | {_cell(item['mapped_cycle'])} | {_cell(item['kind'])} | {_cell(item['actor'])} | {_cell(item['state_after'])} | `{head}` | [evidence]({item['source_url']}) |"
         )
-    if state["state"] == "BLOCKED":
+    if outcome == "MERGED / PASS":
+        gate = f"{state['task_id']} implementation is MERGED / PASS; the current {state['current_agent']} feedback step does not authorize the next implementation task or deployment."
+    elif state["state"] == "BLOCKED":
         gate = f"{state['task_id']} is BLOCKED. No new cycle, PASS, merge or deploy is authorized by this read-model."
     else:
         gate = f"{state['task_id']} is {state['state']}. Progression requires independent evidence and the relevant owner approval; this board grants none."

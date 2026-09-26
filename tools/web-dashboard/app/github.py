@@ -173,6 +173,8 @@ class PullRequestInfo:
     state: str
     merged: bool
     html_url: str
+    merge_commit_sha: str = ""
+    base_ref: str = ""
 
 
 class GitHubReadOnlyClient:
@@ -276,6 +278,8 @@ class GitHubReadOnlyClient:
             state=str(payload.get("state") or ""),
             merged=bool(payload.get("merged")),
             html_url=str(payload.get("html_url") or ""),
+            merge_commit_sha=str((payload.get("merge_commit_sha") or "")),
+            base_ref=str((payload.get("base") or {}).get("ref") or ""),
         )
         self._cached[url] = info
         return info

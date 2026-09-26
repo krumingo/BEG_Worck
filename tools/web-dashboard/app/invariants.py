@@ -211,13 +211,22 @@ def _krum(state: dict, findings: list[Finding]) -> None:
             "BLOCKED_WITHOUT_REASON",
             f"State {_text(state, 'state')} carries no waiting_for.",
         )
-    if _text(state, "next_agent") == "KRUM" and requires is not True:
-        _add(
-            findings,
-            Status.INVALID,
-            "KRUM_NEXT_WITHOUT_FLAG",
-            "next_agent is KRUM but requires_krum is not set, so no reason is recorded.",
-        )
+    if _text(state, "next_agent") not in {"GPT", "CODEX", "CLAUDE"}:
+        _add(findings, Status.INVALID, "NEXT_NOT_AGENT", "next_agent must be a real execution/review agent.")
+    relay = state.get("relay")
+    if not isinstance(relay, dict):
+        _add(findings, Status.INVALID, "RELAY_MISSING", "Explicit relay state is required.")
+        return
+    status = relay.get("status")
+    pending = status in {"NOT_SENT", "SENT_WAITING_RECEIVER"}
+    if relay.get("required_by_krum") is not pending:
+        _add(findings, Status.CONFLICT, "RELAY_RESPONSIBILITY", "Relay status and manual responsibility disagree.")
+    if pending and (requires is not True or relay.get("from") == relay.get("to")
+                    or relay.get("to") != state.get("next_agent")):
+        _add(findings, Status.CONFLICT, "RELAY_NEXT_AGENT", "Pending relay must target the next agent.")
+    if status == "RECEIVED" and (relay.get("from") == relay.get("to")
+                                 or relay.get("to") != state.get("current_agent")):
+        _add(findings, Status.CONFLICT, "RELAY_RECEIVER", "Received relay must belong to the current agent.")
 
 
 def _evidence(state: dict, findings: list[Finding]) -> None:

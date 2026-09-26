@@ -50,7 +50,7 @@ class ControlProtocolTests(unittest.TestCase):
         state = self.state()
         self.assertEqual((state["task_id"], state["cycle_id"], state["state"]),
                          ("W0-03C", "C02", "BLOCKED"))
-        self.assertEqual(state["next_agent"], "KRUM")
+        self.assertEqual(state["next_agent"], "GPT")
         self.assertTrue(state["requires_krum"])
         self.assertEqual(state["pr_head_sha"], HEAD)
         self.assertIsNone(state["control_state_commit_sha"])
@@ -183,6 +183,12 @@ class ControlProtocolTests(unittest.TestCase):
                      last_handoff=None, last_review=None,
                      dispatch_state="RUNNING", dispatch_run_url="https://example.test/run/1",
                      requires_krum=False, requires_krum_reason=None,
+                     relay={"last_agent": "CODEX", "last_event": "Synthetic assignment",
+                            "last_result": "WORKING", "required_by_krum": False,
+                            "from": None, "to": None, "status": "NO_RELAY_NEEDED",
+                            "instruction": "No manual relay is needed.",
+                            "source_url": "https://example.test/run/1",
+                            "updated_at": "2026-09-23T00:00:00Z"},
                      validation_mode="SYNTHETIC_TEST", generated_from=["ACTIVE"],
                      progress={"mode": "STAGE_ONLY", "stage": "IMPLEMENTATION",
                                "completed": None, "total": None, "percent": None},
@@ -193,6 +199,61 @@ class ControlProtocolTests(unittest.TestCase):
                                "head_sha": None, "source_url": "https://example.test/run/1",
                                "source_commit_sha": None, "summary": "Synthetic implementation started."}])
         return state
+
+    def relay_state(self):
+        return json.loads(cp.STATE_PATH.read_text(encoding="utf-8"))
+
+    def test_codex_pass_to_gpt_pending_via_krum_relay(self):
+        state = self.relay_state()
+        state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
+                     current_work_id="W0-03C/C03/CX", state="PASS", pipeline_step="REVIEW",
+                     next_agent="GPT", waiting_for="Krum to relay the PASS result",
+                     requires_krum=True, requires_krum_reason="Copy Codex result to ChatGPT")
+        state["agent_states"]["GPT"] = {"state": "NOT_ACTIVE", "work_id": None,
+                                         "waiting_for": None, "updated_at": state["updated_at"]}
+        state["agent_states"]["CODEX"]["waiting_for"] = state["waiting_for"]
+        state["relay"].update(status="NOT_SENT", required_by_krum=True,
+                              instruction="Copy Codex PASS result to ChatGPT")
+        engine.validate_state(state)
+        self.assertIn("NEXT: GPT", engine.render_board(state))
+        self.assert_status("INVALID", lambda: engine.validate_state({**state, "next_agent": "KRUM"}))
+
+    def test_received_relay_moves_current_to_gpt_without_krum_action(self):
+        state = self.relay_state()
+        engine.validate_state(state)
+        self.assertEqual((state["current_agent"], state["pipeline_step"], state["next_agent"]),
+                         ("GPT", "ARCHITECT_FEEDBACK", "GPT"))
+        self.assertEqual((state["relay"]["status"], state["requires_krum"]), ("RECEIVED", False))
+        self.assertIn("KRUM ACTION: NONE", engine.render_board(state))
+
+    def test_gpt_instructions_to_codex_pending_via_krum(self):
+        state = self.relay_state()
+        state.update(state="HANDOFF", next_agent="CODEX", waiting_for="Krum to relay GPT instructions",
+                     requires_krum=True, requires_krum_reason="Copy GPT instructions to Codex")
+        state["agent_states"]["GPT"].update(state="HANDOFF", waiting_for=state["waiting_for"])
+        state["relay"].update(last_agent="GPT", last_event="Next-stage instructions",
+                              last_result="HANDOFF", from_="GPT")
+        state["relay"]["from"] = "GPT"
+        state["relay"].update(to="CODEX", status="NOT_SENT", required_by_krum=True,
+                              instruction="Copy GPT instructions to Codex")
+        state["relay"].pop("from_", None)
+        engine.validate_state(state)
+        self.assertIn("RELAY: NOT_SENT · GPT → CODEX", engine.render_board(state))
+
+    def test_codex_acknowledgement_starts_work_without_krum_action(self):
+        state = self.relay_state()
+        state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
+                     current_work_id="W0-03C/C03/CX", state="WORKING",
+                     pipeline_step="ASSIGNMENT", next_agent="CLAUDE", waiting_for=None,
+                     requires_krum=False, requires_krum_reason=None)
+        state["agent_states"]["GPT"].update(state="HANDOFF", waiting_for=None)
+        state["agent_states"]["CODEX"].update(state="WORKING", waiting_for=None)
+        state["relay"].update(last_agent="GPT", last_event="Next-stage instructions",
+                              last_result="HANDOFF", to="CODEX", status="RECEIVED",
+                              required_by_krum=False, instruction="Codex acknowledged instructions.")
+        state["relay"]["from"] = "GPT"
+        engine.validate_state(state)
+        self.assertIn("KRUM ACTION: NONE", engine.render_board(state))
 
     def test_generic_nonblocked_synthetic_task_without_pr(self):
         state = self.synthetic_state()

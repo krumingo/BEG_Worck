@@ -11,7 +11,7 @@
     "task_id", "cycle_id", "cycle_origin", "current_agent", "current_role", "agent_states",
     "current_work_id", "state", "pipeline_step", "next_agent", "waiting_for", "wave", "flow",
     "pr_number", "pr_head_sha", "pr_draft", "dispatch_state", "dispatch_run_url",
-    "last_handoff", "last_review", "requires_krum", "requires_krum_reason",
+    "last_handoff", "last_review", "relay", "requires_krum", "requires_krum_reason",
     "progress", "source_refs", "updated_at", "history"
   ],
   "properties": {
@@ -46,7 +46,7 @@
     "current_work_id": { "type": "string", "minLength": 1 },
     "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED"] },
     "pipeline_step": { "enum": ["ARCHITECT", "ASSIGNMENT", "IMPLEMENTATION", "REVIEW", "ARCHITECT_FEEDBACK"] },
-    "next_agent": { "enum": ["GPT", "CODEX", "CLAUDE", "KRUM", "NONE"] },
+    "next_agent": { "enum": ["GPT", "CODEX", "CLAUDE"] },
     "waiting_for": { "type": ["string", "null"] },
     "wave": { "type": "string", "pattern": "^W[0-9]+$" },
     "flow": { "type": "string", "pattern": "^FLOW-[0-9]{3}$" },
@@ -57,6 +57,7 @@
     "dispatch_run_url": { "type": ["string", "null"], "format": "uri" },
     "last_handoff": { "anyOf": [{ "$ref": "#/$defs/handoff" }, { "type": "null" }] },
     "last_review": { "anyOf": [{ "$ref": "#/$defs/review" }, { "type": "null" }] },
+    "relay": { "$ref": "#/$defs/relay" },
     "requires_krum": { "type": "boolean" },
     "requires_krum_reason": { "type": ["string", "null"] },
     "progress": { "$ref": "#/$defs/progress" },
@@ -66,6 +67,22 @@
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "relay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["last_agent", "last_event", "last_result", "required_by_krum", "from", "to", "status", "instruction", "source_url", "updated_at"],
+      "properties": {
+        "last_agent": { "enum": ["GPT", "CODEX", "CLAUDE"] },
+        "last_event": { "type": "string", "minLength": 1 },
+        "last_result": { "type": "string", "minLength": 1 },
+        "required_by_krum": { "type": "boolean" },
+        "from": { "enum": ["GPT", "CODEX", "CLAUDE", null] },
+        "to": { "enum": ["GPT", "CODEX", "CLAUDE", null] },
+        "status": { "enum": ["NOT_SENT", "SENT_WAITING_RECEIVER", "RECEIVED", "NO_RELAY_NEEDED"] },
+        "instruction": { "type": "string", "minLength": 1 },
+        "source_url": { "type": "string", "format": "uri" },
+        "updated_at": { "type": "string", "format": "date-time", "pattern": "Z$" }
+      }
+    },
     "agent_state": {
       "type": "object", "additionalProperties": false,
       "required": ["state", "work_id", "waiting_for", "updated_at"],

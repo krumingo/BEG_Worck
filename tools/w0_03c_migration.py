@@ -231,7 +231,7 @@ def build_state(active_text: str, review_text: str, pr: dict, handoff: dict, can
                       "updated_at": updated_at},
             "CLAUDE": {"state": "NOT_ACTIVE", "work_id": None, "waiting_for": None, "updated_at": updated_at},
         },
-        "current_work_id": "W0-03C/C02/CX", "state": "BLOCKED", "pipeline_step": "REVIEW", "next_agent": "KRUM",
+        "current_work_id": "W0-03C/C02/CX", "state": "BLOCKED", "pipeline_step": "REVIEW", "next_agent": "GPT",
         "waiting_for": "Explicit technical correction cycle or design decision from Krum",
         "wave": "W0", "flow": "FLOW-032", "pr_number": 20,
         "pr_head_sha": head, "pr_draft": True,
@@ -240,6 +240,11 @@ def build_state(active_text: str, review_text: str, pr: dict, handoff: dict, can
                          "at": "2026-09-22T06:03:35Z"},
         "last_review": {"path": "coordination/REVIEWS/W0-03C.md", "blob_sha": review_blob,
                         "reviewed_head_sha": head, "verdict": "BLOCKED"},
+        "relay": {"last_agent": "CODEX", "last_event": "C02 independent review", "last_result": "BLOCKED",
+                  "required_by_krum": True, "from": "CODEX", "to": "GPT", "status": "NOT_SENT",
+                  "instruction": "Relay the blocked C02 review to ChatGPT for an architecture decision.",
+                  "source_url": "https://github.com/krumingo/BEG_Worck/commit/3b991fae892f7a22fdeb3e9d0f0920aa71841f19",
+                  "updated_at": updated_at},
         "requires_krum": True,
         "requires_krum_reason": "Correction cycle 1-of-1 is exhausted; authorize a new technical cycle or decide ambiguous create_index handling.",
         "progress": {"mode": "STAGE_ONLY", "stage": "REVIEW", "completed": None,
@@ -275,8 +280,22 @@ def validate_sources(state: dict, active_text: str, review_text: str, pr: dict,
         raise ControlError("CONFLICT", "ACTIVE PR-Head conflicts with live PR")
     if r.get("Head-SHA") != pr.get("headRefOid"):
         raise ControlError("STALE", "REVIEW head is stale")
-    if a.get("Status") != state["state"] or not r.get("Verdict", "").startswith(state["state"]):
-        raise ControlError("CONFLICT", "ACTIVE/REVIEW verdict changed")
+    if a.get("Current-State", a.get("Status")) != state["state"]:
+        raise ControlError("CONFLICT", "ACTIVE current state changed")
+    if not r.get("Verdict", "").startswith(state["last_review"]["verdict"]):
+        raise ControlError("CONFLICT", "independent REVIEW verdict changed")
+    for field, expected in (("Current-Agent", state["current_agent"]),
+                            ("Pipeline-Step", state["pipeline_step"]),
+                            ("Next-Agent", state["next_agent"]),
+                            ("Relay-State", state["relay"]["status"]),
+                            ("Relay-From", state["relay"]["from"]),
+                            ("Relay-To", state["relay"]["to"])):
+        if field in a and a[field] != expected:
+            raise ControlError("CONFLICT", f"ACTIVE {field} changed")
+        if state["pipeline_step"] == "ARCHITECT_FEEDBACK" and field not in a:
+            raise ControlError("CONFLICT", f"ACTIVE {field} missing for architect feedback")
+    if a.get("Krum-Action") == "NONE" and state["requires_krum"]:
+        raise ControlError("CONFLICT", "ACTIVE Krum action conflicts with relay")
     if state["progress"]["stage"] == "MERGED":
         merge = pr.get("mergeCommit") or {}
         if (a.get("Integration-State") != "MERGED" or a.get("Merge-Base") != pr.get("baseRefName")
