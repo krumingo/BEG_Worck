@@ -12,6 +12,13 @@ It never prints the token. It reads ``BEGWORK_GITHUB_TOKEN`` to *search for* the
 in responses, and reports only whether it was found. Nothing it writes to stdout can
 disclose a credential.
 
+Exit codes
+----------
+``0`` everything asked for was proven. ``1`` something failed. ``2`` a check could not
+be proven on this host or from this surface (a development host cannot demonstrate
+container write denial; a probe cannot establish a token's scope) -- reported as
+unproven rather than quietly passing.
+
 Usage
 -----
     # Live rounds against the configured branch, in-process:
@@ -27,6 +34,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import json
 import os
@@ -247,47 +255,239 @@ def token_containment(base_url: str) -> int:
 # ------------------------------------------------------------- remote checks
 
 
-def remote_rounds(base_url: str, count: int, interval: float) -> int:
-    """Observe a running instance completing consecutive successful rounds.
+@dataclasses.dataclass(frozen=True, slots=True)
+class TargetProfile:
+    """What could be established about the target before observing it."""
 
-    This is the NAS case: the container is already running with its own token, and the
-    probe watches ``/healthz`` advance its round counter without errors.
+    reachable: bool
+    token_configured: bool | None
+    refresh_seconds: int | None
+    repository: str | None
+    branch: str | None
+    acceptance_mode: bool | None
+    detail: str = ""
+
+
+def profile_target(base_url: str) -> TargetProfile:
+    """Read the target's own description of itself from ``/api/state``.
+
+    Used to answer one question before any refresh claim is made: is this target even
+    configured to authenticate? ``config.token_configured`` is a boolean the dashboard
+    publishes; the token itself is never exposed, by design.
     """
-    print(f"REMOTE REFRESH OBSERVATION — {base_url}")
-    header = f"{'#':>2}  {'timestamp':20}  {'link':8}  {'status':9}  {'rounds':>6}  {'fails':>5}  age"
-    print(header)
-    print("-" * len(header))
+    try:
+        with urllib.request.urlopen(base_url.rstrip("/") + "/api/state", timeout=10) as reply:
+            payload = json.loads(reply.read())
+    except (OSError, ValueError) as error:
+        return TargetProfile(False, None, None, None, None, None, f"{error.__class__.__name__}: {error}")
 
-    seen = []
-    last_rounds = None
-    for index in range(1, count + 1):
+    config = payload.get("config") or {}
+    return TargetProfile(
+        reachable=True,
+        token_configured=config.get("token_configured"),
+        refresh_seconds=payload.get("refresh_seconds"),
+        repository=config.get("repository"),
+        branch=config.get("branch"),
+        acceptance_mode=config.get("acceptance_mode"),
+    )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ObservationResult:
+    counted: int
+    required: int
+    samples: int
+    failure: str | None
+
+    @property
+    def ok(self) -> bool:
+        return self.failure is None and self.counted >= self.required
+
+
+def observe_rounds(
+    base_url: str,
+    count: int,
+    poll_interval: float,
+    max_wait: float,
+    printer=print,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+) -> ObservationResult:
+    """Count refresh cycles, requiring ``/healthz.rounds`` to advance for each one.
+
+    A *cycle* is one completed refresh by the target. Polling ``/healthz`` five times
+    does not make five cycles: without checking that the counter moved, five samples of
+    a single round -- or of a target whose refresh loop has stopped entirely -- read as
+    five successes. That was the defect this function is a correction for.
+
+    So each counted cycle requires ``rounds`` to be **strictly greater** than the value
+    at the previously counted cycle, and each cycle has a bounded wait: if no new round
+    arrives within ``max_wait`` seconds the observation fails rather than reporting what
+    it merely kept sampling. A round that advances but is unhealthy fails immediately --
+    the claim being tested is *consecutive successful* cycles.
+    """
+    header = f"{'sample':>6}  {'timestamp':20}  {'link':8}  {'status':9}  {'rounds':>6}  {'fails':>5}  {'age':>7}  note"
+    printer(header)
+    printer("-" * len(header))
+
+    baseline: int | None = None
+    last_counted: int | None = None
+    counted = 0
+    samples = 0
+    cycle_deadline = monotonic() + max_wait
+
+    while counted < count:
+        if monotonic() > cycle_deadline:
+            waited = max_wait
+            failure = (
+                f"no new refresh round within the bounded {waited:.0f}s window after "
+                f"{counted} counted cycle(s); the target's refresh loop is not advancing"
+            )
+            printer(f"{'--':>6}  {now():20}  TIMEOUT   {failure}")
+            return ObservationResult(counted, count, samples, failure)
+
+        samples += 1
         try:
             with urllib.request.urlopen(base_url.rstrip("/") + "/healthz", timeout=10) as reply:
                 health = json.loads(reply.read())
-        except OSError as error:
-            print(f"{index:>2}  {now():20}  UNREACHABLE ({error})")
-            seen.append(False)
-            time.sleep(interval)
-            continue
+        except (OSError, ValueError) as error:
+            failure = f"target unreachable at sample {samples}: {error}"
+            printer(f"{samples:>6}  {now():20}  UNREACHABLE  {error}")
+            return ObservationResult(counted, count, samples, failure)
 
-        advanced = last_rounds is None or health.get("rounds", 0) > last_rounds
-        last_rounds = health.get("rounds", 0)
-        ok = health.get("link") == "ONLINE" and not health.get("consecutive_failures")
-        seen.append(ok)
+        rounds = health.get("rounds")
+        link = health.get("link")
+        failures = health.get("consecutive_failures") or 0
         age = health.get("age_seconds")
-        print(
-            f"{index:>2}  {now():20}  {str(health.get('link')):8}  "
-            f"{str(health.get('control_state_status')):9}  {last_rounds:>6}  "
-            f"{health.get('consecutive_failures', 0):>5}  "
-            f"{'—' if age is None else format(age, '.1f')}s"
-            f"{'' if advanced else '   (no new round yet)'}"
-        )
-        if index < count:
-            time.sleep(interval)
+        healthy = link == "ONLINE" and not failures
 
-    good = sum(1 for item in seen if item)
-    print(f"\nrounds observed healthy: {good}/{count}")
-    return 0 if good == count else 1
+        if not isinstance(rounds, int):
+            failure = f"/healthz did not report an integer round counter (got {rounds!r})"
+            printer(f"{samples:>6}  {now():20}  {str(link):8}  {'':9}  {'?':>6}  {failures:>5}  {'':>7}  {failure}")
+            return ObservationResult(counted, count, samples, failure)
+
+        if baseline is None:
+            baseline = rounds
+            last_counted = rounds
+            note = f"baseline (rounds={rounds}); waiting for it to advance"
+            advanced = False
+        else:
+            advanced = rounds > last_counted
+            note = "" if advanced else "no new round yet — not counted"
+
+        printer(
+            f"{samples:>6}  {now():20}  {str(link):8}  {str(health.get('control_state_status')):9}  "
+            f"{rounds:>6}  {failures:>5}  "
+            f"{('—' if age is None else format(age, '.1f') + 's'):>7}  {note}"
+        )
+
+        if advanced:
+            if not healthy:
+                failure = (
+                    f"round {rounds} completed but the target is not healthy "
+                    f"(link={link}, consecutive_failures={failures}); "
+                    "the run was not five consecutive *successful* cycles"
+                )
+                printer(f"{'--':>6}  {now():20}  FAILED    {failure}")
+                return ObservationResult(counted, count, samples, failure)
+            counted += 1
+            last_counted = rounds
+            cycle_deadline = monotonic() + max_wait
+            printer(f"{'--':>6}  {now():20}  COUNTED   cycle {counted}/{count} at rounds={rounds}")
+
+        if counted < count:
+            sleep(poll_interval)
+
+    return ObservationResult(counted, count, samples, None)
+
+
+def remote_rounds(
+    base_url: str,
+    count: int,
+    interval: float,
+    max_wait: float | None = None,
+    require_auth: bool = False,
+    auth_evidence: str = "",
+    printer=print,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+) -> int:
+    """Observe a running instance completing consecutive successful refresh cycles.
+
+    This is the NAS case. Two claims are kept apart on purpose:
+
+    * **Did it refresh?** Proven here, by requiring the round counter to advance.
+    * **Was it authenticated, with read-only scope?** Only partly provable from
+      outside. That the target has a token configured is published at ``/api/state``.
+      That the token's *scope* is read-only cannot be established from the dashboard's
+      surface at all -- it never exposes the token, deliberately -- so it is reported as
+      operator-attested or as unproven, never as something this probe verified.
+    """
+    printer(f"REMOTE REFRESH OBSERVATION — {base_url}")
+    printer("")
+
+    profile = profile_target(base_url)
+    printer("TARGET")
+    if not profile.reachable:
+        printer(f"  /api/state unreachable: {profile.detail}")
+    else:
+        printer(f"  repository        : {profile.repository}")
+        printer(f"  branch            : {profile.branch}")
+        printer(f"  refresh cadence   : {profile.refresh_seconds}s")
+        printer(f"  token configured  : {profile.token_configured}")
+        printer(f"  acceptance mode   : {profile.acceptance_mode}")
+    printer("")
+
+    if max_wait is None:
+        # Three cadences plus slack: long enough to survive one missed round and a
+        # backoff step, short enough that a stopped loop is reported rather than waited
+        # out. Bounded in both directions.
+        cadence = profile.refresh_seconds if isinstance(profile.refresh_seconds, int) else 30
+        max_wait = min(600.0, max(90.0, cadence * 3.0))
+    printer(f"OBSERVATION — {count} cycles, polling every {interval:.0f}s, "
+            f"max {max_wait:.0f}s per cycle for the round counter to advance")
+
+    result = observe_rounds(
+        base_url, count, interval, max_wait, printer=printer, sleep=sleep, monotonic=monotonic
+    )
+
+    printer("")
+    printer(f"cycles counted (strictly increasing rounds): {result.counted}/{result.required} "
+            f"from {result.samples} sample(s)")
+    if result.failure:
+        printer(f"REFRESH RESULT: FAIL — {result.failure}")
+        return 1
+    printer("REFRESH RESULT: PASS — each counted cycle had a strictly higher round counter")
+
+    # --- the authentication claim, kept separate from the refresh claim ---------------
+    printer("")
+    printer("AUTHENTICATION")
+    if profile.token_configured is not True:
+        printer("  token configured on target : NO (or not reported)")
+        printer("  read-only scope            : NOT APPLICABLE")
+        printer("  AUTHENTICATED REFRESH PASS : NOT CLAIMED — the target is reading anonymously.")
+        if require_auth:
+            printer("  --require-auth was set, so this is a failure.")
+            return 1
+        printer("  The refresh cycles above are ANONYMOUS. Configure a read-only token and re-run")
+        printer("  with --require-auth to produce authenticated evidence.")
+        return 2
+
+    printer("  token configured on target : YES (value never exposed by the dashboard)")
+    if not auth_evidence.strip():
+        printer("  read-only scope            : UNPROVEN")
+        printer("  AUTHENTICATED REFRESH PASS : NOT CLAIMED.")
+        printer("  A configured token proves authentication, not that its scope is read-only, and")
+        printer("  the dashboard never exposes the token, so this probe cannot establish scope.")
+        printer("  Confirm in GitHub token settings that it is repository-scoped to this repo with")
+        printer("  Contents: Read-only and Pull requests: Read-only, then re-run with")
+        printer("  --auth-evidence '<how and when scope was confirmed>'.")
+        return 2
+
+    printer(f"  read-only scope            : OPERATOR-ATTESTED — {auth_evidence.strip()}")
+    printer("  AUTHENTICATED REFRESH PASS : YES, with scope attested by the operator above")
+    printer("  (attestation, not probe-verified: the token is never exposed to this probe).")
+    return 0
 
 
 def main() -> int:
@@ -297,6 +497,12 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=20.0, help="seconds between remote polls")
     parser.add_argument("--seconds", type=float, default=8.0, help="write-audit duration")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080", help="a running instance")
+    parser.add_argument("--max-wait", type=float, default=None,
+                        help="bounded seconds to wait for each new round (default: 3x the target cadence, min 90)")
+    parser.add_argument("--require-auth", action="store_true",
+                        help="fail unless the target is configured with a token")
+    parser.add_argument("--auth-evidence", default="",
+                        help="operator attestation of how read-only token scope was confirmed")
     args = parser.parse_args()
 
     settings = Settings.from_environment()
@@ -306,7 +512,10 @@ def main() -> int:
         codes.append(live_rounds(args.count, settings))
         print("")
     if args.mode in {"remote"}:
-        codes.append(remote_rounds(args.base_url, args.count, args.interval))
+        codes.append(remote_rounds(args.base_url, args.count, args.interval,
+                                   max_wait=args.max_wait,
+                                   require_auth=args.require_auth,
+                                   auth_evidence=args.auth_evidence))
         print("")
     if args.mode in {"writes", "all"}:
         codes.append(write_audit(args.seconds, settings))
@@ -317,8 +526,12 @@ def main() -> int:
         codes.append(token_containment(args.base_url))
         print("")
 
-    # 2 means "not provable on this host", which is not a failure of the software.
-    return 1 if any(code == 1 for code in codes) else 0
+    # 1 is a failure. 2 is "not proven from here", which must stay distinguishable from
+    # success: an acceptance gate checking `rc == 0` should not read an unproven claim
+    # as a passed one.
+    if any(code == 1 for code in codes):
+        return 1
+    return 2 if any(code == 2 for code in codes) else 0
 
 
 if __name__ == "__main__":

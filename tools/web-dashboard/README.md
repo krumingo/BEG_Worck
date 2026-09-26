@@ -286,8 +286,25 @@ whether it was found.
 python3 scripts/acceptance_probe.py rounds --count 5          # consecutive live rounds
 python3 scripts/acceptance_probe.py writes                    # write audit + denial probe
 python3 scripts/acceptance_probe.py token --base-url http://127.0.0.1:8080
-python3 scripts/acceptance_probe.py remote --base-url http://<nas>:8787 --count 5
+python3 scripts/acceptance_probe.py remote --base-url http://<nas>:8787 --count 5 \
+    --require-auth --auth-evidence "fine-grained PAT <date>: repo-scoped, Contents:read, PRs:read"
 ```
+
+`remote` counts a refresh cycle only when the target's `/healthz.rounds` counter is
+**strictly higher** than at the previously counted cycle, and fails if no new round
+arrives inside a bounded window. Polling five times is not five cycles: a target whose
+refresh loop has stopped would otherwise pass the very check meant to prove it running.
+
+It also keeps two claims apart. That the target *refreshes* is proven by the counter.
+That it *authenticates with read-only scope* is not fully provable from outside: the
+dashboard publishes whether a token is configured but never exposes the token, so scope
+has to be confirmed in GitHub's token settings and passed in with `--auth-evidence`,
+where it is reported as operator-attested rather than probe-verified. Without it the
+probe reports the authenticated claim as **NOT CLAIMED** instead of implying it.
+
+Exit codes: `0` everything asked for was proven, `1` something failed, `2` a check could
+not be proven from this host or surface — so an acceptance gate checking `rc == 0` never
+reads an unproven claim as a passed one.
 
 `writes` reports two different things. The **audit** shows what the application tries to
 do and is valid on any host. The **denial probe** shows whether the filesystem refuses a
