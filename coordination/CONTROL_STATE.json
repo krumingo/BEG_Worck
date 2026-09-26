@@ -1,13 +1,13 @@
 {
   "protocol_version": 1,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-26T15:47:34Z",
+  "validated_at": "2026-09-26T16:18:21Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "bdb384a956b0585ceec1cdc3f2a0a1da2f6dba08",
-  "control_state_commit_sha": "f803859ac27187de5c70c02ffb0dc056ca933d6c",
+  "active_source_commit_sha": "2980d354430ebed75b2fbd3de340709ec8d2102c",
+  "control_state_commit_sha": "dbcdd3b65e3cb2f04b4766704cb8507cf9709d59",
   "generated_from": [
     "ACTIVE",
     "REVIEW",
@@ -30,7 +30,7 @@
       "state": "PASS",
       "work_id": "W0-03C/C03/CX",
       "waiting_for": null,
-      "updated_at": "2026-09-26T15:40:32Z"
+      "updated_at": "2026-09-26T16:17:48Z"
     },
     "CLAUDE": {
       "state": "HANDOFF",
@@ -42,7 +42,7 @@
   "current_work_id": "W0-03C/C03/CX",
   "state": "PASS",
   "pipeline_step": "REVIEW",
-  "next_agent": "NONE",
+  "next_agent": "KRUM",
   "waiting_for": null,
   "wave": "W0",
   "flow": "FLOW-032",
@@ -58,24 +58,24 @@
   },
   "last_review": {
     "path": "coordination/REVIEWS/W0-03C.md",
-    "blob_sha": "551cc15a860d1befa25dd68567de0242c695dd8d",
+    "blob_sha": "4b87939057c1d573279b07879739691af9dc4da0",
     "reviewed_head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
     "verdict": "PASS"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "Final merge decision for Draft PR #20; no merge, production index build or deployment is implied.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "PASS",
+    "stage": "GATE_PASS",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "b451add4fdd2757d92138eaafd1656331bc87b10",
+    "active_blob_sha": "124647f4108042dd6765fff0f4a76172f8de367c",
     "review_path": "coordination/REVIEWS/W0-03C.md",
-    "review_blob_sha": "551cc15a860d1befa25dd68567de0242c695dd8d",
+    "review_blob_sha": "4b87939057c1d573279b07879739691af9dc4da0",
     "handoff_comment_sha256": "357fe754714374138b7ab696aa24d334b82b952a1965b5cd6fcaae37e8a12443",
     "canonical_docs": [
       {
@@ -100,7 +100,7 @@
       }
     ]
   },
-  "updated_at": "2026-09-26T15:40:32Z",
+  "updated_at": "2026-09-26T16:17:48Z",
   "history": [
     {
       "event_id": "pr20-comment-5764513929",
@@ -310,7 +310,35 @@
       "head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
       "source_url": "https://github.com/krumingo/BEG_Worck/commit/bdb384a956b0585ceec1cdc3f2a0a1da2f6dba08",
       "source_commit_sha": "bdb384a956b0585ceec1cdc3f2a0a1da2f6dba08",
-      "summary": "Independent C03 code correction review PASS on exact head; W0-03C gate and real-Mongo evidence remain open."
+      "summary": "Independent C03 code correction review PASS on exact head; W0-03C gate and real-Mongo evidence remained open at that time."
+    },
+    {
+      "event_id": "pr20-comment-5847810160",
+      "occurred_at": "2026-09-26T16:16:30Z",
+      "task_id": "W0-03C",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "EVIDENCE",
+      "state_after": "PASS",
+      "head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847810160",
+      "source_commit_sha": null,
+      "summary": "Disposable loopback MongoDB 8.0.30 exact-head suite: 20 collected, 20 passed, 0 skipped; server and test data removed."
+    },
+    {
+      "event_id": "queue-2980d354",
+      "occurred_at": "2026-09-26T16:17:48Z",
+      "task_id": "W0-03C",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "PASS",
+      "head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/2980d354430ebed75b2fbd3de340709ec8d2102c",
+      "source_commit_sha": "2980d354430ebed75b2fbd3de340709ec8d2102c",
+      "summary": "Canonical queue records W0-03C pre-merge gate validation PASS; final Draft PR merge decision remains Krum-owned."
     }
   ]
 }
