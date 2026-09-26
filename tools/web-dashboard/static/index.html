@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BEG_WORK Control Center</title>
+<meta name="description" content="Read-only management view of the BEG_WORK ChatGPT / Codex / Claude control protocol.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0e15">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<noscript class="noscript">
+  This view renders a JSON projection in the browser, so it needs JavaScript.
+  The same data is available without it at <a href="/api/state">/api/state</a>.
+</noscript>
+
+<!--
+  Shown only when the server is serving a synthetic acceptance scenario. It is the
+  first thing in the document and cannot be scrolled past, because the whole risk of
+  an acceptance mode is someone mistaking a demonstration for the real queue.
+-->
+<div class="synthetic" id="f-synthetic" hidden>
+  <strong class="synthetic__tag">SYNTHETIC</strong>
+  <span id="f-synthetic-text">Acceptance data — not live verification.</span>
+</div>
+
+<header class="masthead">
+  <div class="masthead__brand">
+    <span class="wordmark">BEG_WORK</span>
+    <span class="wordmark__sub">Control Center</span>
+  </div>
+
+  <div class="masthead__meta">
+    <span class="meta"><span class="meta__k">Project</span><span class="meta__v" id="f-project">BEG_Work</span></span>
+    <span class="meta"><span class="meta__k">Repository</span><span class="meta__v" id="f-repo">—</span></span>
+    <span class="meta"><span class="meta__k">Branch</span><span class="meta__v" id="f-branch">—</span></span>
+    <span class="meta"><span class="meta__k">Updated</span><span class="meta__v" id="f-verified-at">—</span></span>
+  </div>
+
+  <!--
+    Two separate indicators, never merged. The feed pill is about this dashboard's
+    connection and the age of its last read. The verification chip is about the
+    control state's own protocol status. A dropped network must not read as a
+    protocol conflict, and a real CONFLICT must not be excused as a blip.
+  -->
+  <div class="masthead__signals">
+    <span class="feed" id="f-link" data-feed="OFFLINE">
+      <span class="feed__dot" aria-hidden="true"></span>
+      <span class="feed__label">FEED</span>
+      <strong class="feed__value" id="f-link-value">OFFLINE</strong>
+      <span class="feed__age" id="f-age"></span>
+    </span>
+    <span class="vchip" id="f-status" data-status="UNKNOWN">
+      <span class="vchip__glyph" id="f-status-glyph" aria-hidden="true">…</span>
+      <span class="vchip__label">VERIFICATION</span>
+      <strong class="vchip__value" id="f-status-value">UNKNOWN</strong>
+    </span>
+  </div>
+</header>
+
+<div class="alert alert--krum" id="f-krum" data-required="false" hidden>
+  <span class="alert__tag" id="f-krum-value">KRUM ACTION</span>
+  <span class="alert__body" id="f-krum-reason"></span>
+</div>
+
+<div class="alert alert--warn" id="f-statusalert" hidden>
+  <span class="alert__tag">NOT VERIFIED</span>
+  <span class="alert__body" id="f-statusalert-text"></span>
+</div>
+
+<main class="shell">
+
+  <section class="panel panel--agents" aria-labelledby="h-agents">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-agents">Agents</h2>
+      <p class="panel__hint">From <code>agent_states</code>. History is evidence, not a status source.</p>
+    </div>
+    <div class="agents" id="f-agents"></div>
+  </section>
+
+  <section class="panel panel--focus" aria-labelledby="h-focus">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-focus">Current task</h2>
+      <p class="panel__hint" id="f-focus-hint">—</p>
+    </div>
+
+    <div class="focus">
+      <div class="focus__id">
+        <span class="focus__task" id="f-task">—</span>
+        <span class="focus__cycle" id="f-cycle">—</span>
+      </div>
+      <div class="focus__status">
+        <span class="bigstate" id="f-state" data-state="UNKNOWN">CONNECTING</span>
+        <span class="focus__note" id="f-verified">awaiting first verified round</span>
+      </div>
+    </div>
+
+    <dl class="focus__facts">
+      <div class="fact"><dt>Wave</dt><dd id="f-wave">—</dd></div>
+      <div class="fact"><dt>Flow</dt><dd id="f-flow">—</dd></div>
+      <div class="fact"><dt>Stage</dt><dd id="f-stage">—</dd></div>
+      <div class="fact"><dt>Work-ID</dt><dd id="f-workid">—</dd></div>
+    </dl>
+
+    <!-- Stage meter: a position in the six-step strip below, never a completion bar. -->
+    <div class="progress" id="f-progress"></div>
+  </section>
+
+  <section class="panel panel--next" aria-labelledby="h-next">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-next">Next steps</h2>
+    </div>
+    <div id="f-next-steps"></div>
+    <p class="gate" id="f-gate">—</p>
+  </section>
+
+  <section class="panel panel--workflow" aria-labelledby="h-workflow">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-workflow">Workflow</h2>
+      <p class="panel__hint">
+        Presentation labels over the canonical pipeline. <strong>NEXT</strong> is derived from
+        <code>next_agent</code> and is not a protocol state. Position, not completion.
+      </p>
+    </div>
+    <ol class="wf" id="f-workflow"></ol>
+  </section>
+
+  <section class="panel panel--tasks" aria-labelledby="h-tasks">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-tasks">Tasks</h2>
+    </div>
+    <div class="table-wrap">
+      <table class="tasks" id="f-tasks">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Task</th>
+            <th scope="col">Status</th>
+            <th scope="col">Progress</th>
+            <th scope="col">Current agent</th>
+            <th scope="col">Cycle</th>
+            <th scope="col">Updated</th>
+          </tr>
+        </thead>
+        <tbody id="f-tasks-body"></tbody>
+      </table>
+    </div>
+    <p class="panel__hint" id="f-tasks-note"></p>
+  </section>
+
+  <section class="panel panel--activity" aria-labelledby="h-activity">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-activity">Recent activity</h2>
+      <p class="panel__hint">Newest first. Append-only; a mapped cycle is an explicit mapping.</p>
+    </div>
+    <ol class="timeline" id="f-history"></ol>
+  </section>
+
+  <!--
+    Verification detail is collapsed by default so the page reads as a control center
+    rather than a diagnostics dump. Blockers and KRUM ACTION stay above, uncollapsed,
+    because those are the things someone must act on.
+  -->
+  <details class="panel panel--diag" id="f-diag">
+    <summary class="diag__summary">
+      <span class="diag__title">Verification &amp; evidence</span>
+      <span class="diag__count" id="f-diag-count"></span>
+    </summary>
+
+    <div class="diag__body">
+      <h3 class="diag__h">Findings</h3>
+      <ul class="findings" id="f-findings"></ul>
+
+      <h3 class="diag__h">Evidence</h3>
+      <ul class="evidence" id="f-evidence"></ul>
+
+      <h3 class="diag__h">Feed</h3>
+      <dl class="focus__facts">
+        <div class="fact"><dt>Next read</dt><dd id="f-next">—</dd></div>
+        <div class="fact"><dt>Protocol</dt><dd id="f-protocol">—</dd></div>
+        <div class="fact"><dt>Token</dt><dd id="f-token">—</dd></div>
+        <div class="fact"><dt>Rounds</dt><dd id="f-rounds">—</dd></div>
+      </dl>
+      <p class="diag__error" id="f-error"></p>
+    </div>
+  </details>
+</main>
+
+<footer class="footer">
+  <p class="footer__note">
+    <strong>Snapshot, not live truth.</strong> A verified round means the bytes read this round
+    agreed with each other. Recheck source blobs, PR head and the independent review before any
+    consequential action. This surface never writes to GitHub or to operational state.
+  </p>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
