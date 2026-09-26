@@ -1,7 +1,10 @@
 # BEG_Work Claude assignment queue
 
 Status: PASS
-Gate-validation: PASS (W0-03C / C03 exact-head real-Mongo, pre-merge only)
+Gate-validation: PASS (W0-03C / C03 exact-head real-Mongo, 20/20, 0 skipped)
+Integration-State: MERGED
+Merge-Base: main
+Merge-SHA: 4f46212486e7f2704007cece774939230e0a51f0
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_012DCBdX2BRA6U2UR5zkdkPe
 Task-ID: W0-03C
@@ -44,3 +47,6 @@ Claude's final [HANDOFF](https://github.com/krumingo/BEG_Worck/pull/20#issuecomm
 
 ## Exact-head real-Mongo gate validation
 After that code review, Codex ran the complete `backend/tests/test_w0_03c_real_mongo.py` suite against a new, temporary MongoDB Community 8.0.30 instance bound only to `127.0.0.1`: **20 collected, 20 passed, 0 skipped**. The three C03 real-server cases (create-then-raise/matching reconciliation, read-back of all 25 planned definitions and provable absence, foreign-definition rollback refusal) passed. The temporary server was stopped and its test-only directory removed. [PR #20 evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847810160) and the appended review section record the exact commands, cleanup and limits. The earlier restored-copy duplicate report was CLEAN for the 22 September archive; its snapshot boundary remains explicit. W0-03C **pre-merge gate validation is PASS** on the exact head above, but this authorizes no merge, deployment, production index build or next implementation task. Final PR #20 merge decision belongs to Krum.
+
+## Final integration — C03
+Krum explicitly authorized final integration after the exact-head independent review and disposable real-Mongo gate PASS. PR #20 was confirmed open/Draft on `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`, marked ready, then merged into its GitHub base branch `main` at `4f46212486e7f2704007cece774939230e0a51f0`. The implementation head, last PASS review and 20/20 real-Mongo evidence refer to the same SHA; no later implementation push was observed. **W0-03C = MERGED / PASS**, with C03 the last completed cycle. Dispatch remains `NONE`; no next task is assigned. This is code integration only: no deployment, production index build, Atlas or NAS production write was performed. Next: wait for ChatGPT/Krum to authorize the next W0-03 stage.
