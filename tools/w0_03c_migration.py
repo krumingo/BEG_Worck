@@ -78,7 +78,7 @@ def blob_sha(path: Path) -> str:
 
 def pr_metadata() -> dict:
     return json.loads(command("gh", "pr", "view", "20", "--repo", "krumingo/BEG_Worck",
-                              "--json", "number,url,headRefOid,isDraft,state"))
+                              "--json", "number,url,headRefOid,isDraft,state,baseRefName,mergeCommit"))
 
 
 def handoff_metadata() -> dict:
@@ -277,7 +277,14 @@ def validate_sources(state: dict, active_text: str, review_text: str, pr: dict,
         raise ControlError("STALE", "REVIEW head is stale")
     if a.get("Status") != state["state"] or not r.get("Verdict", "").startswith(state["state"]):
         raise ControlError("CONFLICT", "ACTIVE/REVIEW verdict changed")
-    if pr.get("isDraft") is not state["pr_draft"] or pr.get("state") != "OPEN":
+    if state["progress"]["stage"] == "MERGED":
+        merge = pr.get("mergeCommit") or {}
+        if (a.get("Integration-State") != "MERGED" or a.get("Merge-Base") != pr.get("baseRefName")
+                or pr.get("state") != "MERGED" or pr.get("isDraft") is not False
+                or state["pr_draft"] is not False or not SHA_RE.fullmatch(a.get("Merge-SHA", ""))
+                or a.get("Merge-SHA") != merge.get("oid")):
+            raise ControlError("CONFLICT", "merged PR/base/merge SHA does not match ACTIVE")
+    elif pr.get("isDraft") is not state["pr_draft"] or pr.get("state") != "OPEN":
         raise ControlError("CONFLICT", "PR draft/open state changed")
 
 

@@ -1,13 +1,13 @@
 {
   "protocol_version": 1,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-26T16:18:21Z",
+  "validated_at": "2026-09-26T16:29:54Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "2980d354430ebed75b2fbd3de340709ec8d2102c",
-  "control_state_commit_sha": "dbcdd3b65e3cb2f04b4766704cb8507cf9709d59",
+  "active_source_commit_sha": "6a7611eeb3928c6a2a4e4dd03ce8e17f513204be",
+  "control_state_commit_sha": "35c01cdd413c849915df60c258923c837185062f",
   "generated_from": [
     "ACTIVE",
     "REVIEW",
@@ -29,8 +29,8 @@
     "CODEX": {
       "state": "PASS",
       "work_id": "W0-03C/C03/CX",
-      "waiting_for": null,
-      "updated_at": "2026-09-26T16:17:48Z"
+      "waiting_for": "ChatGPT/Krum authorization for the next W0-03 stage; no automatic dispatch",
+      "updated_at": "2026-09-26T16:29:12Z"
     },
     "CLAUDE": {
       "state": "HANDOFF",
@@ -43,12 +43,12 @@
   "state": "PASS",
   "pipeline_step": "REVIEW",
   "next_agent": "KRUM",
-  "waiting_for": null,
+  "waiting_for": "ChatGPT/Krum authorization for the next W0-03 stage; no automatic dispatch",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 20,
   "pr_head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
-  "pr_draft": true,
+  "pr_draft": false,
   "dispatch_state": "NONE",
   "dispatch_run_url": "https://claude.ai/epitaxy/session_012DCBdX2BRA6U2UR5zkdkPe",
   "last_handoff": {
@@ -63,17 +63,17 @@
     "verdict": "PASS"
   },
   "requires_krum": true,
-  "requires_krum_reason": "Final merge decision for Draft PR #20; no merge, production index build or deployment is implied.",
+  "requires_krum_reason": "PR #20 is merged and accepted; wait for ChatGPT/Krum authorization before any next W0-03 stage. No deploy or production index build is authorized.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "GATE_PASS",
+    "stage": "MERGED",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "124647f4108042dd6765fff0f4a76172f8de367c",
+    "active_blob_sha": "f44dc33b0c0266e3d64f0c85212facc5a57caf4f",
     "review_path": "coordination/REVIEWS/W0-03C.md",
     "review_blob_sha": "4b87939057c1d573279b07879739691af9dc4da0",
     "handoff_comment_sha256": "357fe754714374138b7ab696aa24d334b82b952a1965b5cd6fcaae37e8a12443",
@@ -100,7 +100,7 @@
       }
     ]
   },
-  "updated_at": "2026-09-26T16:17:48Z",
+  "updated_at": "2026-09-26T16:29:12Z",
   "history": [
     {
       "event_id": "pr20-comment-5764513929",
@@ -339,6 +339,34 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/commit/2980d354430ebed75b2fbd3de340709ec8d2102c",
       "source_commit_sha": "2980d354430ebed75b2fbd3de340709ec8d2102c",
       "summary": "Canonical queue records W0-03C pre-merge gate validation PASS; final Draft PR merge decision remains Krum-owned."
+    },
+    {
+      "event_id": "pr20-merge-4f462124",
+      "occurred_at": "2026-09-26T16:26:58Z",
+      "task_id": "W0-03C",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "KRUM",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "PASS",
+      "head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/4f46212486e7f2704007cece774939230e0a51f0",
+      "source_commit_sha": "4f46212486e7f2704007cece774939230e0a51f0",
+      "summary": "Krum-authorized PR #20 merged to main; W0-03C/C03 accepted as MERGED/PASS on the exact independently reviewed and real-Mongo-tested implementation head. No deploy or next dispatch."
+    },
+    {
+      "event_id": "pr20-comment-5847906756",
+      "occurred_at": "2026-09-26T16:29:48Z",
+      "task_id": "W0-03C",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "EVIDENCE",
+      "state_after": "PASS",
+      "head_sha": "e3c4ad8cd5b204eb806c39202cc00dd586bc9049",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847906756",
+      "source_commit_sha": null,
+      "summary": "Final merge SHA, exact merged head and no-deploy/no-next-dispatch evidence published in PR #20."
     }
   ]
 }

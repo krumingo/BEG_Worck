@@ -68,6 +68,24 @@ class ControlProtocolTests(unittest.TestCase):
             self.handoff, self.canonical,
             ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB))
 
+    def test_merged_pr_requires_exact_base_and_merge_sha(self):
+        merge_sha = "4f46212486e7f2704007cece774939230e0a51f0"
+        active = self.active + f"\nIntegration-State: MERGED\nMerge-Base: main\nMerge-SHA: {merge_sha}\n"
+        state = self.state()
+        state["progress"]["stage"] = "MERGED"
+        state["pr_draft"] = False
+        pr = {**self.pr, "state": "MERGED", "isDraft": False,
+              "baseRefName": "main", "mergeCommit": {"oid": merge_sha}}
+        cp.validate_sources(state, active, self.review, pr, self.handoff,
+                            self.canonical, ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB)
+        for changed in ({**pr, "baseRefName": "other"},
+                        {**pr, "mergeCommit": {"oid": "0" * 40}},
+                        {**pr, "state": "OPEN"},
+                        {**pr, "isDraft": True}):
+            self.assert_status("CONFLICT", lambda changed=changed: cp.validate_sources(
+                state, active, self.review, changed, self.handoff,
+                self.canonical, ACTIVE_COMMIT, ACTIVE_BLOB, REVIEW_BLOB))
+
     def test_stale_review_sha_fails_closed(self):
         self.assert_status("STALE", lambda: cp.validate_sources(
             self.state(), self.active, self.review, self.pr,
