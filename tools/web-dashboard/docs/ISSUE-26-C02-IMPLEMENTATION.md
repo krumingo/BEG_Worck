@@ -243,6 +243,153 @@ measured result is rc=0 in 1.52 s.
 
 ---
 
+## 4b. C02 combined cycle — acceptance corrections and the variant-2 redesign
+
+Authorised by ARCHITECT AUTHORISATION and ARCHITECT UPDATE on PR #29. Two tracks were
+delivered together; a third, Synology acceptance, could not be executed from the
+implementation environment and is recorded as PENDING in §4c rather than simulated.
+
+### Track 1 — acceptance corrections
+
+**A. Mobile overflow.** Acceptance found the document widening to roughly 575 px at
+390 px: a long GitHub error string and the footer had nothing to break on. The content
+that causes it is what this dashboard is full of — 40-character SHAs, long API URLs and
+error bodies quoted verbatim.
+
+The redesign rebuilt the stylesheet with the discipline built in rather than patched
+on: `overflow-wrap: anywhere` on every text-bearing element, `min-width: 0` on every
+grid and flex child (the default `auto` minimum is what actually lets a child push a
+container wider), `overflow-x: hidden` on the body as a backstop, and the one element
+that genuinely cannot fit — the seven-column task table — scrolling inside its own
+wrapper rather than scrolling the page.
+
+`tests/test_mobile_overflow.py` (16 cases) measures
+`documentElement.scrollWidth - window.innerWidth` at 320, 375, 390 and 430 px, with the
+diagnostics section expanded so every long SHA is rendered:
+
+- the ordinary page at all four widths;
+- **the real 403 body** GitHub returns when an anonymous read is rate-limited, at all
+  four widths, asserting the error is actually on the page rather than passing by
+  hiding it;
+- pathological input — a 400-character unbroken token in `waiting_for`, in
+  `requires_krum_reason` and in a history summary, plus a 400-character URL;
+- the table wrapper scrolling while the page does not;
+- nothing clipped off the left edge either;
+- and the desktop layout still two-column with three agent cards abreast, so the
+  wrapping rules did not cost desktop readability.
+
+**B. Synthetic acceptance mode.** `app/acceptance.py`, `BEGWORK_ACCEPTANCE_MODE`,
+default false. Rather than returning hand-written payloads, a scenario takes the
+snapshot already read from GitHub, changes one thing in memory and re-runs the real
+`verify()`. What the reviewer sees is the production verification path catching a real
+defect. Safety is asserted, not asserted-to: 46 cases in `tests/test_acceptance_mode.py`
+plus 6 browser cases cover off-by-default, 404-while-disabled, zero GitHub requests,
+canonical files unchanged on disk (SHA-256 before and after), the live projection
+unmodified, the synthetic flag and banner, and a guard that refuses to serve a scenario
+that came out verified or that failed to demonstrate the defect it names — verified by
+neutering the mutation and asserting the guard fires.
+
+**C. Cache loss on restart** is documented as an accepted v0.2 limitation in
+`README.md`, with the reasoning: persisting the projection means giving the container a
+writable volume, and the runtime posture is that the process writes nothing at all.
+Trading that for a two-second gap after a restart is a bad exchange, and a restored
+cache is by definition a reading nobody verified in this process lifetime.
+
+**D. Runtime write protection.** Two distinct claims, kept apart because they are
+different kinds of evidence. The *application* write audit (an audit hook over a full
+refresh round) shows the process attempts **zero** writes anywhere — that holds on any
+host and is now a regression test in `tests/test_readonly.py`. Whether the *filesystem*
+refuses a write is a container property, probed by
+`scripts/acceptance_probe.py writes`, which reports plainly that it is not proven on a
+development host.
+
+### Track 2 — variant-2 redesign
+
+The variant-2 mockup image was **not available** to this session. The redesign was built
+to the written target in ARCHITECT UPDATE; **no pixel fidelity to an unseen image is
+claimed.**
+
+Delivered: a dark management control center — masthead with BEG_WORK, project,
+repository, branch, updated time and an honest LIVE / STALE / OFFLINE feed pill; three
+accented agent cards (ChatGPT teal, Codex blue, Claude amber) showing real protocol
+state, Work-ID, waiting_for and update time; a prominent current-task panel with a large
+Task-ID and status; a horizontal DEFINE → BREAKDOWN → IMPLEMENT → REVIEW → DECISION →
+NEXT workflow; a task table with ID / Task / Status / Progress / Current agent / Cycle /
+Updated; a Next Steps panel; a Recent Activity timeline; and verification, findings and
+evidence moved into a collapsed `<details>`.
+
+Four decisions worth stating:
+
+- **The workflow strip is presentation only.** Each step names the canonical step it
+  renders, so the mapping is auditable on screen. NEXT has no canonical step — it is
+  derived from `next_agent` — and is labelled `DERIVED` / `NO CANONICAL STEP` so the
+  six-label strip can never be read as a change to the five-step state machine.
+- **The stage meter is six discrete segments, not a filled bar,** and reads "Stage 4 of
+  6 — REVIEW. Workflow position, not a completion percentage." The position derives from
+  the verified `pipeline_step`; nothing about completion is claimed. Numeric progress
+  remains withheld on any unverified round, as fixed in §4a.
+- **Collapsing diagnostics must not hide bad news.** Blockers, KRUM ACTION and an
+  explicit "this round did not verify" banner sit above the fold, uncollapsed. Only the
+  detail moved.
+- **The task table shows one row** because protocol v1 proves one active task, and says
+  so in a footnote instead of padding the table with plausible-looking rows.
+
+Agent identity colour is carried by a stripe and a badge; status is always a separate
+pill with its word and glyph, so Claude's amber and a STALE amber are never the same
+signal, and the page reads correctly in greyscale.
+
+### Defects found by the new tests
+
+| Defect | Symptom |
+|---|---|
+| `.alert { display: flex }` outranked the user-agent `[hidden]` rule | The KRUM and synthetic banners stayed on screen after being hidden — the KRUM banner would have shown when no action was required |
+| The `offline` scenario tripped the acceptance guard | Revealed that the guard's "never VALID" rule was wrong for OFFLINE, where a cached verified verdict legitimately survives a dropped link; replaced with a per-scenario expectation that is strictly stronger |
+| `NEXT` rendered "DERIVED" twice | The canonical-step line duplicated the derived badge; it now reads "no canonical step" |
+
+---
+
+## 4c. PENDING — Synology acceptance (not executed, not simulated)
+
+Track 3 of the combined request could **not** be carried out from this session. The
+implementation environment is an isolated cloud container with no network route to the
+NAS, no test URL, and no access to the local secret. The instruction was explicit that
+an unavailable secret is to be marked pending for Codex rather than simulated, and that
+applies to the whole NAS-hosted track: fabricating a "NAS screenshot" from a local
+server would be a false claim about the target environment.
+
+**PENDING, for execution on the Synology test container at the exact head of this PR:**
+
+1. Configure `BEGWORK_GITHUB_TOKEN` as a local env/secret on the test container only.
+2. `python3 scripts/acceptance_probe.py rounds --count 5` inside the container, or
+   `remote --base-url http://<nas>:8787 --count 5` from the LAN — five consecutive
+   successful **authenticated** rounds with timestamps and counters.
+3. `python3 scripts/acceptance_probe.py token --base-url http://<nas>:8787` — token
+   containment across every served response.
+4. `python3 scripts/acceptance_probe.py writes` **inside the container** — the denial
+   probe is only meaningful there.
+5. `BEGWORK_ACCEPTANCE_MODE=true` on the test container; open `/?acceptance=stale`,
+   `conflict`, `invalid`; capture NAS-hosted screenshots.
+6. NAS-hosted desktop and 390×844 screenshots from the confirmed test URL.
+
+**What was done locally instead**, all labelled as such and none of it a substitute:
+
+| Check | Local result | Still pending on the NAS |
+|---|---|---|
+| Five consecutive live rounds | **5/5 VALID**, 6 requests each, 5 served 304 from round 2 | Authenticated rounds on the NAS |
+| Application write audit | **0 write attempts** over 4 live rounds | OS-level denial inside the read-only container |
+| Token containment | Asserted against a synthetic token across every response, log and traceback (39 tests) | A real read-only token on the NAS |
+| Screenshots | Real Chromium against a live local server, desktop / tablet / 390×844 | NAS-hosted captures from the test URL |
+| STALE / CONFLICT / INVALID rendering | Demonstrated in Chromium via acceptance mode | The same, rendered on the NAS |
+
+One diagnostic finding worth carrying into the NAS run: the anonymous 403 is unlikely to
+be a steady-state problem. Conditional requests do not count against GitHub's primary
+rate limit, and the local rounds show 5 of 6 requests answered `304` from the second
+round onward — so a warm dashboard costs almost nothing per round. The 403 seen during
+acceptance was most likely the cold-start burst or a shared-IP limit. A token is still
+the right fix, and is required for a private repository regardless.
+
+---
+
 ## 5. Evidence
 
 Environment: Linux 6.18, Python 3.11.15, pytest 9.1.1, Playwright 1.63.0 driving

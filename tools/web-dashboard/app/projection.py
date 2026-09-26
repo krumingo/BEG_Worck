@@ -46,6 +46,22 @@ PIPELINE = (
     ("ARCHITECT_FEEDBACK", "ChatGPT", "GPT"),
 )
 
+#: Presentation labels for the workflow strip.
+#:
+#: These are display names over the canonical pipeline, not a change to the state
+#: machine: each entry names the canonical step it renders, and the canonical step is
+#: what the protocol actually publishes. DECISION renders ARCHITECT_FEEDBACK. NEXT has
+#: no canonical step at all -- it is derived from ``next_agent`` and is flagged
+#: ``derived`` so it can never be mistaken for a protocol state.
+PRESENTATION_WORKFLOW = (
+    ("DEFINE", "ARCHITECT", "GPT"),
+    ("BREAKDOWN", "ASSIGNMENT", "CODEX"),
+    ("IMPLEMENT", "IMPLEMENTATION", "CLAUDE"),
+    ("REVIEW", "REVIEW", "CODEX"),
+    ("DECISION", "ARCHITECT_FEEDBACK", "GPT"),
+    ("NEXT", None, None),
+)
+
 
 def _iso(moment: dt.datetime | None) -> str | None:
     if moment is None:
@@ -95,6 +111,24 @@ def project(state: DashboardState) -> dict:
             {"step": step, "agent": label, "agent_key": key, "active": False}
             for step, label, key in PIPELINE
         ]
+        payload["workflow"] = [
+            {
+                "label": label,
+                "canonical_step": step,
+                "agent_key": key,
+                "agent": AGENT_DISPLAY.get(key) if key else None,
+                "relative": "unknown",
+                "derived": step is None,
+                "badge": None,
+            }
+            for label, step, key in PRESENTATION_WORKFLOW
+        ]
+        payload["workflow_position"] = None
+        payload["task_table"] = {
+            "rows": [],
+            "note": "No verified snapshot, so no task row can be shown.",
+        }
+        payload["next_steps"] = None
         payload["task"] = None
         payload["evidence"] = None
         payload["history"] = []
@@ -105,6 +139,9 @@ def project(state: DashboardState) -> dict:
         return payload
 
     payload["header"] = _header(control, state, is_verified)
+    payload["workflow"] = _workflow(control, is_verified)
+    payload["task_table"] = _task_table(control, is_verified)
+    payload["next_steps"] = _next_steps(control)
     payload["agents"] = [_agent(control, name) for name in AGENT_ORDER]
     payload["pipeline"] = _pipeline(control, is_verified)
     payload["task"] = _task(control)
@@ -134,6 +171,7 @@ def _unavailable_header(state: DashboardState) -> dict:
             "percent": None,
             "numbers_withheld": True,
             "withheld_reason": "No snapshot has been read, so there is no progress to report.",
+            "workflow_position": None,
         },
         "krum_action": {"required": False, "reason": None},
         "repository": state.settings.repository,
@@ -207,6 +245,9 @@ def _header(control: dict, state: DashboardState, is_verified: bool) -> dict:
             "percent": progress.get("percent") if show_numbers else None,
             "numbers_withheld": not show_numbers,
             "withheld_reason": withheld_reason,
+            # A position in the six-step presentation strip, derived from the verified
+            # pipeline_step. Explicitly a position, never a completion percentage.
+            "workflow_position": _workflow_position(control),
         },
         "krum_action": {
             "required": requires_krum,
@@ -218,6 +259,127 @@ def _header(control: dict, state: DashboardState, is_verified: bool) -> dict:
         "validated_at": control.get("validated_at"),
         "updated_at": control.get("updated_at"),
         "validation_mode": control.get("validation_mode"),
+    }
+
+
+def _workflow(control: dict, is_verified: bool) -> list[dict]:
+    """The six presentation steps, with the canonical step each one renders.
+
+    ``relative`` is purely positional -- before / current / after. It deliberately does
+    not say "done": the protocol proves which step is current, not that earlier steps
+    completed successfully, and rendering them as completed would be a progress claim
+    nothing supports.
+    """
+    active_step = control.get("pipeline_step")
+    raw_state = control.get("state")
+    next_agent = control.get("next_agent")
+    active_index = next(
+        (index for index, (_, step, _) in enumerate(PRESENTATION_WORKFLOW) if step == active_step),
+        None,
+    )
+
+    steps = []
+    for index, (label, step, key) in enumerate(PRESENTATION_WORKFLOW):
+        if active_index is None:
+            relative = "unknown"
+        elif index < active_index:
+            relative = "before"
+        elif index == active_index:
+            relative = "current"
+        else:
+            relative = "after"
+
+        badge = None
+        if relative == "current":
+            badge = raw_state if is_verified else f"{raw_state} (UNVERIFIED)"
+        elif step is None and next_agent:
+            # The derived NEXT column shows who the protocol says acts next.
+            badge = AGENT_DISPLAY.get(str(next_agent), str(next_agent))
+
+        steps.append(
+            {
+                "label": label,
+                "canonical_step": step,
+                "agent_key": key,
+                "agent": AGENT_DISPLAY.get(key) if key else None,
+                "relative": relative,
+                "derived": step is None,
+                "badge": badge,
+            }
+        )
+    return steps
+
+
+def _workflow_position(control: dict) -> dict | None:
+    """Where the current step sits in the presentation strip.
+
+    Used for the stage indicator. It is a *position*, one of six, derived from the
+    verified ``pipeline_step`` -- never a completion percentage.
+    """
+    active_step = control.get("pipeline_step")
+    for index, (label, step, _) in enumerate(PRESENTATION_WORKFLOW):
+        if step == active_step:
+            return {"index": index + 1, "total": len(PRESENTATION_WORKFLOW), "label": label}
+    return None
+
+
+def _progress_text(control: dict, is_verified: bool) -> str:
+    """One short, honest phrase for the Progress column."""
+    progress = control.get("progress") if isinstance(control.get("progress"), dict) else {}
+    stage = progress.get("stage") or "UNKNOWN"
+    mode = progress.get("mode")
+    if is_verified and mode == "EVIDENCE_COUNT":
+        completed, total, percent = progress.get("completed"), progress.get("total"), progress.get("percent")
+        if None not in (completed, total, percent):
+            return f"{completed}/{total} · {percent}%"
+    if not is_verified:
+        return f"{stage} · unverified"
+    if mode == "STAGE_ONLY":
+        return f"{stage} · stage only"
+    return f"{stage} · no proven count"
+
+
+def _task_table(control: dict, is_verified: bool) -> dict:
+    """The task list.
+
+    Protocol v1 publishes exactly one active task, so exactly one row is proven. Padding
+    the table with plausible-looking extra tasks would be inventing rows, so the note
+    says why there is one.
+    """
+    row = {
+        "id": control.get("task_id") or "UNKNOWN",
+        # Protocol v1 carries no free-text task title, so the task is identified by the
+        # fields that do exist rather than by an invented name.
+        "task": " · ".join(part for part in (control.get("wave"), control.get("flow")) if part) or "UNKNOWN",
+        "status": control.get("state") or "UNKNOWN",
+        "status_verified": is_verified,
+        "progress": _progress_text(control, is_verified),
+        "current_agent": AGENT_DISPLAY.get(str(control.get("current_agent")), control.get("current_agent") or "UNKNOWN"),
+        "current_agent_key": control.get("current_agent"),
+        "cycle": _cycle_label(control) or "UNKNOWN",
+        "updated": control.get("updated_at") or "UNKNOWN",
+    }
+    return {
+        "rows": [row],
+        "note": (
+            "Protocol v1 publishes exactly one active task, so exactly one row is proven. "
+            "No other rows are shown because none exist in the snapshot."
+        ),
+    }
+
+
+def _next_steps(control: dict) -> dict:
+    """What the protocol says happens next. Every field is copied, none inferred."""
+    requires_krum = control.get("requires_krum") is True
+    next_agent = control.get("next_agent")
+    return {
+        "next_agent": next_agent,
+        "next_agent_name": AGENT_DISPLAY.get(str(next_agent), next_agent),
+        "waiting_for": control.get("waiting_for"),
+        "requires_krum": requires_krum,
+        "krum_reason": control.get("requires_krum_reason") if requires_krum else None,
+        "dispatch_state": control.get("dispatch_state"),
+        "blocked": control.get("state") == "BLOCKED",
     }
 
 

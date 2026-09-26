@@ -179,3 +179,54 @@ def test_a_url_in_a_log_line_carries_no_query_string():
     assert _safe_url("https://api.github.com/repos/o/r/contents/x?ref=b&token=secret") == (
         "https://api.github.com/repos/o/r/contents/x"
     )
+
+
+# ------------------------------------------------- the app writes nothing to disk
+
+def test_a_full_refresh_round_writes_nothing_to_the_filesystem(fake_github, settings):
+    """The container runs with ``read_only: true``; a stray write would break it.
+
+    Asserted with an audit hook rather than by reading the code, so a dependency or a
+    future change that opens a file for writing is caught. ``/tmp`` is allowed because
+    the compose file mounts a small tmpfs there; nothing else is.
+
+    This is application-level evidence and holds on any host. Whether the *filesystem*
+    refuses a write is a container property, probed separately by
+    ``scripts/acceptance_probe.py writes`` inside the deployed container.
+    """
+    import os
+    import sys
+    import tempfile
+
+    allowed = ("/tmp", "/var/tmp", tempfile.gettempdir())
+    attempts: list[tuple[str, str]] = []
+
+    def hook(event, args):
+        if event == "open":
+            values = list(args) + [None, None, None]
+            path, flags = values[0], values[2]
+            writing = False
+            if isinstance(flags, int):
+                writing = bool(flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND))
+            elif isinstance(flags, str):
+                writing = any(ch in flags for ch in "wax+")
+            if writing and path:
+                attempts.append((event, str(path)))
+        elif event in {"os.remove", "os.rename", "os.mkdir", "os.rmdir"}:
+            attempts.append((event, str(args[0]) if args else "?"))
+
+    # An audit hook cannot be removed once installed, so this runs in a subprocess-free
+    # way by keeping the hook scoped to a flag it checks.
+    sys.addaudithook(hook)
+
+    client = GitHubReadOnlyClient(repository=settings.repository, transport=fake_github)
+    refresher = Refresher(client, settings)
+    refresher.tick()
+    refresher.tick()
+    project(refresher.current())
+
+    outside = [
+        (event, path) for event, path in attempts
+        if not any(str(path).startswith(prefix) for prefix in allowed)
+    ]
+    assert outside == [], f"the application wrote outside the allowed paths: {outside}"

@@ -193,6 +193,7 @@ def test_a_deterministic_evidence_count_progress_is_passed_through(
         "percent": 37,
         "numbers_withheld": False,
         "withheld_reason": None,
+        "workflow_position": {"index": 4, "total": 6, "label": "REVIEW"},
     }
 
 

@@ -179,6 +179,7 @@ def test_a_verified_evidence_count_still_shows_its_justified_numbers(
         "percent": 37,
         "numbers_withheld": False,
         "withheld_reason": None,
+        "workflow_position": {"index": 4, "total": 6, "label": "REVIEW"},
     }
 
 

@@ -19,11 +19,21 @@ services:
     env_file:
       - .env
 
+    environment:
+      # Explicitly off here as well as in .env: a production project file should state
+      # its posture rather than rely on a value someone may have edited.
+      BEGWORK_ACCEPTANCE_MODE: "false"
+
     ports:
       # Host 8787 keeps clear of DSM's own services. Reachable at http://<nas>:8787/
       - "8787:8080"
 
     # Hardening: the app writes nothing, so nothing needs to be writable.
+    # The process writes nothing (asserted by an audit-hook test and by
+    # scripts/acceptance_probe.py), so the root filesystem is read-only. The small
+    # tmpfs exists only because Python may need a scratch path; no dashboard state is
+    # persisted there. See "Known limitations" in README.md for the consequence: the
+    # verified snapshot is rebuilt after a restart rather than restored.
     read_only: true
     tmpfs:
       - /tmp:size=8m

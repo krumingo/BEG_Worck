@@ -38,6 +38,33 @@ GitHub. The two are never merged: a network outage must not read as a protocol
 conflict, and a real `CONFLICT` must not be excused as a connectivity blip. When a
 round fails, the cached snapshot stays on screen with its age, marked `OFFLINE`.
 
+### Acceptance mode — synthetic states, off by default
+
+Acceptance testing needs STALE, CONFLICT and INVALID on screen, and the only safe way
+to get them is to manufacture them: deliberately corrupting the real queue to see a
+colour change is exactly what this dashboard exists to prevent.
+
+Set `BEGWORK_ACCEPTANCE_MODE=true` on a **test** container and the scenarios become
+available at `/?acceptance=<name>` — `stale`, `conflict`, `invalid`, `offline`,
+`unavailable`.
+
+Each one takes the snapshot already read from GitHub, changes one thing **in memory**
+(an ACTIVE byte, a board line, a state field) and re-runs the real verifier. What
+appears is a genuine demonstration of the production verification path catching a real
+defect, not a hand-written picture of one.
+
+Four properties make it safe to ship:
+
+- **Off unless asked.** The default is false, and while it is false the endpoint 404s
+  like any unknown path — a disabled deployment reveals nothing about the feature.
+- **Nothing is written.** No GitHub request is issued, no canonical queue file is
+  touched, nothing is persisted, and the dashboard's own live reading is not modified.
+- **It cannot pass for the truth.** Every payload carries `synthetic: true`, the page
+  shows an unmissable banner, and the code refuses to serve a scenario that came out
+  verified — or one that failed to demonstrate the defect it names.
+- **`/healthz` reports `acceptance_mode`**, so an acceptance box is distinguishable
+  from a production one at a glance.
+
 ### What it will not do
 
 - It never promotes an unverified state. A stored `PASS` that fails verification renders
@@ -248,7 +275,45 @@ pins that.
 python3 scripts/measure_resources.py --seconds 60
 ```
 
+### Acceptance evidence
+
+`scripts/acceptance_probe.py` produces the evidence an acceptance review asks for. It
+runs both here and inside the deployed container, and **never prints the token** — it
+reads `BEGWORK_GITHUB_TOKEN` only to search for that value in responses and reports
+whether it was found.
+
+```bash
+python3 scripts/acceptance_probe.py rounds --count 5          # consecutive live rounds
+python3 scripts/acceptance_probe.py writes                    # write audit + denial probe
+python3 scripts/acceptance_probe.py token --base-url http://127.0.0.1:8080
+python3 scripts/acceptance_probe.py remote --base-url http://<nas>:8787 --count 5
+```
+
+`writes` reports two different things. The **audit** shows what the application tries to
+do and is valid on any host. The **denial probe** shows whether the filesystem refuses a
+write, which only means something inside the hardened container; on a development host
+it says so instead of claiming the protection was verified.
+
 ---
+
+## Known limitations (v0.2)
+
+**The verified snapshot is lost when the container restarts.** The cache lives in
+process memory only. After a restart the dashboard shows `CONTROL STATE NOT AVAILABLE`
+until the first round completes — normally a second or two, longer if GitHub is
+unreachable at that moment.
+
+This is **accepted for v0.2** rather than fixed, deliberately. Persisting the last
+verified projection would mean giving the container a writable volume, and the whole
+runtime posture here is that the process writes nothing at all (`read_only: true`, no
+cache directory, no log file, an audit-hook test asserting zero writes). Trading that
+property away to avoid a two-second gap after a restart is a bad exchange — and a
+restored cache is by definition a reading nobody verified in this process lifetime,
+which would need its own staleness handling to be shown honestly.
+
+If a future cycle decides the gap matters, the scope is narrow: one declared cache path
+under the tmpfs, written atomically, loaded only as a clearly-marked aged snapshot, and
+never as a verified one.
 
 ## Boundaries
 

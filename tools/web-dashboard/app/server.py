@@ -20,6 +20,7 @@ import socketserver
 import urllib.parse
 
 from . import __version__
+from .acceptance import AcceptanceDisabled, AcceptanceError, build as build_acceptance, catalogue
 from .projection import project
 from .redact import redact
 from .refresh import Refresher
@@ -61,6 +62,14 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
         if path == "/healthz":
             self._send_json(200, self._health(), cache=NO_STORE)
             return
+        if path == "/api/acceptance":
+            # The catalogue is always answerable: when the mode is off it says so, which
+            # is how an operator confirms a production deployment has it disabled.
+            self._send_json(200, catalogue(self.settings))
+            return
+        if path.startswith("/api/acceptance/"):
+            self._send_acceptance(path[len("/api/acceptance/"):])
+            return
         if path in STATIC_ROUTES:
             self._send_static(STATIC_ROUTES[path])
             return
@@ -76,6 +85,22 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(404)
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def _send_acceptance(self, scenario: str) -> None:
+        """Serve a synthetic scenario, or 404 as though the route did not exist.
+
+        A disabled deployment must not advertise the feature through a distinctive error,
+        so a request while the mode is off is answered exactly like an unknown path.
+        """
+        try:
+            payload = build_acceptance(scenario, self.refresher.current())
+        except AcceptanceDisabled:
+            self._send_json(404, {"error": "not found", "path": self.path})
+            return
+        except AcceptanceError as error:
+            self._send_json(409, {"error": "scenario unavailable", "detail": str(error)})
+            return
+        self._send_json(200, payload)
 
     def _health(self) -> dict:
         """Liveness plus readiness detail.
@@ -101,6 +126,9 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             "aged": state.is_aged,
             "consecutive_failures": state.consecutive_failures,
             "rounds": state.rounds,
+            # Operationally important: an acceptance deployment must be
+            # distinguishable from a production one at a glance.
+            "acceptance_mode": self.settings.acceptance_mode,
         }
 
     def _send_json(self, status: int, payload: dict, cache: str = NO_STORE) -> None:

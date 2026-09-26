@@ -67,6 +67,9 @@ class Settings:
     backoff_maximum_seconds: int = 120
     request_timeout_seconds: int = 15
     verify_pull_request: bool = True
+    # Synthetic acceptance scenarios (STALE/CONFLICT/INVALID/OFFLINE). Off unless
+    # explicitly switched on: while false the endpoint does not exist at all.
+    acceptance_mode: bool = False
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -90,6 +93,7 @@ class Settings:
             backoff_maximum_seconds=_env_int("BEGWORK_BACKOFF_MAX_SECONDS", 120, 5, 900),
             request_timeout_seconds=_env_int("BEGWORK_REQUEST_TIMEOUT_SECONDS", 15, 2, 120),
             verify_pull_request=_env_flag("BEGWORK_VERIFY_PULL_REQUEST", True),
+            acceptance_mode=_env_flag("BEGWORK_ACCEPTANCE_MODE", False),
         )
 
     @property
@@ -107,4 +111,5 @@ class Settings:
             "verify_pull_request": self.verify_pull_request,
             # The presence of a credential is operationally useful; its value is not.
             "token_configured": self.has_token,
+            "acceptance_mode": self.acceptance_mode,
         }

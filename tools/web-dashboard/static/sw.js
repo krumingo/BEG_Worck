@@ -33,8 +33,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  /* Live data bypasses the cache entirely, in both directions. */
-  if (url.pathname === '/api/state' || url.pathname === '/healthz') return;
+  /* Live data bypasses the cache entirely, in both directions. Acceptance scenarios
+   * are included: a cached synthetic page reappearing later, without its context,
+   * would be exactly the confusion the synthetic banner exists to prevent. */
+  if (url.pathname === '/api/state'
+      || url.pathname === '/healthz'
+      || url.pathname.startsWith('/api/acceptance')) return;
 
   /* Shell: network first so a redeployed container is picked up on the next load,
    * falling back to the cached copy only when the network genuinely fails. */
