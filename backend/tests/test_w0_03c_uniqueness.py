@@ -87,6 +87,8 @@ class IndexCollection:
     async def update_one(self, filter, update):
         """Equality on ``_id`` and ``$set`` — all the run ledger needs."""
         self.calls.append("update_one")
+        if self.db.connection_lost:
+            raise OperationFailure("connection lost")
         if self.name in self.db.fail_update:
             raise OperationFailure("write to %s refused" % self.name)
         fields = update.get("$set", {})
@@ -101,6 +103,11 @@ class IndexCollection:
         self.calls.append("create_index:%s" % name)
         if name in self.db.fail_on:
             raise OperationFailure("index build of %s interrupted" % name)
+        if name in self.db.fail_foreign_build:
+            # the build fails, and an index of ANOTHER definition ends up holding the name
+            self.indexes[name] = {"key": list(keys), "v": 2, "collation": {"locale": "bg"}}
+            self.db.touch(self.name)
+            raise OperationFailure("build of %s failed; the name is taken" % name)
         if name in self.db.interrupt_before:
             # a crash before the server ever saw the build (or before it processed it):
             # nothing physically built, unlike interrupt_on below
@@ -117,6 +124,17 @@ class IndexCollection:
                                         % (self.name, name))
         self.indexes[name] = info
         self.db.touch(self.name)
+        if name in self.db.fail_after_build:
+            # the server built it; only the CALLER sees an error (a reset reply, a timeout)
+            raise OperationFailure("connection reset while reading the reply for %s" % name)
+        if name in self.db.lose_connection_on:
+            # the same, and the connection is gone: the state cannot be read back at all
+            self.db.connection_lost = True
+            raise OperationFailure("connection lost after %s was sent" % name)
+        if name in self.db.unreadable_on:
+            # built, but this collection's index list can no longer be read
+            self.db.fail_index_information.add(self.name)
+            raise OperationFailure("connection reset while reading the reply for %s" % name)
         if name in self.db.interrupt_on:
             # a crash right after the server confirmed the build, before control returns
             # to the caller: the index is real, but create_index() never gets to return
@@ -138,6 +156,10 @@ class IndexCollection:
 
     async def index_information(self):
         self.calls.append("index_information")
+        if self.db.connection_lost:
+            raise OperationFailure("connection lost")
+        if self.name in self.db.fail_index_information:
+            raise OperationFailure("listIndexes on %s is unreadable" % self.name)
         return copy.deepcopy(self.indexes)
 
     @staticmethod
@@ -156,6 +178,12 @@ class IndexDb:
         self.fail_status_writes = set()
         self.interrupt_on = set()
         self.interrupt_before = set()
+        self.fail_after_build = set()        # built on the server, error seen by the caller
+        self.fail_foreign_build = set()      # another definition ends up on that name
+        self.lose_connection_on = set()      # built, then the connection dies entirely
+        self.unreadable_on = set()           # built, then listIndexes stops answering
+        self.fail_index_information = set()
+        self.connection_lost = False
         self._oid = 0
 
     def next_oid(self):
@@ -171,6 +199,8 @@ class IndexDb:
         return self.collections[name]
 
     async def list_collection_names(self):
+        if self.connection_lost:
+            raise OperationFailure("connection lost")
         return sorted(self.present)
 
     def indexes(self, name):
@@ -827,6 +857,10 @@ def undo(db, applied, plan="saved", **kw):
     return run(ib.rollback(db, applied["run_id"], database=SCRATCH, plan=plan, **kw))
 
 
+def _pairs_of(entries):
+    return sorted((e["collection"], e["index"]) for e in entries)
+
+
 def md_tag_key(name):
     return [k for k in uq.CANONICAL_KEYS if k.collection == "md_tag" and k.name == name][0]
 
@@ -1137,6 +1171,155 @@ def test_a_failed_final_status_write_does_not_report_applied():
     assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
 
 
+# ---------------------------------------------------------------- a failed build is reconciled
+# against the server before anything is undone (W0-03C review C02 of PR #20)
+#
+# ``create_index`` raising says only that the CALLER saw an error. The index may well be
+# on the server. Every case below drives that window and pins which of the four outcomes
+# it must produce — and that only the "provably absent" one is allowed to drop anything.
+
+PENDING_LABEL = "%s.md_uq_open_pending" % PENDING_COLLECTION
+
+
+def test_a_build_that_raises_after_the_server_built_it_is_not_reported_rolled_back():
+    """The C02 finding itself: the server acknowledges the index, then the caller sees an
+    error. Reporting FAILED_ROLLED_BACK here would be a lie — the index survives."""
+    db = IndexDb()
+    db.fail_after_build.add("md_uq_open_pending")          # the last index in plan order
+    r = boot(db, apply=True, target=LOCAL)
+
+    assert r["status"] == ib.STATUS_FAILED_INDEX_PRESENT
+    assert r["status"] != ib.STATUS_FAILED_ROLLED_BACK
+    assert "md_uq_open_pending" in db.indexes(PENDING_COLLECTION)      # it really is there
+    assert r["reconciliation"]["state"] == "present"
+    assert r["reconciliation"]["found"] == r["reconciliation"]["wanted"]
+    assert r["unconfirmed"] == [PENDING_LABEL]
+    assert r["undone"] == []                                # nothing was dropped
+    assert not any(c.startswith("drop_index") for c in db.all_calls())
+    assert "md_uq_id" in db.indexes("md_organization")      # the 24 earlier ones stand
+
+
+def test_the_ledger_keeps_every_claim_of_an_ambiguous_run_and_rollback_finishes_it():
+    db = IndexDb()
+    db.fail_after_build.add("md_uq_open_pending")
+    r = boot(db, apply=True, target=LOCAL)
+
+    entry = ledger_of(db, r["run_id"])
+    assert entry["status"] == ib.RUN_INDEX_PRESENT_UNCONFIRMED
+    assert len(entry["created"]) == 25                      # the ambiguous one included
+    assert {"collection": PENDING_COLLECTION, "index": "md_uq_open_pending"} in entry["created"]
+    assert _pairs_of(r["rollback_plan"]) == _pairs_of(entry["created"])   # a saved plan matches
+
+    rb = undo(db, r)                                        # deterministic, later, by hand
+    assert rb["status"] == ib.STATUS_ROLLED_BACK
+    assert [x for x in rb["results"] if x["index"] == PENDING_LABEL][0]["result"] == "dropped"
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+
+
+def test_a_build_that_raises_with_the_index_provably_absent_still_rolls_back():
+    """The one case that may undo anything — and only after the server has said so."""
+    db = IndexDb()
+    db.fail_on.add("md_uq_open_pending")                    # raises before the server builds
+    r = boot(db, apply=True, target=LOCAL)
+
+    assert r["status"] == ib.STATUS_FAILED_ROLLED_BACK
+    assert r["reconciliation"]["state"] == "absent" and r["reconciliation"]["found"] is None
+    assert len(r["undone"]) == 24 and all(u["result"] == "dropped" for u in r["undone"])
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+    entry = ledger_of(db, r["run_id"])
+    assert entry["status"] == ib.RUN_FAILED and entry["created"] == []
+
+
+def test_a_build_whose_state_cannot_be_read_back_fails_closed_and_drops_nothing():
+    """Connection loss: the index may or may not be there. Guessing either way is wrong,
+    so the run keeps every claim, drops nothing and says what has to be reconciled."""
+    db = IndexDb()
+    db.lose_connection_on.add("md_uq_open_pending")
+    r = boot(db, apply=True, target=LOCAL)
+
+    assert r["status"] == ib.STATUS_FAILED_RECONCILE_REQUIRED
+    assert r["reconciliation"]["state"] == "unavailable"
+    assert r["undone"] == [] and not any(c.startswith("drop_index") for c in db.all_calls())
+    assert "md_uq_id" in db.indexes("md_organization")
+
+    entry = ledger_of(db, r["run_id"])
+    assert len(entry["created"]) == 25          # claimed BEFORE the build, so the loss of the
+    assert entry["status"] == ib.RUN_BUILDING   # connection could not take the claims with it
+
+    db.connection_lost = False                  # the operator reconnects and finishes the run
+    rb = undo(db, r)
+    assert rb["status"] == ib.STATUS_ROLLED_BACK
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
+
+
+def test_an_unreadable_index_list_is_reconciliation_required_not_a_rollback():
+    """Only ``listIndexes`` stops answering; the ledger can still be written. The verdict
+    is the same: unknown state, nothing dropped."""
+    db = IndexDb()
+    db.unreadable_on.add("md_uq_open_pending")
+    r = boot(db, apply=True, target=LOCAL)
+
+    assert r["status"] == ib.STATUS_FAILED_RECONCILE_REQUIRED
+    assert "unreadable" in r["reconciliation"]["reason"]
+    assert ledger_of(db, r["run_id"])["status"] == ib.RUN_RECONCILE_REQUIRED
+    assert len(ledger_of(db, r["run_id"])["created"]) == 25
+    assert r["undone"] == [] and "md_uq_open_pending" in db.indexes(PENDING_COLLECTION)
+
+
+def test_a_conflicting_index_on_the_name_blocks_and_is_never_deleted():
+    """The build fails and another definition holds the name. That index is not this
+    run's to delete — not here, and not in a rollback either."""
+    db = IndexDb()
+    db.fail_foreign_build.add("md_uq_open_pending")
+    r = boot(db, apply=True, target=LOCAL)
+
+    assert r["status"] == ib.STATUS_BLOCKED_CONFLICT
+    assert r["reconciliation"]["state"] == "conflict"
+    assert r["reconciliation"]["found"] != r["reconciliation"]["wanted"]
+    assert r["undone"] == []
+    foreign = copy.deepcopy(db["%s" % PENDING_COLLECTION].indexes["md_uq_open_pending"])
+    assert foreign["collation"] == {"locale": "bg"}
+
+    entry = ledger_of(db, r["run_id"])
+    assert entry["status"] == ib.RUN_BLOCKED_CONFLICT and len(entry["created"]) == 25
+
+    rb = undo(db, r)                                        # even asked to, it refuses
+    assert rb["status"] == ib.STATUS_ROLLBACK_FAILED
+    refused = [x for x in rb["results"] if x["index"] == PENDING_LABEL][0]
+    assert refused["result"].startswith("refused")
+    assert db[PENDING_COLLECTION].indexes["md_uq_open_pending"] == foreign   # untouched
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections if c != PENDING_COLLECTION)
+
+
+def test_reconciliation_reads_a_missing_collection_as_proof_the_index_is_absent():
+    db = IndexDb()
+    key = md_tag_key("md_uq_id")
+    db.fail_index_information.add(key.collection)           # listIndexes refuses...
+    assert key.collection not in run(db.list_collection_names())   # ...but there is no such
+    assert run(ib._reconcile(db, key)) == ("absent", None)         # collection at all
+
+
+def test_reconciliation_that_cannot_answer_at_all_raises_instead_of_guessing():
+    db = IndexDb()
+    db.connection_lost = True
+    with pytest.raises(ib.ReconcileUnavailable):
+        run(ib._reconcile(db, md_tag_key("md_uq_id")))
+
+
+def test_an_index_with_a_foreign_option_is_not_mistaken_for_the_planned_one():
+    """Same name, same keys, same uniqueness, same partial filter — but a collation makes
+    it a different index. It is a conflict, never "kept" and never dropped."""
+    db = IndexDb()
+    key = md_tag_key("md_uq_id")
+    prebuild(db, key)
+    db[key.collection].indexes[key.name]["collation"] = {"locale": "bg"}
+
+    r = boot(db, apply=True, target=LOCAL)
+    assert r["status"] == ib.STATUS_REFUSED_CONFLICT
+    assert "md_tag.md_uq_id" in r["reason"]
+    assert key.name in db.indexes(key.collection)           # nothing was dropped to make room
+
+
 # ---------------------------------------------------------------- after apply: the database enforces it
 
 def test_after_apply_the_index_refuses_what_the_report_would_flag():
@@ -1278,6 +1461,19 @@ def test_cli_expectations_are_for_exports_only(capsys):
                      "--expect-db", "x"]) == 2
 
 
+def _cli_bootstrap(db, monkeypatch, out):
+    """Run the CLI's ``bootstrap --apply`` against an in-memory double."""
+    class Client:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "_connect", lambda url, name: (Client(), db))
+    for var in ("DB_NAME", "BEG_SYSTEM_DB"):
+        monkeypatch.delenv(var, raising=False)
+    return cli.main(["bootstrap", "--mongo-url", "mongodb://localhost:27017", "--db", SCRATCH,
+                     "--apply", "--confirm-db", SCRATCH, "--out", str(out)])
+
+
 def test_cli_rollback_needs_an_applied_run_of_the_same_database(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "_connect", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("connected")))
     plan = tmp_path / "run.json"
@@ -1330,6 +1526,39 @@ def test_cli_exit_6_when_the_final_ledger_status_write_fails(tmp_path, monkeypat
     result = json.loads(out.read_text(encoding="utf-8"))
     assert result["status"] == ib.STATUS_APPLIED_UNCONFIRMED
     assert len(result["created"]) == 25
+
+
+@pytest.mark.parametrize("arm, status, code", [
+    ("fail_after_build", ib.STATUS_FAILED_INDEX_PRESENT, 7),
+    ("lose_connection_on", ib.STATUS_FAILED_RECONCILE_REQUIRED, 8),
+    ("fail_foreign_build", ib.STATUS_BLOCKED_CONFLICT, 9),
+])
+def test_cli_gives_each_ambiguous_outcome_its_own_exit_code(arm, status, code, tmp_path, monkeypatch):
+    """An operator script must be able to tell "undone" from "an index survived" from
+    "unknown" from "a human has to look" — by exit code alone."""
+    db = IndexDb()
+    getattr(db, arm).add("md_uq_open_pending")
+    out = tmp_path / "run.json"
+    rc = _cli_bootstrap(db, monkeypatch, out)
+    assert rc == code
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert result["status"] == status
+    assert result["undone"] == []
+    assert result["unconfirmed"] == ["%s.md_uq_open_pending" % PENDING_COLLECTION]
+
+
+def test_cli_rollback_accepts_an_ambiguous_run_that_still_holds_claims(tmp_path, monkeypatch):
+    """The recovery path the ambiguous outcome points at has to be runnable: a run that
+    kept its claims is exactly what rollback exists for."""
+    db = IndexDb()
+    db.fail_after_build.add("md_uq_open_pending")
+    out = tmp_path / "run.json"
+    assert _cli_bootstrap(db, monkeypatch, out) == 7
+    assert "md_uq_open_pending" in db.indexes(PENDING_COLLECTION)
+
+    assert cli.main(["rollback", "--mongo-url", "mongodb://localhost:27017", "--db", SCRATCH,
+                     "--plan", str(out), "--confirm-db", SCRATCH]) == 0
+    assert all(db.indexes(c) <= {"_id_"} for c in db.collections)
 
 
 def test_cli_exit_code_for_every_status():

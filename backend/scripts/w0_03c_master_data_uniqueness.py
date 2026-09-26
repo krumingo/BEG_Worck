@@ -41,6 +41,18 @@ Exit codes:
     6  APPLIED_LEDGER_UNCONFIRMED — every planned index was built, but the run ledger's
        final "applied" write failed, so the run cannot be confirmed done from the ledger
        alone: read the output, confirm by hand, then correct the ledger or roll back
+    7  FAILED_BUILD_INDEX_PRESENT — a build raised, but the server HAS that index with the
+       planned definition: ambiguous, NOT rolled back. Nothing was dropped, every claim is
+       in the ledger; roll the run back (``rollback``) or accept it by hand
+    8  FAILED_RECONCILIATION_REQUIRED — a build raised and the server could not be asked
+       what it actually has: failed closed, nothing dropped, every claim kept. Reconcile
+       the named index by hand before trusting a rollback
+    9  BLOCKED_INDEX_CONFLICT — a build raised and another definition holds that index
+       name: for a human. Nothing was dropped and nothing ever deletes that index
+
+``rollback`` accepts a saved plan of any run that still holds claims (APPLIED,
+APPLIED_LEDGER_UNCONFIRMED, FAILED_BUILD_INDEX_PRESENT, FAILED_RECONCILIATION_REQUIRED,
+BLOCKED_INDEX_CONFLICT); the run ledger, not the file, still decides what is dropped.
 """
 import argparse
 import asyncio
@@ -64,6 +76,9 @@ EXIT_BY_STATUS = {
     ib.STATUS_FAILED_ROLLED_BACK: 3,
     ib.STATUS_ROLLBACK_FAILED: 4,
     ib.STATUS_APPLIED_UNCONFIRMED: 6,
+    ib.STATUS_FAILED_INDEX_PRESENT: 7,
+    ib.STATUS_FAILED_RECONCILE_REQUIRED: 8,
+    ib.STATUS_BLOCKED_CONFLICT: 9,
 }
 
 
@@ -173,9 +188,11 @@ def cmd_rollback(args) -> int:
     _guard_connection(args.mongo_url)
     ib.check_target(database=args.db, **_target(args.mongo_url, args.confirm_db))
     saved = json.loads(Path(args.plan).read_text(encoding="utf-8"))
-    if (saved.get("status") != ib.STATUS_APPLIED or saved.get("database") != args.db
+    if (saved.get("status") not in ib.ROLLBACKABLE_STATUSES or saved.get("database") != args.db
             or not saved.get("run_id")):
-        raise ib.TargetRefused("the plan file is not an APPLIED run of database %r" % args.db)
+        raise ib.TargetRefused("the plan file is not a run of database %r that still holds "
+                               "index claims (%s)"
+                               % (args.db, ", ".join(sorted(ib.ROLLBACKABLE_STATUSES))))
     client, db = _connect(args.mongo_url, args.db)
     try:
         # the ledger decides what the run created; the file's plan is only cross-checked
@@ -216,7 +233,8 @@ def build_parser() -> argparse.ArgumentParser:
     rb.add_argument("--mongo-url", required=True)
     rb.add_argument("--db", required=True)
     rb.add_argument("--plan", required=True,
-                    help="the JSON an APPLIED bootstrap wrote; its run_id selects the ledger entry")
+                    help="the JSON a bootstrap run that holds index claims wrote; its run_id "
+                         "selects the ledger entry")
     rb.add_argument("--confirm-db", required=True)
     rb.add_argument("--out", default="")
     return p

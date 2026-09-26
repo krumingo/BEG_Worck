@@ -303,3 +303,102 @@ def test_a_conflicting_definition_is_refused_on_a_real_server():
         r = await ib.bootstrap(db, database=name, apply=True, target=target(name), env={})
         assert r["status"] == ib.STATUS_REFUSED_CONFLICT
     scratch(t)
+
+
+# ================================================================ a failed build, reconciled against
+# the real server (W0-03C review C02 of PR #20)
+#
+# ``create_index`` can raise AFTER the server has built the index — a reset reply, a
+# timeout. The doubles model that; here the index really is on a real server, and the
+# read-back really goes through ``listIndexes`` and pymongo's own ``index_information()``.
+
+class _RaiseAfterBuild:
+    """A real database handle whose ``create_index`` for ONE index builds on the server
+    and only then raises, the way a lost reply looks to the caller."""
+
+    def __init__(self, db, collection, index):
+        self._db, self._collection, self._index = db, collection, index
+
+    def __getattr__(self, item):
+        return getattr(self._db, item)
+
+    def __getitem__(self, item):
+        coll = self._db[item]
+        return _RaiseAfterBuildCollection(coll, self._index) if item == self._collection else coll
+
+
+class _RaiseAfterBuildCollection:
+    def __init__(self, coll, index):
+        self._coll, self._index = coll, index
+
+    def __getattr__(self, item):
+        return getattr(self._coll, item)
+
+    async def create_index(self, keys, **kw):
+        out = await self._coll.create_index(keys, **kw)
+        if kw.get("name") == self._index:
+            from pymongo.errors import OperationFailure
+            raise OperationFailure("connection reset while reading the reply for %s" % self._index)
+        return out
+
+
+def test_a_build_that_raises_after_a_real_server_built_it_is_not_rolled_back():
+    """The C02 finding on a real server: the index is genuinely there afterwards, so
+    ``FAILED_ROLLED_BACK`` would be a lie and nothing may be dropped."""
+    async def t(db, name):
+        handle = _RaiseAfterBuild(db, PENDING_COLLECTION, "md_uq_open_pending")
+        r = await ib.bootstrap(handle, database=name, apply=True, target=target(name), env={})
+
+        assert r["status"] == ib.STATUS_FAILED_INDEX_PRESENT, r.get("reason")
+        assert r["reconciliation"]["state"] == "present"
+        assert r["undone"] == []
+        assert "md_uq_open_pending" in await db[PENDING_COLLECTION].index_information()
+        assert "md_uq_id" in await db["md_organization"].index_information()
+
+        entry = await db[ib.LEDGER_COLLECTION].find_one({"_id": r["run_id"]})
+        assert entry["status"] == ib.RUN_INDEX_PRESENT_UNCONFIRMED and len(entry["created"]) == 25
+
+        rb = await ib.rollback(db, r["run_id"], database=name, plan=r["rollback_plan"],
+                               target=target(name), env={})
+        assert rb["status"] == ib.STATUS_ROLLED_BACK, rb
+        for coll in await db.list_collection_names():
+            if coll != ib.LEDGER_COLLECTION:
+                assert set(await db[coll].index_information()) == {"_id_"}
+    scratch(t)
+
+
+def test_reconciliation_reads_every_planned_index_back_from_a_real_server():
+    """What only a real server can show: its own ``index_information()`` output compares
+    equal to the planned definition, field by field, for all 25 keys."""
+    async def t(db, name):
+        applied = await ib.bootstrap(db, database=name, apply=True, target=target(name), env={})
+        assert applied["status"] == ib.STATUS_APPLIED, applied.get("reason")
+        for key in uq.CANONICAL_KEYS:
+            assert await ib._reconcile(db, key) == ("present", ib._wanted_spec(key)), key.name
+        await db["md_tag"].drop_index("md_uq_name")
+        assert await ib._reconcile(db, [k for k in uq.CANONICAL_KEYS
+                                        if k.collection == "md_tag"
+                                        and k.name == "md_uq_name"][0]) == ("absent", None)
+    scratch(t)
+
+
+def test_a_real_index_of_another_definition_is_a_conflict_and_is_never_dropped():
+    """The claimed name is taken by something else on the server: reconciliation says
+    conflict, and the rollback refuses to delete it."""
+    async def t(db, name):
+        applied = await ib.bootstrap(db, database=name, apply=True, target=target(name), env={})
+        key = [k for k in uq.CANONICAL_KEYS if k.collection == "md_unit" and k.name == "md_uq_name"][0]
+        await db["md_unit"].drop_index("md_uq_name")
+        await db["md_unit"].create_index([("tenant_id", 1), ("normalized_name", 1)],
+                                         name="md_uq_name", unique=True,
+                                         collation={"locale": "bg"})          # foreign definition
+        state, found = await ib._reconcile(db, key)
+        assert state == "conflict" and found != ib._wanted_spec(key)
+
+        rb = await ib.rollback(db, applied["run_id"], database=name, plan=applied["rollback_plan"],
+                               target=target(name), env={})
+        assert rb["status"] == ib.STATUS_ROLLBACK_FAILED
+        refused = [x for x in rb["results"] if x["index"] == "md_unit.md_uq_name"][0]
+        assert refused["result"].startswith("refused")
+        assert "md_uq_name" in await db["md_unit"].index_information()        # still there
+    scratch(t)
