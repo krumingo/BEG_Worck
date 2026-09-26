@@ -23,7 +23,9 @@ REVIEW_BLOB = "730736763991e2b1486c6ef0829d1d5f88017117"
 class ControlProtocolTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.active = cp.ACTIVE_PATH.read_text(encoding="utf-8")
+        # The migration adapter is intentionally C02-only; pin its historical
+        # source instead of treating the live C03 dispatch pointer as C02 input.
+        cls.active = (ROOT / "tests" / "fixtures" / "active_w0_03c_c02.md").read_text(encoding="utf-8")
         cls.review = cp.REVIEW_PATH.read_text(encoding="utf-8")
         cls.pr = {"number": 20, "url": cp.PR_URL, "state": "OPEN",
                   "isDraft": True, "headRefOid": HEAD}

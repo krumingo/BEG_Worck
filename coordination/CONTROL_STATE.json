@@ -1,13 +1,13 @@
 {
   "protocol_version": 1,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-25T17:38:29Z",
+  "validated_at": "2026-09-26T14:47:13Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
-  "control_state_commit_sha": "6dafcf0b5e525dbf2014b84684e8589a9ead3244",
+  "active_source_commit_sha": "fcfe5f0a16b5f43abd9c93a0204dc730001da535",
+  "control_state_commit_sha": "64bef5f4b352030bad51efdea494e06181baa90b",
   "generated_from": [
     "ACTIVE",
     "REVIEW",
@@ -15,8 +15,8 @@
     "CANONICAL_DOCS"
   ],
   "task_id": "W0-03C",
-  "cycle_id": "C02",
-  "cycle_origin": "MIGRATED",
+  "cycle_id": "C03",
+  "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
@@ -24,33 +24,33 @@
       "state": "NOT_ACTIVE",
       "work_id": null,
       "waiting_for": null,
-      "updated_at": "2026-09-22T06:17:02Z"
+      "updated_at": "2026-09-26T14:42:37Z"
     },
     "CODEX": {
-      "state": "BLOCKED",
-      "work_id": "W0-03C/C02/CX",
-      "waiting_for": "Explicit technical correction cycle or design decision from Krum",
-      "updated_at": "2026-09-22T06:17:02Z"
+      "state": "WORKING",
+      "work_id": "W0-03C/C03/CX",
+      "waiting_for": null,
+      "updated_at": "2026-09-26T14:42:37Z"
     },
     "CLAUDE": {
-      "state": "NOT_ACTIVE",
-      "work_id": null,
-      "waiting_for": null,
-      "updated_at": "2026-09-22T06:17:02Z"
+      "state": "WAITING",
+      "work_id": "W0-03C/C03/CL",
+      "waiting_for": "Direct Code Cloud dispatch of the bounded C03 assignment",
+      "updated_at": "2026-09-26T14:42:37Z"
     }
   },
-  "current_work_id": "W0-03C/C02/CX",
-  "state": "BLOCKED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "KRUM",
-  "waiting_for": "Explicit technical correction cycle or design decision from Krum",
+  "current_work_id": "W0-03C/C03/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": null,
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 20,
   "pr_head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
   "pr_draft": true,
-  "dispatch_state": "BLOCKED",
-  "dispatch_run_url": "https://claude.ai/epitaxy/session_0121FURkAfgZYfT9dqwqsyvc",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130",
     "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
@@ -62,18 +62,18 @@
     "reviewed_head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
     "verdict": "BLOCKED"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "Correction cycle 1-of-1 is exhausted; authorize a new technical cycle or decide ambiguous create_index handling.",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "4bd7800657b9c7d60eab5b5b7560ecbfe46540da",
+    "active_blob_sha": "deb99b96b96bc56a045560c0e1489c860aa2834c",
     "review_path": "coordination/REVIEWS/W0-03C.md",
     "review_blob_sha": "730736763991e2b1486c6ef0829d1d5f88017117",
     "handoff_comment_sha256": "63e68cf85a3ddb5f986b958c6ac585f10362e3d97e88ce93f08ad2acf55c6a79",
@@ -100,7 +100,7 @@
       }
     ]
   },
-  "updated_at": "2026-09-22T06:17:02Z",
+  "updated_at": "2026-09-26T14:42:37Z",
   "history": [
     {
       "event_id": "pr20-comment-5764513929",
@@ -241,6 +241,34 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/commit/4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
       "source_commit_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
       "summary": "ACTIVE and Dispatch-State blocked; no next task or C03 authorized."
+    },
+    {
+      "event_id": "pr20-comment-5847103313",
+      "occurred_at": "2026-09-26T14:34:57Z",
+      "task_id": "W0-03C",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "KRUM",
+      "kind": "EVIDENCE",
+      "state_after": null,
+      "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847103313",
+      "source_commit_sha": null,
+      "summary": "Krum authorized one bounded C03 cycle for ambiguous create_index reconciliation; C02 BLOCKED remains historical."
+    },
+    {
+      "event_id": "queue-fcfe5f0a",
+      "occurred_at": "2026-09-26T14:42:37Z",
+      "task_id": "W0-03C",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/fcfe5f0a16b5f43abd9c93a0204dc730001da535",
+      "source_commit_sha": "fcfe5f0a16b5f43abd9c93a0204dc730001da535",
+      "summary": "Canonical ACTIVE updated to C03/PENDING with exact base and bounded ambiguous-index correction."
     }
   ]
 }
