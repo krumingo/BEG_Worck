@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""
+W0-03C — Master Data uniqueness: duplicate report, index bootstrap, rollback.
+
+A DEVELOPMENT / OPERATIONS tool. Never imported by the application.
+
+  report     read-only; names exactly the records that block each planned unique index
+  bootstrap  dry run by default; ``--apply`` builds the indexes only after a fresh clean
+             report, and only on a disposable local MongoDB whose name is typed twice
+  rollback   drops exactly the indexes the run ledger records for an APPLIED run; the
+             saved plan only selects the run and must match the ledger
+
+Usage:
+    # the NAS path: a report from an export of a restored copy, no driver, no network
+    python scripts/w0_03c_master_data_uniqueness.py report --from-export export.json --out report.json \
+        --expect-db begwork_beg --expect-collection begwork_beg.companies
+
+    # a local disposable MongoDB
+    python scripts/w0_03c_master_data_uniqueness.py report    --mongo-url mongodb://localhost:27017 --db w003c_scratch [--legacy]
+    python scripts/w0_03c_master_data_uniqueness.py bootstrap --mongo-url mongodb://localhost:27017 --db w003c_scratch
+    python scripts/w0_03c_master_data_uniqueness.py bootstrap --mongo-url mongodb://localhost:27017 --db w003c_scratch \\
+        --apply --confirm-db w003c_scratch --out run.json
+    python scripts/w0_03c_master_data_uniqueness.py rollback  --mongo-url mongodb://localhost:27017 --db w003c_scratch \\
+        --plan run.json --confirm-db w003c_scratch
+
+Deliberately NOT read: ``.env`` and ``MONGO_URL``. The server is always named on the
+command line, and anything but a plain local ``mongodb://`` server is refused BEFORE a
+connection is made — Atlas, the NAS and production are unreachable from this tool.
+
+The report always prints one ``verdict=CLEAN|BLOCKED|INCOMPLETE`` line (stderr), so a
+caller can check that the exit code and the verdict agree.
+
+Exit codes:
+    0  CLEAN report · PLANNED · APPLIED · ALREADY_APPLIED · ROLLED_BACK
+    1  BLOCKED — duplicates block at least one index (report, REFUSED_DUPLICATES)
+    2  refused: target, conflict, bad arguments or input
+    3  FAILED_ROLLED_BACK — a build failed and this run's indexes were dropped again
+    4  ROLLBACK_FAILED — something could not be undone; read the output
+    5  INCOMPLETE — the export is empty or lacks what was expected: NOT evidence, neither
+       clean nor duplicates
+    6  APPLIED_LEDGER_UNCONFIRMED — every planned index was built, but the run ledger's
+       final "applied" write failed, so the run cannot be confirmed done from the ledger
+       alone: read the output, confirm by hand, then correct the ledger or roll back
+    7  FAILED_BUILD_INDEX_PRESENT — a build raised, but the server HAS that index with the
+       planned definition: ambiguous, NOT rolled back. Nothing was dropped, every claim is
+       in the ledger; roll the run back (``rollback``) or accept it by hand
+    8  FAILED_RECONCILIATION_REQUIRED — a build raised and the server could not be asked
+       what it actually has: failed closed, nothing dropped, every claim kept. Reconcile
+       the named index by hand before trusting a rollback
+    9  BLOCKED_INDEX_CONFLICT — a build raised and another definition holds that index
+       name: for a human. Nothing was dropped and nothing ever deletes that index
+
+``rollback`` accepts a saved plan of any run that still holds claims (APPLIED,
+APPLIED_LEDGER_UNCONFIRMED, FAILED_BUILD_INDEX_PRESENT, FAILED_RECONCILIATION_REQUIRED,
+BLOCKED_INDEX_CONFLICT); the run ledger, not the file, still decides what is dropped.
+"""
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.master_data import index_bootstrap as ib  # noqa: E402
+from app.master_data import uniqueness as uq  # noqa: E402
+
+EXIT_BY_VERDICT = {uq.VERDICT_CLEAN: 0, uq.VERDICT_BLOCKED: 1, uq.VERDICT_INCOMPLETE: 5}
+
+EXIT_BY_STATUS = {
+    ib.STATUS_PLANNED: 0, ib.STATUS_APPLIED: 0, ib.STATUS_ALREADY_APPLIED: 0,
+    ib.STATUS_ROLLED_BACK: 0,
+    ib.STATUS_REFUSED_DUPLICATES: 1,
+    ib.STATUS_REFUSED_TARGET: 2, ib.STATUS_REFUSED_CONFLICT: 2,
+    ib.STATUS_FAILED_ROLLED_BACK: 3,
+    ib.STATUS_ROLLBACK_FAILED: 4,
+    ib.STATUS_APPLIED_UNCONFIRMED: 6,
+    ib.STATUS_FAILED_INDEX_PRESENT: 7,
+    ib.STATUS_FAILED_RECONCILE_REQUIRED: 8,
+    ib.STATUS_BLOCKED_CONFLICT: 9,
+}
+
+
+def parse_mongo_url(url: str) -> Tuple[str, List[str]]:
+    """``(scheme, hosts)`` of a MongoDB URL, without a driver and without printing the
+    credentials that may be in it."""
+    if "://" not in url:
+        raise ib.TargetRefused("not a MongoDB URL")
+    scheme, rest = url.split("://", 1)
+    netloc = rest.split("/", 1)[0].split("?", 1)[0]
+    netloc = netloc.rsplit("@", 1)[-1]                 # drop user:password@
+    hosts = []
+    for part in netloc.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if part.startswith("["):                       # [::1]:27017
+            hosts.append(part[1:part.index("]")] if "]" in part else part)
+        else:
+            hosts.append(part.rsplit(":", 1)[0] if part.count(":") == 1 else part)
+    return scheme.lower(), hosts
+
+
+def write_json(path: str, data: Dict[str, Any]) -> None:
+    text = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=False)
+    if path:
+        Path(path).write_text(text + "\n", encoding="utf-8", newline="\n")
+    else:
+        print(text)
+
+
+def _connect(url: str, database: str):
+    from motor.motor_asyncio import AsyncIOMotorClient   # only for the live modes
+    client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=5000)
+    return client, client[database]
+
+
+def _target(url: str, confirm: str) -> Dict[str, Any]:
+    scheme, hosts = parse_mongo_url(url)
+    return {"scheme": scheme, "hosts": hosts, "confirm_database": confirm}
+
+
+def _guard_connection(url: str) -> None:
+    scheme, hosts = parse_mongo_url(url)
+    ib.check_local(hosts=hosts, scheme=scheme)
+
+
+def _print_report_summary(summaries: List[Dict[str, Any]]) -> None:
+    for s in summaries:
+        state = "CLEAN" if s["canonical_clean"] else "BLOCKED"
+        print("database=%s canonical=%s blocked_indexes=%d blocking_groups=%d tenantless=%d"
+              % (s["database"], state, len(s["blocked_indexes"]), s["blocking_groups"],
+                 s["tenantless_canonical_records"]), file=sys.stderr)
+        for name in s["blocked_indexes"]:
+            print("  blocked: %s" % name, file=sys.stderr)
+        for lg in s.get("legacy", []):
+            print("  legacy %-26s groups=%d within_collection=%d tenantless=%d"
+                  % (lg["key"], lg["groups"], lg["within_collection_groups"], lg["tenantless_records"]),
+                  file=sys.stderr)
+
+
+def cmd_report(args) -> int:
+    if args.from_export:
+        export = json.loads(Path(args.from_export).read_text(encoding="utf-8"))
+        result = uq.report_set_from_export(export, expected_databases=args.expect_db,
+                                           expected_collections=args.expect_collection)
+        write_json(args.out, result)
+        _print_report_summary(result["summary"])
+        for problem in result["evidence"]["problems"]:
+            print("  not evidence: %s" % problem, file=sys.stderr)
+        print("verdict=%s" % result["verdict"], file=sys.stderr)
+        return EXIT_BY_VERDICT[result["verdict"]]
+    if args.expect_db or args.expect_collection:
+        print("refused: --expect-db/--expect-collection apply to --from-export only", file=sys.stderr)
+        return 2
+    _guard_connection(args.mongo_url)
+    client, db = _connect(args.mongo_url, args.db)
+    try:
+        report = asyncio.run(uq.duplicate_report(db, database=args.db, include_legacy=args.legacy))
+    finally:
+        client.close()
+    write_json(args.out, report)
+    _print_report_summary([uq.summarize(report)])
+    verdict = uq.VERDICT_CLEAN if report["canonical"]["clean"] else uq.VERDICT_BLOCKED
+    print("verdict=%s" % verdict, file=sys.stderr)
+    return EXIT_BY_VERDICT[verdict]
+
+
+def cmd_bootstrap(args) -> int:
+    _guard_connection(args.mongo_url)
+    if args.apply:
+        # the full guard runs again inside bootstrap(); checking here too means a refused
+        # target never even opens a connection
+        ib.check_target(database=args.db, **_target(args.mongo_url, args.confirm_db))
+    client, db = _connect(args.mongo_url, args.db)
+    try:
+        result = asyncio.run(ib.bootstrap(db, database=args.db, apply=args.apply,
+                                          target=_target(args.mongo_url, args.confirm_db)))
+    finally:
+        client.close()
+    write_json(args.out, result)
+    print("status=%s %s" % (result["status"], result.get("reason", "")), file=sys.stderr)
+    return EXIT_BY_STATUS[result["status"]]
+
+
+def cmd_rollback(args) -> int:
+    _guard_connection(args.mongo_url)
+    ib.check_target(database=args.db, **_target(args.mongo_url, args.confirm_db))
+    saved = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+    if (saved.get("status") not in ib.ROLLBACKABLE_STATUSES or saved.get("database") != args.db
+            or not saved.get("run_id")):
+        raise ib.TargetRefused("the plan file is not a run of database %r that still holds "
+                               "index claims (%s)"
+                               % (args.db, ", ".join(sorted(ib.ROLLBACKABLE_STATUSES))))
+    client, db = _connect(args.mongo_url, args.db)
+    try:
+        # the ledger decides what the run created; the file's plan is only cross-checked
+        result = asyncio.run(ib.rollback(db, saved["run_id"], database=args.db,
+                                         plan=saved.get("rollback_plan") or [],
+                                         target=_target(args.mongo_url, args.confirm_db)))
+    finally:
+        client.close()
+    write_json(args.out, result)
+    print("status=%s %s" % (result["status"], result.get("reason", "")), file=sys.stderr)
+    return EXIT_BY_STATUS[result["status"]]
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[1] if __doc__ else None)
+    sub = p.add_subparsers(dest="command", required=True)
+
+    r = sub.add_parser("report", help="read-only duplicate report")
+    src = r.add_mutually_exclusive_group(required=True)
+    src.add_argument("--from-export", help="export JSON of a restored copy (NAS path)")
+    src.add_argument("--mongo-url", help="a LOCAL mongodb:// server")
+    r.add_argument("--db", help="database name (with --mongo-url)")
+    r.add_argument("--legacy", action="store_true", help="also project the keys onto legacy collections")
+    r.add_argument("--expect-db", action="append", default=[],
+                   help="(export) a database the restored copy must contain; repeatable")
+    r.add_argument("--expect-collection", action="append", default=[],
+                   help="(export) <database>.<collection> the export must contain; repeatable")
+    r.add_argument("--out", default="", help="write the JSON here instead of stdout")
+
+    b = sub.add_parser("bootstrap", help="plan or build the unique indexes")
+    b.add_argument("--mongo-url", required=True)
+    b.add_argument("--db", required=True)
+    b.add_argument("--apply", action="store_true")
+    b.add_argument("--confirm-db", default=None, help="repeat --db; required with --apply")
+    b.add_argument("--out", default="")
+
+    rb = sub.add_parser("rollback", help="drop exactly the indexes of an APPLIED run")
+    rb.add_argument("--mongo-url", required=True)
+    rb.add_argument("--db", required=True)
+    rb.add_argument("--plan", required=True,
+                    help="the JSON a bootstrap run that holds index claims wrote; its run_id "
+                         "selects the ledger entry")
+    rb.add_argument("--confirm-db", required=True)
+    rb.add_argument("--out", default="")
+    return p
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.command == "report" and args.mongo_url and not args.db:
+        print("refused: --db is required with --mongo-url", file=sys.stderr)
+        return 2
+    try:
+        return {"report": cmd_report, "bootstrap": cmd_bootstrap, "rollback": cmd_rollback}[args.command](args)
+    except ib.TargetRefused as exc:
+        print("refused: %s" % exc, file=sys.stderr)
+        return 2
+    except (OSError, ValueError) as exc:
+        print("refused: %s" % exc, file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

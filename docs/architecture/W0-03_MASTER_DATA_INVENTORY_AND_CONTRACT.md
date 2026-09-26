@@ -1,6 +1,10 @@
 # W0-03 Master Data (FLOW-032) — инвентар и implementation contract
 
-> **Статус:** `W0-03B1 MERGED — B2/B3/C(min) IN REVIEW`
+> **Статус (21.09.2026):** `W0-03A/B1/B2/B3/C(min)/UI MERGED — W0-03C UNIQUENESS IN REVIEW — D/E NOT STARTED`
+> A (#16), B1 (#17), B2+B3+C(min) (#18) и офис екранът с intake пътищата (#19) са merge-нати;
+> `main` = `2d03f8ac`. W0-03C уникалността (duplicate report + index bootstrap) е в Draft PR —
+> [бележка по изпълнението](W0-03C_UNIQUENESS_READINESS.md). **Нито един уникален индекс не е
+> създаден никъде**, W0-03 не е деплойван, `MASTER_DATA_MODE` по подразбиране е `off`.
 > Contract-ът е merge-нат в `main` на 20.09.2026 (`d8a213a3`). Текстът му не се пренаписва от
 > имплементационните slice-ове; промяна в него изисква отделно решение.
 > **База:** `main` = `ddad542ed0d1de64b3ba9ae4639517dba03425c7`

@@ -1,10 +1,10 @@
 # BEG_Work — Табло за изпълнение
 
-> - Актуално към: 20.09.2026 (W0-10A затворен с PASS; хардуерният NVMe риск остава ОТВОРЕН)
+> - Актуално към: 21.09.2026 (W0-03 A–C(min) и офис екранът merge-нати; W0-03C уникалност в ревю; хардуерният NVMe риск остава ОТВОРЕН)
 > - Статус на документацията: FLOW-001–050 Business Lock; уточнения на Крум от 12.09.2026 са вписани във FLOW-011/012/020/021/026/027/045
 > - Каноничната W0 номерация е в `docs/architecture/IMPLEMENTATION_WAVES.md`. Старата номерация на това табло от 05.08.2026 (12 точки с разменени Permission/Tenant и отделни QA/DR/Retention items) е **отменена**.
 > - Production: `0b53bcd5b977ee27de8d4cee363fed41dd897482` (Merge PR #9), `PERMISSION_SERVICE_MODE` = off
-> - Следващ етап: **W0-03 Master Data** — W0-09A (merge-нат `fdf4d59e`, PR #14, 14.09.2026, **не е деплойван**) и W0-10A (**PASS**, 20.09.2026) са затворени. W0-03A е merge-нат; тече W0-03B1 (основа, `off` режим) в Draft PR.
+> - Следващ етап: **W0-03 Master Data** — W0-09A (merge-нат `fdf4d59e`, PR #14, 14.09.2026, **не е деплойван**) и W0-10A (**PASS**, 20.09.2026) са затворени. W0-03 A, B1, B2, B3, C(min) и офис екранът са merge-нати (PR #16–#19, `main` `2d03f8ac`); W0-03C уникалност (duplicate report + index bootstrap) е в Draft PR; нищо от W0-03 не е деплойвано.
 > - Отворен риск, независим от горното: прегряващите M.2 NVMe кеш дискове на NAS-а (`docs/ops/INCIDENT_2026-09-13_NAS_THERMAL.md`) — **не е отстранен**
 
 ## 1. Общ статус
@@ -17,7 +17,7 @@
 | Активни незавършени FLOW-ове | 0 |
 | Оставащи бизнес решения | 0 |
 | Implementation Gate PASS (цял FLOW) | 0 |
-| Wave 0 items с merge-нато ядро | 3 — W0-01, W0-02, W0-04 |
+| Wave 0 items с merge-нато ядро | 4 — W0-01, W0-02, W0-03, W0-04 |
 | Wave 0 items в production | W0-02 core (deploy 12.09.2026, manual smoke PASS); W0-01/W0-04 foundation код е част от същия build |
 
 ## 2. Wave 0 — реален статус по каноничната номерация
@@ -28,7 +28,7 @@
 |---|---|---|---|---|
 | W0-01 | Tenancy / D-15 / FLOW-050 | **CORE MERGED** | PR #3 (`app/tenancy`: registry, guard, resolver); ползва се от W0-02 пътищата (`deps/auth`, `permissions/*`, `routes/auth`, `activity_budgets`, `assets_intake_pending`) | Tenant Guard не е вързан към всички legacy routes/jobs/files/search/export/AI; migration runner, support access, per-tenant numbering/integrations, пълен isolation suite |
 | W0-02 | Permission Service / FLOW-002 | **CORE DEPLOYED** | PR #9 → `0b53bcd5`; Synology real-Mongo 54 / mock 111 / migration PASS; standard app regression 0 нови failures; production deploy + automated smoke + manual login/dashboard smoke PASS (12.09.2026) | **W0-02 item НЕ е затворен** (решение на Крум 09.09.2026: не се затваря, докато има route, който заобикаля Permission Service). Инвентар в `main`: **232 legacy проверки, 3 мигрирани, 229 остават** (`backend/scripts/w0_02_permission_inventory.py`). Mode остава off; shadow/enforce изискват отделно решение. ExternalPrincipal/AccessGrant, MFA/passkeys — не са започнати |
-| W0-03 | Master Data / FLOW-032 | **W0-03B1 MERGED — B2/B3/C(min) IN REVIEW** | contract и основата са merge-нати (`d8a213a3`, `4e7814ee`); в Draft PR е работещ пакет: pending mapping, човешки approve/reject, нормализация и alias резолюция, шест endpoint-а, OCR intake в shadow | merge с preview и Approval (D), уникални индекси след duplicate report (пълен C), миграция на legacy идентичностите (E); `MASTER_DATA_MODE` по подразбиране е `off` |
+| W0-03 | Master Data / FLOW-032 | **CORE MERGED — W0-03C UNIQUENESS IN REVIEW** | contract (#16), основа с инертен `off` (#17), pending mapping, човешки approve/reject, нормализация и alias резолюция без автоматичен merge (#18), офис екран „За мапване“ с права по каталога и един отворен pending ред под конкурентност (#19); W0-03C: read-only duplicate report и index bootstrap, който отказва при дубликати, в Draft PR | нито един уникален индекс не е създаден; duplicate report върху прясно възстановено копие (задача за Крум); проверка срещу реален MongoDB; merge с preview и Approval (D); миграция на legacy идентичностите (E); `MASTER_DATA_MODE` по подразбиране е `off` |
 | W0-04 | Audit / Lifecycle / Idempotency / FLOW-040 | **CORE MERGED** | PR #6 (`app/audit`: envelope, store с hash chain, correction/reversal/annotation, idempotency registry); ползва се от W0-02 permission audit/sync/workflow | Не покрива всички critical writes; R1–R6 retention enforcement, legal/incident hold, controlled disposition, signed manifests, immutable archive, audit-of-audit — **W0-04B** |
 | W0-05 | Payment Core / FLOW-006 | **NOT STARTED** | няма единен payment write service (legacy `routes/finance.py` съществува) | целият обхват |
 | W0-06 | File Registry / FLOW-016 | **NOT STARTED** | няма `file_id` registry (legacy `routes/media.py`, локален uploads път) | целият обхват (A–E), customer-managed provider onboarding |

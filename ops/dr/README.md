@@ -163,3 +163,55 @@ production.
   не адресира обектите на първия, не маха неговия lock и не пипа неговите доказателства;
 - **невалидна конфигурация** (`M2_SENSORS_REQUIRED=yes`, `TEMP_ABORT=hot`, `READY_TIMEOUT=0`…)
   отказва старта преди каквото и да е обръщение към Docker и преди вземането на lock-а.
+
+## W0-03C — Master Data duplicate report като `POST_VERIFY_HOOK`
+
+Runner-ът приема **по избор** `POST_VERIFY_HOOK` — абсолютен път до bash скрипт.
+
+**Как работи hook-ът:**
+- Пуска се след проверката и **преди** почистването, срещу вече възстановеното копие.
+- Получава в средата си `W010A_NET`, `W010A_MONGO_HOST`, `W010A_MONGO_IMAGE`, `W010A_HOOK_OUT` (= `$OUT/hook`) и `DOCKER`.
+- Има `HOOK_TIMEOUT` секунди, по подразбиране 900.
+
+**Кога блокира PASS** (изход 3; почистването пак се изпълнява):
+- hook-ът се проваля;
+- hook-ът не свърши навреме;
+- температурата се вдигне по време на hook-а.
+
+**Какво чисти почистването:** всеки `*.sensitive*` файл, който hook-ът е оставил, дори ако hook-ът е бил убит.
+
+**Без hook** поведението е същото като преди: в `SUMMARY.txt`, `result.env` и `run.log` няма нов ред, а 40-те стари теста минават без промяна.
+
+`w0_03c_duplicate_report_hook.sh` прави duplicate report-а на W0-03C ([бележка](../../docs/architecture/W0-03C_UNIQUENESS_READINESS.md)):
+
+1. **export:** `mongosh` на изолираната мрежа чете само планираните колекции и полета (`w0_03c_export.js`). Файлът е mode 600 и се казва `export.sensitive.json`.
+2. **report:** stdlib-only Python в `python:3.11-slim` с `--network none` и `--read-only`. Кодът е монтиран само за четене.
+3. **изтриване:** суровият export се изтрива веднага щом има отчет. Остават `W003C_EXPORT_SHA256` и `W003C_EXPORT_BYTES`.
+
+**Резултат:**
+- В `hook/result.env`: `W003C_REPORT=CLEAN` или `W003C_REPORT=BLOCKED`.
+- В `hook/report.json`: пълният отчет. ЕГН е маскирано.
+- **Дубликатите са резултат, не провал** — hook-ът излиза с 0.
+- **Празен или непълен export е провал:** `W003C_REPORT=INCOMPLETE`, изход 1, W0-10A е BLOCKED, а почистването пак минава. Непълен е export, който е празен, не е сканирал нищо или няма очаквана база или колекция.
+- **Очаквания по подразбиране:**
+  - `W003C_EXPECT_DBS=begwork_beg`;
+  - `W003C_EXPECT_COLLECTIONS` = `companies`, `clients`, `counterparties`, `persons`, `items` и `asset_units` в `begwork_beg`.
+
+  Точно тези колекции е имало възстановеното копие на 20.09.2026.
+- **Hook-ът минава само ако изходният код, редът `verdict=` и `report.json` казват едно и също.**
+
+**Пакет за NAS-а** — от точен commit, с LF и sha256 на всеки файл:
+
+```bash
+bash ops/dr/w0_03c_make_bundle.sh <commit> <изходна папка>
+```
+
+**Пускане на NAS-а** (след разархивиране в `/volume1/docker/w003c/`):
+
+```bash
+sudo env DOCKER=/usr/local/bin/docker POST_VERIFY_HOOK=/volume1/docker/w003c/<sha12>/ops/dr/w0_03c_duplicate_report_hook.sh bash /volume1/docker/w003c/<sha12>/ops/dr/w0_10a_restore_proof.sh
+```
+
+`sudo` на DSM не носи потребителския `PATH`, а `docker` на DSM е в `/usr/local/bin`, не в `sudo`-вия `secure_path` — без изричния `DOCKER=` sudo не намира `docker` и прогонът приключва с изход 2 преди restore (както при първия опит на 22.09). Ако инсталацията на Docker/Container Manager е на друг път, провери с `which docker` (без `sudo`) и подай точно него.
+
+**Нужни образи:** `mongo:7` и `python:3.11-slim` трябва да са налични локално. Прогонът не тегли нищо.

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import uuid
 
-from app.master_data.normalize import NORMALIZATION_VERSION, normalize_name
+from app.master_data.normalize import NORMALIZATION_VERSION, normalize_identifier, normalize_name
 
 # --- the nine canonical types of FLOW-032 "Златно правило" -----------------
 ENTITY_PERSON = "person"
@@ -46,8 +46,38 @@ RESERVED_TENANT_KEYS = frozenset({
 })
 
 
+#: Typed identifiers a canonical record may carry, per type — the "Ключов контрол срещу
+#: дублиране" column of contract §5.1. Stored as ``identifiers[]`` with a
+#: ``key = "<kind>:<normalized value>"`` that the W0-03C unique index is built on.
+IDENTIFIER_KINDS = {
+    ENTITY_PERSON: ("egn",),
+    ENTITY_ORGANIZATION: ("eik", "vat"),
+    ENTITY_PHYSICAL_ASSET: ("serial", "qr", "inventory"),
+    ENTITY_ITEM: ("sku",),
+}
+
+
 class MasterDataInvalid(Exception):
     """A document does not satisfy the canonical shape."""
+
+
+def identifier_key(kind: str, value: Optional[str]) -> str:
+    """``("eik", " 123 456 789 ")`` -> ``"eik:123456789"``; empty when there is no value.
+
+    Separators and case carry no identity (the existing ``normalize_identifier``).
+    """
+    normalized = normalize_identifier(value)
+    return "%s:%s" % (kind, normalized) if normalized else ""
+
+
+def new_identifier(entity_type: str, kind: str, value: str) -> Dict[str, Any]:
+    """One typed identifier. Refuses a kind the type does not have and an empty value."""
+    if kind not in IDENTIFIER_KINDS.get(entity_type, ()):
+        raise MasterDataInvalid("%s does not carry a %r identifier" % (entity_type, kind))
+    key = identifier_key(kind, value)
+    if not key:
+        raise MasterDataInvalid("identifier %s has no value" % kind)
+    return {"kind": kind, "value": str(value).strip(), "key": key}
 
 
 def _now() -> str:
@@ -186,6 +216,14 @@ def validate_entity(doc: Dict[str, Any]) -> None:
     for alias in aliases:
         if not isinstance(alias, dict) or not alias.get("value") or not alias.get("added_by"):
             raise MasterDataInvalid("each alias needs a value and the human who added it")
+    identifiers = doc.get("identifiers", [])
+    if not isinstance(identifiers, list):
+        raise MasterDataInvalid("identifiers must be a list")
+    for ident in identifiers:
+        if not isinstance(ident, dict) or ident.get("kind") not in IDENTIFIER_KINDS.get(doc["entity_type"], ()):
+            raise MasterDataInvalid("identifier kind not allowed for %s" % doc["entity_type"])
+        if not ident.get("key") or ident["key"] != identifier_key(ident["kind"], ident.get("value")):
+            raise MasterDataInvalid("identifier key must be <kind>:<normalized value>")
     refs = doc.get("legacy_refs", [])
     if not isinstance(refs, list):
         raise MasterDataInvalid("legacy_refs must be a list")

@@ -34,7 +34,7 @@
 |---|---|---|---|
 | 050 (tenancy / D-15) | W0-01 | CORE MERGED | Tenant Guard на всички входни точки, migration runner, support access, isolation suite |
 | 002 | W0-02 | CORE DEPLOYED (`0b53bcd5`, mode off) | 229 от 232 legacy role проверки не са мигрирани; ExternalPrincipal/AccessGrant; shadow/enforce решение |
-| 032 | W0-03 | **W0-03B1 MERGED — B2/B3/C(min) IN REVIEW** | целият runtime обхват. Инвентарът (`W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md`) показва 15 идентичностни колекции, нула уникални индекса върху master data, дублирани писачи на `persons`/`companies` и седем нескоупнати изтривания |
+| 032 | W0-03 | **A/B1/B2/B3/C(min)/UI MERGED — W0-03C UNIQUENESS IN REVIEW** | уникалните индекси (построени само след чист duplicate report върху възстановено копие — [бележка](W0-03C_UNIQUENESS_READINESS.md)), merge с preview и Approval (D), legacy миграция и isolation suite (E). Инвентарът (`W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md`) показва 15 идентичностни колекции, нула уникални индекса върху master data, дублирани писачи на `persons`/`companies` и седем нескоупнати изтривания |
 | 040 | W0-04 | CORE MERGED | покритие на всички critical writes; retention/hold/archive/audit-of-audit (W0-04B) |
 | 006 | W0-05 | NOT STARTED | целият обхват |
 | 016 | W0-06 | NOT STARTED | целият обхват |
@@ -92,4 +92,4 @@ Wave 2.1 (FLOW-027 график/готовност) не е W0 gate; runtime к�
 
 ## Бизнес статус
 
-Няма оставащи бизнес решения. Wave 0 coding е започнал; W0-09A и W0-10A са затворени (20.09.2026). Следващата implementation стъпка е **W0-03 Master Data**, чийто етап **W0-03A** (инвентар и contract) е в ревю, а runtime не е започнат (пълният ред е в [Implementation Waves](IMPLEMENTATION_WAVES.md)).
+Няма оставащи бизнес решения. Wave 0 coding е започнал; W0-09A и W0-10A са затворени (20.09.2026). Текущата implementation стъпка е **W0-03 Master Data**: A–C(min) и офис екранът са merge-нати, **W0-03C уникалност е в ревю**, D и E не са започнати; нищо от W0-03 не е деплойвано (пълният ред е в [Implementation Waves](IMPLEMENTATION_WAVES.md)).
