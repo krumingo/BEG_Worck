@@ -26,7 +26,8 @@ class ControlProtocolTests(unittest.TestCase):
         # The migration adapter is intentionally C02-only; pin its historical
         # source instead of treating the live C03 dispatch pointer as C02 input.
         cls.active = (ROOT / "tests" / "fixtures" / "active_w0_03c_c02.md").read_text(encoding="utf-8")
-        cls.review = cp.REVIEW_PATH.read_text(encoding="utf-8")
+        # C02 migration fixture stops at the preserved historical review section.
+        cls.review = cp.REVIEW_PATH.read_text(encoding="utf-8").split("\n---\n", 1)[0]
         cls.pr = {"number": 20, "url": cp.PR_URL, "state": "OPEN",
                   "isDraft": True, "headRefOid": HEAD}
         cls.handoff = {"id": 5771922130,

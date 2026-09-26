@@ -82,7 +82,7 @@ def pr_metadata() -> dict:
 
 
 def handoff_metadata() -> dict:
-    return json.loads(command("gh", "api", "repos/krumingo/BEG_Worck/issues/comments/5771922130",
+    return json.loads(command("gh", "api", "repos/krumingo/BEG_Worck/issues/comments/5847481878",
                               "--jq", "{id,body,created_at,html_url}"))
 
 
@@ -107,8 +107,10 @@ def canonical_sources(head: str) -> list[dict]:
 
 def checked_handoff(handoff: dict, head: str) -> str:
     body = handoff.get("body")
-    if (handoff.get("id") != 5771922130 or handoff.get("html_url") != PR_URL + "#issuecomment-5771922130"
-            or handoff.get("created_at") != "2026-09-22T06:03:35Z"
+    known = {5771922130: "2026-09-22T06:03:35Z", 5847481878: "2026-09-26T15:29:30Z"}
+    comment_id = handoff.get("id")
+    if (comment_id not in known or handoff.get("html_url") != PR_URL + f"#issuecomment-{comment_id}"
+            or handoff.get("created_at") != known[comment_id]
             or not isinstance(body, str) or "W0-03C" not in body or head not in body):
         raise ControlError("STALE", "final HANDOFF comment no longer matches W0-03C and exact PR head")
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
