@@ -1,18 +1,18 @@
 # BEG_WORK — active implementation assignment
 
-Status: REVIEW
+Status: CHANGES_REQUESTED
 Current-Agent: CODEX
-Current-State: REVIEWING
+Current-State: WAITING
 Claude-State: HANDOFF_READY
 Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Codex reviewing Claude
+Now: Codex review published; awaiting GPT feedback
 Next-Agent: GPT
-Relay-State: NO_RELAY_NEEDED
-Relay-From: NONE
-Relay-To: NONE
-Krum-Action: NONE
-Dispatch-State: RUNNING
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: RELAY CODEX REVIEW TO CHATGPT
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Task-ID: W0-03D
 Cycle-ID: C01
@@ -23,12 +23,12 @@ PR-URL: https://github.com/krumingo/BEG_Worck/pull/30
 PR-Head: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
 HANDOFF-URL: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 HANDOFF-Head: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
-Review: coordination/REVIEWS/W0-03D.md (create only after independent review)
+Review: coordination/REVIEWS/W0-03D.md (CHANGES_REQUESTED on 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
 Authorization: Krum confirmed one-time Computer Use Send; Claude session start observed at https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
-Correction-cycle: NONE
+Correction-cycle: 0-of-1 used; one bounded correction available, not dispatched
 
 ## Human purpose
 Prepare the next FLOW-032 Master Data stage: a human can inspect a proposed merge before it changes anything; historical IDs must continue to resolve, and merge history must remain immutable. This is technical implementation behind the existing feature-off boundary, not authorization to merge real data.
