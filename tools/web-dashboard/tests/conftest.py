@@ -15,6 +15,13 @@ production. Nothing in the production fail-closed blob check is relaxed to make 
 work: ``verify._check_blob`` still demands an exact match, and
 ``test_blob_and_pr.py::test_a_crlf_converted_checkout_would_not_match`` pins that a
 CRLF-converted copy is still correctly rejected.
+
+The broad PR/merge regression suite is pinned to the real, previously published
+W0-03C/C03 snapshot from queue commit d1893e8. The live queue has since advanced
+to W0-03D/C01 with no PR; using that as the fixture would silently make PR/merge
+tests vacuous. The four historical source blobs below are checked-in test fixtures,
+read via Git objects for the same cross-platform byte guarantee. Protocol v2's
+current PENDING state is exercised separately in tests/test_two_phase_control.py.
 """
 
 from __future__ import annotations
@@ -47,6 +54,7 @@ from app.settings import (  # noqa: E402
 
 ACTIVE_PATH = "coordination/ACTIVE.md"
 REVIEW_PATH = "coordination/REVIEWS/W0-03C.md"
+HISTORICAL_FIXTURE = "tools/web-dashboard/tests/fixtures/w0_03c_"
 
 
 def git_blob(path: str, ref: str = "HEAD") -> bytes:
@@ -69,13 +77,13 @@ def repo_root() -> pathlib.Path:
 
 @pytest.fixture(scope="session")
 def canonical_bytes() -> dict[str, bytes]:
-    """Committed bytes for every file a round reads."""
+    """Frozen real W0-03C/C03 bytes for deterministic PR/merge regressions."""
     return {
-        CONTROL_STATE_PATH: git_blob(CONTROL_STATE_PATH),
+        CONTROL_STATE_PATH: git_blob(HISTORICAL_FIXTURE + "CONTROL_STATE.json"),
         CONTROL_SCHEMA_PATH: git_blob(CONTROL_SCHEMA_PATH),
-        CONTROL_BOARD_PATH: git_blob(CONTROL_BOARD_PATH),
-        ACTIVE_PATH: git_blob(ACTIVE_PATH),
-        REVIEW_PATH: git_blob(REVIEW_PATH),
+        CONTROL_BOARD_PATH: git_blob(HISTORICAL_FIXTURE + "CONTROL_BOARD.md"),
+        ACTIVE_PATH: git_blob(HISTORICAL_FIXTURE + "ACTIVE.md"),
+        REVIEW_PATH: git_blob(HISTORICAL_FIXTURE + "W0-03C.md"),
     }
 
 
