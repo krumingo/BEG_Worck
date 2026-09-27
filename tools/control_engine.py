@@ -108,13 +108,17 @@ def validate_state(state: dict) -> None:
         raise ControlError("INVALID", "pipeline step/agent mismatch")
     agents = state["agent_states"]
     current = agents[state["current_agent"]]
-    if (current["state"] != state["state"] or
+    expected_activity = (state["state"] if state["protocol_version"] == 1 else
+                         {"REVIEW": "REVIEWING", "HANDOFF": "HANDOFF_READY",
+                          "PASS": "WAITING", "CHANGES_REQUESTED": "WAITING"}.get(state["state"], state["state"]))
+    if (current["state"] != expected_activity or
             current["work_id"] != state["current_work_id"] or
             current["waiting_for"] != state["waiting_for"]):
         raise ControlError("CONFLICT", "current agent state/work/waiting does not match snapshot")
-    active = [name for name, item in agents.items() if item["state"] in {"WORKING", "REVIEW"}]
-    if active != ([state["current_agent"]] if state["state"] in {"WORKING", "REVIEW"} else []):
-        raise ControlError("INVALID", "WORKING/REVIEW must belong only to current pipeline agent")
+    busy_states = {"WORKING", "REVIEW"} if state["protocol_version"] == 1 else {"WORKING", "REVIEWING"}
+    active = [name for name, item in agents.items() if item["state"] in busy_states]
+    if active != ([state["current_agent"]] if expected_activity in busy_states else []):
+        raise ControlError("INVALID", "WORKING/REVIEWING must belong only to current pipeline agent")
     validated = dt.datetime.fromisoformat(state["validated_at"].replace("Z", "+00:00"))
     for name, item in agents.items():
         observed = dt.datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00"))
@@ -128,6 +132,10 @@ def validate_state(state: dict) -> None:
             expected = f"{state['task_id']}/{state['cycle_id']}/{suffixes[name]}"
             if item["work_id"] != expected:
                 raise ControlError("INVALID", f"{name} work_id does not match current task/cycle")
+        if state["protocol_version"] == 2 and item["state"] in {"HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED"}:
+            raise ControlError("INVALID", f"{name} uses a workflow outcome as an agent activity")
+    if state["protocol_version"] == 2:
+        _validate_two_phase(state)
     if state["requires_krum"] and not (state["requires_krum_reason"] or "").strip():
         raise ControlError("INVALID", "requires_krum has no reason")
     if state["state"] in {"WAITING", "BLOCKED"} and not (state["waiting_for"] or "").strip():
@@ -186,6 +194,60 @@ def validate_state(state: dict) -> None:
         raise ControlError("INVALID", "progress percentage is not deterministic")
 
 
+def _validate_two_phase(state: dict) -> None:
+    """Fail closed when a v2 snapshot asserts an event before its evidence exists."""
+    transition = state.get("transition")
+    if not isinstance(transition, dict) or not (state.get("now") or "").strip():
+        raise ControlError("INVALID", "v2 requires transition and NOW")
+    event, phase = transition["event"], transition["phase"]
+    evidence, publication = transition["evidence_url"], transition["verdict_publication"]
+    agents = state["agent_states"]
+    if (phase == "INTENT" and evidence is not None) or (phase == "OBSERVED" and evidence is None):
+        raise ControlError("CONFLICT", "intent cannot cite observed evidence; observed event requires evidence")
+    if state["dispatch_state"] == "PENDING":
+        if (event not in {"ASSIGNMENT", "DISPATCH"} or phase != "INTENT" or
+                state["dispatch_run_url"] is not None or state["current_agent"] != "CODEX" or
+                state["pipeline_step"] != "ASSIGNMENT" or state["state"] != "WORKING" or
+                agents["CODEX"]["state"] != "WORKING" or agents["CLAUDE"]["state"] != "WAITING" or
+                state["next_agent"] != "CLAUDE" or publication != "NONE"):
+            raise ControlError("CONFLICT", "dispatch PENDING must precede Send; Claude must still be WAITING")
+    if agents["CLAUDE"]["state"] == "WORKING":
+        if (event != "CLAUDE_START" or phase != "OBSERVED" or
+                evidence != state["dispatch_run_url"] or state["dispatch_state"] != "RUNNING" or
+                state["current_agent"] != "CLAUDE" or state["pipeline_step"] != "IMPLEMENTATION" or
+                agents["CODEX"]["state"] != "WAITING" or publication != "NONE"):
+            raise ControlError("CONFLICT", "Claude WORKING requires observed session start")
+    if agents["CODEX"]["state"] == "REVIEWING":
+        handoff = state["last_handoff"]
+        if (not handoff or handoff["head_sha"] != state["pr_head_sha"] or
+                state["current_agent"] != "CODEX" or state["pipeline_step"] != "REVIEW" or
+                state["state"] != "REVIEW" or agents["CLAUDE"]["state"] != "HANDOFF_READY" or
+                agents["GPT"]["state"] != "WAITING" or
+                event not in {"CLAUDE_HANDOFF", "CODEX_REVIEW", "CODEX_VERDICT"}):
+            raise ControlError("CONFLICT", "Codex REVIEWING requires exact-head Claude HANDOFF")
+    if event == "CLAUDE_HANDOFF":
+        if (phase != "OBSERVED" or not state["last_handoff"] or
+                evidence != state["last_handoff"]["url"] or publication != "NONE" or
+                agents["CODEX"]["state"] != "REVIEWING" or
+                state["relay"]["last_agent"] != "CLAUDE" or state["relay"]["last_result"] != "HANDOFF"):
+            raise ControlError("CONFLICT", "Claude HANDOFF requires published exact-head evidence")
+    if event == "CODEX_VERDICT":
+        if phase == "INTENT":
+            if (publication not in {"PENDING", "READY"} or state["state"] != "REVIEW" or
+                    state["last_review"] is not None or agents["CODEX"]["state"] != "REVIEWING"):
+                raise ControlError("CONFLICT", "unpublished verdict must stay REVIEWING without a claimed result")
+        elif (publication != "PUBLISHED" or not state["last_review"] or
+              state["relay"]["last_agent"] != "CODEX" or
+              state["relay"]["last_result"] != state["last_review"]["verdict"]):
+            raise ControlError("CONFLICT", "published verdict requires exact-head independent review")
+    elif publication != "NONE":
+        raise ControlError("CONFLICT", "verdict publication state requires CODEX_VERDICT event")
+    if event == "CLAUDE_START" and (phase != "OBSERVED" or agents["CLAUDE"]["state"] != "WORKING"):
+        raise ControlError("CONFLICT", "Claude start cannot be claimed without observed WORKING state")
+    if event == "ARCHITECT_RELAY" and phase == "OBSERVED" and state["relay"]["status"] != "RECEIVED":
+        raise ControlError("CONFLICT", "architect relay cannot be observed before receipt")
+
+
 def render_board(state: dict) -> str:
     validate_state(state)
     def cell(value) -> str:
@@ -205,7 +267,7 @@ def render_board(state: dict) -> str:
              f"CURRENT: {state['task_id']} / {cycle} / {state['current_agent']} / **{state['state']}**",
              f"LAST: {state['relay']['last_agent']} — {state['relay']['last_event']} / {state['relay']['last_result']}",
              f"RELAY: {state['relay']['status']} · {state['relay']['from'] or '—'} → {state['relay']['to'] or '—'}",
-             f"NOW: {state['current_agent']} {state['state']} · {state['pipeline_step']}",
+             f"NOW: {state.get('now') or state['current_agent'] + ' ' + state['state'] + ' · ' + state['pipeline_step']}",
              f"NEXT: {state['next_agent']}",
              f"KRUM ACTION: {'REQUIRED — ' + state['requires_krum_reason'] if state['requires_krum'] else 'NONE'}",
              f"WAITING FOR: {state['waiting_for'] or '—'}", "", "## Required agent banner", "",
@@ -222,6 +284,10 @@ def render_board(state: dict) -> str:
              "Current agent state is explicit in `agent_states`; history below is evidence, not a status source.", "",
              "| Agent | State | Work-ID | Waiting for | Updated at (UTC) |",
              "|---|---|---|---|---|"]
+    if state.get("transition"):
+        now_index = next(index for index, line in enumerate(lines) if line.startswith("NOW: "))
+        transition = state["transition"]
+        lines.insert(now_index + 1, f"TRANSITION: {transition['event']} / {transition['phase']} · verdict {transition['verdict_publication']}")
     for name in ("GPT", "CODEX", "CLAUDE"):
         item = agent_status[name]
         lines.append(f"| {name} | {cell(item['state'])} | {cell(item['work_id'])} | {cell(item['waiting_for'])} | {cell(item['updated_at'])} |")

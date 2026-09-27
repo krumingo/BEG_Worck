@@ -16,7 +16,7 @@ const DASH = '—';
 
 /* A glyph per agent state, so cards never depend on colour alone. */
 const STATE_GLYPH = {
-  WORKING: '▶', WAITING: '⏸', REVIEW: '🔍', HANDOFF: '➜', PASS: '✓',
+  WORKING: '▶', WAITING: '⏸', REVIEW: '🔍', REVIEWING: '🔍', HANDOFF: '➜', HANDOFF_READY: '➜', PASS: '✓',
   CHANGES_REQUESTED: '↺', BLOCKED: '■', NOT_ACTIVE: '·', UNKNOWN: '?'
 };
 
@@ -180,6 +180,7 @@ function renderRelay(data) {
     `LAST: ${relay.last_agent} — ${relay.last_action}${relay.verified ? '' : ' (UNVERIFIED)'}`);
   row(host, 'relay__fact', 'Last updated', relay.last_updated);
   row(host, 'relay__fact', 'Relay', relay.status_display);
+  if (relay.transition_phase) row(host, 'relay__fact', 'Evidence phase', relay.transition_phase);
   row(host, 'relay__fact', 'Now', relay.now);
   row(host, 'relay__fact', 'Krum next action', relay.krum_next_action);
   row(host, 'relay__fact', 'Send to', relay.send_to);
@@ -205,7 +206,7 @@ function renderAgents(data) {
     if (agent.is_current) head.appendChild(make('span', 'agent__now', 'current'));
     card.appendChild(head);
 
-    const state = make('div', 'agent__state', agent.state || 'UNKNOWN');
+    const state = make('div', 'agent__state', agent.state_label || agent.state || 'UNKNOWN');
     state.dataset.glyph = STATE_GLYPH[agent.state] || STATE_GLYPH.UNKNOWN;
     card.appendChild(state);
 

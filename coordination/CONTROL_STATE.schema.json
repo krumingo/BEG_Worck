@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/CONTROL_STATE.schema.json",
-  "title": "BEG_WORK control state v1",
-  "$comment": "v1 represents active tasks only: IDLE/NONE and no-active-task are unsupported. VALID is an as-of validated_at snapshot, never live verification without source recheck.",
+  "title": "BEG_WORK control state v1/v2",
+  "$comment": "v2 requires an explicit intent/observed transition; v1 remains readable for historical snapshots. VALID is an as-of validated_at snapshot, never live verification without source recheck.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,9 @@
     "progress", "source_refs", "updated_at", "history"
   ],
   "properties": {
-    "protocol_version": { "const": 1 },
+    "protocol_version": { "enum": [1, 2] },
+    "transition": { "$ref": "#/$defs/transition" },
+    "now": { "type": "string", "minLength": 1 },
     "control_state_status": { "enum": ["VALID", "STALE", "CONFLICT", "INVALID"] },
     "validated_at": { "type": "string", "format": "date-time" },
     "validation_mode": { "enum": ["LIVE_GITHUB", "SYNTHETIC_TEST"] },
@@ -87,10 +89,20 @@
       "type": "object", "additionalProperties": false,
       "required": ["state", "work_id", "waiting_for", "updated_at"],
       "properties": {
-        "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED", "NOT_ACTIVE"] },
+        "state": { "enum": ["WORKING", "WAITING", "HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED", "BLOCKED", "NOT_ACTIVE", "HANDOFF_READY", "REVIEWING"] },
         "work_id": { "type": ["string", "null"], "minLength": 1 },
         "waiting_for": { "type": ["string", "null"] },
         "updated_at": { "type": "string", "format": "date-time", "pattern": "Z$" }
+      }
+    },
+    "transition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "phase", "evidence_url", "verdict_publication"],
+      "properties": {
+        "event": { "enum": ["ASSIGNMENT", "DISPATCH", "CLAUDE_START", "CLAUDE_HANDOFF", "CODEX_REVIEW", "CODEX_VERDICT", "ARCHITECT_RELAY"] },
+        "phase": { "enum": ["INTENT", "OBSERVED"] },
+        "evidence_url": { "type": ["string", "null"], "format": "uri" },
+        "verdict_publication": { "enum": ["NONE", "PENDING", "READY", "PUBLISHED"] }
       }
     },
     "handoff": {

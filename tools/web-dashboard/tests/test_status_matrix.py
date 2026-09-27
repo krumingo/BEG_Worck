@@ -44,14 +44,14 @@ def test_stale_when_a_cited_source_has_moved(fake_github, client, settings):
 
 def test_conflict_when_the_board_is_not_generated_from_the_state(fake_github, client, settings):
     published = fake_github.files[CONTROL_BOARD_PATH].decode("utf-8")
-    fake_github.set_file(CONTROL_BOARD_PATH, published.replace("BLOCKED", "PASS").encode("utf-8"))
+    fake_github.set_file(CONTROL_BOARD_PATH, published.replace("## Evidence", "## EvidenceX").encode("utf-8"))
     result = round_verdict(client, settings)
     assert result.status is Status.CONFLICT
     assert "BOARD_NOT_GENERATED_FROM_STATE" in result.verdict.codes()
 
 
 def test_invalid_when_the_state_breaks_its_own_schema(fake_github, client, settings, published_state, mutate):
-    fake_github.set_state(mutate(published_state, lambda s: s.__setitem__("protocol_version", 2)))
+    fake_github.set_state(mutate(published_state, lambda s: s.__setitem__("protocol_version", 3)))
     assert round_verdict(client, settings).status is Status.INVALID
 
 

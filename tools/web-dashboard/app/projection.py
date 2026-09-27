@@ -390,7 +390,10 @@ def _relay(control: dict, is_verified: bool) -> dict:
     relay = control.get("relay") or {}
     current = control.get("current_agent")
     step = control.get("pipeline_step")
-    if current == "GPT" and step == "ARCHITECT_FEEDBACK" and control.get("state") == "WORKING":
+    if control.get("now"):
+        now = control["now"]
+        next_execution = AGENT_DISPLAY.get(str(control.get("next_agent")), control.get("next_agent"))
+    elif current == "GPT" and step == "ARCHITECT_FEEDBACK" and control.get("state") == "WORKING":
         now = f"ChatGPT deciding next {control.get('task_id')} stage"
         next_execution = "Pending ChatGPT decision"
     else:
@@ -405,6 +408,7 @@ def _relay(control: dict, is_verified: bool) -> dict:
         "last_action": f"{relay.get('last_event')} / {relay.get('last_result')}",
         "last_updated": relay.get("updated_at"),
         "now": now,
+        "transition_phase": (control.get("transition") or {}).get("phase"),
         "from": relay.get("from"),
         "to": relay.get("to"),
         "send_to": recipient if status in {"NOT_SENT", "SENT_WAITING_RECEIVER"} else "NONE",
@@ -431,6 +435,8 @@ def _agent(control: dict, name: str) -> dict:
         "name": AGENT_DISPLAY[name],
         "role": AGENT_ROLE[name],
         "state": card.get("state") or "UNKNOWN",
+        "state_label": {"HANDOFF_READY": "HANDOFF READY", "NOT_ACTIVE": "NOT ACTIVE"}.get(
+            card.get("state"), card.get("state") or "UNKNOWN"),
         "work_id": card.get("work_id"),
         "waiting_for": card.get("waiting_for"),
         "updated_at": card.get("updated_at"),

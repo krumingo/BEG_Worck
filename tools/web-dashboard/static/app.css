@@ -393,7 +393,9 @@ code {
 .agent[data-state="WORKING"] .agent__state           { background: var(--codex-soft);  border-color: var(--codex); color: var(--codex); }
 .agent[data-state="WAITING"] .agent__state           { background: var(--warn-soft);   border-color: var(--warn);  color: var(--warn); }
 .agent[data-state="REVIEW"] .agent__state            { background: var(--violet-soft); border-color: var(--violet); color: var(--violet); }
+.agent[data-state="REVIEWING"] .agent__state         { background: var(--violet-soft); border-color: var(--violet); color: var(--violet); }
 .agent[data-state="HANDOFF"] .agent__state           { background: var(--codex-soft);  border-color: var(--codex); color: var(--codex); }
+.agent[data-state="HANDOFF_READY"] .agent__state     { background: var(--codex-soft);  border-color: var(--codex); color: var(--codex); }
 .agent[data-state="PASS"] .agent__state              { background: var(--ok-soft);     border-color: var(--ok);    color: var(--ok); }
 .agent[data-state="CHANGES_REQUESTED"] .agent__state { background: var(--conflict-soft); border-color: var(--conflict); color: var(--conflict); }
 .agent[data-state="BLOCKED"] .agent__state           { background: var(--bad-soft);    border-color: var(--bad);   color: var(--bad); }

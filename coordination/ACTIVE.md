@@ -3,12 +3,15 @@
 Status: WORKING
 Current-Agent: CODEX
 Current-State: WORKING
+Claude-State: WAITING
 Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex preparing/sending task to Claude
 Next-Agent: CLAUDE
 Relay-State: RECEIVED
 Relay-From: GPT
 Relay-To: CODEX
-Krum-Action: NONE
+Krum-Action: CONFIRM SEND TO CLAUDE
 Dispatch-State: PENDING
 Dispatch-Run: NONE
 Task-ID: W0-03D
@@ -22,7 +25,7 @@ Review: coordination/REVIEWS/W0-03D.md (create only after independent review)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
-Authorization: Krum's one-shot main-development instruction and PC-control confirmation in the current Codex task
+Authorization: Krum's one-shot main-development instruction; Claude Send still requires immediate action-time Computer Use confirmation
 Correction-cycle: NONE
 
 ## Human purpose

@@ -44,6 +44,8 @@ def validate(state: object) -> Verdict:
     _evidence(state, findings)
     _history(state, findings)
     _progress(state, findings)
+    if state.get("protocol_version") == 2:
+        _two_phase(state, findings)
     return Verdict(findings)
 
 
@@ -133,10 +135,14 @@ def _agents(state: dict, findings: list[Finding]) -> None:
     task = _text(state, "task_id")
     cycle = _text(state, "cycle_id")
 
+    v2 = state.get("protocol_version") == 2
+    expected_activity = ({"REVIEW": "REVIEWING", "HANDOFF": "HANDOFF_READY",
+                          "PASS": "WAITING", "CHANGES_REQUESTED": "WAITING"}.get(snapshot_state, snapshot_state)
+                         if v2 else snapshot_state)
     current = agents.get(current_name)
     if isinstance(current, dict):
         if (
-            current.get("state") != snapshot_state
+            current.get("state") != expected_activity
             or current.get("work_id") != state.get("current_work_id")
             or current.get("waiting_for") != state.get("waiting_for")
         ):
@@ -147,9 +153,10 @@ def _agents(state: dict, findings: list[Finding]) -> None:
                 f"The {current_name} card disagrees with the snapshot's own state/work_id/waiting_for.",
             )
 
+    busy_states = {"WORKING", "REVIEWING"} if v2 else BUSY_STATES
     busy = [name for name in AGENTS
-            if isinstance(agents.get(name), dict) and agents[name].get("state") in BUSY_STATES]
-    expected_busy = [current_name] if snapshot_state in BUSY_STATES and current_name else []
+            if isinstance(agents.get(name), dict) and agents[name].get("state") in busy_states]
+    expected_busy = [current_name] if expected_activity in busy_states and current_name else []
     if busy != expected_busy:
         _add(
             findings,
@@ -163,6 +170,8 @@ def _agents(state: dict, findings: list[Finding]) -> None:
         if not isinstance(card, dict):
             continue
         card_state = card.get("state")
+        if v2 and card_state in {"HANDOFF", "REVIEW", "PASS", "CHANGES_REQUESTED"}:
+            _add(findings, Status.INVALID, "OUTCOME_AS_ACTIVITY", f"{name} uses a workflow outcome as agent activity.")
         observed = parse_timestamp(card.get("updated_at"))
         if validated and observed and observed > validated:
             _add(
@@ -197,6 +206,66 @@ def _agents(state: dict, findings: list[Finding]) -> None:
                     "AGENT_WORK_ID_MISMATCH",
                     f"{name} work_id {work_id!r} does not match the current task/cycle ({expected!r}).",
                 )
+
+
+def _two_phase(state: dict, findings: list[Finding]) -> None:
+    transition = state.get("transition")
+    if not isinstance(transition, dict) or not _text(state, "now").strip():
+        _add(findings, Status.INVALID, "TWO_PHASE_MISSING", "v2 requires transition and NOW.")
+        return
+    agents = state.get("agent_states")
+    if not isinstance(agents, dict) or not all(isinstance(agents.get(name), dict) for name in AGENTS):
+        return
+    event, phase = transition.get("event"), transition.get("phase")
+    evidence, publication = transition.get("evidence_url"), transition.get("verdict_publication")
+    if (phase == "INTENT" and evidence is not None) or (phase == "OBSERVED" and evidence is None):
+        _add(findings, Status.CONFLICT, "PHASE_EVIDENCE_CONFLICT", "Intent cannot cite observed evidence; observed event requires evidence.")
+    if state.get("dispatch_state") == "PENDING" and (
+        event not in {"ASSIGNMENT", "DISPATCH"} or phase != "INTENT" or
+        state.get("dispatch_run_url") is not None or state.get("current_agent") != "CODEX" or
+        state.get("pipeline_step") != "ASSIGNMENT" or state.get("state") != "WORKING" or
+        agents["CODEX"].get("state") != "WORKING" or agents["CLAUDE"].get("state") != "WAITING" or
+        state.get("next_agent") != "CLAUDE" or publication != "NONE"
+    ):
+        _add(findings, Status.CONFLICT, "DISPATCH_NOT_PENDING", "Dispatch PENDING must precede Send; Claude must still be WAITING.")
+    if agents["CLAUDE"].get("state") == "WORKING" and (
+        event != "CLAUDE_START" or phase != "OBSERVED" or
+        evidence != state.get("dispatch_run_url") or state.get("dispatch_state") != "RUNNING" or
+        state.get("current_agent") != "CLAUDE" or state.get("pipeline_step") != "IMPLEMENTATION" or
+        agents["CODEX"].get("state") != "WAITING" or publication != "NONE"
+    ):
+        _add(findings, Status.CONFLICT, "CLAUDE_START_UNOBSERVED", "Claude WORKING requires observed session start.")
+    if agents["CODEX"].get("state") == "REVIEWING":
+        handoff = state.get("last_handoff")
+        if (not isinstance(handoff, dict) or handoff.get("head_sha") != state.get("pr_head_sha") or
+            state.get("current_agent") != "CODEX" or state.get("pipeline_step") != "REVIEW" or
+            state.get("state") != "REVIEW" or agents["CLAUDE"].get("state") != "HANDOFF_READY" or
+            agents["GPT"].get("state") != "WAITING" or
+            event not in {"CLAUDE_HANDOFF", "CODEX_REVIEW", "CODEX_VERDICT"}):
+            _add(findings, Status.CONFLICT, "REVIEW_BEFORE_HANDOFF", "Codex REVIEWING requires exact-head Claude HANDOFF.")
+    if event == "CLAUDE_HANDOFF" and (
+        phase != "OBSERVED" or not isinstance(state.get("last_handoff"), dict) or
+        evidence != state.get("last_handoff", {}).get("url") or publication != "NONE" or
+        agents["CODEX"].get("state") != "REVIEWING" or
+        (state.get("relay") or {}).get("last_agent") != "CLAUDE" or
+        (state.get("relay") or {}).get("last_result") != "HANDOFF"
+    ):
+        _add(findings, Status.CONFLICT, "HANDOFF_UNPUBLISHED", "Claude HANDOFF requires published exact-head evidence.")
+    if event == "CODEX_VERDICT":
+        if phase == "INTENT":
+            if (publication not in {"PENDING", "READY"} or state.get("state") != "REVIEW" or
+                state.get("last_review") is not None or agents["CODEX"].get("state") != "REVIEWING"):
+                _add(findings, Status.CONFLICT, "VERDICT_PREMATURE", "Unpublished verdict must stay REVIEWING without a claimed result.")
+        elif (publication != "PUBLISHED" or not isinstance(state.get("last_review"), dict) or
+              (state.get("relay") or {}).get("last_agent") != "CODEX" or
+              (state.get("relay") or {}).get("last_result") != state.get("last_review", {}).get("verdict")):
+            _add(findings, Status.CONFLICT, "VERDICT_UNPUBLISHED", "Published verdict requires exact-head independent review.")
+    elif publication != "NONE":
+        _add(findings, Status.CONFLICT, "VERDICT_PHASE_EVENT", "Verdict publication state requires CODEX_VERDICT event.")
+    if event == "CLAUDE_START" and (phase != "OBSERVED" or agents["CLAUDE"].get("state") != "WORKING"):
+        _add(findings, Status.CONFLICT, "CLAUDE_START_UNOBSERVED", "Claude start cannot be claimed without observed WORKING state.")
+    if event == "ARCHITECT_RELAY" and phase == "OBSERVED" and (state.get("relay") or {}).get("status") != "RECEIVED":
+        _add(findings, Status.CONFLICT, "ARCHITECT_RELAY_UNRECEIVED", "Architect relay cannot be observed before receipt.")
 
 
 def _krum(state: dict, findings: list[Finding]) -> None:
