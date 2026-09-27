@@ -1,13 +1,20 @@
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-27T10:17:32Z",
+  "validated_at": "2026-09-27T13:44:30Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "165868fe9921ca6b6d1ba1ae1732bc00e54514c5",
-  "control_state_commit_sha": "d1893e8fec10cf2adf6cebfd61783af2acb26c9d",
+  "active_source_commit_sha": "286643df882783087ed5633ca5233f3890f38137",
+  "control_state_commit_sha": "178b24347a0b58ef1b90692d1202e18dbc5cd768",
+  "now": "Codex preparing/sending task to Claude",
+  "transition": {
+    "event": "DISPATCH",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
+  },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03D",
   "cycle_id": "C01",
@@ -16,29 +23,29 @@
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
-      "state": "HANDOFF",
+      "state": "HANDOFF_READY",
       "work_id": "W0-03D/C01/GPT",
       "waiting_for": null,
-      "updated_at": "2026-09-27T10:17:11Z"
+      "updated_at": "2026-09-27T13:40:04Z"
     },
     "CODEX": {
       "state": "WORKING",
       "work_id": "W0-03D/C01/CX",
-      "waiting_for": null,
-      "updated_at": "2026-09-27T10:17:11Z"
+      "waiting_for": "One-time Computer Use confirmation",
+      "updated_at": "2026-09-27T13:40:04Z"
     },
     "CLAUDE": {
-      "state": "NOT_ACTIVE",
-      "work_id": null,
-      "waiting_for": null,
-      "updated_at": "2026-09-27T10:17:11Z"
+      "state": "WAITING",
+      "work_id": "W0-03D/C01/CL",
+      "waiting_for": "Codex Send and observed session start",
+      "updated_at": "2026-09-27T13:40:04Z"
     }
   },
   "current_work_id": "W0-03D/C01/CX",
   "state": "WORKING",
   "pipeline_step": "ASSIGNMENT",
   "next_agent": "CLAUDE",
-  "waiting_for": null,
+  "waiting_for": "One-time Computer Use confirmation",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": null,
@@ -60,8 +67,8 @@
     "source_url": "https://github.com/krumingo/BEG_Worck/commit/165868fe9921ca6b6d1ba1ae1732bc00e54514c5",
     "updated_at": "2026-09-27T10:17:11Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "CONFIRM SEND TO CLAUDE",
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "ASSIGNMENT",
@@ -71,7 +78,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "397010152800da2b6ad726fede66579d05f0872a",
+    "active_blob_sha": "24870d8cc11e8925f3ad720e07e0162434512df8",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "e91d3230b74be5807ecf1c86a4219a6a71ef7a92"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -80,7 +87,7 @@
       {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"}
     ]
   },
-  "updated_at": "2026-09-27T10:17:11Z",
+  "updated_at": "2026-09-27T13:40:04Z",
   "history": [
     {
       "event_id": "queue-165868fe",
@@ -95,6 +102,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/commit/165868fe9921ca6b6d1ba1ae1732bc00e54514c5",
       "source_commit_sha": "165868fe9921ca6b6d1ba1ae1732bc00e54514c5",
       "summary": "Bounded W0-03D/C01 foundation assigned from merged W0-03C main head; W0-07 Approval runtime absent, so critical merge remains fail-closed."
+    },
+    {
+      "event_id": "queue-286643d",
+      "occurred_at": "2026-09-27T13:40:04Z",
+      "task_id": "W0-03D",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "WORKING",
+      "head_sha": "4f46212486e7f2704007cece774939230e0a51f0",
+      "source_url": "https://github.com/krumingo/BEG_Worck/commit/286643df882783087ed5633ca5233f3890f38137",
+      "source_commit_sha": "286643df882783087ed5633ca5233f3890f38137",
+      "summary": "Two-phase dispatch intent published before Claude Send: Codex WORKING, Claude WAITING, Dispatch PENDING; Computer Use confirmation remains required."
     }
   ]
 }

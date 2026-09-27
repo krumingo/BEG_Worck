@@ -203,12 +203,18 @@ class ControlProtocolTests(unittest.TestCase):
     def relay_state(self):
         # Relay-transition regressions are synthetic, not assertions that the
         # live queue is permanently parked at W0-03C/C03 architect feedback.
+        # They exercise the readable historical v1 model; v2 lifecycle has
+        # separate strict intent/observed tests in test_two_phase_control.py.
         state = json.loads(cp.STATE_PATH.read_text(encoding="utf-8"))
+        state["protocol_version"] = 1
+        state.pop("transition", None)
+        state.pop("now", None)
         task_cycle = f"{state['task_id']}/{state['cycle_id']}"
         state.update(current_agent="GPT", current_role="ARCHITECT",
                      current_work_id=f"{task_cycle}/GPT", state="WORKING",
                      pipeline_step="ARCHITECT_FEEDBACK", next_agent="GPT",
                      waiting_for=None, dispatch_state="NONE",
+                     requires_krum=False, requires_krum_reason=None,
                      pr_number=99, pr_head_sha=HEAD, pr_draft=False,
                      last_review={"path": "coordination/REVIEWS/synthetic.md",
                                   "blob_sha": REVIEW_BLOB,

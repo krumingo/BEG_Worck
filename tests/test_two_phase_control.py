@@ -38,6 +38,7 @@ class TwoPhaseTests(unittest.TestCase):
         state.update(current_agent="CLAUDE", current_role="IMPLEMENTER",
                      current_work_id="W0-03D/C01/CL", state="WORKING",
                      pipeline_step="IMPLEMENTATION", next_agent="CODEX",
+                     waiting_for=None, requires_krum=False, requires_krum_reason=None,
                      dispatch_state="RUNNING", dispatch_run_url=SESSION,
                      now="Claude working")
         state["agent_states"]["CODEX"].update(state="WAITING", waiting_for="Claude HANDOFF")
