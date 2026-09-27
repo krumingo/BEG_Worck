@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "tools/web-dashboard"))
 import control_engine as engine
 from app import invariants as dashboard_invariants
 from app import schema as dashboard_schema
+from app import board as dashboard_board
 
 HEAD = "a" * 40
 BLOB = "b" * 40
@@ -77,6 +78,7 @@ class TwoPhaseTests(unittest.TestCase):
         schema = json.loads((ROOT / "coordination/CONTROL_STATE.schema.json").read_text(encoding="utf-8"))
         self.assertEqual(dashboard_schema.validate(state, schema).status.label, "VALID")
         self.assertEqual(dashboard_invariants.validate(state).status.label, "VALID")
+        self.assertEqual(dashboard_board.render_board(state), engine.render_board(state))
 
     def test_dispatch_pending_before_send(self):
         state = self.pending()

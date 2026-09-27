@@ -61,7 +61,7 @@ def render_board(state: dict) -> str:
         f"CURRENT: {state['task_id']} / {cycle} / {state['current_agent']} / **{state['state']}**",
         f"LAST: {state['relay']['last_agent']} — {state['relay']['last_event']} / {state['relay']['last_result']}",
         f"RELAY: {state['relay']['status']} · {state['relay']['from'] or '—'} → {state['relay']['to'] or '—'}",
-        f"NOW: {state['current_agent']} {state['state']} · {state['pipeline_step']}",
+        f"NOW: {state.get('now') or state['current_agent'] + ' ' + state['state'] + ' · ' + state['pipeline_step']}",
         f"NEXT: {state['next_agent']}",
         f"KRUM ACTION: {'REQUIRED — ' + state['requires_krum_reason'] if state['requires_krum'] else 'NONE'}",
         f"WAITING FOR: {state['waiting_for'] or '—'}",
@@ -92,6 +92,10 @@ def render_board(state: dict) -> str:
         "| Agent | State | Work-ID | Waiting for | Updated at (UTC) |",
         "|---|---|---|---|---|",
     ]
+    if state.get("transition"):
+        now_index = next(index for index, line in enumerate(lines) if line.startswith("NOW: "))
+        transition = state["transition"]
+        lines.insert(now_index + 1, f"TRANSITION: {transition['event']} / {transition['phase']} · verdict {transition['verdict_publication']}")
     for name in ("GPT", "CODEX", "CLAUDE"):
         item = agent_status[name]
         lines.append(
