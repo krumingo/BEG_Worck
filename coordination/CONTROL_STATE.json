@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-27T15:17:44Z",
+  "validated_at": "2026-09-27T15:30:51Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
   "active_source_commit_sha": "64a8407bef64e5efcd38fb3cb46ceae6577b94e5",
   "control_state_commit_sha": "084181ec313f02c00acc23fa00291226f04d26d9",
-  "now": "Codex reviewing Claude",
+  "now": "Codex verdict ready; publication pending",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03D",
@@ -32,7 +32,7 @@
       "state": "REVIEWING",
       "work_id": "W0-03D/C01/CX",
       "waiting_for": null,
-      "updated_at": "2026-09-27T15:17:44Z"
+      "updated_at": "2026-09-27T15:30:51Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -67,9 +67,9 @@
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Claude final response and Draft PR #30 HANDOFF cite the exact same head; Codex is reviewing. No Krum action.",
+    "instruction": "Codex has a review verdict ready, but it has not been published; no result is claimed yet. No Krum action.",
     "source_url": "https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3",
-    "updated_at": "2026-09-27T15:17:44Z"
+    "updated_at": "2026-09-27T15:30:51Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
@@ -91,7 +91,7 @@
       {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"}
     ]
   },
-  "updated_at": "2026-09-27T15:17:44Z",
+  "updated_at": "2026-09-27T15:30:51Z",
   "history": [
     {
       "event_id": "queue-165868fe",

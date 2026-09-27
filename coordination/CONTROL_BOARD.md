@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-27T15:17:44Z · CONTROL STATE: **VALID** as of 2026-09-27T15:17:44Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-27T15:30:51Z · CONTROL STATE: **VALID** as of 2026-09-27T15:30:51Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03D / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — Exact-head HANDOFF / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Codex reviewing Claude
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex verdict ready; publication pending
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: —
@@ -39,7 +39,7 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
 | GPT | WAITING | W0-03D/C01/GPT | Codex verdict | 2026-09-27T15:17:44Z |
-| CODEX | REVIEWING | W0-03D/C01/CX | — | 2026-09-27T15:17:44Z |
+| CODEX | REVIEWING | W0-03D/C01/CX | — | 2026-09-27T15:30:51Z |
 | CLAUDE | HANDOFF_READY | W0-03D/C01/CL | Codex review | 2026-09-27T15:17:44Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
