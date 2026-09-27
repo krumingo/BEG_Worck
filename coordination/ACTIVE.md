@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: CHANGES_REQUESTED
+Status: WORKING
 Current-Agent: CODEX
-Current-State: WAITING
-Claude-State: HANDOFF_READY
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex review published; awaiting GPT feedback
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: RELAY CODEX REVIEW TO CHATGPT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
+Current-State: WORKING
+Claude-State: WAITING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex preparing one bounded correction for Claude; Send not confirmed
+Next-Agent: CLAUDE
+Relay-State: NO_RELAY_NEEDED
+Relay-From: NONE
+Relay-To: NONE
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
 Task-ID: W0-03D
 Cycle-ID: C01
 Base-branch: main
@@ -21,14 +21,18 @@ Base-SHA: 4f46212486e7f2704007cece774939230e0a51f0
 Implementation-branch: codex/w0-03d-merge-redirect
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/30
 PR-Head: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
+Correction-base-SHA: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
 HANDOFF-URL: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 HANDOFF-Head: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
 Review: coordination/REVIEWS/W0-03D.md (CHANGES_REQUESTED on 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
-Authorization: Krum confirmed one-time Computer Use Send; Claude session start observed at https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
-Correction-cycle: 0-of-1 used; one bounded correction available, not dispatched
+Authorization: The night work package authorizes one bounded correction, but the platform requires fresh action-time confirmation before Computer Use Send; no correction session has started.
+Correction-cycle: 0-of-1 used; one bounded correction reserved, Send pending
+
+## Bounded C01 correction assignment — pending dispatch
+Use the same repository `krumingo/BEG_Worck`, implementation branch `codex/w0-03d-merge-redirect`, Draft PR #30, and exact correction base head `7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd`. Read `coordination/REVIEWS/W0-03D.md` at the current queue head and change only the reviewed defect: preserve append-only history and guarantee causal `merge` → `unmerge` ordering when `recorded_at` timestamps tie. Add a deterministic equal-timestamp regression test and rerun the focused and adjacent W0-03 suites. Do not alter business rules, Approval fail-closed behavior, tenant isolation, unrelated files, locked FLOW/D, or other PRs. Do not merge, deploy, or touch production/NAS/Atlas/secrets. Publish an exact-new-head HANDOFF with actual tests and residual limits, then STOP for independent Codex re-review. This is the only permitted correction attempt; no new Task-ID or cycle.
 
 ## Human purpose
 Prepare the next FLOW-032 Master Data stage: a human can inspect a proposed merge before it changes anything; historical IDs must continue to resolve, and merge history must remain immutable. This is technical implementation behind the existing feature-off boundary, not authorization to merge real data.
