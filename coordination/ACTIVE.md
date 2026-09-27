@@ -1,63 +1,51 @@
-# BEG_Work Claude assignment queue
+# BEG_WORK — active implementation assignment
 
-Status: PASS
-Current-Agent: GPT
+Status: WORKING
+Current-Agent: CODEX
 Current-State: WORKING
-Pipeline-Step: ARCHITECT_FEEDBACK
-Next-Agent: GPT
+Pipeline-Step: ASSIGNMENT
+Next-Agent: CLAUDE
 Relay-State: RECEIVED
-Relay-From: CODEX
-Relay-To: GPT
+Relay-From: GPT
+Relay-To: CODEX
 Krum-Action: NONE
-Gate-validation: PASS (W0-03C / C03 exact-head real-Mongo, 20/20, 0 skipped)
-Integration-State: MERGED
-Merge-Base: main
-Merge-SHA: 4f46212486e7f2704007cece774939230e0a51f0
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/epitaxy/session_012DCBdX2BRA6U2UR5zkdkPe
-Task-ID: W0-03C
-Cycle-ID: C03
-Base-branch: feat/w0-03c-uniqueness-readiness
-Base-SHA: ed588e9420e241f58c14146de6f0c890b38b3743
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/20
-PR-Head: e3c4ad8cd5b204eb806c39202cc00dd586bc9049
-Review: coordination/REVIEWS/W0-03C.md
-Authorization: https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847103313
-Correction-cycle: C03 (new explicit bounded authorization; C02 remains BLOCKED in history)
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Task-ID: W0-03D
+Cycle-ID: C01
+Base-branch: main
+Base-SHA: 4f46212486e7f2704007cece774939230e0a51f0
+Implementation-branch: codex/w0-03d-merge-redirect
+PR-URL: NONE
+PR-Head: NONE
+Review: coordination/REVIEWS/W0-03D.md (create only after independent review)
+Predecessor-Task-ID: W0-03C/C03
+Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
+Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
+Authorization: Krum's one-shot main-development instruction and PC-control confirmation in the current Codex task
+Correction-cycle: NONE
 
 ## Human purpose
-Resolve only the ambiguous `create_index` result exposed by the independent C02 review. An exception after the server creates an index must not be reported as successful rollback while the index survives. No new feature or business rule.
+Prepare the next FLOW-032 Master Data stage: a human can inspect a proposed merge before it changes anything; historical IDs must continue to resolve, and merge history must remain immutable. This is technical implementation behind the existing feature-off boundary, not authorization to merge real data.
 
 ## Canonical authority and prerequisites
-Read `CLAUDE.md`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `docs/architecture/W0-03C_UNIQUENESS_READINESS.md`, and the applicable locked FLOW-032/D decisions. The exact C02 review in `coordination/REVIEWS/W0-03C.md` is the defect evidence, not a PASS. Verify that Draft PR #20 still has exact head `ed588e9420e241f58c14146de6f0c890b38b3743` before editing. Work only in the existing PR branch.
+Read `CLAUDE.md`, `coordination/README.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6 W0-03D, `docs/architecture/W0-03C_UNIQUENESS_READINESS.md`, `docs/flows/FLOW-032.md`, and applicable locked D decisions. Recheck `main` and queue exact SHAs before editing. PRs #16–#20 completed W0-03A/B/C; PR #20 exact head `e3c4ad8cd5b204eb806c39202cc00dd586bc9049` has independent PASS and 20/20 disposable real-Mongo gate evidence, then merged to `main` at the base SHA above. W0-07 Approval runtime is NOT STARTED, so any critical merge must fail closed until trusted Approval evidence exists; an arbitrary `approval_id` string is not itself approval. No W0-03D or later active implementation PR was found at assignment time.
 
-## In scope
-Correct the `create_index` exception path in `backend/app/master_data/index_bootstrap.py` and focused tests for it. Reconcile actual server index state, including name, keys, uniqueness and relevant options/signature, before deciding claim or rollback status:
+## In scope — one bounded W0-03D technical package
+Implement a feature-off Master Data merge/redirect foundation in `backend/app/master_data/` with focused backend tests and only necessary additive, scoped API/permission wiring:
 
-1. Expected index present with matching definition: retain this run's ledger claim and report an explicit ambiguous/applied-unconfirmed outcome, not `FAILED_ROLLED_BACK`; preserve evidence for deterministic later rollback/recovery.
-2. Index provably absent: retract only this run's optimistic claim, then apply the existing safe failure/rollback behavior.
-3. Reconciliation unavailable (including connection loss): fail closed, retain the claim and report an explicit ambiguous/reconciliation-required outcome.
-4. Conflicting definition: retain evidence/claim, report `BLOCKED`/`CONFLICT` for human review, and never auto-delete that index.
+1. Deterministic, read-only preview for two same-tenant, same-entity-type Master records. Show source, target, references to redirect, alias/identifier and other conflicting fields, and exact planned effects. Preview never writes.
+2. A guarded merge operation that verifies a preview/version or equivalent stale-state token, tenant and permission context, idempotency, canonical AuditEvent, and explicit trusted Approval for any critical merge. Since W0-07 is absent, fail closed when trustworthy approval cannot be checked. Do not treat a caller-provided `approval_id` or role alone as proof. Keep `MASTER_DATA_MODE=off` inert and `shadow` non-writing.
+3. Preserve the source record and immutable merge history; set `merged_into` without hard delete. Resolve an old ID through redirects to the canonical target while refusing cross-tenant/type redirects and cycles. Reject a redirect cycle before any write.
+4. Define safe correction/unmerge semantics that append history rather than erase a merge event; if this cannot be made atomic or safely recoverable with existing primitives, fail closed and report the exact technical limitation in HANDOFF instead of claiming a complete operation.
 
-Review rollback behavior only as needed to keep these four outcomes safe; never drop an index with a foreign or conflicting definition.
+Use existing W0-01 tenant resolver, W0-02 permission boundary, W0-04 AuditEvent and W0-03 repository/service conventions. Any necessary permission action must be scoped and default-denied. The package may include minimal internal schema additions required for traceable history, but no new business decision or runtime activation.
 
 ## Excluded
-No other W0-03C slice, no new Task-ID, no next implementation wave, no merge, deploy, migration, production/NAS/Atlas write, real index build outside disposable local scratch, secrets, or locked FLOW/D changes. Do not touch unrelated files or PRs. Keep PR #20 Draft.
+No auto-duplicate detection, automatic merge, heuristic conflict resolution, legacy migration/adapters (W0-03E), W0-07 Approval runtime, production index build, production/NAS/Atlas writes, deployment, merge to `main`, unrelated refactors, secrets, locked FLOW/D edits or other PRs. No real Master data merge. Keep the new PR Draft.
 
-## Acceptance and evidence
-Add fault-injection tests for create-then-raise with matching definition, provably absent, unreachable reconciliation, conflicting definition, rollback after recoverable cases, and refusal to delete foreign/conflicting indexes. Re-run focused regression and safe local-only real-Mongo tests where available; distinguish unavailable external tests from PASS. Publish exact new head SHA, actual diff, commands/results, status/ledger evidence and limitations in a final HANDOFF on PR #20. STOP the Claude session for independent Codex review on the stable exact head. An intermediate push, green CI, or PR body is not completion.
+## Acceptance tests and evidence
+Tests must cover preview purity and deterministic conflict/reference reporting; changed-record/stale-preview refusal; same-tenant/type and cross-tenant/type rejection; permissions and denial audit; fail-closed missing/unverified Approval (including forged `approval_id`); `off` and `shadow` non-writing behavior; idempotent retry and interrupted/partial-write recovery; immutable history, old-ID resolution, cycle refusal, no hard delete, correction/unmerge history, and canonical AuditEvent success/failure. Run focused and adjacent W0-03 regression tests. Real Mongo tests may run only against a disposable local instance; mark unavailable/skipped honestly. Publish the actual diff, test commands/results, exact new head, residual risks and a final HANDOFF in one Draft PR; stop Claude's session for independent Codex review. Intermediate push, PR body or green CI is not HANDOFF.
 
-## Historical review outcome
-C02 was `BLOCKED` on exact PR head `ed588e9420e241f58c14146de6f0c890b38b3743`: an acknowledged server-side index followed by a client exception is retracted from the ledger and survives despite `FAILED_ROLLED_BACK`. The new C03 authorization above supersedes the old dispatch block only for this narrow correction; it does not rewrite or pass the C02 review.
-
-## C03 independent outcome
-Claude's final [HANDOFF](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847481878) and a stable Draft PR head both identify `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`. Independent Codex review of that exact head was `PASS` for the bounded C03 correction; evidence and limitations are in `coordination/REVIEWS/W0-03C.md`. At that review point, this was **not yet** a W0-03C gate PASS because real-Mongo tests on this head were still unperformed. The later gate validation is recorded below. STOP before merge, deployment, migration or any index build outside disposable local scratch. No next implementation task is dispatched.
-
-## Exact-head real-Mongo gate validation
-After that code review, Codex ran the complete `backend/tests/test_w0_03c_real_mongo.py` suite against a new, temporary MongoDB Community 8.0.30 instance bound only to `127.0.0.1`: **20 collected, 20 passed, 0 skipped**. The three C03 real-server cases (create-then-raise/matching reconciliation, read-back of all 25 planned definitions and provable absence, foreign-definition rollback refusal) passed. The temporary server was stopped and its test-only directory removed. [PR #20 evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847810160) and the appended review section record the exact commands, cleanup and limits. The earlier restored-copy duplicate report was CLEAN for the 22 September archive; its snapshot boundary remains explicit. W0-03C **pre-merge gate validation is PASS** on the exact head above, but this authorizes no merge, deployment, production index build or next implementation task. Final PR #20 merge decision belongs to Krum.
-
-## Final integration — C03
-Krum explicitly authorized final integration after the exact-head independent review and disposable real-Mongo gate PASS. PR #20 was confirmed open/Draft on `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`, marked ready, then merged into its GitHub base branch `main` at `4f46212486e7f2704007cece774939230e0a51f0`. The implementation head, last PASS review and 20/20 real-Mongo evidence refer to the same SHA; no later implementation push was observed. **W0-03C = MERGED / PASS**, with C03 the last completed cycle. Dispatch remains `NONE`; no next task is assigned. This is code integration only: no deployment, production index build, Atlas or NAS production write was performed. Next: wait for ChatGPT/Krum to authorize the next W0-03 stage.
-
-## Relay receipt and architect feedback
-The [Issue #26 architect bugfix](https://github.com/krumingo/BEG_Worck/issues/26#issuecomment-5847959264) records that Krum already passed Codex's merged PASS result to ChatGPT. The `CODEX → GPT` relay is therefore `RECEIVED`; Krum has no current relay action. The task outcome remains **MERGED / PASS**, while the current workflow agent is **GPT / ARCHITECT_FEEDBACK / WORKING** to decide the next W0-03 stage. `Next-Agent: GPT` identifies that real decision-maker, not Krum as the message carrier. No Claude or next implementation task is dispatched; production and index-build restrictions remain unchanged.
+## Stop conditions
+STOP without inventing a business rule if canonical FLOW/D leaves a material conflict/Approval choice unresolved. STOP for uncertain base SHA, another active W0-03D task, scope expansion, trusted-Approval bypass, inability to preserve history or tenant isolation, external/production access, merge/deploy request, or need for secrets. Ask Codex to mark BLOCKED with evidence rather than guessing. Codex may send at most one bounded correction after independent review; no next task dispatch after PASS.
