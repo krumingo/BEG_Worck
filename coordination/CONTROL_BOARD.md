@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v1
-ACTIVE source updated: 2026-09-26T16:45:12Z · CONTROL STATE: **VALID** as of 2026-09-26T16:45:34Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-27T10:17:11Z · CONTROL STATE: **VALID** as of 2026-09-27T10:17:32Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03C / C03 / GPT / **WORKING**
-LAST: CODEX — PR #20 MERGED / PASS
-RELAY: RECEIVED · CODEX → GPT
-NOW: GPT WORKING · ARCHITECT_FEEDBACK
-NEXT: GPT
+CURRENT: W0-03D / C01 / CODEX / **WORKING**
+LAST: GPT — NEXT W0-03 STAGE ASSIGNMENT / W0-03D / C01 BOUNDED
+RELAY: RECEIVED · GPT → CODEX
+NOW: CODEX WORKING · ASSIGNMENT
+NEXT: CLAUDE
 KRUM ACTION: NONE
 WAITING FOR: —
 
@@ -18,18 +18,18 @@ All three agents must read the control state and recheck live evidence before co
 
 ```text
 BEG_WORK
-TASK: W0-03C
-CYCLE: C03
+TASK: W0-03D
+CYCLE: C01
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
 STATE: WORKING
-NEXT: GPT
+NEXT: CLAUDE
 WAITING_FOR: NONE
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03C | C03 | WORKING | PASS | HANDOFF | GPT | — | MERGED / PASS |
+| W0-03D | C01 | HANDOFF | WORKING | NOT_ACTIVE | CODEX | — | WORKING |
 
 ## Agent cards
 
@@ -37,22 +37,19 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WORKING | W0-03C/C03/GPT | — | 2026-09-26T16:45:12Z |
-| CODEX | PASS | W0-03C/C03/CX | — | 2026-09-26T16:29:12Z |
-| CLAUDE | HANDOFF | W0-03C/C03/CL | — | 2026-09-26T15:29:30Z |
+| GPT | HANDOFF | W0-03D/C01/GPT | — | 2026-09-27T10:17:11Z |
+| CODEX | WORKING | W0-03D/C01/CX | — | 2026-09-27T10:17:11Z |
+| CLAUDE | NOT_ACTIVE | — | — | 2026-09-27T10:17:11Z |
 
-GPT → Codex → Claude → Codex → **GPT (WORKING)**
+GPT → **Codex (WORKING)** → Claude → Codex → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `4b2ee790c0de419f6025b394161e0b4ea3a2c602` · blob `093a1e1a2567fa780f684a711185d085d85145bd`
-- Review: `coordination/REVIEWS/W0-03C.md` · blob `4b87939057c1d573279b07879739691af9dc4da0` · verdict **PASS** on `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`
-- PR: [#20](https://github.com/krumingo/BEG_Worck/pull/20) · exact head `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`
-- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847481878) · head `e3c4ad8cd5b204eb806c39202cc00dd586bc9049`
-- Dispatch session: https://claude.ai/epitaxy/session_012DCBdX2BRA6U2UR5zkdkPe · dispatch state **NONE**
-- HANDOFF comment SHA-256: `357fe754714374138b7ab696aa24d334b82b952a1965b5cd6fcaae37e8a12443`
-- Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `3ad2670d`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `3e43105b`, `docs/architecture/W0-03C_UNIQUENESS_READINESS.md` @ `f6896b40`, `docs/flows/FLOW-032.md` @ `94f6be34`
-- Wave/Flow: `W0` / `FLOW-032` · progress: **MERGED / STAGE_ONLY** (no proven percentage)
+- ACTIVE: `coordination/ACTIVE.md` · source commit `165868fe9921ca6b6d1ba1ae1732bc00e54514c5` · blob `397010152800da2b6ad726fede66579d05f0872a`
+- Dispatch session: — · dispatch state **PENDING**
+- HANDOFF comment SHA-256: `—`
+- Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `e7957b71`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `e0ce9c2a`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` @ `efa5f37c`, `docs/flows/FLOW-032.md` @ `94f6be34`
+- Wave/Flow: `W0` / `FLOW-032` · progress: **ASSIGNMENT / STAGE_ONLY** (no proven percentage)
 - `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
@@ -61,26 +58,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 
 | UTC | Original cycle | Mapped cycle | Event | Agent | State after | Exact head | Source |
 |---|---|---|---|---|---|---|---|
-| 2026-09-21T17:13:38Z | — | C01 | HANDOFF | UNKNOWN | HANDOFF | `25394418` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5764513929) |
-| 2026-09-21T17:54:07Z | — | C01 | HANDOFF | UNKNOWN | HANDOFF | `be8cd207` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5765042461) |
-| 2026-09-21T18:11:51Z | — | C01 | EVIDENCE | UNKNOWN | — | `be8cd207` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5765269841) |
-| 2026-09-22T05:04:44Z | — | C01 | EVIDENCE | UNKNOWN | — | `be8cd207` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771473368) |
-| 2026-09-22T05:46:10Z | — | C01 | REVIEW | CODEX | CHANGES_REQUESTED | `be8cd207` | [evidence](https://github.com/krumingo/BEG_Worck/commit/ef00659423e899265a0c39657ebd0c97c1011e73) |
-| 2026-09-22T05:46:36Z | — | C02 | ASSIGNMENT | CODEX | CHANGES_REQUESTED | `be8cd207` | [evidence](https://github.com/krumingo/BEG_Worck/commit/2a86eefb1a38b200e0842d9b6b18f36e22f5905c) |
-| 2026-09-22T05:50:41Z | — | C02 | DISPATCH | CODEX | — | `be8cd207` | [evidence](https://github.com/krumingo/BEG_Worck/commit/554109c4332b13a5da90310d9674419f9a5eb1eb) |
-| 2026-09-22T06:03:35Z | — | C02 | HANDOFF | CLAUDE | HANDOFF | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130) |
-| 2026-09-22T06:16:16Z | — | C02 | REVIEW | CODEX | BLOCKED | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/commit/3b991fae892f7a22fdeb3e9d0f0920aa71841f19) |
-| 2026-09-22T06:17:02Z | — | C02 | CONTROL_UPDATE | CODEX | BLOCKED | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/commit/4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1) |
-| 2026-09-26T14:34:57Z | C03 | — | EVIDENCE | KRUM | — | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847103313) |
-| 2026-09-26T14:42:37Z | C03 | — | ASSIGNMENT | CODEX | WORKING | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/commit/fcfe5f0a16b5f43abd9c93a0204dc730001da535) |
-| 2026-09-26T15:08:44Z | C03 | — | DISPATCH | CODEX | WORKING | `ed588e94` | [evidence](https://github.com/krumingo/BEG_Worck/commit/8fb5d42c2ecde3249bfb954dc41c046bff638f3d) |
-| 2026-09-26T15:29:30Z | C03 | — | HANDOFF | CLAUDE | HANDOFF | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847481878) |
-| 2026-09-26T15:40:32Z | C03 | — | REVIEW | CODEX | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/bdb384a956b0585ceec1cdc3f2a0a1da2f6dba08) |
-| 2026-09-26T16:16:30Z | C03 | — | EVIDENCE | CODEX | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847810160) |
-| 2026-09-26T16:17:48Z | C03 | — | CONTROL_UPDATE | CODEX | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/2980d354430ebed75b2fbd3de340709ec8d2102c) |
-| 2026-09-26T16:26:58Z | C03 | — | CONTROL_UPDATE | KRUM | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/4f46212486e7f2704007cece774939230e0a51f0) |
-| 2026-09-26T16:29:48Z | C03 | — | EVIDENCE | CODEX | PASS | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5847906756) |
-| 2026-09-26T16:37:03Z | C03 | — | EVIDENCE | KRUM | WORKING | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/issues/26#issuecomment-5847959264) |
-| 2026-09-26T16:45:12Z | C03 | — | CONTROL_UPDATE | CODEX | WORKING | `e3c4ad8c` | [evidence](https://github.com/krumingo/BEG_Worck/commit/4b2ee790c0de419f6025b394161e0b4ea3a2c602) |
+| 2026-09-27T10:17:11Z | C01 | — | ASSIGNMENT | CODEX | WORKING | `4f462124` | [evidence](https://github.com/krumingo/BEG_Worck/commit/165868fe9921ca6b6d1ba1ae1732bc00e54514c5) |
 
-**Gate:** W0-03C implementation is MERGED / PASS; the current GPT feedback step does not authorize the next implementation task or deployment.
+**Gate:** W0-03D is WORKING. Progression requires independent evidence and the relevant owner approval; this board grants none.

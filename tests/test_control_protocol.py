@@ -201,12 +201,34 @@ class ControlProtocolTests(unittest.TestCase):
         return state
 
     def relay_state(self):
-        return json.loads(cp.STATE_PATH.read_text(encoding="utf-8"))
+        # Relay-transition regressions are synthetic, not assertions that the
+        # live queue is permanently parked at W0-03C/C03 architect feedback.
+        state = json.loads(cp.STATE_PATH.read_text(encoding="utf-8"))
+        task_cycle = f"{state['task_id']}/{state['cycle_id']}"
+        state.update(current_agent="GPT", current_role="ARCHITECT",
+                     current_work_id=f"{task_cycle}/GPT", state="WORKING",
+                     pipeline_step="ARCHITECT_FEEDBACK", next_agent="GPT",
+                     waiting_for=None, dispatch_state="NONE",
+                     pr_number=99, pr_head_sha=HEAD, pr_draft=False,
+                     last_review={"path": "coordination/REVIEWS/synthetic.md",
+                                  "blob_sha": REVIEW_BLOB,
+                                  "reviewed_head_sha": HEAD, "verdict": "PASS"})
+        state["agent_states"]["GPT"] = {"state": "WORKING", "work_id": f"{task_cycle}/GPT",
+                                         "waiting_for": None, "updated_at": state["updated_at"]}
+        state["agent_states"]["CODEX"] = {"state": "PASS", "work_id": f"{task_cycle}/CX",
+                                           "waiting_for": None, "updated_at": state["updated_at"]}
+        state["source_refs"]["review_path"] = "coordination/REVIEWS/synthetic.md"
+        state["source_refs"]["review_blob_sha"] = REVIEW_BLOB
+        state["relay"].update(last_agent="CODEX", last_event="Review",
+                              last_result="PASS", **{"from": "CODEX", "to": "GPT"},
+                              status="RECEIVED", required_by_krum=False,
+                              instruction="Review received by GPT.")
+        return state
 
     def test_codex_pass_to_gpt_pending_via_krum_relay(self):
         state = self.relay_state()
         state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
-                     current_work_id="W0-03C/C03/CX", state="PASS", pipeline_step="REVIEW",
+                     current_work_id=f"{state['task_id']}/{state['cycle_id']}/CX", state="PASS", pipeline_step="REVIEW",
                      next_agent="GPT", waiting_for="Krum to relay the PASS result",
                      requires_krum=True, requires_krum_reason="Copy Codex result to ChatGPT")
         state["agent_states"]["GPT"] = {"state": "NOT_ACTIVE", "work_id": None,
@@ -245,7 +267,7 @@ class ControlProtocolTests(unittest.TestCase):
     def test_codex_acknowledgement_starts_work_without_krum_action(self):
         state = self.relay_state()
         state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
-                     current_work_id="W0-03C/C03/CX", state="WORKING",
+                     current_work_id=f"{state['task_id']}/{state['cycle_id']}/CX", state="WORKING",
                      pipeline_step="ASSIGNMENT", next_agent="CLAUDE", waiting_for=None,
                      requires_krum=False, requires_krum_reason=None)
         state["agent_states"]["GPT"].update(state="HANDOFF", waiting_for=None)
