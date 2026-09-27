@@ -105,8 +105,9 @@ def test_a_full_round_touches_only_the_expected_resources(client, settings, fake
     assert any("ACTIVE.md" in url for url in urls)
     assert any("REVIEWS" in url for url in urls)
     assert any(f"/pulls/{published_state['pr_number']}" in url for url in urls)
-    # Six conditional GETs, serially. Nothing else is contacted.
-    assert len(urls) == 6
+    assert any("FORECAST.json" in url for url in urls)
+    # Seven conditional GETs, serially. Nothing else is contacted.
+    assert len(urls) == 7
     assert all(url.startswith("https://api.github.com/repos/krumingo/BEG_Worck/") for url in urls)
 
 

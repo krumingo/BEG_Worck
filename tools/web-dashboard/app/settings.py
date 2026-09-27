@@ -17,6 +17,7 @@ DEFAULT_BRANCH = "codex/claude-queue"
 CONTROL_STATE_PATH = "coordination/CONTROL_STATE.json"
 CONTROL_SCHEMA_PATH = "coordination/CONTROL_STATE.schema.json"
 CONTROL_BOARD_PATH = "coordination/CONTROL_BOARD.md"
+FORECAST_PATH = "coordination/FORECAST.json"
 
 # Issue #26 asks for 10-30 s. 15 s is inside that band and, with conditional
 # requests, costs no rate-limit budget on an unchanged snapshot.
