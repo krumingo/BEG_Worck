@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
 Status: WORKING
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Codex preparing/sending task to Claude
-Next-Agent: CLAUDE
-Relay-State: RECEIVED
-Relay-From: GPT
-Relay-To: CODEX
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE
+Claude-State: WORKING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Claude working
+Next-Agent: CODEX
+Relay-State: NO_RELAY_NEEDED
+Relay-From: NONE
+Relay-To: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Task-ID: W0-03D
 Cycle-ID: C01
 Base-branch: main
@@ -25,7 +25,7 @@ Review: coordination/REVIEWS/W0-03D.md (create only after independent review)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
-Authorization: Krum's one-shot main-development instruction; Claude Send still requires immediate action-time Computer Use confirmation
+Authorization: Krum confirmed one-time Computer Use Send; Claude session start observed at https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Correction-cycle: NONE
 
 ## Human purpose
