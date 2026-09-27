@@ -48,6 +48,13 @@ ACTIONS: Set[str] = {
     "master_data.pending.approve",
     "master_data.pending.reject",
     "master_data.entity.read",
+    # W0-03D merge/redirect (FLOW-032 "Права": the administrator merges). Not
+    # granted to any role below except through Owner/Admin's full set; every
+    # other role is denied. Execution additionally needs a trusted Approval,
+    # which the W0-07 runtime does not provide yet — so it fails closed.
+    "master_data.merge.preview",
+    "master_data.merge.execute",
+    "master_data.unmerge.execute",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited
