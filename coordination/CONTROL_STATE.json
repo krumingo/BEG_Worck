@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-28T15:25:28Z",
+  "validated_at": "2026-09-28T16:25:05Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "59f2d7e31f16821354fac1b19cd9ec091f078982",
-  "control_state_commit_sha": "ac4e54317e71857ec6f97235efd7b1729736f93d",
-  "now": "Codex published independent C02 PASS; awaiting GPT architect decision before merge or next task",
+  "active_source_commit_sha": "175efb5174b0d84130ead7fedddec4b0a73167f6",
+  "control_state_commit_sha": "321fa44dffe7374a3ce2926449f3e10fe3b7c294",
+  "now": "Codex preparing real-Mongo gate evidence on test-only PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; gate verdict not yet published",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5873109639",
-    "verdict_publication": "PUBLISHED"
+    "event": "CODEX_REVIEW",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03D",
@@ -25,14 +25,14 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03D/C02/GPT",
-      "waiting_for": "Krum relay of published C02 PASS and GPT architect decision",
-      "updated_at": "2026-09-28T15:25:28Z"
+      "waiting_for": "Codex exact-new-head real-Mongo gate verdict",
+      "updated_at": "2026-09-28T16:25:05Z"
     },
     "CODEX": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-03D/C02/CX",
-      "waiting_for": "GPT architect decision before merge or next task",
-      "updated_at": "2026-09-28T15:25:28Z"
+      "waiting_for": null,
+      "updated_at": "2026-09-28T16:25:05Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -42,52 +42,43 @@
     }
   },
   "current_work_id": "W0-03D/C02/CX",
-  "state": "PASS",
+  "state": "WORKING",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "GPT architect decision before merge or next task",
+  "waiting_for": null,
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 30,
-  "pr_head_sha": "86bb4c9229421687cacbbba5cfe4ab00074ecfbb",
+  "pr_head_sha": "ad99598543be60d83c5dbaa29e06a2e8b2063a21",
   "pr_draft": true,
   "dispatch_state": "NONE",
   "dispatch_run_url": "https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3",
-  "last_handoff": {
-    "url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5872902963",
-    "head_sha": "86bb4c9229421687cacbbba5cfe4ab00074ecfbb",
-    "at": "2026-09-28T15:14:39Z"
-  },
-  "last_review": {
-    "path": "coordination/REVIEWS/W0-03D.md",
-    "blob_sha": "4a959efa73d343fb3a32d3480c0a43b4bcfa1e8f",
-    "reviewed_head_sha": "86bb4c9229421687cacbbba5cfe4ab00074ecfbb",
-    "verdict": "PASS"
-  },
+  "last_handoff": null,
+  "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "Independent exact-head C02 review published",
-    "last_result": "PASS",
-    "required_by_krum": true,
-    "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Relay published C02 PASS and real-Mongo limitation to GPT architect; no merge, deploy or next dispatch without an explicit decision.",
+    "last_event": "Test-only head awaits published real-Mongo gate evidence",
+    "last_result": "PENDING",
+    "required_by_krum": false,
+    "from": null,
+    "to": null,
+    "status": "NO_RELAY_NEEDED",
+    "instruction": "Codex is preparing the exact-new-head gate evidence; no Krum action until a verdict is published.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5873109639",
-    "updated_at": "2026-09-28T15:25:28Z"
+    "updated_at": "2026-09-28T16:25:05Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "RELAY W0-03D/C02 PASS TO GPT ARCHITECT",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "PASS",
+    "stage": "REVIEW",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "7030ea72330199a86d1b3f8be03733427e990880",
+    "active_blob_sha": "286d65aadd9cca0355fb2a9f71d4dfdcefd0fc40",
     "review_path": "coordination/REVIEWS/W0-03D.md",
     "review_blob_sha": "4a959efa73d343fb3a32d3480c0a43b4bcfa1e8f",
     "canonical_docs": [
@@ -98,7 +89,7 @@
       {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"}
     ]
   },
-  "updated_at": "2026-09-28T15:25:28Z",
+  "updated_at": "2026-09-28T16:25:05Z",
   "history": [
     {
       "event_id": "queue-165868fe",
