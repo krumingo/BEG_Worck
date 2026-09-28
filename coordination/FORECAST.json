@@ -1,16 +1,16 @@
 {
   "model_version": "v1.0-draft",
   "status": "INCOMPLETE_ESTIMATION",
-  "as_of": "2026-09-28T17:00:37Z",
+  "as_of": "2026-09-28T18:26:32Z",
   "repository": "krumingo/BEG_Worck",
   "source_branch": "codex/claude-queue",
-  "source_commit_sha": "424627867108841e0089d855561e51366168346d",
+  "source_commit_sha": "9b65571ada48425a2ced4a6685327855a9655790",
   "sources": {
     "flows_index": "docs/flows/README.md",
     "waves": "docs/architecture/IMPLEMENTATION_WAVES.md",
     "gate_matrix": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md",
     "active": "coordination/ACTIVE.md",
-    "review": "coordination/REVIEWS/W0-03D.md"
+    "review": "coordination/REVIEWS/W0-03D.md (predecessor evidence only)"
   },
   "measurement_contract": {
     "grain": "one canonical implementation deliverable, not one FLOW",
@@ -31,32 +31,31 @@
   },
   "current_wave": "W0",
   "current_task": {
-    "task_id": "W0-03D",
-    "cycle_id": "C02",
-    "name": "Master Data merge and redirect history",
-    "status": "MERGED / COMPLETE; no deployment",
-    "exact_head": "ad99598543be60d83c5dbaa29e06a2e8b2063a21",
-    "merge_sha": "bbdb94dafa09a483b35ccdf6ed13604b77b86a96",
+    "task_id": "W0-03E",
+    "cycle_id": "C01",
+    "name": "Master Data legacy migration, adapters and isolation proof",
+    "status": "ASSIGNED / DISPATCH PENDING; no implementation or deployment",
+    "exact_head": null,
+    "merge_sha": null,
     "lifecycle": [
-      {"stage": "Assignment", "status": "COMPLETED"},
-      {"stage": "Claude implementation", "status": "COMPLETED"},
-      {"stage": "HANDOFF", "status": "COMPLETED"},
-      {"stage": "Codex review", "status": "COMPLETED"},
-      {"stage": "Bounded correction", "status": "COMPLETED"},
-      {"stage": "Final review", "status": "COMPLETED"},
-      {"stage": "Disposable real-Mongo gate", "status": "COMPLETED"},
-      {"stage": "Merge to main", "status": "COMPLETED"}
+      {"stage": "Canonical assignment published", "status": "COMPLETED"},
+      {"stage": "Claude Send and observed start", "status": "PENDING"},
+      {"stage": "Claude implementation", "status": "PENDING"},
+      {"stage": "Exact-head HANDOFF", "status": "PENDING"},
+      {"stage": "Independent Codex review", "status": "PENDING"},
+      {"stage": "Disposable real-Mongo gate", "status": "PENDING"},
+      {"stage": "Whole-W0-03 closure review", "status": "PENDING"}
     ],
-    "completed_lifecycle_stages": 8,
-    "total_lifecycle_stages": 8,
+    "completed_lifecycle_stages": 1,
+    "total_lifecycle_stages": 7,
     "lifecycle_is_effort_percent": false,
-    "next_step": "Await explicit GPT/Krum decision for the next W0-03 stage; W0-03E is not dispatched"
+    "next_step": "Single Claude Code Cloud Send after required action-time confirmation; then observed start"
   },
   "forecast": {
     "whole_implementation_percent": null,
     "wave_0_percent": null,
     "w0_03_percent": null,
-    "w0_03d_c02_percent": null,
+    "w0_03e_c01_percent": null,
     "total_estimated_hours": null,
     "remaining_estimated_hours": null,
     "reason": "Canonical scope is mapped, but no approved item-level engineering-hour baseline or calibrated remaining-hour estimates exist."

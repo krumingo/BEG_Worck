@@ -24,20 +24,22 @@ REVIEW = "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordina
 class TwoPhaseTests(unittest.TestCase):
     def pending(self):
         state = json.loads((ROOT / "coordination/CONTROL_STATE.json").read_text(encoding="utf-8"))
+        task_cycle = f"{state['task_id']}/{state['cycle_id']}"
         state["protocol_version"] = 2
         state["now"] = "Codex preparing/sending task to Claude"
         state["transition"] = {"event": "DISPATCH", "phase": "INTENT", "evidence_url": None,
                                "verdict_publication": "NONE"}
         state["agent_states"]["GPT"]["state"] = "HANDOFF_READY"
         state["agent_states"]["CLAUDE"] = {
-            "state": "WAITING", "work_id": "W0-03D/C01/CL",
+            "state": "WAITING", "work_id": f"{task_cycle}/CL",
             "waiting_for": "Codex Send and observed session start", "updated_at": state["updated_at"]}
         return state
 
     def started(self):
         state = self.pending()
+        task_cycle = f"{state['task_id']}/{state['cycle_id']}"
         state.update(current_agent="CLAUDE", current_role="IMPLEMENTER",
-                     current_work_id="W0-03D/C01/CL", state="WORKING",
+                     current_work_id=f"{task_cycle}/CL", state="WORKING",
                      pipeline_step="IMPLEMENTATION", next_agent="CODEX",
                      waiting_for=None, requires_krum=False, requires_krum_reason=None,
                      dispatch_state="RUNNING", dispatch_run_url=SESSION,
@@ -54,8 +56,9 @@ class TwoPhaseTests(unittest.TestCase):
 
     def handed_off(self):
         state = self.started()
+        task_cycle = f"{state['task_id']}/{state['cycle_id']}"
         state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
-                     current_work_id="W0-03D/C01/CX", state="REVIEW",
+                     current_work_id=f"{task_cycle}/CX", state="REVIEW",
                      pipeline_step="REVIEW", next_agent="GPT", now="Codex reviewing Claude",
                      pr_number=99, pr_head_sha=HEAD, pr_draft=True,
                      last_handoff={"url": HANDOFF, "head_sha": HEAD, "at": state["updated_at"]})

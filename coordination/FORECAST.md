@@ -1,14 +1,16 @@
 # BEG_WORK management forecast v1.0 — evidence map, estimates pending
 
-Machine source: [`FORECAST.json`](FORECAST.json). This document is a planning read-model, not a business rule, implementation gate, merge, deploy or production forecast. As of 28 September 2026, the canonical scope is mapped but **engineering-hour baselines are not calibrated or approved**. Therefore Whole BEG_WORK %, Wave 0 %, W0-03 %, W0-03D/C02 % and total/remaining hours are `NOT ESTIMATED`, not zero. No dashboard may substitute FLOW count, PR count, lifecycle stages or an equal-weight average.
+> Current operational pointer (28 September 2026): `W0-03E/C01` assignment is published at queue commit `9b65571ada48425a2ced4a6685327855a9655790`; Dispatch is **PENDING**, and Claude has not been sent or observed. The W0-03D facts below are accepted predecessor evidence, not the current task. No implementation percentage or hours are approved for W0-03E.
+
+Machine source: [`FORECAST.json`](FORECAST.json). This document is a planning read-model, not a business rule, implementation gate, merge, deploy or production forecast. As of 28 September 2026, the canonical scope is mapped but **engineering-hour baselines are not calibrated or approved**. Therefore Whole BEG_WORK %, Wave 0 %, W0-03 %, W0-03E/C01 % and total/remaining hours are `NOT ESTIMATED`, not zero. No dashboard may substitute FLOW count, PR count, lifecycle stages or an equal-weight average.
 
 ## Proven visible facts
 
 - Business design: **49/50 Business Locked; 1 legacy** (`FLOW-018` absorbed by `FLOW-039`), per `docs/flows/README.md`. This conveys no implementation credit.
-- Current Wave: **Wave 0**. The last accepted task is `W0-03D/C02`: implementation head `ad99598543be60d83c5dbaa29e06a2e8b2063a21` was merged in PR #30 to `main` at `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`. No successor has been assigned.
-- W0-03D lifecycle: **8/8 stages observed** — assignment, Claude implementation, HANDOFF, Codex review, bounded correction, final review, disposable real-Mongo gate (4/4 PASS, 0 skipped), and merge. This is an accepted deliverable, **not an effort percentage**, a production deployment, or full W0-03/FLOW-032 completion.
+- Current Wave: **Wave 0**. The active assignment is `W0-03E/C01`, Dispatch **PENDING**; there is no Claude Send, implementation or PR yet. The last accepted predecessor is `W0-03D/C02`: implementation head `ad99598543be60d83c5dbaa29e06a2e8b2063a21` was merged in PR #30 to `main` at `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`.
+- W0-03E lifecycle: **1/7 stages complete** — canonical assignment published; Claude Send/start, implementation, HANDOFF, review, disposable real-Mongo gate and whole-W0-03 closure review are pending. This is a checklist, **not an effort percentage**. W0-03D predecessor completed 8/8 lifecycle stages including disposable real-Mongo 4/4 PASS and merge; it is not a production deployment or full W0-03/FLOW-032 completion.
 - W0-03C is merged to `main` at `4f46212486e7f2704007cece774939230e0a51f0`, but Master Data as a whole remains open and no production index build or deployment is inferred.
-- `IMPLEMENTATION_WAVES.md` and `IMPLEMENTATION_GATE_MATRIX.md` contain a 20 September implementation snapshot that still calls W0-03C “in review”. For current status, use live PR metadata and the queue's exact-head ACTIVE/REVIEWS. W0-03E legacy migration/adapters/isolation proof and trusted W0-07 Approval runtime for live critical merge remain; do not silently repeat the older snapshot or call the whole W0-03 gate complete.
+- `IMPLEMENTATION_WAVES.md` and `IMPLEMENTATION_GATE_MATRIX.md` contain a 20 September implementation snapshot that still calls W0-03C “in review”. For current status, use live PR metadata and the queue's exact-head ACTIVE/REVIEWS. W0-03E legacy migration/adapters/isolation proof is now assigned but not implemented; trusted W0-07 Approval runtime for live critical merge remains. Do not silently repeat the older snapshot or call the whole W0-03 gate complete.
 
 ## Forecast grain and inclusion
 
