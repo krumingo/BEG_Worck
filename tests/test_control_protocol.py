@@ -223,6 +223,9 @@ class ControlProtocolTests(unittest.TestCase):
                                          "waiting_for": None, "updated_at": state["updated_at"]}
         state["agent_states"]["CODEX"] = {"state": "PASS", "work_id": f"{task_cycle}/CX",
                                            "waiting_for": None, "updated_at": state["updated_at"]}
+        state["agent_states"]["CLAUDE"] = {"state": "WAITING", "work_id": f"{task_cycle}/CL",
+                                             "waiting_for": "Next assigned implementation task",
+                                             "updated_at": state["updated_at"]}
         state["source_refs"]["review_path"] = "coordination/REVIEWS/synthetic.md"
         state["source_refs"]["review_blob_sha"] = REVIEW_BLOB
         state["relay"].update(last_agent="CODEX", last_event="Review",

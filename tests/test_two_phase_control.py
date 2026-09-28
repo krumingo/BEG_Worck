@@ -26,10 +26,16 @@ class TwoPhaseTests(unittest.TestCase):
         state = json.loads((ROOT / "coordination/CONTROL_STATE.json").read_text(encoding="utf-8"))
         task_cycle = f"{state['task_id']}/{state['cycle_id']}"
         state["protocol_version"] = 2
+        state.update(current_agent="CODEX", current_role="TECH_LEAD_QA",
+                     current_work_id=f"{task_cycle}/CX", state="WORKING",
+                     pipeline_step="ASSIGNMENT", next_agent="CLAUDE",
+                     waiting_for=None, requires_krum=False, requires_krum_reason=None,
+                     dispatch_state="PENDING", dispatch_run_url=None)
         state["now"] = "Codex preparing/sending task to Claude"
         state["transition"] = {"event": "DISPATCH", "phase": "INTENT", "evidence_url": None,
                                "verdict_publication": "NONE"}
         state["agent_states"]["GPT"]["state"] = "HANDOFF_READY"
+        state["agent_states"]["CODEX"].update(state="WORKING", waiting_for=None)
         state["agent_states"]["CLAUDE"] = {
             "state": "WAITING", "work_id": f"{task_cycle}/CL",
             "waiting_for": "Codex Send and observed session start", "updated_at": state["updated_at"]}
