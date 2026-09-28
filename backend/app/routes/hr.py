@@ -1,7 +1,7 @@
 """
 Routes - HR / Payroll (M4) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -11,6 +11,7 @@ from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import advance_master_person
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours_batch
 from ..models.hr import (
     PAY_TYPES, PAY_SCHEDULES, ADVANCE_TYPES, ADVANCE_STATUSES,
@@ -213,12 +214,19 @@ async def list_advances(
 
 
 @router.post("/advances", status_code=201)
-async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m4)):
+async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict = Depends(require_m4)):
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org = user["org_id"]
     is_loan = (data.type or "").lower() == "loan"
+
+    # W0-03E / §4.5 (Krum, 20.09.2026): in MASTER_DATA_MODE=enforce a NEW advance
+    # or loan refers to an official Master Person; a guest_name alone is refused.
+    # off/shadow: None, and nothing below changes.
+    master_person = await advance_master_person(
+        user, person_id=data.person_id, user_id=data.user_id, guest_name=data.guest_name,
+        request=request)
 
     # Resolve recipient: employee (user_id) or external guest (loan only)
     recipient_name = None
@@ -229,6 +237,8 @@ async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m
         recipient_name = target.get("name") or " ".join(filter(None, [target.get("first_name"), target.get("last_name")])) or target.get("email") or "Служител"
     elif is_loan and data.guest_name:
         recipient_name = data.guest_name.strip()
+    elif is_loan and master_person:
+        recipient_name = master_person["display_name"]
     else:
         raise HTTPException(status_code=400, detail="Изберете служител (или външен човек за заем)")
 
@@ -279,6 +289,8 @@ async def create_advance(data: AdvanceLoanCreate, user: dict = Depends(require_m
         "created_at": now,
         "updated_at": now,
     }
+    if master_person:
+        advance["master_person_id"] = master_person["master_person_id"]
     await db.advances.insert_one(advance)
 
     await log_audit(org, user["id"], user["email"], "advance_created", "advance", advance["id"],

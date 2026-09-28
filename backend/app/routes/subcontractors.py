@@ -74,7 +74,9 @@ async def get_subcontractor(sub_id: str, user: dict = Depends(require_m2)):
     sub = await db.subcontractors.find_one({"id": sub_id, "org_id": user["org_id"]}, {"_id": 0})
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
-    return sub
+    # W0-03E: additive master_ref in MASTER_DATA_MODE=enforce only.
+    from app.master_data.legacy_adapter import annotate
+    return (await annotate(user, "subcontractors", [sub]))[0]
 
 
 async def _get_next_pkg_no(org_id):

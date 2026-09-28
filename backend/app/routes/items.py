@@ -144,7 +144,10 @@ async def get_item(item_id: str, user: dict = Depends(get_current_user)):
     item = await db.items.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return item
+    # W0-03E: in MASTER_DATA_MODE=enforce the legacy record also names its Master
+    # record (master_ref); every legacy field and the old id stay as they are.
+    from app.master_data.legacy_adapter import annotate
+    return (await annotate(user, "items", [item]))[0]
 
 
 @router.put("/items/{item_id}")

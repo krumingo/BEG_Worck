@@ -46,6 +46,9 @@ class EmployeeProfileUpdate(BaseModel):
 class AdvanceLoanCreate(BaseModel):
     user_id: Optional[str] = None
     guest_name: Optional[str] = None
+    # W0-03E (§4.5): the official Master Person. Read only when
+    # MASTER_DATA_MODE=enforce, where a new advance cannot be created without one.
+    person_id: Optional[str] = None
     type: str = "Advance"
     amount: float
     currency: str = "EUR"

@@ -6,7 +6,7 @@ Routes - Asset Units (активи — физически бройки на ар
 Всяка бройка получава свой QR автоматично при създаване (през QR модула).
 Материали НЕ влизат тук — те си остават в склада (FIFO).
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -14,6 +14,7 @@ import uuid
 import re
 
 from app.db import db
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user, require_admin
 from app.routes.assets_qr import _make_qr
 from app.routes.assets_custody import custody_after_move
@@ -207,7 +208,13 @@ async def update_asset_unit(unit_id: str, data: AssetUnitUpdate, user: dict = De
 
 
 @router.delete("/assets/units/{unit_id}")
-async def delete_asset_unit(unit_id: str, user: dict = Depends(require_admin)):
+async def delete_asset_unit(unit_id: str, request: Request, user: dict = Depends(require_admin)):
+    if await db.asset_units.find_one({"id": unit_id, "org_id": user["org_id"]}) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    done = await guarded_identity_delete(user, request, db, collection="asset_units",
+                                         legacy_id=unit_id, deleted_response={"deleted": True})
+    if done is not None:
+        return done
     res = await db.asset_units.delete_one({"id": unit_id, "org_id": user["org_id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")

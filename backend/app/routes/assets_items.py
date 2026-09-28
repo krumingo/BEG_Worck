@@ -3,7 +3,7 @@ Routes - Asset Items (артикули — каталог на машини/ин
 Нова колекция asset_items. НЕ пипа съществуващи колекции.
 Моделът е Артикул (каталог) -> Активи (физически бройки, идват в Етап 1B).
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -11,6 +11,7 @@ import uuid
 import re
 
 from app.db import db
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user, require_admin
 from app.routes.asset_item_types import all_type_keys
 
@@ -200,10 +201,16 @@ async def update_asset_item(item_id: str, data: AssetItemUpdate, user: dict = De
 
 
 @router.delete("/assets/items/{item_id}")
-async def delete_asset_item(item_id: str, user: dict = Depends(require_admin)):
+async def delete_asset_item(item_id: str, request: Request, user: dict = Depends(require_admin)):
     # Safety: block delete if this артикул already has физически активи.
     if await _count_units(user["org_id"], item_id) > 0:
         raise HTTPException(status_code=400, detail="Има активи към този артикул")
+    if await db.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    done = await guarded_identity_delete(user, request, db, collection="asset_items",
+                                         legacy_id=item_id, deleted_response={"deleted": True})
+    if done is not None:
+        return done
     res = await db.asset_items.delete_one({"id": item_id, "org_id": user["org_id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")

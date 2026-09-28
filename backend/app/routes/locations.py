@@ -2,13 +2,14 @@
 Routes - Location Tree (Обектова йерархия).
 Hierarchical location structure: project → building → floor → room → zone → element.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 
@@ -155,7 +156,7 @@ async def update_location(
 
 
 @router.delete("/locations/{node_id}")
-async def delete_location(node_id: str, user: dict = Depends(require_m2)):
+async def delete_location(node_id: str, request: Request, user: dict = Depends(require_m2)):
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -188,7 +189,11 @@ async def delete_location(node_id: str, user: dict = Depends(require_m2)):
             detail=f"Cannot delete: {smr_count + ew_count} linked SMR record(s) exist.",
         )
 
-    await db.location_nodes.delete_one({"id": node_id})
+    done = await guarded_identity_delete(user, request, db, collection="location_nodes",
+                                         legacy_id=node_id)
+    if done is not None:
+        return done
+    await db.location_nodes.delete_one({"id": node_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 

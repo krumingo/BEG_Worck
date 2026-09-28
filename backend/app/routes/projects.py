@@ -2,7 +2,7 @@
 Project routes - /api/projects/*, /api/project-enums, /api/persons/*, /api/companies/*
 Includes owner (person/company) management merged from Sites module.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -21,6 +21,7 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 
 router = APIRouter(tags=["projects"])
 
@@ -642,15 +643,20 @@ async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends
 
 
 @router.delete("/persons/{person_id}")
-async def delete_person(person_id: str, user: dict = Depends(require_admin)):
+async def delete_person(person_id: str, request: Request, user: dict = Depends(require_admin)):
     """Delete person (admin only)"""
     person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    project_count = await db.projects.count_documents({"owner_type": "person", "owner_id": person_id})
+    project_count = await db.projects.count_documents({"owner_type": "person", "owner_id": person_id,
+                                                       "org_id": user["org_id"]})
     if project_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete: person is owner of {project_count} project(s)")
-    await db.persons.delete_one({"id": person_id})
+    done = await guarded_identity_delete(user, request, db, collection="persons",
+                                         legacy_id=person_id)
+    if done is not None:
+        return done
+    await db.persons.delete_one({"id": person_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -761,15 +767,20 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
 
 
 @router.delete("/companies/{company_id}")
-async def delete_company(company_id: str, user: dict = Depends(require_admin)):
+async def delete_company(company_id: str, request: Request, user: dict = Depends(require_admin)):
     """Delete company (admin only)"""
     company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    project_count = await db.projects.count_documents({"owner_type": "company", "owner_id": company_id})
+    project_count = await db.projects.count_documents({"owner_type": "company", "owner_id": company_id,
+                                                       "org_id": user["org_id"]})
     if project_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete: company is owner of {project_count} project(s)")
-    await db.companies.delete_one({"id": company_id})
+    done = await guarded_identity_delete(user, request, db, collection="companies",
+                                         legacy_id=company_id)
+    if done is not None:
+        return done
+    await db.companies.delete_one({"id": company_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 

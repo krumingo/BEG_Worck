@@ -1,7 +1,7 @@
 """
 Authentication routes - /api/auth/*
 """
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
@@ -14,6 +14,7 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
 from app.permissions.deps import require_permission, MODE_SHADOW, MODE_ENFORCE
@@ -358,13 +359,18 @@ async def update_user(
     return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str, user: dict = Depends(require_admin)):
+async def delete_user(user_id: str, request: Request, user: dict = Depends(require_admin)):
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    await db.users.delete_one({"id": user_id})
+    # W0-03E: the delete is scoped by the org it was checked against; in
+    # MASTER_DATA_MODE=enforce a used or migrated identity is archived, not deleted.
+    done = await guarded_identity_delete(user, request, db, collection="users", legacy_id=user_id)
+    if done is not None:
+        return done
+    await db.users.delete_one({"id": user_id, "org_id": user["org_id"]})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "user", user_id)
     return {"ok": True}
 

@@ -1,7 +1,7 @@
 """
 Routes - Counterparties (Suppliers and Clients) with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -11,6 +11,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from ..models.finance import CounterpartyCreate, CounterpartyUpdate
 
 router = APIRouter(tags=["Counterparties"])
@@ -241,7 +242,8 @@ async def update_counterparty(counterparty_id: str, data: CounterpartyUpdate, us
 
 
 @router.delete("/counterparties/{counterparty_id}")
-async def delete_counterparty(counterparty_id: str, user: dict = Depends(require_m5)):
+async def delete_counterparty(counterparty_id: str, request: Request,
+                              user: dict = Depends(require_m5)):
     """Delete counterparty (soft delete)"""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -255,12 +257,16 @@ async def delete_counterparty(counterparty_id: str, user: dict = Depends(require
     if invoice_count > 0:
         # Soft delete only
         await db.counterparties.update_one(
-            {"id": counterparty_id},
+            {"id": counterparty_id, "org_id": user["org_id"]},
             {"$set": {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
         return {"ok": True, "soft_deleted": True, "reason": "Has linked invoices"}
     
-    await db.counterparties.delete_one({"id": counterparty_id})
+    done = await guarded_identity_delete(user, request, db, collection="counterparties",
+                                         legacy_id=counterparty_id)
+    if done is not None:
+        return done
+    await db.counterparties.delete_one({"id": counterparty_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 

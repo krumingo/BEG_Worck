@@ -1,7 +1,7 @@
 """
 Routes - Clients (Private Persons) CRUD with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -11,6 +11,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter(tags=["Clients"])
@@ -266,7 +267,7 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
 
 
 @router.delete("/clients/{client_id}")
-async def delete_client(client_id: str, user: dict = Depends(require_m5)):
+async def delete_client(client_id: str, request: Request, user: dict = Depends(require_m5)):
     """Delete client (soft delete if has linked counterparties)"""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -284,12 +285,16 @@ async def delete_client(client_id: str, user: dict = Depends(require_m5)):
     if linked_count > 0:
         # Soft delete only
         await db.clients.update_one(
-            {"id": client_id},
+            {"id": client_id, "org_id": user["org_id"]},
             {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
         return {"ok": True, "soft_deleted": True, "reason": "Has linked counterparties"}
     
-    await db.clients.delete_one({"id": client_id})
+    done = await guarded_identity_delete(user, request, db, collection="clients",
+                                         legacy_id=client_id)
+    if done is not None:
+        return done
+    await db.clients.delete_one({"id": client_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 

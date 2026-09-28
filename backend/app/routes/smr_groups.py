@@ -2,13 +2,14 @@
 Routes - SMR Groups (Локация → Група → СМР линии).
 Triple hierarchy with aggregation.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 
@@ -249,16 +250,24 @@ async def update_group(group_id: str, data: GroupUpdate, user: dict = Depends(re
 
 
 @router.delete("/smr-groups/{group_id}")
-async def delete_group(group_id: str, user: dict = Depends(require_m2)):
+async def delete_group(group_id: str, request: Request, user: dict = Depends(require_m2)):
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
+    # W0-03E: decided BEFORE the lines are unassigned — in enforce a group that
+    # is in use or migrated is refused, and nothing is touched.
+    done = await guarded_identity_delete(user, request, db, collection="smr_groups",
+                                         legacy_id=group_id)
+    if done is not None:
+        return done
     # Unassign all lines (clear group_id) — lines keep existing
-    await db.missing_smr.update_many({"group_id": group_id}, {"$unset": {"group_id": ""}})
-    await db.extra_work_drafts.update_many({"group_id": group_id}, {"$unset": {"group_id": ""}})
+    org = user["org_id"]
+    await db.missing_smr.update_many({"group_id": group_id, "org_id": org}, {"$unset": {"group_id": ""}})
+    await db.extra_work_drafts.update_many({"group_id": group_id, "org_id": org},
+                                           {"$unset": {"group_id": ""}})
     # For smr_analyses, need to update embedded lines
     analyses = await db.smr_analyses.find(
         {"org_id": user["org_id"], "lines.group_id": group_id}
@@ -268,9 +277,9 @@ async def delete_group(group_id: str, user: dict = Depends(require_m2)):
         for ln in lines:
             if ln.get("group_id") == group_id:
                 ln.pop("group_id", None)
-        await db.smr_analyses.update_one({"id": a["id"]}, {"$set": {"lines": lines}})
+        await db.smr_analyses.update_one({"id": a["id"], "org_id": org}, {"$set": {"lines": lines}})
 
-    await db.smr_groups.delete_one({"id": group_id})
+    await db.smr_groups.delete_one({"id": group_id, "org_id": org})
     return {"ok": True}
 
 

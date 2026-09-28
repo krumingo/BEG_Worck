@@ -20,6 +20,20 @@ Approval, which W0-07 does not provide yet):
     GET    /api/master-data/{type}/{id}/resolve        old id -> canonical record
     GET    /api/master-data/{type}/{id}/merge-history  immutable merge/unmerge events
 
+W0-03E legacy migration (feature-off; every write fails closed without a trusted
+Approval — CLAUDE.md §8 "критична миграция/rollback"):
+
+    GET    /api/master-data/legacy/plan                 dry run: inventory + deterministic plan
+    POST   /api/master-data/legacy/migration            execute exactly one dry-run plan
+    GET    /api/master-data/legacy/migration/{run_id}   run status, checkpoint, evidence
+    GET    /api/master-data/legacy/reconcile            counts; zero lost references proof
+    POST   /api/master-data/legacy/rollback/preview     what undoing a run would do
+    POST   /api/master-data/legacy/rollback             undo a run (archive, never delete)
+    GET    /api/master-data/legacy/mappings             legacy records waiting for a person
+    POST   /api/master-data/legacy/mappings/decide      map / create_new / decline one of them
+    GET    /api/master-data/legacy/resolve              old legacy id -> canonical record
+    GET    /api/master-data/legacy/advances/mapping-report  guest_name advances, read-only
+
 Everything a request must pass before a handler runs lives in ``_guard`` below,
 in a fixed order, so no endpoint can get it wrong by accident:
 
@@ -47,6 +61,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.auth import get_current_user
+from app.master_data import legacy_adapter, legacy_migration, legacy_plan
 from app.master_data import merge as merge_mod, models, pending as pending_mod, review, service
 from app.master_data.deps import (
     MODE_ENFORCE,
@@ -71,11 +86,18 @@ ACTION_ENTITY_READ = "master_data.entity.read"
 ACTION_MERGE_PREVIEW = "master_data.merge.preview"
 ACTION_MERGE_EXECUTE = "master_data.merge.execute"
 ACTION_UNMERGE_EXECUTE = "master_data.unmerge.execute"
+ACTION_MIGRATION_PLAN = "master_data.migration.plan"
+ACTION_MIGRATION_EXECUTE = "master_data.migration.execute"
+ACTION_MIGRATION_ROLLBACK = "master_data.migration.rollback"
+ACTION_MIGRATION_MAP = "master_data.migration.map"
+ACTION_LEGACY_DELETE = "master_data.legacy.delete"
 
 #: Actions whose refusal by the in-memory catalog check is written to the audit
 #: chain while Master Data enforces. (Under W0-02 enforce the Permission
 #: Service already audits significant denials itself.)
-DENIAL_AUDITED_ACTIONS = frozenset({ACTION_MERGE_EXECUTE, ACTION_UNMERGE_EXECUTE})
+DENIAL_AUDITED_ACTIONS = frozenset({ACTION_MERGE_EXECUTE, ACTION_UNMERGE_EXECUTE,
+                                    ACTION_MIGRATION_EXECUTE, ACTION_MIGRATION_ROLLBACK,
+                                    ACTION_MIGRATION_MAP, ACTION_LEGACY_DELETE})
 
 
 class ProposeBody(BaseModel):
@@ -133,6 +155,41 @@ class UnmergeBody(_Strict):
     idempotency_key: str
     reason: str
     confirmation: bool = False
+    approval_id: Optional[str] = None
+
+
+class MigrationBody(_Strict):
+    plan_token: str
+    idempotency_key: str
+    confirmation: bool = False
+    approval_id: Optional[str] = None
+    sources: Optional[list] = None
+    batch_size: Optional[int] = None
+
+
+class RollbackPreviewBody(_Strict):
+    run_id: str
+
+
+class RollbackBody(_Strict):
+    run_id: str
+    preview_token: str
+    idempotency_key: str
+    reason: str
+    confirmation: bool = False
+    approval_id: Optional[str] = None
+
+
+class MappingDecisionBody(_Strict):
+    collection: str
+    legacy_id: str
+    decision: str
+    idempotency_key: str
+    confirmation: bool = False
+    canonical_entity_id: Optional[str] = None
+    entity_type: Optional[str] = None
+    display_name: Optional[str] = None
+    reason: Optional[str] = None
     approval_id: Optional[str] = None
 
 
@@ -264,6 +321,17 @@ def _handle(exc: Exception) -> HTTPException:
                                                       "message": str(exc)})
     if isinstance(exc, merge_mod.MasterDataRedirectCycle):
         return HTTPException(status_code=409, detail={"error_code": "REDIRECT_CYCLE",
+                                                      "message": str(exc)})
+    if isinstance(exc, (legacy_migration.MigrationStalePlan, legacy_migration.MigrationBusy,
+                        legacy_migration.MigrationConflict,
+                        legacy_migration.MigrationVerificationFailed)):
+        return HTTPException(status_code=409, detail={"error_code": legacy_migration.error_code(exc),
+                                                      "message": str(exc)})
+    if isinstance(exc, legacy_adapter.LegacyOrgMismatch):
+        return HTTPException(status_code=403, detail={"error_code": "LEGACY_ORG_MISMATCH",
+                                                      "message": str(exc)})
+    if isinstance(exc, legacy_adapter.LegacyReferenceInconsistent):
+        return HTTPException(status_code=409, detail={"error_code": "LEGACY_REFERENCE_INCONSISTENT",
                                                       "message": str(exc)})
     if isinstance(exc, merge_mod.MasterDataMergeBusy):
         return HTTPException(status_code=409, detail={"error_code": "MERGE_BUSY",
@@ -458,6 +526,175 @@ async def unmerge_record(body: UnmergeBody,
     except Exception as exc:                            # noqa: BLE001
         raise _handle(exc)
     return outcome.as_dict()
+
+
+# ============================================================ W0-03E legacy
+def _shadow_read(gate: Gate, key: str) -> Dict[str, Any]:
+    return {"mode": gate.mode, key: None,
+            "detail": "shadow: the canonical store is not read before enforce"}
+
+
+@router.get("/legacy/plan")
+async def legacy_plan_dry_run(sources: Optional[str] = Query(default=None, max_length=500),
+                              gate: Gate = Depends(_guard(ACTION_MIGRATION_PLAN))):
+    """The dry run: every legacy identity document and its planned decision. Never writes."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        plan = await legacy_plan.plan(gate.ctx, mode=gate.mode,
+                                      sources=sources.split(",") if sources else None)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if plan is None:
+        return _shadow_read(gate, "plan")
+    return {"mode": gate.mode, "plan": plan}
+
+
+@router.post("/legacy/migration")
+async def legacy_migration_execute(body: MigrationBody,
+                                   gate: Gate = Depends(_guard(ACTION_MIGRATION_EXECUTE))):
+    """Apply exactly one dry-run plan. Refused without trusted Approval."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        outcome = await legacy_migration.execute(
+            gate.ctx, plan_token=body.plan_token, idempotency_key=body.idempotency_key,
+            confirmation=body.confirmation, approval_id=body.approval_id, sources=body.sources,
+            batch_size=body.batch_size, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return outcome.as_dict()
+
+
+@router.get("/legacy/migration/{run_id}")
+async def legacy_migration_status(run_id: str,
+                                  gate: Gate = Depends(_guard(ACTION_MIGRATION_PLAN))):
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        run = await legacy_migration.run_status(gate.ctx, run_id=run_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if run is None and gate.mode == MODE_ENFORCE:
+        raise HTTPException(status_code=404, detail="no such run in this tenant")
+    return {"mode": gate.mode, "run": run}
+
+
+@router.get("/legacy/reconcile")
+async def legacy_reconcile(sources: Optional[str] = Query(default=None, max_length=500),
+                           gate: Gate = Depends(_guard(ACTION_MIGRATION_PLAN))):
+    """Before/after counts of every legacy identity and every stored reference to one."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        report = await legacy_migration.reconcile(
+            gate.ctx, mode=gate.mode, sources=sources.split(",") if sources else None)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if report is None:
+        return _shadow_read(gate, "reconciliation")
+    return {"mode": gate.mode, "reconciliation": report}
+
+
+@router.post("/legacy/rollback/preview")
+async def legacy_rollback_preview(body: RollbackPreviewBody,
+                                  gate: Gate = Depends(_guard(ACTION_MIGRATION_PLAN))):
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        preview = await legacy_migration.preview_rollback(gate.ctx, run_id=body.run_id,
+                                                          mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if preview is None:
+        return _shadow_read(gate, "preview")
+    return {"mode": gate.mode, "preview": preview}
+
+
+@router.post("/legacy/rollback")
+async def legacy_rollback(body: RollbackBody,
+                          gate: Gate = Depends(_guard(ACTION_MIGRATION_ROLLBACK))):
+    """Undo one run by archiving and detaching — never deleting. Refused without Approval."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        outcome = await legacy_migration.rollback(
+            gate.ctx, run_id=body.run_id, preview_token=body.preview_token,
+            idempotency_key=body.idempotency_key, reason=body.reason,
+            confirmation=body.confirmation, approval_id=body.approval_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return outcome.as_dict()
+
+
+@router.get("/legacy/mappings")
+async def legacy_mappings(status: str = Query(default="pending"),
+                          collection: Optional[str] = Query(default=None),
+                          limit: int = Query(default=50, ge=1, le=200),
+                          gate: Gate = Depends(_guard(ACTION_MIGRATION_PLAN))):
+    if gate.off:
+        return {"mode": gate.mode, "count": 0, "items": []}
+    try:
+        items = await legacy_migration.list_mappings(gate.ctx, status=status,
+                                                     collection=collection, limit=limit,
+                                                     mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return {"mode": gate.mode, "count": len(items), "items": items,
+            "note": "candidates only; every mapping is a human decision"}
+
+
+@router.post("/legacy/mappings/decide")
+async def legacy_mapping_decide(body: MappingDecisionBody,
+                                gate: Gate = Depends(_guard(ACTION_MIGRATION_MAP))):
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        outcome = await legacy_migration.resolve_mapping(
+            gate.ctx, collection=body.collection, legacy_id=body.legacy_id,
+            decision=body.decision, idempotency_key=body.idempotency_key,
+            confirmation=body.confirmation, canonical_entity_id=body.canonical_entity_id,
+            entity_type=body.entity_type, display_name=body.display_name, reason=body.reason,
+            approval_id=body.approval_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return outcome.as_dict()
+
+
+@router.get("/legacy/resolve")
+async def legacy_resolve(collection: str = Query(...), legacy_id: str = Query(...),
+                         org_id: Optional[str] = Query(default=None),
+                         gate: Gate = Depends(_guard(ACTION_ENTITY_READ))):
+    """Resolve an old legacy id of THIS tenant. A foreign ``org_id`` is refused."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        resolved = await legacy_adapter.resolve_legacy(gate.ctx, collection=collection,
+                                                       legacy_id=legacy_id, org_id=org_id,
+                                                       mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if resolved is None:
+        if gate.mode != MODE_ENFORCE:
+            return {"mode": gate.mode, "resolved": None}
+        raise HTTPException(status_code=404, detail="no legacy reference in this tenant")
+    return {"mode": gate.mode, **resolved}
+
+
+@router.get("/legacy/advances/mapping-report")
+async def legacy_advance_report(gate: Gate = Depends(_guard(ACTION_MIGRATION_PLAN))):
+    """Existing guest_name advances with candidate persons. Read-only; maps nothing."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    if gate.mode != MODE_ENFORCE:
+        return _shadow_read(gate, "report")
+    try:
+        report = await legacy_adapter.advance_mapping_report(
+            await gate.ctx.db(), tenant_id=gate.ctx.tenant_id,
+            org_id=legacy_plan.legacy_org_id(gate.ctx))
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return {"mode": gate.mode, "report": report}
 
 
 @router.get("/{entity_type}/{entity_id}/resolve")

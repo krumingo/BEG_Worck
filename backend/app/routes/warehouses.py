@@ -1,7 +1,7 @@
 """
 Routes - Warehouses (Inventory locations) with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -10,6 +10,7 @@ import re
 from app.db import db
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from ..models.warehouse import (
     WAREHOUSE_TYPES,
     WarehouseCreate, WarehouseUpdate
@@ -270,7 +271,7 @@ async def get_warehouse_types():
 # ── DEV-ONLY Endpoints ─────────────────────────────────────────────
 
 @router.post("/dev/reset-warehouses")
-async def dev_reset_warehouses(user: dict = Depends(get_current_user)):
+async def dev_reset_warehouses(request: Request, user: dict = Depends(get_current_user)):
     """
     DEV ONLY: Delete all warehouses for the current organization.
     Used for testing the "first warehouse" flow.
@@ -286,14 +287,30 @@ async def dev_reset_warehouses(user: dict = Depends(get_current_user)):
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    # Delete all warehouses for this org
-    result = await db.warehouses.delete_many({"org_id": user["org_id"]})
-    
-    # Also clear any invoice line allocations pointing to warehouses
-    # (optional: keep allocations but they will reference non-existent warehouses)
-    
-    return {
+    # W0-03E: no org-wide delete_many. Each warehouse is deleted by its own id,
+    # scoped to this org, through the identity delete guard: in
+    # MASTER_DATA_MODE=enforce a used or migrated warehouse is archived instead
+    # and reported; off/shadow keep the previous outcome.
+    org = user["org_id"]
+    ids = [w["id"] for w in await db.warehouses.find({"org_id": org}, {"_id": 0, "id": 1}).to_list(None)
+           if w.get("id")]
+    deleted, kept = 0, []
+    for wid in sorted(ids):
+        done = await guarded_identity_delete(user, request, db, collection="warehouses",
+                                             legacy_id=wid, deleted_response={"ok": True})
+        if done is None:
+            res = await db.warehouses.delete_one({"id": wid, "org_id": org})
+            deleted += res.deleted_count
+        elif done.get("archived"):
+            kept.append({"id": wid, "reason": done.get("reason")})
+        else:
+            deleted += 1
+
+    result = {
         "ok": True,
-        "deleted_count": result.deleted_count,
-        "message": f"Deleted {result.deleted_count} warehouses for org {user['org_id']}"
+        "deleted_count": deleted,
+        "message": f"Deleted {deleted} warehouses for org {org}"
     }
+    if kept:
+        result["kept"] = kept
+    return result

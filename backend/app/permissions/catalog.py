@@ -55,13 +55,24 @@ ACTIONS: Set[str] = {
     "master_data.merge.preview",
     "master_data.merge.execute",
     "master_data.unmerge.execute",
+    # W0-03E legacy migration (FLOW-032 "Права"; CLAUDE.md §8 critical migration).
+    # Owner/Admin only through their full set; the office may decide pending
+    # legacy mappings. Every write additionally needs trusted Approval (W0-07),
+    # so it fails closed in this build.
+    "master_data.migration.plan",
+    "master_data.migration.execute",
+    "master_data.migration.rollback",
+    "master_data.migration.map",
+    # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
+    # adapter write and needs this action; default deny for every other role.
+    "master_data.legacy.delete",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited
 # (guardrail: do not flood the chain with ordinary read/list denials).
 SIGNIFICANT_VERBS: Set[str] = {
     "create", "update", "delete", "approve", "execute",
-    "pay", "payment", "export", "download",
+    "pay", "payment", "export", "download", "rollback",
 }
 
 # Reason codes that are always audited on denial, regardless of the verb.
@@ -112,7 +123,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "master_data.pending.read",
                                                                       "master_data.pending.approve",
                                                                       "master_data.pending.reject",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      "master_data.migration.map"}},
     "worker":          {"label_bg": "Работник",               "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose"}},
     "driver":          {"label_bg": "Шофьор",                 "actions": set()},
