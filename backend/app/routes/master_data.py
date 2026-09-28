@@ -10,6 +10,16 @@ Six endpoints, one rule: an automated channel proposes, a person decides.
     POST   /api/master-data/pending/{id}/reject  close it; Master Data untouched
     GET    /api/master-data/{entity_type}/{id}   read one canonical record
 
+W0-03D merge/redirect (feature-off; execution fails closed without a trusted
+Approval, which W0-07 does not provide yet):
+
+    POST   /api/master-data/merge/preview          what a merge would do; never writes
+    POST   /api/master-data/merge                  merge exactly the previewed state
+    POST   /api/master-data/merge/unmerge/preview  what reversing a merge would do
+    POST   /api/master-data/merge/unmerge          reverse it, appending history
+    GET    /api/master-data/{type}/{id}/resolve        old id -> canonical record
+    GET    /api/master-data/{type}/{id}/merge-history  immutable merge/unmerge events
+
 Everything a request must pass before a handler runs lives in ``_guard`` below,
 in a fixed order, so no endpoint can get it wrong by accident:
 
@@ -34,11 +44,12 @@ touched.
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.auth import get_current_user
-from app.master_data import models, pending as pending_mod, review, service
+from app.master_data import merge as merge_mod, models, pending as pending_mod, review, service
 from app.master_data.deps import (
+    MODE_ENFORCE,
     MODE_OFF,
     MasterDataConfigError,
     MasterDataTenantContextMissing,
@@ -57,6 +68,14 @@ ACTION_PENDING_READ = "master_data.pending.read"
 ACTION_APPROVE = "master_data.pending.approve"
 ACTION_REJECT = "master_data.pending.reject"
 ACTION_ENTITY_READ = "master_data.entity.read"
+ACTION_MERGE_PREVIEW = "master_data.merge.preview"
+ACTION_MERGE_EXECUTE = "master_data.merge.execute"
+ACTION_UNMERGE_EXECUTE = "master_data.unmerge.execute"
+
+#: Actions whose refusal by the in-memory catalog check is written to the audit
+#: chain while Master Data enforces. (Under W0-02 enforce the Permission
+#: Service already audits significant denials itself.)
+DENIAL_AUDITED_ACTIONS = frozenset({ACTION_MERGE_EXECUTE, ACTION_UNMERGE_EXECUTE})
 
 
 class ProposeBody(BaseModel):
@@ -76,6 +95,45 @@ class ApproveBody(BaseModel):
 
 class RejectBody(BaseModel):
     reason: str
+
+
+class _Strict(BaseModel):
+    """A merge body refuses unknown keys — a ``tenant_id`` in it is a 422, not
+    a silently dropped field (D-15)."""
+    model_config = ConfigDict(extra="forbid")
+
+
+class MergePreviewBody(_Strict):
+    entity_type: str
+    source_id: str
+    target_id: str
+
+
+class MergeBody(_Strict):
+    entity_type: str
+    source_id: str
+    target_id: str
+    preview_token: str
+    idempotency_key: str
+    confirmation: bool = False
+    approval_id: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class UnmergePreviewBody(_Strict):
+    entity_type: str
+    source_id: str
+
+
+class UnmergeBody(_Strict):
+    entity_type: str
+    source_id: str
+    merge_event_id: str
+    preview_token: str
+    idempotency_key: str
+    reason: str
+    confirmation: bool = False
+    approval_id: Optional[str] = None
 
 
 class Gate:
@@ -142,11 +200,37 @@ async def _authorize(action: str, request: Request, user: Dict[str, Any],
         return
 
     if action not in _role_actions(user):
-        raise HTTPException(
-            status_code=403,
-            detail={"error_code": "PERMISSION_DENIED",
-                    "message": "This role may not perform %s" % action},
-        )
+        detail = {"error_code": "PERMISSION_DENIED",
+                  "message": "This role may not perform %s" % action}
+        if mode == MODE_ENFORCE and action in DENIAL_AUDITED_ACTIONS:
+            detail["denial_audit"] = await _audit_catalog_denial(action, request, user)
+        raise HTTPException(status_code=403, detail=detail)
+
+
+class _CatalogDenial:
+    reason_code = "ACTION_NOT_ALLOWED"
+    effective_assignment_ids: list = []
+
+
+async def _audit_catalog_denial(action: str, request: Request, user: Dict[str, Any]) -> str:
+    """Record a refused merge/unmerge in the tenant's canonical audit chain.
+
+    The tenant comes from the same W0-01 guard as every other request. A caller
+    without a resolvable tenant has nothing to attribute the event to; the
+    request is refused either way, and the answer says whether evidence exists.
+    """
+    from app.permissions.audit_hooks import audit_permission_denied
+    try:
+        ctx = await get_tenant_context(request, user)
+    except HTTPException:
+        return "not_recorded_no_tenant"
+    try:
+        await audit_permission_denied(ctx, action, module="master_data",
+                                      resource_type="master_data.merge",
+                                      decision=_CatalogDenial(), request=request)
+    except Exception:                                   # noqa: BLE001 — refused regardless
+        return "failed"
+    return "recorded"
 
 
 def _guard(action: str):
@@ -172,6 +256,18 @@ def _off_payload(mode: str) -> Dict[str, Any]:
 def _handle(exc: Exception) -> HTTPException:
     if isinstance(exc, HTTPException):
         return exc
+    if isinstance(exc, merge_mod.MasterDataApprovalRequired):
+        return HTTPException(status_code=403, detail={"error_code": "APPROVAL_REQUIRED",
+                                                      "message": str(exc)})
+    if isinstance(exc, merge_mod.MasterDataStalePreview):
+        return HTTPException(status_code=409, detail={"error_code": "STALE_PREVIEW",
+                                                      "message": str(exc)})
+    if isinstance(exc, merge_mod.MasterDataRedirectCycle):
+        return HTTPException(status_code=409, detail={"error_code": "REDIRECT_CYCLE",
+                                                      "message": str(exc)})
+    if isinstance(exc, merge_mod.MasterDataMergeBusy):
+        return HTTPException(status_code=409, detail={"error_code": "MERGE_BUSY",
+                                                      "message": str(exc)})
     if isinstance(exc, MasterDataTenantContextMissing):
         return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, MasterDataRefused):
@@ -294,6 +390,106 @@ async def reject_pending(
         raise _handle(exc)
     return {"mode": outcome.mode, "performed": outcome.performed,
             "would_perform": outcome.would_perform, "detail": outcome.reason}
+
+
+@router.post("/merge/preview")
+async def merge_preview(body: MergePreviewBody,
+                        gate: Gate = Depends(_guard(ACTION_MERGE_PREVIEW))):
+    """Show a person what merging two records would do. Writes nothing."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        preview = await merge_mod.preview_merge(gate.ctx, entity_type=body.entity_type,
+                                                source_id=body.source_id,
+                                                target_id=body.target_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if preview is None:
+        return {"mode": gate.mode, "preview": None,
+                "detail": "shadow: the canonical store is not read before enforce"}
+    return {"mode": gate.mode, "preview": preview}
+
+
+@router.post("/merge")
+async def merge_records(body: MergeBody, gate: Gate = Depends(_guard(ACTION_MERGE_EXECUTE))):
+    """Merge exactly the previewed state. Refused without trusted Approval."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        outcome = await merge_mod.merge(
+            gate.ctx, entity_type=body.entity_type, source_id=body.source_id,
+            target_id=body.target_id, preview_token=body.preview_token,
+            idempotency_key=body.idempotency_key, confirmation=body.confirmation,
+            approval_id=body.approval_id, reason=body.reason, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return outcome.as_dict()
+
+
+@router.post("/merge/unmerge/preview")
+async def unmerge_preview(body: UnmergePreviewBody,
+                          gate: Gate = Depends(_guard(ACTION_MERGE_PREVIEW))):
+    """Show a person what reversing the current merge of a record would do."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        preview = await merge_mod.preview_unmerge(gate.ctx, entity_type=body.entity_type,
+                                                  source_id=body.source_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if preview is None:
+        return {"mode": gate.mode, "preview": None,
+                "detail": "shadow: the canonical store is not read before enforce"}
+    return {"mode": gate.mode, "preview": preview}
+
+
+@router.post("/merge/unmerge")
+async def unmerge_record(body: UnmergeBody,
+                         gate: Gate = Depends(_guard(ACTION_UNMERGE_EXECUTE))):
+    """Reverse a merge by appending history. Refused without trusted Approval."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        outcome = await merge_mod.unmerge(
+            gate.ctx, entity_type=body.entity_type, source_id=body.source_id,
+            merge_event_id=body.merge_event_id, preview_token=body.preview_token,
+            idempotency_key=body.idempotency_key, reason=body.reason,
+            confirmation=body.confirmation, approval_id=body.approval_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return outcome.as_dict()
+
+
+@router.get("/{entity_type}/{entity_id}/resolve")
+async def resolve_entity(entity_type: str, entity_id: str,
+                         gate: Gate = Depends(_guard(ACTION_ENTITY_READ))):
+    """Follow redirects from any id — also an old, merged one — to its canonical record."""
+    if gate.off:
+        return _off_payload(gate.mode)
+    try:
+        resolved = await merge_mod.resolve(gate.ctx, entity_type=entity_type,
+                                           entity_id=entity_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    if resolved is None:
+        if gate.mode != MODE_ENFORCE:
+            return {"mode": gate.mode, "resolved": None}
+        raise HTTPException(status_code=404, detail="not found in this tenant")
+    return {"mode": gate.mode, **resolved}
+
+
+@router.get("/{entity_type}/{entity_id}/merge-history")
+async def merge_history(entity_type: str, entity_id: str,
+                        gate: Gate = Depends(_guard(ACTION_MERGE_PREVIEW))):
+    """Every merge and unmerge that names this record, oldest first."""
+    if gate.off:
+        return {"mode": gate.mode, "count": 0, "events": []}
+    try:
+        events = await merge_mod.history(gate.ctx, entity_type=entity_type,
+                                         entity_id=entity_id, mode=gate.mode)
+    except Exception as exc:                            # noqa: BLE001
+        raise _handle(exc)
+    return {"mode": gate.mode, "count": len(events), "events": events}
 
 
 @router.get("/{entity_type}/{entity_id}")

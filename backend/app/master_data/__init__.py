@@ -8,7 +8,8 @@ AuditEvent and writes no pending record. No existing route is wired to it.
 
 What is deliberately NOT here (later slices):
   * aliases, normalization and unique indexes — W0-03C;
-  * merge, redirect history and immutable references — W0-03D;
+  * merge, redirect history and immutable references — W0-03D, in ``merge.py``
+    (feature-off; execution fails closed until W0-07 provides trusted Approval);
   * legacy migration and route adapters — W0-03E;
   * pending-mapping records — W0-03B2.
 
