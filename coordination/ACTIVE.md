@@ -1,19 +1,21 @@
 # BEG_WORK — active implementation assignment
 
-Status: ASSIGNED / DISPATCH PENDING
-Current-Agent: CODEX
+Status: ASSIGNED / DISPATCH RUNNING
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Codex preparing the canonical W0-03E/C01 assignment for Claude; Send has not happened
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Claude working in the observed W0-03E/C01 Code Cloud session
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: CONFIRM SEND TO CLAUDE (only if Computer Use requires action-time confirmation)
-Dispatch-State: PENDING
-Dispatch-Run: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
+Dispatch-Observed-At: 2026-09-28T20:15:54Z
 Task-ID: W0-03E
 Cycle-ID: C01
 Base-branch: main
@@ -28,10 +30,10 @@ Review: NONE — independent Codex review follows exact-head HANDOFF
 Predecessor-Task-ID: W0-03D/C02
 Predecessor-Review: coordination/REVIEWS/W0-03D.md (code PASS and real-Mongo 4/4 PASS on exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21)
 Predecessor-Integration: PR #30 merged into main at bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Authorization: Krum authorized the large W0-03E package in the 2026-09-28 request; one regular Claude Code Cloud Send remains pending action-time Computer Use confirmation. No Routine, duplicate session, merge or deploy.
+Authorization: Krum authorized the large W0-03E package and confirmed the one regular Claude Code Cloud Send on 2026-09-28. The exact queue assignment at efe042d5aa405076769d6ae6d46396ca9a2a8079 was sent once to the selected krumingo/BEG_Worck implementation branch; the session above showed Claude responding and running tools. No Routine, duplicate session, merge or deploy.
 Correction-cycles: up to two bounded technical cycles only after independent exact-head CHANGES_REQUESTED, without new business rules or expanded scope; a third correctness failure is BLOCKED.
 
-## Canonical W0-03E/C01 implementation assignment — PENDING, not sent
+## Canonical W0-03E/C01 implementation assignment — SENT, session RUNNING
 
 Repository `krumingo/BEG_Worck`; base branch `main` at **exact** `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`; implementation branch `codex/w0-03e-legacy-migration` already exists at that SHA. Task-ID `W0-03E`, Cycle-ID `C01`. Recheck all three identities and confirm there is no other active W0-03E PR/session before editing. Work only on this branch; publish one Draft PR against `main`, then final exact-head HANDOFF and STOP for independent Codex review. An intermediate push is not completion.
 
