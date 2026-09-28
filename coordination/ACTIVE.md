@@ -1,13 +1,13 @@
 # BEG_WORK — active implementation assignment
 
-Status: WORKING
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Pipeline-Step: IMPLEMENTATION
+Status: REVIEW
+Current-Agent: CODEX
+Current-State: REVIEWING
+Claude-State: HANDOFF_READY
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Claude working on the single bounded correction; no new HANDOFF yet
-Next-Agent: CODEX
+Now: Codex independently reviewing Claude bounded correction on exact head dd6ba1a89b4a5a488d91e082f10f82f323b91c22
+Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
@@ -20,18 +20,18 @@ Base-branch: main
 Base-SHA: 4f46212486e7f2704007cece774939230e0a51f0
 Implementation-branch: codex/w0-03d-merge-redirect
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/30
-PR-Head: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
+PR-Head: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
 Correction-base-SHA: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
-HANDOFF-URL: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
-HANDOFF-Head: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
-Review: coordination/REVIEWS/W0-03D.md (CHANGES_REQUESTED on 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd)
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5863341232
+HANDOFF-Head: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
+Review: coordination/REVIEWS/W0-03D.md (prior CHANGES_REQUESTED on 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd; new exact-head review in progress)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
 Authorization: Krum confirmed one-time Computer Use Send on 2026-09-28. The canonical bounded correction was sent to the existing Claude Code Cloud session; Claude start was observed in that session.
-Correction-cycle: 1-of-1 used; Claude correction running; no further correction cycle authorized
+Correction-cycle: 1-of-1 used; Claude final HANDOFF published; no further correction cycle authorized
 
-## Bounded C01 correction assignment — dispatched and running
+## Bounded C01 correction assignment — HANDOFF received; independent review in progress
 Use the same repository `krumingo/BEG_Worck`, implementation branch `codex/w0-03d-merge-redirect`, Draft PR #30, and exact correction base head `7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd`. Read `coordination/REVIEWS/W0-03D.md` at the current queue head and change only the reviewed defect: preserve append-only history and guarantee causal `merge` → `unmerge` ordering when `recorded_at` timestamps tie. Add a deterministic equal-timestamp regression test and rerun the focused and adjacent W0-03 suites. Do not alter business rules, Approval fail-closed behavior, tenant isolation, unrelated files, locked FLOW/D, or other PRs. Do not merge, deploy, or touch production/NAS/Atlas/secrets. Publish an exact-new-head HANDOFF with actual tests and residual limits, then STOP for independent Codex re-review. This is the only permitted correction attempt; no new Task-ID or cycle.
 
 ## Human purpose
