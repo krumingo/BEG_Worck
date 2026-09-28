@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-28T16:25:05Z",
+  "validated_at": "2026-09-28T16:28:41Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "175efb5174b0d84130ead7fedddec4b0a73167f6",
-  "control_state_commit_sha": "321fa44dffe7374a3ce2926449f3e10fe3b7c294",
-  "now": "Codex preparing real-Mongo gate evidence on test-only PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; gate verdict not yet published",
+  "active_source_commit_sha": "204c1e799291db9e920ec2ee9db128caded400ad",
+  "control_state_commit_sha": "1e46e916c894adbb8ca0b862afad782db24d5f77",
+  "now": "W0-03D real-Mongo gate PASS on exact PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; ready for separate merge decision",
   "transition": {
     "event": "CODEX_REVIEW",
-    "phase": "INTENT",
-    "evidence_url": null,
+    "phase": "OBSERVED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5874227438",
     "verdict_publication": "NONE"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
@@ -25,27 +25,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03D/C02/GPT",
-      "waiting_for": "Codex exact-new-head real-Mongo gate verdict",
-      "updated_at": "2026-09-28T16:25:05Z"
+      "waiting_for": "Krum PR #30 merge approval and GPT architect next-stage decision",
+      "updated_at": "2026-09-28T16:28:41Z"
     },
     "CODEX": {
-      "state": "WORKING",
+      "state": "WAITING",
       "work_id": "W0-03D/C02/CX",
-      "waiting_for": null,
-      "updated_at": "2026-09-28T16:25:05Z"
+      "waiting_for": "Krum approval of PR #30 merge; no automatic merge or next task",
+      "updated_at": "2026-09-28T16:28:41Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
       "work_id": "W0-03D/C02/CL",
-      "waiting_for": "Codex independent C02 review",
+      "waiting_for": "No further implementation authorized",
       "updated_at": "2026-09-28T15:16:53Z"
     }
   },
   "current_work_id": "W0-03D/C02/CX",
-  "state": "WORKING",
+  "state": "PASS",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": null,
+  "waiting_for": "Krum approval of PR #30 merge; no automatic merge or next task",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 30,
@@ -54,33 +54,38 @@
   "dispatch_state": "NONE",
   "dispatch_run_url": "https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3",
   "last_handoff": null,
-  "last_review": null,
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-03D.md",
+    "blob_sha": "2619286a21b2bef170d681f33cf5e98f1e0cd431",
+    "reviewed_head_sha": "ad99598543be60d83c5dbaa29e06a2e8b2063a21",
+    "verdict": "PASS"
+  },
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "Test-only head awaits published real-Mongo gate evidence",
-    "last_result": "PENDING",
+    "last_event": "Disposable real-Mongo gate validated and published",
+    "last_result": "REAL_MONGO_PASS",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex is preparing the exact-new-head gate evidence; no Krum action until a verdict is published.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5873109639",
-    "updated_at": "2026-09-28T16:25:05Z"
+    "instruction": "Real-Mongo 4/4 passed on the exact head; PR #30 is Draft and awaits separate Krum merge approval. No deploy or W0-03E dispatch.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5874227438",
+    "updated_at": "2026-09-28T16:28:41Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "APPROVE PR #30 MERGE",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "GATE_PASS",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "286d65aadd9cca0355fb2a9f71d4dfdcefd0fc40",
+    "active_blob_sha": "682a926ec91b6c9d54cc56f7cf2b4028d4590bfe",
     "review_path": "coordination/REVIEWS/W0-03D.md",
-    "review_blob_sha": "4a959efa73d343fb3a32d3480c0a43b4bcfa1e8f",
+    "review_blob_sha": "2619286a21b2bef170d681f33cf5e98f1e0cd431",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "e91d3230b74be5807ecf1c86a4219a6a71ef7a92"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +94,7 @@
       {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"}
     ]
   },
-  "updated_at": "2026-09-28T16:25:05Z",
+  "updated_at": "2026-09-28T16:28:41Z",
   "history": [
     {
       "event_id": "queue-165868fe",
@@ -272,6 +277,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5873109639",
       "source_commit_sha": "dfce6ba8f7365c74992bac2bb5246e88620e22a2",
       "summary": "Independent C02 exact-head code review PASS. Focused 83 and adjacent W0-03 517 passed; 23 skipped include three unexecuted real-Mongo tests, not real-Mongo PASS. Draft PR remains unmerged and undeployed."
+    },
+    {
+      "event_id": "pr30-ad99598-c02-real-mongo-gate",
+      "occurred_at": "2026-09-28T16:28:41Z",
+      "task_id": "W0-03D",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "EVIDENCE",
+      "state_after": "PASS",
+      "head_sha": "ad99598543be60d83c5dbaa29e06a2e8b2063a21",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5874227438",
+      "source_commit_sha": "494be1dc86ea456bba790581f48e4fab47732a03",
+      "summary": "Independent exact-new-head real-Mongo gate: four collected/four passed/zero skipped on disposable loopback MongoDB 8.0.30; 87 focused W0-03D passed; test databases and temporary server removed. Draft PR #30 awaits separate Krum merge approval."
     }
   ]
 }

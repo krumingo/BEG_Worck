@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-28T16:25:05Z · CONTROL STATE: **VALID** as of 2026-09-28T16:25:05Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-28T16:28:41Z · CONTROL STATE: **VALID** as of 2026-09-28T16:28:41Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03D / C02 / CODEX / **WORKING**
-LAST: CODEX — Test-only head awaits published real-Mongo gate evidence / PENDING
+CURRENT: W0-03D / C02 / CODEX / **PASS**
+LAST: CODEX — Disposable real-Mongo gate validated and published / REAL_MONGO_PASS
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Codex preparing real-Mongo gate evidence on test-only PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; gate verdict not yet published
-TRANSITION: CODEX_REVIEW / INTENT · verdict NONE
+NOW: W0-03D real-Mongo gate PASS on exact PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; ready for separate merge decision
+TRANSITION: CODEX_REVIEW / OBSERVED · verdict NONE
 NEXT: GPT
-KRUM ACTION: NONE
-WAITING FOR: —
+KRUM ACTION: REQUIRED — APPROVE PR #30 MERGE
+WAITING FOR: Krum approval of PR #30 merge; no automatic merge or next task
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-03D
 CYCLE: C02
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: WORKING
+STATE: PASS
 NEXT: GPT
-WAITING_FOR: NONE
+WAITING_FOR: Krum approval of PR #30 merge; no automatic merge or next task
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03D | C02 | WAITING | WORKING | HANDOFF_READY | CODEX | — | WORKING |
+| W0-03D | C02 | WAITING | WAITING | HANDOFF_READY | CODEX | Krum approval of PR #30 merge; no automatic merge or next task | PASS |
 
 ## Agent cards
 
@@ -38,20 +38,21 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03D/C02/GPT | Codex exact-new-head real-Mongo gate verdict | 2026-09-28T16:25:05Z |
-| CODEX | WORKING | W0-03D/C02/CX | — | 2026-09-28T16:25:05Z |
-| CLAUDE | HANDOFF_READY | W0-03D/C02/CL | Codex independent C02 review | 2026-09-28T15:16:53Z |
+| GPT | WAITING | W0-03D/C02/GPT | Krum PR #30 merge approval and GPT architect next-stage decision | 2026-09-28T16:28:41Z |
+| CODEX | WAITING | W0-03D/C02/CX | Krum approval of PR #30 merge; no automatic merge or next task | 2026-09-28T16:28:41Z |
+| CLAUDE | HANDOFF_READY | W0-03D/C02/CL | No further implementation authorized | 2026-09-28T15:16:53Z |
 
-GPT → Codex → Claude → **Codex (WORKING)** → GPT
+GPT → Codex → Claude → **Codex (PASS)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `175efb5174b0d84130ead7fedddec4b0a73167f6` · blob `286d65aadd9cca0355fb2a9f71d4dfdcefd0fc40`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `204c1e799291db9e920ec2ee9db128caded400ad` · blob `682a926ec91b6c9d54cc56f7cf2b4028d4590bfe`
+- Review: `coordination/REVIEWS/W0-03D.md` · blob `2619286a21b2bef170d681f33cf5e98f1e0cd431` · verdict **PASS** on `ad99598543be60d83c5dbaa29e06a2e8b2063a21`
 - Draft PR: [#30](https://github.com/krumingo/BEG_Worck/pull/30) · exact head `ad99598543be60d83c5dbaa29e06a2e8b2063a21`
 - Dispatch session: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3 · dispatch state **NONE**
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `e7957b71`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `e0ce9c2a`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` @ `efa5f37c`, `docs/flows/FLOW-032.md` @ `94f6be34`
-- Wave/Flow: `W0` / `FLOW-032` · progress: **REVIEW / STAGE_ONLY** (no proven percentage)
+- Wave/Flow: `W0` / `FLOW-032` · progress: **GATE_PASS / STAGE_ONLY** (no proven percentage)
 - `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
@@ -73,5 +74,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-09-28T15:12:41Z | C02 | — | DISPATCH | CLAUDE | WORKING | `dd6ba1a8` | [evidence](https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3) |
 | 2026-09-28T15:16:53Z | C02 | — | HANDOFF | CLAUDE | REVIEW | `86bb4c92` | [evidence](https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5872902963) |
 | 2026-09-28T15:25:28Z | C02 | — | REVIEW | CODEX | PASS | `86bb4c92` | [evidence](https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5873109639) |
+| 2026-09-28T16:28:41Z | C02 | — | EVIDENCE | CODEX | PASS | `ad995985` | [evidence](https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5874227438) |
 
-**Gate:** W0-03D is WORKING. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-03D is PASS. Progression requires independent evidence and the relevant owner approval; this board grants none.
