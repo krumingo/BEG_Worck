@@ -88,7 +88,7 @@ def test_merge_resolve_unmerge_on_a_real_server():
                                 approval_verifier=TrustedTestVerifier())
         assert done.performed and done.target_id == "b"
         kinds = [e["kind"] for e in await db[HISTORY_COLLECTION].find({}).sort(
-            "recorded_at", 1).to_list(None)]
+            "sequence", 1).to_list(None)]
         assert kinds == ["merge", "unmerge"]
         assert await db["md_organization"].count_documents({}) == 2, "nothing deleted"
         assert verify_chain(await _events(db)) == (True, None)

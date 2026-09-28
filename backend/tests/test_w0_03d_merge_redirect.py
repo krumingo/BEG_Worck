@@ -111,6 +111,8 @@ def _match_value(actual, expected):
                 return False
             if op == "$in" and not any(_match_value(actual, a) for a in arg):
                 return False
+            if op == "$gt" and not (isinstance(actual, (int, float)) and actual > arg):
+                return False
         return True
     if expected is None:
         return actual is None or actual == []
@@ -912,6 +914,59 @@ def test_unmerge_appends_history_and_never_edits_the_merge_event():
                           repository=_repo(db)))
     assert [e["kind"] for e in hist] == ["merge", "unmerge"]
     assert db.deletes == []
+
+
+def _keys_whose_ids_sort_against_causality():
+    """A merge key and an unmerge key whose derived event ids sort unmerge-first,
+    so an id tiebreak would put the correction before the merge it reverses.
+    Searched deterministically — the same pair on every machine."""
+    for i in range(1000):
+        m_key, u_key = "k-tie-%d" % i, "u-tie-%d" % i
+        if mm.derived_event_id(T_A, "unmerge", u_key) < mm.derived_event_id(T_A, "merge", m_key):
+            return m_key, u_key
+    raise AssertionError("no such key pair found")
+
+
+def test_history_keeps_causal_order_when_merge_and_unmerge_share_a_timestamp(monkeypatch):
+    """Regression (Codex review of 7a84b17): on a coarse clock a merge and its
+    unmerge get the same ``recorded_at``. History must still read merge ->
+    unmerge -> merge, from the sequence assigned under the lock, not the clock
+    and not the event id."""
+    monkeypatch.setattr(mm, "_now", lambda: NOW)          # every event: one timestamp
+    m_key, u_key = _keys_whose_ids_sort_against_causality()
+    db = world()
+    first = run(_merge(db, run(_preview(db))["preview_token"], key=m_key))
+    undo = _unmerge(db, _unmerge_preview(db)["preview_token"], first.event_id, key=u_key)
+    again = run(_merge(db, run(_preview(db))["preview_token"], key=m_key + "-again"))
+    assert undo.event_id < first.event_id, "the fixture must defeat an id tiebreak"
+    assert {e["recorded_at"] for e in db.docs(HISTORY_COLLECTION)} == {NOW}
+
+    for entity in ("org-src", "org-tgt"):
+        hist = run(mm.history(Ctx(db=db), entity_type=ORG, entity_id=entity, mode=MODE_ENFORCE,
+                              repository=_repo(db)))
+        assert [e["kind"] for e in hist] == ["merge", "unmerge", "merge"], entity
+        assert [e["id"] for e in hist] == [first.event_id, undo.event_id, again.event_id]
+        assert [e["sequence"] for e in hist] == [1, 2, 3]
+        assert hist[1]["reverses_event_id"] == hist[0]["id"]
+
+    # the same history, stored in any physical order, reads the same way
+    db.docs(HISTORY_COLLECTION).reverse()
+    hist = run(mm.history(Ctx(db=db), entity_type=ORG, entity_id="org-src", mode=MODE_ENFORCE,
+                          repository=_repo(db)))
+    assert [e["kind"] for e in hist] == ["merge", "unmerge", "merge"]
+
+
+def test_a_retried_history_insert_keeps_its_original_position():
+    """Append-only: the retry of an attempt that already stored its event does
+    not re-number, replace or duplicate it."""
+    db = world()
+    token = run(_preview(db))["preview_token"]
+    with pytest.raises(mm._Interrupted):
+        run(_merge(db, token, _fail_after="history_recorded"))
+    stored = copy.deepcopy(db.docs(HISTORY_COLLECTION))
+    assert [e["sequence"] for e in stored] == [1]
+    assert run(_merge(db, token)).performed
+    assert db.docs(HISTORY_COLLECTION) == stored
 
 
 def test_a_record_can_be_merged_again_after_an_unmerge_and_all_history_stays():

@@ -358,7 +358,16 @@ async def history(ctx: Any, *, entity_type: str, entity_id: str, mode: Any = Non
     events = await _find_all(db, HISTORY_COLLECTION, {
         "tenant_id": ctx.tenant_id, "entity_type": entity_type,
         "$or": [{"source_id": entity_id}, {"target_id": entity_id}]}, min(int(limit), 500))
-    return sorted(events, key=lambda e: (e.get("recorded_at") or "", e.get("id") or ""))
+    # Causal order is the per-(tenant, type) ``sequence`` assigned under the
+    # merge lock — never the clock: a merge and the unmerge that reverses it can
+    # carry the same ``recorded_at``, and event ids are not causal.
+    return sorted(events, key=_history_order)
+
+
+def _history_order(event: Dict[str, Any]):
+    seq = event.get("sequence")
+    return (0, seq, "", "") if isinstance(seq, int) else \
+        (1, 0, event.get("recorded_at") or "", event.get("id") or "")
 
 
 # =================================================================== preview
@@ -871,7 +880,9 @@ async def _run(ctx: Any, db, plan: _Plan, *, actor_id: str, approval_id: Optiona
         _maybe_fail(fail_after, "source_written")
 
         # 6. the immutable history event, keyed by the derived id
-        await _insert_history(db, await plan.history_doc(db, current, now, actor_id, evidence))
+        event = await plan.history_doc(db, current, now, actor_id, evidence)
+        event["sequence"] = await _next_history_sequence(db, tenant_id, plan.entity_type)
+        await _insert_history(db, event)
         _maybe_fail(fail_after, "history_recorded")
 
         # 7. the canonical AuditEvent — once per operation, also across retries
@@ -913,6 +924,22 @@ async def _record_interruption(db, tenant_id: str, plan: _Plan, attempt: str, wr
             await _release_lock(db, tenant_id, plan.entity_type, plan.event_id, attempt, _now())
     except Exception:                                 # noqa: BLE001 — the original error wins
         pass
+
+
+async def _next_history_sequence(db, tenant_id: str, entity_type: str) -> int:
+    """The next position in this tenant's history of this entity type.
+
+    Called only while this operation holds the (tenant, type) merge lock, which
+    every merge and unmerge of that type must take — so no other event of the
+    type can be appended between this read and the insert, and the numbers
+    follow the order in which the operations actually happened. On a retry whose
+    event already exists the number is computed but discarded with the
+    duplicate insert; the stored event keeps its original position.
+    """
+    last = await db[HISTORY_COLLECTION].find_one(
+        {"tenant_id": tenant_id, "entity_type": entity_type, "sequence": {"$gt": 0}},
+        {"_id": 0, "sequence": 1}, sort=[("sequence", -1)])
+    return int((last or {}).get("sequence") or 0) + 1
 
 
 async def _insert_history(db, event: Dict[str, Any]) -> None:
