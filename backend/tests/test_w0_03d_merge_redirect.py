@@ -87,11 +87,27 @@ class _Result:
 
 
 class _Cursor:
+    """Mongo cursor semantics that matter here: without ``sort`` the order is
+    the physical storage order; ``sort`` is applied before ``limit``; a missing
+    or null field sorts before any number."""
+
     def __init__(self, docs):
         self._docs = docs
+        self._limit = None
+
+    def sort(self, keys):
+        for key, direction in reversed(list(keys)):
+            self._docs = sorted(self._docs, key=lambda d: (d.get(key) is not None, d.get(key)),
+                                reverse=direction < 0)
+        return self
+
+    def limit(self, n):
+        self._limit = n
+        return self
 
     async def to_list(self, length=None):
-        return list(self._docs[:length] if length else self._docs)
+        docs = self._docs[:self._limit] if self._limit else self._docs
+        return list(docs[:length] if length else docs)
 
 
 def _get(doc, path):
@@ -954,6 +970,109 @@ def test_history_keeps_causal_order_when_merge_and_unmerge_share_a_timestamp(mon
     hist = run(mm.history(Ctx(db=db), entity_type=ORG, entity_id="org-src", mode=MODE_ENFORCE,
                           repository=_repo(db)))
     assert [e["kind"] for e in hist] == ["merge", "unmerge", "merge"]
+
+
+# ------------------------------------------- C02: limit applies after causal order
+def _merge_unmerge_merge(monkeypatch):
+    """merge(seq=1) -> unmerge(seq=2) -> merge(seq=3), one timestamp for all,
+    then the collection's physical order reversed."""
+    monkeypatch.setattr(mm, "_now", lambda: NOW)
+    m_key, u_key = _keys_whose_ids_sort_against_causality()
+    db = world()
+    first = run(_merge(db, run(_preview(db))["preview_token"], key=m_key))
+    undo = _unmerge(db, _unmerge_preview(db)["preview_token"], first.event_id, key=u_key)
+    again = run(_merge(db, run(_preview(db))["preview_token"], key=m_key + "-again"))
+    db.docs(HISTORY_COLLECTION).reverse()                   # storage: seq 3, 2, 1
+    return db, first, undo, again
+
+
+def _history(db, entity="org-src", limit=200):
+    return run(mm.history(Ctx(db=db), entity_type=ORG, entity_id=entity, mode=MODE_ENFORCE,
+                          repository=_repo(db), limit=limit))
+
+
+def _assert_no_orphaned_unmerge(events):
+    merges = set()
+    for e in events:
+        if e["kind"] == "merge":
+            merges.add(e["id"])
+        else:
+            assert e["reverses_event_id"] in merges, "orphaned unmerge %s" % e["id"]
+
+
+@pytest.mark.parametrize("entity", ["org-src", "org-tgt"])
+def test_a_bounded_history_is_the_causal_prefix_never_an_orphaned_unmerge(monkeypatch, entity):
+    """Codex re-review of dd6ba1a: history(limit=2) on reversed storage returned
+    [unmerge(2), merge(3)] — a correction without the merge it reverses."""
+    db, first, undo, again = _merge_unmerge_merge(monkeypatch)
+    expected = [(first.event_id, "merge", 1), (undo.event_id, "unmerge", 2),
+                (again.event_id, "merge", 3)]
+    for limit, count in ((1, 1), (2, 2), (3, 3), (200, 3), (10_000, 3)):
+        got = _history(db, entity, limit)
+        assert [(e["id"], e["kind"], e["sequence"]) for e in got] == expected[:count], limit
+        _assert_no_orphaned_unmerge(got)
+        assert got == _history(db, entity, limit), "not deterministic"
+    # whatever the physical order, the same answer
+    for seed in range(5):
+        random.Random(seed).shuffle(db.docs(HISTORY_COLLECTION))
+        assert [e["sequence"] for e in _history(db, entity, 2)] == [1, 2]
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, "2", None])
+def test_a_history_limit_that_is_not_a_positive_integer_is_refused(monkeypatch, limit):
+    db, *_ = _merge_unmerge_merge(monkeypatch)
+    with pytest.raises(MasterDataInvalid):
+        _history(db, limit=limit)
+
+
+def _pairs(n_events, tenant=T_A):
+    """Alternating merge/unmerge events of org-src -> org-tgt with sequences 1..n."""
+    events = []
+    for seq in range(1, n_events + 1):
+        kind = "merge" if seq % 2 else "unmerge"
+        eid = "evt-%04d" % seq
+        event = {"_id": eid, "id": eid, "tenant_id": tenant, "entity_type": ORG, "kind": kind,
+                 "source_id": "org-src", "target_id": "org-tgt", "sequence": seq,
+                 "recorded_at": NOW}
+        if kind == "unmerge":
+            event["reverses_event_id"] = "evt-%04d" % (seq - 1)
+        events.append(event)
+    return events
+
+
+def test_the_hard_cap_of_500_takes_the_causal_window_not_the_storage_window():
+    """601 events. Stored so that the first 500 in physical order are seq 2..501:
+    an unsorted cursor truncated to 500 would start with an unmerge whose merge
+    (seq 1, stored last) is cut off, and would miss the true first 500."""
+    db = FakeDb()
+    events = _pairs(601)
+    db[HISTORY_COLLECTION].docs.extend(events[1:] + events[:1])
+    wrong_window = db.docs(HISTORY_COLLECTION)[:500]
+    assert wrong_window[0]["kind"] == "unmerge" and wrong_window[0]["sequence"] == 2
+
+    for limit in (500, 501, 10_000):
+        got = _history(db, limit=limit)
+        assert len(got) == 500
+        assert [e["sequence"] for e in got] == list(range(1, 501))
+        _assert_no_orphaned_unmerge(got)
+    # another tenant's 700 events never enter the window
+    db[HISTORY_COLLECTION].docs.extend(_pairs(700, tenant=T_B))
+    got = _history(db, limit=10_000)
+    assert {e["tenant_id"] for e in got} == {T_A}
+    assert [e["sequence"] for e in got] == list(range(1, 501))
+
+
+@pytest.mark.parametrize("damage", ["missing_sequence", "orphan"])
+def test_a_history_that_cannot_be_proven_causal_is_refused_not_returned(damage):
+    db = FakeDb()
+    events = _pairs(4)
+    if damage == "missing_sequence":
+        del events[2]["sequence"]
+    else:
+        events = events[1:]                  # unmerge seq 2 without merge seq 1
+    db[HISTORY_COLLECTION].docs.extend(events)
+    with pytest.raises(MasterDataRefused, match="false history"):
+        _history(db)
 
 
 def test_a_retried_history_insert_keeps_its_original_position():

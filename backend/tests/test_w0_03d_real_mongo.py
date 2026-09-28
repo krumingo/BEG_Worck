@@ -90,6 +90,11 @@ def test_merge_resolve_unmerge_on_a_real_server():
         kinds = [e["kind"] for e in await db[HISTORY_COLLECTION].find({}).sort(
             "sequence", 1).to_list(None)]
         assert kinds == ["merge", "unmerge"]
+        # C02: the server sorts by sequence before the limit — a causal prefix
+        for limit, expected in ((1, ["merge"]), (2, ["merge", "unmerge"]), (1000, ["merge", "unmerge"])):
+            got = await mm.history(Ctx(T, db), entity_type=ORG, entity_id="a", mode=MODE_ENFORCE,
+                                   repository=MasterDataRepository(T, db=db), limit=limit)
+            assert [e["kind"] for e in got] == expected, limit
         assert await db["md_organization"].count_documents({}) == 2, "nothing deleted"
         assert verify_chain(await _events(db)) == (True, None)
     scratch(body)

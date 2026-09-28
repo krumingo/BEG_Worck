@@ -345,29 +345,64 @@ async def resolve(ctx: Any, *, entity_type: str, entity_id: str, mode: Any = Non
             "entity": chain[-1]}
 
 
+#: Hard cap on one history answer, applied AFTER causal ordering.
+HISTORY_HARD_CAP = 500
+
+
 async def history(ctx: Any, *, entity_type: str, entity_id: str, mode: Any = None,
                   repository=None, limit: int = 200) -> List[Dict[str, Any]]:
-    """Every merge/unmerge event naming this record as source or target."""
+    """Every merge/unmerge event naming this record as source or target, in
+    causal order — the oldest ``min(limit, 500)`` of them.
+
+    Causal order is the per-(tenant, type) ``sequence`` assigned under the merge
+    lock — never the clock (a merge and the unmerge reversing it can share
+    ``recorded_at``) and never the event id. The server sorts by it BEFORE the
+    limit applies, so the answer is always a causal prefix: never an arbitrary
+    window of an unsorted cursor.
+
+    A prefix cannot orphan an unmerge. The merge it reverses has the same source
+    and target, so it matches this same query, and it has a lower sequence, so
+    it lies inside any prefix that contains the unmerge. That is still checked
+    on the way out: an event without a sequence, or an unmerge whose merge is
+    missing, refuses the answer rather than present a false history.
+    """
     effective = resolve_mode(mode)
     if effective in (MODE_OFF, MODE_SHADOW):
         return []
     ctx = require_tenant_context(ctx)
     _require_entity_type(entity_type)
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        raise MasterDataInvalid("history limit must be a positive integer")
+    bounded = min(limit, HISTORY_HARD_CAP)
     repo = repository if repository is not None else _repository_for(ctx)
     db = await _handle(repo)
-    events = await _find_all(db, HISTORY_COLLECTION, {
-        "tenant_id": ctx.tenant_id, "entity_type": entity_type,
-        "$or": [{"source_id": entity_id}, {"target_id": entity_id}]}, min(int(limit), 500))
-    # Causal order is the per-(tenant, type) ``sequence`` assigned under the
-    # merge lock — never the clock: a merge and the unmerge that reverses it can
-    # carry the same ``recorded_at``, and event ids are not causal.
-    return sorted(events, key=_history_order)
+    cursor = db[HISTORY_COLLECTION].find(
+        {"tenant_id": ctx.tenant_id, "entity_type": entity_type,
+         "$or": [{"source_id": entity_id}, {"target_id": entity_id}]},
+        {"_id": 0}).sort([("sequence", 1), ("id", 1)]).limit(bounded)
+    events = await cursor.to_list(length=bounded)
+    return _causal_or_refuse(events, entity_id)
 
 
-def _history_order(event: Dict[str, Any]):
-    seq = event.get("sequence")
-    return (0, seq, "", "") if isinstance(seq, int) else \
-        (1, 0, event.get("recorded_at") or "", event.get("id") or "")
+def _causal_or_refuse(events: List[Dict[str, Any]], entity_id: str) -> List[Dict[str, Any]]:
+    """Refuse an answer that is not a verifiable causal prefix."""
+    seen_merges = set()
+    last = 0
+    for event in events:
+        seq = event.get("sequence")
+        if isinstance(seq, bool) or not isinstance(seq, int) or seq <= last:
+            raise MasterDataRefused(
+                "history of %s cannot be put in causal order (event %s has sequence %r); "
+                "refusing rather than presenting a false history" % (entity_id, event.get("id"), seq))
+        last = seq
+        if event.get("kind") == KIND_MERGE:
+            seen_merges.add(event.get("id"))
+        elif event.get("kind") == KIND_UNMERGE and event.get("reverses_event_id") not in seen_merges:
+            raise MasterDataRefused(
+                "history of %s: unmerge %s appears without the merge %s it reverses; refusing "
+                "rather than presenting a false history"
+                % (entity_id, event.get("id"), event.get("reverses_event_id")))
+    return events
 
 
 # =================================================================== preview
