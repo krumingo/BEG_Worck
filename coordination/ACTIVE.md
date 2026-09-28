@@ -12,7 +12,7 @@ Relay-State: NOT_SENT
 Relay-From: CODEX
 Relay-To: GPT
 Krum-Action: RELAY BLOCKED VERDICT TO GPT ARCHITECT
-Dispatch-State: RUNNING
+Dispatch-State: BLOCKED
 Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Task-ID: W0-03D
 Cycle-ID: C01
