@@ -1,17 +1,17 @@
 # BEG_WORK — active implementation assignment
 
-Status: REVIEW
+Status: BLOCKED
 Current-Agent: CODEX
-Current-State: REVIEWING
+Current-State: BLOCKED
 Claude-State: HANDOFF_READY
-Pipeline-Step: REVIEW
+Pipeline-Step: GATE
 Transition-Phase: OBSERVED
-Now: Codex independently reviewing Claude bounded correction on exact head dd6ba1a89b4a5a488d91e082f10f82f323b91c22
+Now: W0-03D/C01 blocked after final independent exact-head review; causal history is truncated before sequence sorting
 Next-Agent: GPT
-Relay-State: NO_RELAY_NEEDED
-Relay-From: NONE
-Relay-To: NONE
-Krum-Action: NONE
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: RELAY BLOCKED VERDICT TO GPT ARCHITECT
 Dispatch-State: RUNNING
 Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Task-ID: W0-03D
@@ -24,14 +24,14 @@ PR-Head: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
 Correction-base-SHA: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5863341232
 HANDOFF-Head: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
-Review: coordination/REVIEWS/W0-03D.md (prior CHANGES_REQUESTED on 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd; new exact-head review in progress)
+Review: coordination/REVIEWS/W0-03D.md (BLOCKED on dd6ba1a89b4a5a488d91e082f10f82f323b91c22; PR comment https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5863782506)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
 Authorization: Krum confirmed one-time Computer Use Send on 2026-09-28. The canonical bounded correction was sent to the existing Claude Code Cloud session; Claude start was observed in that session.
-Correction-cycle: 1-of-1 used; Claude final HANDOFF published; no further correction cycle authorized
+Correction-cycle: 1-of-1 used; final Codex review BLOCKED; no further correction cycle authorized without explicit new decision
 
-## Bounded C01 correction assignment — HANDOFF received; independent review in progress
+## Bounded C01 correction assignment — final HANDOFF reviewed; gate BLOCKED
 Use the same repository `krumingo/BEG_Worck`, implementation branch `codex/w0-03d-merge-redirect`, Draft PR #30, and exact correction base head `7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd`. Read `coordination/REVIEWS/W0-03D.md` at the current queue head and change only the reviewed defect: preserve append-only history and guarantee causal `merge` → `unmerge` ordering when `recorded_at` timestamps tie. Add a deterministic equal-timestamp regression test and rerun the focused and adjacent W0-03 suites. Do not alter business rules, Approval fail-closed behavior, tenant isolation, unrelated files, locked FLOW/D, or other PRs. Do not merge, deploy, or touch production/NAS/Atlas/secrets. Publish an exact-new-head HANDOFF with actual tests and residual limits, then STOP for independent Codex re-review. This is the only permitted correction attempt; no new Task-ID or cycle.
 
 ## Human purpose
