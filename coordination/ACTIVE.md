@@ -1,39 +1,57 @@
 # BEG_WORK — active implementation assignment
 
-Status: MERGED / COMPLETE
+Status: ASSIGNED / DISPATCH PENDING
 Current-Agent: CODEX
-Current-State: WAITING
-Claude-State: HANDOFF_READY
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex completed Krum-authorized PR #30 merge at bbdb94dafa09a483b35ccdf6ed13604b77b86a96; W0-03D accepted, GPT to decide the next stage
-Next-Agent: GPT
+Current-State: WORKING
+Claude-State: WAITING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex preparing the canonical W0-03E/C01 assignment for Claude; Send has not happened
+Next-Agent: CLAUDE
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
-Task-ID: W0-03D
-Cycle-ID: C02
+Krum-Action: CONFIRM SEND TO CLAUDE (only if Computer Use requires action-time confirmation)
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Task-ID: W0-03E
+Cycle-ID: C01
 Base-branch: main
-Base-SHA: 4f46212486e7f2704007cece774939230e0a51f0
-Implementation-branch: codex/w0-03d-merge-redirect
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/30
-PR-Head: ad99598543be60d83c5dbaa29e06a2e8b2063a21
-Merge-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
+Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
+Implementation-branch: codex/w0-03e-legacy-migration
+PR-URL: NONE — Claude creates one Draft PR after implementation
+PR-Head: NONE
+Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Correction-base-SHA: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5872902963
-HANDOFF-Head: 86bb4c9229421687cacbbba5cfe4ab00074ecfbb
-Review: coordination/REVIEWS/W0-03D.md (C01 BLOCKED historical; C02 code PASS and real-Mongo gate PASS; exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21 now included in main merge bbdb94dafa09a483b35ccdf6ed13604b77b86a96)
-Review-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5874227438
-Predecessor-Task-ID: W0-03C/C03
-Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
-Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
-Authorization: Krum explicitly authorized W0-03D/C02 and confirmed the one-time Computer Use Send on 2026-09-28. The prompt was sent to the existing Code Cloud session; Claude running tools was observed.
-Merge-Authorization: Krum separately approved PR #30 merge on exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21 after real-Mongo 4/4 PASS; no deployment or W0-03E authorization.
-Correction-cycle: C02 code PASS; exact-new-head real-Mongo 4/4 PASS, 0 skipped; PR #30 MERGED / W0-03D COMPLETE; no automatic C03, W0-03E or deploy
+HANDOFF-URL: NONE
+Review: NONE — independent Codex review follows exact-head HANDOFF
+Predecessor-Task-ID: W0-03D/C02
+Predecessor-Review: coordination/REVIEWS/W0-03D.md (code PASS and real-Mongo 4/4 PASS on exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21)
+Predecessor-Integration: PR #30 merged into main at bbdb94dafa09a483b35ccdf6ed13604b77b86a96
+Authorization: Krum authorized the large W0-03E package in the 2026-09-28 request; one regular Claude Code Cloud Send remains pending action-time Computer Use confirmation. No Routine, duplicate session, merge or deploy.
+Correction-cycles: up to two bounded technical cycles only after independent exact-head CHANGES_REQUESTED, without new business rules or expanded scope; a third correctness failure is BLOCKED.
+
+## Canonical W0-03E/C01 implementation assignment — PENDING, not sent
+
+Repository `krumingo/BEG_Worck`; base branch `main` at **exact** `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`; implementation branch `codex/w0-03e-legacy-migration` already exists at that SHA. Task-ID `W0-03E`, Cycle-ID `C01`. Recheck all three identities and confirm there is no other active W0-03E PR/session before editing. Work only on this branch; publish one Draft PR against `main`, then final exact-head HANDOFF and STOP for independent Codex review. An intermediate push is not completion.
+
+Read, in order: `CLAUDE.md`; `docs/architecture/IMPLEMENTATION_WAVES.md` (W0-03 and execution order); `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` (FLOW-032 gate); `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` (especially §§2–6, W0-03E, §4.5); `docs/architecture/W0-03C_UNIQUENESS_READINESS.md`; `docs/architecture/TENANCY_MODEL.md`; `docs/flows/FLOW-032.md`, `FLOW-002.md`, `FLOW-040.md`, and applicable FLOW-033/034 and locked D decisions. Inspect current `backend/app/master_data/`, tenancy, permissions, audit, all inventoried legacy routes and tests. The contract's dated status summary is historical; live `main` and exact PR evidence supersede it.
+
+Implement the **entire canonical W0-03E legacy migration foundation as one bounded package**, not separate unrelated tasks: inventory/report and deterministic plan; dry-run that provably performs zero writes; per-tenant, batchable, resumable, idempotent execution with lock/checkpoint/schema-version/evidence/retry, explicit validation and reconciliation/rollback strategy; fail-closed ambiguous matches and partial writes. Preserve every old ID through tenant-bound `legacy_refs`, a reverse reference and deterministic resolution; reconcile counts before/after so no legacy reference silently disappears. Canonical Master uses server-resolved `tenant_id`; legacy `org_id` is compatibility evidence only, never a caller override or future tenant key. No cross-tenant guessing, fuzzy auto-merge or hard delete.
+
+Cover all inventoried identity sources: `users`/`persons`/`employee_profiles` → person; `companies`/`clients`/`counterparties`/`subcontractors` → one organization with roles; `work_types`/`smr_groups` → activity; `items` → item; `asset_item_types`/`asset_items`/`asset_units` → asset_type/physical_asset; `warehouses`/`location_nodes` → location; source/external IDs. Ambiguous identity, even an exact name match without authoritative identity, stays a candidate in pending mapping until authorized human confirmation. AI/OCR/Excel never creates official Master as a side effect. Legacy adapters for the affected read/write routes, import/export and reports must allow staged migration while retaining old IDs and tenant checks; do not rewrite the entire backend.
+
+Audit **all seven** delete-by-ID identity paths identified in the contract (`auth.py`, `clients.py`, `counterparties.py`, `locations.py`, `projects.py` person/company, `smr_groups.py`) **plus** `warehouses.py` bulk `delete_many({"org_id": ...})` and relevant asset deletion. Scope the actual delete/archive operation by server-resolved tenant and Master ownership; used identity cannot be hard-deleted; preserve permitted legacy behavior only when demonstrably outside Master ownership. Add cross-tenant and used-record refusal regressions. New advances in enforce mode require official Master Person ID; old `guest_name` advances remain readable and unchanged; a read-only manual-mapping report on a restored copy may propose but never auto-map. Preserve one canonical organization across client/supplier/counterparty/subcontractor roles.
+
+For every W0-03E migration/adapter write: W0-02 permission boundary default deny, server-side tenant guard, W0-04 canonical AuditEvent including denial and correlation/idempotency evidence. Do not migrate all 229 unrelated legacy permission checks. `MASTER_DATA_MODE=off` stays inert, `shadow` stays non-writing, and no production activation occurs. W0-07 Approval runtime remains absent; do not bypass its fail-closed boundary or claim full FLOW-032 gate PASS.
+
+Acceptance tests: positive/forbidden/correction paths for all source collections, aliases, old-ID resolution, same legacy ID and same normalized name in two tenants, forged `org_id`/tenant, cross-tenant `legacy_ref` injection, mapping ambiguity and exact-name non-auto-match, tenant A/B reads and writes, merge redirect/unmerge/history, duplicates, archive/delete refusals, new advance without canonical person, old `guest_name` preservation, AI/OCR/Excel pending behavior, permissions and AuditEvent, idempotent retry/interruption/checkpoint, counts and zero lost references, no silent partial success. Run focused and adjacent W0-03 suites; record collected/passed/failed/skipped. Add real-Mongo tests for a disposable local loopback instance; Claude may run them only if safely available. Codex independently repeats the gate after HANDOFF; skipped is never PASS.
+
+Excluded: new business policy, fuzzy matching thresholds, automatic merge, production data migration, live index build, Atlas/NAS/production writes, `MASTER_DATA_MODE` activation, W0-06 implementation, broad W0-02 cleanup, locked FLOW/D edits, deployment and merge. If the full canonical scope cannot be completed safely in one package, do not quietly shrink it or claim PASS: publish exact partial evidence and STOP with a concrete blocker. Krum remains owner of new business rules, security/access, live operations and merge/deploy decisions.
+
+HANDOFF must give actual diff, exact new head, Draft PR URL, source-to-Master coverage, deletion-path coverage, migration/retry/rollback evidence, permission/audit evidence, focused/adjacent/real-Mongo results and honest residual limits. Then STOP. Codex alone reviews exact head, permits at most two bounded purely technical corrections, and performs independent disposable real-Mongo gate and whole-W0-03 closure review if evidence supports it.
+
+## Archived predecessor context — W0-03D/C02, completed
 
 ## Integration result and remaining W0-03 scope
 W0-03D is accepted in `main` at merge `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`; the implementation head `ad99598543be60d83c5dbaa29e06a2e8b2063a21` is an ancestor. W0-03 as a whole and FLOW-032 implementation are **not complete**. W0-03E legacy migration, adapters, reference reconciliation and database-per-tenant isolation proof remain; live critical merge also depends on trusted W0-07 Approval evidence. Await a new, explicit GPT/Krum decision before assigning any successor. No production adoption or index build is implied.
