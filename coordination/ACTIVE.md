@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
 Status: WORKING
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Codex preparing one bounded correction for Claude; Send not confirmed
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Claude working on the single bounded correction; no new HANDOFF yet
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Task-ID: W0-03D
 Cycle-ID: C01
 Base-branch: main
@@ -28,10 +28,10 @@ Review: coordination/REVIEWS/W0-03D.md (CHANGES_REQUESTED on 7a84b1721e6d874e0e5
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
-Authorization: The night work package authorizes one bounded correction, but the platform requires fresh action-time confirmation before Computer Use Send; no correction session has started.
-Correction-cycle: 0-of-1 used; one bounded correction reserved, Send pending
+Authorization: Krum confirmed one-time Computer Use Send on 2026-09-28. The canonical bounded correction was sent to the existing Claude Code Cloud session; Claude start was observed in that session.
+Correction-cycle: 1-of-1 used; Claude correction running; no further correction cycle authorized
 
-## Bounded C01 correction assignment — pending dispatch
+## Bounded C01 correction assignment — dispatched and running
 Use the same repository `krumingo/BEG_Worck`, implementation branch `codex/w0-03d-merge-redirect`, Draft PR #30, and exact correction base head `7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd`. Read `coordination/REVIEWS/W0-03D.md` at the current queue head and change only the reviewed defect: preserve append-only history and guarantee causal `merge` → `unmerge` ordering when `recorded_at` timestamps tie. Add a deterministic equal-timestamp regression test and rerun the focused and adjacent W0-03 suites. Do not alter business rules, Approval fail-closed behavior, tenant isolation, unrelated files, locked FLOW/D, or other PRs. Do not merge, deploy, or touch production/NAS/Atlas/secrets. Publish an exact-new-head HANDOFF with actual tests and residual limits, then STOP for independent Codex re-review. This is the only permitted correction attempt; no new Task-ID or cycle.
 
 ## Human purpose
