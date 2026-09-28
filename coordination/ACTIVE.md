@@ -1,35 +1,42 @@
 # BEG_WORK — active implementation assignment
 
-Status: BLOCKED
+Status: WORKING
 Current-Agent: CODEX
-Current-State: BLOCKED
-Claude-State: HANDOFF_READY
-Pipeline-Step: GATE
-Transition-Phase: OBSERVED
-Now: W0-03D/C01 blocked after final independent exact-head review; causal history is truncated before sequence sorting
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: RELAY BLOCKED VERDICT TO GPT ARCHITECT
-Dispatch-State: BLOCKED
-Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
+Current-State: WORKING
+Claude-State: WAITING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex preparing the authorized W0-03D/C02 correction; Claude has not received this cycle
+Next-Agent: CLAUDE
+Relay-State: NO_RELAY_NEEDED
+Relay-From: NONE
+Relay-To: NONE
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
 Task-ID: W0-03D
-Cycle-ID: C01
+Cycle-ID: C02
 Base-branch: main
 Base-SHA: 4f46212486e7f2704007cece774939230e0a51f0
 Implementation-branch: codex/w0-03d-merge-redirect
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/30
 PR-Head: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
-Correction-base-SHA: 7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5863341232
-HANDOFF-Head: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
-Review: coordination/REVIEWS/W0-03D.md (BLOCKED on dd6ba1a89b4a5a488d91e082f10f82f323b91c22; PR comment https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5863782506)
+Correction-base-SHA: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
+HANDOFF-URL: NONE (C02 not dispatched)
+HANDOFF-Head: NONE (C02 not dispatched)
+Review: coordination/REVIEWS/W0-03D.md (C01 BLOCKED on dd6ba1a89b4a5a488d91e082f10f82f323b91c22; C02 pending)
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
-Authorization: Krum confirmed one-time Computer Use Send on 2026-09-28. The canonical bounded correction was sent to the existing Claude Code Cloud session; Claude start was observed in that session.
-Correction-cycle: 1-of-1 used; final Codex review BLOCKED; no further correction cycle authorized without explicit new decision
+Authorization: Krum explicitly authorized a new technical correctness correction cycle W0-03D/C02 on 2026-09-28 after accepting the C01 BLOCKED review. Computer Use Send still requires action-time confirmation.
+Correction-cycle: C02 newly authorized; no C02 Send yet and no automatic C03
+
+## Canonical W0-03D/C02 technical correction assignment — PENDING, NOT SENT
+Use only repository `krumingo/BEG_Worck`, branch `codex/w0-03d-merge-redirect`, existing Draft PR #30, and exact C02 base head `dd6ba1a89b4a5a488d91e082f10f82f323b91c22`. Read this ACTIVE file, the final BLOCKED evidence in `coordination/REVIEWS/W0-03D.md`, `CLAUDE.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §W0-03D, and `docs/flows/FLOW-032.md` before editing. Recheck the remote PR head; stop on mismatch.
+
+Correct only `history()` causal ordering before limit/truncation. Apply the requested limit and hard cap 500 only to causally ordered history, never to an unsorted Mongo cursor. Ensure a returned unmerge cannot lack the merge it reverses because of pre-sort truncation; if a requested limit itself would cut off the causal predecessor, fail closed or provide a bounded, explicit and deterministic response rather than silently presenting a false history. Preserve append-only history, tenant isolation, existing merge/unmerge business rules, Approval behavior, feature-off boundary and unrelated code. No scope expansion, locked FLOW/D changes, merge, deployment, production/NAS/Atlas writes or W0-03E.
+
+Add deterministic regression tests for `merge(seq=1) -> unmerge(seq=2) -> merge(seq=3)`, reverse physical storage order, and `history(limit=2)` showing a causal and deterministic result with no orphaned unmerge. Test the hard cap 500 with more than 500 history events arranged so unsorted truncation would select the wrong causal window. Run focused W0-03D and adjacent W0-03 suites. Run real-Mongo only against a disposable local instance if safely available; report skipped tests separately, never as PASS. Publish one final HANDOFF with exact new head, actual diff, tests, and limitations in the same PR #30; then STOP for independent Codex re-review. This C02 cycle is one bounded correction, not authorization to start C03 automatically.
 
 ## Bounded C01 correction assignment — final HANDOFF reviewed; gate BLOCKED
 Use the same repository `krumingo/BEG_Worck`, implementation branch `codex/w0-03d-merge-redirect`, Draft PR #30, and exact correction base head `7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd`. Read `coordination/REVIEWS/W0-03D.md` at the current queue head and change only the reviewed defect: preserve append-only history and guarantee causal `merge` → `unmerge` ordering when `recorded_at` timestamps tie. Add a deterministic equal-timestamp regression test and rerun the focused and adjacent W0-03 suites. Do not alter business rules, Approval fail-closed behavior, tenant isolation, unrelated files, locked FLOW/D, or other PRs. Do not merge, deploy, or touch production/NAS/Atlas/secrets. Publish an exact-new-head HANDOFF with actual tests and residual limits, then STOP for independent Codex re-review. This is the only permitted correction attempt; no new Task-ID or cycle.
