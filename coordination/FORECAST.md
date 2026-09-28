@@ -1,14 +1,14 @@
 # BEG_WORK management forecast v1.0 — evidence map, estimates pending
 
-Machine source: [`FORECAST.json`](FORECAST.json). This document is a planning read-model, not a business rule, implementation gate, merge, deploy or production forecast. As of 27 September 2026, the canonical scope is mapped but **engineering-hour baselines are not calibrated or approved**. Therefore Whole BEG_WORK %, Wave 0 %, W0-03 %, W0-03D/C01 % and total/remaining hours are `NOT ESTIMATED`, not zero. No dashboard may substitute FLOW count, PR count, lifecycle stages or an equal-weight average.
+Machine source: [`FORECAST.json`](FORECAST.json). This document is a planning read-model, not a business rule, implementation gate, merge, deploy or production forecast. As of 28 September 2026, the canonical scope is mapped but **engineering-hour baselines are not calibrated or approved**. Therefore Whole BEG_WORK %, Wave 0 %, W0-03 %, W0-03D/C02 % and total/remaining hours are `NOT ESTIMATED`, not zero. No dashboard may substitute FLOW count, PR count, lifecycle stages or an equal-weight average.
 
 ## Proven visible facts
 
 - Business design: **49/50 Business Locked; 1 legacy** (`FLOW-018` absorbed by `FLOW-039`), per `docs/flows/README.md`. This conveys no implementation credit.
-- Current Wave: **Wave 0**. The current task is `W0-03D/C01`, Draft PR #30 at `7a84b1721e6d874e0e5f3a140aaf7b288cfc52cd`.
-- Current task lifecycle: **4/6 stages observed** — Assignment, Claude implementation, HANDOFF and Codex review. Review outcome is `CHANGES_REQUESTED`; bounded correction is prepared but its Send is still `PENDING`, and final review has not happened. The stage count is **not an effort percentage**.
+- Current Wave: **Wave 0**. The last accepted task is `W0-03D/C02`: implementation head `ad99598543be60d83c5dbaa29e06a2e8b2063a21` was merged in PR #30 to `main` at `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`. No successor has been assigned.
+- W0-03D lifecycle: **8/8 stages observed** — assignment, Claude implementation, HANDOFF, Codex review, bounded correction, final review, disposable real-Mongo gate (4/4 PASS, 0 skipped), and merge. This is an accepted deliverable, **not an effort percentage**, a production deployment, or full W0-03/FLOW-032 completion.
 - W0-03C is merged to `main` at `4f46212486e7f2704007cece774939230e0a51f0`, but Master Data as a whole remains open and no production index build or deployment is inferred.
-- `IMPLEMENTATION_WAVES.md` and `IMPLEMENTATION_GATE_MATRIX.md` contain a 20 September implementation snapshot that still calls W0-03C “in review”. For current status, use live PR metadata and the queue's exact-head ACTIVE/REVIEWS. Do not silently repeat the older snapshot as current.
+- `IMPLEMENTATION_WAVES.md` and `IMPLEMENTATION_GATE_MATRIX.md` contain a 20 September implementation snapshot that still calls W0-03C “in review”. For current status, use live PR metadata and the queue's exact-head ACTIVE/REVIEWS. W0-03E legacy migration/adapters/isolation proof and trusted W0-07 Approval runtime for live critical merge remain; do not silently repeat the older snapshot or call the whole W0-03 gate complete.
 
 ## Forecast grain and inclusion
 
@@ -16,7 +16,7 @@ Each row in the JSON is a distinct canonical implementation deliverable. Wave 0 
 
 | Wave | Current evidence-backed position | Unclosed scope |
 |---|---|---|
-| W0 | W0-01, W0-02 and W0-04 cores; W0-03 A/B/C and office intake; W0-09A; W0-10A have bounded evidence | Remaining parts of W0-01/02/04/09/10; W0-03D/E; full W0-05/06/07/08/11 |
+| W0 | W0-01, W0-02 and W0-04 cores; W0-03 A/B/C/D and office intake; W0-09A; W0-10A have bounded evidence | Remaining parts of W0-01/02/04/09/10; W0-03E; full W0-05/06/07/08/11 |
 | W1 | No accepted Wave 1 implementation evidence mapped yet | Commercial lifecycle, payment/financial read model, document control and approvals |
 | W2 | No accepted Wave 2 implementation evidence mapped yet | Modern Field Experience, field operations, cost/logistics/assets, quality/payroll, Wave 2.1 schedule/readiness |
 | W3 | No accepted Wave 3 implementation evidence mapped yet | Governed BEG Brain, agents/decision tools, AI UI and timeline |
@@ -30,4 +30,4 @@ Estimate revisions are append-only: a later estimate adds a dated version and it
 
 ## Sources and boundaries
 
-Canonical scope: `docs/architecture/IMPLEMENTATION_WAVES.md` and `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` on `main`; business count: `docs/flows/README.md`; current operations: `coordination/ACTIVE.md`, `coordination/REVIEWS/W0-03D.md`, exact merged PRs #3, #6, #9, #14, #16–#20, and Draft PR #30. `FORECAST.json` is a management projection only. It does not change locked FLOW/D, grant permissions, authorize a new slice or activate runtime behavior.
+Canonical scope: `docs/architecture/IMPLEMENTATION_WAVES.md` and `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` on `main`; business count: `docs/flows/README.md`; current operations: `coordination/ACTIVE.md`, `coordination/REVIEWS/W0-03D.md`, exact merged PRs #3, #6, #9, #14, #16–#20 and #30. `FORECAST.json` is a management projection only. It does not change locked FLOW/D, grant permissions, authorize a new slice or activate runtime behavior.
