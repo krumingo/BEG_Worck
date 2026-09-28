@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-28T15:16:53Z",
+  "validated_at": "2026-09-28T15:22:00Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
   "active_source_commit_sha": "545b88310b338775c9875abc433eb1a55656b584",
-  "control_state_commit_sha": "6da301fb778de26d49a38f2d915ab8d0fb51a693",
-  "now": "Codex independently reviewing C02 HANDOFF on exact PR #30 head 86bb4c9229421687cacbbba5cfe4ab00074ecfbb",
+  "control_state_commit_sha": "ca613ffa1d834f3f6e872460f8f5555ad6b88a91",
+  "now": "Codex C02 exact-head verdict ready; publication pending",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5872902963",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03D",
@@ -26,13 +26,13 @@
       "state": "WAITING",
       "work_id": "W0-03D/C02/GPT",
       "waiting_for": "Codex C02 exact-head verdict",
-      "updated_at": "2026-09-28T15:16:53Z"
+      "updated_at": "2026-09-28T15:22:00Z"
     },
     "CODEX": {
       "state": "REVIEWING",
       "work_id": "W0-03D/C02/CX",
       "waiting_for": null,
-      "updated_at": "2026-09-28T15:16:53Z"
+      "updated_at": "2026-09-28T15:22:00Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -93,7 +93,7 @@
       {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"}
     ]
   },
-  "updated_at": "2026-09-28T15:16:53Z",
+  "updated_at": "2026-09-28T15:22:00Z",
   "history": [
     {
       "event_id": "queue-165868fe",
