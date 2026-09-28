@@ -1,17 +1,17 @@
 # BEG_WORK — active implementation assignment
 
-Status: WORKING
+Status: GATE_PASS / READY_FOR_MERGE_DECISION
 Current-Agent: CODEX
-Current-State: WORKING
+Current-State: WAITING
 Claude-State: HANDOFF_READY
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT
-Now: Codex real-Mongo gate evidence is being prepared for publication on test-only PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; no gate verdict published yet
+Transition-Phase: OBSERVED
+Now: Codex published real-Mongo gate PASS on exact PR #30 head ad99598543be60d83c5dbaa29e06a2e8b2063a21; awaiting separate merge decision
 Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE
+Krum-Action: APPROVE PR #30 MERGE
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01LkYSm8syiPYo2mzkk1J5Z3
 Task-ID: W0-03D
@@ -24,13 +24,13 @@ PR-Head: ad99598543be60d83c5dbaa29e06a2e8b2063a21
 Correction-base-SHA: dd6ba1a89b4a5a488d91e082f10f82f323b91c22
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5872902963
 HANDOFF-Head: 86bb4c9229421687cacbbba5cfe4ab00074ecfbb
-Review: coordination/REVIEWS/W0-03D.md (C01 BLOCKED historical; C02 code PASS on 86bb4c9229421687cacbbba5cfe4ab00074ecfbb; real-Mongo gate verdict pending publication for new test-only head)
-Review-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5873109639
+Review: coordination/REVIEWS/W0-03D.md (C01 BLOCKED historical; C02 code PASS on 86bb4c9229421687cacbbba5cfe4ab00074ecfbb; real-Mongo gate PASS on test-only head ad99598543be60d83c5dbaa29e06a2e8b2063a21)
+Review-URL: https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5874227438
 Predecessor-Task-ID: W0-03C/C03
 Predecessor-Review: coordination/REVIEWS/W0-03C.md (PASS on e3c4ad8cd5b204eb806c39202cc00dd586bc9049)
 Predecessor-Integration: PR #20 merged into main at 4f46212486e7f2704007cece774939230e0a51f0
 Authorization: Krum explicitly authorized W0-03D/C02 and confirmed the one-time Computer Use Send on 2026-09-28. The prompt was sent to the existing Code Cloud session; Claude running tools was observed.
-Correction-cycle: C02 code PASS; one necessary real-Mongo regression test added; exact-new-head gate evidence pending publication; no automatic C03, W0-03E, merge or deploy
+Correction-cycle: C02 code PASS; exact-new-head real-Mongo 4/4 PASS, 0 skipped; GATE_PASS / READY_FOR_MERGE_DECISION; no automatic C03, W0-03E, merge or deploy
 
 ## Canonical W0-03D/C02 technical correction assignment — completed, independent PASS
 Use only repository `krumingo/BEG_Worck`, branch `codex/w0-03d-merge-redirect`, existing Draft PR #30, and exact C02 base head `dd6ba1a89b4a5a488d91e082f10f82f323b91c22`. Read this ACTIVE file, the final BLOCKED evidence in `coordination/REVIEWS/W0-03D.md`, `CLAUDE.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §W0-03D, and `docs/flows/FLOW-032.md` before editing. Recheck the remote PR head; stop on mismatch.
