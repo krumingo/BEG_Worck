@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-28T04:51:04Z",
+  "validated_at": "2026-09-28T04:58:15Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
   "active_source_commit_sha": "26b88fe21df40ec5c9635abee5732b2ecaf56265",
-  "control_state_commit_sha": "a6ab954bc0f006292a485f1a2e033e01c1b9f01b",
-  "now": "Codex independently reviewing Claude bounded correction on exact head dd6ba1a89b4a5a488d91e082f10f82f323b91c22",
+  "control_state_commit_sha": "6485ac2df3d283b793ab4a603ef9ece8624ebbbd",
+  "now": "Codex exact-head review complete; final verdict ready for publication, not yet published",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/30#issuecomment-5863341232",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03D",
@@ -93,7 +93,7 @@
       {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"}
     ]
   },
-  "updated_at": "2026-09-28T04:51:04Z",
+  "updated_at": "2026-09-28T04:58:15Z",
   "history": [
     {
       "event_id": "queue-165868fe",

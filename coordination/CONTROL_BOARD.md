@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-28T04:51:04Z · CONTROL STATE: **VALID** as of 2026-09-28T04:51:04Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-28T04:58:15Z · CONTROL STATE: **VALID** as of 2026-09-28T04:58:15Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03D / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — Exact-head bounded correction HANDOFF / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Codex independently reviewing Claude bounded correction on exact head dd6ba1a89b4a5a488d91e082f10f82f323b91c22
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex exact-head review complete; final verdict ready for publication, not yet published
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: —
