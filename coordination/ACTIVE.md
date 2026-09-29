@@ -1,14 +1,14 @@
 # BEG_WORK — active implementation assignment
 
-Status: ASSIGNED / DISPATCH RUNNING
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
+Status: HANDOFF READY / CODEX REVIEWING
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Claude working in the observed W0-03E/C01 Code Cloud session
-Next-Agent: CODEX
+Now: Codex independently reviewing Claude's exact W0-03E/C01 head
+Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
@@ -21,19 +21,20 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-legacy-migration
-PR-URL: NONE — Claude creates one Draft PR after implementation
-PR-Head: NONE
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/32 (Draft)
+PR-Head: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE
-Review: NONE — independent Codex review follows exact-head HANDOFF
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (exact-head HANDOFF in PR body; Claude session ended)
+Review: IN_PROGRESS — independent Codex review of exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747; no verdict yet
+HANDOFF-Observed-At: 2026-09-29T04:25:28Z
 Predecessor-Task-ID: W0-03D/C02
 Predecessor-Review: coordination/REVIEWS/W0-03D.md (code PASS and real-Mongo 4/4 PASS on exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21)
 Predecessor-Integration: PR #30 merged into main at bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Authorization: Krum authorized the large W0-03E package and confirmed the one regular Claude Code Cloud Send on 2026-09-28. The exact queue assignment at efe042d5aa405076769d6ae6d46396ca9a2a8079 was sent once to the selected krumingo/BEG_Worck implementation branch; the session above showed Claude responding and running tools. No Routine, duplicate session, merge or deploy.
 Correction-cycles: up to two bounded technical cycles only after independent exact-head CHANGES_REQUESTED, without new business rules or expanded scope; a third correctness failure is BLOCKED.
 
-## Canonical W0-03E/C01 implementation assignment — SENT, session RUNNING
+## Canonical W0-03E/C01 implementation assignment — HANDOFF published, Codex reviewing
 
 Repository `krumingo/BEG_Worck`; base branch `main` at **exact** `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`; implementation branch `codex/w0-03e-legacy-migration` already exists at that SHA. Task-ID `W0-03E`, Cycle-ID `C01`. Recheck all three identities and confirm there is no other active W0-03E PR/session before editing. Work only on this branch; publish one Draft PR against `main`, then final exact-head HANDOFF and STOP for independent Codex review. An intermediate push is not completion.
 
