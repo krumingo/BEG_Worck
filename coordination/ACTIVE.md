@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: CODEX VERDICT READY / PUBLISH PENDING
+Status: CHANGES_REQUESTED / CODEX REVIEW PUBLISHED
 Current-Agent: CODEX
-Current-State: REVIEW
+Current-State: CHANGES_REQUESTED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: WAITING
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT
-Now: Codex has completed the independent W0-03E/C01 review; verdict publication is pending
+Transition-Phase: OBSERVED
+Now: Codex published CHANGES_REQUESTED on W0-03E/C01; no correction has been dispatched
 Next-Agent: GPT
-Relay-State: NO_RELAY_NEEDED
-Relay-From: NONE
-Relay-To: NONE
-Krum-Action: NONE
-Dispatch-State: RUNNING
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: FORWARD CODEX VERDICT TO GPT
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
 Dispatch-Observed-At: 2026-09-28T20:15:54Z
 Task-ID: W0-03E
@@ -26,7 +26,7 @@ PR-Head: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (exact-head HANDOFF in PR body; Claude session ended)
-Review: READY / PUBLISH PENDING — independent review completed on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747; no published verdict yet
+Review: CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847; exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747; no correction dispatch yet
 HANDOFF-Observed-At: 2026-09-29T04:25:28Z
 Predecessor-Task-ID: W0-03D/C02
 Predecessor-Review: coordination/REVIEWS/W0-03D.md (code PASS and real-Mongo 4/4 PASS on exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21)
