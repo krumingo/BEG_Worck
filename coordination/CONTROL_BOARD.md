@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-29T15:08:33Z · CONTROL STATE: **VALID** as of 2026-09-29T15:08:33Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-29T15:12:06Z · CONTROL STATE: **VALID** as of 2026-09-29T15:12:06Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03E / C01 / CODEX / **REVIEW**
-LAST: CLAUDE — W0-03E/C01 exact-head HANDOFF / HANDOFF
-RELAY: NO_RELAY_NEEDED · — → —
-NOW: Codex completed independent review; verdict publication pending
-TRANSITION: CODEX_VERDICT / INTENT · verdict READY
+CURRENT: W0-03E / C01 / CODEX / **CHANGES_REQUESTED**
+LAST: CODEX — W0-03E/C01 exact-head independent review / CHANGES_REQUESTED
+RELAY: NOT_SENT · CODEX → GPT
+NOW: Codex published CHANGES_REQUESTED for W0-03E/C01; no correction has been dispatched
+TRANSITION: CODEX_VERDICT / OBSERVED · verdict PUBLISHED
 NEXT: GPT
-KRUM ACTION: NONE
-WAITING FOR: —
+KRUM ACTION: REQUIRED — FORWARD CODEX VERDICT TO GPT
+WAITING FOR: GPT decision on bounded correction
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-03E
 CYCLE: C01
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: REVIEW
+STATE: CHANGES_REQUESTED
 NEXT: GPT
-WAITING_FOR: NONE
+WAITING_FOR: GPT decision on bounded correction
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03E | C01 | WAITING | REVIEWING | HANDOFF_READY | CODEX | — | REVIEW |
+| W0-03E | C01 | WAITING | WAITING | HANDOFF_READY | CODEX | GPT decision on bounded correction | CHANGES_REQUESTED |
 
 ## Agent cards
 
@@ -38,15 +38,16 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E/C01/GPT | Codex independent verdict | 2026-09-29T15:08:33Z |
-| CODEX | REVIEWING | W0-03E/C01/CX | — | 2026-09-29T15:08:33Z |
+| GPT | WAITING | W0-03E/C01/GPT | Krum relay of published Codex verdict | 2026-09-29T15:12:06Z |
+| CODEX | WAITING | W0-03E/C01/CX | GPT decision on bounded correction | 2026-09-29T15:12:06Z |
 | CLAUDE | HANDOFF_READY | W0-03E/C01/CL | Codex independent review | 2026-09-29T04:25:28Z |
 
-GPT → Codex → Claude → **Codex (REVIEW)** → GPT
+GPT → Codex → Claude → **Codex (CHANGES_REQUESTED)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `f43ba26524a245446bbda95cb4e9400121432f5b` · blob `c8b35762b93d5da2cbc76a97222b0f61b3ce314d`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `6d66f11fc847bb9f3b27cbd3454ed997807d7c22` · blob `d94073d138f37a838e11a770c652d5332cb1f1b5`
+- Review: `coordination/REVIEWS/W0-03E.md` · blob `957310b7d0129e9b351c4c2154727ff3be563cde` · verdict **CHANGES_REQUESTED** on `67c172e3066a53d0d6fa5c594997e2b7af0d1747`
 - Draft PR: [#32](https://github.com/krumingo/BEG_Worck/pull/32) · exact head `67c172e3066a53d0d6fa5c594997e2b7af0d1747`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/32) · head `67c172e3066a53d0d6fa5c594997e2b7af0d1747`
 - Dispatch session: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF · dispatch state **NONE**
@@ -64,5 +65,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-09-28T18:26:32Z | C01 | — | ASSIGNMENT | CODEX | WORKING | `bbdb94da` | [evidence](https://github.com/krumingo/BEG_Worck/commit/9b65571ada48425a2ced4a6685327855a9655790) |
 | 2026-09-28T20:15:54Z | C01 | — | DISPATCH | CLAUDE | WORKING | `bbdb94da` | [evidence](https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF) |
 | 2026-09-29T04:25:28Z | C01 | — | HANDOFF | CLAUDE | HANDOFF | `67c172e3` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32) |
+| 2026-09-29T15:12:06Z | C01 | — | REVIEW | CODEX | CHANGES_REQUESTED | `67c172e3` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847) |
 
-**Gate:** W0-03E is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-03E is CHANGES_REQUESTED. Progression requires independent evidence and the relevant owner approval; this board grants none.

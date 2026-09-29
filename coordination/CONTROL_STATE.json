@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-29T15:08:33Z",
+  "validated_at": "2026-09-29T15:12:06Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "f43ba26524a245446bbda95cb4e9400121432f5b",
-  "control_state_commit_sha": "385ed98e031e7f9603df4ea7ddade7ffb82c32e9",
-  "now": "Codex completed independent review; verdict publication pending",
+  "active_source_commit_sha": "6d66f11fc847bb9f3b27cbd3454ed997807d7c22",
+  "control_state_commit_sha": "3ba3bb670359a9b168f6fa4d4d25509f98c11a35",
+  "now": "Codex published CHANGES_REQUESTED for W0-03E/C01; no correction has been dispatched",
   "transition": {
     "event": "CODEX_VERDICT",
-    "phase": "INTENT",
-    "evidence_url": null,
-    "verdict_publication": "READY"
+    "phase": "OBSERVED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
+    "verdict_publication": "PUBLISHED"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03E",
@@ -25,14 +25,14 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E/C01/GPT",
-      "waiting_for": "Codex independent verdict",
-      "updated_at": "2026-09-29T15:08:33Z"
+      "waiting_for": "Krum relay of published Codex verdict",
+      "updated_at": "2026-09-29T15:12:06Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "WAITING",
       "work_id": "W0-03E/C01/CX",
-      "waiting_for": null,
-      "updated_at": "2026-09-29T15:08:33Z"
+      "waiting_for": "GPT decision on bounded correction",
+      "updated_at": "2026-09-29T15:12:06Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -42,10 +42,10 @@
     }
   },
   "current_work_id": "W0-03E/C01/CX",
-  "state": "REVIEW",
+  "state": "CHANGES_REQUESTED",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": null,
+  "waiting_for": "GPT decision on bounded correction",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 32,
@@ -58,21 +58,26 @@
     "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
     "at": "2026-09-28T20:51:46Z"
   },
-  "last_review": null,
-  "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "W0-03E/C01 exact-head HANDOFF",
-    "last_result": "HANDOFF",
-    "required_by_krum": false,
-    "from": null,
-    "to": null,
-    "status": "NO_RELAY_NEEDED",
-    "instruction": "No manual relay; Codex is independently reviewing exact PR #32 head.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
-    "updated_at": "2026-09-29T04:25:28Z"
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-03E.md",
+    "blob_sha": "957310b7d0129e9b351c4c2154727ff3be563cde",
+    "reviewed_head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
+    "verdict": "CHANGES_REQUESTED"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "relay": {
+    "last_agent": "CODEX",
+    "last_event": "W0-03E/C01 exact-head independent review",
+    "last_result": "CHANGES_REQUESTED",
+    "required_by_krum": true,
+    "from": "CODEX",
+    "to": "GPT",
+    "status": "NOT_SENT",
+    "instruction": "Krum forwards the published exact-head Codex verdict to GPT; no correction was dispatched.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
+    "updated_at": "2026-09-29T15:12:06Z"
+  },
+  "requires_krum": true,
+  "requires_krum_reason": "FORWARD CODEX VERDICT TO GPT",
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "REVIEW",
@@ -82,7 +87,9 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "c8b35762b93d5da2cbc76a97222b0f61b3ce314d",
+    "active_blob_sha": "d94073d138f37a838e11a770c652d5332cb1f1b5",
+    "review_path": "coordination/REVIEWS/W0-03E.md",
+    "review_blob_sha": "957310b7d0129e9b351c4c2154727ff3be563cde",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "e91d3230b74be5807ecf1c86a4219a6a71ef7a92"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -94,7 +101,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-09-29T15:08:33Z",
+  "updated_at": "2026-09-29T15:12:06Z",
   "history": [
     {
       "event_id": "w0-03e-c01-assignment-intent",
@@ -137,6 +144,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
       "source_commit_sha": "1b7df12a8f7776f0f03b2180f436c4ac90c95521",
       "summary": "Claude session ended, Draft PR #32 is stable at exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747 and its body contains the final HANDOFF. Codex independent review is in progress; no verdict yet."
+    },
+    {
+      "event_id": "w0-03e-c01-codex-changes-requested",
+      "occurred_at": "2026-09-29T15:12:06Z",
+      "task_id": "W0-03E",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
+      "source_commit_sha": "787f41e6803fb7f9a218b67a51edc945699d313c",
+      "summary": "Independent exact-head review found financial recipient identity mismatch and incomplete assigned legacy import/export/report adapter coverage; 110 focused and 627 adjacent in-memory tests passed, but no independent real-Mongo gate. No correction dispatched."
     }
   ]
 }
