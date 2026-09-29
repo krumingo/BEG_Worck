@@ -1,40 +1,52 @@
 # BEG_WORK — active implementation assignment
 
-Status: CHANGES_REQUESTED / CODEX REVIEW PUBLISHED
+Status: W0-03E/C02 CORRECTION ASSIGNMENT / DISPATCH PENDING
 Current-Agent: CODEX
-Current-State: CHANGES_REQUESTED
-Claude-State: HANDOFF_READY
-Codex-State: WAITING
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex published CHANGES_REQUESTED on W0-03E/C01; no correction has been dispatched
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: FORWARD CODEX VERDICT TO GPT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
-Dispatch-Observed-At: 2026-09-28T20:15:54Z
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex prepared the authorized bounded C02 correction; Send is pending, Claude has not started
+Next-Agent: CLAUDE
+Relay-State: RECEIVED
+Relay-From: GPT
+Relay-To: CODEX
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Dispatch-Observed-At: NONE (C02 has not been sent; C01 session is archived below)
 Task-ID: W0-03E
-Cycle-ID: C01
+Cycle-ID: C02
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-legacy-migration
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/32 (Draft)
 PR-Head: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
+Correction-Base-SHA: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (exact-head HANDOFF in PR body; Claude session ended)
-Review: CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847; exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747; no correction dispatch yet
-HANDOFF-Observed-At: 2026-09-29T04:25:28Z
-Predecessor-Task-ID: W0-03D/C02
-Predecessor-Review: coordination/REVIEWS/W0-03D.md (code PASS and real-Mongo 4/4 PASS on exact head ad99598543be60d83c5dbaa29e06a2e8b2063a21)
-Predecessor-Integration: PR #30 merged into main at bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Authorization: Krum authorized the large W0-03E package and confirmed the one regular Claude Code Cloud Send on 2026-09-28. The exact queue assignment at efe042d5aa405076769d6ae6d46396ca9a2a8079 was sent once to the selected krumingo/BEG_Worck implementation branch; the session above showed Claude responding and running tools. No Routine, duplicate session, merge or deploy.
+HANDOFF-URL: NONE for C02 (C01 exact-head HANDOFF remains in PR #32 body)
+Review: C01 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847; exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747. Krum authorized bounded correction #1; C02 Send is pending and no Claude start has been observed.
+HANDOFF-Observed-At: NONE for C02 (C01 observed at 2026-09-29T04:25:28Z)
+Predecessor-Task-ID: W0-03E/C01
+Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
+Predecessor-Integration: NONE; PR #32 remains Draft and unmerged
+Authorization: Krum accepted the C01 verdict and authorized bounded technical correction #1 in the current Codex conversation on 2026-09-29. The C02 assignment is published but not yet sent; any Computer Use Send requires action-time confirmation. The C01 Claude session and HANDOFF are historical evidence only. No Routine, duplicate session, merge or deploy.
 Correction-cycles: up to two bounded technical cycles only after independent exact-head CHANGES_REQUESTED, without new business rules or expanded scope; a third correctness failure is BLOCKED.
 
-## Canonical W0-03E/C01 implementation assignment — HANDOFF published, Codex reviewing
+## Canonical W0-03E/C02 bounded correction #1 — PENDING direct Claude Send
+
+Krum accepts Codex's C01 `CHANGES_REQUESTED` verdict and explicitly authorizes one bounded technical correction, without a new business decision. Continue the **same Task-ID W0-03E**, implementation branch `codex/w0-03e-legacy-migration`, and existing Draft PR #32. The **exact correction base head** is `67c172e3066a53d0d6fa5c594997e2b7af0d1747`; stop on any mismatch. This is **Cycle-ID C02**, correction 1 of at most 2, not a new feature or a new PR. Read this ACTIVE file, `coordination/REVIEWS/W0-03E.md`, `CLAUDE.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §§4.5 and 6, the original C01 assignment below, applicable locked FLOW/D, and the exact PR diff before editing.
+
+Correct **both** independent review findings in one package:
+
+1. **Financial recipient identity.** New Advance/Loan must refer to a proven canonical Master Person. `user_id`, `guest_name` and `person_id` must not describe different people. If a supplied legacy recipient has no proven mapping to the supplied canonical `person_id`, fail closed: no name guess, fuzzy match or automatic person creation. Add deterministic negative regressions for unmapped `user_id` plus a different valid `person_id`; contradictory `guest_name` plus `person_id`; mapped legacy person versus different canonical person; no advance **or payment** persisted on refusal; and canonical auditable denial. Preserve accepted same-person and historical `guest_name` behavior required by §4.5, without changing business rules.
+2. **Incomplete adapter coverage.** Inventory the **specific identity-bearing** legacy import, export, report and AI-adjacent paths covered by the original assignment and contract §6, including relevant route/service entry points. Add bounded, tenant-safe adapter coverage and focused tests for those paths; retain old IDs and preserve pending-only AI/OCR/Excel behavior. Do not rewrite unrelated routes, expand to all 3,673 legacy `org_id` uses, or claim missing paths as PASS. If a named in-scope path cannot safely be covered without a new architectural choice, STOP for that exact path with concrete evidence instead of silently narrowing the package.
+
+Run focused W0-03E and adjacent W0-03 regressions; record collected/passed/failed/skipped. Claude may run disposable loopback real-Mongo tests if safely available, but Codex independently repeats the real-Mongo gate after final HANDOFF; skipped/unrun is **not** PASS. Publish the actual diff, exact new PR head, final HANDOFF, path coverage, tests and residual limits in PR #32, then STOP. Codex reviews only after observed final HANDOFF and stable exact head. No automatic new correction if there is another defect; the remaining bounded cycle requires a separate decision. No merge, deploy, Atlas/NAS/production write, locked FLOW/D change, Claude Routine, or other PR change.
+
+## Original W0-03E/C01 implementation assignment — HANDOFF reviewed, CHANGES_REQUESTED
 
 Repository `krumingo/BEG_Worck`; base branch `main` at **exact** `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`; implementation branch `codex/w0-03e-legacy-migration` already exists at that SHA. Task-ID `W0-03E`, Cycle-ID `C01`. Recheck all three identities and confirm there is no other active W0-03E PR/session before editing. Work only on this branch; publish one Draft PR against `main`, then final exact-head HANDOFF and STOP for independent Codex review. An intermediate push is not completion.
 
