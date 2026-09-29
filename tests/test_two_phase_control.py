@@ -30,7 +30,9 @@ class TwoPhaseTests(unittest.TestCase):
                      current_work_id=f"{task_cycle}/CX", state="WORKING",
                      pipeline_step="ASSIGNMENT", next_agent="CLAUDE",
                      waiting_for=None, requires_krum=False, requires_krum_reason=None,
-                     dispatch_state="PENDING", dispatch_run_url=None)
+                     dispatch_state="PENDING", dispatch_run_url=None,
+                     pr_number=None, pr_head_sha=None, pr_draft=None,
+                     last_handoff=None, last_review=None)
         state["now"] = "Codex preparing/sending task to Claude"
         state["transition"] = {"event": "DISPATCH", "phase": "INTENT", "evidence_url": None,
                                "verdict_publication": "NONE"}

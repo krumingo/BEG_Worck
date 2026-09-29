@@ -216,6 +216,7 @@ class ControlProtocolTests(unittest.TestCase):
                      waiting_for=None, dispatch_state="NONE",
                      requires_krum=False, requires_krum_reason=None,
                      pr_number=99, pr_head_sha=HEAD, pr_draft=False,
+                     last_handoff=None,
                      last_review={"path": "coordination/REVIEWS/synthetic.md",
                                   "blob_sha": REVIEW_BLOB,
                                   "reviewed_head_sha": HEAD, "verdict": "PASS"})
