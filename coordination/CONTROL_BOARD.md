@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-29T04:25:28Z · CONTROL STATE: **VALID** as of 2026-09-29T04:25:28Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-29T15:08:33Z · CONTROL STATE: **VALID** as of 2026-09-29T15:08:33Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03E / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-03E/C01 exact-head HANDOFF / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Codex independently reviewing Claude's exact W0-03E/C01 head
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex completed independent review; verdict publication pending
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: —
@@ -38,15 +38,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E/C01/GPT | Codex independent verdict | 2026-09-29T04:25:28Z |
-| CODEX | REVIEWING | W0-03E/C01/CX | — | 2026-09-29T04:25:28Z |
+| GPT | WAITING | W0-03E/C01/GPT | Codex independent verdict | 2026-09-29T15:08:33Z |
+| CODEX | REVIEWING | W0-03E/C01/CX | — | 2026-09-29T15:08:33Z |
 | CLAUDE | HANDOFF_READY | W0-03E/C01/CL | Codex independent review | 2026-09-29T04:25:28Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `1b7df12a8f7776f0f03b2180f436c4ac90c95521` · blob `049c0a7ac5739b915735ae23159a9185f563500c`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `f43ba26524a245446bbda95cb4e9400121432f5b` · blob `c8b35762b93d5da2cbc76a97222b0f61b3ce314d`
 - Draft PR: [#32](https://github.com/krumingo/BEG_Worck/pull/32) · exact head `67c172e3066a53d0d6fa5c594997e2b7af0d1747`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/32) · head `67c172e3066a53d0d6fa5c594997e2b7af0d1747`
 - Dispatch session: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF · dispatch state **NONE**
