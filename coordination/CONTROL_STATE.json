@@ -1,63 +1,59 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-29T15:12:06Z",
+  "validated_at": "2026-09-29T16:29:29Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "6d66f11fc847bb9f3b27cbd3454ed997807d7c22",
-  "control_state_commit_sha": "3ba3bb670359a9b168f6fa4d4d25509f98c11a35",
-  "now": "Codex published CHANGES_REQUESTED for W0-03E/C01; no correction has been dispatched",
+  "active_source_commit_sha": "e7ea61ced9a737c4b414647e91591348bd19dcd9",
+  "control_state_commit_sha": "a47436b41c4eb762a156117d6d42c5b726b68a3c",
+  "now": "Codex prepared the authorized W0-03E/C02 correction; Send is pending and Claude has not started",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03E",
-  "cycle_id": "C01",
+  "cycle_id": "C02",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-03E/C01/GPT",
-      "waiting_for": "Krum relay of published Codex verdict",
-      "updated_at": "2026-09-29T15:12:06Z"
+      "work_id": "W0-03E/C02/GPT",
+      "waiting_for": "bounded correction outcome",
+      "updated_at": "2026-09-29T16:29:29Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-03E/C01/CX",
-      "waiting_for": "GPT decision on bounded correction",
-      "updated_at": "2026-09-29T15:12:06Z"
+      "state": "WORKING",
+      "work_id": "W0-03E/C02/CX",
+      "waiting_for": null,
+      "updated_at": "2026-09-29T16:29:29Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-03E/C01/CL",
-      "waiting_for": "Codex independent review",
-      "updated_at": "2026-09-29T04:25:28Z"
+      "state": "WAITING",
+      "work_id": "W0-03E/C02/CL",
+      "waiting_for": "confirmed direct C02 Send",
+      "updated_at": "2026-09-29T16:29:29Z"
     }
   },
-  "current_work_id": "W0-03E/C01/CX",
-  "state": "CHANGES_REQUESTED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT decision on bounded correction",
+  "current_work_id": "W0-03E/C02/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": null,
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 32,
   "pr_head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
   "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF",
-  "last_handoff": {
-    "url": "https://github.com/krumingo/BEG_Worck/pull/32",
-    "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
-    "at": "2026-09-28T20:51:46Z"
-  },
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
+  "last_handoff": null,
   "last_review": {
     "path": "coordination/REVIEWS/W0-03E.md",
     "blob_sha": "957310b7d0129e9b351c4c2154727ff3be563cde",
@@ -65,29 +61,29 @@
     "verdict": "CHANGES_REQUESTED"
   },
   "relay": {
-    "last_agent": "CODEX",
-    "last_event": "W0-03E/C01 exact-head independent review",
-    "last_result": "CHANGES_REQUESTED",
-    "required_by_krum": true,
-    "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Krum forwards the published exact-head Codex verdict to GPT; no correction was dispatched.",
+    "last_agent": "GPT",
+    "last_event": "W0-03E/C02 bounded correction authorized",
+    "last_result": "AUTHORIZED",
+    "required_by_krum": false,
+    "from": "GPT",
+    "to": "CODEX",
+    "status": "RECEIVED",
+    "instruction": "Krum's bounded correction authorization reached Codex; Claude Send remains pending action-time confirmation.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
-    "updated_at": "2026-09-29T15:12:06Z"
+    "updated_at": "2026-09-29T16:29:29Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "FORWARD CODEX VERDICT TO GPT",
+  "requires_krum_reason": "CONFIRM SEND TO CLAUDE",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "d94073d138f37a838e11a770c652d5332cb1f1b5",
+    "active_blob_sha": "06039c24456e8f8e5244396f339343f0264a459d",
     "review_path": "coordination/REVIEWS/W0-03E.md",
     "review_blob_sha": "957310b7d0129e9b351c4c2154727ff3be563cde",
     "canonical_docs": [
@@ -101,7 +97,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-09-29T15:12:06Z",
+  "updated_at": "2026-09-29T16:29:29Z",
   "history": [
     {
       "event_id": "w0-03e-c01-assignment-intent",
@@ -158,6 +154,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
       "source_commit_sha": "787f41e6803fb7f9a218b67a51edc945699d313c",
       "summary": "Independent exact-head review found financial recipient identity mismatch and incomplete assigned legacy import/export/report adapter coverage; 110 focused and 627 adjacent in-memory tests passed, but no independent real-Mongo gate. No correction dispatched."
+    },
+    {
+      "event_id": "w0-03e-c02-correction-assignment-intent",
+      "occurred_at": "2026-09-29T16:29:29Z",
+      "task_id": "W0-03E",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
+      "source_commit_sha": "e7ea61ced9a737c4b414647e91591348bd19dcd9",
+      "summary": "Krum authorized bounded technical correction #1 for both C01 findings in the same Draft PR #32 and branch. Canonical C02 assignment published; dispatch is PENDING, no Claude Send or start observed."
     }
   ]
 }
