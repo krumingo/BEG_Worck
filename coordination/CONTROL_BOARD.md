@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-30T17:23:38Z · CONTROL STATE: **VALID** as of 2026-09-30T17:23:38Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-30T17:34:46Z · CONTROL STATE: **VALID** as of 2026-09-30T17:34:46Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03E / C03 / CLAUDE / **WORKING**
-LAST: CODEX — W0-03E/C03 dispatched to Claude after the single confirmed Send / DISPATCHED
-RELAY: NO_RELAY_NEEDED · CODEX → CLAUDE
-NOW: Claude is working on the final W0-03E/C03 bounded correction
-TRANSITION: CLAUDE_START / OBSERVED · verdict NONE
-NEXT: CODEX
+CURRENT: W0-03E / C03 / CODEX / **REVIEW**
+LAST: CLAUDE — W0-03E/C03 final exact-head implementation HANDOFF / HANDOFF
+RELAY: NO_RELAY_NEEDED · CLAUDE → CODEX
+NOW: Codex is independently reviewing the entire W0-03E PR #32 at the C03 exact head
+TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NEXT: GPT
 KRUM ACTION: NONE
-WAITING FOR: —
+WAITING FOR: Independent whole-PR review and disposable real-Mongo gate
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-03E
 CYCLE: C03
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: WORKING
-NEXT: CODEX
-WAITING_FOR: NONE
+STATE: REVIEW
+NEXT: GPT
+WAITING_FOR: Independent whole-PR review and disposable real-Mongo gate
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03E | C03 | WAITING | WAITING | WORKING | CLAUDE | — | WORKING |
+| W0-03E | C03 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent whole-PR review and disposable real-Mongo gate | REVIEW |
 
 ## Agent cards
 
@@ -38,22 +38,21 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E/C03/GPT | Claude final C03 HANDOFF and independent Codex review | 2026-09-30T17:23:38Z |
-| CODEX | WAITING | W0-03E/C03/CX | Claude final C03 exact-head HANDOFF and session end | 2026-09-30T17:23:38Z |
-| CLAUDE | WORKING | W0-03E/C03/CL | — | 2026-09-30T17:22:27Z |
+| GPT | WAITING | W0-03E/C03/GPT | Codex independent exact-head C03 verdict | 2026-09-30T17:34:46Z |
+| CODEX | REVIEWING | W0-03E/C03/CX | Independent whole-PR review and disposable real-Mongo gate | 2026-09-30T17:34:46Z |
+| CLAUDE | HANDOFF_READY | W0-03E/C03/CL | Codex independent C03 review | 2026-09-30T17:34:46Z |
 
-GPT → Codex → **Claude (WORKING)** → Codex → GPT
+GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `1f2ac00ab44723d55a28de40887934e920102ba3` · blob `38d0dd56fc76d6a9e7632ff7fd8dd55bea4f5c23`
-- Review: `coordination/REVIEWS/W0-03E.md` · blob `828b8ca3a825c1998a6d15dca096b22cc112d51d` · verdict **CHANGES_REQUESTED** on `117072c4529cf29af716c5673ad106ab2a0d465b`
-- Draft PR: [#32](https://github.com/krumingo/BEG_Worck/pull/32) · exact head `117072c4529cf29af716c5673ad106ab2a0d465b`
-- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/32) · head `117072c4529cf29af716c5673ad106ab2a0d465b`
-- Dispatch session: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF · dispatch state **RUNNING**
+- ACTIVE: `coordination/ACTIVE.md` · source commit `cdfeec3cb4c656f37ff2c12578c0cb295ec30931` · blob `217873d85e475eab437628f0de703bb116611ba2`
+- Draft PR: [#32](https://github.com/krumingo/BEG_Worck/pull/32) · exact head `47a0c59a4eac974d7bab144f71c076a5748243d0`
+- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/32) · head `47a0c59a4eac974d7bab144f71c076a5748243d0`
+- Dispatch session: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF · dispatch state **NONE**
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `e7957b71`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `e0ce9c2a`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` @ `efa5f37c`, `docs/architecture/TENANCY_MODEL.md` @ `93997df2`, `docs/flows/FLOW-032.md` @ `94f6be34`, `docs/flows/FLOW-002.md` @ `5594ffa4`, `docs/flows/FLOW-040.md` @ `3d2ce96e`
-- Wave/Flow: `W0` / `FLOW-032` · progress: **IMPLEMENTATION / STAGE_ONLY** (no proven percentage)
+- Wave/Flow: `W0` / `FLOW-032` · progress: **REVIEW / STAGE_ONLY** (no proven percentage)
 - `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
@@ -73,5 +72,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-09-30T04:59:29Z | C02 | — | REVIEW | CODEX | CHANGES_REQUESTED | `117072c4` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547) |
 | 2026-09-30T17:09:42Z | C03 | — | ASSIGNMENT | CODEX | WORKING | `117072c4` | [evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md) |
 | 2026-09-30T17:22:27Z | C03 | — | DISPATCH | CLAUDE | WORKING | `117072c4` | [evidence](https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF) |
+| 2026-09-30T17:34:46Z | C03 | — | HANDOFF | CLAUDE | HANDOFF | `47a0c59a` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32) |
 
-**Gate:** W0-03E is WORKING. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-03E is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
