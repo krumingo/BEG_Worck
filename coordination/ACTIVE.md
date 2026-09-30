@@ -1,18 +1,18 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E/C03 REVIEW / VERDICT READY, PUBLICATION PENDING
+Status: W0-03E/C03 BLOCKED — FINAL CORRECTION CYCLE EXHAUSTED
 Current-Agent: CODEX
-Current-State: REVIEW
+Current-State: BLOCKED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: BLOCKED
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT (CODEX_VERDICT READY; not published)
-Now: Codex review and independent real-Mongo gate are complete; final C03 verdict is prepared but not yet published
+Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
+Now: Codex published final C03 BLOCKED verdict after independent exact-head review and disposable real-Mongo gate
 Next-Agent: GPT
-Relay-State: NO_RELAY_NEEDED
+Relay-State: NOT_SENT
 Relay-From: CODEX
-Relay-To: CLAUDE
-Krum-Action: NONE
+Relay-To: GPT
+Krum-Action: FORWARD FINAL BLOCKER TO GPT
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
 Dispatch-Observed-At: 2026-09-30T17:22:27Z (C03 message visible; Claude running git status)
@@ -27,13 +27,13 @@ Correction-Base-SHA: 117072c4529cf29af716c5673ad106ab2a0d465b
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (C03 final HANDOFF in PR body at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
-Review: C02 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547; exact head 117072c4529cf29af716c5673ad106ab2a0d465b. Independent real-Mongo reproduction found a cross-tenant `/prices` invoice join. This is prior-cycle evidence, not a C03 verdict.
-Prepared-Verdict: BLOCKED — unpublished. Independent C03 review reproduced cross-tenant project-name leakage in the in-scope offer XLSX export at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. Do not treat this as a published verdict until the review artifact and PR comment exist. No C04 is authorized.
+Review: C03 BLOCKED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408; exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. Independent review reproduced cross-tenant project-name leakage in the in-scope offer XLSX export despite 861/861 disposable real-Mongo regression tests passing.
+Final-Verdict: BLOCKED — FINAL CORRECTION CYCLE EXHAUSTED. The C03 review artifact and PR comment are published. No C04, merge, deploy or next-stage dispatch.
 HANDOFF-Observed-At: 2026-09-30T17:34:46Z for C03 (Claude session finished; PR #32 body carries final HANDOFF at 47a0c59a4eac974d7bab144f71c076a5748243d0)
 Predecessor-Task-ID: W0-03E/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
 Predecessor-Integration: NONE; PR #32 remains Draft and unmerged
-Authorization: Krum authorized W0-03E/C03 as final bounded correction #2 of 2 in the same branch and Draft PR #32, then gave explicit one-time Computer Use Send confirmation. The canonical C03 assignment from queue SHA 07cda0e9fccaf22db2d86c7b257a3a9df4c2d635 was sent once in the existing Code Cloud session; its message appeared and Claude was observed running git status at 2026-09-30T17:22:27Z. Claude ended the session and published a final exact-head HANDOFF in PR #32 at 47a0c59a4eac974d7bab144f71c076a5748243d0. Codex review has started but no C03 verdict exists yet. No Routine, duplicate session, merge or deploy.
+Authorization: Krum authorized W0-03E/C03 as final bounded correction #2 of 2 in the same branch and Draft PR #32, then gave explicit one-time Computer Use Send confirmation. The canonical C03 assignment from queue SHA 07cda0e9fccaf22db2d86c7b257a3a9df4c2d635 was sent once in the existing Code Cloud session; its message appeared and Claude was observed running git status at 2026-09-30T17:22:27Z. Claude ended the session and published a final exact-head HANDOFF in PR #32 at 47a0c59a4eac974d7bab144f71c076a5748243d0. Codex completed independent review and published BLOCKED at the exact head. No Routine, duplicate session, merge or deploy.
 Correction-cycles: C02 was correction #1; C03 is correction #2 and final. A further correctness defect means BLOCKED; no C04 automatically or otherwise under this authorization.
 
 ## Canonical W0-03E/C03 final bounded correction #2 — HANDOFF published, Codex reviewing
