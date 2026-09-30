@@ -205,7 +205,9 @@ async def list_advances(
         if adv.get("recipient_name"):
             adv["user_name"] = adv["recipient_name"]
         elif adv.get("user_id"):
-            u = await db.users.find_one({"id": adv["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+            # W0-03E/C03: the recipient's name comes only from this org's users
+            u = await db.users.find_one({"id": adv["user_id"], "org_id": user["org_id"]},
+                                        {"_id": 0, "name": 1, "email": 1})
             adv["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
         else:
             adv["user_name"] = adv.get("guest_name") or "—"

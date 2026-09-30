@@ -27,7 +27,9 @@ run makes execution refuse the plan as stale.
 never the key of a canonical record: it selects which legacy rows belong to the
 tenant the W0-01 resolver already chose, and it is written into ``legacy_refs``
 so the old documents keep resolving. Legacy rows of another ``org_id`` in the
-same database, and rows without one, are counted and excluded — never guessed.
+same database are neither read nor counted (their volume is that tenant's
+data); rows without any ``org_id`` are counted as data quality and excluded —
+never guessed.
 """
 import hashlib
 import json
@@ -124,10 +126,12 @@ async def load_state(db, tenant_id: str, org_id: str, collections: List[str]) ->
     for name in collections:
         owned = await db[name].find({"org_id": org_id}, {"_id": 0}).to_list(None)
         docs[name] = sorted(owned, key=lambda d: str(d.get("id") or ""))
-        total = await db[name].count_documents({})
+        # W0-03E/C03: no count of OTHER orgs' documents — in a shared legacy
+        # database that would disclose another tenant's data volume. Only the
+        # rows that belong to no tenant at all are reported, as data quality.
         unowned = await db[name].count_documents({"$or": [{"org_id": None},
                                                           {"org_id": {"$exists": False}}]})
-        excluded[name] = {"other_org": total - len(owned) - unowned, "no_org_id": unowned}
+        excluded[name] = {"no_org_id": unowned}
     masters: Dict[str, List[Dict[str, Any]]] = {}
     for etype in sorted({ls.source(n).entity_type for n in collections}):
         masters[etype] = await db["md_" + etype].find(

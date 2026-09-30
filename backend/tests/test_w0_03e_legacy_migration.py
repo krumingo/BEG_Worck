@@ -351,7 +351,7 @@ def test_other_orgs_and_ownerless_rows_are_counted_and_never_planned():
         await db["users"].insert_one({"id": "u-noorg", "first_name": "X"})
         return await dry(db)
     plan = run(body())
-    assert plan["inventory"]["users"]["other_org"] == 4
+    assert "other_org" not in plan["inventory"]["users"]           # C03: no count of B's data
     assert plan["inventory"]["users"]["no_org_id"] == 1
     assert all(i["legacy_id"] != "u-noorg" for i in plan["items"])
     assert len([i for i in plan["items"] if i["collection"] == "users"]) == 3

@@ -71,7 +71,7 @@ GET  legacy/resolve         → стар id → reverse row → Master → merge
 
 - **Tenant.** Само от W0-01 resolver-а. Legacy `org_id` идва от registry mapping-а на контекста
   (`TenantContext.org_id`) и е само доказателство: избира кои legacy редове са на tenant-а и се
-  пише в `legacy_refs`. Редове с друг `org_id` или без `org_id` се броят и се изключват. `org_id`
+  пише в `legacy_refs`. Редове с друг `org_id` не се четат и не се броят (C03: броят им е данни на другия tenant); редове без `org_id` се броят като data quality и се изключват. `org_id`
   от caller-а, различен от tenant-а → **отказ** (`LEGACY_ORG_MISMATCH`); `tenant_id`/`org_id` в
   body → отказ.
 - **Reverse reference.** `md_legacy_refs`, един ред на legacy документ, `_id` =
@@ -143,12 +143,13 @@ Owner/Admin чрез пълния си набор; `office` получава с�
 
 ## 8. Доказателства
 
-| Suite | Резултат (C02 head) |
+| Suite | Резултат (C03 head) |
 |---|---|
 | `test_w0_03e_legacy_migration.py` (mongomock-motor) | 26 passed |
 | `test_w0_03e_legacy_routes.py` | 84 passed |
 | `test_w0_03e_c02_corrections.py` (находки 1 и 2) | 25 passed |
-| `test_w0_03e_real_mongo.py` (MongoDB 8.0.23, loopback, disposable DB) | 6 passed |
+| `test_w0_03e_c03_isolation.py` (C03, A/B isolation × off/shadow/enforce) | 20 passed |
+| `test_w0_03e_real_mongo.py` (MongoDB 8.0.23, loopback, disposable DB) | 8 passed |
 | Съседни W0-03A–D, W0-01, W0-02, W0-04 | без регресия (точните числа — в PR HANDOFF) |
 
 ## 9. Технически интерпретации за ревю (не бизнес решения)
@@ -207,3 +208,47 @@ Owner/Admin чрез пълния си набор; `office` получава с�
 scoping-ът на look-up-ите в справките важи и в `off`, защото променя отговора само когато
 id на чужда фирма би показал нейното име. Няма път от инвентара, който да изисква нов
 архитектурен избор.
+
+## 12. C03 — tenant isolation на join-ове и look-up-и в обхвата
+
+Находка от C02 ревюто (възпроизведена на реален Mongo): `/prices` съпоставяше `invoice_lines`
+на tenant-а, но join-ваше `invoices` по гол `invoice_id == id` — фактура на tenant B със същото
+id връщаше своя номер, дата и доставчик в отговора на tenant A. Поправено; и всеки join/look-up
+в обхвата е проверен. Tenant predicate = `org_id` от **автентикираната сесия** (server-side,
+`user["org_id"]`), никога от заявката; в `enforce` адаптерите изискват и W0-01 контекстът да
+съвпада с него.
+
+| Път | Колекция | Ключ | Tenant predicate | Резултат |
+|---|---|---|---|---|
+| `GET /prices` | `invoice_lines` | — (`$match`) | `org_id` | SAFE |
+| `GET /prices` | `invoices` (`$lookup`) | `invoice_id` → `id` | `$filter` върху join-натия масив по `org_id` **преди** всеки `$match`/`$project`; чужда фактура → редът остава без данни за фактура | **FIXED (C03)** |
+| `GET /prices` | `counterparties` / `users` / `projects` / `warehouses` | `supplier_id` / `purchased_by_user_id` / `ref_id` | `org_id` | SAFE (C02) |
+| `GET /prices` | `md_legacy_refs`/Master (annotation) | `supplier_id`, `purchased_by_user_id` | W0-01 tenant + reverse-ref `_id` на tenant-а | SAFE |
+| `GET /reports/turnover-by-counterparty` | `invoices` (aggregate) | — | `org_id` в `$match` | SAFE |
+| същото | `counterparties` | `_id` на групата | `org_id` | SAFE (C02) |
+| `GET /reports/turnover-by-counterparty/{id}/invoices` | `invoices` | `supplier_counterparty_id` | `org_id` | SAFE |
+| същото | `counterparties` | path id | `org_id` | SAFE (C02) |
+| `GET /reports/turnover-by-client` | `invoices` (aggregate) | — | `org_id` | SAFE |
+| същото | `counterparties` | `_id` на групата | `org_id` | SAFE (C02) |
+| `GET /reports/company-finance-summary`, `-compare`, `-export` | `invoices`, `cash_transactions`, `overhead_transactions`, `bonus_payments`, `payment_slips` (`paid_labor_v3`) | — | `org_id` | SAFE (не е идентичностен) |
+| `GET /reports/company-finance-export` | `organizations` | собственото `org_id` | `id == org_id` на сесията | SAFE |
+| `GET /smr-analyses/{id}/export-excel` | `smr_analyses` | path id | `org_id` | SAFE (не е идентичностен) |
+| `POST /projects/{id}/import-client-invoice` | `projects`, `companies`, `persons`, `clients` | `owner_id` | `org_id` | SAFE; запис в проекта FIXED (C02) |
+| `POST /offers/import-confirm` | `projects`, `offers` (номер) | `project_id` | `org_id` | SAFE |
+| `GET /advances` | `users` (име на получател) | `advance.user_id` | липсваше | **FIXED (C03)** |
+| `POST /advances` (C02 guard) | `md_person`, `md_legacy_refs`, `users`, `financial_accounts` | `person_id`, `user_id`, `account_id` | W0-01 tenant / `org_id` | SAFE |
+| `POST /ocr-invoice/*` | `media_files`, `counterparties` | `media_id`, `supplier_id` | `org_id`; enforce отказ преди запис | SAFE (C02) |
+| `POST /assets/batch-intake/recognize` | `asset_items`, `asset_item_types` | име / етикет | `org_id` | SAFE |
+| `legacy_adapter._resolve_row`, `annotate_refs`, `resolve_legacy` | `md_legacy_refs`, `md_<type>` | `_id` = sha256(tenant, collection, id); redirect chain | `tenant_id`; `org_id` на реда = на tenant-а; обратната препратка задължителна | SAFE |
+| `legacy_adapter.count_usage`, `guarded_identity_delete` | 46 референтни полета | legacy id | `org_id` | SAFE |
+| `legacy_adapter.advance_mapping_report` | `advances`, `persons`, `users`, `md_person`, `md_legacy_refs` | — | `org_id` / `tenant_id` | SAFE |
+| `legacy_plan.load_state` (dry run) | 15 legacy колекции | — | `org_id`; брояч на **чужди** документи (`other_org`) | **FIXED (C03)**: броят на документите на друг tenant вече не се отчита |
+| `legacy_migration` reconcile / rollback / mapping | legacy + `md_*` | — | `org_id` / `tenant_id` | SAFE |
+| `intake_hooks` (OCR/AI/Excel/offer) | `md_pending_mapping` | нормализиран текст | W0-01 tenant | SAFE; само pending |
+
+Няма BLOCKED ред. Регресии: `tests/test_w0_03e_c03_isolation.py` (A/B с еднакви id на клиент,
+фирма, потребител, склад, фактура и контрагент; фактура на A към id само в B; агрегация, в
+която B има по-големи суми; подправен B `legacy_ref`; немапнат получател и несъвпадащ човек;
+drill-down; xlsx експорт; импорт на клиентски данни, прочетен обратно) във всеки от `off`,
+`shadow`, `enforce`; същите пътища на реален MongoDB в `test_w0_03e_real_mongo.py`
+(`test_c03_*`). Без `$filter` 6 теста в паметта и реалният тест падат.

@@ -219,3 +219,102 @@ def test_c02_recipient_identity_and_report_refs_on_a_real_server(monkeypatch):
         ok_chain, why = verify_chain(await events(db))
         assert ok_chain, why
     scratch(body)
+
+
+def test_c03_reports_imports_and_adapters_are_tenant_isolated_on_a_real_server(monkeypatch):
+    """The reproduced C02 leak, on the server that reproduced it: the actual
+    route pipelines run against MongoDB, with tenant B holding the same ids."""
+    from app.master_data.deps import ENV_MODE
+    from app.routes import hr, projects, reports
+    from tests.test_w0_03e_c03_isolation import ADMIN, _world, assert_no_b, b_canonical_ids_async
+
+    async def body(db, _name):
+        await _world(db)
+        for module in (reports, hr, projects):
+            monkeypatch.setattr(module, "db", db)
+        b_ids = await b_canonical_ids_async(db)
+        user = dict(ADMIN)
+        for mode in ("off", "shadow", "enforce"):
+            monkeypatch.setenv(ENV_MODE, mode)
+            if mode == "enforce":
+                ctx = Ctx(db)
+
+                async def resolved(u):
+                    return ctx
+                monkeypatch.setattr(la, "context_for", resolved)
+            prices = await reports.get_price_history(
+                user=user, page=1, page_size=20, sort_by="created_at", sort_dir="desc", search=None,
+                item_id=None, supplier_id=None, project_id=None, warehouse_id=None, date_from=None,
+                date_to=None)
+            rows = {r["line_id"]: r for r in prices["items"]}
+            assert rows["line-a"]["invoice_no"] == "A-INV-1"
+            assert "invoice_no" not in rows["line-a2"]
+            filtered = await reports.get_price_history(
+                user=user, page=1, page_size=20, sort_by="created_at", sort_dir="desc", search=None,
+                item_id=None, supplier_id="cp-b-hidden-supplier", project_id=None, warehouse_id=None,
+                date_from=None, date_to=None)
+            assert filtered["items"] == [] and filtered["total"] == 0
+            turnover = await reports.get_turnover_by_counterparty(
+                user=user, page=1, page_size=20, sort_by="sum_total", sort_dir="desc",
+                counterparty_id=None, date_from=None, date_to=None, type="purchases")
+            assert turnover["grand_totals"]["total_amount"] == 10
+            drill = await reports.get_counterparty_invoices(
+                counterparty_id="cp1", user=user, page=1, page_size=20, date_from=None,
+                date_to=None, type="all")
+            clients = await reports.get_turnover_by_client(
+                user=user, page=1, page_size=20, sort_by="sum_total", sort_dir="desc",
+                client_id=None, date_from=None, date_to=None)
+            advances = await hr.list_advances(user=user, user_id=None, status=None)
+            assert [a["user_name"] for a in advances if a["id"] == "adv-foreign-user"] == ["Unknown"]
+            imported = await projects.import_client_invoice(project_id="pr-x", user=user)
+            assert imported["invoice_details"]["company_name"] == "А Клиент ООД"
+            for payload in (prices, filtered, turnover, drill, clients, advances, imported):
+                assert_no_b(None, payload, b_ids=b_ids)
+            if mode == "enforce":
+                assert rows["line-a"]["supplier_master_ref"]["status"] == "mapped"
+        # the database proves the scoping did not cross in either direction
+        theirs = await db["projects"].find_one({"id": "pr-x", "org_id": ORG_B})
+        assert "invoice_details" not in theirs
+    scratch(body)
+
+
+def test_c03_pending_mapping_decision_stays_inside_the_tenant_on_a_real_server():
+    async def body(db, _name):
+        from tests.test_w0_03e_c03_isolation import _world, assert_no_b, b_canonical_ids_async
+        await _world(db)
+        ctx = Ctx(db, user_id="office-1")
+        b_ids = await b_canonical_ids_async(db)
+        u3 = (await la.resolve_legacy(ctx, collection="users", legacy_id="u3", mode=MODE_ENFORCE,
+                                      repository=repo(db)))["canonical_id"]
+        out = await lm.resolve_mapping(ctx, collection="users", legacy_id="u2", decision="map",
+                                       canonical_entity_id=u3, idempotency_key="d1",
+                                       confirmation=True, approval_id="APR-d1", mode=MODE_ENFORCE,
+                                       repository=repo(db), approval_verifier=TrustedTestVerifier())
+        assert out.performed and out.entity_id == u3
+        # tenant B's identical legacy id stays pending in B, untouched by A's decision
+        b_row = await db[lp.REFS_COLLECTION].find_one({"_id": lp.ref_row_id(T_B, "users", "u2")})
+        assert b_row["status"] == "pending" and b_row["entity_id"] is None
+        # a B Master cannot be the target of A's decision
+        b_person = await db["md_person"].find_one({"tenant_id": T_B, "status": "active"})
+        with pytest.raises(lm.MasterDataRefused):
+            await lm.resolve_mapping(ctx, collection="persons", legacy_id="p1", decision="map",
+                                     canonical_entity_id=b_person["id"], idempotency_key="d2",
+                                     confirmation=True, approval_id="APR-d2", mode=MODE_ENFORCE,
+                                     repository=repo(db), approval_verifier=TrustedTestVerifier())
+        # ...and the refusal says exactly what it says for an id that exists nowhere:
+        # A learns nothing about B (no existence oracle)
+        with pytest.raises(lm.MasterDataRefused) as ghost:
+            await lm.resolve_mapping(ctx, collection="persons", legacy_id="p1", decision="map",
+                                     canonical_entity_id="no-such-person", idempotency_key="d3",
+                                     confirmation=True, approval_id="APR-d3", mode=MODE_ENFORCE,
+                                     repository=repo(db), approval_verifier=TrustedTestVerifier())
+        refusals = [e for e in await events(db, T_A)
+                    if e["action"] == "master_data.legacy_mapping.resolve_refused"]
+        assert [r["reason"].replace(b_person["id"], "X") for r in refusals[:1]] == [
+            str(ghost.value).replace("no-such-person", "X")]
+        for tenant in (T_A, T_B):
+            ok, why = verify_chain(await events(db, tenant))
+            assert ok, why
+        # the only B id in A's audit is the one A's caller itself submitted
+        assert_no_b(None, await events(db, T_A), b_ids=b_ids - {b_person["id"]})
+    scratch(body)

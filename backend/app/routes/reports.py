@@ -57,6 +57,15 @@ async def get_price_history(
             "as": "invoice"
         }
     })
+    # W0-03E/C03: the join is by the bare invoice id, so it can reach another
+    # tenant's invoice that shares that id. Keep only invoices of THIS org (from
+    # the authenticated session, never from the request) BEFORE anything is
+    # matched or projected from them; a line whose invoice is not this tenant's
+    # keeps its own fields and gets no invoice data (the existing
+    # preserveNullAndEmptyArrays contract). $filter works on every MongoDB
+    # version and in the test double, unlike a $lookup sub-pipeline.
+    pipeline.append({"$addFields": {"invoice": {"$filter": {
+        "input": "$invoice", "as": "inv", "cond": {"$eq": ["$$inv.org_id", user["org_id"]]}}}}})
     pipeline.append({"$unwind": {"path": "$invoice", "preserveNullAndEmptyArrays": True}})
     
     # Filter by supplier
