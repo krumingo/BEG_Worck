@@ -1,39 +1,59 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E/C02 CHANGES_REQUESTED / CODEX REVIEW PUBLISHED
+Status: W0-03E/C03 PENDING / FINAL BOUNDED CORRECTION #2 OF 2
 Current-Agent: CODEX
-Current-State: CHANGES_REQUESTED
-Claude-State: HANDOFF_READY
-Codex-State: WAITING
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
-Now: Codex published CHANGES_REQUESTED on W0-03E/C02; a cross-tenant /prices join remains and no correction #2 has been dispatched
-Next-Agent: GPT
-Relay-State: NOT_SENT
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT (ASSIGNMENT; no Claude Send or start observed)
+Now: Codex prepared the final W0-03E/C03 bounded correction; Claude Send is pending confirmation
+Next-Agent: CLAUDE
+Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: FORWARD CODEX VERDICT TO GPT
-Dispatch-State: NONE
+Relay-To: CLAUDE
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
 Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
-Dispatch-Observed-At: 2026-09-30T04:29:47Z (C02 Claude running git status after the single Send)
+Dispatch-Observed-At: NONE for C03; C02 observed at 2026-09-30T04:29:47Z
 Task-ID: W0-03E
-Cycle-ID: C02
+Cycle-ID: C03
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-legacy-migration
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/32 (Draft)
 PR-Head: 117072c4529cf29af716c5673ad106ab2a0d465b
-Correction-Base-SHA: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
+Correction-Base-SHA: 117072c4529cf29af716c5673ad106ab2a0d465b
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (C02 final HANDOFF in PR body at exact head)
-Review: C02 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547; exact head 117072c4529cf29af716c5673ad106ab2a0d465b. Independent real-Mongo reproduction found a cross-tenant `/prices` invoice join. C01 review history remains in the same artifact. No correction #2 dispatched.
+Review: C02 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547; exact head 117072c4529cf29af716c5673ad106ab2a0d465b. Independent real-Mongo reproduction found a cross-tenant `/prices` invoice join. This is prior-cycle evidence, not a C03 verdict.
 HANDOFF-Observed-At: 2026-09-30T04:46:03Z for C02 (Claude session finished, PR #32 body carries final HANDOFF at 117072c4529cf29af716c5673ad106ab2a0d465b)
 Predecessor-Task-ID: W0-03E/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
 Predecessor-Integration: NONE; PR #32 remains Draft and unmerged
-Authorization: Krum accepted the C01 verdict, authorized bounded technical correction #1 and gave action-time one-shot Computer Use Send confirmation on 2026-09-30. The exact C02 assignment from queue SHA 2deb7ec7aa5aa995ac19608b362d803f0eb796dc was sent once in the existing Code Cloud session above; its message appeared and Claude was observed running git status. The C01 HANDOFF is historical evidence only. No Routine, duplicate session, merge or deploy.
-Correction-cycles: up to two bounded technical cycles only after independent exact-head CHANGES_REQUESTED, without new business rules or expanded scope; a third correctness failure is BLOCKED.
+Authorization: Krum authorized W0-03E/C03 as final bounded correction #2 of 2 in the same branch and Draft PR #32 through the supplied 2026-09-30 instruction. The C02 verdict and real-Mongo reproduction are published evidence. C03 Code Cloud Send and observed start have NOT happened; action-time Computer Use Send confirmation is pending. No Routine, duplicate session, merge or deploy.
+Correction-cycles: C02 was correction #1; C03 is correction #2 and final. A further correctness defect means BLOCKED; no C04 automatically or otherwise under this authorization.
+
+## Canonical W0-03E/C03 final bounded correction #2 — PENDING, not sent
+
+**Identity and gate.** Repository `krumingo/BEG_Worck`, Task-ID `W0-03E`, Cycle-ID `C03`, same branch `codex/w0-03e-legacy-migration`, same Draft PR #32 against `main`. Correction base and expected current PR head: **`117072c4529cf29af716c5673ad106ab2a0d465b`**. STOP on head or branch mismatch, duplicate active dispatch, or a material requirement conflict. This is the last authorized technical correction; there is no C04. Before implementation, read `CLAUDE.md`, this ACTIVE file and `coordination/REVIEWS/W0-03E.md`, original C01 and C02 assignments below, `docs/architecture/IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` especially §§4.5 and 6, `TENANCY_MODEL.md`, applicable locked FLOW/D, and the actual PR #32 base-to-head diff. Do not treat historical C02 HANDOFF or review as C03 completion.
+
+**Fix the proven `/prices` leak, fail closed.** `backend/app/routes/reports.py` currently scopes `invoice_lines.org_id` but joins `invoices` by bare `invoice_id=id`, allowing tenant B's invoice fields in tenant A's response when IDs collide. Scope every `/prices` invoice/customer/counterparty/company/user lookup by the **server-resolved** tenant, never caller-supplied `org_id`; no global-ID or name fallback. A missing tenant-consistent relation must be omitted or refused according to the existing route contract, without foreign data or references. Add a deterministic A/B duplicate-ID regression proving A's response contains no B name, value or canonical/legacy reference, including `off`, `shadow` and `enforce` modes as applicable.
+
+**Bounded audit and correction of the assigned report/export surface.** Inspect the identity-bearing paths already in W0-03E scope: `/prices`, turnover by counterparty/client, drilldowns, related finance/report lookup helpers, identity-bearing export adapters, and offer/client-invoice report projections where those helpers are used. For each in-scope join or lookup publish `path | collection | join key | tenant predicate | result` with result `SAFE`, `FIXED`, `NOT APPLICABLE` or `BLOCKED`; never `ASSUMED SAFE`. No join by `id`, name, `client_id`, `company_id`, `user_id`, `warehouse_id` or another legacy key may cross a tenant boundary. This is not a full-repo rewrite; if a named in-scope path cannot be made safe without an architectural/business choice, STOP with exact evidence instead of narrowing scope or claiming PASS.
+
+**Adapter helper check.** Inspect C01/C02 legacy-ref resolution, annotations, report/import adapters, AI/OCR pending paths, financial recipient resolution, client/counterparty/company resolution and warehouse/location resolution. Each must use server-resolved tenant context, tenant-scoped queries, cross-tenant legacy-ref refusal and no global-ID or name-based automatic match. Preserve the accepted C02 Advance/Loan identity guard, no financial write on refusal and auditable denial; do not change financial or merge/unmerge business rules.
+
+**Security regressions.** Cover same client, company, user and warehouse IDs in tenant A/B; an A invoice pointing to an ID present only in B; foreign side of a report aggregation present only in B; forged B `legacy_ref`; unmapped recipient; mapped-person mismatch; report drilldown and export leakage; and an import-produced reference read through a report. For every case prove tenant B data does not appear in A response, audit, adapter result or canonical reference. Targeted deterministic and real-Mongo tests may share fixtures, but record each scenario's actual coverage and any gap honestly.
+
+**Implementation HANDOFF.** Work only in the authorized W0-03E correction surface and tests on the same branch/PR. Run focused W0-03E and adjacent W0-03 regressions with exact collected/passed/failed/skipped. Use only a disposable local MongoDB bound to `127.0.0.1` with separate temporary dbpath for real-Mongo `/prices`, turnover, legacy-ref isolation, recipient identity, migration plan/resume, pending mapping, annotations and export/report coverage; no skipped/unrun result may be called PASS. Stop Mongo, drop temporary DB and verify cleanup. Publish the actual diff, coverage table, exact new PR head, test evidence, remaining limitations and **final C03 HANDOFF** in PR #32; then STOP Claude for independent Codex review. Intermediate push is not HANDOFF.
+
+**Codex-only closure after HANDOFF.** Only after the Claude session ends and a stable exact-head HANDOFF is published, Codex independently reviews the **entire PR head**, not merely C03 diff: migration dry-run purity, plan, idempotent resume/checkpoint/retry/reconciliation; Person/Organization roles/Activity/Item/Asset/Location identity, refs/aliases/pending mapping; proven financial recipient and denial audit; assigned reads/writes/import/export/deletion paths and tenant isolation; W0-02 permission, W0-04 AuditEvent, W0-07 fail-closed boundary and safe `MASTER_DATA_MODE`. Codex repeats focused, adjacent and disposable real-Mongo gates. If any correctness defect remains, publish `W0-03E BLOCKED — FINAL CORRECTION CYCLE EXHAUSTED` with exact blocker; do not dispatch C04. If C03 passes, publish `W0-03E PASS — READY FOR MERGE DECISION`, but do **not** merge.
+
+**Separate closure review after C03 PASS only.** Evaluate W0-03A inventory/contract, W0-03B foundation/mapping/intake/normalization/aliases, W0-03C uniqueness, W0-03D merge/redirect/history and W0-03E migration/adapters/isolation. Report `W0-03 IMPLEMENTATION PACKAGE = PASS/OPEN` separately from `FLOW-032 LIVE GATE = PASS/OPEN`; W0-07 Approval may leave the live gate OPEN even if the implementation package passes. Do not infer either gate from business lock or a Draft PR. Only upon W0-03E PASS, prepare a **read-only** W0-06 File Registry package inventorying upload/download/storage routes, local/NAS paths, Drive refs, attachment/file IDs, documents/photos, duplicate stores, providers, missing hash/integrity/version, tenant/deletion/retention dependencies; no W0-06 implementation or dispatch.
+
+**Hard boundaries.** No merge/deploy, Atlas/NAS/production write, real BEG DB, live Master activation/index, locked FLOW/D edit, new business rule, W0-06 code, another PR/branch, Claude Routine or duplicate session. Krum owns merge/deploy and new business/security decisions. Dashboard-first transitions: C03 `PENDING` before Send; `RUNNING`/Claude `WORKING` only after observed start; Codex `REVIEWING` only after exact-head HANDOFF; final verdict only after independent review publication. This assignment is intent, not implementation evidence.
 
 ## Canonical W0-03E/C02 bounded correction #1 — final HANDOFF, independent review in progress
 
