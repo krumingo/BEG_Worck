@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E/C02 CORRECTION IMPLEMENTATION / CLAUDE WORKING
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
+Status: W0-03E/C02 INDEPENDENT CODEX REVIEW / REVIEWING
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Claude is working on the bounded W0-03E/C02 correction in the existing Code Cloud session
-Next-Agent: CODEX
+Now: Codex is independently reviewing Claude's final W0-03E/C02 HANDOFF on exact head 117072c4529cf29af716c5673ad106ab2a0d465b
+Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
 Dispatch-Observed-At: 2026-09-30T04:29:47Z (C02 Claude running git status after the single Send)
 Task-ID: W0-03E
@@ -22,20 +22,20 @@ Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-legacy-migration
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/32 (Draft)
-PR-Head: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
+PR-Head: 117072c4529cf29af716c5673ad106ab2a0d465b
 Correction-Base-SHA: 67c172e3066a53d0d6fa5c594997e2b7af0d1747
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE for C02 (C01 exact-head HANDOFF remains in PR #32 body)
-Review: C01 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847; exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747. C02 implementation is running; no C02 HANDOFF or independent re-review yet.
-HANDOFF-Observed-At: NONE for C02 (C01 observed at 2026-09-29T04:25:28Z)
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (C02 final HANDOFF in PR body at exact head)
+Review: C01 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847; exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747. C02 independent re-review is now in progress; no C02 verdict yet.
+HANDOFF-Observed-At: 2026-09-30T04:46:03Z for C02 (Claude session finished, PR #32 body carries final HANDOFF at 117072c4529cf29af716c5673ad106ab2a0d465b)
 Predecessor-Task-ID: W0-03E/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
 Predecessor-Integration: NONE; PR #32 remains Draft and unmerged
 Authorization: Krum accepted the C01 verdict, authorized bounded technical correction #1 and gave action-time one-shot Computer Use Send confirmation on 2026-09-30. The exact C02 assignment from queue SHA 2deb7ec7aa5aa995ac19608b362d803f0eb796dc was sent once in the existing Code Cloud session above; its message appeared and Claude was observed running git status. The C01 HANDOFF is historical evidence only. No Routine, duplicate session, merge or deploy.
 Correction-cycles: up to two bounded technical cycles only after independent exact-head CHANGES_REQUESTED, without new business rules or expanded scope; a third correctness failure is BLOCKED.
 
-## Canonical W0-03E/C02 bounded correction #1 — Claude observed working
+## Canonical W0-03E/C02 bounded correction #1 — final HANDOFF, independent review in progress
 
 Krum accepts Codex's C01 `CHANGES_REQUESTED` verdict and explicitly authorizes one bounded technical correction, without a new business decision. Continue the **same Task-ID W0-03E**, implementation branch `codex/w0-03e-legacy-migration`, and existing Draft PR #32. The **exact correction base head** is `67c172e3066a53d0d6fa5c594997e2b7af0d1747`; stop on any mismatch. This is **Cycle-ID C02**, correction 1 of at most 2, not a new feature or a new PR. Read this ACTIVE file, `coordination/REVIEWS/W0-03E.md`, `CLAUDE.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §§4.5 and 6, the original C01 assignment below, applicable locked FLOW/D, and the exact PR diff before editing.
 
