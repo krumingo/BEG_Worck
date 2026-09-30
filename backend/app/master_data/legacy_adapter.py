@@ -54,6 +54,8 @@ REASON_IN_USE = "IDENTITY_IN_USE"
 REASON_MASTER_OWNED = "MASTER_OWNED"
 REASON_ADVANCE_PERSON = "ADVANCE_REQUIRES_MASTER_PERSON"
 REASON_ADVANCE_MISMATCH = "ADVANCE_PERSON_MISMATCH"
+REASON_ADVANCE_UNMAPPED = "ADVANCE_RECIPIENT_UNMAPPED"
+REASON_ADVANCE_NAME_CONFLICT = "ADVANCE_RECIPIENT_NAME_CONFLICT"
 
 
 class LegacyOrgMismatch(MasterDataRefused):
@@ -149,35 +151,108 @@ def _repository_for(ctx: Any):
 # ============================================================ read annotation
 async def annotate(user: Optional[Dict[str, Any]], collection: str,
                    docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Add ``master_ref`` to legacy documents in ``enforce``; otherwise return them
-    untouched. Never raises into a legacy read: an annotation is additive."""
-    try:
-        mode = current_mode()
-    except MasterDataConfigError:
-        return docs
-    if mode != MODE_ENFORCE or not docs:
-        return docs
-    try:
-        ctx = await context_for(user)
-        if ctx is None or ctx.org_id != (user or {}).get("org_id"):
-            return docs
-        db = await ctx.db()
-        for doc in docs:
-            if not isinstance(doc, dict) or doc.get("org_id") != ctx.org_id or not doc.get("id"):
-                continue
-            try:
-                resolved = await _resolve_row(db, ctx.tenant_id, ctx.org_id, collection, doc["id"])
-            except MasterDataRefused as exc:
-                doc["master_ref"] = {"status": "inconsistent", "detail": str(exc)}
-                continue
-            if resolved is None:
-                doc["master_ref"] = {"status": "unmigrated"}
-                continue
-            doc["master_ref"] = {k: resolved.get(k) for k in (
-                "status", "entity_type", "entity_id", "canonical_id", "redirected", "reason_code")}
-    except Exception as exc:                          # noqa: BLE001 — additive only
-        logger.warning("master_data: legacy annotation of %s skipped: %s", collection, exc)
+    """Add ``master_ref`` to legacy documents of ``collection`` in ``enforce``;
+    otherwise return them untouched. Never raises into a legacy read."""
+    owned = [d for d in docs or [] if isinstance(d, dict)
+             and d.get("org_id") == (user or {}).get("org_id")]
+    await annotate_refs(user, owned, {"id": collection})
     return docs
+
+
+def ref_key(field: str) -> str:
+    """``supplier_id`` -> ``supplier_master_ref``; ``id`` -> ``master_ref``."""
+    if field == "id":
+        return "master_ref"
+    return (field[:-3] if field.endswith("_id") else field) + "_master_ref"
+
+
+async def _enforce_context(user: Optional[Dict[str, Any]]):
+    """The resolved tenant of a legacy request in ``enforce``; None in any other
+    case — also when the tenant's legacy org is not the session's org, because
+    then the legacy rows the route read are not this tenant's."""
+    try:
+        if current_mode() != MODE_ENFORCE:
+            return None
+    except MasterDataConfigError:
+        return None
+    ctx = await context_for(user)
+    if ctx is None or ctx.org_id != (user or {}).get("org_id"):
+        return None
+    return ctx
+
+
+async def _ref_view(db, ctx, collection: str, legacy_id: Any) -> Dict[str, Any]:
+    if not isinstance(legacy_id, str) or not legacy_id:
+        return {"status": "none"}
+    try:
+        resolved = await _resolve_row(db, ctx.tenant_id, ctx.org_id, collection, legacy_id)
+    except MasterDataRefused as exc:
+        return {"status": "inconsistent", "detail": str(exc)}
+    if resolved is None:
+        return {"status": "unmigrated"}
+    return {k: resolved.get(k) for k in (
+        "status", "entity_type", "entity_id", "canonical_id", "redirected", "reason_code")}
+
+
+async def annotate_refs(user: Optional[Dict[str, Any]], rows: List[Dict[str, Any]],
+                        fields: Dict[str, str]) -> List[Dict[str, Any]]:
+    """For import/export/report/AI outputs whose rows carry legacy identity ids:
+    in ``enforce`` each ``field`` -> ``<field>_master_ref`` (see ``ref_key``),
+    resolved inside the server-side tenant; the old id stays exactly where it
+    was. ``off``/``shadow``: the rows are returned untouched, nothing is read.
+    Never raises into the legacy path: the annotation is additive only."""
+    if not rows:
+        return rows
+    try:
+        ctx = await _enforce_context(user)
+        if ctx is None:
+            return rows
+        db = await ctx.db()
+        cache: Dict[Any, Dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for field, collection in fields.items():
+                value = row.get(field)
+                key = (collection, value)
+                if key not in cache:
+                    cache[key] = await _ref_view(db, ctx, collection, value)
+                row[ref_key(field)] = dict(cache[key])
+    except Exception as exc:                          # noqa: BLE001 — additive only
+        logger.warning("master_data: legacy annotation %s skipped: %s", sorted(fields), exc)
+    return rows
+
+
+async def require_tenant_identity(user: Dict[str, Any], legacy_db, *, collection: str,
+                                  legacy_id: Optional[str], request=None) -> None:
+    """An identity id a caller hands to an import/AI path must be a record of the
+    server-resolved tenant. ``enforce`` only: a foreign or unknown id is refused
+    (404, never confirming that it exists elsewhere) with a denial AuditEvent,
+    before the path writes anything. ``off``/``shadow``: nothing is read."""
+    if not legacy_id:
+        return
+    mode = _mode_or_503()
+    if mode != MODE_ENFORCE:
+        return
+    ctx = await context_for(user)
+    if ctx is None:
+        raise _http(403, {"error_code": "TENANT_NOT_RESOLVED",
+                          "message": "no server-side tenant for this session"})
+    found = None
+    if ctx.org_id == user.get("org_id") and await ctx.data_path_matches(legacy_db):
+        found = await legacy_db[collection].find_one({"id": legacy_id, "org_id": ctx.org_id},
+                                                     {"_id": 0, "id": 1})
+    if found is None:
+        try:
+            await _audit_delete(ctx, action="master_data.legacy.identity_refused", result="denied",
+                                collection=collection, legacy_id=legacy_id,
+                                error_code="IDENTITY_NOT_IN_TENANT", diff={"field": collection},
+                                reason="an identity id that is not a record of this tenant",
+                                request=request)
+        except Exception as exc:                      # noqa: BLE001 — refused either way
+            logger.warning("master_data: identity refusal audit failed: %s", exc)
+        raise _http(404, {"error_code": "IDENTITY_NOT_IN_TENANT",
+                          "message": "%s not found" % collection})
 
 
 # ============================================================== delete guard
@@ -296,17 +371,33 @@ async def advance_master_person(user: Dict[str, Any], *, person_id: Optional[str
                                 request=None) -> Optional[Dict[str, Any]]:
     """The official Master Person a NEW advance refers to (§4.5).
 
-    ``off``: None, nothing read. ``shadow``: None, logged. ``enforce``: the
-    canonical person, from ``person_id`` or from the mapped legacy user; refused
-    (422, machine reason code, denial AuditEvent) otherwise — ``guest_name`` alone
-    is never enough and never creates a person.
+    ``off``: None, nothing read. ``shadow``: None, logged. ``enforce``: every
+    recipient field the caller supplies must describe ONE proven canonical Master
+    Person, or the advance is refused (422, machine reason code, denial
+    AuditEvent) before anything — advance or payment — is written:
+
+      * ``person_id`` must be an active official Master Person of this tenant
+        (followed through a merge redirect to its canonical record);
+      * ``user_id`` must have a PROVEN mapping — a ``mapped`` reverse reference
+        whose Master record carries the user back. An unmapped user is refused
+        even when a valid ``person_id`` is given: nothing proves they are the
+        same person (``ADVANCE_RECIPIENT_UNMAPPED``);
+      * when both are given they must reach the same canonical record
+        (``ADVANCE_PERSON_MISMATCH``);
+      * a ``guest_name`` is display text, never an identity. When it is given it
+        must equal the chosen person's official name or one of its
+        human-confirmed aliases under the versioned W0-03C normalization —
+        otherwise it names someone else (``ADVANCE_RECIPIENT_NAME_CONFLICT``).
+        This is a consistency check, not a lookup: no fuzzy match, no guess;
+      * ``guest_name`` alone, or nothing at all, is refused
+        (``ADVANCE_REQUIRES_MASTER_PERSON``). No person is ever created here.
     """
     mode = _mode_or_503()
     if mode == MODE_OFF:
         return None
     if mode == MODE_SHADOW:
         logger.info("master_data: shadow advance person_id=%s user_id=%s guest=%s — enforce "
-                    "requires an official Master Person", bool(person_id), bool(user_id),
+                    "requires one proven official Master Person", bool(person_id), bool(user_id),
                     bool(guest_name))
         return None
     ctx = await context_for(user)
@@ -343,8 +434,13 @@ async def advance_master_person(user: Dict[str, Any], *, person_id: Optional[str
             resolved = await _resolve_row(db, ctx.tenant_id, ctx.org_id, "users", user_id)
         except MasterDataRefused:
             resolved = None
-        if resolved and resolved.get("canonical_id"):
-            from_user = resolved["entity"]
+        if not resolved or resolved.get("status") != lp.REF_MAPPED or not resolved.get("canonical_id"):
+            await refuse(REASON_ADVANCE_UNMAPPED,
+                         "the employee has no proven mapping to an official Master Person; map "
+                         "the user first — nothing proves it is the person named (§4.5)")
+        from_user = resolved["entity"]
+        if from_user.get("status") != STATUS_ACTIVE:
+            await refuse(REASON_ADVANCE_UNMAPPED, "the employee's Master Person is not active")
     if from_person and from_user and from_person["id"] != from_user["id"]:
         await refuse(REASON_ADVANCE_MISMATCH, "person_id and the employee's Master Person differ")
     chosen = from_person or from_user
@@ -352,6 +448,14 @@ async def advance_master_person(user: Dict[str, Any], *, person_id: Optional[str
         await refuse(REASON_ADVANCE_PERSON,
                      "a new advance or loan needs an official Master Person (person_id); a "
                      "guest_name is not an identity — create or confirm the person first (§4.5)")
+    if isinstance(guest_name, str) and guest_name.strip():
+        official = {chosen.get("normalized_name") or normalize_name(chosen.get("display_name"))}
+        official |= {a.get("normalized") for a in chosen.get("aliases") or []
+                     if isinstance(a, dict) and a.get("normalized")}
+        if normalize_name(guest_name) not in official:
+            await refuse(REASON_ADVANCE_NAME_CONFLICT,
+                         "guest_name does not name the chosen Master Person (neither its official "
+                         "name nor a confirmed alias); refusing rather than guessing")
     return {"master_person_id": chosen["id"], "display_name": chosen.get("display_name")}
 
 

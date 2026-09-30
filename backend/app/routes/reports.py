@@ -8,6 +8,7 @@ from calendar import monthrange
 import re
 
 from app.db import db
+from app.master_data.legacy_adapter import annotate_refs, require_tenant_identity
 from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
@@ -117,14 +118,15 @@ async def get_price_history(
         # Supplier name
         if item.get("supplier_id"):
             supplier = await db.counterparties.find_one(
-                {"id": item["supplier_id"]}, {"_id": 0, "name": 1}
+                {"id": item["supplier_id"], "org_id": user["org_id"]}, {"_id": 0, "name": 1}
             )
             item["supplier_name"] = supplier["name"] if supplier else ""
         
         # Purchaser name
         if item.get("purchased_by_user_id"):
             purchaser = await db.users.find_one(
-                {"id": item["purchased_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1}
+                {"id": item["purchased_by_user_id"], "org_id": user["org_id"]},
+                {"_id": 0, "first_name": 1, "last_name": 1}
             )
             item["purchased_by_name"] = f"{purchaser['first_name']} {purchaser['last_name']}" if purchaser else ""
         
@@ -133,13 +135,20 @@ async def get_price_history(
         alloc_summary = []
         for a in allocations[:3]:  # Limit to 3
             if a.get("type") == "project":
-                proj = await db.projects.find_one({"id": a.get("ref_id")}, {"_id": 0, "code": 1})
+                proj = await db.projects.find_one({"id": a.get("ref_id"), "org_id": user["org_id"]},
+                                                  {"_id": 0, "code": 1})
                 alloc_summary.append(f"P:{proj['code'] if proj else '?'}:{a.get('qty')}")
             elif a.get("type") == "warehouse":
-                wh = await db.warehouses.find_one({"id": a.get("ref_id")}, {"_id": 0, "code": 1})
+                wh = await db.warehouses.find_one({"id": a.get("ref_id"), "org_id": user["org_id"]},
+                                                  {"_id": 0, "code": 1})
                 alloc_summary.append(f"W:{wh['code'] if wh else '?'}:{a.get('qty')}")
         item["allocation_summary"] = ", ".join(alloc_summary)
-    
+
+    # W0-03E: in MASTER_DATA_MODE=enforce each identity id also names its Master
+    # record; the old ids stay. off/shadow: unchanged, nothing read.
+    await annotate_refs(user, items, {"supplier_id": "counterparties",
+                                      "purchased_by_user_id": "users"})
+
     return {
         "items": items,
         "total": total,
@@ -228,7 +237,8 @@ async def get_turnover_by_counterparty(
         counterparty = None
         if counterparty_id:
             counterparty = await db.counterparties.find_one(
-                {"id": counterparty_id}, {"_id": 0, "id": 1, "name": 1, "eik": 1, "type": 1}
+                {"id": counterparty_id, "org_id": user["org_id"]},
+                {"_id": 0, "id": 1, "name": 1, "eik": 1, "type": 1}
             )
         
         items.append({
@@ -245,7 +255,8 @@ async def get_turnover_by_counterparty(
             "first_invoice_date": r["first_invoice_date"],
             "last_invoice_date": r["last_invoice_date"],
         })
-    
+    await annotate_refs(user, items, {"counterparty_id": "counterparties"})
+
     # Calculate grand totals
     totals_pipeline = [
         {"$match": match_stage},
@@ -321,9 +332,10 @@ async def get_counterparty_invoices(
     invoices = await db.invoices.find(query, {"_id": 0}).sort("issue_date", -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Get counterparty name
-    counterparty = await db.counterparties.find_one({"id": counterparty_id}, {"_id": 0, "name": 1})
-    
-    return {
+    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]},
+                                                    {"_id": 0, "name": 1})
+    await annotate_refs(user, invoices, {"supplier_counterparty_id": "counterparties"})
+    result = {
         "counterparty_id": counterparty_id,
         "counterparty_name": counterparty["name"] if counterparty else "(Неизвестен)",
         "items": invoices,
@@ -332,6 +344,8 @@ async def get_counterparty_invoices(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
     }
+    await annotate_refs(user, [result], {"counterparty_id": "counterparties"})
+    return result
 
 
 
@@ -410,7 +424,8 @@ async def get_turnover_by_client(
         client = None
         if client_id_val:
             client = await db.counterparties.find_one(
-                {"id": client_id_val, "type": {"$in": ["client", "person", "both"]}},
+                {"id": client_id_val, "org_id": user["org_id"],
+                 "type": {"$in": ["client", "person", "both"]}},
                 {"_id": 0, "id": 1, "name": 1, "eik": 1, "type": 1, "phone": 1, "email": 1}
             )
         
@@ -431,7 +446,8 @@ async def get_turnover_by_client(
                 "first_invoice_date": r["first_invoice_date"],
                 "last_invoice_date": r["last_invoice_date"],
             })
-    
+    await annotate_refs(user, items, {"client_id": "counterparties"})
+
     # Calculate grand totals
     totals_pipeline = [
         {"$match": match_stage},

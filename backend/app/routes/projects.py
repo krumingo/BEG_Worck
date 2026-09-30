@@ -324,9 +324,12 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail="Project has no linked client")
 
     invoice = {}
+    source_collection = None
     if owner_type == "company":
+        source_collection = "companies"
         company = await db.companies.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
         if not company:
+            source_collection = "clients"
             company = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
         if company:
             invoice = {
@@ -342,8 +345,10 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
                 "notes": "",
             }
     elif owner_type == "person":
+        source_collection = "persons"
         person = await db.persons.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
         if not person:
+            source_collection = "clients"
             person = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
         if person:
             invoice = {
@@ -357,8 +362,16 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Client data not found")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.projects.update_one({"id": project_id}, {"$set": {"invoice_details": invoice, "updated_at": now}})
-    return {"ok": True, "invoice_details": invoice}
+    await db.projects.update_one({"id": project_id, "org_id": user["org_id"]},
+                                 {"$set": {"invoice_details": invoice, "updated_at": now}})
+    result = {"ok": True, "invoice_details": invoice}
+    # W0-03E: in enforce the imported owner identity also names its Master record.
+    from app.master_data.legacy_adapter import annotate_refs
+    owner = [{"owner_id": owner_id}]
+    await annotate_refs(user, owner, {"owner_id": source_collection})
+    if "owner_master_ref" in owner[0]:
+        result["owner_master_ref"] = owner[0]["owner_master_ref"]
+    return result
 
 
 # Team routes

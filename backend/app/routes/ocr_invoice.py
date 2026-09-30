@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.master_data.legacy_adapter import annotate_refs, require_tenant_identity
 from app.deps.auth import get_current_user
 from app.services.ocr_invoice import create_ocr_intake
 from app.master_data.intake_hooks import observe_ocr_supplier
@@ -51,6 +52,10 @@ async def upload_invoice(
 ):
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
+    # W0-03E: in MASTER_DATA_MODE=enforce a supplier id handed to the AI/OCR path
+    # must be a counterparty of the server-resolved tenant — checked before the
+    # file, the media record or the intake is written.
+    await require_tenant_identity(user, db, collection="counterparties", legacy_id=supplier_id)
 
     # Save file
     content = await file.read()
@@ -80,7 +85,7 @@ async def upload_invoice(
     # MASTER_DATA_MODE=off, and unable to raise - the intake already succeeded.
     await observe_ocr_supplier(user, intake.get("detected_data"),
                                source_ref="ocr-intake:%s" % intake.get("id"))
-    return intake
+    return (await annotate_refs(user, [intake], {"supplier_id": "counterparties"}))[0]
 
 
 @router.post("/ocr-invoice/from-media", status_code=201)
@@ -88,6 +93,7 @@ async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
     media = await db.media_files.find_one({"id": data.media_id, "org_id": user["org_id"]})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
+    await require_tenant_identity(user, db, collection="counterparties", legacy_id=data.supplier_id)
 
     intake = await create_ocr_intake(
         user["org_id"], data.media_id, user["id"],
@@ -98,7 +104,7 @@ async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
     # MASTER_DATA_MODE=off, and unable to raise - the intake already succeeded.
     await observe_ocr_supplier(user, intake.get("detected_data"),
                                source_ref="ocr-intake:%s" % intake.get("id"))
-    return intake
+    return (await annotate_refs(user, [intake], {"supplier_id": "counterparties"}))[0]
 
 
 # ── List / Detail ──────────────────────────────────────────────────

@@ -345,7 +345,9 @@ def test_enforce_refuses_a_new_advance_without_a_master_person(monkeypatch):
                  {"type": "Loan", "person_id": "no-such", "amount": 10}):
         r = _advance(monkeypatch, db, body)
         assert r.status_code == 422, (body, r.text)
-        assert r.json()["detail"]["error_code"] == la.REASON_ADVANCE_PERSON
+        # C02: an employee without a proven mapping has its own reason code
+        assert r.json()["detail"]["error_code"] == (
+            la.REASON_ADVANCE_UNMAPPED if body.get("user_id") else la.REASON_ADVANCE_PERSON)
     assert run(find_all(db, "advances")) == old                     # nothing created or changed
     refusals = [e for e in run(find_all(db, AUDIT_COLLECTION))
                 if e["action"] == "master_data.advance.create_refused"]

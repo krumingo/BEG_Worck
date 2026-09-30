@@ -172,8 +172,14 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
     await observe_ai_asset(user, suggestion, source_ref="assets-batch-intake:%s" % session_id,
                            model_and_version="openai/gpt-4.1")
 
+    matched_item = ({"id": matched["id"], "name": matched["name"],
+                     "brand": matched.get("brand"), "model": matched.get("model")} if matched else None)
+    if matched_item:
+        # W0-03E: in enforce the legacy match also names its Master record — still
+        # a suggestion for a person, never a link.
+        from app.master_data.legacy_adapter import annotate_refs
+        await annotate_refs(user, [matched_item], {"id": "asset_items"})
     return {
         "suggestion": suggestion,
-        "matched_item": ({"id": matched["id"], "name": matched["name"],
-                          "brand": matched.get("brand"), "model": matched.get("model")} if matched else None),
+        "matched_item": matched_item,
     }

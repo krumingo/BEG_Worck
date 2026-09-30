@@ -955,7 +955,12 @@ async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
     await db.offers.insert_one(offer)
     await log_audit(user["org_id"], user["id"], user["email"], "offer_imported", "offer", offer["id"],
                     {"offer_no": offer_no, "lines": len(lines), "source": data.get("file_name")})
-    
+    # W0-03E: the free-text works and units of an imported offer go to pending
+    # mapping only (never an official Master record). A no-op while
+    # MASTER_DATA_MODE=off, and unable to raise — the import already succeeded.
+    from app.master_data.intake_hooks import observe_excel_offer_lines
+    await observe_excel_offer_lines(user, import_lines, source_ref="offer-import:%s" % offer["id"])
+
     return {k: v for k, v in offer.items() if k != "_id"}
 
 

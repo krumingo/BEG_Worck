@@ -21,7 +21,7 @@
 | `backend/app/routes/master_data.py` | 10 нови endpoint-а под `/api/master-data/legacy/…` |
 | 9 legacy route файла + `models/hr.py` | scoped delete + guard; аванс само към Master Person в enforce |
 | `backend/scripts/w0_03e_legacy_migration_report.py` | read-only отчет върху **възстановено копие** на локален Mongo |
-| `backend/tests/test_w0_03e_*.py` | 26 + 84 + 5 теста (in-memory, routes, real Mongo) |
+| `backend/tests/test_w0_03e_*.py` | 26 + 84 + 25 (C02) + 6 теста (in-memory, routes, корекции, real Mongo) |
 
 ## 2. Source → Master покритие
 
@@ -110,10 +110,20 @@ delete. Всеки изход → canonical AuditEvent (`deleted` / `archived_in
 
 ## 5. Аванси (§4.5)
 
-- `enforce`: нов аванс/заем изисква официален Master Person — `person_id` (активен, през
-  redirect) или мапнат `user_id`. `guest_name` сам → **422 `ADVANCE_REQUIRES_MASTER_PERSON`**,
-  несъвпадение → `ADVANCE_PERSON_MISMATCH`; denial AuditEvent. Новият аванс носи
-  `master_person_id`. `off`/`shadow` — непроменено.
+- `enforce`: нов аванс/заем изисква **един доказан** официален Master Person. Всяко
+  подадено поле за получател трябва да сочи него, иначе отказ (422, denial AuditEvent)
+  **преди** запис на аванс или плащане (C02, находка 1 от ревюто):
+  - `person_id` — активен Master Person на tenant-а (през merge redirect към canonical);
+  - `user_id` — само с **доказано** мапване (`mapped` reverse reference, записът го носи
+    обратно). Немапнат или непознат служител → `ADVANCE_RECIPIENT_UNMAPPED`, **дори ако е
+    подаден валиден `person_id`** — нищо не доказва, че е същият човек;
+  - `user_id` и `person_id` към различни canonical записи → `ADVANCE_PERSON_MISMATCH`;
+  - `guest_name` е текст за показване, не идентичност: ако е подаден, трябва да е
+    официалното име или потвърден alias на избрания човек (версионираната W0-03C
+    нормализация, точно равенство — проверка за съгласуваност, не търсене) → иначе
+    `ADVANCE_RECIPIENT_NAME_CONFLICT`;
+  - `guest_name` сам или нищо → `ADVANCE_REQUIRES_MASTER_PERSON`. Човек не се създава.
+  Новият аванс носи `master_person_id`. `off`/`shadow` — непроменено.
 - Съществуващите `guest_name` аванси не се пипат. `legacy/advances/mapping-report` и скриптът
   ги изброяват с кандидати по точно име — **само предложения**, `auto_mapped = 0`.
 
@@ -133,12 +143,13 @@ Owner/Admin чрез пълния си набор; `office` получава с�
 
 ## 8. Доказателства
 
-| Suite | Резултат |
+| Suite | Резултат (C02 head) |
 |---|---|
 | `test_w0_03e_legacy_migration.py` (mongomock-motor) | 26 passed |
 | `test_w0_03e_legacy_routes.py` | 84 passed |
-| `test_w0_03e_real_mongo.py` (MongoDB 8.0.23, loopback, disposable DB) | 5 passed |
-| Съседни W0-03A–D, W0-01, W0-02, W0-04 | без регресия (виж PR HANDOFF за точните числа) |
+| `test_w0_03e_c02_corrections.py` (находки 1 и 2) | 25 passed |
+| `test_w0_03e_real_mongo.py` (MongoDB 8.0.23, loopback, disposable DB) | 6 passed |
+| Съседни W0-03A–D, W0-01, W0-02, W0-04 | без регресия (точните числа — в PR HANDOFF) |
 
 ## 9. Технически интерпретации за ревю (не бизнес решения)
 
@@ -155,9 +166,9 @@ Owner/Admin чрез пълния си набор; `office` получава с�
 ## 10. Остатъчни ограничения
 
 - W0-07 Approval runtime липсва → нито един migration write не може да се изпълни в build-а.
-- Read annotation е вързан към два detail route-а (`items`, `subcontractors`); останалите
-  legacy четения/експорти минават през `legacy_adapter.annotate` домейн по домейн (contract §4.1
-  стъпка 3). Excel/OCR/AI intake вече пише само pending (W0-03B2/C) — не е променян.
+- Адаптерите покриват пътищата от инвентара в §11. Останалите legacy **четения** на
+  идентичности (списъци, търсения, dashboard-и) не са част от импорт/експорт/справки/AI и
+  минават през `legacy_adapter.annotate` домейн по домейн (contract §4.1 стъпка 3).
 - Регистърът на референции покрива основните 46 полета, не всичките 3673 `org_id` употреби.
   Непокрито поле не прави изтриване по-малко строго от преди, но не се брои в reconciliation.
 - `supplier_id` в `supplier_invoices`/`warehouse_batches` не се валидира от legacy writer-а;
@@ -165,3 +176,34 @@ Owner/Admin чрез пълния си набор; `office` получава с�
 - Database-per-tenant: доказано с отделни DB handles и с два org-а в една legacy DB; реален
   per-tenant resolver срещу Atlas не е пипан.
 - Premature: production миграция, index build, `MASTER_DATA_MODE` активиране, W0-06.
+
+## 11. Импорт / експорт / справки / AI — инвентар и покритие (C02, находка 2 от ревюто)
+
+Инвентар на **идентичностните** пътища от тези четири групи: пътища, които четат, пишат или
+връщат id от 15-те колекции, или внасят свободен текст за идентичност. Как е намерен: grep
+по route декораторите за import/export/report/excel/ocr/intake/ai и по достъпите до 15-те
+колекции в тези файлове. Покритие = tenant-safe адаптер + фокусиран тест в
+`tests/test_w0_03e_c02_corrections.py`. Стария id остава навсякъде.
+
+| # | Път | Идентичност | Адаптер | Тест |
+|---|---|---|---|---|
+| R1 | `GET /api/prices` (`reports.py`) | `supplier_id` → counterparties, `purchased_by_user_id` → users, алокации към warehouses/projects | look-up-ите са scoped по org (всички режими); `*_master_ref` в enforce | `test_reports_*[/api/prices]` |
+| R2 | `GET /api/reports/turnover-by-counterparty` | `counterparty_id` | scoped look-up; `counterparty_master_ref` | `test_reports_*`, `test_report_lookups_*` |
+| R3 | `GET /api/reports/turnover-by-counterparty/{id}/invoices` | `counterparty_id`, `supplier_counterparty_id` на всяка фактура | scoped look-up; двата ref-а | същите |
+| R4 | `GET /api/reports/turnover-by-client` | `client_id` → counterparties | scoped look-up (чужд контрагент вече не влиза); ref | същите |
+| A1 | `POST /api/ocr-invoice/upload`, `/from-media` | caller-supplied `supplier_id`; OCR текст на доставчик | enforce: `supplier_id` трябва да е на tenant-а (404 + denial audit **преди** файл/медия/intake); `supplier_master_ref`; текстът → само pending (съществуваща кука) | `test_ocr_*` |
+| A2 | `POST /api/assets/batch-intake/recognize` | `matched_item` = legacy `asset_items` id | `master_ref` в enforce; остава предложение; AI → само pending | `test_ai_batch_*` |
+| A3 | `POST /api/assets/ai-intake` | връща само предложение, без legacy id | няма id за адаптиране; AI → само pending (съществуваща кука `observe_ai_asset`) | `test_ai_ocr_excel_proposals_*` (C01) |
+| A4 | `POST /api/assets/intake/{id}/approve`, `approve-bulk` | човешко одобрение създава legacy asset идентичности | поетапно: новият legacy запис се брои `unmigrated` и следващият план го мигрира със стария id | `test_a_legacy_identity_created_after_*` |
+| I1 | `POST /api/excel-import/commit` (КСС) | свободен текст дейност/единица | само pending (съществуваща кука) | `test_excel_import_hooks_*[kss]` |
+| I2 | `POST /api/smr-analyses/import-excel` | същото | същата кука | същият |
+| I3 | `POST /api/historical/import-confirm` | свободен текст | само pending | `test_excel_import_hooks_*[historical]` |
+| I4 | `POST /api/offers/import-confirm` | свободен текст дейност/единица в редовете | **нова** кука `observe_excel_offer_lines`: само pending, никога Master/alias/link | `test_offer_import_*`, `test_excel_import_hooks_*[offer]` |
+| I5 | `POST /api/projects/{id}/import-client-invoice` | копира данни от собственика (companies/persons/clients) | `owner_master_ref` в enforce; записът в проекта scoped по org | `test_client_invoice_import_*` |
+| E1 | `GET /api/reports/company-finance-export` | само седмични суми и името на организацията | **не е идентичностен** — няма id от 15-те колекции | — |
+| E2 | `GET /api/smr-analyses/{id}/export-excel` | КСС редове (свободен текст, `line_id`) | **не е идентичностен** | — |
+
+`off`: отговорите са непроменени, нищо от Master Data не се чете (landmine тестове);
+scoping-ът на look-up-ите в справките важи и в `off`, защото променя отговора само когато
+id на чужда фирма би показал нейното име. Няма път от инвентара, който да изисква нов
+архитектурен избор.

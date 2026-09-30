@@ -183,3 +183,39 @@ def test_the_restored_copy_report_script_is_read_only(tmp_path):
     scratch(body)
     assert script.main(["--mongo-url", "mongodb+srv://x.mongodb.net", "--db", "d",
                         "--tenant-id", "t", "--org-id", "o"]) == 2
+
+
+def test_c02_recipient_identity_and_report_refs_on_a_real_server(monkeypatch):
+    from fastapi import HTTPException
+    from app.master_data.deps import ENV_MODE
+    monkeypatch.setenv(ENV_MODE, "enforce")
+
+    async def body(db, _name):
+        await prepare(db)
+        await go(db, (await dry(db))["plan_token"])
+        ctx = Ctx(db)
+
+        async def resolved(user):
+            return ctx
+        monkeypatch.setattr(la, "context_for", resolved)
+        user = {"id": "owner-1", "org_id": ORG_A}
+        u1 = (await la.resolve_legacy(ctx, collection="users", legacy_id="u1", mode=MODE_ENFORCE,
+                                      repository=repo(db)))["canonical_id"]
+        for kw, code in ((dict(user_id="u2", person_id=u1), la.REASON_ADVANCE_UNMAPPED),
+                         (dict(person_id=u1, guest_name="Друг човек"), la.REASON_ADVANCE_NAME_CONFLICT)):
+            with pytest.raises(HTTPException) as info:
+                await la.advance_master_person(user, **dict(dict(person_id=None, user_id=None,
+                                                                 guest_name=None), **kw))
+            assert info.value.detail["error_code"] == code
+        ok = await la.advance_master_person(user, person_id=u1, user_id="u1",
+                                            guest_name="Иван Петров")
+        assert ok["master_person_id"] == u1
+        rows = [{"supplier_id": "cp1"}, {"supplier_id": "cp3"}]
+        await la.annotate_refs(user, rows, {"supplier_id": "counterparties"})
+        assert rows[0]["supplier_master_ref"]["status"] == "mapped"
+        assert rows[1]["supplier_master_ref"]["status"] == "pending"
+        denials = [e for e in await events(db) if e["action"] == "master_data.advance.create_refused"]
+        assert len(denials) == 2
+        ok_chain, why = verify_chain(await events(db))
+        assert ok_chain, why
+    scratch(body)
