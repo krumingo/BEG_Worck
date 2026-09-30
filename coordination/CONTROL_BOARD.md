@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-30T17:52:51Z · CONTROL STATE: **VALID** as of 2026-09-30T17:52:51Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-30T18:00:52Z · CONTROL STATE: **VALID** as of 2026-09-30T18:00:52Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03E / C03 / CODEX / **REVIEW**
-LAST: CLAUDE — W0-03E/C03 final exact-head implementation HANDOFF / HANDOFF
-RELAY: NO_RELAY_NEEDED · CLAUDE → CODEX
-NOW: Codex review and independent real-Mongo gate are complete; final C03 verdict is prepared but not yet published
-TRANSITION: CODEX_VERDICT / INTENT · verdict READY
+CURRENT: W0-03E / C03 / CODEX / **BLOCKED**
+LAST: CODEX — W0-03E/C03 final exact-head independent review / BLOCKED
+RELAY: NOT_SENT · CODEX → GPT
+NOW: Codex published final C03 BLOCKED verdict after independent exact-head review and disposable real-Mongo gate
+TRANSITION: CODEX_VERDICT / OBSERVED · verdict PUBLISHED
 NEXT: GPT
-KRUM ACTION: NONE
-WAITING FOR: Independent whole-PR review and disposable real-Mongo gate
+KRUM ACTION: REQUIRED — FORWARD FINAL BLOCKER TO GPT
+WAITING FOR: GPT/Krum decision after final correction exhausted
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-03E
 CYCLE: C03
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: REVIEW
+STATE: BLOCKED
 NEXT: GPT
-WAITING_FOR: Independent whole-PR review and disposable real-Mongo gate
+WAITING_FOR: GPT/Krum decision after final correction exhausted
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03E | C03 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent whole-PR review and disposable real-Mongo gate | REVIEW |
+| W0-03E | C03 | WAITING | BLOCKED | HANDOFF_READY | CODEX | GPT/Krum decision after final correction exhausted | BLOCKED |
 
 ## Agent cards
 
@@ -38,15 +38,16 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E/C03/GPT | Codex independent exact-head C03 verdict | 2026-09-30T17:52:51Z |
-| CODEX | REVIEWING | W0-03E/C03/CX | Independent whole-PR review and disposable real-Mongo gate | 2026-09-30T17:52:51Z |
+| GPT | WAITING | W0-03E/C03/GPT | Krum relay of final Codex blocker | 2026-09-30T18:00:52Z |
+| CODEX | BLOCKED | W0-03E/C03/CX | GPT/Krum decision after final correction exhausted | 2026-09-30T18:00:52Z |
 | CLAUDE | HANDOFF_READY | W0-03E/C03/CL | Codex independent C03 review | 2026-09-30T17:34:46Z |
 
-GPT → Codex → Claude → **Codex (REVIEW)** → GPT
+GPT → Codex → Claude → **Codex (BLOCKED)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `48728683294fd855ab9d56b55f38a7208709ce2f` · blob `3fd166a37e7182227f1eef3f833a0e9c361f006d`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `0d302792eac7a0765717c723577512e2ef00d90f` · blob `8382db0dabfd4c14d8990e4bfa9b73d9142b6bf4`
+- Review: `coordination/REVIEWS/W0-03E.md` · blob `c1425c39949c7b8dc697633a4cef6dd58f5540a3` · verdict **BLOCKED** on `47a0c59a4eac974d7bab144f71c076a5748243d0`
 - Draft PR: [#32](https://github.com/krumingo/BEG_Worck/pull/32) · exact head `47a0c59a4eac974d7bab144f71c076a5748243d0`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/32) · head `47a0c59a4eac974d7bab144f71c076a5748243d0`
 - Dispatch session: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF · dispatch state **NONE**
@@ -74,5 +75,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-09-30T17:22:27Z | C03 | — | DISPATCH | CLAUDE | WORKING | `117072c4` | [evidence](https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF) |
 | 2026-09-30T17:34:46Z | C03 | — | HANDOFF | CLAUDE | HANDOFF | `47a0c59a` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32) |
 | 2026-09-30T17:52:51Z | C03 | — | CONTROL_UPDATE | CODEX | REVIEW | `47a0c59a` | [evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md) |
+| 2026-09-30T18:00:52Z | C03 | — | REVIEW | CODEX | BLOCKED | `47a0c59a` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408) |
 
-**Gate:** W0-03E is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-03E is BLOCKED. No new cycle, PASS, merge or deploy is authorized by this read-model.
