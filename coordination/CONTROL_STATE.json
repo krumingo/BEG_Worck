@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-30T17:34:46Z",
+  "validated_at": "2026-09-30T17:52:51Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "cdfeec3cb4c656f37ff2c12578c0cb295ec30931",
-  "control_state_commit_sha": "cd45259f30fab4dc6c290718e9f9704d26e6bf4e",
-  "now": "Codex is independently reviewing the entire W0-03E PR #32 at the C03 exact head",
+  "active_source_commit_sha": "48728683294fd855ab9d56b55f38a7208709ce2f",
+  "control_state_commit_sha": "b44b7aafa4728c4344a53c820559f73375db60d4",
+  "now": "Codex review and independent real-Mongo gate are complete; final C03 verdict is prepared but not yet published",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/32",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03E",
@@ -26,13 +26,13 @@
       "state": "WAITING",
       "work_id": "W0-03E/C03/GPT",
       "waiting_for": "Codex independent exact-head C03 verdict",
-      "updated_at": "2026-09-30T17:34:46Z"
+      "updated_at": "2026-09-30T17:52:51Z"
     },
     "CODEX": {
       "state": "REVIEWING",
       "work_id": "W0-03E/C03/CX",
       "waiting_for": "Independent whole-PR review and disposable real-Mongo gate",
-      "updated_at": "2026-09-30T17:34:46Z"
+      "updated_at": "2026-09-30T17:52:51Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -69,7 +69,7 @@
     "status": "NO_RELAY_NEEDED",
     "instruction": "Codex independently reviews the whole PR and the real-Mongo gate; no C03 verdict has been published.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
-    "updated_at": "2026-09-30T17:34:46Z"
+    "updated_at": "2026-09-30T17:52:51Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
@@ -82,7 +82,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "217873d85e475eab437628f0de703bb116611ba2",
+    "active_blob_sha": "3fd166a37e7182227f1eef3f833a0e9c361f006d",
     "review_path": "coordination/REVIEWS/W0-03E.md",
     "review_blob_sha": "828b8ca3a825c1998a6d15dca096b22cc112d51d",
     "canonical_docs": [
@@ -96,7 +96,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-09-30T17:34:46Z",
+  "updated_at": "2026-09-30T17:52:51Z",
   "history": [
     {
       "event_id": "w0-03e-c01-assignment-intent",
@@ -265,6 +265,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
       "source_commit_sha": "cdfeec3cb4c656f37ff2c12578c0cb295ec30931",
       "summary": "Claude session ended and published final C03 HANDOFF in Draft PR #32 at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. Codex independent whole-PR and real-Mongo review is in progress; no verdict yet."
+    },
+    {
+      "event_id": "w0-03e-c03-codex-verdict-ready-intent",
+      "occurred_at": "2026-09-30T17:52:51Z",
+      "task_id": "W0-03E",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "REVIEW",
+      "head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
+      "source_commit_sha": "48728683294fd855ab9d56b55f38a7208709ce2f",
+      "summary": "Independent whole-PR review and disposable real-Mongo gate finished. A cross-tenant offer XLSX project-name leak was reproduced. The final BLOCKED verdict is READY but not published; no C04 is authorized."
     }
   ]
 }

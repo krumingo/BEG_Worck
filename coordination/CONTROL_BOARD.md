@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-09-30T17:34:46Z · CONTROL STATE: **VALID** as of 2026-09-30T17:34:46Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-09-30T17:52:51Z · CONTROL STATE: **VALID** as of 2026-09-30T17:52:51Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03E / C03 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-03E/C03 final exact-head implementation HANDOFF / HANDOFF
 RELAY: NO_RELAY_NEEDED · CLAUDE → CODEX
-NOW: Codex is independently reviewing the entire W0-03E PR #32 at the C03 exact head
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex review and independent real-Mongo gate are complete; final C03 verdict is prepared but not yet published
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: Independent whole-PR review and disposable real-Mongo gate
@@ -38,15 +38,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E/C03/GPT | Codex independent exact-head C03 verdict | 2026-09-30T17:34:46Z |
-| CODEX | REVIEWING | W0-03E/C03/CX | Independent whole-PR review and disposable real-Mongo gate | 2026-09-30T17:34:46Z |
+| GPT | WAITING | W0-03E/C03/GPT | Codex independent exact-head C03 verdict | 2026-09-30T17:52:51Z |
+| CODEX | REVIEWING | W0-03E/C03/CX | Independent whole-PR review and disposable real-Mongo gate | 2026-09-30T17:52:51Z |
 | CLAUDE | HANDOFF_READY | W0-03E/C03/CL | Codex independent C03 review | 2026-09-30T17:34:46Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `cdfeec3cb4c656f37ff2c12578c0cb295ec30931` · blob `217873d85e475eab437628f0de703bb116611ba2`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `48728683294fd855ab9d56b55f38a7208709ce2f` · blob `3fd166a37e7182227f1eef3f833a0e9c361f006d`
 - Draft PR: [#32](https://github.com/krumingo/BEG_Worck/pull/32) · exact head `47a0c59a4eac974d7bab144f71c076a5748243d0`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/32) · head `47a0c59a4eac974d7bab144f71c076a5748243d0`
 - Dispatch session: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF · dispatch state **NONE**
@@ -73,5 +73,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-09-30T17:09:42Z | C03 | — | ASSIGNMENT | CODEX | WORKING | `117072c4` | [evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md) |
 | 2026-09-30T17:22:27Z | C03 | — | DISPATCH | CLAUDE | WORKING | `117072c4` | [evidence](https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF) |
 | 2026-09-30T17:34:46Z | C03 | — | HANDOFF | CLAUDE | HANDOFF | `47a0c59a` | [evidence](https://github.com/krumingo/BEG_Worck/pull/32) |
+| 2026-09-30T17:52:51Z | C03 | — | CONTROL_UPDATE | CODEX | REVIEW | `47a0c59a` | [evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md) |
 
 **Gate:** W0-03E is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
