@@ -14,7 +14,7 @@ Relay-From: CODEX
 Relay-To: CLAUDE
 Krum-Action: CONFIRM SEND TO CLAUDE
 Dispatch-State: PENDING
-Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
+Dispatch-Run: NONE for C03 (existing C02 session URL is historical; intended reuse after confirmation)
 Dispatch-Observed-At: NONE for C03; C02 observed at 2026-09-30T04:29:47Z
 Task-ID: W0-03E
 Cycle-ID: C03
