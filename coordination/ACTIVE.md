@@ -1,21 +1,21 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E/C03 PENDING / FINAL BOUNDED CORRECTION #2 OF 2
-Current-Agent: CODEX
+Status: W0-03E/C03 RUNNING / FINAL BOUNDED CORRECTION #2 OF 2
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT (ASSIGNMENT; no Claude Send or start observed)
-Now: Codex prepared the final W0-03E/C03 bounded correction; Claude Send is pending confirmation
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED (CLAUDE_START; message visible and git status running)
+Now: Claude is working on the final W0-03E/C03 bounded correction
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
 Relay-To: CLAUDE
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE for C03 (existing C02 session URL is historical; intended reuse after confirmation)
-Dispatch-Observed-At: NONE for C03; C02 observed at 2026-09-30T04:29:47Z
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
+Dispatch-Observed-At: 2026-09-30T17:22:27Z (C03 message visible; Claude running git status)
 Task-ID: W0-03E
 Cycle-ID: C03
 Base-branch: main
@@ -32,10 +32,10 @@ HANDOFF-Observed-At: 2026-09-30T04:46:03Z for C02 (Claude session finished, PR #
 Predecessor-Task-ID: W0-03E/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
 Predecessor-Integration: NONE; PR #32 remains Draft and unmerged
-Authorization: Krum authorized W0-03E/C03 as final bounded correction #2 of 2 in the same branch and Draft PR #32 through the supplied 2026-09-30 instruction. The C02 verdict and real-Mongo reproduction are published evidence. C03 Code Cloud Send and observed start have NOT happened; action-time Computer Use Send confirmation is pending. No Routine, duplicate session, merge or deploy.
+Authorization: Krum authorized W0-03E/C03 as final bounded correction #2 of 2 in the same branch and Draft PR #32, then gave explicit one-time Computer Use Send confirmation. The canonical C03 assignment from queue SHA 07cda0e9fccaf22db2d86c7b257a3a9df4c2d635 was sent once in the existing Code Cloud session; its message appeared and Claude was observed running git status at 2026-09-30T17:22:27Z. The C02 verdict and real-Mongo reproduction are prior-cycle evidence. No C03 HANDOFF, Routine, duplicate session, merge or deploy.
 Correction-cycles: C02 was correction #1; C03 is correction #2 and final. A further correctness defect means BLOCKED; no C04 automatically or otherwise under this authorization.
 
-## Canonical W0-03E/C03 final bounded correction #2 — PENDING, not sent
+## Canonical W0-03E/C03 final bounded correction #2 — RUNNING, no HANDOFF yet
 
 **Identity and gate.** Repository `krumingo/BEG_Worck`, Task-ID `W0-03E`, Cycle-ID `C03`, same branch `codex/w0-03e-legacy-migration`, same Draft PR #32 against `main`. Correction base and expected current PR head: **`117072c4529cf29af716c5673ad106ab2a0d465b`**. STOP on head or branch mismatch, duplicate active dispatch, or a material requirement conflict. This is the last authorized technical correction; there is no C04. Before implementation, read `CLAUDE.md`, this ACTIVE file and `coordination/REVIEWS/W0-03E.md`, original C01 and C02 assignments below, `docs/architecture/IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` especially §§4.5 and 6, `TENANCY_MODEL.md`, applicable locked FLOW/D, and the actual PR #32 base-to-head diff. Do not treat historical C02 HANDOFF or review as C03 completion.
 
