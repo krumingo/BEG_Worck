@@ -1,40 +1,58 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E/C03 BLOCKED — FINAL CORRECTION CYCLE EXHAUSTED
+Status: W0-03E-R1/C01 ASSIGNMENT READY — DISPATCH PENDING
 Current-Agent: CODEX
-Current-State: BLOCKED
-Claude-State: HANDOFF_READY
-Codex-State: BLOCKED
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
-Now: Codex published final C03 BLOCKED verdict after independent exact-head review and disposable real-Mongo gate
-Next-Agent: GPT
-Relay-State: NOT_SENT
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT (R1 assignment published; Claude not sent)
+Now: Codex preparing W0-03E-R1/C01 tenant-export remediation assignment for Claude
+Next-Agent: CLAUDE
+Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: FORWARD FINAL BLOCKER TO GPT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF
-Dispatch-Observed-At: 2026-09-30T17:22:27Z (C03 message visible; Claude running git status)
-Task-ID: W0-03E
-Cycle-ID: C03
+Relay-To: CLAUDE
+Krum-Action: CONFIRM SEND TO CLAUDE if Computer Use requests action-time confirmation; otherwise NONE
+Dispatch-State: PENDING
+Dispatch-Run: NONE (R1 has not been sent)
+Dispatch-Observed-At: NONE (R1 has not started)
+Task-ID: W0-03E-R1
+Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Implementation-branch: codex/w0-03e-legacy-migration
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/32 (Draft)
-PR-Head: 47a0c59a4eac974d7bab144f71c076a5748243d0
-Correction-Base-SHA: 117072c4529cf29af716c5673ad106ab2a0d465b
+Implementation-branch: codex/w0-03e-r1-tenant-export
+PR-URL: NONE (new Draft PR against main to be opened by Claude after implementation; PR #32 remains untouched and Draft)
+PR-Head: NONE (implementation branch currently at the exact remediation base)
+Remediation-Base-SHA: 47a0c59a4eac974d7bab144f71c076a5748243d0
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (C03 final HANDOFF in PR body at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
-Review: C03 BLOCKED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408; exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. Independent review reproduced cross-tenant project-name leakage in the in-scope offer XLSX export despite 861/861 disposable real-Mongo regression tests passing.
-Final-Verdict: BLOCKED — FINAL CORRECTION CYCLE EXHAUSTED. The C03 review artifact and PR comment are published. No C04, merge, deploy or next-stage dispatch.
-HANDOFF-Observed-At: 2026-09-30T17:34:46Z for C03 (Claude session finished; PR #32 body carries final HANDOFF at 47a0c59a4eac974d7bab144f71c076a5748243d0)
-Predecessor-Task-ID: W0-03E/C01
-Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
-Predecessor-Integration: NONE; PR #32 remains Draft and unmerged
-Authorization: Krum authorized W0-03E/C03 as final bounded correction #2 of 2 in the same branch and Draft PR #32, then gave explicit one-time Computer Use Send confirmation. The canonical C03 assignment from queue SHA 07cda0e9fccaf22db2d86c7b257a3a9df4c2d635 was sent once in the existing Code Cloud session; its message appeared and Claude was observed running git status at 2026-09-30T17:22:27Z. Claude ended the session and published a final exact-head HANDOFF in PR #32 at 47a0c59a4eac974d7bab144f71c076a5748243d0. Codex completed independent review and published BLOCKED at the exact head. No Routine, duplicate session, merge or deploy.
-Correction-cycles: C02 was correction #1; C03 is correction #2 and final. A further correctness defect means BLOCKED; no C04 automatically or otherwise under this authorization.
+HANDOFF-URL: NONE (R1)
+Review: Predecessor W0-03E/C03 BLOCKED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408 on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. This remains final for that task/cycle; R1 is separately authorized and has no review yet.
+Final-Verdict: NONE (R1 not implemented or reviewed)
+HANDOFF-Observed-At: NONE (R1)
+Predecessor-Task-ID: W0-03E/C03
+Predecessor-Review: coordination/REVIEWS/W0-03E.md (final BLOCKED on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
+Predecessor-Integration: NONE; blocked PR #32 remains Draft and unmerged. R1 reuses its exact head as code base only, not as accepted integration.
+Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head. This is not C04 or a new business rule. The new implementation branch points to that head; no R1 Claude Send, HANDOFF, PR, review, merge or deploy has occurred yet.
+Correction-cycles: W0-03E C02/C03 budget is exhausted and immutable. R1 is a distinct remediation Task-ID with its own C01; if it has another tenant-isolation correctness defect, R1 is BLOCKED for architectural redesign, not another automatic correction.
+
+## Canonical W0-03E-R1/C01 tenant export remediation — PENDING, not sent
+
+**Identity, base and PR.** Repository `krumingo/BEG_Worck`. Task-ID `W0-03E-R1`; Cycle-ID `C01`. New branch `codex/w0-03e-r1-tenant-export` already exists at **exact** `47a0c59a4eac974d7bab144f71c076a5748243d0`, the blocked PR #32 head. Recheck branch SHA, PR #32 status/head, `main` head `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`, and that no R1 run/PR exists before coding. Open one **new Draft PR against `main`** for the final full W0-03E package, clearly linking blocked PR #32 and identifying this as R1 remediation, not C04. Do not edit, close or merge PR #32. Draft is not integration. If a base/head mismatch or duplicate R1 dispatch appears, STOP and report it.
+
+**Read first.** `CLAUDE.md`, this `coordination/ACTIVE.md`, `coordination/README.md`, predecessor `coordination/REVIEWS/W0-03E.md` (especially final C03 review), `docs/architecture/IMPLEMENTATION_WAVES.md`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `docs/architecture/TENANCY_MODEL.md`, applicable locked FLOW/D including `docs/flows/FLOW-032.md`, and the actual PR #32 base-to-head diff. The C03 review's cross-tenant offer XLSX leak is the entry point, not the whole audit boundary.
+
+**Fix, fail closed.** Scope the offer XLSX and PDF `project_id` joins to the **server-resolved tenant** before reading project fields. Audit and fix any other in-scope offer/export helper resolving `project_id`, `client_id`, `company_id`, `user_id`, `warehouse_id` or another legacy identity key without a tenant predicate. When a related document is absent in the caller tenant, do not use another tenant's document or infer an identity from matching IDs/names. Preserve the existing export contract where safe; if a named path cannot be made safe without a new architectural/business decision, mark that exact path BLOCKED with evidence rather than guessing.
+
+**Bounded complete audit.** Inspect offer XLSX and PDF, finance exports, КСС exports, client-invoice exports, report drilldowns and report helpers already in W0-03E scope. HANDOFF must contain a complete table for each actual path: `path | collection | join key | tenant predicate | SAFE/FIXED/BLOCKED`, with code/test evidence. No `ASSUMED SAFE`, no silent omission, no full-repository rewrite. Scope every identity-bearing lookup/aggregation by server-resolved tenant, including all foreign sides of joins.
+
+**Regressions.** Deterministic tenant A/B fixtures with duplicate `project_id`, client, company, user and warehouse IDs; a foreign related document existing only in B; forged/foreign legacy references; both XLSX and PDF leak cases; export/report responses containing **zero** B data, references or derived labels for A. Include negative/fail-closed cases and preserve accepted same-tenant behavior. Cover the actual HTTP export responses, not only helper calls, and prove no forbidden side effects.
+
+**Tests and HANDOFF.** Run focused W0-03E and adjacent W0-03 tests and disposable local real-Mongo tests with exact A/B duplicate-ID fixtures; bind only to `127.0.0.1`, use a new empty dbpath, and clean it up. Count collected/passed/failed/skipped; skipped or unrun is not PASS. Publish the actual remediation diff, full audit matrix, exact new head, new Draft PR URL, test commands/results, remaining limitations and explicit final `W0-03E-R1/C01 HANDOFF`; then STOP Claude. Codex reviews only after observed final HANDOFF and stable PR head, independently checks the **whole `main`→R1 head W0-03E package**, not just R1 delta, repeats focused/adjacent tests and a disposable real-Mongo gate, and reproduces the tenant A/B export responses. If safe, verdict `W0-03E PASS — READY FOR MERGE DECISION`; if any tenant-isolation correctness defect remains, verdict `W0-03E-R1 BLOCKED` and stop for architectural redesign. No automatic next task/cycle.
+
+**Boundaries and lifecycle.** No merge, deploy, Atlas/NAS/production write, real BEG database, W0-06 implementation, locked FLOW/D edit, new business rule, Claude Routine or duplicate session. `MASTER_DATA_MODE=off` and shadow non-writing, W0-02 permission, W0-04 AuditEvent, W0-07 fail-closed Approval and existing financial rules remain intact. Publish/validate `PENDING` before Send; only observed Claude start may set `RUNNING`/Claude WORKING; only exact-head HANDOFF may set Codex REVIEWING; publish verdict only after independent review. User owns merge/deploy/security/business decisions.
+
+## Archived W0-03E/C03 final bounded correction #2 — BLOCKED, budget exhausted
 
 ## Canonical W0-03E/C03 final bounded correction #2 — HANDOFF published, Codex reviewing
 
