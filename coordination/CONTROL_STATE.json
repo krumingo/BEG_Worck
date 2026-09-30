@@ -1,303 +1,141 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-30T18:00:52Z",
+  "validated_at": "2026-09-30T20:47:23Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "0d302792eac7a0765717c723577512e2ef00d90f",
-  "control_state_commit_sha": "ec24cc0f0b367f97362b97b5fe0773ff4cf25c57",
-  "now": "Codex published final C03 BLOCKED verdict after independent exact-head review and disposable real-Mongo gate",
+  "active_source_commit_sha": "6d129f6fe7935ef863b4ea261898f51812c99640",
+  "control_state_commit_sha": "1906839a544f86de3634c088d9ec0d9471e3be4d",
+  "now": "Codex preparing W0-03E-R1/C01 tenant-export remediation assignment for Claude",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
-  "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
-  "task_id": "W0-03E",
-  "cycle_id": "C03",
+  "generated_from": [
+    "ACTIVE",
+    "REVIEW",
+    "PR/HANDOFF",
+    "CANONICAL_DOCS"
+  ],
+  "task_id": "W0-03E-R1",
+  "cycle_id": "C01",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-03E/C03/GPT",
-      "waiting_for": "Krum relay of final Codex blocker",
-      "updated_at": "2026-09-30T18:00:52Z"
+      "work_id": "W0-03E-R1/C01/GPT",
+      "waiting_for": "Codex and Claude R1 implementation and review",
+      "updated_at": "2026-09-30T20:47:23Z"
     },
     "CODEX": {
-      "state": "BLOCKED",
-      "work_id": "W0-03E/C03/CX",
-      "waiting_for": "GPT/Krum decision after final correction exhausted",
-      "updated_at": "2026-09-30T18:00:52Z"
+      "state": "WORKING",
+      "work_id": "W0-03E-R1/C01/CX",
+      "waiting_for": "One-time Claude Send confirmation and observed start",
+      "updated_at": "2026-09-30T20:47:23Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-03E/C03/CL",
-      "waiting_for": "Codex independent C03 review",
-      "updated_at": "2026-09-30T17:34:46Z"
+      "state": "WAITING",
+      "work_id": "W0-03E-R1/C01/CL",
+      "waiting_for": "Codex dispatch of canonical R1 assignment",
+      "updated_at": "2026-09-30T20:47:23Z"
     }
   },
-  "current_work_id": "W0-03E/C03/CX",
-  "state": "BLOCKED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT/Krum decision after final correction exhausted",
+  "current_work_id": "W0-03E-R1/C01/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "One-time Claude Send confirmation and observed start",
   "wave": "W0",
   "flow": "FLOW-032",
-  "pr_number": 32,
-  "pr_head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
-  "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF",
-  "last_handoff": {
-    "url": "https://github.com/krumingo/BEG_Worck/pull/32",
-    "head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
-    "at": "2026-09-30T17:34:46Z"
-  },
-  "last_review": {
-    "path": "coordination/REVIEWS/W0-03E.md",
-    "blob_sha": "c1425c39949c7b8dc697633a4cef6dd58f5540a3",
-    "reviewed_head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
-    "verdict": "BLOCKED"
-  },
+  "pr_number": null,
+  "pr_head_sha": null,
+  "pr_draft": null,
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
+  "last_handoff": null,
+  "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-03E/C03 final exact-head independent review",
-    "last_result": "BLOCKED",
-    "required_by_krum": true,
+    "last_event": "W0-03E-R1/C01 canonical assignment",
+    "last_result": "PENDING",
+    "required_by_krum": false,
     "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Forward the final correctness blocker to GPT; no C04, merge or deploy is authorized.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408",
-    "updated_at": "2026-09-30T18:00:52Z"
+    "to": "CLAUDE",
+    "status": "NO_RELAY_NEEDED",
+    "instruction": "Canonical assignment is published; Claude has not been sent or observed.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/6d129f6fe7935ef863b4ea261898f51812c99640/coordination/ACTIVE.md",
+    "updated_at": "2026-09-30T20:47:23Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "FORWARD FINAL BLOCKER TO GPT",
+  "requires_krum_reason": "CONFIRM SEND TO CLAUDE",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "8382db0dabfd4c14d8990e4bfa9b73d9142b6bf4",
+    "active_blob_sha": "a409657baf315c45aaad4861d8f40b8712c43bcb",
     "review_path": "coordination/REVIEWS/W0-03E.md",
     "review_blob_sha": "c1425c39949c7b8dc697633a4cef6dd58f5540a3",
     "canonical_docs": [
-      {"path": "CLAUDE.md", "blob_sha": "e91d3230b74be5807ecf1c86a4219a6a71ef7a92"},
-      {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
-      {"path": "docs/architecture/IMPLEMENTATION_WAVES.md", "blob_sha": "e0ce9c2a2d80cc29e785d8e1f7cde28c03e2c0ca"},
-      {"path": "docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md", "blob_sha": "efa5f37c9c2ee6eb3c520e57d061982ddedb9f59"},
-      {"path": "docs/architecture/TENANCY_MODEL.md", "blob_sha": "93997df23592d0c808af17fbbd8167324b9dc9a1"},
-      {"path": "docs/flows/FLOW-032.md", "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"},
-      {"path": "docs/flows/FLOW-002.md", "blob_sha": "5594ffa4507e58bcdb4bcb2cf2071a1b835bc3b5"},
-      {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
+      {
+        "path": "CLAUDE.md",
+        "blob_sha": "e91d3230b74be5807ecf1c86a4219a6a71ef7a92"
+      },
+      {
+        "path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md",
+        "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"
+      },
+      {
+        "path": "docs/architecture/IMPLEMENTATION_WAVES.md",
+        "blob_sha": "e0ce9c2a2d80cc29e785d8e1f7cde28c03e2c0ca"
+      },
+      {
+        "path": "docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md",
+        "blob_sha": "efa5f37c9c2ee6eb3c520e57d061982ddedb9f59"
+      },
+      {
+        "path": "docs/architecture/TENANCY_MODEL.md",
+        "blob_sha": "93997df23592d0c808af17fbbd8167324b9dc9a1"
+      },
+      {
+        "path": "docs/flows/FLOW-032.md",
+        "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"
+      },
+      {
+        "path": "docs/flows/FLOW-002.md",
+        "blob_sha": "5594ffa4507e58bcdb4bcb2cf2071a1b835bc3b5"
+      },
+      {
+        "path": "docs/flows/FLOW-040.md",
+        "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"
+      }
     ]
   },
-  "updated_at": "2026-09-30T18:00:52Z",
+  "updated_at": "2026-09-30T20:47:23Z",
   "history": [
     {
-      "event_id": "w0-03e-c01-assignment-intent",
-      "occurred_at": "2026-09-28T18:26:32Z",
-      "task_id": "W0-03E",
+      "event_id": "w0-03e-r1-c01-assignment-intent",
+      "occurred_at": "2026-09-30T20:47:23Z",
+      "task_id": "W0-03E-R1",
       "cycle_id": "C01",
       "mapped_cycle": null,
       "actor": "CODEX",
       "kind": "ASSIGNMENT",
       "state_after": "WORKING",
-      "head_sha": "bbdb94dafa09a483b35ccdf6ed13604b77b86a96",
-      "source_url": "https://github.com/krumingo/BEG_Worck/commit/9b65571ada48425a2ced4a6685327855a9655790",
-      "source_commit_sha": "9b65571ada48425a2ced4a6685327855a9655790",
-      "summary": "Canonical W0-03E/C01 package and exact main base published. Dispatch is PENDING; Claude has not been sent or observed."
-    },
-    {
-      "event_id": "w0-03e-c01-claude-observed-start",
-      "occurred_at": "2026-09-28T20:15:54Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C01",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "DISPATCH",
-      "state_after": "WORKING",
-      "head_sha": "bbdb94dafa09a483b35ccdf6ed13604b77b86a96",
-      "source_url": "https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF",
-      "source_commit_sha": "52735825f4b5785f0709ba47dd91067a9b5edf6c",
-      "summary": "One confirmed Code Cloud Send; Claude session observed responding and running tools on the selected implementation branch. No HANDOFF or review yet."
-    },
-    {
-      "event_id": "w0-03e-c01-exact-head-handoff",
-      "occurred_at": "2026-09-29T04:25:28Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C01",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "HANDOFF",
-      "state_after": "HANDOFF",
-      "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
-      "source_commit_sha": "1b7df12a8f7776f0f03b2180f436c4ac90c95521",
-      "summary": "Claude session ended, Draft PR #32 is stable at exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747 and its body contains the final HANDOFF. Codex independent review is in progress; no verdict yet."
-    },
-    {
-      "event_id": "w0-03e-c01-codex-changes-requested",
-      "occurred_at": "2026-09-29T15:12:06Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C01",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "REVIEW",
-      "state_after": "CHANGES_REQUESTED",
-      "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5893044847",
-      "source_commit_sha": "787f41e6803fb7f9a218b67a51edc945699d313c",
-      "summary": "Independent exact-head review found financial recipient identity mismatch and incomplete assigned legacy import/export/report adapter coverage; 110 focused and 627 adjacent in-memory tests passed, but no independent real-Mongo gate. No correction dispatched."
-    },
-    {
-      "event_id": "w0-03e-c02-correction-assignment-intent",
-      "occurred_at": "2026-09-29T16:29:29Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C02",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "ASSIGNMENT",
-      "state_after": "WORKING",
-      "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
-      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
-      "source_commit_sha": "e7ea61ced9a737c4b414647e91591348bd19dcd9",
-      "summary": "Krum authorized bounded technical correction #1 for both C01 findings in the same Draft PR #32 and branch. Canonical C02 assignment published; dispatch is PENDING, no Claude Send or start observed."
-    },
-    {
-      "event_id": "w0-03e-c02-claude-observed-start",
-      "occurred_at": "2026-09-30T04:29:47Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C02",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "DISPATCH",
-      "state_after": "WORKING",
-      "head_sha": "67c172e3066a53d0d6fa5c594997e2b7af0d1747",
-      "source_url": "https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF",
-      "source_commit_sha": "ab03dd99e282fe8d40d34a448cecdf2a471836e4",
-      "summary": "One confirmed C02 Send to the existing Claude Code Cloud session; its message appeared and Claude was observed executing git status. No C02 HANDOFF or Codex re-review yet."
-    },
-    {
-      "event_id": "w0-03e-c02-exact-head-handoff",
-      "occurred_at": "2026-09-30T04:46:03Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C02",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "HANDOFF",
-      "state_after": "HANDOFF",
-      "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
-      "source_commit_sha": "c5ade5e63ceb1ac668a05382856d41cd5b891bd8",
-      "summary": "Claude session finished and Draft PR #32 has a final C02 HANDOFF on exact head 117072c4529cf29af716c5673ad106ab2a0d465b. Codex independent review is now in progress; no verdict yet."
-    },
-    {
-      "event_id": "w0-03e-c02-codex-verdict-ready-intent",
-      "occurred_at": "2026-09-30T04:56:48Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C02",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "CONTROL_UPDATE",
-      "state_after": "REVIEW",
-      "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
-      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
-      "source_commit_sha": "1d25b7a71b3a783d3ba63d527ed523d5f825f599",
-      "summary": "Independent review and disposable real-Mongo gate finished. CHANGES_REQUESTED is ready but not published; a cross-tenant /prices invoice join was reproduced. Dashboard must not treat the pending verdict as confirmed."
-    },
-    {
-      "event_id": "w0-03e-c02-codex-changes-requested",
-      "occurred_at": "2026-09-30T04:59:29Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C02",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "REVIEW",
-      "state_after": "CHANGES_REQUESTED",
-      "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547",
-      "source_commit_sha": "f22dfcef6edec2f77a84a2706464538087cd8968",
-      "summary": "Independent exact-head review published CHANGES_REQUESTED after a real-Mongo reproduction of a cross-tenant /prices invoice join. Focused 135, adjacent 809, and real-Mongo 30 passed but did not cover this defect; no correction #2 dispatched."
-    },
-    {
-      "event_id": "w0-03e-c03-final-correction-assignment-intent",
-      "occurred_at": "2026-09-30T17:09:42Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C03",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "ASSIGNMENT",
-      "state_after": "WORKING",
-      "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
-      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
-      "source_commit_sha": "7dad307c695d992701a3bed148d2a1b9d3c2a37d",
-      "summary": "Krum authorized final bounded correction #2 of 2 for W0-03E in Draft PR #32. Canonical C03 assignment published on the exact C02 reviewed head. Dispatch is PENDING; no C03 Claude Send or start observed."
-    },
-    {
-      "event_id": "w0-03e-c03-claude-observed-start",
-      "occurred_at": "2026-09-30T17:22:27Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C03",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "DISPATCH",
-      "state_after": "WORKING",
-      "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
-      "source_url": "https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF",
-      "source_commit_sha": "1f2ac00ab44723d55a28de40887934e920102ba3",
-      "summary": "One confirmed C03 Code Cloud Send to the existing session; message appeared and Claude was observed running git status. No C03 HANDOFF or Codex review yet."
-    },
-    {
-      "event_id": "w0-03e-c03-exact-head-handoff",
-      "occurred_at": "2026-09-30T17:34:46Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C03",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "HANDOFF",
-      "state_after": "HANDOFF",
       "head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32",
-      "source_commit_sha": "cdfeec3cb4c656f37ff2c12578c0cb295ec30931",
-      "summary": "Claude session ended and published final C03 HANDOFF in Draft PR #32 at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. Codex independent whole-PR and real-Mongo review is in progress; no verdict yet."
-    },
-    {
-      "event_id": "w0-03e-c03-codex-verdict-ready-intent",
-      "occurred_at": "2026-09-30T17:52:51Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C03",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "CONTROL_UPDATE",
-      "state_after": "REVIEW",
-      "head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
-      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
-      "source_commit_sha": "48728683294fd855ab9d56b55f38a7208709ce2f",
-      "summary": "Independent whole-PR review and disposable real-Mongo gate finished. A cross-tenant offer XLSX project-name leak was reproduced. The final BLOCKED verdict is READY but not published; no C04 is authorized."
-    },
-    {
-      "event_id": "w0-03e-c03-codex-blocked-final",
-      "occurred_at": "2026-09-30T18:00:52Z",
-      "task_id": "W0-03E",
-      "cycle_id": "C03",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "REVIEW",
-      "state_after": "BLOCKED",
-      "head_sha": "47a0c59a4eac974d7bab144f71c076a5748243d0",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408",
-      "source_commit_sha": "0d302792eac7a0765717c723577512e2ef00d90f",
-      "summary": "Final C03 independent exact-head review published BLOCKED: A offer XLSX export leaked B project code/name through a bare project_id lookup. Disposable real-Mongo 861/861 passed but did not cover the demonstrated export defect. Correction #2 of 2 exhausted; no C04, merge or deploy."
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/6d129f6fe7935ef863b4ea261898f51812c99640/coordination/ACTIVE.md",
+      "source_commit_sha": "6d129f6fe7935ef863b4ea261898f51812c99640",
+      "summary": "Krum authorized a separate tenant-export remediation task on blocked PR #32 exact head. New branch exists at that head; dispatch PENDING, no R1 Claude Send, Draft PR, HANDOFF or verdict yet. C03 remains final BLOCKED, not C04."
     }
   ]
 }
