@@ -1,13 +1,13 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E/C03 HANDOFF / CODEX INDEPENDENT REVIEW IN PROGRESS
+Status: W0-03E/C03 REVIEW / VERDICT READY, PUBLICATION PENDING
 Current-Agent: CODEX
 Current-State: REVIEW
 Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (CLAUDE_HANDOFF; exact-head PR body and ended session)
-Now: Codex is independently reviewing the entire W0-03E PR #32 at the C03 exact head
+Transition-Phase: INTENT (CODEX_VERDICT READY; not published)
+Now: Codex review and independent real-Mongo gate are complete; final C03 verdict is prepared but not yet published
 Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
@@ -28,6 +28,7 @@ Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/32 (C03 final HANDOFF in PR body at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
 Review: C02 CHANGES_REQUESTED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547; exact head 117072c4529cf29af716c5673ad106ab2a0d465b. Independent real-Mongo reproduction found a cross-tenant `/prices` invoice join. This is prior-cycle evidence, not a C03 verdict.
+Prepared-Verdict: BLOCKED — unpublished. Independent C03 review reproduced cross-tenant project-name leakage in the in-scope offer XLSX export at exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. Do not treat this as a published verdict until the review artifact and PR comment exist. No C04 is authorized.
 HANDOFF-Observed-At: 2026-09-30T17:34:46Z for C03 (Claude session finished; PR #32 body carries final HANDOFF at 47a0c59a4eac974d7bab144f71c076a5748243d0)
 Predecessor-Task-ID: W0-03E/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (CHANGES_REQUESTED on exact head 67c172e3066a53d0d6fa5c594997e2b7af0d1747)
