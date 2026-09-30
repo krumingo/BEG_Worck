@@ -1,58 +1,58 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-09-30T04:59:29Z",
+  "validated_at": "2026-09-30T17:09:42Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "f22dfcef6edec2f77a84a2706464538087cd8968",
-  "control_state_commit_sha": "f5d95a7f3d7b5d3b9a71399c57aa2862dccb5ae6",
-  "now": "Codex published CHANGES_REQUESTED on W0-03E/C02; a cross-tenant /prices join remains and no correction #2 has been dispatched",
+  "active_source_commit_sha": "7dad307c695d992701a3bed148d2a1b9d3c2a37d",
+  "control_state_commit_sha": "e77e974ebe6f00b8d516bb23db216715f762efdf",
+  "now": "Codex prepared the final W0-03E/C03 bounded correction; Claude Send is pending confirmation",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": ["ACTIVE", "REVIEW", "PR/HANDOFF", "CANONICAL_DOCS"],
   "task_id": "W0-03E",
-  "cycle_id": "C02",
+  "cycle_id": "C03",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-03E/C02/GPT",
-      "waiting_for": "Krum relay of the published Codex C02 verdict",
-      "updated_at": "2026-09-30T04:59:29Z"
+      "work_id": "W0-03E/C03/GPT",
+      "waiting_for": "Final W0-03E/C03 implementation and independent Codex review",
+      "updated_at": "2026-09-30T17:09:42Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-03E/C02/CX",
-      "waiting_for": "GPT decision on a remaining bounded correction",
-      "updated_at": "2026-09-30T04:59:29Z"
+      "state": "WORKING",
+      "work_id": "W0-03E/C03/CX",
+      "waiting_for": "Action-time confirmation for the single Claude Send",
+      "updated_at": "2026-09-30T17:09:42Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-03E/C02/CL",
-      "waiting_for": "Codex independent C02 review",
-      "updated_at": "2026-09-30T04:46:03Z"
+      "state": "WAITING",
+      "work_id": "W0-03E/C03/CL",
+      "waiting_for": "Confirmed one-time Codex Send of the C03 assignment",
+      "updated_at": "2026-09-30T17:09:42Z"
     }
   },
-  "current_work_id": "W0-03E/C02/CX",
-  "state": "CHANGES_REQUESTED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT decision on a remaining bounded correction",
+  "current_work_id": "W0-03E/C03/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "Action-time confirmation for the single Claude Send",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 32,
   "pr_head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
   "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/code/session_01H4RDLb5DobWSt3AT8C1BRF",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/pull/32",
     "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
@@ -66,28 +66,28 @@
   },
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-03E/C02 exact-head independent review",
+    "last_event": "W0-03E/C02 exact-head independent review; C03 assignment is pending",
     "last_result": "CHANGES_REQUESTED",
-    "required_by_krum": true,
+    "required_by_krum": false,
     "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Krum forwards the published C02 Codex verdict to GPT; correction #2 was not dispatched.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547",
-    "updated_at": "2026-09-30T04:59:29Z"
+    "to": "CLAUDE",
+    "status": "NO_RELAY_NEEDED",
+    "instruction": "Codex will directly send the canonical C03 assignment after action-time confirmation; no Claude start has been observed.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
+    "updated_at": "2026-09-30T17:09:42Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "FORWARD CODEX VERDICT TO GPT",
+  "requires_krum_reason": "CONFIRM SEND TO CLAUDE",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "7d79ac02c20a018fb8e36e02324dff57628697b9",
+    "active_blob_sha": "e7cf07c2f90a4b7a1d274947d10dfa6b0c38dcff",
     "review_path": "coordination/REVIEWS/W0-03E.md",
     "review_blob_sha": "828b8ca3a825c1998a6d15dca096b22cc112d51d",
     "canonical_docs": [
@@ -101,7 +101,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-09-30T04:59:29Z",
+  "updated_at": "2026-09-30T17:09:42Z",
   "history": [
     {
       "event_id": "w0-03e-c01-assignment-intent",
@@ -228,6 +228,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5904379547",
       "source_commit_sha": "f22dfcef6edec2f77a84a2706464538087cd8968",
       "summary": "Independent exact-head review published CHANGES_REQUESTED after a real-Mongo reproduction of a cross-tenant /prices invoice join. Focused 135, adjacent 809, and real-Mongo 30 passed but did not cover this defect; no correction #2 dispatched."
+    },
+    {
+      "event_id": "w0-03e-c03-final-correction-assignment-intent",
+      "occurred_at": "2026-09-30T17:09:42Z",
+      "task_id": "W0-03E",
+      "cycle_id": "C03",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "117072c4529cf29af716c5673ad106ab2a0d465b",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
+      "source_commit_sha": "7dad307c695d992701a3bed148d2a1b9d3c2a37d",
+      "summary": "Krum authorized final bounded correction #2 of 2 for W0-03E in Draft PR #32. Canonical C03 assignment published on the exact C02 reviewed head. Dispatch is PENDING; no C03 Claude Send or start observed."
     }
   ]
 }
