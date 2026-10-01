@@ -1,21 +1,21 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A1/C01 PENDING — TENANT-SAFE DATA ACCESS ARCHITECTURE
-Current-Agent: CODEX
+Status: W0-03E-A1/C01 RUNNING — CLAUDE IMPLEMENTING TENANT-SAFE ACCESS
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: DISPATCH
-Transition-Phase: INTENT (A1 assignment prepared; Claude not sent or observed)
-Now: Codex preparing the W0-03E-A1 tenant-safe data access assignment for Claude
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED (Claude session initialized and actively responding)
+Now: Claude implementing W0-03E-A1 tenant-safe data access architecture
+Next-Agent: CODEX
 Relay-State: RECEIVED
 Relay-From: GPT
 Relay-To: CODEX
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE
-Dispatch-Observed-At: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01YKpo97ohTUBtSeZAFAE71a
+Dispatch-Observed-At: 2026-10-01T13:34:11Z (message visible, Claude responding, commands running)
 Task-ID: W0-03E-A1
 Cycle-ID: C01
 Base-branch: main
@@ -33,10 +33,10 @@ HANDOFF-Observed-At: NONE for A1
 Predecessor-Task-ID: W0-03E-R1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-R1.md (final BLOCKED on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
 Predecessor-Integration: NONE; blocked PR #32 and #33 remain Draft and unmerged. A1 reuses PR #33 exact head as code base only, not accepted integration.
-Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR. This is neither C04 nor R1 continuation. Claude has not been sent or observed at this PENDING snapshot.
+Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR, then explicitly confirmed the one-time direct Claude Send. The new Code Cloud session was observed at the URL above, responding and running commands on the selected A1 branch. This is neither C04 nor R1 continuation; no A1 HANDOFF or verdict exists yet.
 Correction-cycles: W0-03E C02/C03 and R1 budgets remain exhausted and immutable. A1 is an explicitly authorized new architecture task, not an automatic correction.
 
-## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — PENDING dispatch
+## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — Claude RUNNING
 
 **Identity and exact base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A1`; Cycle-ID `C01`; branch `codex/w0-03e-a1-tenant-safe-access` starts at exact `2cd40a377b67beb4cc60bf211e42708e2a69f881` from blocked Draft PR #33. Open one **new Draft PR against `main`** for A1; leave PR #32 and #33 open/Draft and untouched. Recheck exact base/branch and absence of duplicate A1 session/PR before work. Draft is not integration. If identities drift, STOP.
 
