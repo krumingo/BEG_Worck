@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2B/C01 IMPLEMENTATION — CLAUDE WORKING
-Human-Summary-BG: Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
-Transition-Phase: OBSERVED (one-time direct Claude Send accepted; Code Cloud session initialized and ran git status)
-Now: Claude working on W0-03E-A2B/C01 in the exact implementation branch
-Next-Agent: CODEX
+Status: W0-03E-A2B/C01 REVIEW — CODEX REVIEWING
+Human-Summary-BG: Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: OBSERVED (final exact-head HANDOFF published in PR #40 and Claude Code Cloud session finished)
+Now: Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
+Next-Agent: GPT
 Relay-State: RECEIVED
-Relay-From: CODEX
-Relay-To: CLAUDE
+Relay-From: CLAUDE
+Relay-To: CODEX
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc
 Dispatch-Observed-At: 2026-10-01T18:10:23Z (Claude Code Cloud session initialized on BEG_Worck/A2B branch and ran git status)
 Task-ID: W0-03E-A2B
@@ -22,25 +22,25 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-a2b-single-tenant-backfill
-PR-URL: NONE (new A2B Draft PR to be created by Claude; #32/#33/#34/#36 remain Draft and untouched)
-PR-Head: NONE
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/40 (Draft; #32/#33/#34/#36 remain Draft and untouched)
+PR-Head: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473
 Remediation-Base-SHA: 43ba7e35e9b14899cc3054f1f9c65f30996162ae
 Architecture-Commit-SHA: bd2cd362bf7b6009d82407925c76c0a9390737fb
-Implementation-Branch-Head: bd2cd362bf7b6009d82407925c76c0a9390737fb (architecture-only descendant of remediation base; no A2B runtime implementation yet)
+Implementation-Branch-Head: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473 (final HANDOFF head; not yet independently accepted)
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE for A2B
-Review: predecessor coordination/REVIEWS/W0-03E-A2.md is BLOCKED on 43ba7e35e9b14899cc3054f1f9c65f30996162ae; no A2B review exists yet.
-Final-Verdict: NONE for A2B. Claude implementation is active; no A2B PR, HANDOFF, review, merge or deploy yet.
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512
+Review: independent A2B whole-package review and disposable real-Mongo gate are underway; no A2B verdict exists yet. Explicitly assess residual 314 unscoped reads, 169 unscoped writes and fixed `_id` settings.
+Final-Verdict: NONE for A2B. PR #40 is Draft and unmerged; HANDOFF is not Codex PASS; no deploy.
 Predecessor-Task-ID: W0-03E-A2/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2.md (final BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
 Predecessor-Integration: NONE; PR #32, #33, #34 and #36 remain Draft and unmerged. A2B uses blocked A2 exact head as code base only; architecture decision bd2cd362 is not an accepted implementation gate.
 Authorization: Issue #38 owner decision and latest canonical assignment https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793 supersede the current-dataset unresolved-provenance quarantine requirement. The one-time BEG legacy rule is restricted to the proven current single-tenant source, never future ambiguous imports. Test-only second tenant is authorized only after zero-ownerless test backfill in a disposable environment. Krum explicitly confirmed the one-time A2B Send; the direct Claude Code Cloud session above was observed starting. No duplicate Send.
 Correction-cycles: W0-03E C02/C03, R1, A1 and A2 outcomes remain immutable. A2B is a separately authorized task, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — RUNNING
+## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — REVIEWING
 
-**За Крум.** Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми.
+**На човешки / Какво правим.** Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
 
 **Identity and sources.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2B`; Cycle-ID `C01`; code base exact `43ba7e35e9b14899cc3054f1f9c65f30996162ae` from blocked Draft PR #36. Implementation branch `codex/w0-03e-a2b-single-tenant-backfill` currently points at architecture-only commit `bd2cd362bf7b6009d82407925c76c0a9390737fb`, a descendant of the code base. Read Issue #38 **including the latest owner canonical assignment and test-tenant extension**, `docs/architecture/W0-03E-A2B_SINGLE_TENANT_BACKFILL.md` at bd2cd362, `CLAUDE.md`, `coordination/README.md`, this ACTIVE assignment, predecessor `coordination/REVIEWS/W0-03E-A1.md` and `W0-03E-A2.md`, `docs/architecture/TENANCY_MODEL.md` (D-15), `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `docs/flows/FLOW-032.md`, W0-02 permission/bootstrap code and the complete main→A2 package. Recheck branch/base, absence of another A2B session/PR and exact queue SHA before editing. Open one new Draft PR against main; PR #32/#33/#34/#36 stay Draft and untouched. Draft is not integration.
 
