@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T16:17:21Z",
+  "validated_at": "2026-10-01T16:28:29Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "2a3f5e426c9375b2f6276c1e065d97a011abe49c",
-  "control_state_commit_sha": "4e35bbb02e6f98329084e577ae84e2613610328f",
-  "now": "Codex independently reviewing complete main-to-A2 package and provenance gate",
+  "active_source_commit_sha": "92f18256cbf9778e1657711d56cca13cb8939aba",
+  "control_state_commit_sha": "0485be8801fe53cad1c1e63d8845d5abb601f6a7",
+  "now": "A2 BLOCKED: unresolved project_team tenant provenance has no durable DQ/pending work item",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
+    "event": "CODEX_VERDICT",
     "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935491747",
-    "verdict_publication": "NONE"
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935767587",
+    "verdict_publication": "PUBLISHED"
   },
   "generated_from": [
     "ACTIVE",
@@ -30,27 +30,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2/C01/GPT",
-      "waiting_for": "Codex independent A2 verdict",
-      "updated_at": "2026-10-01T16:17:21Z"
+      "waiting_for": "Manual relay of published A2 blocker and architect decision",
+      "updated_at": "2026-10-01T16:28:29Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "BLOCKED",
       "work_id": "W0-03E-A2/C01/CX",
-      "waiting_for": "Independent exact-head review and disposable real-Mongo gate",
-      "updated_at": "2026-10-01T16:17:21Z"
+      "waiting_for": "GPT/Krum architecture decision on unresolved authorization provenance",
+      "updated_at": "2026-10-01T16:28:29Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
+      "state": "WAITING",
       "work_id": "W0-03E-A2/C01/CL",
-      "waiting_for": "Codex independent A2 review verdict",
-      "updated_at": "2026-10-01T16:17:21Z"
+      "waiting_for": "No further dispatch authorized after BLOCKED verdict",
+      "updated_at": "2026-10-01T16:28:29Z"
     }
   },
   "current_work_id": "W0-03E-A2/C01/CX",
-  "state": "REVIEW",
+  "state": "BLOCKED",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Independent exact-head review and disposable real-Mongo gate",
+  "waiting_for": "GPT/Krum architecture decision on unresolved authorization provenance",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 36,
@@ -63,21 +63,26 @@
     "head_sha": "43ba7e35e9b14899cc3054f1f9c65f30996162ae",
     "at": "2026-10-01T16:12:15Z"
   },
-  "last_review": null,
-  "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "W0-03E-A2/C01 final exact-head HANDOFF",
-    "last_result": "HANDOFF",
-    "required_by_krum": false,
-    "from": "CLAUDE",
-    "to": "CODEX",
-    "status": "RECEIVED",
-    "instruction": "Codex is independently reviewing the complete package; no verdict has been published.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935491747",
-    "updated_at": "2026-10-01T16:17:21Z"
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-03E-A2.md",
+    "blob_sha": "6a4f4292f42fa298d06d421ad81c9fd57122d778",
+    "reviewed_head_sha": "43ba7e35e9b14899cc3054f1f9c65f30996162ae",
+    "verdict": "BLOCKED"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "relay": {
+    "last_agent": "CODEX",
+    "last_event": "W0-03E-A2/C01 independent exact-head review published",
+    "last_result": "BLOCKED",
+    "required_by_krum": true,
+    "from": "CODEX",
+    "to": "GPT",
+    "status": "NOT_SENT",
+    "instruction": "Relay the published A2 blocker to GPT for an architecture decision; no automatic successor task or Claude dispatch.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935767587",
+    "updated_at": "2026-10-01T16:28:29Z"
+  },
+  "requires_krum": true,
+  "requires_krum_reason": "Manual relay of A2 security/architecture blocker to GPT; Krum retains authorization decisions.",
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "REVIEW",
@@ -87,9 +92,9 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "3632102b7e8c35c85e883f2797f830204ac96834",
-    "review_path": "coordination/REVIEWS/W0-03E-A1.md",
-    "review_blob_sha": "4d1cef4f09c826b945c7bff9a6c167b37fcfea5d",
+    "active_blob_sha": "a1fe9bacd3e92373e26b6a7c21ebb7f7ec3a254e",
+    "review_path": "coordination/REVIEWS/W0-03E-A2.md",
+    "review_blob_sha": "6a4f4292f42fa298d06d421ad81c9fd57122d778",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -125,7 +130,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T16:17:21Z",
+  "updated_at": "2026-10-01T16:28:29Z",
   "history": [
     {
       "event_id": "w0-03e-a2-c01-assignment-intent",
@@ -168,6 +173,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935491747",
       "source_commit_sha": "43ba7e35e9b14899cc3054f1f9c65f30996162ae",
       "summary": "Claude published final exact-head HANDOFF in Draft PR #36 and the Code Cloud session reached Awaiting input. Codex began independent whole-package review. Claude reports the existing DQ/pending mapping cannot represent ownerless authorization provenance; this remains to be independently verified."
+    },
+    {
+      "event_id": "w0-03e-a2-c01-independent-blocked-verdict",
+      "occurred_at": "2026-10-01T16:28:29Z",
+      "task_id": "W0-03E-A2",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "BLOCKED",
+      "head_sha": "43ba7e35e9b14899cc3054f1f9c65f30996162ae",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935767587",
+      "source_commit_sha": "92f18256cbf9778e1657711d56cca13cb8939aba",
+      "summary": "Independent exact-head review confirms ownerless project_team records deny runtime access but cannot be persisted as DQ/pending work items under the existing tenant-required FLOW-032 model. W0-02 permission bootstrap also contains an unscoped membership derivation risk. A2 BLOCKED; independent real-Mongo gate not run and not claimed PASS. No merge, deploy or new dispatch."
     }
   ]
 }
