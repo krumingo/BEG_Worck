@@ -1,22 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2B/C01 ASSIGNMENT — PENDING SEND, NOT STARTED
+Status: W0-03E-A2B/C01 IMPLEMENTATION — CLAUDE WORKING
 Human-Summary-BG: Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми.
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT (canonical A2B assignment prepared; no Claude Send or observed start)
-Now: Codex preparing W0-03E-A2B/C01 assignment and waiting for one-time Computer Use Send confirmation
-Next-Agent: CLAUDE
-Relay-State: NOT_SENT
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED (one-time direct Claude Send accepted; Code Cloud session initialized and ran git status)
+Now: Claude working on W0-03E-A2B/C01 in the exact implementation branch
+Next-Agent: CODEX
+Relay-State: RECEIVED
 Relay-From: CODEX
 Relay-To: CLAUDE
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE
-Dispatch-Observed-At: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc
+Dispatch-Observed-At: 2026-10-01T18:10:23Z (Claude Code Cloud session initialized on BEG_Worck/A2B branch and ran git status)
 Task-ID: W0-03E-A2B
 Cycle-ID: C01
 Base-branch: main
@@ -31,14 +31,14 @@ Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: NONE for A2B
 Review: predecessor coordination/REVIEWS/W0-03E-A2.md is BLOCKED on 43ba7e35e9b14899cc3054f1f9c65f30996162ae; no A2B review exists yet.
-Final-Verdict: NONE for A2B. No Send, implementation, PR, HANDOFF, merge or deploy.
+Final-Verdict: NONE for A2B. Claude implementation is active; no A2B PR, HANDOFF, review, merge or deploy yet.
 Predecessor-Task-ID: W0-03E-A2/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2.md (final BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
 Predecessor-Integration: NONE; PR #32, #33, #34 and #36 remain Draft and unmerged. A2B uses blocked A2 exact head as code base only; architecture decision bd2cd362 is not an accepted implementation gate.
-Authorization: Issue #38 owner decision and latest canonical assignment https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793 supersede the current-dataset unresolved-provenance quarantine requirement. The one-time BEG legacy rule is restricted to the proven current single-tenant source, never future ambiguous imports. Test-only second tenant is authorized only after zero-ownerless test backfill in a disposable environment. One-time Claude Computer Use Send is still awaiting Krum confirmation.
+Authorization: Issue #38 owner decision and latest canonical assignment https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793 supersede the current-dataset unresolved-provenance quarantine requirement. The one-time BEG legacy rule is restricted to the proven current single-tenant source, never future ambiguous imports. Test-only second tenant is authorized only after zero-ownerless test backfill in a disposable environment. Krum explicitly confirmed the one-time A2B Send; the direct Claude Code Cloud session above was observed starting. No duplicate Send.
 Correction-cycles: W0-03E C02/C03, R1, A1 and A2 outcomes remain immutable. A2B is a separately authorized task, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — PENDING, NOT SENT
+## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — RUNNING
 
 **За Крум.** Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми.
 
