@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T14:09:34Z",
+  "validated_at": "2026-10-01T14:18:36Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "08cf5a065ce68fcf50739d79c6754aa7e884b32b",
-  "control_state_commit_sha": "1d197be4acf3a516b52ab4b297efce8f9e6bebeb",
-  "now": "Codex independently reviewing the whole W0-03E-A1 package and residual project_team risk",
+  "active_source_commit_sha": "7899335cf4ee7753ae900a1813ae0553d6817858",
+  "control_state_commit_sha": "7899335cf4ee7753ae900a1813ae0553d6817858",
+  "now": "Codex preparing exact-head independent verdict publication; no verdict published yet",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/34",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": [
     "ACTIVE",
@@ -31,13 +31,13 @@
       "state": "WAITING",
       "work_id": "W0-03E-A1/C01/GPT",
       "waiting_for": "Codex independent exact-head A1 verdict",
-      "updated_at": "2026-10-01T14:09:34Z"
+      "updated_at": "2026-10-01T14:18:36Z"
     },
     "CODEX": {
       "state": "REVIEWING",
       "work_id": "W0-03E-A1/C01/CX",
-      "waiting_for": "Independent whole-package exact-head review and disposable real-Mongo gate",
-      "updated_at": "2026-10-01T14:09:34Z"
+      "waiting_for": "Publication of prepared independent exact-head verdict",
+      "updated_at": "2026-10-01T14:18:36Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -50,7 +50,7 @@
   "state": "REVIEW",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Independent whole-package exact-head review and disposable real-Mongo gate",
+  "waiting_for": "Publication of prepared independent exact-head verdict",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 34,
@@ -87,7 +87,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "7bedd0d625a31e09e4abe05a7ae67cf63315ea6e",
+    "active_blob_sha": "e1832eba873e4729969fd625a1f290e7de265aed",
     "review_path": "coordination/REVIEWS/W0-03E-R1.md",
     "review_blob_sha": "85e97790ce4a6a5d46f311ae377571991f3904e2",
     "canonical_docs": [
@@ -125,7 +125,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T14:09:34Z",
+  "updated_at": "2026-10-01T14:18:36Z",
   "history": [
     {
       "event_id": "w0-03e-a1-c01-assignment-intent",

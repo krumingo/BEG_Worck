@@ -1,13 +1,13 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A1/C01 REVIEW — EXACT-HEAD CLAUDE HANDOFF OBSERVED
+Status: W0-03E-A1/C01 REVIEW — CODEX VERDICT READY / PUBLICATION PENDING
 Current-Agent: CODEX
 Current-State: REVIEW
 Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (Claude session ended; exact-head HANDOFF in Draft PR #34)
-Now: Codex independently reviewing the whole W0-03E-A1 package and residual project_team risk
+Transition-Phase: INTENT (independent BLOCKED verdict prepared but not published)
+Now: Codex preparing exact-head independent verdict publication; no verdict published yet
 Next-Agent: GPT
 Relay-State: RECEIVED
 Relay-From: GPT
@@ -27,8 +27,8 @@ Remediation-Base-SHA: 2cd40a377b67beb4cc60bf211e42708e2a69f881
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/34 (final A1 exact-head HANDOFF in PR body)
-Review: A1 independent whole-package review in progress on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. Claude reports a residual project_team authorization ambiguity; its tests and inventory are claims pending independent verification. Predecessor R1 BLOCKED remains in coordination/REVIEWS/W0-03E-R1.md.
-Final-Verdict: NONE for A1; Codex reviewing. No merge or deploy.
+Review: Exact-head independent review found that the central project_team access helpers grant tenant A membership from tenant B's only team row when user/project IDs collide; the Windows static guard also reports four violations despite the claimed clean guard. A BLOCKED verdict is prepared but not yet published. Predecessor R1 BLOCKED remains in coordination/REVIEWS/W0-03E-R1.md.
+Final-Verdict: PUBLISH PENDING for A1; Codex remains REVIEWING until the independent review is published. No merge or deploy.
 HANDOFF-Observed-At: 2026-10-01T14:09:34Z (Claude response finished; PR #34 body carries final HANDOFF at exact head)
 Predecessor-Task-ID: W0-03E-R1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-R1.md (final BLOCKED on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
