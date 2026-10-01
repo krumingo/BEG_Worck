@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2/C01 RUNNING — AUTHORIZATION RELATION TENANT PROVENANCE
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
-Transition-Phase: OBSERVED (Claude Code Cloud session started and read the canonical assignment)
-Now: Claude working on W0-03E-A2/C01
-Next-Agent: CODEX
+Status: W0-03E-A2/C01 REVIEW — AUTHORIZATION RELATION TENANT PROVENANCE
+Current-Agent: CODEX
+Current-State: REVIEWING
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: OBSERVED (final exact-head HANDOFF published and Code Cloud session ended)
+Now: Codex independently reviewing complete main-to-A2 package and provenance gate
+Next-Agent: GPT
 Relay-State: RECEIVED
 Relay-From: GPT
 Relay-To: CODEX
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1
 Dispatch-Observed-At: 2026-10-01T15:22:58Z (Claude verified branch/base/queue SHA and began reading A2 context)
 Task-ID: W0-03E-A2
@@ -21,22 +21,22 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-a2-project-team-provenance
-PR-URL: NONE (new Draft PR required; PR #32/#33/#34 remain Draft and untouched)
-PR-Head: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/36 (open Draft; PR #32/#33/#34 remain Draft and untouched)
+PR-Head: 43ba7e35e9b14899cc3054f1f9c65f30996162ae
 Remediation-Base-SHA: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE for A2 (Claude is working; no final HANDOFF)
-Review: Predecessor A1 BLOCKED — coordination/REVIEWS/W0-03E-A1.md and https://github.com/krumingo/BEG_Worck/pull/34#issuecomment-5933406188 on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. A B-only project_team row authorized A's same-ID project; Windows guard exited 1. A2 has no review yet.
-Final-Verdict: NONE for A2; Claude implementation is active, not reviewed. No merge or deploy.
-HANDOFF-Observed-At: NONE for A2
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935491747 (exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
+Review: CODEX REVIEWING A2 exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae; predecessor A1 BLOCKED evidence remains in coordination/REVIEWS/W0-03E-A1.md. Claude HANDOFF reports existing DQ/pending mapping cannot represent ownerless project_team provenance; this is a finding to verify, not yet an independent verdict.
+Final-Verdict: NONE for A2; independent review in progress. No merge or deploy.
+HANDOFF-Observed-At: 2026-10-01T16:17:21Z
 Predecessor-Task-ID: W0-03E-A1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A1.md (final BLOCKED on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb)
 Predecessor-Integration: NONE; blocked PR #32, #33 and #34 remain Draft and unmerged. A2 reuses PR #34 exact head as code base only, not accepted integration.
-Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch started at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. The one authorized direct Claude Code Cloud Send was observed at the session above. No final A2 HANDOFF or verdict has occurred; no A2 Draft PR was observed at dispatch start.
+Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch started at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. The one authorized direct Claude Code Cloud Send was observed at the session above. Final exact-head HANDOFF is now published in Draft PR #36; Codex review has begun, with no verdict, merge or deploy yet.
 Correction-cycles: W0-03E C02/C03, R1 and A1 outcomes remain immutable. A2 is an explicitly authorized separate provenance task, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — RUNNING implementation
+## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — REVIEW
 
 **Identity and base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2`; Cycle-ID `C01`; implementation branch `codex/w0-03e-a2-project-team-provenance` is already published at exact blocked A1 head `4b7f9869c288a9b9596bb8d2c02136b0fb749acb`. Open one **new Draft PR against `main`** for the complete stacked A2 package; clearly identify PR #34 as an unaccepted predecessor code base. Leave PR #32/#33/#34 open/Draft and untouched. Recheck exact branch/base and absence of duplicate A2 session/PR before work; STOP on drift. Draft is not integration.
 
