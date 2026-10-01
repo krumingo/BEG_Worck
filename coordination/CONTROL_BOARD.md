@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-01T20:00:55Z · CONTROL STATE: **VALID** as of 2026-10-01T20:00:55Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-01T20:07:19Z · CONTROL STATE: **VALID** as of 2026-10-01T20:07:19Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03E-A2B / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-03E-A2B/C01 exact-head HANDOFF published in Draft PR #40 / HANDOFF
 RELAY: RECEIVED · CLAUDE → CODEX
 NOW: Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: Independent whole-package review and real-Mongo gate
@@ -46,7 +46,7 @@ GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `c34e688b5c8d9453150ac0bdf941be2d40376a2c` · blob `193fe18a16cf6641829bbf44e5cf0e76b2c2ab0a`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `8fcb9287bd98ca5f767e853bb7deaea88f099a15` · blob `d44cb7580063cd3c5ac8966db6e0a217a66974e7`
 - Draft PR: [#40](https://github.com/krumingo/BEG_Worck/pull/40) · exact head `62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512) · head `62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473`
 - Dispatch session: https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc · dispatch state **NONE**

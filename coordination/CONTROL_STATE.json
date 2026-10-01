@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T20:00:55Z",
+  "validated_at": "2026-10-01T20:07:19Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "c34e688b5c8d9453150ac0bdf941be2d40376a2c",
-  "control_state_commit_sha": "acde64fe97bef98340c052f7283516e2f520dbe2",
+  "active_source_commit_sha": "8fcb9287bd98ca5f767e853bb7deaea88f099a15",
+  "control_state_commit_sha": "bdb9eafefba41a292022be1343a6fffce28e0992",
   "now": "Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": [
     "ACTIVE",
@@ -85,7 +85,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "193fe18a16cf6641829bbf44e5cf0e76b2c2ab0a",
+    "active_blob_sha": "d44cb7580063cd3c5ac8966db6e0a217a66974e7",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -121,7 +121,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T20:00:55Z",
+  "updated_at": "2026-10-01T20:07:19Z",
   "history": [
     {
       "event_id": "w0-03e-a2b-c01-assignment-intent",
