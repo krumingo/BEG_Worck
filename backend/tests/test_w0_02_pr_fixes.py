@@ -1286,7 +1286,13 @@ class TestPR06ShadowTenantBoundary:
     def test_shadow_project_remove_sync_failure_keeps_legacy_result_and_is_recorded(self, monkeypatch, caplog):
         async def go():
             app, holder, sysdb, dba, dbb, _ = await _two_tenant_env("shadow")
-            await dba.project_team.insert_one({"id": "pt_x", "project_id": "P1", "user_id": "u_target",
+            # W0-03E-A2: project_team is a tenant-bound authorization relation, so a
+            # seeded membership carries its tenant (A, the legacy global handle here).
+            # An ownerless row is deliberately NOT the tenant's to manage any more;
+            # what this test pins down is the shadow-sync failure behaviour, so the
+            # fixture states the owner instead of relying on the pre-A2 world.
+            await dba.project_team.insert_one({"id": "pt_x", "org_id": "A", "project_id": "P1",
+                                               "user_id": "u_target",
                                                "role_in_project": "Technician", "active": True})
             papp = _project_app(dba, holder)
             from app.permissions import sync as psync

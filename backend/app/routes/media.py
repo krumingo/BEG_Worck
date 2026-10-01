@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.media_acl import enforce_media_access, enforce_context_access, MEDIA_CONTEXT_TYPES, check_media_access
 
@@ -311,10 +312,10 @@ async def list_media(
     
     # Prefetch projects the user can access (via project_team)
     user_project_ids = set()
-    team_memberships = await db.project_team.find(
-        {"user_id": user_id, "org_id": org_id},
-        {"_id": 0, "project_id": 1}
-    ).to_list(500)
+    # W0-03E-A2: one relation accessor; the tenant predicate is applied last.
+    team_memberships = await project_team.user_rows(
+        project_team.tenant_for_org(db, org_id), user_id, {"_id": 0, "project_id": 1},
+        active_only=False, limit=500)
     for tm in team_memberships:
         user_project_ids.add(tm.get("project_id"))
     prefetched["user_project_ids"] = user_project_ids

@@ -42,6 +42,19 @@ Rules, applied to every module in ``PROTECTED_MODULES``:
                 reads a caller-controlled parameter — any route parameter not
                 injected with ``Depends(...)`` (path, query or body).
 
+W0-03E-A2 adds one rule that is applied to the WHOLE ``app/`` tree rather than
+to the protected set, because ``project_team`` is an authorization relation and
+a membership question answered anywhere decides access everywhere:
+
+  A2-TEAM       any ``project_team`` access that is not through
+                ``app.tenancy.project_team`` — ``db.project_team``,
+                ``db["project_team"]``, a module-level alias of either, or
+                ``from app.db import project_team``. A bare membership lookup
+                by ``project_id``/``user_id`` alone is the A1 defect: in one
+                shared legacy database an ownerless row written by tenant B
+                authorized tenant A. Scoping the filter by hand does not help,
+                because the next route forgets; the relation has one accessor.
+
 There is no allowlist. A line that cannot be proven safe is a violation; the
 fix is to route it through the access layer, not to exclude it.
 """
@@ -380,11 +393,90 @@ def check_source(source: str, rel: str, functions: Optional[Iterable[str]] = Non
     return sorted(set(checker.out), key=lambda v: (v[0], v[1], v[2], v[3]))
 
 
+#: The authorization relation and its one accessor module (W0-03E-A2).
+TEAM_COLLECTION = "project_team"
+TEAM_RELATION_MODULE = "app/tenancy/project_team.py"
+
+#: Where a ``project_team`` access may legitimately appear: the relation module
+#: itself (which reaches it through ``TenantData``), and the two A1 helper
+#: entry points that delegate to it. There is no allowlist for a route.
+TEAM_ALLOWED_MODULES: Tuple[str, ...] = (TEAM_RELATION_MODULE,)
+
+
+def check_team_relation(source: str, rel: str) -> List[Violation]:
+    """A2-TEAM: ``project_team`` reached outside ``app.tenancy.project_team``.
+
+    Deterministic and allowlist-free. It fires on a raw handle attribute
+    (``db.project_team``), a subscript (``db["project_team"]``), an alias of
+    either, and on importing the pre-bound collection from ``app.db``. The
+    collection name appearing as a *string* argument to the relation module's
+    own accessors is not an access and is not reported.
+    """
+    out: List[Violation] = []
+    if rel in TEAM_ALLOWED_MODULES:
+        return out
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        return [(rel, exc.lineno or 0, "A2-TEAM", "could not parse: %s" % exc.msg)]
+
+    def report(node, how: str) -> None:
+        out.append((rel, getattr(node, "lineno", 0), "A2-TEAM",
+                    "%s reaches '%s' outside app.tenancy.project_team; use its "
+                    "accessors so the tenant predicate cannot be forgotten" % (how, TEAM_COLLECTION)))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == TEAM_COLLECTION:
+            report(node, "attribute access")
+        elif isinstance(node, ast.Subscript):
+            sl = node.slice
+            if isinstance(sl, ast.Constant) and sl.value == TEAM_COLLECTION:
+                report(node, "subscript access")
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.db"):
+            for alias in node.names:
+                if alias.name == TEAM_COLLECTION:
+                    report(node, "pre-bound import")
+    return sorted(set(out), key=lambda v: (v[0], v[1], v[2], v[3]))
+
+
+def team_relation_files() -> List[str]:
+    """Every module of the application tree, as backend-relative POSIX paths."""
+    return sorted(p.relative_to(BACKEND).as_posix()
+                  for p in (BACKEND / "app").rglob("*.py"))
+
+
+def check_team_relation_tree() -> Tuple[int, List[Violation]]:
+    """A2-TEAM over the whole ``app/`` tree."""
+    found: List[Violation] = []
+    files = team_relation_files()
+    for rel in files:
+        found.extend(check_team_relation((BACKEND / rel).read_text(encoding="utf-8"), rel))
+    return len(files), found
+
+
 def _rel(p: str) -> Tuple[Path, str]:
-    path = Path(p)
+    """``(absolute path, backend-relative POSIX path)``.
+
+    W0-03E-A2: the relative part is always built with ``as_posix()``. It is
+    compared against ``HELPER_MODULES`` / ``PROTECTED_MODULES``, which are
+    POSIX strings, and ``str(PurePath)`` yields ``app\\services\\paid_labor.py``
+    on Windows. The A1 review hit exactly that: the membership test was false,
+    so three helper modules were judged by the wrong (stricter) tier and the
+    clean tree reported four violations with exit 1 on Windows and 0 on POSIX.
+    A guard whose verdict depends on the host separator proves nothing, so the
+    comparison key is normalized here, once, for every caller.
+    """
+    given = p
+    if "\\" in given and not Path(given).exists():
+        # A Windows-style argument handed to a POSIX interpreter: ``Path`` would
+        # treat the whole string as ONE file name. Normalize so the CLI behaves
+        # the same on both platforms.
+        given = given.replace("\\", "/")
+    path = Path(given)
     if not path.is_absolute():
         path = BACKEND / path
-    rel = str(path.relative_to(BACKEND)) if path.is_relative_to(BACKEND) else str(path)
+    rel = (path.relative_to(BACKEND).as_posix() if path.is_relative_to(BACKEND)
+           else Path(given).as_posix())
     return path, rel
 
 
@@ -393,8 +485,9 @@ def check_files(paths: Iterable[str]) -> List[Violation]:
     found: List[Violation] = []
     for p in paths:
         path, rel = _rel(p)
-        found.extend(check_source(path.read_text(encoding="utf-8"), rel,
-                                  helper=rel in HELPER_MODULES))
+        source = path.read_text(encoding="utf-8")
+        found.extend(check_source(source, rel, helper=rel in HELPER_MODULES))
+        found.extend(check_team_relation(source, rel))
     return found
 
 
@@ -405,7 +498,9 @@ def check_protected_surface() -> Tuple[int, List[Violation]]:
         path, rel = _rel(p)
         found.extend(check_source(path.read_text(encoding="utf-8"), rel, functions=names))
     units = len(PROTECTED_MODULES) + len(HELPER_MODULES) + sum(map(len, PROTECTED_FUNCTIONS.values()))
-    return units, found
+    # W0-03E-A2: the authorization relation is checked over the whole app tree.
+    team_units, team_found = check_team_relation_tree()
+    return units + team_units, found + team_found
 
 
 def main(argv: List[str]) -> int:

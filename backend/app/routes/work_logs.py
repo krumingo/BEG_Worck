@@ -10,6 +10,12 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user, require_admin, can_access_project, get_user_project_ids
+from app.tenancy import project_team
+
+
+def _team(user: dict):
+    """W0-03E-A2 — the session user's tenant view of the authorization relation."""
+    return project_team.tenant_for(db, user)
 from app.utils.audit import log_audit
 
 router = APIRouter(tags=["work-logs"])
@@ -129,11 +135,7 @@ async def check_site_access(user: dict, site_id: str) -> bool:
         return project is not None
     
     # Check team membership
-    member = await db.project_team.find_one({
-        "project_id": site_id,
-        "user_id": user["id"],
-        "active": True
-    })
+    member = await project_team.member_row(_team(user), user["id"], site_id)
     if member:
         return True
     
@@ -151,12 +153,8 @@ async def can_approve_site(user: dict, site_id: str) -> bool:
         return True
     
     # Check if SiteManager on this project
-    member = await db.project_team.find_one({
-        "project_id": site_id,
-        "user_id": user["id"],
-        "role_in_project": "SiteManager",
-        "active": True
-    })
+    member = await project_team.member_row(_team(user), user["id"], site_id,
+                                           project_team.ROLE_SITE_MANAGER)
     if member:
         return True
     
@@ -616,11 +614,8 @@ async def get_my_sites(user: dict = Depends(get_current_user)):
         ).sort("code", 1).to_list(100)
     else:
         # Get projects where user is team member
-        memberships = await db.project_team.find(
-            {"user_id": user["id"], "active": True},
-            {"_id": 0, "project_id": 1}
-        ).to_list(100)
-        project_ids = [m["project_id"] for m in memberships]
+        project_ids = await project_team.assigned_project_ids(_team(user), user["id"],
+                                                               limit=100)
         
         # Also include projects where user is default manager
         manager_projects = await db.projects.find(
@@ -644,10 +639,8 @@ async def get_site_team(site_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Get team members
-    members = await db.project_team.find(
-        {"project_id": site_id, "active": True},
-        {"_id": 0, "user_id": 1, "role_in_project": 1}
-    ).to_list(100)
+    members = await project_team.project_rows(
+        _team(user), [site_id], {"_id": 0, "user_id": 1, "role_in_project": 1}, limit=100)
     
     result = []
     for m in members:

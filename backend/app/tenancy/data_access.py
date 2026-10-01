@@ -205,6 +205,20 @@ class TenantData:
         return cls(db, ctx.org_id)
 
     @classmethod
+    def for_resolved_org(cls, db, org_id: Any) -> "TenantData":
+        """A tenant whose ``org_id`` a caller in the server has ALREADY resolved.
+
+        For module-level helpers that a route hands its own
+        ``user["org_id"]``/``ctx.org_id`` down to (the A1 ``HELPER_MODULES``
+        tier) and that therefore never see the session document themselves.
+        The value is server-side state travelling down a call chain, not a
+        request field: the guard's ``A1-CALLERTENANT`` rule still rejects a
+        route that feeds a caller-controlled parameter into any ``for_*``
+        constructor, and an empty/absent org still fails closed here.
+        """
+        return cls(db, org_id)
+
+    @classmethod
     def for_owner_of(cls, db, record: Mapping) -> "TenantData":
         """The tenant of a record that a server-side secret (a public review
         token) already resolved. The record's own ``org_id`` — never a caller value."""
@@ -312,34 +326,32 @@ async def resolve_review_token(db, token: Any, projection: Optional[Mapping] = N
 
 
 # ------------------------------------------------------------------ project team
-# ``project_team`` rows carry no tenant key (legacy schema: project_id, user_id,
-# role_in_project, active). A row is honoured only when its project exists in
-# the request's tenant; a row whose project id resolves only in another tenant
-# grants nothing. Residual (documented, W0-03E_LEGACY_MIGRATION.md §14): when
-# BOTH the user id and the project id collide across tenants in one shared
-# legacy database, the row itself cannot say which tenant wrote it — that needs
-# an ``org_id`` backfill on ``project_team`` (a migration decision). It affects
-# only which of the caller's OWN tenant's projects a SiteManager may see; every
-# record read after it is tenant-scoped.
+# W0-03E-A2: ``project_team`` is a tenant-bound AUTHORIZATION relation, owned by
+# ``app.tenancy.project_team``. A1 honoured a row whose *project* resolved in the
+# caller's tenant, which the A1 review broke: with one shared legacy database, a
+# project id and a user id colliding across tenants let a row written by B
+# authorize A, because an ownerless row cannot say who wrote it. Both helpers
+# below now carry the tenant predicate on the row itself, so an ownerless or
+# foreign row matches nothing. They stay here as the A1 entry points the
+# protected modules already call; the rule lives in one place.
+
 
 async def assigned_project_ids(tenant: TenantData, user: Mapping) -> List[str]:
-    """Active team assignments of the session user, limited to the tenant's projects."""
-    rows = await tenant._db["project_team"].find(
-        {"user_id": user["id"], "active": True}, {"_id": 0, "project_id": 1}).to_list(1000)
-    ids = [r["project_id"] for r in rows if r.get("project_id")]
-    own = await tenant.projects.get_many(ids, {"_id": 0, "id": 1})
-    return [i for i in ids if i in own]
+    """The tenant's projects the session user is actively assigned to.
+
+    Tenant-scoped on the membership row AND on the project: an ownerless or
+    another tenant's row grants nothing.
+    """
+    from app.tenancy import project_team
+    return await project_team.assigned_project_ids(tenant, (user or {}).get("id"))
 
 
 async def is_project_member(tenant: TenantData, user: Mapping, project_id: Any,
                             role_in_project: Optional[str] = None) -> bool:
-    """An active team row for this user on a project that exists in the tenant."""
-    if not await tenant.projects.get(project_id, {"_id": 0, "id": 1}):
-        return False
-    flt: Dict[str, Any] = {"project_id": project_id, "user_id": user["id"], "active": True}
-    if role_in_project:
-        flt["role_in_project"] = role_in_project
-    return await tenant._db["project_team"].find_one(flt, {"_id": 1}) is not None
+    """An active team row of THIS tenant for this user on one of its projects."""
+    from app.tenancy import project_team
+    return await project_team.is_member(tenant, (user or {}).get("id"), project_id,
+                                        role_in_project)
 
 
 def _proj(projection: Optional[Mapping]) -> Optional[Dict]:

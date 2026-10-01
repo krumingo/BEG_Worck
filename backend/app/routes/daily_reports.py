@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 
@@ -807,8 +808,8 @@ async def get_project_day_status(project_id: str, date: Optional[str] = None, us
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Get team members
-    team = await db.project_team.find({"project_id": project_id}, {"_id": 0, "user_id": 1}).to_list(100)
-    team_ids = [t["user_id"] for t in team]
+    team_ids = await project_team.project_member_ids(
+        project_team.tenant_for_org(db, org_id), project_id, active_only=False, limit=100)
 
     # Also get employees who have reported on this project today
     reports_today = await db.employee_daily_reports.find(

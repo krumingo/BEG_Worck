@@ -144,16 +144,36 @@ def test_review_token_resolves_exactly_one_owner_or_nothing():
         assert run(resolve_review_token(db, bad)) == (None, None)
 
 
-def test_team_assignments_count_only_for_the_tenants_projects():
+def test_team_assignments_need_the_rows_own_tenant_not_just_the_projects():
+    """W0-03E-A2 narrowed this: the ROW must be the tenant's, not only the project.
+
+    A1 honoured a row whose project resolved in the caller's tenant, and the A1
+    review reproduced the hole: with a project id AND a user id colliding across
+    tenants in one shared legacy database, an ownerless row written by B
+    authorized A. ``project_team`` is now a tenant-bound authorization relation
+    (``app.tenancy.project_team``), so an ownerless row grants nothing and a
+    stamped row grants only its own tenant. The full matrix lives in
+    ``tests/test_w0_03e_a2_project_team_provenance.py``.
+    """
     db = run(_db())
+    user = {"id": "s1", "org_id": A}
+    # ownerless legacy rows — the pre-A2 fixture — now authorize nobody
     run(db.project_team.insert_one({"user_id": "s1", "project_id": "p-only-b", "active": True,
                                     "role_in_project": "SiteManager"}))
     run(db.project_team.insert_one({"user_id": "s1", "project_id": "p1", "active": True,
                                     "role_in_project": "SiteManager"}))
-    user = {"id": "s1", "org_id": A}
-    assert run(assigned_project_ids(t(db), user)) == ["p1"]
+    assert run(assigned_project_ids(t(db), user)) == []
+    assert run(is_project_member(t(db), user, "p1", "SiteManager")) is False
+    # the same rows, stamped with their tenant, behave as before for THAT tenant
+    run(db.project_team.insert_one({"user_id": "s1", "project_id": "p1", "active": True,
+                                    "role_in_project": "SiteManager", "org_id": A}))
+    run(db.project_team.insert_one({"user_id": "s1", "project_id": "p-only-b", "active": True,
+                                    "role_in_project": "SiteManager", "org_id": A}))
+    assert run(assigned_project_ids(t(db), user)) == ["p1"]   # p-only-b is not A's project
     assert run(is_project_member(t(db), user, "p1", "SiteManager")) is True
     assert run(is_project_member(t(db), user, "p-only-b")) is False
+    # ...and never for the other tenant
+    assert run(assigned_project_ids(t(db, B), user)) == []
 
 
 def test_ownerless_count_discloses_no_tenant():

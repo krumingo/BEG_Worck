@@ -10,10 +10,22 @@ from zoneinfo import ZoneInfo
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
 
 router = APIRouter(tags=["attendance"])
+
+
+def _team(user: dict):
+    """W0-03E-A2 — the session user's tenant view of the authorization relation."""
+    return project_team.tenant_for(db, user)
+
+
+def _team_org(org_id: str):
+    """Same relation, for a helper handed an already server-resolved ``org_id``."""
+    return project_team.tenant_for_org(db, org_id)
+
 
 # Constants
 ATTENDANCE_STATUSES = ["Present", "Absent", "Late", "SickLeave", "Vacation"]
@@ -76,12 +88,13 @@ async def get_org_attendance_window(org_id: str):
     end = org.get("attendance_end", "10:00") if org else "10:00"
     return start, end
 
-async def get_user_active_project_ids(user_id: str):
-    members = await db.project_team.find({"user_id": user_id, "active": True}, {"_id": 0, "project_id": 1}).to_list(100)
-    pids = [m["project_id"] for m in members]
+async def get_user_active_project_ids(user_id: str, org_id: str):
+    tenant = _team_org(org_id)
+    pids = await project_team.assigned_project_ids(tenant, user_id, limit=100)
     if not pids:
         return []
-    active = await db.projects.find({"id": {"$in": pids}, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
+    active = await tenant.projects.find(
+        {"id": {"$in": pids}, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
     return [p["id"] for p in active]
 
 async def is_past_deadline(org_id: str):
@@ -120,22 +133,16 @@ async def can_access_report(user: dict, report: dict) -> bool:
     if report["user_id"] == user["id"]:
         return True
     if user["role"] == "SiteManager":
-        mgr = await db.project_team.find_one({
-            "project_id": report["project_id"], "user_id": user["id"],
-            "active": True, "role_in_project": "SiteManager"
-        })
-        return mgr is not None
+        return await project_team.is_member(_team(user), user["id"], report["project_id"],
+                                            project_team.ROLE_SITE_MANAGER)
     return False
 
 async def can_review_report(user: dict, report: dict) -> bool:
     if user["role"] in ["Admin", "Owner"]:
         return True
     if user["role"] == "SiteManager":
-        mgr = await db.project_team.find_one({
-            "project_id": report["project_id"], "user_id": user["id"],
-            "active": True, "role_in_project": "SiteManager"
-        })
-        return mgr is not None
+        return await project_team.is_member(_team(user), user["id"], report["project_id"],
+                                            project_team.ROLE_SITE_MANAGER)
     return False
 
 def enrich_report(report: dict) -> dict:
@@ -169,7 +176,7 @@ async def compute_missing_attendance(org_id: str, date: str, scoped_project_ids=
         pids = [p["id"] for p in active]
     if not pids:
         return []
-    members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(1000)
+    members = await project_team.project_rows(_team_org(org_id), pids, {"_id": 0}, limit=1000)
     seen = set()
     unique_uids = []
     for m in members:
@@ -202,7 +209,8 @@ async def compute_missing_work_reports(org_id: str, date: str, scoped_project_id
     else:
         active = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
         pids = [p["id"] for p in active]
-    members = await db.project_team.find({"project_id": {"$in": pids}, "active": True, "user_id": {"$in": present_uids}}, {"_id": 0}).to_list(1000)
+    members = await project_team.project_rows(_team_org(org_id), pids, {"_id": 0},
+                                              limit=1000, user_ids=present_uids)
     user_projects = {}
     for m in members:
         user_projects.setdefault(m["user_id"], []).append(m["project_id"])
@@ -388,14 +396,9 @@ async def mark_attendance_for_user(data: AttendanceMarkForUser, user: dict = Dep
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if user["role"] == "SiteManager":
-        mgr_projects = await db.project_team.find(
-            {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
-        ).to_list(100)
-        mgr_pids = {m["project_id"] for m in mgr_projects}
-        target_projects = await db.project_team.find(
-            {"user_id": data.user_id, "active": True}, {"_id": 0, "project_id": 1}
-        ).to_list(100)
-        target_pids = {m["project_id"] for m in target_projects}
+        mgr_pids = set(await project_team.managed_project_ids(_team(user), user["id"], limit=100))
+        target_pids = set(await project_team.assigned_project_ids(_team(user), data.user_id,
+                                                                  limit=100))
         if not mgr_pids & target_pids:
             raise HTTPException(status_code=403, detail="User not in any of your managed projects")
     date = today_str()
@@ -412,7 +415,7 @@ async def get_my_attendance_today(user: dict = Depends(get_current_user)):
     date = today_str()
     entry = await db.attendance_entries.find_one({"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0})
     past_deadline = await is_past_deadline(user["org_id"])
-    active_pids = await get_user_active_project_ids(user["id"])
+    active_pids = await get_user_active_project_ids(user["id"], user["org_id"])
     projects = []
     if active_pids:
         projs = await db.projects.find({"id": {"$in": active_pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
@@ -440,10 +443,10 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
     org_id = user["org_id"]
     if project_id:
         if user["role"] == "SiteManager":
-            mgr = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
-            if not mgr:
+            if not await project_team.is_member(_team(user), user["id"], project_id,
+                                                project_team.ROLE_SITE_MANAGER):
                 raise HTTPException(status_code=403, detail="Not managing this project")
-        members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
+        members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
 
         # Include workers with attendance_entries for this project today (source of truth from TechPortal → Хора)
         att_entries = await db.attendance_entries.find(
@@ -471,15 +474,12 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
                 members.append({"user_id": rid})
     else:
         if user["role"] == "SiteManager":
-            mgr_projects = await db.project_team.find(
-                {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
-            ).to_list(100)
-            pids = [m["project_id"] for m in mgr_projects]
-            members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+            pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
+            members = await project_team.project_rows(_team(user), pids, {"_id": 0}, limit=500)
         else:
             active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
             pids = [p["id"] for p in active_projs]
-            members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+            members = await project_team.project_rows(_team(user), pids, {"_id": 0}, limit=500)
 
         # Also include workers from attendance_entries + daily reports (both schemas)
         att_all = await db.attendance_entries.find(
@@ -548,23 +548,20 @@ async def get_missing_attendance_today(user: dict = Depends(get_current_user), p
     org_id = user["org_id"]
     if project_id:
         if user["role"] == "SiteManager":
-            mgr = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
-            if not mgr:
+            if not await project_team.is_member(_team(user), user["id"], project_id,
+                                                project_team.ROLE_SITE_MANAGER):
                 raise HTTPException(status_code=403, detail="Not managing this project")
         proj = await db.projects.find_one({"id": project_id, "org_id": org_id, "status": "Active"})
         if not proj:
             return {"missing": [], "count": 0}
-        members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
+        members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
     else:
         if user["role"] == "SiteManager":
-            mgr_projects = await db.project_team.find(
-                {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
-            ).to_list(100)
-            pids = [m["project_id"] for m in mgr_projects]
+            pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
         else:
             active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
             pids = [p["id"] for p in active_projs]
-        members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0}).to_list(500)
+        members = await project_team.project_rows(_team(user), pids, {"_id": 0}, limit=500)
     seen = set()
     unique_uids = []
     for m in members:
@@ -732,17 +729,12 @@ async def get_project_day_reports(user: dict = Depends(get_current_user), projec
     query = {"org_id": user["org_id"], "date": date}
     if project_id:
         if user["role"] == "SiteManager":
-            mgr = await db.project_team.find_one({
-                "project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"
-            })
-            if not mgr:
+            if not await project_team.is_member(_team(user), user["id"], project_id,
+                                                project_team.ROLE_SITE_MANAGER):
                 raise HTTPException(status_code=403, detail="Not managing this project")
         query["project_id"] = project_id
     elif user["role"] == "SiteManager":
-        mgr_projects = await db.project_team.find(
-            {"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}
-        ).to_list(100)
-        pids = [m["project_id"] for m in mgr_projects]
+        pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
         query["project_id"] = {"$in": pids}
     reports = await db.work_reports.find(query, {"_id": 0}).to_list(200)
     enriched = []
@@ -786,8 +778,7 @@ async def api_missing_attendance(user: dict = Depends(get_current_user), date: s
         date = today_str()
     scoped = None
     if user["role"] == "SiteManager":
-        mgr = await db.project_team.find({"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}).to_list(100)
-        scoped = [m["project_id"] for m in mgr]
+        scoped = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
     return await compute_missing_attendance(user["org_id"], date, scoped)
 
 @router.get("/reminders/missing-work-reports")
@@ -798,8 +789,7 @@ async def api_missing_work_reports(user: dict = Depends(get_current_user), date:
         date = today_str()
     scoped = None
     if user["role"] == "SiteManager":
-        mgr = await db.project_team.find({"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}).to_list(100)
-        scoped = [m["project_id"] for m in mgr]
+        scoped = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
     return await compute_missing_work_reports(user["org_id"], date, scoped)
 
 @router.get("/reminders/logs")
@@ -812,9 +802,9 @@ async def get_reminder_logs(user: dict = Depends(get_current_user), date: str = 
     if rtype:
         query["type"] = rtype
     if user["role"] == "SiteManager":
-        mgr = await db.project_team.find({"user_id": user["id"], "active": True, "role_in_project": "SiteManager"}, {"_id": 0, "project_id": 1}).to_list(100)
-        pids = [m["project_id"] for m in mgr]
-        members = await db.project_team.find({"project_id": {"$in": pids}, "active": True}, {"_id": 0, "user_id": 1}).to_list(500)
+        pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
+        members = await project_team.project_rows(_team(user), pids, {"_id": 0, "user_id": 1},
+                                                  limit=500)
         uids = list({m["user_id"] for m in members})
         query["user_id"] = {"$in": uids}
     logs = await db.reminder_logs.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
@@ -927,10 +917,7 @@ async def get_unclear_status(user: dict = Depends(get_current_user), project_id:
 
     # If project_id filter, only check workers assigned to that project
     if project_id:
-        team = await db.project_team.find(
-            {"project_id": project_id, "active": True}, {"_id": 0, "user_id": 1}
-        ).to_list(200)
-        team_ids = set(t["user_id"] for t in team)
+        team_ids = set(await project_team.project_member_ids(_team(user), project_id, limit=200))
         # Also include workers from today's roster
         roster = await db.site_daily_rosters.find_one(
             {"org_id": org_id, "project_id": project_id, "date": date}, {"_id": 0, "workers": 1}

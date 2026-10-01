@@ -22,7 +22,10 @@ subscriptions = db.subscriptions
 feature_flags = db.feature_flags
 audit_logs = db.audit_logs
 projects = db.projects
-project_team = db.project_team
+# W0-03E-A2: no pre-bound ``project_team`` handle. It is a tenant-bound
+# authorization relation, reached only through app.tenancy.project_team, so a
+# module-level alias here would be a ready-made bypass of the tenant predicate
+# (``scripts/w0_03e_a1_tenant_access_guard.py``, rule A2-TEAM).
 project_phases = db.project_phases
 offers = db.offers
 activity_catalog = db.activity_catalog

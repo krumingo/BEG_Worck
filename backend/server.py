@@ -391,6 +391,11 @@ async def startup():
     await db.audit_logs.create_index([("org_id", 1), ("timestamp", -1)])
     await db.projects.create_index([("org_id", 1), ("code", 1)], unique=True)
     await db.projects.create_index([("org_id", 1), ("status", 1)])
+    # W0-03E-A2: project_team is a tenant-bound authorization relation, so the
+    # hot path is (tenant, project, user) and (tenant, user). The two legacy
+    # indexes stay for the rows that still await a provenance decision.
+    await db.project_team.create_index([("org_id", 1), ("project_id", 1), ("user_id", 1)])
+    await db.project_team.create_index([("org_id", 1), ("user_id", 1), ("active", 1)])
     await db.project_team.create_index([("project_id", 1), ("user_id", 1)])
     await db.project_team.create_index("user_id")
     await db.project_phases.create_index("project_id")

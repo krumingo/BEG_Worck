@@ -6,9 +6,11 @@
 > means that function reached that collection at least once without a tenant predicate at the
 > base; every such row is now `FIXED`. `scoped@base` / `new read` → `SAFE`. A row whose
 > predicate is `NONE` would be `UNSCOPED → BLOCKED` (there are none). Regenerate with
-> `cd backend && python scripts/w0_03e_a1_inventory.py`. The one data-model residual
-> (`project_team` has no tenant key) is described in
-> [W0-03E_LEGACY_MIGRATION.md §14.3](W0-03E_LEGACY_MIGRATION.md).
+> `cd backend && python scripts/w0_03e_a1_inventory.py`. The one data-model residual A1 left
+> (`project_team` had no tenant key, so a row was honoured on the strength of its *project*)
+> was the blocking A1 review finding and is **closed by W0-03E-A2**: the relation is now
+> tenant-bound. See [W0-03E_LEGACY_MIGRATION.md §15](W0-03E_LEGACY_MIGRATION.md) and
+> [W0-03E-A2_PROJECT_TEAM_INVENTORY.md](W0-03E-A2_PROJECT_TEAM_INVENTORY.md).
 
 | path | route | entity (collection) | access (lookup key) | tenant predicate | risk | action |
 |---|---|---|---|---|---|---|
@@ -44,9 +46,9 @@
 | app/routes/finance.py:delete_account | DELETE /finance/accounts/{account_id} | finance_payments | count(account_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:delete_account | DELETE /finance/accounts/{account_id} | financial_accounts | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_invoices | GET /finance/invoices | projects | get_many(id ∈ (inv.get('project_id') for inv in invoic) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:list_invoices | GET /finance/invoices | project_team→projects | assigned_project_ids(user_id → tenant projects) | data_access helper | new read | SAFE |
+| app/routes/finance.py:list_invoices | GET /finance/invoices | project_team→projects | assigned_project_ids(org_id+user_id → tenant projects) | data_access helper | new read | SAFE |
 | app/routes/finance.py:list_invoices | GET /finance/invoices | invoices | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | project_team→projects | assigned_project_ids(user_id → tenant projects) | data_access helper | new read | SAFE |
+| app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | project_team→projects | assigned_project_ids(org_id+user_id → tenant projects) | data_access helper | new read | SAFE |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | projects | get(id = proj_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractor_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
@@ -54,7 +56,7 @@
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | projects | get(id = invoice['project_id']) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | finance_payments | get(id = alloc.get('payment_id')) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | project_team→projects | assigned_project_ids(user_id → tenant projects) | data_access helper | new read | SAFE |
+| app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | project_team→projects | assigned_project_ids(org_id+user_id → tenant projects) | data_access helper | new read | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | payment_allocations | find(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_invoice_versions | GET /finance/invoices/{invoice_id}/versions | invoice_versions | find(invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
@@ -110,13 +112,13 @@
 | app/routes/finance.py:export_invoice_pdf | GET /finance/invoices/{invoice_id}/pdf | projects | get(id = invoice['project_id']) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:aging_report | GET /finance/aging-report | invoices | find(direction, status) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:upcoming_payments | GET /finance/upcoming-payments | invoices | find(direction, status, due_date) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/offers.py:can_access_project | (helper) | project_team→projects | is_project_member(project_id+user_id → tenant project) | data_access helper | new read | SAFE |
-| app/routes/offers.py:can_manage_project | (helper) | project_team→projects | is_project_member(project_id+user_id → tenant project) | data_access helper | new read | SAFE |
+| app/routes/offers.py:can_access_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
+| app/routes/offers.py:can_manage_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
 | app/routes/offers.py:get_next_offer_no | (helper) | offers | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_offer | POST /offers | projects | get(id = data.project_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_offer | POST /offers | offers | insert_one(offer) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:list_offers | GET /offers | projects | get_many(id ∈ (o.get('project_id') for o in offers)) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/offers.py:list_offers | GET /offers | project_team→projects | assigned_project_ids(user_id → tenant projects) | data_access helper | new read | SAFE |
+| app/routes/offers.py:list_offers | GET /offers | project_team→projects | assigned_project_ids(org_id+user_id → tenant projects) | data_access helper | new read | SAFE |
 | app/routes/offers.py:list_offers | GET /offers | offers | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:get_offer | GET /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:get_offer | GET /offers/{offer_id} | projects | get(id = offer.get('project_id')) | TenantData org_id (session) | scoped@base | SAFE |

@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.tenancy.data_access import TenantData
+from app.tenancy import project_team
 from app.services.paid_labor import paid_labor_for_projects_v3
 from app.deps.auth import (
     get_current_user, require_admin,
@@ -26,6 +27,16 @@ from app.master_data.legacy_adapter import guarded_identity_delete
 
 router = APIRouter(tags=["projects"])
 
+
+
+def _team(user: dict) -> TenantData:
+    """The session user's tenant view for the project-team authorization relation.
+
+    W0-03E-A2: the tenant is the ``org_id`` of the session document
+    ``get_current_user`` loaded server-side by the verified JWT user id. A
+    tenant value from the path, query, form or body is never an input.
+    """
+    return project_team.tenant_for(db, user)
 
 def _tenant(user: dict) -> TenantData:
     """W0-03E-A1: the session user's tenant view of the legacy database."""
@@ -134,7 +145,7 @@ async def list_projects(
     if type:
         query["type"] = type
     if user["role"] not in ["Admin", "Owner", "Accountant"]:
-        assigned_ids = await get_user_project_ids(user["id"])
+        assigned_ids = await get_user_project_ids(user["id"], user)
         query["id"] = {"$in": assigned_ids}
     projects = await db.projects.find(query, {"_id": 0}).sort("updated_at", -1).to_list(1000)
     if search:
@@ -146,7 +157,7 @@ async def list_projects(
             p["site_manager_name"] = f"{mgr['first_name']} {mgr['last_name']}" if mgr else ""
         else:
             p["site_manager_name"] = ""
-        p["team_count"] = await db.project_team.count_documents({"project_id": p["id"], "active": True})
+        p["team_count"] = await project_team.active_member_count(_team(user), p["id"])
     return projects
 
 @router.post("/projects", status_code=201)
@@ -211,15 +222,11 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
     }
     await db.projects.insert_one(project)
     if data.default_site_manager_id:
-        await db.project_team.insert_one({
-            "id": str(uuid.uuid4()),
-            "project_id": project["id"],
-            "user_id": data.default_site_manager_id,
-            "role_in_project": "SiteManager",
-            "active": True,
-            "from_date": data.start_date,
-            "to_date": data.end_date,
-        })
+        # W0-03E-A2: the membership carries the server-resolved active tenant.
+        await project_team.add_member(
+            _team(user), member_id=str(uuid.uuid4()), project_id=project["id"],
+            user_id=data.default_site_manager_id, role_in_project="SiteManager",
+            active=True, from_date=data.start_date, to_date=data.end_date)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "project", project["id"], {"code": data.code, "name": data.name})
     return {k: v for k, v in project.items() if k != "_id"}
 
@@ -235,7 +242,7 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
         project["site_manager_name"] = f"{mgr['first_name']} {mgr['last_name']}" if mgr else ""
     else:
         project["site_manager_name"] = ""
-    project["team_count"] = await db.project_team.count_documents({"project_id": project_id, "active": True})
+    project["team_count"] = await project_team.active_member_count(_team(user), project_id)
     return project
 
 @router.put("/projects/{project_id}")
@@ -300,7 +307,12 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin)):
     if child_count > 0:
         raise HTTPException(status_code=400, detail=f"Обектът има {child_count} под-обекта. Изтрийте или преместете ги първо.")
     await db.projects.delete_one({"id": project_id})
-    await db.project_team.delete_many({"project_id": project_id})
+    # W0-03E-A2: scoped to this tenant — an unscoped delete_many would remove
+    # another tenant's memberships whenever the project ids collide. A row of
+    # UNRESOLVED provenance therefore survives this delete; that is deliberate:
+    # it authorizes nothing anyway, and hard-deleting a row whose owner is
+    # unknown would destroy the evidence a human still has to decide on.
+    await _team(user).collection("project_team").delete_many({"project_id": project_id})
     await db.project_phases.delete_many({"project_id": project_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "project", project_id, {"code": project.get("code")})
     return {"ok": True}
@@ -388,7 +400,7 @@ async def list_project_team(project_id: str, user: dict = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
-    members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
+    members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
     for m in members:
         u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
         if u:
@@ -413,19 +425,15 @@ async def add_team_member(project_id: str, data: TeamMemberAdd, user: dict = Dep
     target_user = await db.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found in organization")
-    existing = await db.project_team.find_one({"project_id": project_id, "user_id": data.user_id, "active": True})
-    if existing:
+    _tenant = _team(user)
+    if await project_team.is_member(_tenant, data.user_id, project_id):
         raise HTTPException(status_code=400, detail="User already on team")
-    member = {
-        "id": str(uuid.uuid4()),
-        "project_id": project_id,
-        "user_id": data.user_id,
-        "role_in_project": data.role_in_project,
-        "active": True,
-        "from_date": data.from_date,
-        "to_date": data.to_date,
-    }
-    await db.project_team.insert_one(member)
+    # W0-03E-A2: stamped with the server-resolved active tenant; a tenant value
+    # from the body/path/query is never an input.
+    member = await project_team.add_member(
+        _tenant, member_id=str(uuid.uuid4()), project_id=project_id,
+        user_id=data.user_id, role_in_project=data.role_in_project, active=True,
+        from_date=data.from_date, to_date=data.to_date)
     await log_audit(user["org_id"], user["id"], user["email"], "team_added", "project", project_id, {"member_id": data.user_id, "role": data.role_in_project})
     # W0-02: mirror the new membership into a project-scope RoleAssignment so the
     # Permission Service reflects it. Skipped while mode='off' (behavior unchanged).
@@ -456,8 +464,10 @@ async def remove_team_member(project_id: str, member_id: str, user: dict = Depen
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    mem = await db.project_team.find_one({"id": member_id, "project_id": project_id})
-    result = await db.project_team.update_one({"id": member_id, "project_id": project_id}, {"$set": {"active": False}})
+    _tenant = _team(user)
+    mem = await project_team.row_by_id(_tenant, member_id, project_id)
+    result = await project_team.deactivate_member(_tenant, member_id=member_id,
+                                                  project_id=project_id)
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Team member not found")
     await log_audit(user["org_id"], user["id"], user["email"], "team_removed", "project", project_id, {"member_id": member_id})
@@ -1108,10 +1118,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     # ── Card 4: Team/Personnel ──────────────────────────────────────────────
-    team_members = await db.project_team.find(
-        {"project_id": project_id, "active": True},
-        {"_id": 0}
-    ).to_list(100)
+    team_members = await project_team.project_rows(_team(user), [project_id], {"_id": 0},
+                                                   limit=100)
     
     user_ids = [m["user_id"] for m in team_members]
     users_map = {}
@@ -1551,17 +1559,17 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             migration_log["contract_payments"] = cp_result.modified_count
 
         # Project team: clone (not move) so parent can still display
-        team_members = await db.project_team.find(
-            {"project_id": project_id, "org_id": org_id},
-            {"_id": 0},
-        ).to_list(100)
+        _tenant = _team(user)
+        team_members = await _tenant.collection("project_team").find(
+            {"project_id": project_id}, {"_id": 0}).to_list(100)
         for tm in team_members:
-            await db.project_team.insert_one({
-                **tm,
-                "_id": None,
-                "id": str(uuid.uuid4()),
-                "project_id": child_a_id,
-            })
+            # W0-03E-A2: the clone is stamped from the active tenant, and the
+            # source rows were read inside it, so a foreign row is never cloned.
+            await project_team.add_member(
+                _tenant, member_id=str(uuid.uuid4()), project_id=child_a_id,
+                user_id=tm.get("user_id"), role_in_project=tm.get("role_in_project"),
+                active=tm.get("active", True), from_date=tm.get("from_date"),
+                to_date=tm.get("to_date"))
         if team_members:
             migration_log["project_team_cloned"] = len(team_members)
 
@@ -1974,7 +1982,8 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Team ──
     async def count_team(pid):
-        return await db.project_team.count_documents({"org_id": org_id, "project_id": pid})
+        # W0-03E-A2: one relation accessor; the tenant predicate is applied last.
+        return await _team(user).collection("project_team").count({"project_id": pid})
 
     async def count_reported(pid):
         reps = await db.employee_daily_reports.find(

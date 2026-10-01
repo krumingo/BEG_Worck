@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.tenancy.data_access import TenantData
 from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
@@ -467,9 +468,11 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
             att["project_name"] = p["name"] if p else ""
     
     # Project history from team assignments
-    team_entries = await db.project_team.find(
-        {"user_id": user_id}, {"_id": 0}
-    ).to_list(100)
+    # W0-03E-A2: assignment history inside this tenant only; an ownerless or
+    # another tenant's membership row is not part of this employee's history.
+    team_entries = await project_team.user_rows(
+        project_team.tenant_for_org(db, org_id), user_id, {"_id": 0},
+        active_only=False, limit=100)
     
     project_history = []
     for te in team_entries:

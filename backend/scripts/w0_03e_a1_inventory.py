@@ -29,8 +29,11 @@ sys.path.insert(0, str(BACKEND / "scripts"))
 import w0_03e_a1_tenant_access_guard as g  # noqa: E402
 
 LAYER_HELPERS = {"resolve_review_token": ("offers", "review_token (unique, fail-closed)"),
-                 "assigned_project_ids": ("project_team→projects", "user_id → tenant projects"),
-                 "is_project_member": ("project_team→projects", "project_id+user_id → tenant project"),
+                 # W0-03E-A2: the membership predicate now names the tenant too.
+                 "assigned_project_ids": ("project_team→projects",
+                                          "org_id+user_id → tenant projects"),
+                 "is_project_member": ("project_team→projects",
+                                       "org_id+project_id+user_id[+role]"),
                  "count_ownerless": ("<legacy collection>", "org_id null/missing (no tenant data)")}
 
 

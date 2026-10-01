@@ -83,22 +83,67 @@ async def require_admin(request: Request, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
-async def get_user_project_ids(user_id: str) -> List[str]:
-    members = await db.project_team.find({"user_id": user_id, "active": True}, {"_id": 0, "project_id": 1}).to_list(1000)
-    return [m["project_id"] for m in members]
+# ---------------------------------------------------------------------------
+# W0-03E-A2 — project access from the tenant-bound authorization relation.
+#
+# These three helpers are THE project authorization gate of the legacy routes.
+# Until A2 they read ``project_team`` by id pair alone, so in one shared legacy
+# database a row written by tenant B authorized tenant A's user on A's
+# same-id project (the defect the A1 review reproduced). They now go through
+# ``app.tenancy.project_team``, which carries the tenant predicate on the row
+# itself: an ownerless legacy row and another tenant's row both grant zero.
+#
+# The tenant is the session user's own ``org_id`` — the document
+# ``get_current_user`` loaded server-side from the database by the verified JWT
+# user id (``TenantData.for_user``), never a path, query, form or body value.
+# The signatures are unchanged, so every existing caller becomes tenant-bound
+# without a route-local membership query of its own.
+# ---------------------------------------------------------------------------
+
+def _team_tenant(user: dict):
+    from app.tenancy.project_team import tenant_for
+    return tenant_for(db, user)
+
+
+async def get_user_project_ids(user_id: str, user: dict = None) -> List[str]:
+    """Project ids of the user's active memberships, inside ONE tenant.
+
+    ``user`` is the session document that fixes the tenant; without it the
+    tenant cannot be resolved server-side, so the answer is empty — fail
+    closed, never a cross-tenant list.
+
+    ``user_id`` must be the id. Two callers in ``work_logs.py`` pass the whole
+    session dict instead (``get_user_project_ids(user)``); that already
+    returned an empty list before A2, because the dict never matched a
+    ``user_id`` field, so those routes deny non-admins today. A2 keeps that
+    result exactly: widening it would grant access that the system does not
+    grant now, which is a business decision, not a tenant-provenance fix. It is
+    recorded as debt in docs/architecture/W0-03E_LEGACY_MIGRATION.md §15.
+    """
+    if not isinstance(user_id, str) or not user_id:
+        return []
+    if not user or not user.get("org_id"):
+        return []
+    from app.tenancy import project_team
+    return await project_team.assigned_project_ids(_team_tenant(user), user_id)
+
 
 async def can_access_project(user: dict, project_id: str) -> bool:
+    """May this user see this project? Admin/Owner tenant-wide, else membership."""
     if user["role"] in ["Admin", "Owner"]:
         return True
-    member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True})
-    return member is not None
+    from app.tenancy import project_team
+    return await project_team.is_member(_team_tenant(user), user["id"], project_id)
+
 
 async def can_manage_project(user: dict, project_id: str) -> bool:
+    """May this user manage this project? Admin/Owner, or a SiteManager membership."""
     if user["role"] in ["Admin", "Owner"]:
         return True
     if user["role"] == "SiteManager":
-        member = await db.project_team.find_one({"project_id": project_id, "user_id": user["id"], "active": True, "role_in_project": "SiteManager"})
-        return member is not None
+        from app.tenancy import project_team
+        return await project_team.is_member(_team_tenant(user), user["id"], project_id,
+                                            project_team.ROLE_SITE_MANAGER)
     return False
 
 

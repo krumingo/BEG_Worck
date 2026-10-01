@@ -396,8 +396,8 @@ drill-down; xlsx експорт; импорт на клиентски данни
 стъпка `{"id": current, "tenant_id": tenant_id}` (`merge.py` `_chain`); `annotate_refs` →
 `legacy_adapter` (в обхвата); `log_audit` само пише.
 
-**BLOCKED остатък (модел на данните, не изтичане на данни на B):** `project_team` няма tenant
-ключ. A1 зачита ред само за проект на tenant-а (ред към проект само на B не дава нищо — тест
+**BLOCKED остатък (модел на данните, не изтичане на данни на B) — ЗАТВОРЕН от W0-03E-A2
+(§15):** `project_team` няма tenant ключ. A1 зачита ред само за проект на tenant-а (ред към проект само на B не дава нищо — тест
 `sitemanager-scope`). Когато в **споделена** legacy DB и user id, и project id съвпадат между
 tenant-и, редът сам не казва кой tenant го е записал: тогава SiteManager на A може да получи
 видимост върху **собствен** проект на A. Всяко последващо четене е tenant-scoped, така че данни
@@ -418,3 +418,142 @@ tenant-и, редът сам не казва кой tenant го е записа�
 - Legacy HTTP suites (finance/offers/clients, 204 теста) срещу жив сървър на loopback Mongo:
   идентичен резултат тест по тест на `2cd40a3` и на A1 (157/42/5; 42-те са fixture/data
   зависими и падат еднакво на базата).
+
+## 15. W0-03E-A2/C01 — `project_team` като tenant-bound authorization relation
+
+Нова архитектурна задача (не C04, не автоматична корекция на A1), база = блокираната глава на
+PR #34 `4b7f9869c288a9b9596bb8d2c02136b0fb749acb`. Независимото A1 ревю възпроизведе §14.3
+остатъка като **blocking** дефект: в една споделена legacy база, с project id `p1` и user id `u1`
+в **двата** tenant-а, единственият team ред — записан от **B**, със същата роля — даде на
+потребителя на A `assigned_project_ids() == ['p1']` и `is_project_member(..., 'p1',
+'SiteManager') is True`. Резолюцията на проекта в A **след** четене на ред без собственик не
+доказва кой е записал реда. A2 премахва модела: релацията носи tenant-а.
+
+### 15.1 Правило
+
+`project_team` е **authorization relation**, следователно е tenant-bound като всеки друг
+оперативен запис:
+
+- всеки нов ред носи `org_id` от **server-side активния tenant** (сесийният потребител, зареден
+  от базата по проверен JWT; `TenantData.for_user`). Стойност от path/query/form/body никога не
+  е вход — отказва се, не се пренаписва;
+- всяко authorization четене носи `org_id` **и** `project_id` **и** `user_id` (и
+  `role_in_project`, където ролята решава). Въпрос с по-малко ключове е отказ
+  (`ProjectTeamAuthorizationIncomplete`), не случаен отговор;
+- ред **без собственик** и ред на **друг tenant** дават **нула** права: tenant предикатът просто
+  не ги намира. Няма global/name/role/id извод и няма fallback „проектът съществува тук, значи
+  редът е наш";
+- проектът пак трябва да съществува в tenant-а — две независими fail-closed проверки, не една;
+- W0-01 Tenant Guard, W0-02 permission boundary и W0-04 AuditEvent са запазени; няма ново
+  бизнес правило и няма разхлабено одобрение.
+
+### 15.2 Код
+
+| Файл | Роля |
+|---|---|
+| `backend/app/tenancy/project_team.py` | **един** accessor на релацията (четене, запис, provenance); работи само през A1 `TenantData` |
+| `backend/app/tenancy/data_access.py` | `assigned_project_ids` / `is_project_member` делегират; нов `TenantData.for_resolved_org` за helper-и с вече резолвнат org |
+| `backend/app/deps/auth.py` | `can_access_project` / `can_manage_project` / `get_user_project_ids` — централната project authorization врата, вече tenant-bound (подписите са същите, така че всеки caller става tenant-bound без собствена membership заявка) |
+| 9 route файла | `projects`, `attendance`, `work_logs`, `technician`, `media`, `hr`, `daily_reports`, `activity_budgets` + `app/db/__init__.py` (премахнат pre-bound alias) |
+| `backend/server.py` | индекси `(org_id, project_id, user_id)` и `(org_id, user_id, active)` |
+| `backend/scripts/w0_03e_a2_project_team_provenance.py` | read-only provenance dry run |
+| `backend/scripts/w0_03e_a2_project_team_inventory.py` | генериран инвентар на релацията |
+| `backend/scripts/w0_03e_a1_tenant_access_guard.py` | ново правило `A2-TEAM` + POSIX нормализация на пътя |
+
+Инвентар: [W0-03E-A2_PROJECT_TEAM_INVENTORY.md](W0-03E-A2_PROJECT_TEAM_INVENTORY.md) — **56**
+access пункта (25 authorization четения, 13 roster, 2 history, 2 raw read, 5 writes, 9 tenant
+resolution). На A1 главата **51** от тях достигаха `project_team` без tenant предикат.
+
+### 15.3 Статичен guard
+
+`A2-TEAM` отхвърля всеки достъп до `project_team` извън `app.tenancy.project_team` —
+`db.project_team`, `db["project_team"]`, alias на което и да е от двете, и
+`from app.db import project_team`. Прилага се върху **целия** `app/` дървен обхват (не само
+върху A1 protected set), защото membership въпрос, отговорен където и да е, решава достъпа
+навсякъде. Ръчно scope-ване също се отхвърля: следващият route забравя, релацията има един
+accessor. Без allowlist — единственото изключение е самият модул на релацията.
+
+Отделно A2 поправя **портируемостта**, по която A1 падна независимо: `_rel()` строеше ключа за
+сравнение с `str(PurePath)`, което на Windows дава `app\services\paid_labor.py`, докато
+`HELPER_MODULES` държи POSIX низове — затова три helper модула се съдеха по по-строгия tier и
+чистото дърво даваше 4 „нарушения" и exit 1 на Windows при exit 0 на POSIX. Ключът вече минава
+през `as_posix()`, а Windows-style CLI аргумент се нормализира и на POSIX интерпретатор.
+
+### 15.4 Provenance на legacy редовете — детерминистично, без догадки
+
+Два изхода, нищо друго: `PROVEN_TENANT` или `UNRESOLVED_PROVENANCE`.
+
+Единственото приемано доказателство за детерминистичен backfill е, че **source базата е доказано
+single-tenant**, проверено срещу W0-01 Tenant Registry. Трите условия важат заедно:
+
+1. точно **един** registry tenant сочи тази база (`database_name`);
+2. самата база съдържа точно **един** различен непразен `org_id` в tenant-keyed колекциите;
+3. този наблюдаван `org_id` **е** legacy org-ът на registry записа.
+
+Всичко друго е `UNRESOLVED_PROVENANCE`: без registry запис (`NO_REGISTRY_RECORD`), споделена
+база (`SHARED_SOURCE_DATABASE`), данни на няколко tenant-а (`MULTI_TENANT_DATA_IN_SOURCE`),
+противоречие между данни и registry (`REGISTRY_DATA_MISMATCH`), нерезолвнат registry org
+(`REGISTRY_ORG_UNRESOLVED`). Ред, чийто съществуващ stamp противоречи на доказания източник, е
+`STAMP_CONFLICTS_WITH_SOURCE` → също unresolved. Няма извод от project id, user id, име, роля
+или съвпадащ запис — точно те съвпадат в колизията, която блокира A1. `project_team` не е
+собствено доказателство: въпросът е кой притежава редовете му.
+
+Миграцията е **само dry-run**: `scripts/w0_03e_a2_project_team_provenance.py` чете през handle,
+който отказва всеки write метод преди сървъра, и връща `proven` / `unresolved` / `conflicting`
+броячи плюс `backfill_plan` (празен, когато източникът не е доказан). Нищо не е изпълнявано
+срещу реални данни; никаква живата/production миграция не е разрешена от този отчет.
+
+**Deny страната не зависи от опашка.** `UNRESOLVED` ред остава без `org_id`, значи tenant
+предикатът никога не го намира и той не дава права — fail closed, веднага, без човешко действие.
+
+### 15.5 Архитектурен блокер: DQ/pending не може да носи provenance
+
+Заданието иска unresolved редовете да отидат в **съществуващия** DQ/pending mapping за явна
+човешка резолюция, и изрично казва да се спре с точния блокер, вместо да се измисля нов approval
+flow. Проверено срещу реалния модел (`app/master_data/pending.py`), не по памет —
+`md_pending_mapping` **не може** да представи unresolved provenance, по три независими причини,
+всяка от които е умишлен инвариант, който A2 не бива да разхлабва:
+
+1. `tenant_id` е **задължителен** и „идва само от server-side resolver". Но точно tenant-ът е
+   неизвестното. Да му се подаде стойност е догадката, която A2 забранява; да му се подаде
+   placeholder слага ред с неизвестна собственост в опашката на един конкретен tenant.
+2. `entity_type` е един от деветте FLOW-032 Master Data типа. Membership е authorization
+   relation, не Master Data запис; нов тип би променил заключения Master Data модел.
+3. `source_channel` е автоматизиран proposal канал (`ai`/`ocr`/`excel`/`import`) — „човешки път
+   не принадлежи в pending mapping". Provenance-ът на legacy ред не е нито един от тях.
+
+Затова A2 **не пише** в `md_pending_mapping` и **не въвежда** нова approval колекция или flow.
+Отчетът съдържа машинно четим блокер (`dq_pending_mapping.blockers`). Липсва само **човешкият
+worklist запис**; authorization изходът е вече правилен и безопасен. Решението кой носител да
+получи unresolved provenance (разширен DQ модел срещу отделен registry на authorization
+relations) е архитектурно/бизнес решение за GPT/Крум и е **извън** A2.
+
+### 15.6 Доказателства (A2 head, локално)
+
+- A/B колизионна матрица на unit ниво и **през реалните HTTP route-ове** като SiteManager
+  (ролята, чийто достъп решава именно team ред): project team routes, finance invoice
+  list/detail, offers list/detail, reports/exports и A1 protected пътищата — за четири
+  provenance форми (само B / без собственик / само A / двата).
+- Същите светове на **реален MongoDB** (loopback, еднократна база, dropped след теста), с
+  предварително твърдение, че tenant-blind `find_one({"id": ...})` наистина връща копието на B
+  на този сървър — предусловието, което прави колизията истинска.
+- Регресионно доказателство: с върнато A1 поведение (`_rel` → нескоупната колекция) **16** A2
+  теста падат; с A2 всички минават.
+- Guard: чисто дърво 217 units / 0 нарушения / exit 0; инжектиран bare membership lookup →
+  `A2-TEAM`, exit 1; Windows/POSIX ключът се твърди детерминистично и на двете платформи.
+
+### 15.7 Записан дълг (не поправян тук — CLAUDE.md §18)
+
+1. `app/routes/work_logs.py` (2 места) викат `get_user_project_ids(user)` с целия сесиен dict
+   вместо с id. Това **вече** връщаше празен списък преди A2 (dict никога не съвпада с
+   `user_id`), тоест тези route-ове отказват на non-admin днес. A2 запазва резултата точно:
+   разширяването му би дало достъп, който системата сега не дава — бизнес решение, не
+   tenant-provenance поправка.
+2. `tests/test_w0_02_permission_core.py` сетва `os.environ["PERMISSION_SERVICE_MODE"]` директно
+   (не през `monkeypatch`) и не го връща, затова `tests/test_w0_03e_legacy_routes.py` дава 15
+   падания, когато двата файла се пуснат в един процес. Съществува и на A1 главата
+   `4b7f986` **непроменено** (проверено чрез stash на A2 промените); изолационен тестов дефект,
+   не runtime.
+3. `scripts/w0_02_bootstrap_permissions.py` чете `op_db.project_team` нескоупнато, за да строи
+   W0-02 project-scope assignment-и. Това е W0-02 bootstrap път върху tenant-резолвнат handle, не
+   authorization четене; остава извън A2 обхвата.

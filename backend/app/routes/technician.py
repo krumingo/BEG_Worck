@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user
 
 router = APIRouter(tags=["Technician"])
@@ -88,10 +89,8 @@ async def my_sites(user: dict = Depends(get_current_user)):
             {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "owner_id": 1, "parent_project_id": 1},
         ).to_list(50)
     else:
-        memberships = await db.project_team.find(
-            {"user_id": uid, "active": True}, {"_id": 0, "project_id": 1}
-        ).to_list(50)
-        pids = [m["project_id"] for m in memberships]
+        pids = await project_team.assigned_project_ids(
+            project_team.tenant_for(db, user), uid, limit=50)
         projects = await db.projects.find(
             {"org_id": org_id, "id": {"$in": pids}},
             {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "parent_project_id": 1},

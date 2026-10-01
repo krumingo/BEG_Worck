@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user, can_access_project, can_manage_project
 from app.utils.audit import log_audit
 from app.tenancy.guard import TenantContext
@@ -307,10 +308,10 @@ DEFAULT_DAILY_WAGE = 200  # BGN fallback
 
 async def compute_avg_daily_wage(org_id: str, project_id: str) -> float:
     """Compute average daily wage from project team's employee profiles."""
-    team = await db.project_team.find(
-        {"project_id": project_id, "org_id": org_id, "active": True},
-        {"_id": 0, "user_id": 1},
-    ).to_list(100)
+    # W0-03E-A2: one relation accessor; the tenant predicate is applied last.
+    team = await project_team.project_rows(
+        project_team.tenant_for_org(db, org_id), [project_id], {"_id": 0, "user_id": 1},
+        limit=100)
     if not team:
         return DEFAULT_DAILY_WAGE
 
