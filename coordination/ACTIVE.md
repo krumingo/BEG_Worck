@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2B/C01 REVIEW — CODEX REVIEWING
+Status: W0-03E-A2B/C01 BLOCKED — EXACT-HEAD INDEPENDENT REVIEW PUBLISHED
 Human-Summary-BG: Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
 Current-Agent: CODEX
-Current-State: REVIEW
+Current-State: BLOCKED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: BLOCKED
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (final exact-head HANDOFF published in PR #40 and Claude Code Cloud session finished)
-Now: Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
+Transition-Phase: OBSERVED (Codex exact-head BLOCKED verdict published in PR #40)
+Now: Codex провери пакета и откри активен финансов път, който при еднакви ID-та може да прочете или промени запис на друг tenant. W0-03E-A2B е BLOCKED; следва архитектурно решение за непокрития tenant-safe access scope.
 Next-Agent: GPT
-Relay-State: RECEIVED
-Relay-From: CLAUDE
-Relay-To: CODEX
-Krum-Action: NONE
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: ПРЕДАЙ BLOCKED РЕЗУЛТАТА НА GPT
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc
 Dispatch-Observed-At: 2026-10-01T18:10:23Z (Claude Code Cloud session initialized on BEG_Worck/A2B branch and ran git status)
@@ -30,16 +30,16 @@ Implementation-Branch-Head: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473 (final HAND
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512
-Review: independent whole-package review found a concrete tenant leak and cross-tenant financial-write path in the registered invoice-lines route; the verdict is ready but not yet published. The separate real-Mongo gate has not run because the code gate is already failed. Residual 314 unscoped reads, 169 unscoped writes and fixed `_id` settings remain unaccepted.
-Verdict-Publication: READY / PUBLISH PENDING; CODEX remains REVIEWING until the exact-head review artifact and PR verdict are published.
-Final-Verdict: NONE for A2B until publication. PR #40 remains Draft/unmerged; no deploy.
+Review: coordination/REVIEWS/W0-03E-A2B.md on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473; PR verdict https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5939648544. The separate real-Mongo gate was not run after the decisive code-gate failure; no independent real-Mongo PASS is claimed. Residual 314 unscoped reads, 169 unscoped writes and fixed `_id` settings remain unaccepted.
+Verdict-Publication: PUBLISHED / BLOCKED.
+Final-Verdict: W0-03E-A2B BLOCKED — active invoice-line route can read and modify another tenant's financial records under colliding IDs. PR #40 remains Draft/unmerged; no deploy or automatic successor.
 Predecessor-Task-ID: W0-03E-A2/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2.md (final BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
 Predecessor-Integration: NONE; PR #32, #33, #34 and #36 remain Draft and unmerged. A2B uses blocked A2 exact head as code base only; architecture decision bd2cd362 is not an accepted implementation gate.
 Authorization: Issue #38 owner decision and latest canonical assignment https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793 supersede the current-dataset unresolved-provenance quarantine requirement. The one-time BEG legacy rule is restricted to the proven current single-tenant source, never future ambiguous imports. Test-only second tenant is authorized only after zero-ownerless test backfill in a disposable environment. Krum explicitly confirmed the one-time A2B Send; the direct Claude Code Cloud session above was observed starting. No duplicate Send.
 Correction-cycles: W0-03E C02/C03, R1, A1 and A2 outcomes remain immutable. A2B is a separately authorized task, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — REVIEWING
+## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — BLOCKED
 
 **На човешки / Какво правим.** Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.
 
