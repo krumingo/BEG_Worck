@@ -21,3 +21,13 @@ A Draft PR is not merged code. A successor may be stacked on a verified exact he
 Krum is asked only for a new or changed business rule, an unresolved choice that changes scope, security/access or credentials, production/NAS/Atlas operations, destructive migration, live acceptance, merge into main, or deployment. Technical implementation inside locked FLOW scope does not need a repeated copy/paste approval. The older per-change manual transfer in CLAUDE.md section 18 is superseded for this coordination loop by Krum's explicit 22 Sep 2026 instruction; its business and merge/deploy safeguards remain.
 
 Automations and routine runs consume usage. If the Claude trigger cannot be reached or evidence cannot be verified, stop with BLOCKED; never infer success from a green run status.
+
+
+## Mandatory Bulgarian human summary
+
+Every ACTIVE implementation task must contain a **1–2 line plain-Bulgarian human summary** explaining what will actually be changed and why it matters to Krum. This is not a technical restatement of the Task-ID.
+
+Canonical field in ACTIVE/TASK template: `Human-Summary-BG`.
+
+The same summary must be projected to the management dashboard and task table. Dashboard labels and management-facing task text are Bulgarian by default. Technical identifiers (Task-ID, Cycle-ID, SHA, PR, FLOW/Wave IDs) remain unchanged.
+
