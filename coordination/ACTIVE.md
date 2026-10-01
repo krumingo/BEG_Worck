@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A1/C01 RUNNING — CLAUDE IMPLEMENTING TENANT-SAFE ACCESS
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
-Transition-Phase: OBSERVED (Claude session initialized and actively responding)
-Now: Claude implementing W0-03E-A1 tenant-safe data access architecture
-Next-Agent: CODEX
+Status: W0-03E-A1/C01 REVIEW — EXACT-HEAD CLAUDE HANDOFF OBSERVED
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: OBSERVED (Claude session ended; exact-head HANDOFF in Draft PR #34)
+Now: Codex independently reviewing the whole W0-03E-A1 package and residual project_team risk
+Next-Agent: GPT
 Relay-State: RECEIVED
 Relay-From: GPT
 Relay-To: CODEX
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01YKpo97ohTUBtSeZAFAE71a
 Dispatch-Observed-At: 2026-10-01T13:34:11Z (message visible, Claude responding, commands running)
 Task-ID: W0-03E-A1
@@ -21,22 +21,22 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-a1-tenant-safe-access
-PR-URL: NONE (new Draft PR required; PR #32 and #33 remain untouched)
-PR-Head: 2cd40a377b67beb4cc60bf211e42708e2a69f881
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/34 (Draft against main)
+PR-Head: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
 Remediation-Base-SHA: 2cd40a377b67beb4cc60bf211e42708e2a69f881
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE (A1 has not started)
-Review: Predecessor R1 BLOCKED — coordination/REVIEWS/W0-03E-R1.md and https://github.com/krumingo/BEG_Worck/pull/33#issuecomment-5925443677 on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881. A/B fixture returned tenant B project code/name in tenant A finance invoice list/detail. A1 has no review yet.
-Final-Verdict: NONE for A1; implementation pending. No merge or deploy.
-HANDOFF-Observed-At: NONE for A1
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/34 (final A1 exact-head HANDOFF in PR body)
+Review: A1 independent whole-package review in progress on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. Claude reports a residual project_team authorization ambiguity; its tests and inventory are claims pending independent verification. Predecessor R1 BLOCKED remains in coordination/REVIEWS/W0-03E-R1.md.
+Final-Verdict: NONE for A1; Codex reviewing. No merge or deploy.
+HANDOFF-Observed-At: 2026-10-01T14:09:34Z (Claude response finished; PR #34 body carries final HANDOFF at exact head)
 Predecessor-Task-ID: W0-03E-R1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-R1.md (final BLOCKED on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
 Predecessor-Integration: NONE; blocked PR #32 and #33 remain Draft and unmerged. A1 reuses PR #33 exact head as code base only, not accepted integration.
-Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR, then explicitly confirmed the one-time direct Claude Send. The new Code Cloud session was observed at the URL above, responding and running commands on the selected A1 branch. This is neither C04 nor R1 continuation; no A1 HANDOFF or verdict exists yet.
+Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR, then explicitly confirmed the one-time direct Claude Send. The Code Cloud session ended and published Draft PR #34 with final exact-head HANDOFF on 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. This is neither C04 nor R1 continuation; Codex has not published an A1 verdict.
 Correction-cycles: W0-03E C02/C03 and R1 budgets remain exhausted and immutable. A1 is an explicitly authorized new architecture task, not an automatic correction.
 
-## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — Claude RUNNING
+## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — HANDOFF published, Codex REVIEWING
 
 **Identity and exact base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A1`; Cycle-ID `C01`; branch `codex/w0-03e-a1-tenant-safe-access` starts at exact `2cd40a377b67beb4cc60bf211e42708e2a69f881` from blocked Draft PR #33. Open one **new Draft PR against `main`** for A1; leave PR #32 and #33 open/Draft and untouched. Recheck exact base/branch and absence of duplicate A1 session/PR before work. Draft is not integration. If identities drift, STOP.
 
