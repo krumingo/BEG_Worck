@@ -1,18 +1,18 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2/C01 REVIEW — AUTHORIZATION RELATION TENANT PROVENANCE
+Status: W0-03E-A2/C01 BLOCKED — LEGACY AUTHORIZATION PROVENANCE UNRESOLVED
 Current-Agent: CODEX
-Current-State: REVIEWING
-Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Current-State: BLOCKED
+Claude-State: WAITING
+Codex-State: BLOCKED
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (final exact-head HANDOFF published and Code Cloud session ended)
-Now: Codex independently reviewing complete main-to-A2 package and provenance gate
+Transition-Phase: OBSERVED (independent exact-head BLOCKED review published in coordination and PR #36)
+Now: A2 blocked; ownerless project_team rows deny access but have no durable DQ/pending work item
 Next-Agent: GPT
-Relay-State: RECEIVED
-Relay-From: GPT
-Relay-To: CODEX
-Krum-Action: NONE
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: RELAY A2 BLOCKER TO GPT FOR ARCHITECT DECISION
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1
 Dispatch-Observed-At: 2026-10-01T15:22:58Z (Claude verified branch/base/queue SHA and began reading A2 context)
@@ -27,16 +27,16 @@ Remediation-Base-SHA: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935491747 (exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
-Review: CODEX REVIEWING A2 exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae; predecessor A1 BLOCKED evidence remains in coordination/REVIEWS/W0-03E-A1.md. Claude HANDOFF reports existing DQ/pending mapping cannot represent ownerless project_team provenance; this is a finding to verify, not yet an independent verdict.
-Final-Verdict: NONE for A2; independent review in progress. No merge or deploy.
+Review: coordination/REVIEWS/W0-03E-A2.md — independent whole-package BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae; published at https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935767587. Independent real-Mongo gate was not run after fail-fast architecture blocker; Claude's result is not an independent PASS.
+Final-Verdict: W0-03E-A2 BLOCKED — LEGACY AUTHORIZATION PROVENANCE UNRESOLVED. No merge, deploy, new cycle or successor dispatch.
 HANDOFF-Observed-At: 2026-10-01T16:17:21Z
 Predecessor-Task-ID: W0-03E-A1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A1.md (final BLOCKED on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb)
 Predecessor-Integration: NONE; blocked PR #32, #33 and #34 remain Draft and unmerged. A2 reuses PR #34 exact head as code base only, not accepted integration.
-Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch started at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. The one authorized direct Claude Code Cloud Send was observed at the session above. Final exact-head HANDOFF is now published in Draft PR #36; Codex review has begun, with no verdict, merge or deploy yet.
+Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch started at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. The one authorized direct Claude Code Cloud Send, final HANDOFF and independent BLOCKED review are observed. The existing pending-mapping model cannot carry tenant-unknown authorization provenance without a new architecture decision. No verdict can be changed to PASS by implementation-side tests alone. No merge or deploy.
 Correction-cycles: W0-03E C02/C03, R1 and A1 outcomes remain immutable. A2 is an explicitly authorized separate provenance task, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — REVIEW
+## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — BLOCKED
 
 **Identity and base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2`; Cycle-ID `C01`; implementation branch `codex/w0-03e-a2-project-team-provenance` is already published at exact blocked A1 head `4b7f9869c288a9b9596bb8d2c02136b0fb749acb`. Open one **new Draft PR against `main`** for the complete stacked A2 package; clearly identify PR #34 as an unaccepted predecessor code base. Leave PR #32/#33/#34 open/Draft and untouched. Recheck exact branch/base and absence of duplicate A2 session/PR before work; STOP on drift. Draft is not integration.
 
