@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T18:12:09Z",
+  "validated_at": "2026-10-01T20:00:55Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "0991583f4a0b7819e20443fa3568f1503331f770",
-  "control_state_commit_sha": "89975a6548d7be3c71ff2848f80aea8a89a49f79",
-  "now": "Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми. Claude работи по W0-03E-A2B/C01.",
+  "active_source_commit_sha": "c34e688b5c8d9453150ac0bdf941be2d40376a2c",
+  "control_state_commit_sha": "acde64fe97bef98340c052f7283516e2f520dbe2",
+  "now": "Claude приключи промяната, с която старите данни се закачат към BEG и се проверява работа с втора тестова фирма. Сега Codex трябва независимо да провери дали между двете фирми никъде не се смесват данни, права или финансови записи и дали останалите непроверени места са достатъчно сериозни, за да блокират задачата.",
   "transition": {
-    "event": "CLAUDE_START",
+    "event": "CLAUDE_HANDOFF",
     "phase": "OBSERVED",
-    "evidence_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -22,66 +22,70 @@
   "task_id": "W0-03E-A2B",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
-  "current_agent": "CLAUDE",
-  "current_role": "IMPLEMENTER",
+  "current_agent": "CODEX",
+  "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2B/C01/GPT",
       "waiting_for": "A2B implementation and independent gate outcome",
-      "updated_at": "2026-10-01T18:12:09Z"
+      "updated_at": "2026-10-01T20:00:55Z"
     },
     "CODEX": {
-      "state": "WAITING",
+      "state": "REVIEWING",
       "work_id": "W0-03E-A2B/C01/CX",
-      "waiting_for": "Claude exact-head HANDOFF",
-      "updated_at": "2026-10-01T18:12:09Z"
+      "waiting_for": "Independent whole-package review and real-Mongo gate",
+      "updated_at": "2026-10-01T20:00:55Z"
     },
     "CLAUDE": {
-      "state": "WORKING",
+      "state": "HANDOFF_READY",
       "work_id": "W0-03E-A2B/C01/CL",
-      "waiting_for": "Claude exact-head HANDOFF",
-      "updated_at": "2026-10-01T18:12:09Z"
+      "waiting_for": "Codex independent verdict",
+      "updated_at": "2026-10-01T20:00:55Z"
     }
   },
-  "current_work_id": "W0-03E-A2B/C01/CL",
-  "state": "WORKING",
-  "pipeline_step": "IMPLEMENTATION",
-  "next_agent": "CODEX",
-  "waiting_for": "Claude exact-head HANDOFF",
+  "current_work_id": "W0-03E-A2B/C01/CX",
+  "state": "REVIEW",
+  "pipeline_step": "REVIEW",
+  "next_agent": "GPT",
+  "waiting_for": "Independent whole-package review and real-Mongo gate",
   "wave": "W0",
   "flow": "FLOW-032",
-  "pr_number": null,
-  "pr_head_sha": null,
-  "pr_draft": null,
-  "dispatch_state": "RUNNING",
+  "pr_number": 40,
+  "pr_head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
+  "pr_draft": true,
+  "dispatch_state": "NONE",
   "dispatch_run_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
-  "last_handoff": null,
+  "last_handoff": {
+    "url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
+    "head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
+    "at": "2026-10-01T18:59:13Z"
+  },
   "last_review": null,
   "relay": {
-    "last_agent": "CODEX",
-    "last_event": "W0-03E-A2B/C01 assignment dispatched; Claude session observed starting",
-    "last_result": "DISPATCHED",
+    "last_agent": "CLAUDE",
+    "last_event": "W0-03E-A2B/C01 exact-head HANDOFF published in Draft PR #40",
+    "last_result": "HANDOFF",
     "required_by_krum": false,
-    "from": "CODEX",
-    "to": "CLAUDE",
+    "from": "CLAUDE",
+    "to": "CODEX",
     "status": "RECEIVED",
-    "instruction": "Claude working; Codex waits for final exact-head HANDOFF.",
-    "source_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
-    "updated_at": "2026-10-01T18:12:09Z"
+    "instruction": "Codex is independently reviewing the exact PR #40 head; GPT waits for published verdict.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
+    "updated_at": "2026-10-01T20:00:55Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "IMPLEMENTATION",
+    "stage": "REVIEW",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "0cf8b1d60ee2c43e74372022d2e0be0e73b95c23",
+    "active_blob_sha": "193fe18a16cf6641829bbf44e5cf0e76b2c2ab0a",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -117,7 +121,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T18:12:09Z",
+  "updated_at": "2026-10-01T20:00:55Z",
   "history": [
     {
       "event_id": "w0-03e-a2b-c01-assignment-intent",
@@ -146,6 +150,20 @@
       "source_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
       "source_commit_sha": "0991583f4a0b7819e20443fa3568f1503331f770",
       "summary": "One-time direct Claude Send confirmed by Krum and accepted. Code Cloud initialized the A2B session on the intended repository/branch and ran git status. Implementation observed running; Codex waiting for exact-head HANDOFF."
+    },
+    {
+      "event_id": "w0-03e-a2b-c01-exact-head-handoff",
+      "occurred_at": "2026-10-01T18:59:13Z",
+      "task_id": "W0-03E-A2B",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CLAUDE",
+      "kind": "HANDOFF",
+      "state_after": "REVIEW",
+      "head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
+      "source_commit_sha": "c34e688b5c8d9453150ac0bdf941be2d40376a2c",
+      "summary": "Claude published final exact-head HANDOFF on PR #40 and Code Cloud session finished. Codex now independently reviews the whole package and disposable real-Mongo gate; residual unscoped reads/writes and fixed-ID settings are not presumed safe."
     }
   ]
 }
