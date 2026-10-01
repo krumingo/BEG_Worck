@@ -1,6 +1,7 @@
 # BEG_WORK — active implementation assignment
 
 Status: W0-03E-A2B/C01 ASSIGNMENT — PENDING SEND, NOT STARTED
+Human-Summary-BG: Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми.
 Current-Agent: CODEX
 Current-State: WORKING
 Claude-State: WAITING
@@ -38,6 +39,8 @@ Authorization: Issue #38 owner decision and latest canonical assignment https://
 Correction-cycles: W0-03E C02/C03, R1, A1 and A2 outcomes remain immutable. A2B is a separately authorized task, not C04 or an automatic correction.
 
 ## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — PENDING, NOT SENT
+
+**За Крум.** Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми.
 
 **Identity and sources.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2B`; Cycle-ID `C01`; code base exact `43ba7e35e9b14899cc3054f1f9c65f30996162ae` from blocked Draft PR #36. Implementation branch `codex/w0-03e-a2b-single-tenant-backfill` currently points at architecture-only commit `bd2cd362bf7b6009d82407925c76c0a9390737fb`, a descendant of the code base. Read Issue #38 **including the latest owner canonical assignment and test-tenant extension**, `docs/architecture/W0-03E-A2B_SINGLE_TENANT_BACKFILL.md` at bd2cd362, `CLAUDE.md`, `coordination/README.md`, this ACTIVE assignment, predecessor `coordination/REVIEWS/W0-03E-A1.md` and `W0-03E-A2.md`, `docs/architecture/TENANCY_MODEL.md` (D-15), `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `docs/flows/FLOW-032.md`, W0-02 permission/bootstrap code and the complete main→A2 package. Recheck branch/base, absence of another A2B session/PR and exact queue SHA before editing. Open one new Draft PR against main; PR #32/#33/#34/#36 stay Draft and untouched. Draft is not integration.
 
