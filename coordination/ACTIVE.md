@@ -1,21 +1,21 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-R1/C01 ASSIGNMENT READY — DISPATCH PENDING
-Current-Agent: CODEX
+Status: W0-03E-R1/C01 CLAUDE IMPLEMENTATION — DISPATCH RUNNING
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT (R1 assignment published; Claude not sent)
-Now: Codex preparing W0-03E-R1/C01 tenant-export remediation assignment for Claude
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED (CLAUDE_START in direct Code Cloud session)
+Now: Claude working on W0-03E-R1/C01 tenant-export remediation
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
 Relay-To: CLAUDE
-Krum-Action: CONFIRM SEND TO CLAUDE if Computer Use requests action-time confirmation; otherwise NONE
-Dispatch-State: PENDING
-Dispatch-Run: NONE (R1 has not been sent)
-Dispatch-Observed-At: NONE (R1 has not started)
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/code/session_01APog23r6ALrEg1dsY56LYY
+Dispatch-Observed-At: 2026-10-01T05:08:26Z (R1 message visible; Claude responding and running git diff)
 Task-ID: W0-03E-R1
 Cycle-ID: C01
 Base-branch: main
@@ -33,10 +33,10 @@ HANDOFF-Observed-At: NONE (R1)
 Predecessor-Task-ID: W0-03E/C03
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (final BLOCKED on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
 Predecessor-Integration: NONE; blocked PR #32 remains Draft and unmerged. R1 reuses its exact head as code base only, not as accepted integration.
-Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head. This is not C04 or a new business rule. The new implementation branch points to that head; no R1 Claude Send, HANDOFF, PR, review, merge or deploy has occurred yet.
+Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head, then confirmed one Computer Use Send. The canonical assignment from queue SHA c959721bab4fd4e60859314df75e38de0aee5110 was sent once to a new direct Code Cloud session on the selected R1 branch. The message appeared, the session initialized, Claude confirmed base and queue SHA and was observed responding and running git diff at 2026-10-01T05:08:26Z. This is not C04 or a new business rule. No R1 HANDOFF, PR, review, merge or deploy exists yet.
 Correction-cycles: W0-03E C02/C03 budget is exhausted and immutable. R1 is a distinct remediation Task-ID with its own C01; if it has another tenant-isolation correctness defect, R1 is BLOCKED for architectural redesign, not another automatic correction.
 
-## Canonical W0-03E-R1/C01 tenant export remediation — PENDING, not sent
+## Canonical W0-03E-R1/C01 tenant export remediation — sent once; Claude working
 
 **Identity, base and PR.** Repository `krumingo/BEG_Worck`. Task-ID `W0-03E-R1`; Cycle-ID `C01`. New branch `codex/w0-03e-r1-tenant-export` already exists at **exact** `47a0c59a4eac974d7bab144f71c076a5748243d0`, the blocked PR #32 head. Recheck branch SHA, PR #32 status/head, `main` head `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`, and that no R1 run/PR exists before coding. Open one **new Draft PR against `main`** for the final full W0-03E package, clearly linking blocked PR #32 and identifying this as R1 remediation, not C04. Do not edit, close or merge PR #32. Draft is not integration. If a base/head mismatch or duplicate R1 dispatch appears, STOP and report it.
 
