@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-R1/C01 CLAUDE IMPLEMENTATION — DISPATCH RUNNING
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
-Transition-Phase: OBSERVED (CLAUDE_START in direct Code Cloud session)
-Now: Claude working on W0-03E-R1/C01 tenant-export remediation
-Next-Agent: CODEX
+Status: W0-03E-R1/C01 HANDOFF READY — CODEX REVIEWING
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: OBSERVED (final exact-head Claude HANDOFF in Draft PR #33)
+Now: Codex independently reviewing the full W0-03E package and disposable real-Mongo gate
+Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
 Relay-To: CLAUDE
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01APog23r6ALrEg1dsY56LYY
 Dispatch-Observed-At: 2026-10-01T05:08:26Z (R1 message visible; Claude responding and running git diff)
 Task-ID: W0-03E-R1
@@ -21,22 +21,22 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-r1-tenant-export
-PR-URL: NONE (new Draft PR against main to be opened by Claude after implementation; PR #32 remains untouched and Draft)
-PR-Head: NONE (implementation branch currently at the exact remediation base)
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/33 (Draft against main)
+PR-Head: 2cd40a377b67beb4cc60bf211e42708e2a69f881
 Remediation-Base-SHA: 47a0c59a4eac974d7bab144f71c076a5748243d0
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE (R1)
-Review: Predecessor W0-03E/C03 BLOCKED — coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408 on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0. This remains final for that task/cycle; R1 is separately authorized and has no review yet.
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/33 (final R1 exact-head HANDOFF in PR body)
+Review: R1 independent review in progress; no R1 verdict yet. Predecessor W0-03E/C03 remains final BLOCKED in coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408.
 Final-Verdict: NONE (R1 not implemented or reviewed)
-HANDOFF-Observed-At: NONE (R1)
+HANDOFF-Observed-At: 2026-10-01T05:24:59Z (Claude session ended; PR #33 body carries final HANDOFF at exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
 Predecessor-Task-ID: W0-03E/C03
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (final BLOCKED on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
 Predecessor-Integration: NONE; blocked PR #32 remains Draft and unmerged. R1 reuses its exact head as code base only, not as accepted integration.
-Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head, then confirmed one Computer Use Send. The canonical assignment from queue SHA c959721bab4fd4e60859314df75e38de0aee5110 was sent once to a new direct Code Cloud session on the selected R1 branch. The message appeared, the session initialized, Claude confirmed base and queue SHA and was observed responding and running git diff at 2026-10-01T05:08:26Z. This is not C04 or a new business rule. No R1 HANDOFF, PR, review, merge or deploy exists yet.
+Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head, then confirmed one Computer Use Send. The canonical assignment from queue SHA c959721bab4fd4e60859314df75e38de0aee5110 was sent once to a new direct Code Cloud session on the selected R1 branch. Claude's session ended and it published Draft PR #33 with final exact-head HANDOFF at 2cd40a377b67beb4cc60bf211e42708e2a69f881. This is not C04 or a new business rule. Codex independent review is now in progress. No R1 verdict, merge or deploy exists yet.
 Correction-cycles: W0-03E C02/C03 budget is exhausted and immutable. R1 is a distinct remediation Task-ID with its own C01; if it has another tenant-isolation correctness defect, R1 is BLOCKED for architectural redesign, not another automatic correction.
 
-## Canonical W0-03E-R1/C01 tenant export remediation — sent once; Claude working
+## Canonical W0-03E-R1/C01 tenant export remediation — final HANDOFF published; Codex reviewing
 
 **Identity, base and PR.** Repository `krumingo/BEG_Worck`. Task-ID `W0-03E-R1`; Cycle-ID `C01`. New branch `codex/w0-03e-r1-tenant-export` already exists at **exact** `47a0c59a4eac974d7bab144f71c076a5748243d0`, the blocked PR #32 head. Recheck branch SHA, PR #32 status/head, `main` head `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`, and that no R1 run/PR exists before coding. Open one **new Draft PR against `main`** for the final full W0-03E package, clearly linking blocked PR #32 and identifying this as R1 remediation, not C04. Do not edit, close or merge PR #32. Draft is not integration. If a base/head mismatch or duplicate R1 dispatch appears, STOP and report it.
 
