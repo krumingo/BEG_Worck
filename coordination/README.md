@@ -29,5 +29,5 @@ Every ACTIVE implementation task must contain a **1–2 line plain-Bulgarian hum
 
 Canonical field in ACTIVE/TASK template: `Human-Summary-BG`.
 
-The same summary must be projected to the management dashboard and task table. Dashboard labels and management-facing task text are Bulgarian by default. Technical identifiers (Task-ID, Cycle-ID, SHA, PR, FLOW/Wave IDs) remain unchanged.
+Every new assignment message to Codex or Claude **begins** with `На човешки:` and that exact 1–2 line text before its technical banner. The same words go into `Human-Summary-BG` and, during the active assignment/review, into the dashboard's “Какво правим”/NOW projection. After a lifecycle transition, NOW must be updated to the newly observed reality; it must not keep saying a completed action is still pending. Dashboard labels and management-facing task text are Bulgarian by default. Technical identifiers (Task-ID, Cycle-ID, SHA, PR, FLOW/Wave IDs) remain unchanged.
 

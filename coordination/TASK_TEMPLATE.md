@@ -1,5 +1,7 @@
 # ACTIVE assignment template
 
+На човешки: REQUIRED — 1–2 изречения на разбираем български за работата и защо е важна.
+
 Status: IDLE
 Dispatch-State: NONE
 Dispatch-Run: NONE
@@ -9,10 +11,10 @@ Base-SHA: NONE
 Predecessor-Task-ID: NONE
 Predecessor-Review: NONE
 
-Human-Summary-BG: REQUIRED — 1–2 lines in plain Bulgarian
+Human-Summary-BG: REQUIRED — copy the exact “На човешки” text above, without a technical rewrite
 
 ## Human purpose
-Write the same 1–2 line Bulgarian summary here in natural language: what will be done and why it matters to Krum. Avoid technical-only wording.
+Write the same 1–2 line Bulgarian summary here in natural language: what will be done and why it matters to Krum. Avoid technical-only wording. Every outbound assignment to Codex or Claude starts with those lines before the technical banner; the active dashboard's “Какво правим” text projects the same words while that assignment is current. Later lifecycle updates must describe observed reality rather than leave a stale future action in NOW.
 
 ## Canonical authority
 List exact FLOW files and D decisions. If ambiguous, BLOCKED; do not invent a rule.
