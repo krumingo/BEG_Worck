@@ -9,8 +9,10 @@ Base-SHA: NONE
 Predecessor-Task-ID: NONE
 Predecessor-Review: NONE
 
+Human-Summary-BG: REQUIRED — 1–2 lines in plain Bulgarian
+
 ## Human purpose
-Explain in plain Bulgarian what this changes for the user.
+Write the same 1–2 line Bulgarian summary here in natural language: what will be done and why it matters to Krum. Avoid technical-only wording.
 
 ## Canonical authority
 List exact FLOW files and D decisions. If ambiguous, BLOCKED; do not invent a rule.
