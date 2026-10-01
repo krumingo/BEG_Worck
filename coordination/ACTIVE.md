@@ -1,18 +1,18 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A1/C01 REVIEW — CODEX VERDICT READY / PUBLICATION PENDING
+Status: W0-03E-A1/C01 BLOCKED — CENTRAL TENANT DATA ACCESS INCOMPLETE
 Current-Agent: CODEX
-Current-State: REVIEW
+Current-State: BLOCKED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: BLOCKED
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT (independent BLOCKED verdict prepared but not published)
-Now: Codex preparing exact-head independent verdict publication; no verdict published yet
+Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
+Now: Codex published A1 BLOCKED after independently reproducing cross-tenant project_team authorization
 Next-Agent: GPT
-Relay-State: RECEIVED
-Relay-From: GPT
-Relay-To: CODEX
-Krum-Action: NONE
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: FORWARD A1 BLOCKER TO GPT
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01YKpo97ohTUBtSeZAFAE71a
 Dispatch-Observed-At: 2026-10-01T13:34:11Z (message visible, Claude responding, commands running)
@@ -27,16 +27,16 @@ Remediation-Base-SHA: 2cd40a377b67beb4cc60bf211e42708e2a69f881
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/34 (final A1 exact-head HANDOFF in PR body)
-Review: Exact-head independent review found that the central project_team access helpers grant tenant A membership from tenant B's only team row when user/project IDs collide; the Windows static guard also reports four violations despite the claimed clean guard. A BLOCKED verdict is prepared but not yet published. Predecessor R1 BLOCKED remains in coordination/REVIEWS/W0-03E-R1.md.
-Final-Verdict: PUBLISH PENDING for A1; Codex remains REVIEWING until the independent review is published. No merge or deploy.
+Review: A1 BLOCKED — coordination/REVIEWS/W0-03E-A1.md and https://github.com/krumingo/BEG_Worck/pull/34#issuecomment-5933406188 on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. A/B ID collision made tenant A's membership helpers accept tenant B's only project_team row; the Windows static guard exits 1 with four portability false positives. Independent full test and real-Mongo gates remain UNVERIFIED after fail-fast blocker. Predecessor R1 BLOCKED remains in coordination/REVIEWS/W0-03E-R1.md.
+Final-Verdict: W0-03E-A1 BLOCKED — published. Stop for GPT/Krum tenant-provenance/security decision. No automatic cycle, merge, deploy or successor dispatch.
 HANDOFF-Observed-At: 2026-10-01T14:09:34Z (Claude response finished; PR #34 body carries final HANDOFF at exact head)
 Predecessor-Task-ID: W0-03E-R1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-R1.md (final BLOCKED on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
 Predecessor-Integration: NONE; blocked PR #32 and #33 remain Draft and unmerged. A1 reuses PR #33 exact head as code base only, not accepted integration.
-Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR, then explicitly confirmed the one-time direct Claude Send. The Code Cloud session ended and published Draft PR #34 with final exact-head HANDOFF on 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. This is neither C04 nor R1 continuation; Codex has not published an A1 verdict.
+Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR, then explicitly confirmed the one-time direct Claude Send. The Code Cloud session ended and published Draft PR #34 with final exact-head HANDOFF on 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. This is neither C04 nor R1 continuation; Codex published an independent A1 BLOCKED verdict on that exact head.
 Correction-cycles: W0-03E C02/C03 and R1 budgets remain exhausted and immutable. A1 is an explicitly authorized new architecture task, not an automatic correction.
 
-## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — HANDOFF published, Codex REVIEWING
+## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — final independent BLOCKED
 
 **Identity and exact base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A1`; Cycle-ID `C01`; branch `codex/w0-03e-a1-tenant-safe-access` starts at exact `2cd40a377b67beb4cc60bf211e42708e2a69f881` from blocked Draft PR #33. Open one **new Draft PR against `main`** for A1; leave PR #32 and #33 open/Draft and untouched. Recheck exact base/branch and absence of duplicate A1 session/PR before work. Draft is not integration. If identities drift, STOP.
 
