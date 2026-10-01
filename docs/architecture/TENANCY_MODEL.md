@@ -223,7 +223,29 @@ BEG_Work-managed deletion включва tenant DB, File Registry, caches, crede
 - customer originals в BEG_Work quota като Launch модел;
 - automatic deletion поради non-payment или изтекъл retention.
 
-## 18. Проследимост
+## 18. Mandatory tenant ownership invariant
+
+> **Decision extension — 01.10.2026, Krum/GPT:** Every tenant-owned business, operational, authorization and relation record in BEG_Work **must carry an explicit `tenant_id`**. Ownerless operational records are not allowed in the canonical model.
+
+Rules:
+
+1. `tenant_id` is written only from the server-resolved active tenant / trusted migration source. It is never accepted as authoritative from a form, request body, free header or arbitrary legacy field.
+2. Every read, write, join, lookup, export, report, authorization check and relation traversal over tenant-owned data is scoped by `tenant_id`.
+3. A bare business identifier such as `id`, `project_id`, `user_id`, `invoice_id`, `client_id`, `company_id`, `warehouse_id`, `person_id`, `payment_id` or similar is never sufficient to establish ownership or authorization.
+4. Every tenant-owned relation record also carries `tenant_id`, including authorization relations such as `project_team`. A role/membership in Tenant A never grants access in Tenant B, even if IDs collide.
+5. Legacy operational rows without proven tenant ownership are **fail-closed**:
+   - if provenance is deterministically proven by a trusted per-tenant source database / Tenant Registry mapping, migration may backfill `tenant_id`;
+   - otherwise the row is classified as unresolved Data Quality / pending mapping;
+   - unresolved rows cannot grant authorization, create financial effects, act as an official business relation, or appear in official reports/exports as trusted data.
+6. No tenant may be inferred from matching IDs, names, roles, fuzzy matching or lookup order.
+7. The standard database-per-tenant deployment remains an isolation layer, but it does **not** replace explicit `tenant_id` ownership inside business records. Both protections are required.
+8. Global technical records are permitted only when the domain is explicitly system-global (for example Tenant Registry / Release Manifest / non-commercial technical catalogs). Operational business data is never implicitly global.
+9. New schemas/writers must reject creation of tenant-owned records without `tenant_id`. Static/CI guards and isolation tests must prevent regressions.
+10. Migration and Wave 0 gates must inventory ownerless legacy collections, backfill only proven ownership, report unresolved/conflicting rows and keep them fail-closed until resolved.
+
+This invariant applies across projects, people, organizations, project-team relations, offers, contracts, invoices, payments, warehouses, materials, assets, tasks, schedules, files/File Registry metadata, photos, reports, AuditEvents and all other tenant-owned business records.
+
+## 19. Проследимост
 
 - D-15 е одобрено на 29.07.2026.
 - Customer-managed storage е заключено на 03.08.2026.
