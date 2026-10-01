@@ -1,40 +1,57 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2/C01 BLOCKED — LEGACY AUTHORIZATION PROVENANCE UNRESOLVED
+Status: W0-03E-A2B/C01 ASSIGNMENT — PENDING SEND, NOT STARTED
 Current-Agent: CODEX
-Current-State: BLOCKED
+Current-State: WORKING
 Claude-State: WAITING
-Codex-State: BLOCKED
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (independent exact-head BLOCKED review published in coordination and PR #36)
-Now: A2 blocked; ownerless project_team rows deny access but have no durable DQ/pending work item
-Next-Agent: GPT
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT (canonical A2B assignment prepared; no Claude Send or observed start)
+Now: Codex preparing W0-03E-A2B/C01 assignment and waiting for one-time Computer Use Send confirmation
+Next-Agent: CLAUDE
 Relay-State: NOT_SENT
 Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: RELAY A2 BLOCKER TO GPT FOR ARCHITECT DECISION
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1
-Dispatch-Observed-At: 2026-10-01T15:22:58Z (Claude verified branch/base/queue SHA and began reading A2 context)
-Task-ID: W0-03E-A2
+Relay-To: CLAUDE
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Dispatch-Observed-At: NONE
+Task-ID: W0-03E-A2B
 Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Implementation-branch: codex/w0-03e-a2-project-team-provenance
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/36 (open Draft; PR #32/#33/#34 remain Draft and untouched)
-PR-Head: 43ba7e35e9b14899cc3054f1f9c65f30996162ae
-Remediation-Base-SHA: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
+Implementation-branch: codex/w0-03e-a2b-single-tenant-backfill
+PR-URL: NONE (new A2B Draft PR to be created by Claude; #32/#33/#34/#36 remain Draft and untouched)
+PR-Head: NONE
+Remediation-Base-SHA: 43ba7e35e9b14899cc3054f1f9c65f30996162ae
+Architecture-Commit-SHA: bd2cd362bf7b6009d82407925c76c0a9390737fb
+Implementation-Branch-Head: bd2cd362bf7b6009d82407925c76c0a9390737fb (architecture-only descendant of remediation base; no A2B runtime implementation yet)
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935491747 (exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
-Review: coordination/REVIEWS/W0-03E-A2.md — independent whole-package BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae; published at https://github.com/krumingo/BEG_Worck/pull/36#issuecomment-5935767587. Independent real-Mongo gate was not run after fail-fast architecture blocker; Claude's result is not an independent PASS.
-Final-Verdict: W0-03E-A2 BLOCKED — LEGACY AUTHORIZATION PROVENANCE UNRESOLVED. No merge, deploy, new cycle or successor dispatch.
-HANDOFF-Observed-At: 2026-10-01T16:17:21Z
-Predecessor-Task-ID: W0-03E-A1/C01
-Predecessor-Review: coordination/REVIEWS/W0-03E-A1.md (final BLOCKED on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb)
-Predecessor-Integration: NONE; blocked PR #32, #33 and #34 remain Draft and unmerged. A2 reuses PR #34 exact head as code base only, not accepted integration.
-Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch started at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. The one authorized direct Claude Code Cloud Send, final HANDOFF and independent BLOCKED review are observed. The existing pending-mapping model cannot carry tenant-unknown authorization provenance without a new architecture decision. No verdict can be changed to PASS by implementation-side tests alone. No merge or deploy.
-Correction-cycles: W0-03E C02/C03, R1 and A1 outcomes remain immutable. A2 is an explicitly authorized separate provenance task, not C04 or an automatic correction.
+HANDOFF-URL: NONE for A2B
+Review: predecessor coordination/REVIEWS/W0-03E-A2.md is BLOCKED on 43ba7e35e9b14899cc3054f1f9c65f30996162ae; no A2B review exists yet.
+Final-Verdict: NONE for A2B. No Send, implementation, PR, HANDOFF, merge or deploy.
+Predecessor-Task-ID: W0-03E-A2/C01
+Predecessor-Review: coordination/REVIEWS/W0-03E-A2.md (final BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
+Predecessor-Integration: NONE; PR #32, #33, #34 and #36 remain Draft and unmerged. A2B uses blocked A2 exact head as code base only; architecture decision bd2cd362 is not an accepted implementation gate.
+Authorization: Issue #38 owner decision and latest canonical assignment https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793 supersede the current-dataset unresolved-provenance quarantine requirement. The one-time BEG legacy rule is restricted to the proven current single-tenant source, never future ambiguous imports. Test-only second tenant is authorized only after zero-ownerless test backfill in a disposable environment. One-time Claude Computer Use Send is still awaiting Krum confirmation.
+Correction-cycles: W0-03E C02/C03, R1, A1 and A2 outcomes remain immutable. A2B is a separately authorized task, not C04 or an automatic correction.
+
+## Canonical W0-03E-A2B/C01 — BEG legacy backfill + two-tenant isolation — PENDING, NOT SENT
+
+**Identity and sources.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2B`; Cycle-ID `C01`; code base exact `43ba7e35e9b14899cc3054f1f9c65f30996162ae` from blocked Draft PR #36. Implementation branch `codex/w0-03e-a2b-single-tenant-backfill` currently points at architecture-only commit `bd2cd362bf7b6009d82407925c76c0a9390737fb`, a descendant of the code base. Read Issue #38 **including the latest owner canonical assignment and test-tenant extension**, `docs/architecture/W0-03E-A2B_SINGLE_TENANT_BACKFILL.md` at bd2cd362, `CLAUDE.md`, `coordination/README.md`, this ACTIVE assignment, predecessor `coordination/REVIEWS/W0-03E-A1.md` and `W0-03E-A2.md`, `docs/architecture/TENANCY_MODEL.md` (D-15), `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `docs/flows/FLOW-032.md`, W0-02 permission/bootstrap code and the complete main→A2 package. Recheck branch/base, absence of another A2B session/PR and exact queue SHA before editing. Open one new Draft PR against main; PR #32/#33/#34/#36 stay Draft and untouched. Draft is not integration.
+
+**Phase 1 — fail-closed precondition.** Resolve canonical BUILDING EXPRESS GROUP / BEG tenant only from trusted server-side Registry/organization state; do not hard-code UUID/name or trust request fields. Prove exactly one eligible active operational tenant for the current legacy source and no conflicting pre-owned records before any migration write. If this cannot be proven, STOP with exact blocker. This owner-approved one-time inference is *only* for the current BEG legacy dataset, not future imports or a future real second tenant.
+
+**Phase 2–3 — inventory and test-only backfill.** Inventory every tenant-owned business/operational/authorization collection in the protected W0-03E scope; for each report `collection | total | already tenant-bound | ownerless | conflicting | writer paths | migration action`, with no ASSUMED SAFE. Include the minimum collection families named in Issue #38: projects/team, users/persons/profiles, companies/clients/counterparties/subcontractors, offers/contracts/invoices/lines, payments/allocations/advances/loans, warehouses/locations, items/materials/requests, work/SMR, assets, tasks/schedules/relations, files/doc metadata and audit/business history. Implement dry-run, idempotent/resumable backfill of current ownerless rows to the resolved BEG tenant **only in isolated test data**; preserve business IDs, never overwrite conflicting ownership, audit/reconcile before/after, no silent partial success. Prove zero ownerless operational and authorization records in the defined protected test scope and zero unresolved conflicts. No production migration.
+
+**Phase 4–6 — writers, membership, bootstrap, guards.** Every new protected tenant-owned record must stamp server-resolved active tenant at creation and reject caller override/ownerless creation. `project_team` must be tenant-bound; authorization uses tenant + project + user [+ role], never bare IDs. Harden `backend/scripts/w0_02_bootstrap_permissions.py` and equivalent permission backfills: consume only tenant-bound memberships, reject any remaining ownerless row, never infer tenant from bare user/project IDs. Static guard must pass clean tree on Windows/POSIX and fail deliberate ownerless-writer, bare-ID lookup and tenantless authorization mutations.
+
+**Phase 7–9 — second tenant and gate.** Only after verified zero-ownerless test backfill, create TEST COMPANY B through the canonical onboarding path in the same disposable test environment; do not copy BEG data. Seed A/B colliding IDs across project, user/person, company/client/counterparty, team membership, invoice, payment/allocation, warehouse/location, offer/export/report. Insert B first where useful. Demonstrate bidirectional isolation, no cross-tenant permission, enrichment, financial value, legacy reference, XLSX/PDF export or report/drilldown leak; each new A/B record gets its own server-derived tenant. Include HTTP route-level tests for project/team authorization, invoice list/detail, offers XLSX/PDF, reports/drilldowns, payment/allocation projections and protected legacy/Master reads. Run disposable real Mongo bound only to `127.0.0.1`, fresh temp dbpath, 0 skipped required scenarios, verified cleanup; never Atlas/NAS/production DB or a real second production tenant.
+
+**HANDOFF and independent gate.** After one confirmed direct Code Cloud Send and observed start, Claude implements on the exact A2B branch, opens a new Draft PR, publishes exact-head HANDOFF with full main→A2B diff/inventory, dry-run and test migration reconciliation, writer/access/guard matrix, focused/adjacent/HTTP tests, real-Mongo counts and cleanup, then STOPS. Codex changes dashboard to REVIEWING only after final HANDOFF and ended session, independently reviews the **whole main→A2B package**, runs focused/adjacent/static guard and a separate disposable real-Mongo A/B collision gate with zero required skips. PASS only when all Issue #38 conditions are proven; then separately review final W0-03E closure. If a correctness gate fails, record `W0-03E-A2B BLOCKED — <one exact blocker>`, no automatic new cycle.
+
+**Hard boundaries and lifecycle.** No merge, deploy, production migration, Atlas/NAS/production write, real second production tenant, W0-06 implementation, unrelated locked FLOW/D changes, automatic Master Data production activation, Claude Routine or duplicate Send. PENDING is intent, not implementation; only observed Claude start allows RUNNING/CLAUDE WORKING, only final exact-head HANDOFF allows CODEX REVIEWING, and a verdict exists only after independent evidence. Krum retains Send, architecture/security, merge and deploy decisions.
 
 ## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — BLOCKED
 
