@@ -1,18 +1,18 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-R1/C01 REVIEW / VERDICT READY, PUBLICATION PENDING
+Status: W0-03E-R1/C01 BLOCKED — ARCHITECTURAL REDESIGN DECISION REQUIRED
 Current-Agent: CODEX
-Current-State: REVIEW
+Current-State: BLOCKED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: BLOCKED
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT (CODEX_VERDICT READY; not published)
-Now: Codex independent whole-package review and disposable real-Mongo gate are complete; R1 verdict is prepared but not published
+Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
+Now: Codex published W0-03E-R1 BLOCKED after independent whole-package review and disposable real-Mongo gate
 Next-Agent: GPT
-Relay-State: NO_RELAY_NEEDED
+Relay-State: NOT_SENT
 Relay-From: CODEX
-Relay-To: CLAUDE
-Krum-Action: NONE
+Relay-To: GPT
+Krum-Action: FORWARD R1 BLOCKER TO GPT
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/code/session_01APog23r6ALrEg1dsY56LYY
 Dispatch-Observed-At: 2026-10-01T05:08:26Z (R1 message visible; Claude responding and running git diff)
@@ -27,13 +27,13 @@ Remediation-Base-SHA: 47a0c59a4eac974d7bab144f71c076a5748243d0
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/33 (final R1 exact-head HANDOFF in PR body)
-Review: R1 verdict pending publication; no R1 verdict exists yet. Predecessor W0-03E/C03 remains final BLOCKED in coordination/REVIEWS/W0-03E.md and https://github.com/krumingo/BEG_Worck/pull/32#issuecomment-5916815408.
-Prepared-Verdict: W0-03E-R1 BLOCKED — unpublished. Independent A/B fixture returned tenant B project code/name in tenant A finance invoice list on real MongoDB and in invoice detail on the same exact head. No new R1 correction cycle or merge/deploy is authorized. Do not treat this as published until review artifact and PR comment exist.
+Review: R1 BLOCKED — coordination/REVIEWS/W0-03E-R1.md and https://github.com/krumingo/BEG_Worck/pull/33#issuecomment-5925443677 on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881. A/B fixture returned tenant B project code/name in tenant A finance invoice list on real MongoDB and in invoice detail. Predecessor C03 remains final BLOCKED in coordination/REVIEWS/W0-03E.md.
+Final-Verdict: W0-03E-R1 BLOCKED — published. Stop for GPT/Krum architectural redesign decision. No automatic R1 correction, C04, merge, deploy or successor dispatch.
 HANDOFF-Observed-At: 2026-10-01T05:24:59Z (Claude session ended; PR #33 body carries final HANDOFF at exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
 Predecessor-Task-ID: W0-03E/C03
 Predecessor-Review: coordination/REVIEWS/W0-03E.md (final BLOCKED on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
 Predecessor-Integration: NONE; blocked PR #32 remains Draft and unmerged. R1 reuses its exact head as code base only, not as accepted integration.
-Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head, then confirmed one Computer Use Send. The canonical assignment from queue SHA c959721bab4fd4e60859314df75e38de0aee5110 was sent once to a new direct Code Cloud session on the selected R1 branch. Claude's session ended and it published Draft PR #33 with final exact-head HANDOFF at 2cd40a377b67beb4cc60bf211e42708e2a69f881. This is not C04 or a new business rule. Codex independent whole-package review and disposable real-Mongo gate are complete, but no R1 verdict has yet been published. No merge or deploy exists.
+Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head, then confirmed one Computer Use Send. The canonical assignment from queue SHA c959721bab4fd4e60859314df75e38de0aee5110 was sent once to a new direct Code Cloud session on the selected R1 branch. Claude's session ended and it published Draft PR #33 with final exact-head HANDOFF at 2cd40a377b67beb4cc60bf211e42708e2a69f881. This is not C04 or a new business rule. Codex independently reviewed the whole package, ran disposable real-Mongo tests and published R1 BLOCKED on the exact head. No merge or deploy exists.
 Correction-cycles: W0-03E C02/C03 budget is exhausted and immutable. R1 is a distinct remediation Task-ID with its own C01; if it has another tenant-isolation correctness defect, R1 is BLOCKED for architectural redesign, not another automatic correction.
 
 ## Canonical W0-03E-R1/C01 tenant export remediation — final HANDOFF published; Codex reviewing
