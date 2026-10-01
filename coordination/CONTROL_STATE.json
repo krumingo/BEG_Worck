@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T14:41:12Z",
+  "validated_at": "2026-10-01T15:22:58Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "bd24adfdac9d7c6f108e6832b055755911e2b032",
-  "control_state_commit_sha": "767b52c49e6fd0b74512f97a46d391b1ce81acbc",
-  "now": "Codex preparing the W0-03E-A2 tenant-provenance assignment for Claude",
+  "active_source_commit_sha": "1fb79824cf9e855c48ede812528b745baeffa20c",
+  "control_state_commit_sha": "afd0150299d2c401b831b151ef41f08897b4c892",
+  "now": "Claude working on W0-03E-A2/C01",
   "transition": {
-    "event": "ASSIGNMENT",
-    "phase": "INTENT",
-    "evidence_url": null,
+    "event": "CLAUDE_START",
+    "phase": "OBSERVED",
+    "evidence_url": "https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -24,66 +24,66 @@
   "task_id": "W0-03E-A2",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
-  "current_agent": "CODEX",
-  "current_role": "TECH_LEAD_QA",
+  "current_agent": "CLAUDE",
+  "current_role": "IMPLEMENTER",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2/C01/GPT",
       "waiting_for": "Codex and Claude A2 implementation and review",
-      "updated_at": "2026-10-01T14:41:12Z"
+      "updated_at": "2026-10-01T15:22:58Z"
     },
     "CODEX": {
-      "state": "WORKING",
+      "state": "WAITING",
       "work_id": "W0-03E-A2/C01/CX",
-      "waiting_for": "One-time Claude Send confirmation and observed start",
-      "updated_at": "2026-10-01T14:41:12Z"
+      "waiting_for": "Claude final exact-head HANDOFF for independent review",
+      "updated_at": "2026-10-01T15:22:58Z"
     },
     "CLAUDE": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-03E-A2/C01/CL",
-      "waiting_for": "Codex dispatch of canonical A2 assignment",
-      "updated_at": "2026-10-01T14:41:12Z"
+      "waiting_for": "Complete canonical A2 assignment and publish final exact-head HANDOFF",
+      "updated_at": "2026-10-01T15:22:58Z"
     }
   },
-  "current_work_id": "W0-03E-A2/C01/CX",
+  "current_work_id": "W0-03E-A2/C01/CL",
   "state": "WORKING",
-  "pipeline_step": "ASSIGNMENT",
-  "next_agent": "CLAUDE",
-  "waiting_for": "One-time Claude Send confirmation and observed start",
+  "pipeline_step": "IMPLEMENTATION",
+  "next_agent": "CODEX",
+  "waiting_for": "Complete canonical A2 assignment and publish final exact-head HANDOFF",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": null,
   "pr_head_sha": null,
   "pr_draft": null,
-  "dispatch_state": "PENDING",
-  "dispatch_run_url": null,
+  "dispatch_state": "RUNNING",
+  "dispatch_run_url": "https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1",
   "last_handoff": null,
   "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-03E-A2/C01 canonical assignment",
-    "last_result": "PENDING",
+    "last_event": "W0-03E-A2/C01 direct Claude dispatch",
+    "last_result": "DISPATCHED",
     "required_by_krum": false,
     "from": "CODEX",
     "to": "CLAUDE",
-    "status": "NO_RELAY_NEEDED",
-    "instruction": "Canonical A2 assignment is prepared; Claude has not been sent or observed.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/blob/bd24adfdac9d7c6f108e6832b055755911e2b032/coordination/ACTIVE.md",
-    "updated_at": "2026-10-01T14:41:12Z"
+    "status": "RECEIVED",
+    "instruction": "Claude Code Cloud observed working; Codex waits for final exact-head HANDOFF.",
+    "source_url": "https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1",
+    "updated_at": "2026-10-01T15:22:58Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "CONFIRM SEND TO CLAUDE",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "ASSIGNMENT",
+    "stage": "IMPLEMENTATION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "03dbacede5bb903b4701d7ee455ea3b7906464b6",
+    "active_blob_sha": "d824ee590a0d79ed1ec087efa5c5cf696e355ee1",
     "review_path": "coordination/REVIEWS/W0-03E-A1.md",
     "review_blob_sha": "4d1cef4f09c826b945c7bff9a6c167b37fcfea5d",
     "canonical_docs": [
@@ -121,7 +121,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T14:41:12Z",
+  "updated_at": "2026-10-01T15:22:58Z",
   "history": [
     {
       "event_id": "w0-03e-a2-c01-assignment-intent",
@@ -136,6 +136,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/blob/bd24adfdac9d7c6f108e6832b055755911e2b032/coordination/ACTIVE.md",
       "source_commit_sha": "bd24adfdac9d7c6f108e6832b055755911e2b032",
       "summary": "Krum authorized separate A2 tenant-bound project_team provenance task on blocked A1 exact head. Branch exists at that head; dispatch PENDING. No A2 Claude Send, Draft PR, HANDOFF, review, merge or deploy; PR #32/#33/#34 remain Draft and untouched."
+    },
+    {
+      "event_id": "w0-03e-a2-c01-claude-observed-start",
+      "occurred_at": "2026-10-01T15:22:58Z",
+      "task_id": "W0-03E-A2",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CLAUDE",
+      "kind": "DISPATCH",
+      "state_after": "WORKING",
+      "head_sha": "4b7f9869c288a9b9596bb8d2c02136b0fb749acb",
+      "source_url": "https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1",
+      "source_commit_sha": "1fb79824cf9e855c48ede812528b745baeffa20c",
+      "summary": "One authorized direct Code Cloud Send was delivered in krumingo/BEG_Worck on exact A2 branch/base. Claude verified repository, branch, start head and queue SHA, read the canonical assignment and began implementation. Codex waits for final HANDOFF; no A2 PR or verdict observed at dispatch start."
     }
   ]
 }
