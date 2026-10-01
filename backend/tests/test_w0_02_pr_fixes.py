@@ -118,8 +118,8 @@ async def _seed_legacy(sysdb, opdb):
     await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": _TEST_OP_DB, "status": "active"})
     await opdb.projects.insert_one({"id": "P1", "org_id": "T1"})
     await opdb.project_team.insert_many([
-        {"id": "pt_v", "project_id": "P1", "user_id": "u_view", "role_in_project": "Worker", "active": True},
-        {"id": "pt_s", "project_id": "P1", "user_id": "u_sm", "role_in_project": "SiteManager", "active": True},
+        {"id": "pt_v", "org_id": "T1", "project_id": "P1", "user_id": "u_view", "role_in_project": "Worker", "active": True},
+        {"id": "pt_s", "org_id": "T1", "project_id": "P1", "user_id": "u_sm", "role_in_project": "SiteManager", "active": True},
     ])
 
 

@@ -165,7 +165,9 @@ async def set_sales_margins(data: dict, user: dict = Depends(get_current_user)):
     }
     await db.settings.update_one(
         {"_id": f"sales_margins_{user['org_id']}"},
-        {"$set": {"margins": margins, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        # W0-03E-A2B: the settings row carries its tenant, not only inside its _id.
+        {"$set": {"org_id": user["org_id"], "margins": margins,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True,
     )
     return margins

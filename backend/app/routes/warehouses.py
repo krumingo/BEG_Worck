@@ -113,11 +113,13 @@ async def list_warehouses(
     # Enrich with reference names
     for wh in warehouses:
         if wh.get("project_id"):
-            proj = await db.projects.find_one({"id": wh["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            proj = await db.projects.find_one({"id": wh["project_id"], "org_id": user["org_id"]},
+                                              {"_id": 0, "code": 1, "name": 1})
             wh["project_code"] = proj["code"] if proj else ""
             wh["project_name"] = proj["name"] if proj else ""
         if wh.get("person_id"):
-            person = await db.persons.find_one({"id": wh["person_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            person = await db.persons.find_one({"id": wh["person_id"], "org_id": user["org_id"]},
+                                               {"_id": 0, "first_name": 1, "last_name": 1})
             wh["person_name"] = f"{person['first_name']} {person['last_name']}" if person else ""
         if wh.get("vehicle_id"):
             wh["vehicle_name"] = wh.get("vehicle_id", "")
@@ -213,7 +215,8 @@ async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user
     
     # Enrich with reference names
     if warehouse.get("project_id"):
-        proj = await db.projects.find_one({"id": warehouse["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+        proj = await db.projects.find_one({"id": warehouse["project_id"], "org_id": user["org_id"]},
+                                          {"_id": 0, "code": 1, "name": 1})
         warehouse["project_code"] = proj["code"] if proj else ""
         warehouse["project_name"] = proj["name"] if proj else ""
     
@@ -243,8 +246,9 @@ async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict 
     
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.warehouses.update_one({"id": warehouse_id}, {"$set": update})
-    return await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+    # W0-03E-A2B: this tenant's warehouse only (ids collide across tenants).
+    await db.warehouses.update_one({"id": warehouse_id, "org_id": user["org_id"]}, {"$set": update})
+    return await db.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/warehouses/{warehouse_id}")

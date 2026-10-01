@@ -130,7 +130,8 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     Returns: { ok: true }
     """
     # Fetch fresh user data with password hash
-    db_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    # W0-03E-A2B: the session's own record — (id, tenant), never the id alone.
+    db_user = await db.users.find_one({"id": user["id"], "org_id": user["org_id"]}, {"_id": 0})
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -153,7 +154,7 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     # Update password
     new_hash = hash_password(data.new_password)
     await db.users.update_one(
-        {"id": user["id"]},
+        {"id": user["id"], "org_id": user["org_id"]},
         {"$set": {
             "password_hash": new_hash,
             "updated_at": datetime.now(timezone.utc).isoformat(),

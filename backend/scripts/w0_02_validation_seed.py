@@ -43,9 +43,12 @@ async def seed_docs(op, sy):
             "scope_type": "company", "scope_ids": [], "status": "active",
             "created_at": "2026-08-01T00:00:00+00:00", "migrated_from": "users.role"})
     await op.projects.insert_one({"id": "P1", "org_id": "T1"})
+    # W0-03E-A2B: the bootstrap derives project permissions only from
+    # tenant-bound memberships of a Tenant Registry tenant of this database.
+    await sy.tenant_registry.insert_one({"id": "T1", "database_name": op.name, "status": "active"})
     await op.project_team.insert_many([
-        {"id": "pt_v", "project_id": "P1", "user_id": "u_view", "role_in_project": "Worker", "active": True},
-        {"id": "pt_s", "project_id": "P1", "user_id": "u_sm", "role_in_project": "SiteManager", "active": True},
+        {"id": "pt_v", "org_id": "T1", "project_id": "P1", "user_id": "u_view", "role_in_project": "Worker", "active": True},
+        {"id": "pt_s", "org_id": "T1", "project_id": "P1", "user_id": "u_sm", "role_in_project": "SiteManager", "active": True},
     ])
 
 

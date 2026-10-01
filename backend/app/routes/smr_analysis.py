@@ -474,6 +474,8 @@ async def snapshot_analysis(analysis_id: str, user: dict = Depends(require_m2)):
     now = datetime.now(timezone.utc).isoformat()
     new_doc = copy.deepcopy(doc)
     new_doc["id"] = str(uuid.uuid4())
+    # W0-03E-A2B: the copy's owner is the session tenant, stamped explicitly.
+    new_doc["org_id"] = user["org_id"]
     new_doc["version"] = new_version
     new_doc["status"] = "draft"
     new_doc["name"] = f"{doc['name']} (v{new_version})"
@@ -942,7 +944,9 @@ async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user))
 
     # Check for cached results
     cache_key = f"ai_breakdown_{analysis_id}"
-    cached = await db.ai_cache.find_one({"key": cache_key})
+    # W0-03E-A2B: the cache is tenant-owned. An analysis id is not unique across
+    # tenants, so a key-only lookup could return another tenant's AI results.
+    cached = await db.ai_cache.find_one({"key": cache_key, "org_id": org_id})
     if cached and cached.get("results"):
         # Apply cached results
         for result in cached["results"]:
@@ -1021,7 +1025,7 @@ material_cena + trud_cena трябва да = ed_cena.
 
         # Cache results
         await db.ai_cache.update_one(
-            {"key": cache_key},
+            {"key": cache_key, "org_id": org_id},
             {"$set": {"results": results, "created_at": now}},
             upsert=True,
         )

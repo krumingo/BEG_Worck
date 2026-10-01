@@ -38,9 +38,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("user_id")
-        if not user_id:
+        org_id = payload.get("org_id")
+        # W0-03E-A2B: the session user is identified by the SIGNED (user id,
+        # tenant) pair. A user id alone is not unique across tenants — two
+        # tenants can hold the same id — and a bare-id lookup would return
+        # whichever tenant's user the database finds first. Every token this
+        # server issues carries org_id (auth.login, billing.signup); a token
+        # without it is refused rather than resolved by id alone.
+        if not user_id or not isinstance(org_id, str) or not org_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        user = await db.users.find_one({"id": user_id, "org_id": org_id}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         if not user.get("is_active", True):

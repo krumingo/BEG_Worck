@@ -241,6 +241,32 @@ async def active_member_count(tenant: TenantData, project_id: Any) -> int:
     return await rel.count({"project_id": pid, "active": True})
 
 
+async def tenant_active_rows(tenant: TenantData, projection: Optional[Mapping] = None,
+                             limit: Optional[int] = None) -> List[Dict]:
+    """Every active membership row of THIS tenant (W0-03E-A2B, W0-02 bootstrap).
+
+    The permission bootstrap derives project-scope RoleAssignments from
+    memberships. It reads them here — tenant predicate applied by the A1 layer —
+    so a row of another tenant, or an ownerless row, is never an input to a
+    permission. Not an authorization answer by itself.
+    """
+    return await _rel(tenant).find(
+        {"active": True}, projection if projection is not None else {"_id": 0}).to_list(limit)
+
+
+async def ownerless_row_count(db) -> int:
+    """How many rows carry NO tenant at all (missing / ``null`` / ``""``).
+
+    A data-quality figure, deliberately not tenant-scoped and therefore
+    disclosing nothing about any tenant: a row counted here belongs to none.
+    After the W0-03E-A2B backfill it must be zero; a consumer that derives
+    authorization from memberships (the W0-02 bootstrap) refuses to run while
+    it is not.
+    """
+    from app.tenancy.ownership import ownerless_predicate
+    return await db[COLLECTION].count_documents(ownerless_predicate(TENANT_KEY))
+
+
 async def row_by_id(tenant: TenantData, member_id: Any, project_id: Any,
                     projection: Optional[Mapping] = None) -> Optional[Dict]:
     """One membership row of this tenant by its own id, within one project."""

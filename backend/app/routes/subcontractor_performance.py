@@ -67,8 +67,9 @@ async def create_performance(data: PerformanceCreate, user: dict = Depends(get_c
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
         **data.model_dump(),
+        # W0-03E-A2B: after the caller's fields, so nothing can replace the tenant.
+        "org_id": user["org_id"],
         "status": "unknown",
         "created_by": user["id"],
         "created_at": now,

@@ -174,8 +174,7 @@ async def get_stock_value(org_id: str, warehouse_id: str) -> dict:
 
 async def ensure_indexes(org_id: str = None):
     """Create required indexes for warehouse_batches."""
-    coll = db.warehouse_batches
-    await coll.create_index([("org_id", 1), ("item_id", 1), ("warehouse_id", 1), ("status", 1), ("received_at", 1)])
-    await coll.create_index([("org_id", 1), ("batch_number", 1)], unique=True)
-    await coll.create_index([("org_id", 1), ("supplier_id", 1)])
-    await coll.create_index([("org_id", 1), ("invoice_number", 1)])
+    await db.warehouse_batches.create_index([("org_id", 1), ("item_id", 1), ("warehouse_id", 1), ("status", 1), ("received_at", 1)])
+    await db.warehouse_batches.create_index([("org_id", 1), ("batch_number", 1)], unique=True)
+    await db.warehouse_batches.create_index([("org_id", 1), ("supplier_id", 1)])
+    await db.warehouse_batches.create_index([("org_id", 1), ("invoice_number", 1)])

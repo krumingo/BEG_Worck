@@ -375,7 +375,10 @@ def _make_client_dbs():
         return client, client[_TEST_SYS_DB], client[_TEST_OP_DB]
     from mongomock_motor import AsyncMongoMockClient
     client = AsyncMongoMockClient()
-    return client, client["sys_test"], client["op_test"]
+    # W0-03E-A2B: the bootstrap reads the memberships of the Tenant Registry
+    # tenants of ITS database, so the in-process database carries the same name
+    # the seeded registry record names (as in real-Mongo mode).
+    return client, client[_TEST_SYS_DB], client[_TEST_OP_DB]
 
 
 async def _reset(sysdb, opdb):
@@ -614,7 +617,7 @@ async def _seed_api(sysdb, opdb, boot):
                                                    "tenant_id": "T1", "status": "active"})
     await sysdb.tenant_registry.insert_one({"id": "T1", "database_name": _TEST_OP_DB, "status": "active"})
     await opdb.projects.insert_one({"id": "P1", "org_id": "T1", "name": "P1"})
-    await opdb.project_team.insert_one({"id": "pt1", "project_id": "P1", "user_id": "u_view",
+    await opdb.project_team.insert_one({"id": "pt1", "org_id": "T1", "project_id": "P1", "user_id": "u_view",
                                         "role_in_project": "Worker", "active": True})
     await opdb.activity_budgets.insert_one({"id": "b1", "org_id": "T1", "project_id": "P1",
                                             "type": "Общо", "subtype": ""})

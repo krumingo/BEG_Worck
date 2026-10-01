@@ -163,8 +163,9 @@ async def update_item(item_id: str, data: ItemUpdate, user: dict = Depends(get_c
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.items.update_one({"id": item_id}, {"$set": update})
-    return await db.items.find_one({"id": item_id}, {"_id": 0})
+    # W0-03E-A2B: this tenant's item only (ids collide across tenants).
+    await db.items.update_one({"id": item_id, "org_id": user["org_id"]}, {"$set": update})
+    return await db.items.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/items/{item_id}")

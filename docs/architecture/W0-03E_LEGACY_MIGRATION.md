@@ -557,3 +557,71 @@ relations) е архитектурно/бизнес решение за GPT/Кр
 3. `scripts/w0_02_bootstrap_permissions.py` чете `op_db.project_team` нескоупнато, за да строи
    W0-02 project-scope assignment-и. Това е W0-02 bootstrap път върху tenant-резолвнат handle, не
    authorization четене; остава извън A2 обхвата.
+
+## 16. W0-03E-A2B/C01 — еднократен backfill към единствения tenant BEG + двоен tenant gate
+
+Отделна задача (Issue #38, решение `docs/architecture/W0-03E-A2B_SINGLE_TENANT_BACKFILL.md`),
+база = блокираната A2 глава `43ba7e35e9b14899cc3054f1f9c65f30996162ae`. Решението на собственика
+замества quarantine изискването за **текущия** dataset: всеки текущ ownerless tenant-owned legacy
+запис принадлежи на BUILDING EXPRESS GROUP / BEG. Правилото е еднократно и не важи за бъдещи импорти.
+
+### 16.1 Ред на изпълнение
+
+1. **Precondition (fail closed)** — `prove_precondition`: tenant-ът се резолвира само от Tenant
+   Registry (system DB) и `organizations` на source базата; няма hard-coded UUID/име, няма request
+   поле. Изисква: точно един registry запис за базата, той е `is_primary_installation`, в
+   оперативен статус, единственият eligible оперативен tenant в целия registry, организацията му
+   е в базата и няма втора оперативна организация. Иначе — един точен код
+   (`NO_REGISTRY_RECORD`, `SHARED_SOURCE_DATABASE`, `NOT_THE_LEGACY_INSTALLATION`,
+   `TENANT_NOT_OPERATIONAL`, `NOT_EXACTLY_ONE_OPERATIONAL_TENANT`, `SECOND_ORGANIZATION_IN_SOURCE`,
+   `REGISTRY_ORG_NOT_IN_SOURCE`, `PLATFORM_TENANT_NOT_ELIGIBLE`) и нищо не се записва.
+2. **Inventory / dry run** — всяка колекция в базата + всяка декларирана в
+   `app/tenancy/ownership.py` (единствената класификация): `total | bound | ownerless |
+   conflicting | platform | action`. Конфликтен собственик, ownerless ред в каноничен
+   `tenant_id` store или некласифицирана колекция с документи блокират целия run. Read-only по
+   конструкция. `plan_token` = точната версия (вкл. digest на ownerless `_id` множеството).
+3. **Execute** — повторна проверка на precondition, отказ при stale план, Approval за точния
+   `plan_token` (default verifier = W0-07 NOT STARTED → отказ), per-tenant lock, само ownerless
+   редове (предикатът се проверява от сървъра на всеки batch → чужд собственик никога не се
+   презаписва), journal на всеки batch, AuditEvent started/completed, reconciliation: 0 ownerless,
+   0 conflicting, journaled == planned; иначе `verification_failed` (няма тих частичен успех).
+   Същият idempotency key продължава прекъснат run или връща завършения.
+4. **Rollback** — само journaled редове, само докато носят stamp-натия tenant, връщат точната
+   ownerless форма (липсващ / `null` / `""`); approval-gated.
+5. **Invariant** — след доказани 0 ownerless: `$jsonSchema` validator (`org_id` непразен string) на
+   всички 124 org-keyed колекции; сървърът отказва ownerless insert и премахване на собственик.
+6. **W0-02 bootstrap** — отказва (exit 4) докато има ownerless `project_team`; чете memberships
+   само per registry tenant през `TenantData`, сдвоява само с потребители на същия tenant,
+   `tenant_id` = registry tenant.
+7. **Втори tenant** — само през `app/tenancy/onboarding.py` (`POST /billing/signup` и
+   `scripts/create_company.py`): server-generated id, registry (`is_primary_installation: false`),
+   membership, owner assignment. След това precondition-ът на стъпка 1 пада завинаги.
+
+### 16.2 Writers и identity
+
+- `A2B-WRITER` / `A2B-OVERRIDE` / `A2B-ALIAS` (guard, целият `app/` + `server.py` +
+  `scripts/create_company.py`): всяка операция, която може да създаде документ в org-keyed
+  колекция, трябва доказуемо да носи `org_id`; spread след ключа или стойност от route параметър е
+  нарушение. Поправени ownerless writers: `project_phases` (без собственик), `smr_analyses`
+  snapshot, `ai_cache` (споделен между tenant-и ключ → tenant-scoped четене и запис),
+  `settings` (sales margins), `alarm_events`, `subcontractor_performance` (spread преди ключа),
+  `fifo_service` alias.
+- `A2-TEAM` покрива и `scripts/w0_02_bootstrap_permissions.py`.
+- `get_current_user` резолвира сесийния потребител по подписаната двойка (user id, org_id) —
+  user id не е уникален между tenant-и. Token без `org_id` → 401 (всички издавани token-и го имат).
+- Поправени bare-id четения/записи по маршрутите от Issue #38 матрицата: team roster, project
+  list/detail/update, project photos, warehouses list/detail/update, item update.
+
+### 16.3 Ограничения / дълг
+
+- **Deploy ред:** кодът предполага, че backfill-ът е изпълнен преди deploy (новите tenant-scoped
+  филтри не намират ownerless редове). Production migration не е разрешена от тази задача.
+- **Остатъчен дълг:** извън W0-03E protected surface остават raw четения/записи без литерален
+  tenant филтър — пълен генериран списък в
+  [W0-03E-A2B_INVENTORY.md](W0-03E-A2B_INVENTORY.md) §3. Те не са в матрицата на Issue #38, но
+  при колизия на id са cross-tenant достъп и са блокер за **реален** втори tenant.
+- `settings` с фиксиран `_id` (`worker_rates`, `employee_cost_config`, `overtime_config`) не може да
+  съществува за два tenant-а едновременно (уникален `_id`) — дефект за реален втори tenant, записан
+  като дълг.
+- Цифрите в инвентара са от синтетичния legacy dataset на disposable gate-а; реалната BEG база не
+  е четена.

@@ -179,7 +179,8 @@ async def evaluate_all_rules(org_id: str) -> dict:
     for rule in rules:
         new_events = await evaluate_rule(rule, org_id)
         for ev in new_events:
-            await db.alarm_events.insert_one(ev)
+            # W0-03E-A2B: stamped at the write with the tenant being evaluated.
+            await db.alarm_events.insert_one({**ev, "org_id": org_id})
         all_new.extend(new_events)
 
         # Auto-resolve

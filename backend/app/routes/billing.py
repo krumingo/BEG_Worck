@@ -73,57 +73,35 @@ async def get_billing_config(user: dict = Depends(require_platform_admin)):
 @router.post("/billing/signup")
 async def signup_organization(data: OrgSignupRequest):
     """Public endpoint - create new organization with owner"""
-    # Check if email already exists
-    existing = await db.users.find_one({"email": data.owner_email.lower()})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
+    # W0-03E-A2B: the canonical tenant onboarding path. It generates the tenant
+    # id server-side, writes the organization and the owner stamped with it,
+    # and registers the tenant (registry + membership + owner assignment), so a
+    # new company is never invisible to the Tenant Guard and never mistaken for
+    # the legacy BEG installation by the one-time backfill rule.
+    from app.tenancy import registry as tenant_registry_mod
+    from app.tenancy.onboarding import OnboardingRefused, onboard_tenant
+
     now = datetime.now(timezone.utc).isoformat()
-    org_id = str(uuid.uuid4())
-    user_id = str(uuid.uuid4())
-    
+
     # Parse owner name into first_name and last_name
     name_parts = data.owner_name.strip().split(" ", 1)
     first_name = name_parts[0]
     last_name = name_parts[1] if len(name_parts) > 1 else ""
-    
-    # Create organization
-    org = {
-        "id": org_id,
-        "name": data.org_name,
-        "slug": data.org_name.lower().replace(" ", "-").replace("_", "-")[:50],
-        "email": data.owner_email.lower(),
-        "phone": "",
-        "address": "",
-        "logo_url": "",
-        "vat_percent": 20.0,
-        "attendance_start": "06:00",
-        "attendance_end": "10:00",
-        "work_report_deadline": "18:30",
-        "max_reminders_per_day": 2,
-        "escalation_after_days": 2,
-        "org_timezone": "Europe/Sofia",
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.organizations.insert_one(org)
-    
-    # Create owner user
-    user = {
-        "id": user_id,
-        "org_id": org_id,
-        "email": data.owner_email.lower(),
-        "password_hash": hash_password(data.password),
-        "first_name": first_name,
-        "last_name": last_name,
-        "role": "Owner",
-        "phone": "",
-        "is_active": True,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.users.insert_one(user)
-    
+
+    try:
+        created = await onboard_tenant(
+            db, tenant_registry_mod.system_db, org_name=data.org_name,
+            owner_email=data.owner_email, owner_password_hash=hash_password(data.password),
+            owner_first_name=first_name, owner_last_name=last_name, owner_role="Owner",
+            organization_extra={
+                "attendance_start": "06:00", "attendance_end": "10:00",
+                "work_report_deadline": "18:30", "max_reminders_per_day": 2,
+                "escalation_after_days": 2})
+    except OnboardingRefused as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    org_id = created["tenant"]["id"]
+    user_id = created["owner"]["id"]
+
     # Create subscription with free trial
     trial_ends = datetime.now(timezone.utc) + timedelta(days=SUBSCRIPTION_PLANS["free"]["trial_days"])
     subscription = {

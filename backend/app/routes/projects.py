@@ -153,7 +153,8 @@ async def list_projects(
         projects = [p for p in projects if s in p.get("code", "").lower() or s in p.get("name", "").lower()]
     for p in projects:
         if p.get("default_site_manager_id"):
-            mgr = await db.users.find_one({"id": p["default_site_manager_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            mgr = await db.users.find_one({"id": p["default_site_manager_id"], "org_id": user["org_id"]},
+                                          {"_id": 0, "first_name": 1, "last_name": 1})
             p["site_manager_name"] = f"{mgr['first_name']} {mgr['last_name']}" if mgr else ""
         else:
             p["site_manager_name"] = ""
@@ -238,7 +239,8 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     if project.get("default_site_manager_id"):
-        mgr = await db.users.find_one({"id": project["default_site_manager_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+        mgr = await db.users.find_one({"id": project["default_site_manager_id"], "org_id": user["org_id"]},
+                                      {"_id": 0, "first_name": 1, "last_name": 1})
         project["site_manager_name"] = f"{mgr['first_name']} {mgr['last_name']}" if mgr else ""
     else:
         project["site_manager_name"] = ""
@@ -293,9 +295,10 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
         if parts:
             update["address_text"] = ", ".join(parts)
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.projects.update_one({"id": project_id}, {"$set": update})
+    # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
+    await db.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
-    return await db.projects.find_one({"id": project_id}, {"_id": 0})
+    return await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, user: dict = Depends(require_admin)):
@@ -402,7 +405,10 @@ async def list_project_team(project_id: str, user: dict = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Access denied")
     members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
     for m in members:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
+        # W0-03E-A2B: the member's user in THIS tenant — a user id is not unique
+        # across tenants, so a bare-id lookup could name another tenant's person.
+        u = await db.users.find_one({"id": m["user_id"], "org_id": user["org_id"]},
+                                    {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
         if u:
             m["user_name"] = f"{u['first_name']} {u['last_name']}"
             m["user_email"] = u["email"]
@@ -510,6 +516,8 @@ async def create_phase(project_id: str, data: PhaseCreate, user: dict = Depends(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     phase = {
         "id": str(uuid.uuid4()),
+        # W0-03E-A2B: a phase is tenant-owned; stamped from the session tenant.
+        "org_id": user["org_id"],
         "project_id": project_id,
         "name": data.name,
         "order": data.order,
@@ -832,7 +840,8 @@ async def list_project_photos(project_id: str, user: dict = Depends(get_current_
     user_ids = list(set(p.get("uploaded_by") for p in photos if p.get("uploaded_by")))
     users_map = {}
     if user_ids:
-        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
+        users = await db.users.find({"id": {"$in": user_ids}, "org_id": org_id},
+                                    {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
         users_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
     for photo in photos:
         photo["uploader_name"] = users_map.get(photo.get("uploaded_by"), "")

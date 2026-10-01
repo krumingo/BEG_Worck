@@ -55,6 +55,36 @@ a membership question answered anywhere decides access everywhere:
                 authorized tenant A. Scoping the filter by hand does not help,
                 because the next route forgets; the relation has one accessor.
 
+W0-03E-A2B adds the writer side, also over the WHOLE ``app/`` tree (plus
+``server.py`` and the operator scripts in ``WRITER_SCRIPTS``), because after the
+single-tenant backfill no tenant-owned record may ever be created ownerless:
+
+  A2B-WRITER    a write that can CREATE a document in a tenant-owned
+                (``org_id``-keyed, ``app.tenancy.ownership.ORG_KEYED``)
+                collection — ``insert_one``, ``insert_many``, ``replace_one``,
+                ``find_one_and_replace``, or an ``update_*``/``find_one_and_update``
+                with ``upsert=True`` — whose document is not PROVEN to carry an
+                ``org_id`` key. Proven means: a dict literal with the key; a
+                name assigned such a literal, or given the key by
+                ``name["org_id"] = ...``, ``name.update({...})``/
+                ``name.setdefault("org_id", ...)`` in the same function;
+                ``dict(x, org_id=...)``; a list literal / comprehension of such
+                dicts, or a list filled by ``.append(<proven>)`` or whose loop
+                variable is given the key; for an upsert, the key in the filter
+                or in ``$set``/``$setOnInsert``. Writes through a ``TenantData``
+                collection (``tenant.<c>``/``_tenant(...).<c>``) stamp the
+                tenant themselves and are not judged here.
+  A2B-OVERRIDE  a ``**spread`` placed AFTER the ``org_id`` key of a written
+                document (the spread could replace the server's tenant), or —
+                inside an HTTP route — an ``org_id`` value that reads a
+                caller-controlled route parameter.
+  A2B-ALIAS     a tenant-owned collection bound to a name
+                (``coll = db.invoices``), which would hide its writes.
+
+``A2-TEAM`` additionally covers the authorization-deriving scripts in
+``AUTHZ_SCRIPTS`` (the W0-02 permission bootstrap), which must read
+memberships through ``app.tenancy.project_team`` like the application.
+
 There is no allowlist. A line that cannot be proven safe is a violation; the
 fix is to route it through the access layer, not to exclude it.
 """
@@ -488,6 +518,7 @@ def check_files(paths: Iterable[str]) -> List[Violation]:
         source = path.read_text(encoding="utf-8")
         found.extend(check_source(source, rel, helper=rel in HELPER_MODULES))
         found.extend(check_team_relation(source, rel))
+        found.extend(check_writers(source, rel))
     return found
 
 
@@ -500,7 +531,324 @@ def check_protected_surface() -> Tuple[int, List[Violation]]:
     units = len(PROTECTED_MODULES) + len(HELPER_MODULES) + sum(map(len, PROTECTED_FUNCTIONS.values()))
     # W0-03E-A2: the authorization relation is checked over the whole app tree.
     team_units, team_found = check_team_relation_tree()
-    return units + team_units, found + team_found
+    # W0-03E-A2B: the authorization-deriving scripts, and every writer.
+    for rel in AUTHZ_SCRIPTS:
+        found.extend(check_team_relation((BACKEND / rel).read_text(encoding="utf-8"), rel))
+    writer_units, writer_found = check_writer_tree()
+    return (units + team_units + len(AUTHZ_SCRIPTS) + writer_units,
+            found + team_found + writer_found)
+
+
+# ============================================================== W0-03E-A2B
+#: Scripts that derive AUTHORIZATION from memberships: A2-TEAM applies to them.
+AUTHZ_SCRIPTS: Tuple[str, ...] = ("scripts/w0_02_bootstrap_permissions.py",)
+
+#: Operator scripts that create tenant-owned records: A2B-WRITER applies.
+WRITER_SCRIPTS: Tuple[str, ...] = ("scripts/create_company.py",)
+
+
+def _ownership_module():
+    """``app/tenancy/ownership.py`` loaded by file path.
+
+    It is stdlib-only; importing it as ``app.tenancy.ownership`` would run the
+    package ``__init__`` (database clients), and the guard must stay a pure
+    AST check that needs no application dependency on any platform.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_w0_03e_a2b_ownership", BACKEND / "app" / "tenancy" / "ownership.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _org_keyed() -> frozenset:
+    """The tenant-owned collections — read from the ONE classification."""
+    return frozenset(_ownership_module().ORG_KEYED)
+
+
+#: Names that hold a raw database handle anywhere in the app tree.
+WRITER_DB_NAMES = DB_NAMES | frozenset({"tdb", "op_db", "sys_db", "system_db", "db_handle"})
+CREATE_METHODS = frozenset({"insert_one", "insert_many", "replace_one", "find_one_and_replace"})
+UPSERT_METHODS = frozenset({"update_one", "update_many", "find_one_and_update"})
+OWNER_KEY = "org_id"
+
+
+def _is_writer_db(node: ast.AST) -> bool:
+    if isinstance(node, ast.IfExp):              # (db if h is None else h)
+        return _is_writer_db(node.body) and _is_writer_db(node.orelse)
+    if isinstance(node, ast.Name):
+        return node.id in WRITER_DB_NAMES
+    if isinstance(node, ast.Attribute):
+        return node.attr in WRITER_DB_NAMES
+    if isinstance(node, ast.Await):
+        call = node.value
+        return (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                and call.func.attr in WRITER_DB_NAMES)
+    return False
+
+
+def _module_constants(tree: ast.Module) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
+            out[node.targets[0].id] = node.value.value
+    return out
+
+
+def _prebound(tree: ast.Module) -> Dict[str, str]:
+    """``from app.db import invoices [as inv]`` -> {local name: collection}."""
+    out: Dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "app.db":
+            for alias in node.names:
+                if alias.name != "db":
+                    out[alias.asname or alias.name] = alias.name
+    return out
+
+
+def _dict_owner(node: ast.AST) -> Tuple[bool, bool, Optional[ast.AST]]:
+    """(has the owner key, a spread follows it, the owner value)."""
+    has, spread_after, value = False, False, None
+    if isinstance(node, ast.Dict):
+        for k, v in zip(node.keys, node.values):
+            if k is None:
+                if has:
+                    spread_after = True
+                continue
+            if isinstance(k, ast.Constant) and k.value == OWNER_KEY:
+                has, spread_after, value = True, False, v
+    elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict"):
+        for kw in node.keywords:
+            if kw.arg == OWNER_KEY:
+                has, value = True, kw.value
+        if not has and node.args:
+            return _dict_owner(node.args[0])
+    return has, spread_after, value
+
+
+class _WriterChecker:
+    def __init__(self, rel: str, tree: ast.Module, scoped: frozenset):
+        self.rel, self.tree, self.scoped = rel, tree, scoped
+        self.consts = _module_constants(tree)
+        self.prebound = _prebound(tree)
+        self.out: List[Violation] = []
+
+    def add(self, node, rule, msg):
+        self.out.append((self.rel, getattr(node, "lineno", 0), rule, msg))
+
+    # ---- which collection does a receiver name?
+    def _collection(self, node: ast.AST, aliases: Dict[str, str]) -> Optional[str]:
+        if isinstance(node, ast.Attribute) and _is_writer_db(node.value):
+            return node.attr
+        if isinstance(node, ast.Subscript) and _is_writer_db(node.value):
+            key = node.slice
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                return key.value
+            if isinstance(key, ast.Name):
+                return self.consts.get(key.id)
+            return None
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id) or self.prebound.get(node.id)
+        return None
+
+    # ---- is a document expression proven to carry the owner?
+    def _proven(self, expr: Optional[ast.AST], fn: ast.AST, route_params: frozenset,
+                call: ast.Call, many: bool = False) -> bool:
+        if expr is None:
+            return False
+        if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name) and expr.func.id in (
+                "dict", "list") and expr.args and not expr.keywords:
+            return self._proven(expr.args[0], fn, route_params, call, many)
+        if many:
+            if isinstance(expr, (ast.List, ast.Tuple)):
+                return bool(expr.elts) and all(
+                    self._proven(e, fn, route_params, call) for e in expr.elts)
+            if isinstance(expr, ast.ListComp):
+                return self._proven(expr.elt, fn, route_params, call)
+            if isinstance(expr, ast.Name):
+                return self._list_name_proven(expr.id, fn, route_params, call)
+            return False
+        has, spread_after, value = _dict_owner(expr)
+        if has:
+            self._judge_value(call, value, spread_after, route_params)
+            return True
+        if isinstance(expr, ast.Name):
+            return self._name_proven(expr.id, fn, route_params, call)
+        return False
+
+    def _judge_value(self, call, value, spread_after, route_params):
+        if spread_after:
+            self.add(call, "A2B-OVERRIDE",
+                     "a **spread after the org_id key could replace the server's tenant")
+        if value is not None and route_params:
+            used = {n.id for n in ast.walk(value) if isinstance(n, ast.Name)}
+            bad = sorted(used & route_params)
+            if bad:
+                self.add(call, "A2B-OVERRIDE",
+                         "org_id value reads caller-controlled route parameter(s) %s"
+                         % ", ".join(bad))
+
+    def _name_proven(self, name: str, fn: ast.AST, route_params, call) -> bool:
+        ok = False
+        for n in ast.walk(fn):
+            if isinstance(n, (ast.Assign, ast.AnnAssign)):
+                targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+                for t in targets:
+                    if isinstance(t, ast.Name) and t.id == name and n.value is not None:
+                        has, spread_after, value = _dict_owner(n.value)
+                        if has:
+                            self._judge_value(call, value, spread_after, route_params)
+                            ok = True
+                        elif self._factory_proven(n.value, route_params, call):
+                            ok = True
+                    if (isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name)
+                            and t.value.id == name and isinstance(t.slice, ast.Constant)
+                            and t.slice.value == OWNER_KEY):
+                        self._judge_value(call, n.value, False, route_params)
+                        ok = True
+            elif (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                  and isinstance(n.func.value, ast.Name) and n.func.value.id == name):
+                if n.func.attr == "update" and n.args:
+                    has, spread_after, value = _dict_owner(n.args[0])
+                    if has:
+                        self._judge_value(call, value, spread_after, route_params)
+                        ok = True
+                if n.func.attr in ("update", "setdefault"):
+                    for kw in n.keywords:
+                        if kw.arg == OWNER_KEY:
+                            ok = True
+                if (n.func.attr == "setdefault" and n.args
+                        and isinstance(n.args[0], ast.Constant) and n.args[0].value == OWNER_KEY):
+                    ok = True
+        return ok
+
+    def _factory_proven(self, value: ast.AST, route_params, call) -> bool:
+        """``doc = _new_doc()``: a local factory every ``return`` of which is a
+        dict literal carrying the owner key."""
+        if not (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)):
+            return False
+        defs = [n for n in ast.walk(self.tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and n.name == value.func.id]
+        if len(defs) != 1:
+            return False
+        returns = [r for r in ast.walk(defs[0]) if isinstance(r, ast.Return)]
+        if not returns:
+            return False
+        for r in returns:
+            has, spread_after, owner = _dict_owner(r.value) if r.value is not None else (
+                False, False, None)
+            if not has:
+                return False
+            self._judge_value(call, owner, spread_after, route_params)
+        return True
+
+    def _list_name_proven(self, name: str, fn: ast.AST, route_params, call) -> bool:
+        """A list filled by ``.append(<proven>)``, built as a proven literal/comp,
+        or whose elements are given the key by ``for x in name: x["org_id"] = ...``."""
+        appended, all_ok = False, True
+        for n in ast.walk(fn):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and isinstance(n.func.value, ast.Name) and n.func.value.id == name
+                    and n.func.attr in ("append", "extend")):
+                appended = True
+                arg = n.args[0] if n.args else None
+                if n.func.attr == "extend":
+                    all_ok &= self._proven(arg, fn, route_params, call, many=True)
+                else:
+                    all_ok &= self._proven(arg, fn, route_params, call)
+            if isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name) and t.id == name and isinstance(
+                            n.value, (ast.List, ast.ListComp)) and (
+                            not isinstance(n.value, ast.List) or n.value.elts):
+                        appended = True
+                        all_ok &= self._proven(n.value, fn, route_params, call, many=True)
+            if (isinstance(n, (ast.For, ast.AsyncFor)) and isinstance(n.iter, ast.Name)
+                    and n.iter.id == name and isinstance(n.target, ast.Name)):
+                var = n.target.id
+                for m in ast.walk(n):
+                    if (isinstance(m, ast.Assign) and any(
+                            isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name)
+                            and t.value.id == var and isinstance(t.slice, ast.Constant)
+                            and t.slice.value == OWNER_KEY for t in m.targets)):
+                        return True
+        return appended and all_ok
+
+    def check(self) -> List[Violation]:
+        for fn in ast.walk(self.tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            route_params = _caller_params(fn) if _is_route(fn) else frozenset()
+            aliases: Dict[str, str] = {}
+            for n in ast.walk(fn):
+                if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(
+                        n.targets[0], ast.Name):
+                    coll = self._collection(n.value, {})
+                    if coll is not None and isinstance(n.value, (ast.Attribute, ast.Subscript)):
+                        aliases[n.targets[0].id] = coll
+                        if coll in self.scoped:
+                            self.add(n, "A2B-ALIAS", "tenant-owned collection %r bound to %r "
+                                     "hides its writes; call it directly" % (coll, n.targets[0].id))
+            for call in ast.walk(fn):
+                if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+                    continue
+                method = call.func.attr
+                upsert = any(kw.arg == "upsert" and isinstance(kw.value, ast.Constant)
+                             and kw.value.value is True for kw in call.keywords)
+                if method not in CREATE_METHODS and not (method in UPSERT_METHODS and upsert):
+                    continue
+                coll = self._collection(call.func.value, aliases)
+                if coll is None or coll not in self.scoped:
+                    continue
+                if method in ("insert_one",):
+                    ok = self._proven(_arg(call, 0, "document"), fn, route_params, call)
+                elif method == "insert_many":
+                    ok = self._proven(_arg(call, 0, "documents"), fn, route_params, call, many=True)
+                elif method in ("replace_one", "find_one_and_replace"):
+                    ok = self._proven(_arg(call, 1, "replacement"), fn, route_params, call)
+                else:
+                    flt, upd = _arg(call, 0, "filter"), _arg(call, 1, "update")
+                    ok = _dict_owner(flt)[0] if flt is not None else False
+                    if ok:
+                        self._judge_value(call, _dict_owner(flt)[2], False, route_params)
+                    if not ok and isinstance(upd, ast.Dict):
+                        for k, v in zip(upd.keys, upd.values):
+                            if (isinstance(k, ast.Constant) and k.value in ("$set", "$setOnInsert")
+                                    and self._proven(v, fn, route_params, call)):
+                                ok = True
+                if not ok:
+                    self.add(call, "A2B-WRITER",
+                             "%s into tenant-owned %r: the document is not proven to carry "
+                             "org_id from the server-resolved tenant" % (method, coll))
+        return self.out
+
+
+def check_writers(source: str, rel: str) -> List[Violation]:
+    """A2B-WRITER / A2B-OVERRIDE / A2B-ALIAS over one module."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        return [(rel, exc.lineno or 0, "A2B-WRITER", "could not parse: %s" % exc.msg)]
+    out = _WriterChecker(rel, tree, _org_keyed()).check()
+    return sorted(set(out), key=lambda v: (v[0], v[1], v[2], v[3]))
+
+
+def writer_files() -> List[str]:
+    """The app tree, ``server.py`` and the writer scripts (POSIX, backend-relative)."""
+    files = set(team_relation_files()) | {"server.py"} | set(WRITER_SCRIPTS)
+    return sorted(f for f in files if (BACKEND / f).is_file())
+
+
+def check_writer_tree() -> Tuple[int, List[Violation]]:
+    found: List[Violation] = []
+    files = writer_files()
+    for rel in files:
+        found.extend(check_writers((BACKEND / rel).read_text(encoding="utf-8"), rel))
+    return len(files), found
 
 
 def main(argv: List[str]) -> int:
