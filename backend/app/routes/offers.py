@@ -164,7 +164,9 @@ async def list_offers(
     
     # Enrich with project info
     for o in offers:
-        p = await db.projects.find_one({"id": o["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+        # W0-03E-R1: the project is read only inside the caller's org.
+        p = await db.projects.find_one({"id": o["project_id"], "org_id": user["org_id"]},
+                                       {"_id": 0, "code": 1, "name": 1})
         o["project_code"] = p["code"] if p else ""
         o["project_name"] = p["name"] if p else ""
         o["line_count"] = len(o.get("lines", []))
@@ -181,7 +183,8 @@ async def get_offer(offer_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich
-    p = await db.projects.find_one({"id": offer["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+    p = await db.projects.find_one({"id": offer["project_id"], "org_id": user["org_id"]},
+                                   {"_id": 0, "code": 1, "name": 1})
     offer["project_code"] = p["code"] if p else ""
     offer["project_name"] = p["name"] if p else ""
     
@@ -529,7 +532,12 @@ async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=404, detail="Offer not found")
     
     org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
-    project = await db.projects.find_one({"id": offer.get("project_id")}, {"_id": 0, "code": 1, "name": 1, "address_text": 1}) if offer.get("project_id") else None
+    # W0-03E-R1: the related project must be the caller's own (org from the
+    # authenticated session, never the request). A project_id that resolves only
+    # in another org exports no project at all — never that org's code or name.
+    project = await db.projects.find_one(
+        {"id": offer.get("project_id"), "org_id": user["org_id"]},
+        {"_id": 0, "code": 1, "name": 1, "address_text": 1}) if offer.get("project_id") else None
     
     try:
         from reportlab.lib import colors
@@ -638,7 +646,10 @@ async def export_offer_xlsx(offer_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=404, detail="Offer not found")
     
     org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
-    project = await db.projects.find_one({"id": offer.get("project_id")}, {"_id": 0, "code": 1, "name": 1}) if offer.get("project_id") else None
+    # W0-03E-R1: same tenant predicate as the PDF export.
+    project = await db.projects.find_one(
+        {"id": offer.get("project_id"), "org_id": user["org_id"]},
+        {"_id": 0, "code": 1, "name": 1}) if offer.get("project_id") else None
     
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -1058,7 +1069,7 @@ async def get_offer_review(review_token: str):
             "viewed_at": now, "updated_at": now,
         }})
         existing_view = await db.offer_events.find_one({
-            "offer_id": offer["id"], "event_type": "viewed",
+            "offer_id": offer["id"], "org_id": offer["org_id"], "event_type": "viewed",
         })
         if not existing_view:
             await db.offer_events.insert_one({
@@ -1068,7 +1079,10 @@ async def get_offer_review(review_token: str):
             })
     
     # Get project info
-    project = await db.projects.find_one({"id": offer["project_id"]}, {"_id": 0, "code": 1, "name": 1, "address_text": 1})
+    # W0-03E-R1: no session here; the tenant is the org of the offer the review
+    # token resolved to, and the project is read only inside it.
+    project = await db.projects.find_one({"id": offer["project_id"], "org_id": offer["org_id"]},
+                                         {"_id": 0, "code": 1, "name": 1, "address_text": 1})
     
     # Get org info
     org = await db.organizations.find_one({"id": offer["org_id"]}, {"_id": 0, "name": 1, "phone": 1, "email": 1})
@@ -1147,6 +1161,6 @@ async def get_offer_events(offer_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=404, detail="Offer not found")
     
     events = await db.offer_events.find(
-        {"offer_id": offer_id}, {"_id": 0}
+        {"offer_id": offer_id, "org_id": user["org_id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     return events

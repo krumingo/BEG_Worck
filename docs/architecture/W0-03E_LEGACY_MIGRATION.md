@@ -252,3 +252,76 @@ id връщаше своя номер, дата и доставчик в отг�
 drill-down; xlsx експорт; импорт на клиентски данни, прочетен обратно) във всеки от `off`,
 `shadow`, `enforce`; същите пътища на реален MongoDB в `test_w0_03e_real_mongo.py`
 (`test_c03_*`). Без `$filter` 6 теста в паметта и реалният тест падат.
+
+## 13. W0-03E-R1/C01 — tenant-scoped offer и finance експорти
+
+Нова remediation задача (не C04), база = блокираната глава на PR #32
+`47a0c59a4eac974d7bab144f71c076a5748243d0`. Финалното C03 ревю възпроизведе: `GET
+/offers/{id}/xlsx` чете офертата на tenant A, после `projects` по **гол** `offer.project_id`
+→ проект на B със същото id излиза в клетка B3. PDF експортът имаше същия join. Поправено;
+одитът е разширен до всички offer, finance, КСС, client-invoice, drill-down и report-helper
+пътища в обхвата. Tenant predicate = `org_id` от **автентикираната сесия** (`user["org_id"]`),
+никога от заявката; за публичния review линк (без сесия) — `org_id` на офертата, до която
+води токенът. Връзка, която не е в tenant-а, дава празно поле/„Unknown"/без проект — никога
+чужд документ и никога извод по съвпадащо id или име.
+
+| Път | Колекция | Join ключ | Tenant predicate | Резултат |
+|---|---|---|---|---|
+| `GET /offers/{id}/xlsx` | `offers` | path id | `org_id` | SAFE |
+| същото | `projects` | `offer.project_id` | липсваше → `org_id` | **FIXED (R1)** |
+| същото | `organizations` | сесийното `org_id` | `id == org_id` | SAFE |
+| `GET /offers/{id}/pdf` | `offers` | path id | `org_id` | SAFE |
+| същото | `projects` | `offer.project_id` | липсваше → `org_id` | **FIXED (R1)** |
+| същото | `organizations` | сесийното `org_id` | `id == org_id` | SAFE |
+| `GET /offers` (списък, проекция) | `offers` | — | `org_id` | SAFE |
+| същото | `projects` | `offer.project_id` | липсваше → `org_id` | **FIXED (R1)** |
+| `GET /offers/{id}` | `offers` / `projects` | path id / `project_id` | `org_id` / липсваше → `org_id` | SAFE / **FIXED (R1)** |
+| `GET /offers/{id}/events` | `offer_events` | `offer_id` | липсваше → `org_id` | **FIXED (R1)** |
+| `GET /offers/review/{token}` (публичен) | `offers` | `review_token` (самият достъп) | org на офертата | SAFE |
+| същото | `projects` | `offer.project_id` | липсваше → `offer.org_id` | **FIXED (R1)** |
+| същото | `offer_events` (има ли вече „viewed") | `offer_id` | липсваше → `offer.org_id` | **FIXED (R1)** |
+| същото | `organizations` | `offer.org_id` | `id == offer.org_id` | SAFE |
+| `POST /offers/import-confirm` | `projects`, `offers` | `project_id` | `org_id` | SAFE (C03) |
+| `GET /finance/invoices/{id}/pdf` (клиентска фактура) | `invoices` | path id | `org_id` | SAFE |
+| същото | `projects` | `invoice.project_id` | липсваше → `org_id` | **FIXED (R1)** |
+| същото | `organizations` | сесийното `org_id` | `id == org_id` | SAFE |
+| същото | контрагент | — (копие в самата фактура, без join) | — | SAFE |
+| `GET /finance/aging-report` | `invoices` | — (без join) | `org_id` | SAFE |
+| `GET /payment-slips/{id}/pdf` | `payment_slips`, `organizations` | path id / `org_id` | `org_id` | SAFE |
+| `GET /reports/finance-details/summary` | `invoices`, `cash_transactions`, `overhead_transactions`, `bonus_payments`, `paid_labor_v3` | — | `org_id` | SAFE |
+| `GET /reports/finance-details/by-counterparty` | `invoices` (aggregate) | — | `org_id` | SAFE |
+| същото | `counterparties` | `$in` групови id | липсваше → `org_id` | **FIXED (R1)** |
+| `GET /reports/finance-details/by-project` | `invoices` (aggregate) | — | `org_id` | SAFE |
+| същото | `projects` | `$in` `allocations.ref_id` | липсваше → `org_id` | **FIXED (R1)** |
+| `GET /reports/finance-details/transactions` | 4 колекции + `paid_labor_v3` | — (без name join) | `org_id` | SAFE |
+| `GET /reports/finance-details/top-counterparties` | `counterparties` | `$in` групови id | липсваше → `org_id` | **FIXED (R1)** |
+| `GET /reports/company-finance-series` | 5 колекции + `paid_labor_v3` | — | `org_id` | SAFE |
+| `GET /reports/company-finance-summary`, `-compare`, `-export` | 5 колекции + `paid_labor_v3`; `organizations` | — / `org_id` | `org_id` | SAFE (C03, преверено) |
+| `paid_labor_v3`, `_paid_alloc_rows` (report helper) | `payment_slips`, `pay_runs`, `projects` (по име) | име на проект | `org_id` | SAFE |
+| `GET /smr-analyses/{id}/export-excel` (КСС) | `smr_analyses` | path id | `org_id`; `export_kss_to_excel` не чете DB | SAFE |
+| `GET /prices`, turnover-by-counterparty/-client, drill-down `/{id}/invoices` | всички join-ове/look-up-и | виж §12 | `org_id` | SAFE (C03 FIXED, преверено с R1 fixture) |
+| `POST /projects/{id}/import-client-invoice` | `projects`, `companies`, `persons`, `clients` | `owner_id` | `org_id` | SAFE (C02/C03) |
+| `legacy_adapter.annotate_refs` / `resolve_legacy` / `count_usage` | `md_legacy_refs`, `md_*` | виж §12 | `tenant_id` / `org_id` | SAFE (C03) |
+
+Няма BLOCKED ред. Регресии: `tests/test_w0_03e_r1_exports.py` — истински HTTP отговори
+(XLSX клетки, PDF текст, JSON) с A/B fixture: еднакво `project_id`, оферта, събития, клиент,
+фирма, потребител и склад в двата tenant-а; проект на B, вмъкнат **преди** този на A (голият
+`find_one` връща B); проект, който съществува само в B; чужд offer id → 404; контрола, че PDF
+извличането наистина би видяло B текста; без промяна в документите на B. Всеки сценарий в
+`off`, `shadow`, `enforce`. Без поправката 16 от 18 теста падат (двата контролни минават), и
+реалният Mongo тест `test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server`
+пада с `B-CODE-PRX - B-SECRET-PROJECT` в B3.
+
+**Извън R1 обхвата — записано като дълг, не поправено (CLAUDE.md §18):**
+
+- write пътищата на офертите и КСС (`PUT/POST /offers/{id}...`, `/activity-catalog/{id}`,
+  `/smr-analyses/{id}/...`) проверяват собствеността с `org_id`, но след това пишат и четат
+  отговора по **голо** `id` (`update_one({"id": ...})`). При database-per-tenant това не може да
+  пресече tenant; в споделена legacy DB с колизия на uuid би могло. Това е системен pattern в
+  целия backend (контракт §6: 3 673 `org_id` употреби) и изисква отделно решение/задача.
+- `POST /offers/review/{token}/respond` и записа „viewed" обновяват по `review_token` без
+  `org_id` (токенът е 24 hex случайни символа).
+- Тестова изолация: `test_w0_02_*` пишат `os.environ["PERMISSION_SERVICE_MODE"]` директно
+  (не през monkeypatch); в една pytest сесия преди `test_w0_03e_legacy_routes.py` това дава 15
+  фалшиви отказа `TENANT_NOT_REGISTERED`. Възпроизвежда се идентично на базата `47a0c59`;
+  W0-01/02 и W0-03/04 се пускат в отделни pytest процеси.

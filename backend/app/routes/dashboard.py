@@ -638,7 +638,7 @@ async def get_finance_by_counterparty(
     # Enrich with counterparty names
     cp_ids = [r["counterparty_id"] for r in results]
     counterparties = await db.counterparties.find(
-        {"id": {"$in": cp_ids}},
+        {"id": {"$in": cp_ids}, "org_id": org_id},  # W0-03E-R1: names of this org only
         {"_id": 0, "id": 1, "name": 1, "type": 1}
     ).to_list(len(cp_ids))
     cp_map = {cp["id"]: cp for cp in counterparties}
@@ -726,7 +726,7 @@ async def get_finance_by_project(
     # Enrich with project names
     project_ids = [r["project_id"] for r in results]
     projects = await db.projects.find(
-        {"id": {"$in": project_ids}},
+        {"id": {"$in": project_ids}, "org_id": org_id},  # W0-03E-R1: this org only
         {"_id": 0, "id": 1, "code": 1, "name": 1}
     ).to_list(len(project_ids))
     proj_map = {p["id"]: p for p in projects}
@@ -943,7 +943,7 @@ async def get_top_counterparties(
     # Enrich with names
     cp_ids = [r["_id"] for r in results]
     counterparties = await db.counterparties.find(
-        {"id": {"$in": cp_ids}},
+        {"id": {"$in": cp_ids}, "org_id": org_id},  # W0-03E-R1: names of this org only
         {"_id": 0, "id": 1, "name": 1}
     ).to_list(len(cp_ids))
     cp_map = {cp["id"]: cp["name"] for cp in counterparties}

@@ -1529,7 +1529,9 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     project_name = ""
     project_code = ""
     if invoice.get("project_id"):
-        project = await db.projects.find_one({"id": invoice["project_id"]}, {"_id": 0, "name": 1, "code": 1})
+        # W0-03E-R1: only the caller's own project; a foreign one prints nothing.
+        project = await db.projects.find_one({"id": invoice["project_id"], "org_id": user["org_id"]},
+                                             {"_id": 0, "name": 1, "code": 1})
         if project:
             project_name = project.get("name", "")
             project_code = project.get("code", "")

@@ -318,3 +318,96 @@ def test_c03_pending_mapping_decision_stays_inside_the_tenant_on_a_real_server()
         # the only B id in A's audit is the one A's caller itself submitted
         assert_no_b(None, await events(db, T_A), b_ids=b_ids - {b_person["id"]})
     scratch(body)
+
+
+# ============================================================== W0-03E-R1
+def test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server(monkeypatch):
+    """The C03-review reproduction, on a server: the actual HTTP export and
+    drill-down responses (ASGI, same event loop as the motor client) with
+    tenant B holding the same project, offer, counterparty and user ids."""
+    import httpx
+    import reportlab.pdfbase.ttfonts as ttfonts
+    from fastapi import FastAPI
+
+    from app.deps.auth import get_current_user
+    from app.deps.modules import require_m2, require_m5
+    from app.master_data.deps import ENV_MODE
+    from app.routes import dashboard, finance, offers
+    from tests.test_w0_03e_c03_isolation import ADMIN, b_canonical_ids_async
+    from tests.test_w0_03e_r1_exports import (
+        A_PROJECT, PERIOD, _r1_world, assert_no_b, pdf_text, xlsx_text,
+    )
+
+    def unavailable(*a, **kw):
+        raise OSError("font unavailable in this test")
+    monkeypatch.setattr(ttfonts, "TTFont", unavailable)        # searchable Helvetica text
+
+    async def _noop(*a, **kw):
+        return None
+
+    async def _user():
+        return dict(ADMIN)
+
+    async def body(db, _name):
+        await _r1_world(db)
+        app = FastAPI()
+        for module in (offers, finance, dashboard):
+            monkeypatch.setattr(module, "db", db)
+            if hasattr(module, "log_audit"):
+                monkeypatch.setattr(module, "log_audit", _noop)
+            app.include_router(module.router, prefix="/api")
+        for dep in (get_current_user, require_m2, require_m5):
+            app.dependency_overrides[dep] = _user
+        b_snapshot = {n: await db[n].find({"org_id": ORG_B}, {"_id": 0}).sort("id", 1).to_list(None)
+                      for n in ("projects", "offers", "offer_events", "invoices")}
+        b_ids = await b_canonical_ids_async(db)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            for mode in ("off", "shadow", "enforce"):
+                monkeypatch.setenv(ENV_MODE, mode)
+                if mode == "enforce":
+                    ctx = Ctx(db)
+
+                    async def resolved(u):
+                        return ctx
+                    monkeypatch.setattr(la, "context_for", resolved)
+                r = await c.get("/api/offers/offer-a/xlsx")
+                assert r.status_code == 200, r.text
+                cells = xlsx_text(r.content)
+                assert cells["B3"] == A_PROJECT
+                assert_no_b(None, " ".join(map(str, cells.values())), b_ids=b_ids)
+                r = await c.get("/api/offers/offer-a-foreign/xlsx")
+                assert "B3" not in xlsx_text(r.content)
+                assert_no_b(None, " ".join(map(str, xlsx_text(r.content).values())), b_ids=b_ids)
+                for url, own in (("/api/offers/offer-a/pdf", "A-OWN-PROJECT"),
+                                 ("/api/offers/offer-a-foreign/pdf", None),
+                                 ("/api/finance/invoices/inv-shared/pdf", "A-OWN-PROJECT"),
+                                 ("/api/finance/invoices/inv-a-foreign/pdf", None)):
+                    r = await c.get(url)
+                    assert r.status_code == 200, (url, r.text)
+                    text = pdf_text(r.content)
+                    if own:
+                        assert own in text, url
+                    else:
+                        assert "A-OWN-PROJECT" not in text, url
+                    assert_no_b(None, text, b_ids=b_ids)
+                listed = (await c.get("/api/offers")).json()
+                review = (await c.get("/api/offers/review/tok-a")).json()
+                assert review["project_name"] == "A-OWN-PROJECT"
+                events = (await c.get("/api/offers/offer-a/events")).json()
+                assert events and all(e["org_id"] == ORG_A for e in events)
+                by_cp = (await c.get("/api/reports/finance-details/by-counterparty?" + PERIOD)).json()
+                assert {r["counterparty_id"]: r["counterparty_name"] for r in by_cp["items"]} == {
+                    "cp1": "Baumit Bulgaria", "cp-only-b": "Unknown"}
+                by_pr = (await c.get("/api/reports/finance-details/by-project?" + PERIOD)).json()
+                assert {r["project_id"]: r["project_name"] for r in by_pr["items"]} == {
+                    "pr-x": "A-OWN-PROJECT", "pr-only-b": "Unknown"}
+                top = (await c.get("/api/reports/finance-details/top-counterparties?direction=income&"
+                                   + PERIOD)).json()
+                assert [r["counterparty_name"] for r in top["items"]] == ["Unknown"]
+                for payload in (listed, review, events, by_cp, by_pr, top):
+                    assert_no_b(None, payload, b_ids=b_ids)
+        # nothing of tenant B was changed by any of these A requests
+        for n, docs in b_snapshot.items():
+            assert await db[n].find({"org_id": ORG_B}, {"_id": 0}).sort("id", 1).to_list(None) == docs
+    scratch(body)
