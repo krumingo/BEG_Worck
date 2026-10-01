@@ -1,40 +1,62 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-R1/C01 BLOCKED — ARCHITECTURAL REDESIGN DECISION REQUIRED
+Status: W0-03E-A1/C01 PENDING — TENANT-SAFE DATA ACCESS ARCHITECTURE
 Current-Agent: CODEX
-Current-State: BLOCKED
-Claude-State: HANDOFF_READY
-Codex-State: BLOCKED
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
-Now: Codex published W0-03E-R1 BLOCKED after independent whole-package review and disposable real-Mongo gate
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: FORWARD R1 BLOCKER TO GPT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/code/session_01APog23r6ALrEg1dsY56LYY
-Dispatch-Observed-At: 2026-10-01T05:08:26Z (R1 message visible; Claude responding and running git diff)
-Task-ID: W0-03E-R1
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: DISPATCH
+Transition-Phase: INTENT (A1 assignment prepared; Claude not sent or observed)
+Now: Codex preparing the W0-03E-A1 tenant-safe data access assignment for Claude
+Next-Agent: CLAUDE
+Relay-State: RECEIVED
+Relay-From: GPT
+Relay-To: CODEX
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Dispatch-Observed-At: NONE
+Task-ID: W0-03E-A1
 Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Implementation-branch: codex/w0-03e-r1-tenant-export
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/33 (Draft against main)
+Implementation-branch: codex/w0-03e-a1-tenant-safe-access
+PR-URL: NONE (new Draft PR required; PR #32 and #33 remain untouched)
 PR-Head: 2cd40a377b67beb4cc60bf211e42708e2a69f881
-Remediation-Base-SHA: 47a0c59a4eac974d7bab144f71c076a5748243d0
+Remediation-Base-SHA: 2cd40a377b67beb4cc60bf211e42708e2a69f881
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/33 (final R1 exact-head HANDOFF in PR body)
-Review: R1 BLOCKED — coordination/REVIEWS/W0-03E-R1.md and https://github.com/krumingo/BEG_Worck/pull/33#issuecomment-5925443677 on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881. A/B fixture returned tenant B project code/name in tenant A finance invoice list on real MongoDB and in invoice detail. Predecessor C03 remains final BLOCKED in coordination/REVIEWS/W0-03E.md.
-Final-Verdict: W0-03E-R1 BLOCKED — published. Stop for GPT/Krum architectural redesign decision. No automatic R1 correction, C04, merge, deploy or successor dispatch.
-HANDOFF-Observed-At: 2026-10-01T05:24:59Z (Claude session ended; PR #33 body carries final HANDOFF at exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
-Predecessor-Task-ID: W0-03E/C03
-Predecessor-Review: coordination/REVIEWS/W0-03E.md (final BLOCKED on exact head 47a0c59a4eac974d7bab144f71c076a5748243d0)
-Predecessor-Integration: NONE; blocked PR #32 remains Draft and unmerged. R1 reuses its exact head as code base only, not as accepted integration.
-Authorization: Krum explicitly authorized NEW TASK W0-03E-R1/C01 with a separate bounded remediation budget on the blocked PR #32 exact head, then confirmed one Computer Use Send. The canonical assignment from queue SHA c959721bab4fd4e60859314df75e38de0aee5110 was sent once to a new direct Code Cloud session on the selected R1 branch. Claude's session ended and it published Draft PR #33 with final exact-head HANDOFF at 2cd40a377b67beb4cc60bf211e42708e2a69f881. This is not C04 or a new business rule. Codex independently reviewed the whole package, ran disposable real-Mongo tests and published R1 BLOCKED on the exact head. No merge or deploy exists.
-Correction-cycles: W0-03E C02/C03 budget is exhausted and immutable. R1 is a distinct remediation Task-ID with its own C01; if it has another tenant-isolation correctness defect, R1 is BLOCKED for architectural redesign, not another automatic correction.
+HANDOFF-URL: NONE (A1 has not started)
+Review: Predecessor R1 BLOCKED — coordination/REVIEWS/W0-03E-R1.md and https://github.com/krumingo/BEG_Worck/pull/33#issuecomment-5925443677 on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881. A/B fixture returned tenant B project code/name in tenant A finance invoice list/detail. A1 has no review yet.
+Final-Verdict: NONE for A1; implementation pending. No merge or deploy.
+HANDOFF-Observed-At: NONE for A1
+Predecessor-Task-ID: W0-03E-R1/C01
+Predecessor-Review: coordination/REVIEWS/W0-03E-R1.md (final BLOCKED on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
+Predecessor-Integration: NONE; blocked PR #32 and #33 remain Draft and unmerged. A1 reuses PR #33 exact head as code base only, not accepted integration.
+Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR. This is neither C04 nor R1 continuation. Claude has not been sent or observed at this PENDING snapshot.
+Correction-cycles: W0-03E C02/C03 and R1 budgets remain exhausted and immutable. A1 is an explicitly authorized new architecture task, not an automatic correction.
+
+## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — PENDING dispatch
+
+**Identity and exact base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A1`; Cycle-ID `C01`; branch `codex/w0-03e-a1-tenant-safe-access` starts at exact `2cd40a377b67beb4cc60bf211e42708e2a69f881` from blocked Draft PR #33. Open one **new Draft PR against `main`** for A1; leave PR #32 and #33 open/Draft and untouched. Recheck exact base/branch and absence of duplicate A1 session/PR before work. Draft is not integration. If identities drift, STOP.
+
+**Read first.** `CLAUDE.md`, `coordination/README.md`, this ACTIVE file, `coordination/REVIEWS/W0-03E-R1.md`, `coordination/REVIEWS/W0-03E.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `docs/architecture/TENANCY_MODEL.md`, `docs/flows/FLOW-032.md` and other applicable locked FLOW/D, plus the complete actual `main`→PR #33 code diff. The R1 real-Mongo HTTP invoice list/detail leak is the entry evidence, not the whole boundary.
+
+**Full protected-surface inventory.** Search the entire W0-03E/FLOW-032 protected read surface for `find_one({"id": ...})`, reads on `..._id` without tenant predicate, `$lookup` matching only an ID, and helpers resolving project/client/company/user/warehouse/invoice/counterparty/person/payment/allocation or any other identity-bearing record without server-resolved tenant context. Inventory every actual path as `path | entity | lookup key | tenant predicate | risk | action`. Include nested aggregation foreign sides and adapter calls. No `ASSUMED SAFE`; an unverified path is BLOCKED, not silently omitted.
+
+**Central access layer, no bypass.** Implement one reusable tenant-safe repository/access layer with scoped accessors for project, client, company, user, warehouse, invoice, counterparty, person, payment and allocation as applicable. Tenant comes only from verified server-side resolver/context; each lookup includes tenant predicate and enforces resource ownership. No global-ID, name or fuzzy fallback. Fail closed on absent/mismatched related record. Legacy resolution goes only through proven tenant-bound mapping. Preserve current business behavior where safely possible; do not invent identity matching or change business rules. Migrate the whole assigned surface: finance invoice list/detail and enrichment, offers XLSX/PDF, reports, exports, drilldowns, payment/allocation projections, legacy adapter reads, and relevant import/report projections. No route-local bare identity lookup in the protected modules.
+
+**Static enforcement.** Add CI-runnable deterministic guard that rejects new bare-ID reads or ID-only `$lookup` in the protected modules for at least projects, clients, companies, users, warehouses, invoices, counterparties, persons, payments and allocations. Demonstrate that the guard FAILS on a deliberately injected unsafe `db.projects.find_one({"id": project_id})` and PASSES the corrected tree. Do not satisfy it through exclusions or cosmetic renaming that leaves a bypass. Scope any allowlist narrowly with proof; no `ASSUMED SAFE`.
+
+**Collision and HTTP tests.** Tenant A/B fixtures with identical IDs for project, client, company, user, warehouse, invoice, counterparty, person, payment and allocation; B records inserted first where ordering could expose global lookups. Prove A responses contain zero B name, code, financial value, Master reference or legacy reference, including foreign related document only in B and missing A relation. Exercise actual route-level HTTP for finance invoice list/detail, offers XLSX/PDF, reports, drilldowns, exports and payment/allocation projections, not helper tests alone. Preserve accepted same-tenant behavior and fail-closed denials.
+
+**Real Mongo and HANDOFF.** Run a disposable local MongoDB bound only to `127.0.0.1`, with fresh empty dbpath, all A/B collision scenarios and zero skipped; verify process/database cleanup. Never use Atlas, NAS, production or real BEG databases. Publish exact new head, new Draft PR URL, full inventory with SAFE/FIXED/BLOCKED evidence, central-layer and guard design, intentionally failing guard demonstration, actual diff, focused/adjacent/HTTP/real-Mongo commands and collected/passed/failed/skipped counts, cleanup, residual limits and final exact-head `W0-03E-A1/C01 HANDOFF`; then STOP Claude. An intermediate push/green run is not HANDOFF.
+
+**Codex independent gate.** Only after observed final HANDOFF, ended Claude session and stable PR head: independently inspect **whole `main`→A1 package**, search for bare protected lookups, prove the static guard catches an injected unsafe lookup, run focused and adjacent regressions and a separate disposable real-Mongo collision matrix with 0 skipped. PASS requires no proven tenant leak, no bare identity lookup in the protected surface, a genuinely effective guard and 100% real-Mongo matrix PASS. Then publish `W0-03E-A1 PASS — TENANT-SAFE DATA ACCESS ARCHITECTURE CLOSED` and separately `W0-03E READY FOR FINAL MERGE DECISION`, without merging. Any residual leak or incomplete central layer is `W0-03E-A1 BLOCKED — CENTRAL TENANT DATA ACCESS INCOMPLETE` with exact evidence; do not fabricate PASS.
+
+**Hard boundaries and lifecycle.** No merge, deploy, production/Atlas/NAS writes, W0-06 implementation, locked FLOW/D edits, new business rule, Claude Routine, duplicate Send, or edits to PR #32/#33. Preserve `MASTER_DATA_MODE=off` inert and shadow non-writing, W0-02 permission, W0-04 AuditEvent, W0-07 Approval fail-closed, historical IDs and financial rules. Publish/validate PENDING before Claude Send; only observed Claude start changes Dispatch to RUNNING/Claude WORKING; only final exact-head HANDOFF changes Codex to REVIEWING; publish final verdict only after independent review. Krum retains merge/deploy and business/security decisions.
+
+## Archived predecessor W0-03E-R1/C01 — final BLOCKED; no automatic correction
 
 ## Canonical W0-03E-R1/C01 tenant export remediation — final HANDOFF published; Codex reviewing
 
