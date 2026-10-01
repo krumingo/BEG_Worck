@@ -17,6 +17,7 @@ from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
+from app.tenancy.data_access import TenantData
 from app.permissions.deps import require_permission, MODE_SHADOW, MODE_ENFORCE
 from app.permissions.sync import grant_company_role, shadow_sync
 from app.permissions.workflow import (
@@ -303,7 +304,8 @@ async def update_user(
     user = ctx.user
     org_id = ctx.org_id
     tdb = await ctx.db()
-    target = await tdb.users.find_one({"id": user_id, **ctx.owner_filter()})
+    tenant = TenantData.for_context(tdb, ctx)       # W0-03E-A1: every users read below
+    target = await tenant.users.get(user_id)
     if not ctx.owns(target):
         raise HTTPException(status_code=404, detail="User not found")   # foreign == missing
     update = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -312,7 +314,7 @@ async def update_user(
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     async def _business():
-        await tdb.users.update_one({"id": user_id, **ctx.owner_filter()}, {"$set": update})
+        await tenant.users.update_one({"id": user_id}, {"$set": update})
         return user_id
 
     if ctx.mode != MODE_ENFORCE or "role" not in update:
@@ -323,7 +325,7 @@ async def update_user(
         if ctx.mode == MODE_SHADOW and "role" in update:
             await shadow_sync(ctx, tdb, "user.update", user_id,
                               lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
-        return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        return await tenant.users.get(user_id, {"_id": 0, "password_hash": 0})
 
     # ---- enforce + role change: authoritative assignment FIRST (PR-05) -------
     # If the business write then fails, users.role is stale but the
@@ -343,7 +345,7 @@ async def update_user(
         key=f"user.update:{user_id}:{op_id}",
         fingerprint=fingerprint_without(update, "updated_at")).begin()
     if wf.already_completed:
-        return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        return await tenant.users.get(user_id, {"_id": 0, "password_hash": 0})
     try:
         await wf.step("sync", lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
         await wf.step("business", _business, reference=lambda r: r)
@@ -356,13 +358,14 @@ async def update_user(
         await wf.fail(code)
         raise wf.failure_response(code, exc)
     await wf.complete(user_id)
-    return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return await tenant.users.get(user_id, {"_id": 0, "password_hash": 0})
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, request: Request, user: dict = Depends(require_admin)):
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-    target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
+    tenant = TenantData.for_user(db, user)
+    target = await tenant.users.get(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     # W0-03E: the delete is scoped by the org it was checked against; in
@@ -370,7 +373,7 @@ async def delete_user(user_id: str, request: Request, user: dict = Depends(requi
     done = await guarded_identity_delete(user, request, db, collection="users", legacy_id=user_id)
     if done is not None:
         return done
-    await db.users.delete_one({"id": user_id, "org_id": user["org_id"]})
+    await tenant.users.delete_one({"id": user_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "user", user_id)
     return {"ok": True}
 

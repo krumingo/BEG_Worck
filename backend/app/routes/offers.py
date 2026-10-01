@@ -12,7 +12,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db import db
-from app.deps.auth import get_current_user, can_access_project, can_manage_project, get_user_project_ids
+from app.deps.auth import get_current_user
+from app.tenancy.data_access import (
+    TenantData, assigned_project_ids, is_project_member, resolve_review_token,
+)
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from ..models.offers import (
@@ -25,10 +28,32 @@ router = APIRouter(tags=["Offers / BOQ"])
 
 # ── Helpers ────────────────────────────────────────────────────────
 
-async def get_next_offer_no(org_id: str) -> str:
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view — every record below is read through it."""
+    return TenantData.for_user(db, user)
+
+
+async def can_access_project(user: dict, project_id: str) -> bool:
+    """``deps.auth.can_access_project`` semantics, team row honoured only for a
+    project of the caller's own tenant (W0-03E-A1)."""
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    return await is_project_member(_tenant(user), user, project_id)
+
+
+async def can_manage_project(user: dict, project_id: str) -> bool:
+    """``deps.auth.can_manage_project`` semantics, tenant-bound like :func:`can_access_project`."""
+    if user["role"] in ["Admin", "Owner"]:
+        return True
+    if user["role"] == "SiteManager":
+        return await is_project_member(_tenant(user), user, project_id, role_in_project="SiteManager")
+    return False
+
+
+async def get_next_offer_no(tenant: TenantData) -> str:
     """Generate sequential offer number like OFF-0001"""
-    last = await db.offers.find_one(
-        {"org_id": org_id},
+    last = await tenant.offers.find_one(
+        {},
         {"_id": 0, "offer_no": 1},
         sort=[("created_at", -1)]
     )
@@ -81,14 +106,14 @@ async def create_offer(data: OfferCreate, user: dict = Depends(require_m2)):
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    project = await _tenant(user).projects.get(data.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, data.project_id):
         raise HTTPException(status_code=403, detail="Not authorized for this project")
     
     now = datetime.now(timezone.utc).isoformat()
-    offer_no = await get_next_offer_no(user["org_id"])
+    offer_no = await get_next_offer_no(_tenant(user))
     
     lines = []
     for i, line in enumerate(data.lines):
@@ -128,7 +153,7 @@ async def create_offer(data: OfferCreate, user: dict = Depends(require_m2)):
     }
     offer = compute_offer_totals(offer)
     
-    await db.offers.insert_one(offer)
+    await _tenant(user).offers.insert_one(offer)
     await log_audit(user["org_id"], user["id"], user["email"], "offer_created", "offer", offer["id"], 
                     {"offer_no": offer_no, "title": data.title, "project_id": data.project_id})
     
@@ -142,7 +167,8 @@ async def list_offers(
     status: Optional[str] = None,
     search: Optional[str] = None,
 ):
-    query = {"org_id": user["org_id"]}
+    tenant = _tenant(user)
+    query = {}
     
     if project_id:
         if not await can_access_project(user, project_id):
@@ -150,25 +176,25 @@ async def list_offers(
         query["project_id"] = project_id
     elif user["role"] not in ["Admin", "Owner", "Accountant"]:
         # Limit to assigned projects
-        assigned = await get_user_project_ids(user["id"])
+        assigned = await assigned_project_ids(tenant, user)
         query["project_id"] = {"$in": assigned}
     
     if status:
         query["status"] = status
     
-    offers = await db.offers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    offers = await tenant.offers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
     if search:
         s = search.lower()
         offers = [o for o in offers if s in o.get("offer_no", "").lower() or s in o.get("title", "").lower()]
     
-    # Enrich with project info
+    # Enrich with project info — the caller's tenant only (W0-03E-R1/A1)
+    projects_by_id = await tenant.projects.get_many(
+        (o.get("project_id") for o in offers), {"_id": 0, "code": 1, "name": 1})
     for o in offers:
-        # W0-03E-R1: the project is read only inside the caller's org.
-        p = await db.projects.find_one({"id": o["project_id"], "org_id": user["org_id"]},
-                                       {"_id": 0, "code": 1, "name": 1})
-        o["project_code"] = p["code"] if p else ""
-        o["project_name"] = p["name"] if p else ""
+        p = projects_by_id.get(o.get("project_id"))
+        o["project_code"] = p.get("code", "") if p else ""
+        o["project_name"] = p.get("name", "") if p else ""
         o["line_count"] = len(o.get("lines", []))
     
     return offers
@@ -176,24 +202,23 @@ async def list_offers(
 
 @router.get("/offers/{offer_id}")
 async def get_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    offer = await _tenant(user).offers.get(offer_id, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_access_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich
-    p = await db.projects.find_one({"id": offer["project_id"], "org_id": user["org_id"]},
-                                   {"_id": 0, "code": 1, "name": 1})
-    offer["project_code"] = p["code"] if p else ""
-    offer["project_name"] = p["name"] if p else ""
+    p = await _tenant(user).projects.get(offer.get("project_id"), {"_id": 0, "code": 1, "name": 1})
+    offer["project_code"] = p.get("code", "") if p else ""
+    offer["project_name"] = p.get("name", "") if p else ""
     
     return offer
 
 
 @router.put("/offers/{offer_id}")
 async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_edit_offer(user, offer):
@@ -202,25 +227,25 @@ async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(re
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.offers.update_one({"id": offer_id}, {"$set": update})
+    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": update})
     
     # Recompute if vat changed
     if "vat_percent" in update:
-        updated = await db.offers.find_one({"id": offer_id})
+        updated = await _tenant(user).offers.get(offer_id)
         updated = compute_offer_totals({k: v for k, v in updated.items() if k != "_id"})
-        await db.offers.update_one({"id": offer_id}, {"$set": {
+        await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
             "subtotal": updated["subtotal"],
             "vat_amount": updated["vat_amount"],
             "total": updated["total"],
         }})
     
     await log_audit(user["org_id"], user["id"], user["email"], "offer_updated", "offer", offer_id, update)
-    return await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    return await _tenant(user).offers.get(offer_id, {"_id": 0})
 
 
 @router.put("/offers/{offer_id}/lines")
 async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_edit_offer(user, offer):
@@ -258,16 +283,16 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
     updated["vat_amount"] = offer["vat_amount"]
     updated["total"] = offer["total"]
     
-    await db.offers.update_one({"id": offer_id}, {"$set": updated})
+    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": updated})
     await log_audit(user["org_id"], user["id"], user["email"], "offer_lines_updated", "offer", offer_id, 
                     {"line_count": len(lines)})
     
-    return await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    return await _tenant(user).offers.get(offer_id, {"_id": 0})
 
 
 @router.post("/offers/{offer_id}/send")
 async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_manage_project(user, offer["project_id"]):
@@ -304,7 +329,7 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
         "snapshot_json": snapshot, "is_auto_backup": True,
     })
     
-    await db.offers.update_one({"id": offer_id}, {"$set": {
+    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
         "status": "Sent", "sent_at": now, "sent_by": user["id"],
         "review_token": review_token, "updated_at": now,
     }})
@@ -320,14 +345,14 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     await log_audit(user["org_id"], user["id"], user["email"], "offer_sent", "offer", offer_id, 
                     {"offer_no": offer["offer_no"]})
     
-    result = await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    result = await _tenant(user).offers.get(offer_id, {"_id": 0})
     result["review_url"] = f"/offers/review/{review_token}"
     return result
 
 
 @router.post("/offers/{offer_id}/accept")
 async def accept_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if user["role"] not in ["Admin", "Owner"]:
@@ -336,7 +361,7 @@ async def accept_offer(offer_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=400, detail="Only Sent offers can be accepted")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.offers.update_one({"id": offer_id}, {"$set": {
+    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
         "status": "Accepted",
         "accepted_at": now,
         "updated_at": now,
@@ -344,12 +369,12 @@ async def accept_offer(offer_id: str, user: dict = Depends(require_m2)):
     await log_audit(user["org_id"], user["id"], user["email"], "offer_accepted", "offer", offer_id,
                     {"offer_no": offer["offer_no"], "total": offer.get("total", 0)})
     
-    return await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    return await _tenant(user).offers.get(offer_id, {"_id": 0})
 
 
 @router.post("/offers/{offer_id}/reject")
 async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if user["role"] not in ["Admin", "Owner"]:
@@ -358,7 +383,7 @@ async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(re
         raise HTTPException(status_code=400, detail="Only Sent offers can be rejected")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.offers.update_one({"id": offer_id}, {"$set": {
+    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
         "status": "Rejected",
         "reject_reason": data.reason,
         "updated_at": now,
@@ -366,12 +391,12 @@ async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(re
     await log_audit(user["org_id"], user["id"], user["email"], "offer_rejected", "offer", offer_id,
                     {"offer_no": offer["offer_no"], "reason": data.reason})
     
-    return await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    return await _tenant(user).offers.get(offer_id, {"_id": 0})
 
 
 @router.post("/offers/{offer_id}/new-version")
 async def create_offer_version(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_manage_project(user, offer["project_id"]):
@@ -411,7 +436,7 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2)):
         "accepted_at": None,
     }
     
-    await db.offers.insert_one(new_offer)
+    await _tenant(user).offers.insert_one(new_offer)
     await log_audit(user["org_id"], user["id"], user["email"], "offer_versioned", "offer", new_offer["id"],
                     {"offer_no": offer["offer_no"], "version": new_version, "from_version": offer.get("version", 1)})
     
@@ -420,7 +445,7 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2)):
 
 @router.delete("/offers/{offer_id}")
 async def delete_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if user["role"] not in ["Admin", "Owner"]:
@@ -428,7 +453,7 @@ async def delete_offer(offer_id: str, user: dict = Depends(require_m2)):
     if offer["status"] == "Accepted":
         raise HTTPException(status_code=400, detail="Cannot delete accepted offers")
     
-    await db.offers.delete_one({"id": offer_id})
+    await _tenant(user).offers.delete_one({"id": offer_id})
     await log_audit(user["org_id"], user["id"], user["email"], "offer_deleted", "offer", offer_id,
                     {"offer_no": offer["offer_no"]})
     return {"ok": True}
@@ -442,7 +467,7 @@ async def list_activity_catalog(
     project_id: Optional[str] = None,
     active_only: bool = True,
 ):
-    query = {"org_id": user["org_id"]}
+    query = {}
     if project_id:
         if not await can_access_project(user, project_id):
             raise HTTPException(status_code=403, detail="Access denied")
@@ -450,7 +475,7 @@ async def list_activity_catalog(
     if active_only:
         query["active"] = True
     
-    items = await db.activity_catalog.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    items = await _tenant(user).activity_catalog.find(query, {"_id": 0}).sort("name", 1).to_list(500)
     return items
 
 
@@ -459,7 +484,7 @@ async def create_activity(data: ActivityCatalogCreate, user: dict = Depends(requ
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    project = await _tenant(user).projects.get(data.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, data.project_id):
@@ -495,8 +520,8 @@ async def update_activity(item_id: str, data: ActivityCatalogUpdate, user: dict 
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.activity_catalog.update_one({"id": item_id}, {"$set": update})
-    return await db.activity_catalog.find_one({"id": item_id}, {"_id": 0})
+    await db.activity_catalog.update_one({"id": item_id, "org_id": user["org_id"]}, {"$set": update})
+    return await db.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/activity-catalog/{item_id}")
@@ -507,7 +532,7 @@ async def delete_activity(item_id: str, user: dict = Depends(require_m2)):
     if not await can_manage_project(user, item["project_id"]):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    await db.activity_catalog.delete_one({"id": item_id})
+    await db.activity_catalog.delete_one({"id": item_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -527,17 +552,16 @@ STATUS_LABELS_BG = {"Draft": "Чернова", "Sent": "Изпратена", "Ac
 @router.get("/offers/{offer_id}/pdf")
 async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
     """Export offer as PDF"""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    offer = await _tenant(user).offers.get(offer_id, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    org = await _tenant(user).own_organization({"_id": 0})
     # W0-03E-R1: the related project must be the caller's own (org from the
     # authenticated session, never the request). A project_id that resolves only
     # in another org exports no project at all — never that org's code or name.
-    project = await db.projects.find_one(
-        {"id": offer.get("project_id"), "org_id": user["org_id"]},
-        {"_id": 0, "code": 1, "name": 1, "address_text": 1}) if offer.get("project_id") else None
+    project = await _tenant(user).projects.get(
+        offer.get("project_id"), {"_id": 0, "code": 1, "name": 1, "address_text": 1})
     
     try:
         from reportlab.lib import colors
@@ -641,15 +665,13 @@ async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
 @router.get("/offers/{offer_id}/xlsx")
 async def export_offer_xlsx(offer_id: str, user: dict = Depends(require_m2)):
     """Export offer as XLSX"""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    offer = await _tenant(user).offers.get(offer_id, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    org = await _tenant(user).own_organization({"_id": 0})
     # W0-03E-R1: same tenant predicate as the PDF export.
-    project = await db.projects.find_one(
-        {"id": offer.get("project_id"), "org_id": user["org_id"]},
-        {"_id": 0, "code": 1, "name": 1}) if offer.get("project_id") else None
+    project = await _tenant(user).projects.get(offer.get("project_id"), {"_id": 0, "code": 1, "name": 1})
     
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -895,7 +917,7 @@ async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id required")
     
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await _tenant(user).projects.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -909,7 +931,7 @@ async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
     vat_percent = float(data.get("vat_percent", 20))
     
     now = datetime.now(timezone.utc).isoformat()
-    offer_no = await get_next_offer_no(user["org_id"])
+    offer_no = await get_next_offer_no(_tenant(user))
     
     lines = []
     for i, il in enumerate(import_lines):
@@ -963,7 +985,7 @@ async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
         "import_source": data.get("file_name"),
     }
     
-    await db.offers.insert_one(offer)
+    await _tenant(user).offers.insert_one(offer)
     await log_audit(user["org_id"], user["id"], user["email"], "offer_imported", "offer", offer["id"],
                     {"offer_no": offer_no, "lines": len(lines), "source": data.get("file_name")})
     # W0-03E: the free-text works and units of an imported offer go to pending
@@ -1058,14 +1080,16 @@ async def download_import_template(user: dict = Depends(require_m2)):
 @router.get("/offers/review/{review_token}")
 async def get_offer_review(review_token: str):
     """Public endpoint - get offer for client review (no auth required)"""
-    offer = await db.offers.find_one({"review_token": review_token}, {"_id": 0})
+    # W0-03E-A1: no session — the token is the only key. It must resolve to
+    # exactly one offer; that offer's own org is the tenant of every read below.
+    tenant, offer = await resolve_review_token(db, review_token, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Офертата не е намерена")
     
     # Record view event (only first time)
     if offer["status"] == "Sent":
         now = datetime.now(timezone.utc).isoformat()
-        await db.offers.update_one({"review_token": review_token}, {"$set": {
+        await tenant.offers.update_one({"id": offer["id"], "review_token": review_token}, {"$set": {
             "viewed_at": now, "updated_at": now,
         }})
         existing_view = await db.offer_events.find_one({
@@ -1079,13 +1103,12 @@ async def get_offer_review(review_token: str):
             })
     
     # Get project info
-    # W0-03E-R1: no session here; the tenant is the org of the offer the review
-    # token resolved to, and the project is read only inside it.
-    project = await db.projects.find_one({"id": offer["project_id"], "org_id": offer["org_id"]},
-                                         {"_id": 0, "code": 1, "name": 1, "address_text": 1})
+    # W0-03E-R1/A1: the project is read only inside the offer's own tenant.
+    project = await tenant.projects.get(offer.get("project_id"),
+                                        {"_id": 0, "code": 1, "name": 1, "address_text": 1})
     
     # Get org info
-    org = await db.organizations.find_one({"id": offer["org_id"]}, {"_id": 0, "name": 1, "phone": 1, "email": 1})
+    org = await tenant.own_organization({"_id": 0, "name": 1, "phone": 1, "email": 1})
     
     return {
         "offer_no": offer.get("offer_no"),
@@ -1113,7 +1136,7 @@ async def get_offer_review(review_token: str):
 @router.post("/offers/review/{review_token}/respond")
 async def respond_to_offer(review_token: str, data: dict):
     """Public endpoint - client responds to offer (no auth required)"""
-    offer = await db.offers.find_one({"review_token": review_token})
+    tenant, offer = await resolve_review_token(db, review_token)
     if not offer:
         raise HTTPException(status_code=404, detail="Офертата не е намерена")
     if offer["status"] not in ["Sent"]:
@@ -1139,7 +1162,7 @@ async def respond_to_offer(review_token: str, data: dict):
     else:
         raise HTTPException(status_code=400, detail="Невалидно действие")
     
-    await db.offers.update_one({"review_token": review_token}, {"$set": update_fields})
+    await tenant.offers.update_one({"id": offer["id"], "review_token": review_token}, {"$set": update_fields})
     
     await db.offer_events.insert_one({
         "id": str(uuid.uuid4()), "org_id": offer["org_id"],
@@ -1156,7 +1179,7 @@ async def respond_to_offer(review_token: str, data: dict):
 @router.get("/offers/{offer_id}/events")
 async def get_offer_events(offer_id: str, user: dict = Depends(require_m2)):
     """Get event history for an offer"""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     

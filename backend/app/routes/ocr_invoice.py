@@ -115,12 +115,12 @@ async def list_intakes(
     project_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
-    query = {"org_id": user["org_id"]}
+    query = {}
     if status:
         query["status"] = status
     if project_id:
         query["project_id"] = project_id
-    items = await db.ocr_invoice_intake.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    items = await db.ocr_invoice_intake.find({**query, "org_id": user["org_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"items": items, "total": len(items)}
 
 
@@ -152,14 +152,14 @@ async def review_intake(intake_id: str, data: ReviewData, user: dict = Depends(g
 
     now = datetime.now(timezone.utc).isoformat()
     reviewed = {k: v for k, v in data.model_dump().items() if v is not None}
-    await db.ocr_invoice_intake.update_one({"id": intake_id}, {"$set": {
+    await db.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "reviewed_data": reviewed,
         "status": "reviewed",
         "reviewed_by": user["id"],
         "reviewed_at": now,
         "updated_at": now,
     }})
-    return await db.ocr_invoice_intake.find_one({"id": intake_id}, {"_id": 0})
+    return await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 # ── Approve ────────────────────────────────────────────────────────
@@ -197,14 +197,14 @@ async def approve_intake(intake_id: str, user: dict = Depends(get_current_user))
     }
     await db.pending_expenses.insert_one(expense)
 
-    await db.ocr_invoice_intake.update_one({"id": intake_id}, {"$set": {
+    await db.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "status": "approved",
         "approved_by": user["id"],
         "approved_at": now,
         "linked_expense_id": expense["id"],
         "updated_at": now,
     }})
-    return await db.ocr_invoice_intake.find_one({"id": intake_id}, {"_id": 0})
+    return await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 # ── Reject ─────────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ async def reject_intake(intake_id: str, data: RejectBody, user: dict = Depends(g
     warnings = doc.get("warnings", [])
     if data.reason:
         warnings.append(f"Отказано: {data.reason}")
-    await db.ocr_invoice_intake.update_one({"id": intake_id}, {"$set": {
+    await db.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "status": "rejected", "warnings": warnings, "updated_at": now,
     }})
-    return await db.ocr_invoice_intake.find_one({"id": intake_id}, {"_id": 0})
+    return await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})

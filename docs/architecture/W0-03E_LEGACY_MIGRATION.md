@@ -1,6 +1,7 @@
 # W0-03E — legacy migration, adapters and isolation proof (implementation note)
 
 > **Статус:** IMPLEMENTED BEHIND `MASTER_DATA_MODE` — Draft PR, не е merge-нат, не е деплойван.
+> **W0-03E-A1 (§14):** централен tenant-safe слой за достъп + статичен guard; Draft PR, не е merge-нат.
 > Нито една миграция не е изпълнена срещу реални данни. **Никой запис по миграцията не може
 > да се изпълни в този build**: всяко execute / rollback / mapping решение изисква trusted
 > Approval, а W0-07 не е започнат (fail closed). Живи са dry run-ът, reconciliation отчетът,
@@ -325,3 +326,95 @@ drill-down; xlsx експорт; импорт на клиентски данни
   (не през monkeypatch); в една pytest сесия преди `test_w0_03e_legacy_routes.py` това дава 15
   фалшиви отказа `TENANT_NOT_REGISTERED`. Възпроизвежда се идентично на базата `47a0c59`;
   W0-01/02 и W0-03/04 се пускат в отделни pytest процеси.
+
+## 14. W0-03E-A1/C01 — централен tenant-safe слой за достъп до данни
+
+Нова архитектурна задача (не C04, не продължение на R1), база = блокираната глава на PR #33
+`2cd40a377b67beb4cc60bf211e42708e2a69f881`. R1 ревюто възпроизведе на реален Mongo, че
+`GET /finance/invoices` и `GET /finance/invoices/{id}` обогатяват фактурата на A с
+`db.projects.find_one({"id": ...})` и връщат кода и името на проекта на B. Дефектът е
+**моделът** (свързан запис, търсен само по id), не отделният route: C03 и R1 поправиха по един
+екземпляр и всеки път ревюто намери следващия. A1 премахва модела.
+
+### 14.1 Слой — `backend/app/tenancy/data_access.py`
+
+- `TenantData` се строи **само** чрез `for_user(db, user)` (сесийният потребител, зареден
+  server-side от `get_current_user`), `for_context(db, ctx)` (W0-01 `TenantContext`) или
+  `for_owner_of(db, record)` (публичен review линк: org-ът на офертата, до която токенът е
+  довел). Стойност от query/body/path никога не е вход.
+- Всяко четене и всеки филтриран запис получава `org_id` на tenant-а. Филтър с **друг**
+  `org_id`/`tenant_id` → `TenantScopeViolation` (отказ, не пренаписване). `insert_one/many`
+  към друг tenant → отказ.
+- `get(id)` / `get_many(ids)` връщат само записите на tenant-а; липсваща връзка → `None`
+  (рендира се празно/„Unknown"). Няма глобален, по име или fuzzy fallback.
+- `aggregate()` добавя tenant `$match` като **първи** етап; join е позволен само като
+  `TenantData.lookup()` (`$lookup` + незабавен `$filter` по `org_id`, преди всеки следващ етап).
+  Суров `$lookup`, `$graphLookup`, `$unionWith`, `$out`, `$merge` (и в `$facet`) → отказ преди DB.
+- `own_organization()` — собственият `organizations` запис; `resolve_review_token()` — точно
+  един собственик на токена, иначе нищо (колизия на токен между tenant-и → 404);
+  `assigned_project_ids()` / `is_project_member()` — `project_team` ред важи само за проект на
+  tenant-а; `count_ownerless()` — data-quality брояч на документи **без** tenant (C03 правило).
+- Canonical Master (`md_*`) остава на W0-03 `MasterDataRepository._scope()` (`tenant_id`),
+  който A1 не заменя; guard-ът проверява и него.
+
+### 14.2 Статичен guard — `backend/scripts/w0_03e_a1_tenant_access_guard.py`
+
+Детерминистичен AST check (без import на проверявания код, без DB), exit 0/1/2,
+изпълнява се и в pytest (`tests/test_w0_03e_a1_static_guard.py`). Без allowlist.
+
+| Правило | Отхвърля |
+|---|---|
+| A1-IDENTITY | всяко `db.<projects/clients/companies/users/warehouses/invoices/counterparties/persons/finance_payments/payment_allocations/financial_accounts/offers/subcontractors/organizations>` извън `TenantData` — четене, запис или alias, дори ако е scoped |
+| A1-UNSCOPED | всяка друга `db.<c>.<method>(filter)` без литерален `org_id`/`tenant_id` (aggregate: първи `$match`); филтър в променлива; `org_id: None`; `**spread` след tenant ключа; `db[<expr>]` без литерален tenant |
+| A1-DYNAMIC | `getattr(db, …)`, `db.get_collection(…)`, alias `coll = db.x` / `db[name]` |
+| A1-RECEIVER | find/update/delete/aggregate върху непознат handle (не raw DB, не `tenant.<c>`), освен ако филтърът е доказан (`scoped()`/`_scope()`) |
+| A1-LOOKUP | суров `$lookup` / `$graphLookup` / `$unionWith` литерал |
+| A1-CALLERTENANT | в HTTP route: tenant стойност (филтър или `TenantData.for_*`), която чете параметър без `Depends()` |
+| A1-CTOR | `TenantData(...)` направо |
+| A1-RAWIMPORT | `from app.db import <collection>` |
+| A1-SCOPE | защитена функция, която вече не съществува (преименуване не стеснява обхвата) |
+
+Обхват (40 единици): цели модули `finance.py`, `offers.py`, `reports.py`, `dashboard.py`,
+`ocr_invoice.py`, `assets_batch_intake.py`, `master_data.py` (route), `legacy_adapter.py`,
+`legacy_plan.py`, `legacy_migration.py`, `intake_hooks.py`, `repository.py`; W0-03E функциите в
+`projects.py` (`import_client_invoice`, person/company update/delete), `hr.py` (advances),
+`clients.py`, `counterparties.py`, `locations.py`, `smr_groups.py`, `assets_items.py`,
+`assets_units.py`, `auth.py` (user update/delete), `items.py` (`get_item`), `subcontractors.py`
+(`get_subcontractor`), `warehouses.py` (delete/dev reset); helper модули `services/paid_labor.py`,
+`deps/modules.py`, `utils/audit.py` (всички правила без A1-IDENTITY: литерален tenant предикат
+е задължителен). Останалите функции в тези route файлове са извън W0-03E (contract §6:
+останалите legacy `org_id` употреби не са този пакет) — guard-ът върху целите `routes/` +
+`services/` дава 863 нарушения като **информационен** остатък, не като PASS.
+
+### 14.3 Инвентар
+
+Пълната таблица `path | route | entity | access (lookup key) | tenant predicate | risk | action`
+се генерира от кода: `python scripts/w0_03e_a1_inventory.py` →
+[W0-03E-A1_INVENTORY.md](W0-03E-A1_INVENTORY.md). 347 достъпа: **130 FIXED** (функцията е
+достигала колекцията без tenant предикат на `2cd40a3`), **217 SAFE**, **0 UNSCOPED/BLOCKED** в
+кода. Извън генерирания инвентар, проверено ръчно: `merge._chain` (W0-03D, в `main`) — всяка
+стъпка `{"id": current, "tenant_id": tenant_id}` (`merge.py` `_chain`); `annotate_refs` →
+`legacy_adapter` (в обхвата); `log_audit` само пише.
+
+**BLOCKED остатък (модел на данните, не изтичане на данни на B):** `project_team` няма tenant
+ключ. A1 зачита ред само за проект на tenant-а (ред към проект само на B не дава нищо — тест
+`sitemanager-scope`). Когато в **споделена** legacy DB и user id, и project id съвпадат между
+tenant-и, редът сам не казва кой tenant го е записал: тогава SiteManager на A може да получи
+видимост върху **собствен** проект на A. Всяко последващо четене е tenant-scoped, така че данни
+на B не излизат. Затваряне = `org_id` backfill на `project_team` (миграционно решение, Крум/Codex);
+при database-per-tenant не възниква.
+
+### 14.4 Доказателства (A1 head, локално)
+
+- A/B матрица с еднакви id за project, client, company, user, warehouse, invoice,
+  counterparty, person, payment, allocation; копието на B е **първо** в storage order (тест
+  `test_every_a1_entity_really_collides_and_b_is_stored_first`). 43 проверени пункта: 41 HTTP
+  проекции + writes на споделени id +
+  SiteManager scope, във `off`/`shadow`/`enforce`, в паметта и на реален MongoDB.
+- Същата матрица срещу `2cd40a3`: пада на `/finance/invoices` (`B-SECRET-PROJECT`). Census по
+  route на `2cd40a3`: изтичат 6 finance пътя (проект, плащане, сметка, алокация, фактура на B) и
+  `POST /finance/invoices/{id}/payments` маркира фактурата на A като **Paid** заради алокациите на
+  B (999999). На A1: 0 изтичания, статус `PartiallyPaid`.
+- Legacy HTTP suites (finance/offers/clients, 204 теста) срещу жив сървър на loopback Mongo:
+  идентичен резултат тест по тест на `2cd40a3` и на A1 (157/42/5; 42-те са fixture/data
+  зависими и падат еднакво на базата).

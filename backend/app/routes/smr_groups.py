@@ -245,8 +245,8 @@ async def update_group(group_id: str, data: GroupUpdate, user: dict = Depends(re
         raise HTTPException(status_code=404, detail="Group not found")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.smr_groups.update_one({"id": group_id}, {"$set": update})
-    return await db.smr_groups.find_one({"id": group_id}, {"_id": 0})
+    await db.smr_groups.update_one({"id": group_id, "org_id": user["org_id"]}, {"$set": update})
+    return await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/smr-groups/{group_id}")

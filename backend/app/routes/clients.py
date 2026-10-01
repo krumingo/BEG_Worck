@@ -8,6 +8,7 @@ import uuid
 import re
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.utils.audit import log_audit
@@ -15,6 +16,11 @@ from app.master_data.legacy_adapter import guarded_identity_delete
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter(tags=["Clients"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view of the legacy database."""
+    return TenantData.for_user(db, user)
 
 
 def finance_permission(user: dict) -> bool:
@@ -233,7 +239,7 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    client = await db.clients.find_one({"id": client_id, "org_id": user["org_id"]})
+    client = await _tenant(user).clients.get(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
@@ -243,7 +249,7 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
     if data.phone is not None:
         phone_normalized = normalize_phone(data.phone)
         if phone_normalized != client.get("phone_normalized"):
-            existing = await db.clients.find_one({
+            existing = await _tenant(user).clients.find_one({
                 "org_id": user["org_id"],
                 "phone_normalized": phone_normalized,
                 "id": {"$ne": client_id}
@@ -261,9 +267,9 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
     
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.clients.update_one({"id": client_id}, {"$set": update})
+        await _tenant(user).clients.update_one({"id": client_id}, {"$set": update})
     
-    return await db.clients.find_one({"id": client_id}, {"_id": 0})
+    return await _tenant(user).clients.get(client_id, {"_id": 0})
 
 
 @router.delete("/clients/{client_id}")
@@ -272,19 +278,19 @@ async def delete_client(client_id: str, request: Request, user: dict = Depends(r
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    client = await db.clients.find_one({"id": client_id, "org_id": user["org_id"]})
+    client = await _tenant(user).clients.get(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
     # Check if has linked counterparties
-    linked_count = await db.counterparties.count_documents({
+    linked_count = await _tenant(user).counterparties.count({
         "org_id": user["org_id"],
         "client_id": client_id
     })
     
     if linked_count > 0:
         # Soft delete only
-        await db.clients.update_one(
+        await _tenant(user).clients.update_one(
             {"id": client_id, "org_id": user["org_id"]},
             {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
@@ -294,7 +300,7 @@ async def delete_client(client_id: str, request: Request, user: dict = Depends(r
                                          legacy_id=client_id)
     if done is not None:
         return done
-    await db.clients.delete_one({"id": client_id, "org_id": user["org_id"]})
+    await _tenant(user).clients.delete_one({"id": client_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 

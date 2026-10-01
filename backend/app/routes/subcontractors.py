@@ -16,11 +16,17 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 
 router = APIRouter(tags=["Subcontractors"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view of the legacy database."""
+    return TenantData.for_user(db, user)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -71,7 +77,7 @@ async def list_subcontractors(user: dict = Depends(require_m2)):
 
 @router.get("/subcontractors/{sub_id}")
 async def get_subcontractor(sub_id: str, user: dict = Depends(require_m2)):
-    sub = await db.subcontractors.find_one({"id": sub_id, "org_id": user["org_id"]}, {"_id": 0})
+    sub = await _tenant(user).subcontractors.get(sub_id, {"_id": 0})
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
     # W0-03E: additive master_ref in MASTER_DATA_MODE=enforce only.

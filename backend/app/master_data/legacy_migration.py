@@ -277,24 +277,23 @@ async def _take_lock(db, tenant_id: str, holder: str, attempt: str, now: str,
     recorded the interruption; ``takeover_from`` lets a rollback take the lock
     of the interrupted run it is about to undo — nothing else.
     """
-    locks = db[LOCK_COLLECTION]
     lid = _lock_id(tenant_id)
     try:
-        await locks.update_one({"_id": lid, "tenant_id": tenant_id, "holder": None},
+        await db[LOCK_COLLECTION].update_one({"_id": lid, "tenant_id": tenant_id, "holder": None},
                                {"$set": {"holder": holder, "attempt": attempt, "interrupted": False,
                                          "taken_at": now}}, upsert=True)
     except Exception as exc:                          # noqa: BLE001 — only a duplicate is expected
         if not _is_duplicate_key(exc):
             raise
-    current = await locks.find_one({"_id": lid, "tenant_id": tenant_id}) or {}
+    current = await db[LOCK_COLLECTION].find_one({"_id": lid, "tenant_id": tenant_id}) or {}
     reclaimable = current.get("interrupted") is True and current.get("attempt") != attempt and (
         current.get("holder") == holder or current.get("holder") == takeover_from)
     if reclaimable:
-        await locks.update_one({"_id": lid, "tenant_id": tenant_id, "holder": current.get("holder"),
+        await db[LOCK_COLLECTION].update_one({"_id": lid, "tenant_id": tenant_id, "holder": current.get("holder"),
                                 "attempt": current.get("attempt"), "interrupted": True},
                                {"$set": {"holder": holder, "attempt": attempt, "interrupted": False,
                                          "retaken_at": now}})
-        current = await locks.find_one({"_id": lid, "tenant_id": tenant_id}) or {}
+        current = await db[LOCK_COLLECTION].find_one({"_id": lid, "tenant_id": tenant_id}) or {}
     if current.get("holder") != holder or current.get("attempt") != attempt:
         busy = MigrationBusy("another migration operation of this tenant is in progress or was "
                              "interrupted (%s); finish or roll back that one first"
@@ -377,11 +376,10 @@ async def _insert_master(db, doc: Dict[str, Any], entry: Dict[str, Any]) -> None
 
 async def _attach(db, tenant_id: str, entity_type: str, entity_id: str, entry: Dict[str, Any],
                   identifiers: List[Dict[str, Any]], now: str) -> None:
-    coll = db[_coll(entity_type)]
     update: Dict[str, Any] = {"$addToSet": {"legacy_refs": entry}, "$set": {"updated_at": now}}
-    result = await coll.update_one({"id": entity_id, "tenant_id": tenant_id,
+    result = await db[_coll(entity_type)].update_one({"id": entity_id, "tenant_id": tenant_id,
                                     "status": models.STATUS_ACTIVE}, update)
-    doc = await coll.find_one({"id": entity_id, "tenant_id": tenant_id}, {"_id": 0})
+    doc = await db[_coll(entity_type)].find_one({"id": entity_id, "tenant_id": tenant_id}, {"_id": 0})
     if getattr(result, "modified_count", 0) != 1 and (
             not doc or entry not in (doc.get("legacy_refs") or [])):
         raise MigrationConflict("Master %s %s is not an active record of this tenant; the legacy "
@@ -390,7 +388,7 @@ async def _attach(db, tenant_id: str, entity_type: str, entity_id: str, entry: D
     have = {i.get("key") for i in (doc.get("identifiers") or [])}
     for ident in identifiers:
         if ident["key"] not in have:
-            await coll.update_one({"id": entity_id, "tenant_id": tenant_id,
+            await db[_coll(entity_type)].update_one({"id": entity_id, "tenant_id": tenant_id,
                                    "identifiers.key": {"$ne": ident["key"]}},
                                   {"$push": {"identifiers": ident}})
 
@@ -398,14 +396,13 @@ async def _attach(db, tenant_id: str, entity_type: str, entity_id: str, entry: D
 async def _write_ref(db, row: Dict[str, Any]) -> None:
     """Insert the reverse reference; a retry finds its own row, a rolled-back row
     is taken over by compare-and-set, anything else is a conflict."""
-    refs = db[lp.REFS_COLLECTION]
     try:
-        await refs.insert_one(dict(row))
+        await db[lp.REFS_COLLECTION].insert_one(dict(row))
         return
     except Exception as exc:                          # noqa: BLE001 — only a duplicate is expected
         if not _is_duplicate_key(exc):
             raise
-    existing = await refs.find_one({"_id": row["_id"], "tenant_id": row["tenant_id"]}) or {}
+    existing = await db[lp.REFS_COLLECTION].find_one({"_id": row["_id"], "tenant_id": row["tenant_id"]}) or {}
     same = all(existing.get(k) == row.get(k)
                for k in ("run_id", "status", "entity_id", "collection", "legacy_id"))
     if same:
@@ -413,7 +410,7 @@ async def _write_ref(db, row: Dict[str, Any]) -> None:
     if existing.get("status") == lp.REF_ROLLED_BACK:
         prior = {k: existing.get(k) for k in ("run_id", "status", "entity_id", "updated_at")}
         new = {k: v for k, v in row.items() if k not in ("_id", "history")}
-        result = await refs.update_one({"_id": row["_id"], "tenant_id": row["tenant_id"],
+        result = await db[lp.REFS_COLLECTION].update_one({"_id": row["_id"], "tenant_id": row["tenant_id"],
                                         "status": lp.REF_ROLLED_BACK, "run_id": existing.get("run_id")},
                                        {"$set": new, "$push": {"history": prior}})
         if getattr(result, "modified_count", 0) == 1:
@@ -576,9 +573,8 @@ async def reconcile_state(db, tenant_id: str, org_id: str,
     for ref in ls.REFERENCES:
         if ref.target not in names:
             continue
-        query: Dict[str, Any] = {"org_id": org_id}
-        query.update(dict(ref.where))
-        docs = await db[ref.collection].find(query, {"_id": 0}).to_list(None)
+        docs = await db[ref.collection].find({**dict(ref.where), "org_id": org_id},
+                                             {"_id": 0}).to_list(None)
         counts = {"total": 0, "accounted": 0, "unmigrated": 0, "dangling": 0, "lost": 0}
         for doc in docs:
             for value in ls.values_at(doc, ref.field):
@@ -676,7 +672,8 @@ async def _begin(db, tenant_id: str, action: str, key: str, fingerprint: str):
     from app.audit.idempotency import (
         IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IdempotencyConflict,
         _record_id, begin_idempotent)
-    prior = await db[IDEMPOTENCY_COLLECTION].find_one({"id": _record_id(tenant_id, action, key)},
+    prior = await db[IDEMPOTENCY_COLLECTION].find_one({"id": _record_id(tenant_id, action, key),
+                                                       "tenant_id": tenant_id},
                                                       {"_id": 0})
     if prior and prior.get("request_fingerprint") not in (None, fingerprint):
         raise MasterDataRefused("idempotency key %r was already used for a different %s request"
@@ -917,7 +914,7 @@ async def _begin_readonly(db, tenant_id: str, key: str, fingerprint: str):
     """Read the registry without reserving: an identical completed request is a replay."""
     from app.audit.idempotency import IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, _record_id
     prior = await db[IDEMPOTENCY_COLLECTION].find_one(
-        {"id": _record_id(tenant_id, ACTION_EXECUTE, key)}, {"_id": 0})
+        {"id": _record_id(tenant_id, ACTION_EXECUTE, key), "tenant_id": tenant_id}, {"_id": 0})
     if prior and prior.get("request_fingerprint") not in (None, fingerprint):
         raise MasterDataRefused("idempotency key %r was already used for a different migration "
                                 "request" % key)
@@ -969,8 +966,7 @@ async def _rollback_state(db, tenant_id: str, org_id: str, run_id: str) -> Dict[
     pending_refs = {p.get("resolved_entity_id") for p in await db["md_pending_mapping"].find(
         {"tenant_id": tenant_id}, {"_id": 0, "resolved_entity_id": 1}).to_list(None)}
     for etype in types:
-        coll = db[_coll(etype)]
-        for m in await coll.find({"tenant_id": tenant_id, "migration_run_id": run_id},
+        for m in await db[_coll(etype)].find({"tenant_id": tenant_id, "migration_run_id": run_id},
                                  {"_id": 0}).to_list(None):
             created.append(m)
             if m.get("status") == models.STATUS_ARCHIVED and m.get("archived_by_run") == run_id:
@@ -980,7 +976,7 @@ async def _rollback_state(db, tenant_id: str, org_id: str, run_id: str) -> Dict[
             foreign_entries = [r for r in m.get("legacy_refs") or [] if r.get("run_id") != run_id]
             if foreign_entries:
                 blocking.append("%s %s carries legacy references added outside this run" % (etype, m["id"]))
-            if await coll.find_one({"tenant_id": tenant_id, "merged_into": m["id"]}, {"_id": 0}):
+            if await db[_coll(etype)].find_one({"tenant_id": tenant_id, "merged_into": m["id"]}, {"_id": 0}):
                 blocking.append("%s %s is the target of a merge" % (etype, m["id"]))
             if m["id"] in pending_refs:
                 blocking.append("%s %s is used by a resolved pending mapping" % (etype, m["id"]))
@@ -991,7 +987,7 @@ async def _rollback_state(db, tenant_id: str, org_id: str, run_id: str) -> Dict[
                 if other:
                     blocking.append("%s %s is referenced by %s of %s outside this run"
                                     % (etype, m["id"], rel, other.get("id")))
-        for m in await coll.find({"tenant_id": tenant_id, "legacy_refs.run_id": run_id,
+        for m in await db[_coll(etype)].find({"tenant_id": tenant_id, "legacy_refs.run_id": run_id,
                                   "migration_run_id": {"$ne": run_id}}, {"_id": 0}).to_list(None):
             attached.append(m)
     token = lp.digest({"run": run, "rows": sorted(rows, key=lambda r: r["legacy_id"]),
@@ -1151,12 +1147,13 @@ async def list_mappings(ctx: Any, *, status: str = lp.REF_PENDING, collection: O
     if effective in (MODE_OFF, MODE_SHADOW):
         return []
     ctx = require_tenant_context(ctx)
-    query: Dict[str, Any] = {"tenant_id": ctx.tenant_id, "status": status}
+    query: Dict[str, Any] = {"status": status}
     if collection:
         ls.source(collection)
         query["collection"] = collection
     repo = repository if repository is not None else _repository_for(ctx)
-    rows = await (await repo.db())[lp.REFS_COLLECTION].find(query, {"_id": 0}).sort(
+    rows = await (await repo.db())[lp.REFS_COLLECTION].find(
+        {**query, "tenant_id": ctx.tenant_id}, {"_id": 0}).sort(
         [("collection", 1), ("legacy_id", 1)]).to_list(length=min(int(limit), 200))
     for row in rows:
         row.pop("fingerprint", None)

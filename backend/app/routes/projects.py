@@ -14,6 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.services.paid_labor import paid_labor_for_projects_v3
 from app.deps.auth import (
     get_current_user, require_admin,
@@ -24,6 +25,11 @@ from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
 
 router = APIRouter(tags=["projects"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view of the legacy database."""
+    return TenantData.for_user(db, user)
 
 # Constants
 PROJECT_STATUSES = ["Draft", "Active", "Paused", "Stopped", "Completed", "Cancelled", "Overhead", "Archived", "Finished"]
@@ -312,7 +318,7 @@ async def get_invoice_details(project_id: str, user: dict = Depends(get_current_
 @router.post("/projects/{project_id}/import-client-invoice")
 async def import_client_invoice(project_id: str, user: dict = Depends(get_current_user)):
     """Copy invoice_details from the project's linked client/company record."""
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await _tenant(user).projects.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
@@ -327,10 +333,10 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
     source_collection = None
     if owner_type == "company":
         source_collection = "companies"
-        company = await db.companies.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        company = await _tenant(user).companies.get(owner_id, {"_id": 0})
         if not company:
             source_collection = "clients"
-            company = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+            company = await _tenant(user).clients.get(owner_id, {"_id": 0})
         if company:
             invoice = {
                 "company_name": company.get("name") or company.get("companyName") or "",
@@ -346,10 +352,10 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
             }
     elif owner_type == "person":
         source_collection = "persons"
-        person = await db.persons.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        person = await _tenant(user).persons.get(owner_id, {"_id": 0})
         if not person:
             source_collection = "clients"
-            person = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+            person = await _tenant(user).clients.get(owner_id, {"_id": 0})
         if person:
             invoice = {
                 "company_name": person.get("full_name") or person.get("fullName") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
@@ -362,7 +368,7 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Client data not found")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.projects.update_one({"id": project_id, "org_id": user["org_id"]},
+    await _tenant(user).projects.update_one({"id": project_id, "org_id": user["org_id"]},
                                  {"$set": {"invoice_details": invoice, "updated_at": now}})
     result = {"ok": True, "invoice_details": invoice}
     # W0-03E: in enforce the imported owner identity also names its Master record.
@@ -646,22 +652,22 @@ async def get_person(person_id: str, user: dict = Depends(get_current_user)):
 @router.put("/persons/{person_id}")
 async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user)):
     """Update person"""
-    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
+    person = await _tenant(user).persons.get(person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
     update = {k: v.strip() if isinstance(v, str) else v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.persons.update_one({"id": person_id}, {"$set": update})
-    return await db.persons.find_one({"id": person_id}, {"_id": 0})
+    await _tenant(user).persons.update_one({"id": person_id}, {"$set": update})
+    return await _tenant(user).persons.get(person_id, {"_id": 0})
 
 
 @router.delete("/persons/{person_id}")
 async def delete_person(person_id: str, request: Request, user: dict = Depends(require_admin)):
     """Delete person (admin only)"""
-    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
+    person = await _tenant(user).persons.get(person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    project_count = await db.projects.count_documents({"owner_type": "person", "owner_id": person_id,
+    project_count = await _tenant(user).projects.count({"owner_type": "person", "owner_id": person_id,
                                                        "org_id": user["org_id"]})
     if project_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete: person is owner of {project_count} project(s)")
@@ -669,7 +675,7 @@ async def delete_person(person_id: str, request: Request, user: dict = Depends(r
                                          legacy_id=person_id)
     if done is not None:
         return done
-    await db.persons.delete_one({"id": person_id, "org_id": user["org_id"]})
+    await _tenant(user).persons.delete_one({"id": person_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -762,7 +768,7 @@ async def get_company(company_id: str, user: dict = Depends(get_current_user)):
 @router.put("/companies/{company_id}")
 async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user)):
     """Update company"""
-    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
+    company = await _tenant(user).companies.get(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     update = {}
@@ -775,17 +781,17 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
             else:
                 update[k] = v
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.companies.update_one({"id": company_id}, {"$set": update})
-    return await db.companies.find_one({"id": company_id}, {"_id": 0})
+    await _tenant(user).companies.update_one({"id": company_id}, {"$set": update})
+    return await _tenant(user).companies.get(company_id, {"_id": 0})
 
 
 @router.delete("/companies/{company_id}")
 async def delete_company(company_id: str, request: Request, user: dict = Depends(require_admin)):
     """Delete company (admin only)"""
-    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
+    company = await _tenant(user).companies.get(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    project_count = await db.projects.count_documents({"owner_type": "company", "owner_id": company_id,
+    project_count = await _tenant(user).projects.count({"owner_type": "company", "owner_id": company_id,
                                                        "org_id": user["org_id"]})
     if project_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete: company is owner of {project_count} project(s)")
@@ -793,7 +799,7 @@ async def delete_company(company_id: str, request: Request, user: dict = Depends
                                          legacy_id=company_id)
     if done is not None:
         return done
-    await db.companies.delete_one({"id": company_id, "org_id": user["org_id"]})
+    await _tenant(user).companies.delete_one({"id": company_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 

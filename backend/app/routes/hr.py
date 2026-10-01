@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
@@ -192,13 +193,14 @@ async def list_advances(
     elif not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    query = {"org_id": user["org_id"]}
+    tenant = TenantData.for_user(db, user)          # W0-03E-A1
+    query = {}
     if user_id:
         query["user_id"] = user_id
     if status:
         query["status"] = status
     
-    advances = await db.advances.find(query, {"_id": 0}).sort("issued_date", -1).to_list(500)
+    advances = await tenant.advances.find(query, {"_id": 0}).sort("issued_date", -1).to_list(500)
     
     # Enrich with recipient name (employee or external guest)
     for adv in advances:
@@ -206,8 +208,7 @@ async def list_advances(
             adv["user_name"] = adv["recipient_name"]
         elif adv.get("user_id"):
             # W0-03E/C03: the recipient's name comes only from this org's users
-            u = await db.users.find_one({"id": adv["user_id"], "org_id": user["org_id"]},
-                                        {"_id": 0, "name": 1, "email": 1})
+            u = await tenant.users.get(adv["user_id"], {"_id": 0, "name": 1, "email": 1})
             adv["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
         else:
             adv["user_name"] = adv.get("guest_name") or "—"
@@ -221,6 +222,7 @@ async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict =
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org = user["org_id"]
+    tenant = TenantData.for_user(db, user)          # W0-03E-A1
     is_loan = (data.type or "").lower() == "loan"
 
     # W0-03E / §4.5 (Krum, 20.09.2026): in MASTER_DATA_MODE=enforce a NEW advance
@@ -233,7 +235,7 @@ async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict =
     # Resolve recipient: employee (user_id) or external guest (loan only)
     recipient_name = None
     if data.user_id:
-        target = await db.users.find_one({"id": data.user_id, "org_id": org})
+        target = await tenant.users.get(data.user_id)
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         recipient_name = target.get("name") or " ".join(filter(None, [target.get("first_name"), target.get("last_name")])) or target.get("email") or "Служител"
@@ -254,13 +256,13 @@ async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict =
     # Cash movement — money leaves Каса/Банка (the missing register entry)
     payment_id = None
     if data.account_id:
-        account = await db.financial_accounts.find_one({"id": data.account_id, "org_id": org})
+        account = await tenant.financial_accounts.get(data.account_id)
         if not account:
             raise HTTPException(status_code=404, detail="Сметката не е намерена")
         acc_type = (account.get("type") or "").lower()
         method = "Cash" if acc_type in ("cash", "каса") else "BankTransfer"
         payment_id = str(uuid.uuid4())
-        await db.finance_payments.insert_one({
+        await tenant.finance_payments.insert_one({
             "id": payment_id, "org_id": org, "direction": "Outflow", "amount": data.amount,
             "currency": data.currency, "date": issued, "method": method,
             "account_id": data.account_id, "counterparty_name": recipient_name,

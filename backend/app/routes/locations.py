@@ -151,8 +151,8 @@ async def update_location(
                 update[k] = v
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.location_nodes.update_one({"id": node_id}, {"$set": update})
-    return await db.location_nodes.find_one({"id": node_id}, {"_id": 0})
+    await db.location_nodes.update_one({"id": node_id, "org_id": user["org_id"]}, {"$set": update})
+    return await db.location_nodes.find_one({"id": node_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/locations/{node_id}")

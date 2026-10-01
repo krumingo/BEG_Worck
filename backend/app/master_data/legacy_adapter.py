@@ -263,9 +263,8 @@ async def count_usage(db, org_id: str, collection: str, doc: Dict[str, Any]) -> 
         value = doc.get(ref.by_key) if ref.by_key else doc.get("id")
         if not value:
             continue
-        query: Dict[str, Any] = {"org_id": org_id, ref.field: value}
-        query.update(dict(ref.where))
-        n = await db[ref.collection].count_documents(query)
+        n = await db[ref.collection].count_documents({**dict(ref.where), ref.field: value,
+                                                      "org_id": org_id})
         if n:
             usage["%s.%s" % (ref.collection, ref.field)] = n
     return usage
@@ -336,7 +335,6 @@ async def guarded_identity_delete(user: Dict[str, Any], request, legacy_db, *, c
         {"_id": lp.ref_row_id(ctx.tenant_id, collection, legacy_id), "tenant_id": ctx.tenant_id},
         {"_id": 0})
     owned = row is not None and row.get("status") in lp.LIVE_REF_STATUSES
-    scope = {"id": legacy_id, "org_id": ctx.org_id}
     if usage or owned:
         code = REASON_MASTER_OWNED if owned else REASON_IN_USE
         diff = {"usage": usage, "reverse_reference": row.get("status") if row else None}
@@ -350,7 +348,7 @@ async def guarded_identity_delete(user: Dict[str, Any], request, legacy_db, *, c
                               "message": "this record is in use or owned by Master Data; it "
                                          "cannot be deleted and has no archive state"})
         now = _now()
-        await legacy_db[collection].update_one(scope, {"$set": {
+        await legacy_db[collection].update_one({"id": legacy_id, "org_id": ctx.org_id}, {"$set": {
             flag: False, "archived_at": now, "archived_by": ctx.user_id, "updated_at": now}})
         await _audit_delete(ctx, action="master_data.legacy.archived_instead_of_delete",
                             result="success", collection=collection, legacy_id=legacy_id,
@@ -358,7 +356,7 @@ async def guarded_identity_delete(user: Dict[str, Any], request, legacy_db, *, c
                             reason="hard delete replaced by archive: the identity is in use or "
                                    "owned by Master Data (FLOW-032)")
         return {"ok": True, "soft_deleted": True, "archived": True, "reason": code, "usage": usage}
-    await legacy_db[collection].delete_one(scope)
+    await legacy_db[collection].delete_one({"id": legacy_id, "org_id": ctx.org_id})
     await _audit_delete(ctx, action="master_data.legacy.deleted", result="success",
                         collection=collection, legacy_id=legacy_id, diff={"usage": {}},
                         request=request, reason="unused, unmigrated legacy identity deleted")

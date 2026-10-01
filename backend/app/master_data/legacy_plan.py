@@ -46,6 +46,7 @@ from app.master_data.deps import (
 )
 from app.master_data.models import MasterDataInvalid, identifier_key
 from app.master_data.normalize import normalize_name
+from app.tenancy.data_access import count_ownerless
 
 PLAN_VERSION = 1
 #: The schema this migration writes. Recorded on every run, every Master record it
@@ -129,8 +130,7 @@ async def load_state(db, tenant_id: str, org_id: str, collections: List[str]) ->
         # W0-03E/C03: no count of OTHER orgs' documents — in a shared legacy
         # database that would disclose another tenant's data volume. Only the
         # rows that belong to no tenant at all are reported, as data quality.
-        unowned = await db[name].count_documents({"$or": [{"org_id": None},
-                                                          {"org_id": {"$exists": False}}]})
+        unowned = await count_ownerless(db, name)
         excluded[name] = {"no_org_id": unowned}
     masters: Dict[str, List[Dict[str, Any]]] = {}
     for etype in sorted({ls.source(n).entity_type for n in collections}):
