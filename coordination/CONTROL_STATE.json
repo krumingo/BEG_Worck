@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T05:24:59Z",
+  "validated_at": "2026-10-01T05:34:33Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "77e8df36a9fe050ffd19efecf12de1acfdf787bf",
-  "control_state_commit_sha": "ccbff467ec21b51fe85f5a48a2f69c4de6c08b9a",
-  "now": "Codex independently reviewing the full W0-03E package and disposable real-Mongo gate",
+  "active_source_commit_sha": "315383aa72fb3c686783a58e2eb5ee4992992997",
+  "control_state_commit_sha": "a75c792bf6dd56912c38284c417511d6386c164c",
+  "now": "Codex independent whole-package review and disposable real-Mongo gate are complete; R1 verdict is prepared but not published",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/33",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": [
     "ACTIVE",
@@ -30,14 +30,14 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-R1/C01/GPT",
-      "waiting_for": "Codex independent exact-head R1 verdict",
-      "updated_at": "2026-10-01T05:24:59Z"
+      "waiting_for": "Publication of Codex independent R1 verdict",
+      "updated_at": "2026-10-01T05:34:33Z"
     },
     "CODEX": {
       "state": "REVIEWING",
       "work_id": "W0-03E-R1/C01/CX",
-      "waiting_for": "Independent whole-package exact-head review and disposable real-Mongo gate",
-      "updated_at": "2026-10-01T05:24:59Z"
+      "waiting_for": "Publication of exact-head independent R1 verdict",
+      "updated_at": "2026-10-01T05:34:33Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -50,7 +50,7 @@
   "state": "REVIEW",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Independent whole-package exact-head review and disposable real-Mongo gate",
+  "waiting_for": "Publication of exact-head independent R1 verdict",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 33,
@@ -72,9 +72,9 @@
     "from": "CLAUDE",
     "to": "CODEX",
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex independently reviews the whole PR and real-Mongo gate; no R1 verdict has been published.",
+    "instruction": "Codex completed review; final R1 verdict is ready but not yet published.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/33",
-    "updated_at": "2026-10-01T05:24:59Z"
+    "updated_at": "2026-10-01T05:34:33Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
@@ -87,7 +87,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "2dcd5320b4d15713bb6736d3d12d885de325f46f",
+    "active_blob_sha": "f780f463b0ea56f7e09fa8db2423138cebe393ee",
     "review_path": "coordination/REVIEWS/W0-03E.md",
     "review_blob_sha": "c1425c39949c7b8dc697633a4cef6dd58f5540a3",
     "canonical_docs": [
@@ -125,7 +125,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T05:24:59Z",
+  "updated_at": "2026-10-01T05:34:33Z",
   "history": [
     {
       "event_id": "w0-03e-r1-c01-assignment-intent",
@@ -168,6 +168,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/33",
       "source_commit_sha": "77e8df36a9fe050ffd19efecf12de1acfdf787bf",
       "summary": "Claude session ended and published Draft PR #33 with final R1 exact-head HANDOFF. PR #32 remains Draft and unchanged. Codex whole-package independent review has begun; no verdict yet."
+    },
+    {
+      "event_id": "w0-03e-r1-c01-codex-verdict-ready-intent",
+      "occurred_at": "2026-10-01T05:34:33Z",
+      "task_id": "W0-03E-R1",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "REVIEW",
+      "head_sha": "2cd40a377b67beb4cc60bf211e42708e2a69f881",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/ACTIVE.md",
+      "source_commit_sha": "315383aa72fb3c686783a58e2eb5ee4992992997",
+      "summary": "Independent full-package review and disposable real-Mongo gate completed. A tenant B project-name leak remains in tenant A finance invoice list/detail. BLOCKED verdict is READY but not yet published; no new correction cycle."
     }
   ]
 }
