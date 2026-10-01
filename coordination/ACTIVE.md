@@ -30,8 +30,9 @@ Implementation-Branch-Head: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473 (final HAND
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512
-Review: independent A2B whole-package review and disposable real-Mongo gate are underway; no A2B verdict exists yet. Explicitly assess residual 314 unscoped reads, 169 unscoped writes and fixed `_id` settings.
-Final-Verdict: NONE for A2B. PR #40 is Draft and unmerged; HANDOFF is not Codex PASS; no deploy.
+Review: independent whole-package review found a concrete tenant leak and cross-tenant financial-write path in the registered invoice-lines route; the verdict is ready but not yet published. The separate real-Mongo gate has not run because the code gate is already failed. Residual 314 unscoped reads, 169 unscoped writes and fixed `_id` settings remain unaccepted.
+Verdict-Publication: READY / PUBLISH PENDING; CODEX remains REVIEWING until the exact-head review artifact and PR verdict are published.
+Final-Verdict: NONE for A2B until publication. PR #40 remains Draft/unmerged; no deploy.
 Predecessor-Task-ID: W0-03E-A2/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2.md (final BLOCKED on exact head 43ba7e35e9b14899cc3054f1f9c65f30996162ae)
 Predecessor-Integration: NONE; PR #32, #33, #34 and #36 remain Draft and unmerged. A2B uses blocked A2 exact head as code base only; architecture decision bd2cd362 is not an accepted implementation gate.
