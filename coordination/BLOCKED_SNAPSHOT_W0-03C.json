@@ -1,0 +1,28 @@
+{
+  "queue_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
+  "dispatch_state": "BLOCKED",
+  "active_session": false,
+  "already_dispatched": true,
+  "owner_required": true,
+  "next_task": {
+    "task_id": "W0-03D",
+    "branch": "not-assigned",
+    "base_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+    "scope": "not assigned",
+    "exclusions": "no production",
+    "acceptance_tests": "not assigned",
+    "prerequisites_proven": false
+  },
+  "predecessor": {
+    "verdict": "BLOCKED",
+    "reviewer": "codex",
+    "implementer": "claude",
+    "final_handoff": true,
+    "session_ended": true,
+    "head_stable": true,
+    "pr_head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+    "reviewed_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+    "diff_reviewed": true,
+    "review_artifact": "coordination/REVIEWS/W0-03C.md"
+  }
+}

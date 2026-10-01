@@ -1,5 +1,7 @@
 # Claude–Codex implementation loop
 
+Current human-readable dependency schedule: [WORK_PLAN.md](WORK_PLAN.md). Exact state/owner/test rules: [RELAY_PROTOCOL.md](RELAY_PROTOCOL.md). Append-only audit begins at [ACTIVITY_LOG.jsonl](ACTIVITY_LOG.jsonl); it does not reconstruct undocumented history. `tools/agent_relay.py` is an offline fail-closed readiness check, **not** a Claude dispatcher. No automatic Claude transport is enabled by these files.
+
 This branch is a coordination mailbox, separate from runtime code. `coordination/ACTIVE.md` is the only dispatch pointer; `coordination/REVIEWS/` holds independent Codex verdicts. The default state is IDLE.
 
 Dispatch protocol: Codex writes Dispatch-State: PENDING only after validating one ACTIVE task. Claude executes only PENDING. After Codex observes the run start, Codex changes it to RUNNING and records Dispatch-Run. A scheduled Claude run seeing RUNNING must stop as IDLE, not repeat work. Codex alone returns it to PENDING for a new bounded correction or next Task-ID, or to NONE after review. The state field prevents duplicate delivery; a run status alone does not prove code completion.
