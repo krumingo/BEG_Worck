@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T17:47:13Z",
+  "validated_at": "2026-10-01T18:12:09Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "37f42f65a30436844010e52d6e3713bfb558157b",
-  "control_state_commit_sha": "3cfa02ed59df059b9f6039cc4c184e77b25ca01f",
-  "now": "Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми. A2B Send към Claude: PENDING.",
+  "active_source_commit_sha": "0991583f4a0b7819e20443fa3568f1503331f770",
+  "control_state_commit_sha": "89975a6548d7be3c71ff2848f80aea8a89a49f79",
+  "now": "Ще подредим старите записи към единствената фирма BEG и ще проверим с втора тестова фирма, че хора, права и финансови данни никога не се смесват между фирми. Claude работи по W0-03E-A2B/C01.",
   "transition": {
-    "event": "ASSIGNMENT",
-    "phase": "INTENT",
-    "evidence_url": null,
+    "event": "CLAUDE_START",
+    "phase": "OBSERVED",
+    "evidence_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -22,66 +22,66 @@
   "task_id": "W0-03E-A2B",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
-  "current_agent": "CODEX",
-  "current_role": "TECH_LEAD_QA",
+  "current_agent": "CLAUDE",
+  "current_role": "IMPLEMENTER",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2B/C01/GPT",
       "waiting_for": "A2B implementation and independent gate outcome",
-      "updated_at": "2026-10-01T17:47:13Z"
+      "updated_at": "2026-10-01T18:12:09Z"
     },
     "CODEX": {
-      "state": "WORKING",
+      "state": "WAITING",
       "work_id": "W0-03E-A2B/C01/CX",
-      "waiting_for": "One-time Computer Use Send confirmation before Claude dispatch",
-      "updated_at": "2026-10-01T17:47:13Z"
+      "waiting_for": "Claude exact-head HANDOFF",
+      "updated_at": "2026-10-01T18:12:09Z"
     },
     "CLAUDE": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-03E-A2B/C01/CL",
-      "waiting_for": "Canonical A2B assignment; not yet sent",
-      "updated_at": "2026-10-01T17:47:13Z"
+      "waiting_for": "Claude exact-head HANDOFF",
+      "updated_at": "2026-10-01T18:12:09Z"
     }
   },
-  "current_work_id": "W0-03E-A2B/C01/CX",
+  "current_work_id": "W0-03E-A2B/C01/CL",
   "state": "WORKING",
-  "pipeline_step": "ASSIGNMENT",
-  "next_agent": "CLAUDE",
-  "waiting_for": "One-time Computer Use Send confirmation before Claude dispatch",
+  "pipeline_step": "IMPLEMENTATION",
+  "next_agent": "CODEX",
+  "waiting_for": "Claude exact-head HANDOFF",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": null,
   "pr_head_sha": null,
   "pr_draft": null,
-  "dispatch_state": "PENDING",
-  "dispatch_run_url": null,
+  "dispatch_state": "RUNNING",
+  "dispatch_run_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
   "last_handoff": null,
   "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-03E-A2B/C01 canonical assignment prepared; Send not yet performed",
-    "last_result": "ASSIGNMENT_PENDING",
-    "required_by_krum": true,
+    "last_event": "W0-03E-A2B/C01 assignment dispatched; Claude session observed starting",
+    "last_result": "DISPATCHED",
+    "required_by_krum": false,
     "from": "CODEX",
     "to": "CLAUDE",
-    "status": "NOT_SENT",
-    "instruction": "Krum must confirm the one-time Computer Use Send of the canonical A2B assignment before Claude can start.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793",
-    "updated_at": "2026-10-01T17:47:13Z"
+    "status": "RECEIVED",
+    "instruction": "Claude working; Codex waits for final exact-head HANDOFF.",
+    "source_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
+    "updated_at": "2026-10-01T18:12:09Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "One-time Computer Use confirmation is required immediately before A2B Send to Claude.",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "ASSIGNMENT",
+    "stage": "IMPLEMENTATION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "c8157906b705b8365e0f16153b6204b90ae60d2e",
+    "active_blob_sha": "0cf8b1d60ee2c43e74372022d2e0be0e73b95c23",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -117,7 +117,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T17:47:13Z",
+  "updated_at": "2026-10-01T18:12:09Z",
   "history": [
     {
       "event_id": "w0-03e-a2b-c01-assignment-intent",
@@ -132,6 +132,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793",
       "source_commit_sha": "37f42f65a30436844010e52d6e3713bfb558157b",
       "summary": "Krum authorized distinct A2B single-BEG legacy backfill and immediate test-only second-tenant isolation gate. Exact A2 code base is 43ba7e35; branch has architecture-only descendant bd2cd362. No duplicate A2B PR or visible Code Cloud session, no Send or observed start. Dispatch PENDING until one-time Computer Use confirmation. No production migration, merge or deploy. Human-Summary-BG is recorded in ACTIVE."
+    },
+    {
+      "event_id": "w0-03e-a2b-c01-claude-observed-start",
+      "occurred_at": "2026-10-01T18:10:23Z",
+      "task_id": "W0-03E-A2B",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CLAUDE",
+      "kind": "DISPATCH",
+      "state_after": "WORKING",
+      "head_sha": "bd2cd362bf7b6009d82407925c76c0a9390737fb",
+      "source_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
+      "source_commit_sha": "0991583f4a0b7819e20443fa3568f1503331f770",
+      "summary": "One-time direct Claude Send confirmed by Krum and accepted. Code Cloud initialized the A2B session on the intended repository/branch and ran git status. Implementation observed running; Codex waiting for exact-head HANDOFF."
     }
   ]
 }
