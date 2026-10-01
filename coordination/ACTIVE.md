@@ -1,40 +1,62 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A1/C01 BLOCKED — CENTRAL TENANT DATA ACCESS INCOMPLETE
+Status: W0-03E-A2/C01 PENDING — AUTHORIZATION RELATION TENANT PROVENANCE
 Current-Agent: CODEX
-Current-State: BLOCKED
-Claude-State: HANDOFF_READY
-Codex-State: BLOCKED
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (CODEX_VERDICT PUBLISHED)
-Now: Codex published A1 BLOCKED after independently reproducing cross-tenant project_team authorization
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: FORWARD A1 BLOCKER TO GPT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/code/session_01YKpo97ohTUBtSeZAFAE71a
-Dispatch-Observed-At: 2026-10-01T13:34:11Z (message visible, Claude responding, commands running)
-Task-ID: W0-03E-A1
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT (A2 assignment prepared; Claude not sent or observed)
+Now: Codex preparing the W0-03E-A2 tenant-provenance assignment for Claude
+Next-Agent: CLAUDE
+Relay-State: RECEIVED
+Relay-From: GPT
+Relay-To: CODEX
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Dispatch-Observed-At: NONE for A2
+Task-ID: W0-03E-A2
 Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-Implementation-branch: codex/w0-03e-a1-tenant-safe-access
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/34 (Draft against main)
+Implementation-branch: codex/w0-03e-a2-project-team-provenance
+PR-URL: NONE (new Draft PR required; PR #32/#33/#34 remain Draft and untouched)
 PR-Head: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
-Remediation-Base-SHA: 2cd40a377b67beb4cc60bf211e42708e2a69f881
+Remediation-Base-SHA: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/34 (final A1 exact-head HANDOFF in PR body)
-Review: A1 BLOCKED — coordination/REVIEWS/W0-03E-A1.md and https://github.com/krumingo/BEG_Worck/pull/34#issuecomment-5933406188 on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. A/B ID collision made tenant A's membership helpers accept tenant B's only project_team row; the Windows static guard exits 1 with four portability false positives. Independent full test and real-Mongo gates remain UNVERIFIED after fail-fast blocker. Predecessor R1 BLOCKED remains in coordination/REVIEWS/W0-03E-R1.md.
-Final-Verdict: W0-03E-A1 BLOCKED — published. Stop for GPT/Krum tenant-provenance/security decision. No automatic cycle, merge, deploy or successor dispatch.
-HANDOFF-Observed-At: 2026-10-01T14:09:34Z (Claude response finished; PR #34 body carries final HANDOFF at exact head)
-Predecessor-Task-ID: W0-03E-R1/C01
-Predecessor-Review: coordination/REVIEWS/W0-03E-R1.md (final BLOCKED on exact head 2cd40a377b67beb4cc60bf211e42708e2a69f881)
-Predecessor-Integration: NONE; blocked PR #32 and #33 remain Draft and unmerged. A1 reuses PR #33 exact head as code base only, not accepted integration.
-Authorization: Krum explicitly authorized NEW ARCHITECTURAL REMEDIATION TASK W0-03E-A1/C01 on PR #33 exact head, a new implementation branch and a new Draft PR, then explicitly confirmed the one-time direct Claude Send. The Code Cloud session ended and published Draft PR #34 with final exact-head HANDOFF on 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. This is neither C04 nor R1 continuation; Codex published an independent A1 BLOCKED verdict on that exact head.
-Correction-cycles: W0-03E C02/C03 and R1 budgets remain exhausted and immutable. A1 is an explicitly authorized new architecture task, not an automatic correction.
+HANDOFF-URL: NONE for A2 (Claude has not started)
+Review: Predecessor A1 BLOCKED — coordination/REVIEWS/W0-03E-A1.md and https://github.com/krumingo/BEG_Worck/pull/34#issuecomment-5933406188 on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. A B-only project_team row authorized A's same-ID project; Windows guard exited 1. A2 has no review yet.
+Final-Verdict: NONE for A2; implementation dispatch pending. No merge or deploy.
+HANDOFF-Observed-At: NONE for A2
+Predecessor-Task-ID: W0-03E-A1/C01
+Predecessor-Review: coordination/REVIEWS/W0-03E-A1.md (final BLOCKED on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb)
+Predecessor-Integration: NONE; blocked PR #32, #33 and #34 remain Draft and unmerged. A2 reuses PR #34 exact head as code base only, not accepted integration.
+Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch exists at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. No A2 Claude Send, session, Draft PR, HANDOFF or verdict has occurred at this PENDING snapshot.
+Correction-cycles: W0-03E C02/C03, R1 and A1 outcomes remain immutable. A2 is an explicitly authorized separate provenance task, not C04 or an automatic correction.
+
+## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — PENDING dispatch
+
+**Identity and base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2`; Cycle-ID `C01`; implementation branch `codex/w0-03e-a2-project-team-provenance` is already published at exact blocked A1 head `4b7f9869c288a9b9596bb8d2c02136b0fb749acb`. Open one **new Draft PR against `main`** for the complete stacked A2 package; clearly identify PR #34 as an unaccepted predecessor code base. Leave PR #32/#33/#34 open/Draft and untouched. Recheck exact branch/base and absence of duplicate A2 session/PR before work; STOP on drift. Draft is not integration.
+
+**Read first.** `CLAUDE.md`, `coordination/README.md`, this ACTIVE assignment, `coordination/REVIEWS/W0-03E-A1.md`, the prior W0-03E/R1 reviews, `docs/architecture/IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `TENANCY_MODEL.md` (D-15), applicable locked FLOW/D including `docs/flows/FLOW-032.md`, and the actual complete `main`→A1 head package. Treat A1's team-membership counterexample and Windows guard failure as entry evidence, not optional observations.
+
+**Authoritative rule.** `project_team` is a tenant-bound authorization relation. Every new row carries `tenant_id` from the verified **server-side active tenant** only; reject caller/form/body/query tenant overrides. Membership queries require `tenant_id + project_id + user_id` and optional role, never ID pairs alone. An ownerless legacy row grants **zero** authorization; no global/name/role/ID inference. Preserve W0-01 Tenant Guard, W0-02 permission boundary and W0-04 AuditEvent. Do not invent a business rule or relax existing approvals. Existing legacy `org_id` data may be a compatibility input only after trusted server-side tenant resolution, never a substitute for proven row provenance.
+
+**Schema, writes and protected reads.** Add minimal tenant provenance to project-team schema/runtime. Find every in-scope project-team writer and authorization reader, including project team routes, finance invoice list/detail, offers, reports, exports and the A1 `assigned_project_ids()`/`is_project_member()` helpers. All new writes stamp the server-resolved `tenant_id`, enforce permission/resource ownership and emit the canonical AuditEvent; no caller override. All authorization reads filter on the exact `tenant_id`, `project_id`, `user_id` and role where needed; ownerless or mismatched rows are refused/ignored. Do not leave a route-local bare membership bypass. Keep `MASTER_DATA_MODE=off` inert and shadow non-writing.
+
+**Deterministic legacy migration.** Classify each legacy row `PROVEN_TENANT` or `UNRESOLVED_PROVENANCE`; count `proven`, `unresolved` and `conflicting` in a read-only dry-run. Only a **provably single-tenant source database** verified against Tenant Registry/database context may backfill its own tenant_id. An ambiguous shared/unknown-source row is `UNRESOLVED`, goes to existing DQ/pending mapping for explicit human resolution and never participates in authorization. No guess from project/user IDs, name, role or coincident records. Migration is implementation/dry-run only; no live/production migration or external write. If the current DQ/pending model cannot represent provenance safely, STOP with the exact architectural blocker rather than inventing a new approval flow.
+
+**Tests.** Deterministic A/B collision matrix: same project ID, same user ID, same role, B membership inserted first, A project exists, B row gives **no** A access. Also prove A-proven row authorizes only A, ownerless row DENY, forged tenant DENY, unresolved migration row DENY, mixed/contradictory source provenance fail-closed, and no unauthorized write. Exercise actual HTTP authorization through project-team, finance invoice list/detail, offers, reports/exports and relevant protected A1 access paths, not helpers alone. Add migration dry-run counts and provenance fixtures; preserve permission/audit and adjacent W0-03 regressions.
+
+**Static guard and HANDOFF.** Normalize Windows/POSIX paths so the A1 guard passes the clean protected tree and fails a deliberately injected unsafe bare-ID lookup on both platforms. Do not hide violations via exclusions. Claude runs focused/adjacent tests and an isolated disposable **real MongoDB** A/B collision and ownerless migration matrix with zero skipped (bind `127.0.0.1`, fresh dbpath, cleanup proven; never Atlas/NAS/production). HANDOFF in the new Draft PR must give exact head, actual diff, writer/reader/migration inventory, concrete test commands and collected/passed/failed/skipped counts, guard positive/negative evidence, real-Mongo evidence, cleanup and limitations; then STOP. Intermediate push is not HANDOFF.
+
+**Codex independent gate.** Only after observed final exact-head HANDOFF, ended Claude session and stable PR head, review the **whole `main`→A2 package**, not just A2 delta. Independently search every protected team authorization path, run static guard and synthetic unsafe injection, focused and adjacent tests, HTTP A/B collisions, ownerless/provenance migration cases and a separate disposable real-Mongo matrix with **0 skipped**. PASS only if B/ownerless rows cannot authorize A, proven A membership works, all in-scope writes carry server-resolved tenant, the guard passes and rejects unsafe code, and real Mongo is 100% PASS. Verdict `W0-03E-A2 PASS — PROJECT TEAM TENANT PROVENANCE CLOSED`; then independently repeat the final W0-03E gate before claiming W0-03E ready for merge decision. Any unresolved provenance/authorization correctness defect is `W0-03E-A2 BLOCKED — LEGACY AUTHORIZATION PROVENANCE UNRESOLVED`; no automatic new cycle.
+
+**Hard boundaries and lifecycle.** No merge, deploy, production migration, Atlas/NAS/production writes, real BEG database, W0-06 implementation, locked FLOW/D edit, new business rule, Claude Routine, duplicate Send or modification of PR #32/#33/#34. Publish/validate `PENDING` before Claude Send; only observed start changes Dispatch to RUNNING/Claude WORKING; only final exact-head HANDOFF changes Codex to REVIEWING; publish final verdict only after independent review. Krum retains merge, deploy and security decisions. At this snapshot Claude is WAITING and has not been sent.
+
+## Archived predecessor W0-03E-A1/C01 — final independent BLOCKED; no automatic correction
 
 ## Canonical W0-03E-A1/C01 — tenant-safe data access architecture — final independent BLOCKED
 
