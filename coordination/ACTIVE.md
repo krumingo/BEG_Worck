@@ -1,21 +1,21 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2/C01 PENDING — AUTHORIZATION RELATION TENANT PROVENANCE
-Current-Agent: CODEX
+Status: W0-03E-A2/C01 RUNNING — AUTHORIZATION RELATION TENANT PROVENANCE
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT (A2 assignment prepared; Claude not sent or observed)
-Now: Codex preparing the W0-03E-A2 tenant-provenance assignment for Claude
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED (Claude Code Cloud session started and read the canonical assignment)
+Now: Claude working on W0-03E-A2/C01
+Next-Agent: CODEX
 Relay-State: RECEIVED
 Relay-From: GPT
 Relay-To: CODEX
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE
-Dispatch-Observed-At: NONE for A2
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/epitaxy/session_017TfNExYkwSc5i92MNkjpL1
+Dispatch-Observed-At: 2026-10-01T15:22:58Z (Claude verified branch/base/queue SHA and began reading A2 context)
 Task-ID: W0-03E-A2
 Cycle-ID: C01
 Base-branch: main
@@ -26,17 +26,17 @@ PR-Head: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
 Remediation-Base-SHA: 4b7f9869c288a9b9596bb8d2c02136b0fb749acb
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE for A2 (Claude has not started)
+HANDOFF-URL: NONE for A2 (Claude is working; no final HANDOFF)
 Review: Predecessor A1 BLOCKED — coordination/REVIEWS/W0-03E-A1.md and https://github.com/krumingo/BEG_Worck/pull/34#issuecomment-5933406188 on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. A B-only project_team row authorized A's same-ID project; Windows guard exited 1. A2 has no review yet.
-Final-Verdict: NONE for A2; implementation dispatch pending. No merge or deploy.
+Final-Verdict: NONE for A2; Claude implementation is active, not reviewed. No merge or deploy.
 HANDOFF-Observed-At: NONE for A2
 Predecessor-Task-ID: W0-03E-A1/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A1.md (final BLOCKED on exact head 4b7f9869c288a9b9596bb8d2c02136b0fb749acb)
 Predecessor-Integration: NONE; blocked PR #32, #33 and #34 remain Draft and unmerged. A2 reuses PR #34 exact head as code base only, not accepted integration.
-Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch exists at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. No A2 Claude Send, session, Draft PR, HANDOFF or verdict has occurred at this PENDING snapshot.
+Authorization: GPT/Krum explicitly decided that project_team is a tenant-bound authorization relation and authorized NEW TASK W0-03E-A2/C01 on blocked A1 exact head, a new branch and a new Draft PR. The separate A2 branch started at exactly 4b7f9869c288a9b9596bb8d2c02136b0fb749acb. The one authorized direct Claude Code Cloud Send was observed at the session above. No final A2 HANDOFF or verdict has occurred; no A2 Draft PR was observed at dispatch start.
 Correction-cycles: W0-03E C02/C03, R1 and A1 outcomes remain immutable. A2 is an explicitly authorized separate provenance task, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — PENDING dispatch
+## Canonical W0-03E-A2/C01 — project-team authorization tenant provenance — RUNNING implementation
 
 **Identity and base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2`; Cycle-ID `C01`; implementation branch `codex/w0-03e-a2-project-team-provenance` is already published at exact blocked A1 head `4b7f9869c288a9b9596bb8d2c02136b0fb749acb`. Open one **new Draft PR against `main`** for the complete stacked A2 package; clearly identify PR #34 as an unaccepted predecessor code base. Leave PR #32/#33/#34 open/Draft and untouched. Recheck exact branch/base and absence of duplicate A2 session/PR before work; STOP on drift. Draft is not integration.
 
@@ -54,7 +54,7 @@ Correction-cycles: W0-03E C02/C03, R1 and A1 outcomes remain immutable. A2 is an
 
 **Codex independent gate.** Only after observed final exact-head HANDOFF, ended Claude session and stable PR head, review the **whole `main`→A2 package**, not just A2 delta. Independently search every protected team authorization path, run static guard and synthetic unsafe injection, focused and adjacent tests, HTTP A/B collisions, ownerless/provenance migration cases and a separate disposable real-Mongo matrix with **0 skipped**. PASS only if B/ownerless rows cannot authorize A, proven A membership works, all in-scope writes carry server-resolved tenant, the guard passes and rejects unsafe code, and real Mongo is 100% PASS. Verdict `W0-03E-A2 PASS — PROJECT TEAM TENANT PROVENANCE CLOSED`; then independently repeat the final W0-03E gate before claiming W0-03E ready for merge decision. Any unresolved provenance/authorization correctness defect is `W0-03E-A2 BLOCKED — LEGACY AUTHORIZATION PROVENANCE UNRESOLVED`; no automatic new cycle.
 
-**Hard boundaries and lifecycle.** No merge, deploy, production migration, Atlas/NAS/production writes, real BEG database, W0-06 implementation, locked FLOW/D edit, new business rule, Claude Routine, duplicate Send or modification of PR #32/#33/#34. Publish/validate `PENDING` before Claude Send; only observed start changes Dispatch to RUNNING/Claude WORKING; only final exact-head HANDOFF changes Codex to REVIEWING; publish final verdict only after independent review. Krum retains merge, deploy and security decisions. At this snapshot Claude is WAITING and has not been sent.
+**Hard boundaries and lifecycle.** No merge, deploy, production migration, Atlas/NAS/production writes, real BEG database, W0-06 implementation, locked FLOW/D edit, new business rule, Claude Routine, duplicate Send or modification of PR #32/#33/#34. `PENDING` was published/validated before Claude Send; observed start changed Dispatch to RUNNING/Claude WORKING; only final exact-head HANDOFF changes Codex to REVIEWING; publish final verdict only after independent review. Krum retains merge, deploy and security decisions. Claude is now working in the recorded direct Code Cloud session; Codex waits for final HANDOFF.
 
 ## Archived predecessor W0-03E-A1/C01 — final independent BLOCKED; no automatic correction
 
