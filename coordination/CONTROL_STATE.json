@@ -1,25 +1,25 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-01T20:12:05Z",
+  "validated_at": "2026-10-02T05:15:45Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "50f2170f6f6751411ddcb07da423cb435b0ec440",
-  "control_state_commit_sha": "0486f537c06387c96e6ab6b37f728df8ad0480ab",
-  "now": "Codex провери пакета и откри активен финансов път, който при еднакви ID-та може да прочете или промени запис на друг tenant. W0-03E-A2B е BLOCKED; следва архитектурно решение за непокрития tenant-safe access scope.",
+  "active_source_commit_sha": "493f4669699c7ccad8205750d3ad1b94edc34d4c",
+  "control_state_commit_sha": "28aac35bb0a18d4a42630d924de357af791a8237",
+  "now": "Няма да оправяме само `invoice_lines` и после да чакаме да излезе следващ теч. Ще минем целия активен backend и ще затворим всички места, където при еднакви ID-та данни могат да прескочат между две фирми. Codex подготви задачата; изпращането към Claude е PENDING.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5939648544",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
     "CANONICAL_DOCS"
   ],
-  "task_id": "W0-03E-A2B",
+  "task_id": "W0-03E-A2C",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
@@ -27,72 +27,61 @@
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-03E-A2B/C01/GPT",
-      "waiting_for": "Krum relay of the published BLOCKED review and architecture decision",
-      "updated_at": "2026-10-01T20:12:05Z"
+      "work_id": "W0-03E-A2C/C01/GPT",
+      "waiting_for": "A2C implementation and independent gate outcome",
+      "updated_at": "2026-10-02T05:15:45Z"
     },
     "CODEX": {
-      "state": "BLOCKED",
-      "work_id": "W0-03E-A2B/C01/CX",
-      "waiting_for": "GPT/Krum decision on uncovered tenant-safe access scope",
-      "updated_at": "2026-10-01T20:12:05Z"
+      "state": "WORKING",
+      "work_id": "W0-03E-A2C/C01/CX",
+      "waiting_for": "One-time Computer Use Send confirmation before Claude dispatch",
+      "updated_at": "2026-10-02T05:15:45Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-03E-A2B/C01/CL",
-      "waiting_for": "Codex independent verdict",
-      "updated_at": "2026-10-01T20:12:05Z"
+      "state": "WAITING",
+      "work_id": "W0-03E-A2C/C01/CL",
+      "waiting_for": "Canonical A2C assignment; not yet sent",
+      "updated_at": "2026-10-02T05:15:45Z"
     }
   },
-  "current_work_id": "W0-03E-A2B/C01/CX",
-  "state": "BLOCKED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT/Krum decision on uncovered tenant-safe access scope",
+  "current_work_id": "W0-03E-A2C/C01/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "One-time Computer Use Send confirmation before Claude dispatch",
   "wave": "W0",
   "flow": "FLOW-032",
-  "pr_number": 40,
-  "pr_head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
-  "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
-  "last_handoff": {
-    "url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
-    "head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
-    "at": "2026-10-01T18:59:13Z"
-  },
-  "last_review": {
-    "path": "coordination/REVIEWS/W0-03E-A2B.md",
-    "blob_sha": "2ec0874fb30bfd5843fa0971fb13b4432eb471dd",
-    "reviewed_head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
-    "verdict": "BLOCKED"
-  },
+  "pr_number": null,
+  "pr_head_sha": null,
+  "pr_draft": null,
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
+  "last_handoff": null,
+  "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "Independent exact-head W0-03E-A2B BLOCKED verdict published in PR #40",
-    "last_result": "BLOCKED",
+    "last_event": "W0-03E-A2C/C01 canonical assignment prepared; Claude Send not yet performed",
+    "last_result": "ASSIGNMENT_PENDING",
     "required_by_krum": true,
     "from": "CODEX",
-    "to": "GPT",
+    "to": "CLAUDE",
     "status": "NOT_SENT",
-    "instruction": "Relay the published review to GPT/Krum for a scoped architecture decision; do not dispatch Claude automatically.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5939648544",
-    "updated_at": "2026-10-01T20:12:05Z"
+    "instruction": "Krum must confirm the one-time Computer Use Send of the canonical A2C assignment before Claude can start.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/issues/41",
+    "updated_at": "2026-10-02T05:15:45Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "Manual relay of the published BLOCKED review to GPT; architecture/security scope belongs to GPT/Krum.",
+  "requires_krum_reason": "One-time Computer Use confirmation is required immediately before A2C Send to Claude.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "7414a8f5a7a411d0de265b55970292dda84e1ac5",
-    "review_path": "coordination/REVIEWS/W0-03E-A2B.md",
-    "review_blob_sha": "2ec0874fb30bfd5843fa0971fb13b4432eb471dd",
+    "active_blob_sha": "7fbb26a5de504554dd43499171a66ce922478a0e",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -128,63 +117,21 @@
       }
     ]
   },
-  "updated_at": "2026-10-01T20:12:05Z",
+  "updated_at": "2026-10-02T05:15:45Z",
   "history": [
     {
-      "event_id": "w0-03e-a2b-c01-assignment-intent",
-      "occurred_at": "2026-10-01T17:47:13Z",
-      "task_id": "W0-03E-A2B",
+      "event_id": "w0-03e-a2c-c01-assignment-intent",
+      "occurred_at": "2026-10-02T05:15:45Z",
+      "task_id": "W0-03E-A2C",
       "cycle_id": "C01",
       "mapped_cycle": null,
       "actor": "CODEX",
       "kind": "ASSIGNMENT",
       "state_after": "WORKING",
-      "head_sha": "bd2cd362bf7b6009d82407925c76c0a9390737fb",
-      "source_url": "https://github.com/krumingo/BEG_Worck/issues/38#issuecomment-5936885793",
-      "source_commit_sha": "37f42f65a30436844010e52d6e3713bfb558157b",
-      "summary": "Krum authorized distinct A2B single-BEG legacy backfill and immediate test-only second-tenant isolation gate. Exact A2 code base is 43ba7e35; branch has architecture-only descendant bd2cd362. No duplicate A2B PR or visible Code Cloud session, no Send or observed start. Dispatch PENDING until one-time Computer Use confirmation. No production migration, merge or deploy. Human-Summary-BG is recorded in ACTIVE."
-    },
-    {
-      "event_id": "w0-03e-a2b-c01-claude-observed-start",
-      "occurred_at": "2026-10-01T18:10:23Z",
-      "task_id": "W0-03E-A2B",
-      "cycle_id": "C01",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "DISPATCH",
-      "state_after": "WORKING",
-      "head_sha": "bd2cd362bf7b6009d82407925c76c0a9390737fb",
-      "source_url": "https://claude.ai/code/session_01F9CE6Cip9jQobxYJL9guoc",
-      "source_commit_sha": "0991583f4a0b7819e20443fa3568f1503331f770",
-      "summary": "One-time direct Claude Send confirmed by Krum and accepted. Code Cloud initialized the A2B session on the intended repository/branch and ran git status. Implementation observed running; Codex waiting for exact-head HANDOFF."
-    },
-    {
-      "event_id": "w0-03e-a2b-c01-exact-head-handoff",
-      "occurred_at": "2026-10-01T18:59:13Z",
-      "task_id": "W0-03E-A2B",
-      "cycle_id": "C01",
-      "mapped_cycle": null,
-      "actor": "CLAUDE",
-      "kind": "HANDOFF",
-      "state_after": "REVIEW",
       "head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5938448512",
-      "source_commit_sha": "c34e688b5c8d9453150ac0bdf941be2d40376a2c",
-      "summary": "Claude published final exact-head HANDOFF on PR #40 and Code Cloud session finished. Codex now independently reviews the whole package and disposable real-Mongo gate; residual unscoped reads/writes and fixed-ID settings are not presumed safe."
-    },
-    {
-      "event_id": "w0-03e-a2b-c01-codex-blocked-published",
-      "occurred_at": "2026-10-01T20:12:05Z",
-      "task_id": "W0-03E-A2B",
-      "cycle_id": "C01",
-      "mapped_cycle": null,
-      "actor": "CODEX",
-      "kind": "REVIEW",
-      "state_after": "BLOCKED",
-      "head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
-      "source_url": "https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5939648544",
-      "source_commit_sha": "d5edcaefd99f92defd0147376ebad1e7bc911750",
-      "summary": "Independent whole-package review published BLOCKED: active invoice-lines HTTP route can enrich from and mutate foreign tenant financial records under colliding IDs; static guard excludes it. Separate real-Mongo Codex gate not run after decisive code defect. No automatic correction, merge or deploy."
+      "source_url": "https://github.com/krumingo/BEG_Worck/issues/41",
+      "source_commit_sha": "493f4669699c7ccad8205750d3ad1b94edc34d4c",
+      "summary": "Krum authorized distinct A2C full-active-backend tenant-boundary remediation stacked on blocked PR #40 exact head. Canonical assignment prepared in ACTIVE with Human-Summary-BG. No A2C PR or Claude Send/start; Dispatch PENDING until one-time Computer Use confirmation. No merge, deploy or production migration."
     }
   ]
 }
