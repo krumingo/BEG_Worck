@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T15:55:57Z",
+  "validated_at": "2026-10-02T16:12:46Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "9823b3e355f37bcb6cfca14d478a5a11ff0d9fd8",
-  "control_state_commit_sha": "bbba8f7c9785bd9acaa4765ce9772806261d14b1",
-  "now": "Claude приключи системното затваряне на tenant-разделението по целия активен backend. Сега Codex независимо проверява дали при две фирми няма място, което може да прочете или промени чужди данни, и изпълнява задължителния real-Mongo тест. PASS не е установен.",
+  "active_source_commit_sha": "c7a659f30618a55cafc4f578f6ac7ce587823043",
+  "control_state_commit_sha": "c7d50c7adeca8c569f5253b616b60bcfbcc96f91",
+  "now": "Codex е завършил независимите проверки и подготвя BLOCKED verdict за дефектния committed real-Mongo test. Резултатът още не е публикуван; PASS не е установен.",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": [
     "ACTIVE",
@@ -29,14 +29,14 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C01/GPT",
-      "waiting_for": "Codex exact-head independent review and real-Mongo verdict",
-      "updated_at": "2026-10-02T15:55:57Z"
+      "waiting_for": "Codex publication of exact-head independent review verdict",
+      "updated_at": "2026-10-02T16:12:46Z"
     },
     "CODEX": {
       "state": "REVIEWING",
       "work_id": "W0-03E-A2C/C01/CX",
-      "waiting_for": "Independent whole-package review and disposable real-Mongo two-tenant gate",
-      "updated_at": "2026-10-02T15:55:57Z"
+      "waiting_for": "Publication of prepared Codex review verdict",
+      "updated_at": "2026-10-02T16:12:46Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
@@ -49,7 +49,7 @@
   "state": "REVIEW",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Independent whole-package review and disposable real-Mongo two-tenant gate",
+  "waiting_for": "Publication of prepared Codex review verdict",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 42,
@@ -86,7 +86,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "3bed8130282b844954b29e02326f21775f0c1cc3",
+    "active_blob_sha": "ba9a10729002fd6519a5cc5baa14d9e7e027a78b",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -122,7 +122,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T15:55:57Z",
+  "updated_at": "2026-10-02T16:12:46Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",

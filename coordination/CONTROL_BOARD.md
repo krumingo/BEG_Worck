@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-02T15:55:57Z · CONTROL STATE: **VALID** as of 2026-10-02T15:55:57Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-02T16:12:46Z · CONTROL STATE: **VALID** as of 2026-10-02T16:12:46Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03E-A2C / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-03E-A2C/C01 final exact-head HANDOFF published in Draft PR #42 / HANDOFF
 RELAY: RECEIVED · CLAUDE → CODEX
-NOW: Claude приключи системното затваряне на tenant-разделението по целия активен backend. Сега Codex независимо проверява дали при две фирми няма място, което може да прочете или промени чужди данни, и изпълнява задължителния real-Mongo тест. PASS не е установен.
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex е завършил независимите проверки и подготвя BLOCKED verdict за дефектния committed real-Mongo test. Резултатът още не е публикуван; PASS не е установен.
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
-WAITING FOR: Independent whole-package review and disposable real-Mongo two-tenant gate
+WAITING FOR: Publication of prepared Codex review verdict
 
 ## Required agent banner
 
@@ -25,12 +25,12 @@ AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
 STATE: REVIEW
 NEXT: GPT
-WAITING_FOR: Independent whole-package review and disposable real-Mongo two-tenant gate
+WAITING_FOR: Publication of prepared Codex review verdict
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03E-A2C | C01 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent whole-package review and disposable real-Mongo two-tenant gate | REVIEW |
+| W0-03E-A2C | C01 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Publication of prepared Codex review verdict | REVIEW |
 
 ## Agent cards
 
@@ -38,15 +38,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E-A2C/C01/GPT | Codex exact-head independent review and real-Mongo verdict | 2026-10-02T15:55:57Z |
-| CODEX | REVIEWING | W0-03E-A2C/C01/CX | Independent whole-package review and disposable real-Mongo two-tenant gate | 2026-10-02T15:55:57Z |
+| GPT | WAITING | W0-03E-A2C/C01/GPT | Codex publication of exact-head independent review verdict | 2026-10-02T16:12:46Z |
+| CODEX | REVIEWING | W0-03E-A2C/C01/CX | Publication of prepared Codex review verdict | 2026-10-02T16:12:46Z |
 | CLAUDE | HANDOFF_READY | W0-03E-A2C/C01/CL | Codex independent exact-head review | 2026-10-02T15:55:57Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `9823b3e355f37bcb6cfca14d478a5a11ff0d9fd8` · blob `3bed8130282b844954b29e02326f21775f0c1cc3`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `c7a659f30618a55cafc4f578f6ac7ce587823043` · blob `ba9a10729002fd6519a5cc5baa14d9e7e027a78b`
 - Draft PR: [#42](https://github.com/krumingo/BEG_Worck/pull/42) · exact head `1308f20b38ef94ac396b1607ade49eb7e0d18f46`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130) · head `1308f20b38ef94ac396b1607ade49eb7e0d18f46`
 - Dispatch session: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf · dispatch state **NONE**
