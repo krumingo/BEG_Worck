@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T16:12:46Z",
+  "validated_at": "2026-10-02T16:17:59Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "c7a659f30618a55cafc4f578f6ac7ce587823043",
-  "control_state_commit_sha": "c7d50c7adeca8c569f5253b616b60bcfbcc96f91",
-  "now": "Codex е завършил независимите проверки и подготвя BLOCKED verdict за дефектния committed real-Mongo test. Резултатът още не е публикуван; PASS не е установен.",
+  "active_source_commit_sha": "0d6a341a78d8e905de49c05158e4e3cfcb368e9e",
+  "control_state_commit_sha": "9c28bf6d24b4f9bada84fe89ab24cb525e6da4e8",
+  "now": "Codex публикува BLOCKED review за точния head: committed real-Mongo gate не стига до A/B сценария. Следва архитектурно/owner решение; няма автоматична корекция.",
   "transition": {
     "event": "CODEX_VERDICT",
-    "phase": "INTENT",
-    "evidence_url": null,
-    "verdict_publication": "READY"
+    "phase": "OBSERVED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363",
+    "verdict_publication": "PUBLISHED"
   },
   "generated_from": [
     "ACTIVE",
@@ -29,27 +29,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C01/GPT",
-      "waiting_for": "Codex publication of exact-head independent review verdict",
-      "updated_at": "2026-10-02T16:12:46Z"
+      "waiting_for": "Krum relay of blocked review and GPT architectural decision",
+      "updated_at": "2026-10-02T16:17:59Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "BLOCKED",
       "work_id": "W0-03E-A2C/C01/CX",
-      "waiting_for": "Publication of prepared Codex review verdict",
-      "updated_at": "2026-10-02T16:12:46Z"
+      "waiting_for": "GPT/Krum decision on blocked committed real-Mongo gate",
+      "updated_at": "2026-10-02T16:17:59Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
       "work_id": "W0-03E-A2C/C01/CL",
       "waiting_for": "Codex independent exact-head review",
-      "updated_at": "2026-10-02T15:55:57Z"
+      "updated_at": "2026-10-02T16:17:59Z"
     }
   },
   "current_work_id": "W0-03E-A2C/C01/CX",
-  "state": "REVIEW",
+  "state": "BLOCKED",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Publication of prepared Codex review verdict",
+  "waiting_for": "GPT/Krum decision on blocked committed real-Mongo gate",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 42,
@@ -62,21 +62,26 @@
     "head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
     "at": "2026-10-02T11:33:44Z"
   },
-  "last_review": null,
-  "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "W0-03E-A2C/C01 final exact-head HANDOFF published in Draft PR #42",
-    "last_result": "HANDOFF",
-    "required_by_krum": false,
-    "from": "CLAUDE",
-    "to": "CODEX",
-    "status": "RECEIVED",
-    "instruction": "Codex independently reviews the whole exact-head package and runs a separate real-Mongo A/B gate; no Krum action now.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130",
-    "updated_at": "2026-10-02T15:55:57Z"
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-03E-A2C.md",
+    "blob_sha": "ecc6f0e2cba73c428604d020daa4e4a6529aac20",
+    "reviewed_head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
+    "verdict": "BLOCKED"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "relay": {
+    "last_agent": "CODEX",
+    "last_event": "W0-03E-A2C/C01 exact-head independent BLOCKED review published",
+    "last_result": "BLOCKED",
+    "required_by_krum": true,
+    "from": "CODEX",
+    "to": "GPT",
+    "status": "NOT_SENT",
+    "instruction": "Relay the exact-head BLOCKED review to GPT architect; no correction, merge or deploy is automatic.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363",
+    "updated_at": "2026-10-02T16:17:59Z"
+  },
+  "requires_krum": true,
+  "requires_krum_reason": "Relay BLOCKED review to GPT architect for next decision",
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "REVIEW",
@@ -86,7 +91,9 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "ba9a10729002fd6519a5cc5baa14d9e7e027a78b",
+    "active_blob_sha": "1e4c26f94191a1df2e33f4d9fb7619e277a5edc0",
+    "review_path": "coordination/REVIEWS/W0-03E-A2C.md",
+    "review_blob_sha": "ecc6f0e2cba73c428604d020daa4e4a6529aac20",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -122,7 +129,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T16:12:46Z",
+  "updated_at": "2026-10-02T16:17:59Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -165,6 +172,34 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130",
       "source_commit_sha": "9823b3e355f37bcb6cfca14d478a5a11ff0d9fd8",
       "summary": "Final Claude HANDOFF published for PR #42 exact head; Claude Desktop showed finished response. Independent whole-package Codex review and separate disposable real-Mongo gate begin; no PASS, merge or deploy."
+    },
+    {
+      "event_id": "w0-03e-a2c-c01-codex-verdict-ready-intent",
+      "occurred_at": "2026-10-02T16:12:46Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "CONTROL_UPDATE",
+      "state_after": "REVIEW",
+      "head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/c7a659f30618a55cafc4f578f6ac7ce587823043/coordination/ACTIVE.md",
+      "source_commit_sha": "c7a659f30618a55cafc4f578f6ac7ce587823043",
+      "summary": "Dashboard-first CODEX_VERDICT READY/PUBLISH PENDING intent; Codex remained REVIEWING and no result was yet claimed as published."
+    },
+    {
+      "event_id": "w0-03e-a2c-c01-codex-blocked-review-published",
+      "occurred_at": "2026-10-02T16:17:59Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "BLOCKED",
+      "head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363",
+      "source_commit_sha": "6b21d41de5b35b5652997fdb305b38e373d09202",
+      "summary": "Independent Codex exact-head review BLOCKED: the committed required A2C real-Mongo test indexes os.environ with the already-resolved URI value and raises KeyError before the A/B scenario. Direct separate scenario and predecessor gates passed, but cannot substitute for a failing committed gate. No automatic correction, merge or deploy."
     }
   ]
 }
