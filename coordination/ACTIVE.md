@@ -1,14 +1,14 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2C/C02 HANDOFF RECEIVED — CODEX INDEPENDENT REVIEW
+Status: W0-03E-A2C/C02 CODEX VERDICT READY — PUBLISH PENDING
 Human-Summary-BG: Поправяме само грешката в real-Mongo теста. След това Claude пуска теста наново, а Codex го проверява независимо; ако committed gate мине чисто, A2C може да получи PASS.
 Current-Agent: CODEX
 Current-State: REVIEW
 Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (final exact-head HANDOFF published; independent Codex review in progress)
-Now: Claude приключи едноредовата C02 корекция; Codex независимо преглежда exact head и изпълнява committed real-Mongo gate.
+Transition-Phase: INTENT (independent gate complete; Codex verdict prepared but not yet published)
+Now: Codex приключи независимия exact-head gate; verdict е подготвен, но още не е публикуван.
 Next-Agent: GPT
 Relay-State: RECEIVED
 Relay-From: GPT
@@ -29,7 +29,7 @@ Implementation-Branch-Head: 5e16cb90c175f6b697b256f63b8e652ed9d00e43 (exact C02 
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: C01 https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130; C02 https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882.
-Review: C01 coordination/REVIEWS/W0-03E-A2C.md — BLOCKED on exact head 1308f20b38ef94ac396b1607ade49eb7e0d18f46; PR comment https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363. C02 independent review IN PROGRESS; no verdict yet.
+Review: C01 coordination/REVIEWS/W0-03E-A2C.md — BLOCKED on exact head 1308f20b38ef94ac396b1607ade49eb7e0d18f46; PR comment https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363. C02 independent exact-head gate complete; verdict READY / PUBLISH PENDING, not yet a published result.
 Final-Verdict: NONE for C02. C01 BLOCKED remains historical evidence; no C02 PASS, merge, deploy or production migration.
 Predecessor-Task-ID: W0-03E-A2B/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2B.md (final BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473)
