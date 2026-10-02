@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-02T17:34:34Z · CONTROL STATE: **VALID** as of 2026-10-02T17:34:34Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-02T19:09:21Z · CONTROL STATE: **VALID** as of 2026-10-02T19:09:21Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-03E-A2C / C02 / CODEX / **PASS**
 LAST: CODEX — Independent exact-head C02 PASS published in PR #42 / PASS
 RELAY: NOT_SENT · CODEX → GPT
-NOW: Codex публикува PASS за A2C/C02 на exact head; W0-03E пакетът чака GPT/Krum решение за merge, без deploy.
+NOW: PR #42 е open и Ready for review на exact PASS head, но не е merge-нат; Codex чака изрично разрешение за merge, без deploy.
 TRANSITION: CODEX_VERDICT / OBSERVED · verdict PUBLISHED
 NEXT: GPT
-KRUM ACTION: REQUIRED — RELAY CODEX PASS TO GPT; PR #42 MERGE DECISION
-WAITING FOR: GPT/Krum final PR #42 merge decision
+KRUM ACTION: REQUIRED — EXPLICITLY APPROVE PR #42 MERGE AT EXACT HEAD; NO DEPLOY
+WAITING FOR: Explicit Krum merge authorization for PR #42 exact head
 
 ## Required agent banner
 
@@ -25,12 +25,12 @@ AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
 STATE: PASS
 NEXT: GPT
-WAITING_FOR: GPT/Krum final PR #42 merge decision
+WAITING_FOR: Explicit Krum merge authorization for PR #42 exact head
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03E-A2C | C02 | WAITING | WAITING | WAITING | CODEX | GPT/Krum final PR #42 merge decision | PASS |
+| W0-03E-A2C | C02 | WAITING | WAITING | WAITING | CODEX | Explicit Krum merge authorization for PR #42 exact head | PASS |
 
 ## Agent cards
 
@@ -38,17 +38,17 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E-A2C/C02/GPT | Published Codex PASS relay and owner merge decision | 2026-10-02T17:34:34Z |
-| CODEX | WAITING | W0-03E-A2C/C02/CX | GPT/Krum final PR #42 merge decision | 2026-10-02T17:34:34Z |
+| GPT | WAITING | W0-03E-A2C/C02/GPT | Explicit owner merge approval for PR #42 exact head | 2026-10-02T19:09:21Z |
+| CODEX | WAITING | W0-03E-A2C/C02/CX | Explicit Krum merge authorization for PR #42 exact head | 2026-10-02T19:09:21Z |
 | CLAUDE | WAITING | W0-03E-A2C/C02/CL | No new Claude assignment authorized | 2026-10-02T17:34:34Z |
 
 GPT → Codex → Claude → **Codex (PASS)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `5d053de72249cd6937a8ade604bd152570f1d1b9` · blob `6a95283c4c79ee9ce9e52a3b2d4e03f7baabdace`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `d747e191e92b3357cd0301f94f2e867079eb0891` · blob `3047121f9b5efb857baf5b90f71598a76e1c829f`
 - Review: `coordination/REVIEWS/W0-03E-A2C.md` · blob `110f33b95ef2e564bf846ceeefc6a764d24ebaa4` · verdict **PASS** on `5e16cb90c175f6b697b256f63b8e652ed9d00e43`
-- Draft PR: [#42](https://github.com/krumingo/BEG_Worck/pull/42) · exact head `5e16cb90c175f6b697b256f63b8e652ed9d00e43`
+- PR: [#42](https://github.com/krumingo/BEG_Worck/pull/42) · exact head `5e16cb90c175f6b697b256f63b8e652ed9d00e43`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882) · head `5e16cb90c175f6b697b256f63b8e652ed9d00e43`
 - Dispatch session: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf · dispatch state **NONE**
 - HANDOFF comment SHA-256: `—`
@@ -72,5 +72,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-02T17:17:20Z | C02 | — | HANDOFF | CODEX | REVIEW | `5e16cb90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882) |
 | 2026-10-02T17:28:51Z | C02 | — | CONTROL_UPDATE | CODEX | REVIEW | `5e16cb90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882) |
 | 2026-10-02T17:34:34Z | C02 | — | REVIEW | CODEX | PASS | `5e16cb90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541) |
+| 2026-10-02T19:09:21Z | C02 | — | CONTROL_UPDATE | CODEX | PASS | `5e16cb90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42) |
 
 **Gate:** W0-03E-A2C is PASS. Progression requires independent evidence and the relevant owner approval; this board grants none.

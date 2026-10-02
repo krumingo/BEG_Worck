@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2C/C02 PASS — W0-03E CODE PACKAGE READY FOR MERGE DECISION
-Human-Summary-BG: Едноредовата поправка в теста мина независимия двуфирмен MongoDB gate. W0-03E кодът е готов за решение за merge, но още не е в main и FLOW-032 не е активиран.
+Status: W0-03E-A2C/C02 PASS — PR #42 READY, UNMERGED; EXPLICIT MERGE APPROVAL PENDING
+Human-Summary-BG: Двуфирменият MongoDB gate е минал и PR #42 е готов за review. Той още не е слят в main; нужно е изрично разрешение за merge на този PR и exact head. Няма deploy.
 Current-Agent: CODEX
 Current-State: PASS
 Claude-State: WAITING
 Codex-State: WAITING
 Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED (independent exact-head PASS published in PR #42)
-Now: Codex публикува PASS за A2C/C02 на exact head; W0-03E пакетът чака GPT/Krum решение за merge, без deploy.
+Now: PR #42 е open и Ready for review на exact PASS head, но не е merge-нат; Codex чака изрично разрешение за merge, без deploy.
 Next-Agent: GPT
 Relay-State: NOT_SENT
 Relay-From: CODEX
 Relay-To: GPT
-Krum-Action: RELAY CODEX PASS TO GPT; PR #42 MERGE DECISION
+Krum-Action: EXPLICITLY APPROVE PR #42 MERGE AT EXACT HEAD; NO DEPLOY
 Dispatch-State: NONE (C02 session finished)
 Dispatch-Run: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf (C02 finished direct follow-up in existing C01 session)
 Dispatch-Observed-At: 2026-10-02T17:04:26Z
@@ -22,7 +22,7 @@ Cycle-ID: C02
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-a2c-full-tenant-boundary
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/42 (Draft, open; PR #40 remains Draft/BLOCKED and untouched)
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/42 (Ready for review, open, unmerged; PR #40 remains Draft/BLOCKED and untouched)
 PR-Head: 5e16cb90c175f6b697b256f63b8e652ed9d00e43
 Remediation-Base-SHA: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473
 Implementation-Branch-Head: 5e16cb90c175f6b697b256f63b8e652ed9d00e43 (exact C02 final HANDOFF head, rechecked in PR metadata)
@@ -34,7 +34,7 @@ Final-Verdict: W0-03E-A2C/C02 PASS; W0-03E implementation code package READY_FOR
 Predecessor-Task-ID: W0-03E-A2B/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2B.md (final BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473)
 Predecessor-Integration: NONE; PR #40 remains Draft/BLOCKED and unmerged. A2C is a separate owner-authorized stacked task using its exact head as code base only, not main integration.
-Authorization: Owner's bounded C02 correction in PR #42 https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750 authorized only the test fix. Issue #41 remained the A2C gate. Claude published final exact-head HANDOFF https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882 and stopped. Codex independently passed the committed and predecessor real-Mongo gates, published exact-head PASS https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541, and stopped. Merge/deploy/production migration require separate owner action.
+Authorization: Owner's bounded C02 correction in PR #42 https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750 authorized only the test fix. Claude published final exact-head HANDOFF https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882 and stopped. Codex independently passed the gates and published exact-head PASS https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541. PR #42 was marked Ready for review, but merge was not executed: a standalone "да" was insufficiently specific authorization for this high-impact main mutation. Explicit PR #42/exact-head merge approval is required; no workaround, deploy or production migration is authorized.
 Correction-cycles: W0-03E C02/C03, R1, A1, A2 and A2B outcomes remain immutable. A2C/C01 BLOCKED remains historical; A2C/C02 is one owner-authorized bounded correction, not a new Task-ID or C04.
 
 ## Canonical W0-03E-A2C/C02 — bounded committed real-Mongo test correction — HANDOFF / REVIEW
