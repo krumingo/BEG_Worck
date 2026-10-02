@@ -422,7 +422,7 @@ def test_the_two_tenant_boundary_on_a_real_disposable_mongodb(monkeypatch):
     op_name, sys_name = "w0_03e_a2c_op_" + suffix, "w0_03e_a2c_sys_" + suffix
 
     async def body():
-        client = AsyncIOMotorClient(os.environ[REAL_URL])
+        client = AsyncIOMotorClient(REAL_URL)
         try:
             return await scenario(client[op_name], client[sys_name], monkeypatch)
         finally:
