@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T17:04:26Z",
+  "validated_at": "2026-10-02T17:17:20Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "3ec7905c178059783347d93d3253d53c1011fece",
-  "control_state_commit_sha": "3ec7905c178059783347d93d3253d53c1011fece",
-  "now": "Claude работи по ограничената C02 корекция на committed real-Mongo теста; Codex чака финален exact-head HANDOFF.",
+  "active_source_commit_sha": "4d929a0c3237d360d31c800e26d0fbb3c96d9a45",
+  "control_state_commit_sha": "4d929a0c3237d360d31c800e26d0fbb3c96d9a45",
+  "now": "Claude приключи едноредовата C02 корекция; Codex независимо преглежда exact head и изпълнява committed real-Mongo gate.",
   "transition": {
-    "event": "CLAUDE_START",
+    "event": "CLAUDE_HANDOFF",
     "phase": "OBSERVED",
-    "evidence_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -23,75 +23,70 @@
   "task_id": "W0-03E-A2C",
   "cycle_id": "C02",
   "cycle_origin": "NATIVE",
-  "current_agent": "CLAUDE",
-  "current_role": "IMPLEMENTER",
+  "current_agent": "CODEX",
+  "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C02/GPT",
       "waiting_for": "Claude implementation and Codex review verdict",
-      "updated_at": "2026-10-02T17:04:26Z"
+      "updated_at": "2026-10-02T17:17:20Z"
     },
     "CODEX": {
-      "state": "WAITING",
+      "state": "REVIEWING",
       "work_id": "W0-03E-A2C/C02/CX",
-      "waiting_for": "Final exact-head C02 Claude HANDOFF",
-      "updated_at": "2026-10-02T17:04:26Z"
+      "waiting_for": "Independent exact-head review and disposable committed real-Mongo gate",
+      "updated_at": "2026-10-02T17:17:20Z"
     },
     "CLAUDE": {
-      "state": "WORKING",
+      "state": "HANDOFF_READY",
       "work_id": "W0-03E-A2C/C02/CL",
-      "waiting_for": "Final exact-head C02 Claude HANDOFF",
-      "updated_at": "2026-10-02T17:04:26Z"
+      "waiting_for": "Independent Codex verdict",
+      "updated_at": "2026-10-02T17:17:20Z"
     }
   },
-  "current_work_id": "W0-03E-A2C/C02/CL",
-  "state": "WORKING",
-  "pipeline_step": "IMPLEMENTATION",
-  "next_agent": "CODEX",
-  "waiting_for": "Final exact-head C02 Claude HANDOFF",
+  "current_work_id": "W0-03E-A2C/C02/CX",
+  "state": "REVIEW",
+  "pipeline_step": "REVIEW",
+  "next_agent": "GPT",
+  "waiting_for": "Independent exact-head review and disposable committed real-Mongo gate",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 42,
-  "pr_head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
+  "pr_head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
   "pr_draft": true,
-  "dispatch_state": "RUNNING",
+  "dispatch_state": "NONE",
   "dispatch_run_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
   "last_handoff": {
-    "url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130",
-    "head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
-    "at": "2026-10-02T11:33:44Z"
+    "url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
+    "head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
+    "at": "2026-10-02T17:15:18Z"
   },
-  "last_review": {
-    "path": "coordination/REVIEWS/W0-03E-A2C.md",
-    "blob_sha": "ecc6f0e2cba73c428604d020daa4e4a6529aac20",
-    "reviewed_head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
-    "verdict": "BLOCKED"
-  },
+  "last_review": null,
   "relay": {
-    "last_agent": "CODEX",
-    "last_event": "One confirmed direct C02 assignment sent to Claude Code Cloud",
-    "last_result": "DISPATCHED_TO_CLAUDE",
+    "last_agent": "CLAUDE",
+    "last_event": "Final exact-head C02 HANDOFF published in PR #42",
+    "last_result": "HANDOFF",
     "required_by_krum": false,
-    "from": "CODEX",
-    "to": "CLAUDE",
+    "from": "CLAUDE",
+    "to": "CODEX",
     "status": "RECEIVED",
-    "instruction": "Claude corrects only the committed real-Mongo test and publishes exact-head HANDOFF; Codex waits for independent review.",
-    "source_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
-    "updated_at": "2026-10-02T17:04:26Z"
+    "instruction": "Codex independently reviews the one-file C02 diff and runs the committed A2C gate on a separate disposable MongoDB.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
+    "updated_at": "2026-10-02T17:17:20Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "IMPLEMENTATION",
+    "stage": "REVIEW",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "c7e077be9f78ede65c15900a708159556572fe2f",
+    "active_blob_sha": "ad382b616b589aacf0df8f446fecf77a18245db4",
     "review_path": "coordination/REVIEWS/W0-03E-A2C.md",
     "review_blob_sha": "ecc6f0e2cba73c428604d020daa4e4a6529aac20",
     "canonical_docs": [
@@ -129,7 +124,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T17:04:26Z",
+  "updated_at": "2026-10-02T17:17:20Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -228,6 +223,20 @@
       "source_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
       "source_commit_sha": "3ec7905c178059783347d93d3253d53c1011fece",
       "summary": "One owner-confirmed direct C02 Send posted in the existing Code Cloud session on the exact A2C branch; Claude Preparing was observed. Dispatch RUNNING, Claude WORKING, Codex WAITING. No C02 HANDOFF, PASS, merge or deploy."
+    },
+    {
+      "event_id": "w0-03e-a2c-c02-exact-head-handoff-observed",
+      "occurred_at": "2026-10-02T17:17:20Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "HANDOFF",
+      "state_after": "REVIEW",
+      "head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
+      "source_commit_sha": "4d929a0c3237d360d31c800e26d0fbb3c96d9a45",
+      "summary": "Claude published final C02 HANDOFF on exact PR #42 head 5e16cb90 and ended the direct session; Codex rechecked stable open Draft head. CODEX REVIEWING; Claude claims 4/4 committed real-Mongo, but independent gate and verdict are pending."
     }
   ]
 }

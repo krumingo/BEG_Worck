@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-02T17:04:26Z · CONTROL STATE: **VALID** as of 2026-10-02T17:04:26Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-02T17:17:20Z · CONTROL STATE: **VALID** as of 2026-10-02T17:17:20Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-03E-A2C / C02 / CLAUDE / **WORKING**
-LAST: CODEX — One confirmed direct C02 assignment sent to Claude Code Cloud / DISPATCHED_TO_CLAUDE
-RELAY: RECEIVED · CODEX → CLAUDE
-NOW: Claude работи по ограничената C02 корекция на committed real-Mongo теста; Codex чака финален exact-head HANDOFF.
-TRANSITION: CLAUDE_START / OBSERVED · verdict NONE
-NEXT: CODEX
+CURRENT: W0-03E-A2C / C02 / CODEX / **REVIEW**
+LAST: CLAUDE — Final exact-head C02 HANDOFF published in PR #42 / HANDOFF
+RELAY: RECEIVED · CLAUDE → CODEX
+NOW: Claude приключи едноредовата C02 корекция; Codex независимо преглежда exact head и изпълнява committed real-Mongo gate.
+TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NEXT: GPT
 KRUM ACTION: NONE
-WAITING FOR: Final exact-head C02 Claude HANDOFF
+WAITING FOR: Independent exact-head review and disposable committed real-Mongo gate
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-03E-A2C
 CYCLE: C02
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: WORKING
-NEXT: CODEX
-WAITING_FOR: Final exact-head C02 Claude HANDOFF
+STATE: REVIEW
+NEXT: GPT
+WAITING_FOR: Independent exact-head review and disposable committed real-Mongo gate
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-03E-A2C | C02 | WAITING | WAITING | WORKING | CLAUDE | Final exact-head C02 Claude HANDOFF | WORKING |
+| W0-03E-A2C | C02 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent exact-head review and disposable committed real-Mongo gate | REVIEW |
 
 ## Agent cards
 
@@ -38,22 +38,21 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-03E-A2C/C02/GPT | Claude implementation and Codex review verdict | 2026-10-02T17:04:26Z |
-| CODEX | WAITING | W0-03E-A2C/C02/CX | Final exact-head C02 Claude HANDOFF | 2026-10-02T17:04:26Z |
-| CLAUDE | WORKING | W0-03E-A2C/C02/CL | Final exact-head C02 Claude HANDOFF | 2026-10-02T17:04:26Z |
+| GPT | WAITING | W0-03E-A2C/C02/GPT | Claude implementation and Codex review verdict | 2026-10-02T17:17:20Z |
+| CODEX | REVIEWING | W0-03E-A2C/C02/CX | Independent exact-head review and disposable committed real-Mongo gate | 2026-10-02T17:17:20Z |
+| CLAUDE | HANDOFF_READY | W0-03E-A2C/C02/CL | Independent Codex verdict | 2026-10-02T17:17:20Z |
 
-GPT → Codex → **Claude (WORKING)** → Codex → GPT
+GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `3ec7905c178059783347d93d3253d53c1011fece` · blob `c7e077be9f78ede65c15900a708159556572fe2f`
-- Review: `coordination/REVIEWS/W0-03E-A2C.md` · blob `ecc6f0e2cba73c428604d020daa4e4a6529aac20` · verdict **BLOCKED** on `1308f20b38ef94ac396b1607ade49eb7e0d18f46`
-- Draft PR: [#42](https://github.com/krumingo/BEG_Worck/pull/42) · exact head `1308f20b38ef94ac396b1607ade49eb7e0d18f46`
-- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130) · head `1308f20b38ef94ac396b1607ade49eb7e0d18f46`
-- Dispatch session: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf · dispatch state **RUNNING**
+- ACTIVE: `coordination/ACTIVE.md` · source commit `4d929a0c3237d360d31c800e26d0fbb3c96d9a45` · blob `ad382b616b589aacf0df8f446fecf77a18245db4`
+- Draft PR: [#42](https://github.com/krumingo/BEG_Worck/pull/42) · exact head `5e16cb90c175f6b697b256f63b8e652ed9d00e43`
+- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882) · head `5e16cb90c175f6b697b256f63b8e652ed9d00e43`
+- Dispatch session: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf · dispatch state **NONE**
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `e7957b71`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `e0ce9c2a`, `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` @ `efa5f37c`, `docs/architecture/TENANCY_MODEL.md` @ `93997df2`, `docs/flows/FLOW-032.md` @ `94f6be34`, `docs/flows/FLOW-002.md` @ `5594ffa4`, `docs/flows/FLOW-040.md` @ `3d2ce96e`
-- Wave/Flow: `W0` / `FLOW-032` · progress: **IMPLEMENTATION / STAGE_ONLY** (no proven percentage)
+- Wave/Flow: `W0` / `FLOW-032` · progress: **REVIEW / STAGE_ONLY** (no proven percentage)
 - `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
@@ -69,5 +68,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-02T16:17:59Z | C01 | — | REVIEW | CODEX | BLOCKED | `1308f20b` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363) |
 | 2026-10-02T16:57:28Z | C02 | — | ASSIGNMENT | CODEX | WORKING | `1308f20b` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750) |
 | 2026-10-02T17:04:26Z | C02 | — | DISPATCH | CODEX | WORKING | `1308f20b` | [evidence](https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf) |
+| 2026-10-02T17:17:20Z | C02 | — | HANDOFF | CODEX | REVIEW | `5e16cb90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882) |
 
-**Gate:** W0-03E-A2C is WORKING. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-03E-A2C is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
