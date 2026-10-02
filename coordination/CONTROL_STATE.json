@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T17:28:51Z",
+  "validated_at": "2026-10-02T17:34:34Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "479b68c747754b2e8e217a0386fa7a91d184e60f",
-  "control_state_commit_sha": "479b68c747754b2e8e217a0386fa7a91d184e60f",
-  "now": "Codex приключи независимия exact-head gate; verdict е подготвен, но още не е публикуван.",
+  "active_source_commit_sha": "5d053de72249cd6937a8ade604bd152570f1d1b9",
+  "control_state_commit_sha": "5d053de72249cd6937a8ade604bd152570f1d1b9",
+  "now": "Codex публикува PASS за A2C/C02 на exact head; W0-03E пакетът чака GPT/Krum решение за merge, без deploy.",
   "transition": {
     "event": "CODEX_VERDICT",
-    "phase": "INTENT",
-    "evidence_url": null,
-    "verdict_publication": "READY"
+    "phase": "OBSERVED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541",
+    "verdict_publication": "PUBLISHED"
   },
   "generated_from": [
     "ACTIVE",
@@ -29,27 +29,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C02/GPT",
-      "waiting_for": "Claude implementation and Codex review verdict",
-      "updated_at": "2026-10-02T17:28:51Z"
+      "waiting_for": "Published Codex PASS relay and owner merge decision",
+      "updated_at": "2026-10-02T17:34:34Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "WAITING",
       "work_id": "W0-03E-A2C/C02/CX",
-      "waiting_for": "Independent exact-head review and disposable committed real-Mongo gate",
-      "updated_at": "2026-10-02T17:28:51Z"
+      "waiting_for": "GPT/Krum final PR #42 merge decision",
+      "updated_at": "2026-10-02T17:34:34Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
+      "state": "WAITING",
       "work_id": "W0-03E-A2C/C02/CL",
-      "waiting_for": "Independent Codex verdict",
-      "updated_at": "2026-10-02T17:17:20Z"
+      "waiting_for": "No new Claude assignment authorized",
+      "updated_at": "2026-10-02T17:34:34Z"
     }
   },
   "current_work_id": "W0-03E-A2C/C02/CX",
-  "state": "REVIEW",
+  "state": "PASS",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Independent exact-head review and disposable committed real-Mongo gate",
+  "waiting_for": "GPT/Krum final PR #42 merge decision",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 42,
@@ -62,33 +62,38 @@
     "head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
     "at": "2026-10-02T17:15:18Z"
   },
-  "last_review": null,
-  "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "Final exact-head C02 HANDOFF published in PR #42",
-    "last_result": "HANDOFF",
-    "required_by_krum": false,
-    "from": "CLAUDE",
-    "to": "CODEX",
-    "status": "RECEIVED",
-    "instruction": "Codex independently reviews the one-file C02 diff and runs the committed A2C gate on a separate disposable MongoDB.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
-    "updated_at": "2026-10-02T17:17:20Z"
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-03E-A2C.md",
+    "blob_sha": "110f33b95ef2e564bf846ceeefc6a764d24ebaa4",
+    "reviewed_head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
+    "verdict": "PASS"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "relay": {
+    "last_agent": "CODEX",
+    "last_event": "Independent exact-head C02 PASS published in PR #42",
+    "last_result": "PASS",
+    "required_by_krum": true,
+    "from": "CODEX",
+    "to": "GPT",
+    "status": "NOT_SENT",
+    "instruction": "Relay the published A2C/C02 PASS and W0-03E code-package assessment to GPT; merge remains a separate Krum decision.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541",
+    "updated_at": "2026-10-02T17:34:34Z"
+  },
+  "requires_krum": true,
+  "requires_krum_reason": "RELAY CODEX PASS TO GPT; PR #42 MERGE DECISION",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "PASS",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "2e1cd39968e0f20318a5d8c6613877330a582fd8",
+    "active_blob_sha": "6a95283c4c79ee9ce9e52a3b2d4e03f7baabdace",
     "review_path": "coordination/REVIEWS/W0-03E-A2C.md",
-    "review_blob_sha": "ecc6f0e2cba73c428604d020daa4e4a6529aac20",
+    "review_blob_sha": "110f33b95ef2e564bf846ceeefc6a764d24ebaa4",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -124,7 +129,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T17:28:51Z",
+  "updated_at": "2026-10-02T17:34:34Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -251,6 +256,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
       "source_commit_sha": "479b68c747754b2e8e217a0386fa7a91d184e60f",
       "summary": "Independent exact-head C02 review completed: one-file one-line correction, committed A2C real-Mongo 4/4, focused 57/57, whole-active guard 198 modules/0 violations, inventory UNSCOPED=0, predecessor real-Mongo 50/50. Separate disposable Mongo instances and pytest temp cleaned. Verdict READY but not yet published; CODEX remains REVIEWING."
+    },
+    {
+      "event_id": "w0-03e-a2c-c02-codex-pass-published",
+      "occurred_at": "2026-10-02T17:34:34Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "PASS",
+      "head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541",
+      "source_commit_sha": "5d053de72249cd6937a8ade604bd152570f1d1b9",
+      "summary": "Codex published exact-head A2C/C02 PASS after independent committed A2C real-Mongo 4/4, focused 57/57, predecessor real-Mongo 50/50, whole-active guard and UNSCOPED=0. W0-03E code package ready for owner merge decision; W0-03 integration and FLOW-032 live gate remain OPEN. No merge, deploy or next-task dispatch."
     }
   ]
 }
