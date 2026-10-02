@@ -1,22 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2C/C01 ASSIGNMENT — PENDING SEND, NOT STARTED
-Human-Summary-BG: Няма да оправяме само `invoice_lines` и после да чакаме да излезе следващ теч. Ще минем целия активен backend и ще затворим всички места, където при еднакви ID-та данни могат да прескочат между две фирми.
-Current-Agent: CODEX
+Status: W0-03E-A2C/C01 IMPLEMENTATION — CLAUDE WORKING
+Human-Summary-BG: Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях.
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT (owner decision in Issue #41; canonical assignment prepared, no Claude Send or observed start)
-Now: Няма да оправяме само `invoice_lines` и после да чакаме да излезе следващ теч. Ще минем целия активен backend и ще затворим всички места, където при еднакви ID-та данни могат да прескочат между две фирми. Codex подготви задачата; изпращането към Claude е PENDING.
-Next-Agent: CLAUDE
-Relay-State: NOT_SENT
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED (one authorized direct Send and Claude session start observed)
+Now: Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях. Claude работи; Codex чака финален exact-head HANDOFF.
+Next-Agent: CODEX
+Relay-State: RECEIVED
 Relay-From: CODEX
 Relay-To: CLAUDE
-Krum-Action: CONFIRM SEND TO CLAUDE (only immediately before a direct Computer Use Send)
-Dispatch-State: PENDING
-Dispatch-Run: NONE for A2C
-Dispatch-Observed-At: NONE for A2C
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf
+Dispatch-Observed-At: 2026-10-02T10:17:55Z
 Task-ID: W0-03E-A2C
 Cycle-ID: C01
 Base-branch: main
@@ -25,21 +25,21 @@ Implementation-branch: codex/w0-03e-a2c-full-tenant-boundary
 PR-URL: NONE for A2C; PR #40 remains Draft/BLOCKED and untouched
 PR-Head: NONE for A2C
 Remediation-Base-SHA: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473
-Implementation-Branch-Head: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473 (same as remediation base; no A2C implementation yet)
+Implementation-Branch-Head-at-Dispatch: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473 (subsequent pushes are not HANDOFF)
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: NONE for A2C
 Review: predecessor coordination/REVIEWS/W0-03E-A2B.md is BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473; no A2C review exists yet.
-Final-Verdict: NONE for A2C. No Send, implementation, PR, HANDOFF, merge or deploy.
+Final-Verdict: NONE for A2C. Claude implementation is active; no A2C PR, HANDOFF, independent review, merge or deploy yet.
 Predecessor-Task-ID: W0-03E-A2B/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2B.md (final BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473)
 Predecessor-Integration: NONE; PR #40 remains Draft/BLOCKED and unmerged. A2C is a separate owner-authorized stacked task using its exact head as code base only, not main integration.
-Authorization: Issue #41 https://github.com/krumingo/BEG_Worck/issues/41 and the owner decision in PR #40 https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5945977465 authorize the full-active-backend tenant-boundary remediation. They do not authorize a Claude Send, merge, deploy or production migration.
+Authorization: Issue #41 https://github.com/krumingo/BEG_Worck/issues/41 and the owner decision in PR #40 https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5945977465 authorize the full-active-backend tenant-boundary remediation. Krum separately confirmed exactly one Claude Code Cloud Send; no merge, deploy or production migration is authorized.
 Correction-cycles: W0-03E C02/C03, R1, A1, A2 and A2B outcomes remain immutable. A2C is a separate Task-ID, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2C/C01 — full active backend tenant boundary — PENDING, NOT SENT
+## Canonical W0-03E-A2C/C01 — full active backend tenant boundary — RUNNING, awaiting HANDOFF
 
-**На човешки / Какво правим.** Няма да оправяме само `invoice_lines` и после да чакаме да излезе следващ теч. Ще минем целия активен backend и ще затворим всички места, където при еднакви ID-та данни могат да прескочат между две фирми.
+**На човешки / Какво правим.** Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях.
 
 **Identity and sources.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2C`; Cycle-ID `C01`; implementation branch `codex/w0-03e-a2c-full-tenant-boundary` at exact base `62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473` from blocked Draft PR #40. Main is `bbdb94dafa09a483b35ccdf6ed13604b77b86a96`. Read Issue #41 and the latest owner decision in PR #40, `coordination/REVIEWS/W0-03E-A2B.md`, complete main→A2B diff, `CLAUDE.md`, `coordination/README.md`, `docs/architecture/W0-03E-A2B_SINGLE_TENANT_BACKFILL.md`, `W0-03E-A2B_INVENTORY.md` §3, `TENANCY_MODEL.md` (D-15), `W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md` §6, `IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, and `docs/flows/FLOW-032.md`. Recheck exact branch/base and absence of duplicate A2C PR/session before editing. Open one new Draft PR against `main`; PR #40 stays Draft/BLOCKED and untouched. Draft is not integration.
 
