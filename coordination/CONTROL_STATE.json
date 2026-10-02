@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T05:15:45Z",
+  "validated_at": "2026-10-02T10:20:09Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "493f4669699c7ccad8205750d3ad1b94edc34d4c",
-  "control_state_commit_sha": "28aac35bb0a18d4a42630d924de357af791a8237",
-  "now": "Няма да оправяме само `invoice_lines` и после да чакаме да излезе следващ теч. Ще минем целия активен backend и ще затворим всички места, където при еднакви ID-та данни могат да прескочат между две фирми. Codex подготви задачата; изпращането към Claude е PENDING.",
+  "active_source_commit_sha": "ebae277403b2e3e576d0d863e37f069dbedbb15d",
+  "control_state_commit_sha": "b16035c5dc8c526a613bc903e1674b1450fefbf2",
+  "now": "Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях. Claude работи; Codex чака финален exact-head HANDOFF.",
   "transition": {
-    "event": "ASSIGNMENT",
-    "phase": "INTENT",
-    "evidence_url": null,
+    "event": "CLAUDE_START",
+    "phase": "OBSERVED",
+    "evidence_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -22,66 +22,66 @@
   "task_id": "W0-03E-A2C",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
-  "current_agent": "CODEX",
-  "current_role": "TECH_LEAD_QA",
+  "current_agent": "CLAUDE",
+  "current_role": "IMPLEMENTER",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C01/GPT",
       "waiting_for": "A2C implementation and independent gate outcome",
-      "updated_at": "2026-10-02T05:15:45Z"
+      "updated_at": "2026-10-02T10:17:55Z"
     },
     "CODEX": {
-      "state": "WORKING",
+      "state": "WAITING",
       "work_id": "W0-03E-A2C/C01/CX",
-      "waiting_for": "One-time Computer Use Send confirmation before Claude dispatch",
-      "updated_at": "2026-10-02T05:15:45Z"
+      "waiting_for": "Final exact-head Claude HANDOFF and ended session before independent review",
+      "updated_at": "2026-10-02T10:17:55Z"
     },
     "CLAUDE": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-03E-A2C/C01/CL",
-      "waiting_for": "Canonical A2C assignment; not yet sent",
-      "updated_at": "2026-10-02T05:15:45Z"
+      "waiting_for": "Final exact-head Claude HANDOFF and ended session before independent review",
+      "updated_at": "2026-10-02T10:17:55Z"
     }
   },
-  "current_work_id": "W0-03E-A2C/C01/CX",
+  "current_work_id": "W0-03E-A2C/C01/CL",
   "state": "WORKING",
-  "pipeline_step": "ASSIGNMENT",
-  "next_agent": "CLAUDE",
-  "waiting_for": "One-time Computer Use Send confirmation before Claude dispatch",
+  "pipeline_step": "IMPLEMENTATION",
+  "next_agent": "CODEX",
+  "waiting_for": "Final exact-head Claude HANDOFF and ended session before independent review",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": null,
   "pr_head_sha": null,
   "pr_draft": null,
-  "dispatch_state": "PENDING",
-  "dispatch_run_url": null,
+  "dispatch_state": "RUNNING",
+  "dispatch_run_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
   "last_handoff": null,
   "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-03E-A2C/C01 canonical assignment prepared; Claude Send not yet performed",
-    "last_result": "ASSIGNMENT_PENDING",
-    "required_by_krum": true,
+    "last_event": "W0-03E-A2C/C01 dispatched to Claude after one-time owner confirmation",
+    "last_result": "DISPATCHED",
+    "required_by_krum": false,
     "from": "CODEX",
     "to": "CLAUDE",
-    "status": "NOT_SENT",
-    "instruction": "Krum must confirm the one-time Computer Use Send of the canonical A2C assignment before Claude can start.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/41",
-    "updated_at": "2026-10-02T05:15:45Z"
+    "status": "RECEIVED",
+    "instruction": "Claude is working; Codex waits for final exact-head HANDOFF. No Krum action now.",
+    "source_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
+    "updated_at": "2026-10-02T10:17:55Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "One-time Computer Use confirmation is required immediately before A2C Send to Claude.",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "ASSIGNMENT",
+    "stage": "IMPLEMENTATION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "7fbb26a5de504554dd43499171a66ce922478a0e",
+    "active_blob_sha": "d167d1a455237b7525fec0185d278eef8baa06a9",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -117,7 +117,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T05:15:45Z",
+  "updated_at": "2026-10-02T10:17:55Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -132,6 +132,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/issues/41",
       "source_commit_sha": "493f4669699c7ccad8205750d3ad1b94edc34d4c",
       "summary": "Krum authorized distinct A2C full-active-backend tenant-boundary remediation stacked on blocked PR #40 exact head. Canonical assignment prepared in ACTIVE with Human-Summary-BG. No A2C PR or Claude Send/start; Dispatch PENDING until one-time Computer Use confirmation. No merge, deploy or production migration."
+    },
+    {
+      "event_id": "w0-03e-a2c-c01-claude-observed-start",
+      "occurred_at": "2026-10-02T10:17:55Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "DISPATCH",
+      "state_after": "WORKING",
+      "head_sha": "62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473",
+      "source_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
+      "source_commit_sha": "ebae277403b2e3e576d0d863e37f069dbedbb15d",
+      "summary": "One authorized direct Claude Code Cloud Send on the exact A2C branch; observed session started, verified repository, branch, start head and canonical queue SHA, and began reading assignment. Dispatch RUNNING; Claude WORKING; Codex WAITING; no HANDOFF, review, merge or deploy."
     }
   ]
 }
