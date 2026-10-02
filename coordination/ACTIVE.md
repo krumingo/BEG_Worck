@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2C/C01 CODEX VERDICT READY — PUBLICATION PENDING
-Human-Summary-BG: Независимият review намери точен дефект в committed real-Mongo gate: тестът пада с KeyError, преди да изпълни A/B сценария. Codex подготвя BLOCKED verdict; няма PASS, merge или deploy.
+Status: W0-03E-A2C/C01 BLOCKED — COMMITTED REAL-MONGO GATE FAILS BEFORE SCENARIO
+Human-Summary-BG: Независимият review намери точен дефект в задължителния real-Mongo тест: той пада с KeyError, преди да провери двете фирми. Отделното пряко изпълнение на сценария мина, но committed gate не е PASS. Задачата чака решение от GPT/Крум; няма merge или deploy.
 Current-Agent: CODEX
-Current-State: REVIEWING
+Current-State: BLOCKED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: BLOCKED
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT (CODEX_VERDICT READY / PUBLISH PENDING; result not yet published)
-Now: Codex е завършил независимите проверки и подготвя BLOCKED verdict за дефектния committed real-Mongo test. Резултатът още не е публикуван; PASS не е установен.
+Transition-Phase: OBSERVED (CODEX_VERDICT BLOCKED published in canonical REVIEW and PR #42)
+Now: Codex публикува BLOCKED review за точния head: committed real-Mongo gate не стига до A/B сценария. Следва архитектурно/owner решение; няма автоматична корекция.
 Next-Agent: GPT
-Relay-State: RECEIVED
-Relay-From: CLAUDE
-Relay-To: CODEX
-Krum-Action: NONE
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: RELAY BLOCKED REVIEW TO GPT ARCHITECT
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf
 Dispatch-Observed-At: 2026-10-02T10:17:55Z
@@ -29,8 +29,8 @@ Implementation-Branch-Head: 1308f20b38ef94ac396b1607ade49eb7e0d18f46 (exact fina
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130 (published 2026-10-02T11:33:44Z; real-Mongo explicitly unrun/skipped)
-Review: coordination/REVIEWS/W0-03E-A2B.md remains predecessor BLOCKED. A2C exact-head review completed locally; BLOCKED verdict is READY but not yet published in coordination/REVIEWS/W0-03E-A2C.md or PR #42.
-Final-Verdict: PUBLISH PENDING for A2C. The committed real-Mongo test fails before scenario execution; no PASS, merge or deploy.
+Review: coordination/REVIEWS/W0-03E-A2C.md — BLOCKED on exact head 1308f20b38ef94ac396b1607ade49eb7e0d18f46; PR comment https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363. Predecessor W0-03E-A2B.md remains BLOCKED.
+Final-Verdict: W0-03E-A2C BLOCKED — committed required real-Mongo test uses URI value as environment key and fails before scenario execution. No PASS, merge, deploy, production migration or automatic correction.
 Predecessor-Task-ID: W0-03E-A2B/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2B.md (final BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473)
 Predecessor-Integration: NONE; PR #40 remains Draft/BLOCKED and unmerged. A2C is a separate owner-authorized stacked task using its exact head as code base only, not main integration.
