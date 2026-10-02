@@ -3,6 +3,7 @@ Service - Subcontractor Performance summary.
 Additive analytics layer on top of existing subcontractor data.
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 def _compute_status(entry: dict) -> str:
@@ -28,13 +29,14 @@ def _compute_status(entry: dict) -> str:
 
 
 async def build_subcontractor_performance(org_id: str, project_id: str = None, subcontractor_id: str = None) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     query = {"org_id": org_id}
     if project_id:
         query["project_id"] = project_id
     if subcontractor_id:
         query["subcontractor_id"] = subcontractor_id
 
-    items = await db.subcontractor_performance.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    items = await tenant.subcontractor_performance.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
 
     delayed = 0
     over_budget = 0

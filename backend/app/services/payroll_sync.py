@@ -17,6 +17,7 @@ Finance Dashboard / Reports read paid labor from v3 (paid_labor_v3), not payroll
 Project P&L reads paid labor from v3 (paid_labor_allocations_v3), not payroll_payment_allocations.
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
@@ -24,12 +25,13 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
     Called after v3 pay_run is CONFIRMED (not yet paid).
     Creates provisional mirrors. Finance does NOT see these yet.
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     run_id = pay_run["id"]
     now = pay_run.get("confirmed_at") or pay_run.get("created_at", "")
 
     # ── A. Mirror to payroll_payment_allocations (v2 format) ──────
     # Idempotent: only create if no active/provisional records exist
-    existing_active = await db.payroll_payment_allocations.count_documents(
+    existing_active = await tenant.payroll_payment_allocations.count_documents(
         {"source_pay_run_id": run_id, "org_id": org_id, "status": {"$in": ["provisional", "active"]}}
     )
     if existing_active == 0:
@@ -61,7 +63,7 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                 ratio = site_data["gross"] / total_val if total_val > 0 else 1.0 / max(len(by_project), 1)
                 alloc_paid = round(paid * ratio, 2)
 
-                proj = await db.projects.find_one(
+                proj = await tenant.projects.find_one(
                     {"name": site_name, "org_id": org_id}, {"_id": 0, "id": 1}
                 ) if site_name else None
 
@@ -87,7 +89,7 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                 })
 
         if v2_allocs:
-            await db.payroll_payment_allocations.insert_many(v2_allocs)
+            await tenant.payroll_payment_allocations.insert_many(v2_allocs)
 
     # ── B. Reports → BATCHED (not paid!) ──────────────────────────
     # P0-2A.2: prefer explicit selected_report_ids if provided by frontend (per-report precision).
@@ -100,7 +102,7 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
         selected_ids = er.get("selected_report_ids", []) or []
         if selected_ids:
             # P0-2A.2 precise mode: mark only the explicitly selected reports.
-            await db.employee_daily_reports.update_many(
+            await tenant.employee_daily_reports.update_many(
                 {"org_id": org_id, "worker_id": eid, "id": {"$in": selected_ids},
                  "status": "APPROVED",
                  "payroll_status": {"$nin": ["paid", "batched"]}},
@@ -110,7 +112,7 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
             # Legacy mode: mark all approved unpaid reports for the selected days.
             dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
             if dates:
-                await db.employee_daily_reports.update_many(
+                await tenant.employee_daily_reports.update_many(
                     {"org_id": org_id, "worker_id": eid, "date": {"$in": dates},
                      "status": "APPROVED",
                      "payroll_status": {"$nin": ["paid", "batched"]}},
@@ -127,10 +129,11 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
     Promotes mirrors from provisional → active/paid.
     Only NOW does finance see the paid labor.
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     run_id = pay_run["id"]
 
     # A. Allocations: provisional → active (finance sees them now)
-    await db.payroll_payment_allocations.update_many(
+    await tenant.payroll_payment_allocations.update_many(
         {"source_pay_run_id": run_id, "org_id": org_id, "status": "provisional"},
         {"$set": {"status": "active", "paid_at": paid_at}},
     )
@@ -141,7 +144,7 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
             continue
         dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
         if dates:
-            await db.employee_daily_reports.update_many(
+            await tenant.employee_daily_reports.update_many(
                 {"org_id": org_id, "worker_id": er["employee_id"],
                  "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}"},
                 {"$set": {"payroll_status": "paid"}},
@@ -159,11 +162,12 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
     Called after v3 pay_run is REOPENED.
     Reverses downstream mirrors.
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     run_id = pay_run["id"]
     reopen_all = not employee_ids
 
     if reopen_all:
-        await db.payroll_payment_allocations.update_many(
+        await tenant.payroll_payment_allocations.update_many(
             {"source_pay_run_id": run_id, "org_id": org_id},
             {"$set": {"status": "reversed"}},
         )
@@ -172,7 +176,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
         for er in pay_run.get("employee_rows", []):
             dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
             if dates:
-                await db.employee_daily_reports.update_many(
+                await tenant.employee_daily_reports.update_many(
                     {"org_id": org_id, "worker_id": er["employee_id"],
                      "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
                      "payroll_status": "batched"},
@@ -180,7 +184,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                 )
     else:
         for eid in employee_ids:
-            await db.payroll_payment_allocations.update_many(
+            await tenant.payroll_payment_allocations.update_many(
                 {"source_pay_run_id": run_id, "org_id": org_id, "worker_id": eid},
                 {"$set": {"status": "reversed"}},
             )
@@ -190,7 +194,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
             if er:
                 dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
                 if dates:
-                    await db.employee_daily_reports.update_many(
+                    await tenant.employee_daily_reports.update_many(
                         {"org_id": org_id, "worker_id": eid,
                          "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
                          "payroll_status": "batched"},

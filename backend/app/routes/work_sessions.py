@@ -9,7 +9,14 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
+from app.tenancy.settings_identity import OVERTIME_CONFIG, settings_id
 from app.deps.auth import get_current_user
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Work Sessions"])
 
@@ -45,14 +52,17 @@ class SessionSplit(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────
 
 async def get_ot_coefficients(org_id: str) -> dict:
-    doc = await db.settings.find_one({"_id": "overtime_config", "org_id": org_id})
+    # W0-03E-A2C: per-tenant settings row id + tenant-scoped read.
+    doc = await TenantData.for_resolved_org(db, org_id).settings.find_one(
+        {"_id": settings_id(OVERTIME_CONFIG, org_id)})
     if doc and doc.get("coefficients"):
         return doc["coefficients"]
     return DEFAULT_OT
 
 
 async def snapshot_hourly_rate(org_id: str, worker_id: str) -> float:
-    profile = await db.employee_profiles.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    profile = await tenant.employee_profiles.find_one(
         {"org_id": org_id, "user_id": worker_id}, {"_id": 0}
     )
     if not profile:
@@ -79,10 +89,11 @@ def compute_duration(started: str, ended: str) -> float:
 
 async def detect_overtime(org_id: str, worker_id: str, date_str: str, session_ended: str, ot_cfg: dict) -> dict:
     """Detect overtime for the session based on total daily hours and time of day."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     # Get all closed sessions for this worker today
     day_start = f"{date_str}T00:00:00"
     day_end = f"{date_str}T23:59:59"
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "worker_id": worker_id, "started_at": {"$gte": day_start, "$lte": day_end}, "ended_at": {"$ne": None}},
         {"_id": 0, "duration_hours": 1},
     ).to_list(50)
@@ -115,13 +126,14 @@ async def detect_overtime(org_id: str, worker_id: str, date_str: str, session_en
 
 @router.post("/work-sessions/start", status_code=201)
 async def start_session(data: SessionStart, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     worker_id = user["id"]
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
 
     # Validate site
-    project = await db.projects.find_one({"id": data.site_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "status": 1})
+    project = await tenant.projects.find_one({"id": data.site_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "status": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Site/project not found")
 
@@ -129,7 +141,7 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
     await check_project_writable(data.site_id, org_id, "работни сесии")
 
     # Auto-close existing open session
-    open_session = await db.work_sessions.find_one(
+    open_session = await tenant.work_sessions.find_one(
         {"org_id": org_id, "worker_id": worker_id, "ended_at": None}
     )
     if open_session:
@@ -140,7 +152,7 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
         rate = open_session.get("hourly_rate_at_date", 0)
         cost = round(duration * rate * ot["coefficient"], 2)
 
-        await db.work_sessions.update_one(
+        await tenant.work_sessions.update_one(
             {"id": open_session["id"]},
             {"$set": {
                 "ended_at": now_iso,
@@ -181,7 +193,7 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
         "created_at": now_iso,
         "updated_at": now_iso,
     }
-    await db.work_sessions.insert_one(session)
+    await tenant.work_sessions.insert_one(session)
     result = {k: v for k, v in session.items() if k != "_id"}
     if open_session:
         result["auto_closed_session_id"] = open_session["id"]
@@ -192,11 +204,12 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
 
 @router.post("/work-sessions/end")
 async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     worker_id = user["id"]
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    open_session = await db.work_sessions.find_one(
+    open_session = await tenant.work_sessions.find_one(
         {"org_id": org_id, "worker_id": worker_id, "ended_at": None}
     )
     if not open_session:
@@ -211,7 +224,7 @@ async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
 
     notes = data.notes or open_session.get("notes")
 
-    await db.work_sessions.update_one(
+    await tenant.work_sessions.update_one(
         {"id": open_session["id"]},
         {"$set": {
             "ended_at": now_iso,
@@ -224,7 +237,7 @@ async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
             "updated_at": now_iso,
         }},
     )
-    return await db.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})
+    return await tenant.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})
 
 
 # ── List / Query ───────────────────────────────────────────────────
@@ -260,7 +273,8 @@ async def list_sessions(
     if is_overtime is not None:
         query["is_overtime"] = is_overtime
 
-    return await paginate_query(db.work_sessions, query, page, page_size, "started_at", -1)
+    tenant = _tenant(user)
+    return await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1)
 
 
 # ── Active Sessions ────────────────────────────────────────────────
@@ -270,10 +284,11 @@ async def get_active_sessions(
     site_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"], "ended_at": None}
     if site_id:
         query["site_id"] = site_id
-    items = await db.work_sessions.find(query, {"_id": 0}).sort("started_at", 1).to_list(200)
+    items = await tenant.work_sessions.find(query, {"_id": 0}).sort("started_at", 1).to_list(200)
     now = datetime.now(timezone.utc).isoformat()
     for s in items:
         s["elapsed_hours"] = round(compute_duration(s["started_at"], now), 2)
@@ -284,13 +299,14 @@ async def get_active_sessions(
 
 @router.get("/work-sessions/my-today")
 async def get_my_today(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     query = {
         "org_id": user["org_id"],
         "worker_id": user["id"],
         "started_at": {"$gte": f"{today}T00:00:00", "$lte": f"{today}T23:59:59"},
     }
-    items = await db.work_sessions.find(query, {"_id": 0}).sort("started_at", 1).to_list(50)
+    items = await tenant.work_sessions.find(query, {"_id": 0}).sort("started_at", 1).to_list(50)
 
     now_iso = datetime.now(timezone.utc).isoformat()
     total_hours = 0
@@ -326,6 +342,7 @@ async def get_summary(
     date_to: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"], "ended_at": {"$ne": None}}
     if site_id:
         query["site_id"] = site_id
@@ -338,7 +355,7 @@ async def get_summary(
         if date_to:
             query["started_at"]["$lte"] = f"{date_to}T23:59:59"
 
-    items = await db.work_sessions.find(query, {"_id": 0}).to_list(1000)
+    items = await tenant.work_sessions.find(query, {"_id": 0}).to_list(1000)
     total_hours = sum(s.get("duration_hours", 0) for s in items)
     total_cost = sum(s.get("labor_cost", 0) for s in items)
     overtime_hours = sum(s.get("duration_hours", 0) for s in items if s.get("is_overtime"))
@@ -357,10 +374,11 @@ async def get_summary(
 
 @router.post("/work-sessions/{session_id}/split")
 async def split_session(session_id: str, data: SessionSplit, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    session = await db.work_sessions.find_one({"id": session_id, "org_id": user["org_id"]})
+    session = await tenant.work_sessions.find_one({"id": session_id, "org_id": user["org_id"]})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     if not session.get("ended_at"):
@@ -407,12 +425,12 @@ async def split_session(session_id: str, data: SessionSplit, user: dict = Depend
         cursor = end_dt
 
     # Mark original as split
-    await db.work_sessions.update_one(
+    await tenant.work_sessions.update_one(
         {"id": session_id},
         {"$set": {"is_flagged": True, "flag_reason": "split", "updated_at": now_iso}},
     )
     if new_sessions:
-        await db.work_sessions.insert_many(new_sessions)
+        await tenant.work_sessions.insert_many(new_sessions)
 
     return {
         "ok": True,
@@ -430,6 +448,7 @@ async def get_overtime_report(
     worker_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"], "ended_at": {"$ne": None}}
     if worker_id:
         query["worker_id"] = worker_id
@@ -440,7 +459,7 @@ async def get_overtime_report(
         if date_to:
             query["started_at"]["$lte"] = f"{date_to}T23:59:59"
 
-    items = await db.work_sessions.find(query, {"_id": 0}).to_list(2000)
+    items = await tenant.work_sessions.find(query, {"_id": 0}).to_list(2000)
 
     workers = {}
     for s in items:
@@ -472,10 +491,11 @@ async def get_overtime_report(
 
 @router.put("/work-sessions/{session_id}")
 async def update_session(session_id: str, data: SessionUpdate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    session = await db.work_sessions.find_one({"id": session_id, "org_id": user["org_id"]})
+    session = await tenant.work_sessions.find_one({"id": session_id, "org_id": user["org_id"]})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -504,22 +524,23 @@ async def update_session(session_id: str, data: SessionUpdate, user: dict = Depe
         update["labor_cost"] = round(duration * rate * ot["coefficient"], 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.work_sessions.update_one({"id": session_id}, {"$set": update})
-    return await db.work_sessions.find_one({"id": session_id}, {"_id": 0})
+    await tenant.work_sessions.update_one({"id": session_id}, {"$set": update})
+    return await tenant.work_sessions.find_one({"id": session_id}, {"_id": 0})
 
 
 # ── Delete (Admin only, flagged only) ──────────────────────────────
 
 @router.delete("/work-sessions/{session_id}")
 async def delete_session(session_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    session = await db.work_sessions.find_one({"id": session_id, "org_id": user["org_id"]})
+    session = await tenant.work_sessions.find_one({"id": session_id, "org_id": user["org_id"]})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     if not session.get("is_flagged"):
         raise HTTPException(status_code=400, detail="Can only delete flagged sessions")
 
-    await db.work_sessions.delete_one({"id": session_id})
+    await tenant.work_sessions.delete_one({"id": session_id})
     return {"ok": True}

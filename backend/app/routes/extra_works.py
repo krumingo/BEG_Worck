@@ -9,12 +9,19 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
+from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.services.ai_proposal import get_ai_proposal as hybrid_ai_proposal
 
 router = APIRouter(tags=["Extra Works / AI Offers"])
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
+
 
 
 # ── Pydantic Models ────────────────────────────────────────────────
@@ -105,7 +112,12 @@ ACTIVITY_TO_WORKER = {
 
 async def get_org_worker_rates(org_id: str) -> dict:
     """Load org-configured worker rates from DB, fallback to DEMO"""
-    settings = await db.settings.find_one({"_id": "worker_rates", "org_id": org_id})
+    # W0-03E-A2C: the row id is per-tenant (settings_identity), and the read is
+    # tenant-scoped, so a second tenant has its own rates instead of colliding
+    # on a single global ``_id``.
+    tenant = TenantData.for_resolved_org(db, org_id)
+    settings = await tenant.settings.find_one(
+        {"_id": settings_id(WORKER_RATES, org_id)})
     if settings and settings.get("rates"):
         return settings["rates"]
     return None  # None means use DEMO
@@ -159,13 +171,14 @@ def apply_hourly_pricing(proposal: dict, qty: float, org_rates: dict = None) -> 
 
 @router.post("/extra-works", status_code=201)
 async def create_extra_work(data: ExtraWorkCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     from app.services.project_guards import check_project_writable
     await check_project_writable(data.project_id, user["org_id"], "допълнителни работи")
 
-    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -205,7 +218,7 @@ async def create_extra_work(data: ExtraWorkCreate, user: dict = Depends(require_
         "target_offer_id": None,
         "group_batch_id": None,
     }
-    await db.extra_work_drafts.insert_one(draft)
+    await tenant.extra_work_drafts.insert_one(draft)
     return {k: v for k, v in draft.items() if k != "_id"}
 
 
@@ -215,19 +228,21 @@ async def list_extra_works(
     status: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     if status:
         query["status"] = status
     
-    drafts = await db.extra_work_drafts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    drafts = await tenant.extra_work_drafts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return drafts
 
 
 @router.get("/extra-works/{draft_id}")
 async def get_extra_work(draft_id: str, user: dict = Depends(require_m2)):
-    draft = await db.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    draft = await tenant.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]}, {"_id": 0})
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     return draft
@@ -235,7 +250,8 @@ async def get_extra_work(draft_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/extra-works/{draft_id}")
 async def update_extra_work(draft_id: str, data: ExtraWorkUpdate, user: dict = Depends(require_m2)):
-    draft = await db.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    draft = await tenant.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     if draft["status"] not in ["draft"]:
@@ -243,18 +259,19 @@ async def update_extra_work(draft_id: str, data: ExtraWorkUpdate, user: dict = D
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.extra_work_drafts.update_one({"id": draft_id}, {"$set": update})
-    return await db.extra_work_drafts.find_one({"id": draft_id}, {"_id": 0})
+    await tenant.extra_work_drafts.update_one({"id": draft_id}, {"$set": update})
+    return await tenant.extra_work_drafts.find_one({"id": draft_id}, {"_id": 0})
 
 
 @router.delete("/extra-works/{draft_id}")
 async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
-    draft = await db.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    draft = await tenant.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     if draft["status"] not in ["draft"]:
         raise HTTPException(status_code=400, detail="Can only delete draft items")
-    await db.extra_work_drafts.delete_one({"id": draft_id})
+    await tenant.extra_work_drafts.delete_one({"id": draft_id})
     return {"ok": True}
 
 
@@ -392,7 +409,8 @@ async def refine_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_
 @router.post("/extra-works/{draft_id}/apply-ai")
 async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dict = Depends(require_m2)):
     """Generate and apply AI proposal to an existing draft"""
-    draft = await db.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    draft = await tenant.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]})
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     
@@ -413,9 +431,9 @@ async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dic
         "suggested_materials": proposal["materials"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.extra_work_drafts.update_one({"id": draft_id}, {"$set": update})
+    await tenant.extra_work_drafts.update_one({"id": draft_id}, {"$set": update})
     
-    updated = await db.extra_work_drafts.find_one({"id": draft_id}, {"_id": 0})
+    updated = await tenant.extra_work_drafts.find_one({"id": draft_id}, {"_id": 0})
     return {"draft": updated, "proposal": proposal}
 
 
@@ -424,13 +442,14 @@ async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dic
 @router.post("/extra-works/create-offer", status_code=201)
 async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Depends(require_m2)):
     """Create a new offer from selected draft extra work rows"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     if not data.draft_ids:
         raise HTTPException(status_code=400, detail="No draft rows selected")
     
-    drafts = await db.extra_work_drafts.find(
+    drafts = await tenant.extra_work_drafts.find(
         {"id": {"$in": data.draft_ids}, "org_id": user["org_id"], "status": "draft"},
         {"_id": 0}
     ).to_list(100)
@@ -443,11 +462,11 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
         raise HTTPException(status_code=400, detail="All draft rows must belong to the same project")
     
     project_id = drafts[0]["project_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "code": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    last = await db.offers.find_one({"org_id": user["org_id"]}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)])
+    last = await tenant.offers.find_one({"org_id": user["org_id"]}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)])
     if last and last.get("offer_no"):
         try:
             num = int(last["offer_no"].split("-")[1]) + 1
@@ -533,9 +552,9 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
         "source_batch_id": batch_id,
     }
     
-    await db.offers.insert_one(offer)
+    await tenant.offers.insert_one(offer)
     
-    await db.extra_work_drafts.update_many(
+    await tenant.extra_work_drafts.update_many(
         {"id": {"$in": data.draft_ids}},
         {"$set": {
             "status": "converted",
@@ -557,6 +576,7 @@ async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Dep
 @router.post("/extra-works/batch-save", status_code=201)
 async def batch_save_drafts(data: dict, user: dict = Depends(require_m2)):
     """Save multiple extra work drafts with AI data in one call"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -564,7 +584,7 @@ async def batch_save_drafts(data: dict, user: dict = Depends(require_m2)):
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id required")
     
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -612,7 +632,7 @@ async def batch_save_drafts(data: dict, user: dict = Depends(require_m2)):
             "target_offer_id": None,
             "group_batch_id": batch_id,
         }
-        await db.extra_work_drafts.insert_one(draft)
+        await tenant.extra_work_drafts.insert_one(draft)
         saved.append(draft["id"])
     
     return {"ok": True, "saved_count": len(saved), "batch_id": batch_id, "draft_ids": saved}
@@ -638,9 +658,12 @@ async def save_hourly_rates(data: dict, user: dict = Depends(require_m2)):
     rates = data.get("rates", {})
     now = datetime.now(timezone.utc).isoformat()
     
-    await db.settings.update_one(
-        {"_id": "worker_rates", "org_id": user["org_id"]},
-        {"$set": {"_id": "worker_rates", "org_id": user["org_id"], "rates": rates, "updated_at": now, "updated_by": user["id"]}},
+    tenant = _tenant(user)
+    row_id = settings_id(WORKER_RATES, tenant.org_id)
+    await tenant.settings.update_one(
+        {"_id": row_id},
+        {"$set": {"_id": row_id, "org_id": tenant.org_id, "rates": rates,
+                  "updated_at": now, "updated_by": user["id"]}},
         upsert=True,
     )
     return {"ok": True, "source": "organization", "rates": rates}
@@ -654,10 +677,11 @@ async def get_smr_aggregated(project_id: str, user: dict = Depends(get_current_u
     Aggregated SMR rows for a project: groups similar items by title+unit+location.
     Merges from both extra_work_drafts and missing_smr.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Fetch from both sources
-    drafts = await db.extra_work_drafts.find(
+    drafts = await tenant.extra_work_drafts.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "id": 1, "title": 1, "qty": 1, "unit": 1,
          "location_room": 1, "location_floor": 1, "location_zone": 1,
@@ -665,7 +689,7 @@ async def get_smr_aggregated(project_id: str, user: dict = Depends(get_current_u
          "normalized_activity_type": 1},
     ).to_list(500)
 
-    missing = await db.missing_smr.find(
+    missing = await tenant.missing_smr.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "id": 1, "smr_type": 1, "activity_type": 1,
          "qty": 1, "unit": 1, "room": 1, "floor": 1, "zone": 1,
@@ -745,6 +769,7 @@ async def get_smr_aggregated(project_id: str, user: dict = Depends(get_current_u
 @router.post("/projects/{project_id}/smr-to-offer")
 async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depends(get_current_user)):
     """Create an offer from selected SMR rows."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -753,7 +778,7 @@ async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depend
     if not source_ids:
         raise HTTPException(status_code=400, detail="Изберете поне 1 СМР ред")
 
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": project_id, "org_id": org_id},
         {"_id": 0, "id": 1, "name": 1, "code": 1, "owner_id": 1},
     )
@@ -762,7 +787,7 @@ async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depend
 
     # Gather selected rows from both collections
     lines = []
-    drafts = await db.extra_work_drafts.find(
+    drafts = await tenant.extra_work_drafts.find(
         {"org_id": org_id, "id": {"$in": source_ids}}, {"_id": 0}
     ).to_list(500)
     for d in drafts:
@@ -773,7 +798,7 @@ async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depend
             "unit_price": float(d.get("ai_total_price_per_unit") or 0),
         })
 
-    missing_rows = await db.missing_smr.find(
+    missing_rows = await tenant.missing_smr.find(
         {"org_id": org_id, "id": {"$in": source_ids}}, {"_id": 0}
     ).to_list(500)
     for m in missing_rows:
@@ -794,7 +819,7 @@ async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depend
     # Create offer
     import uuid
     now = datetime.now(timezone.utc).isoformat()
-    offer_count = await db.offers.count_documents({"org_id": org_id})
+    offer_count = await tenant.offers.count_documents({"org_id": org_id})
     offer_id = str(uuid.uuid4())
 
     offer = {
@@ -813,14 +838,14 @@ async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depend
         "created_at": now,
         "updated_at": now,
     }
-    await db.offers.insert_one(offer)
+    await tenant.offers.insert_one(offer)
 
     # Mark source rows as linked to this offer
-    await db.extra_work_drafts.update_many(
+    await tenant.extra_work_drafts.update_many(
         {"id": {"$in": source_ids}, "org_id": org_id},
         {"$set": {"target_offer_id": offer_id, "status": "in_offer"}},
     )
-    await db.missing_smr.update_many(
+    await tenant.missing_smr.update_many(
         {"id": {"$in": source_ids}, "org_id": org_id},
         {"$set": {"linked_offer_id": offer_id, "status": "in_offer"}},
     )

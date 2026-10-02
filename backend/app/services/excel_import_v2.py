@@ -12,6 +12,7 @@ from app.services.excel_import import COLUMN_KEYWORDS, parse_float
 
 
 import unicodedata
+from app.tenancy.data_access import TenantData
 
 def _normalize(s: str) -> str:
     """Normalize text for comparison: lowercase, strip, remove dots/dashes."""
@@ -162,6 +163,7 @@ def normalize_with_mapping(file_bytes: bytes, column_mapping: dict, sheet_name: 
 
 
 async def save_import_template(org_id: str, name: str, import_type: str, column_mapping: dict, created_by: str, **kwargs) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -177,12 +179,13 @@ async def save_import_template(org_id: str, name: str, import_type: str, column_
         "created_at": now,
         "updated_at": now,
     }
-    await db.excel_import_templates.insert_one(doc)
+    await tenant.excel_import_templates.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
 async def apply_template(org_id: str, template_id: str, file_bytes: bytes) -> dict:
-    tpl = await db.excel_import_templates.find_one({"id": template_id, "org_id": org_id}, {"_id": 0})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    tpl = await tenant.excel_import_templates.find_one({"id": template_id, "org_id": org_id}, {"_id": 0})
     if not tpl:
         return {"error": "Template not found"}
     mapping = tpl.get("column_mapping", {})

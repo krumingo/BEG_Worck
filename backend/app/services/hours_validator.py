@@ -3,10 +3,12 @@ Hours validation — checks worker daily hours across all projects.
 Supports BOTH old schema (worker_id/date/hours) and new schema (employee_id/report_date/day_entries).
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 async def get_worker_hours_for_day(org_id: str, worker_id: str, date: str) -> float:
     """Total hours for worker on date, summing BOTH schemas."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     query = {
         "org_id": org_id,
         "$or": [
@@ -15,7 +17,7 @@ async def get_worker_hours_for_day(org_id: str, worker_id: str, date: str) -> fl
         ],
         "approval_status": {"$nin": ["REJECTED"]},
     }
-    cursor = db.employee_daily_reports.find(
+    cursor = tenant.employee_daily_reports.find(
         query, {"_id": 0, "hours": 1, "hours_worked": 1, "day_entries": 1},
     )
     total = 0.0

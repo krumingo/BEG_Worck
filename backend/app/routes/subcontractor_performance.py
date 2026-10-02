@@ -11,6 +11,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.subcontractor_performance import build_subcontractor_performance
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Subcontractor Performance"])
 
@@ -64,6 +70,7 @@ async def get_compact(
 
 @router.post("/subcontractor-performance", status_code=201)
 async def create_performance(data: PerformanceCreate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -75,19 +82,20 @@ async def create_performance(data: PerformanceCreate, user: dict = Depends(get_c
         "created_at": now,
         "updated_at": now,
     }
-    await db.subcontractor_performance.insert_one(doc)
+    await tenant.subcontractor_performance.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
 @router.put("/subcontractor-performance/{record_id}")
 async def update_performance(record_id: str, data: PerformanceUpdate, user: dict = Depends(get_current_user)):
-    doc = await db.subcontractor_performance.find_one({"id": record_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.subcontractor_performance.find_one({"id": record_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Record not found")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.subcontractor_performance.update_one({"id": record_id}, {"$set": update})
-    return await db.subcontractor_performance.find_one({"id": record_id}, {"_id": 0})
+    await tenant.subcontractor_performance.update_one({"id": record_id}, {"$set": update})
+    return await tenant.subcontractor_performance.find_one({"id": record_id}, {"_id": 0})
 
 
 @router.get("/subcontractor-performance/log")
@@ -95,8 +103,9 @@ async def get_log(
     project_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
-    items = await db.subcontractor_performance.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    items = await tenant.subcontractor_performance.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"items": items, "total": len(items)}

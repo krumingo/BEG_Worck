@@ -14,6 +14,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Revenue Snapshot / Profit Period / Procurement"])
 
@@ -27,13 +33,14 @@ DEFAULT_PROCUREMENT_LEAD_DAYS = 14
 @router.post("/revenue-snapshots/from-offer/{offer_id}", status_code=201)
 async def create_revenue_snapshot(offer_id: str, user: dict = Depends(require_m2)):
     """Create a frozen revenue snapshot from an accepted offer"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
     # Prevent duplicate snapshots for same offer version
-    existing = await db.revenue_snapshots.find_one(
+    existing = await tenant.revenue_snapshots.find_one(
         {"org_id": org_id, "offer_id": offer_id, "version": offer.get("version", 1)})
     if existing:
         raise HTTPException(status_code=400, detail="Snapshot already exists for this offer version")
@@ -73,20 +80,22 @@ async def create_revenue_snapshot(offer_id: str, user: dict = Depends(require_m2
         "frozen_at": now,
         "frozen_by": user["id"],
     }
-    await db.revenue_snapshots.insert_one(snapshot)
+    await tenant.revenue_snapshots.insert_one(snapshot)
     return {k: v for k, v in snapshot.items() if k != "_id"}
 
 
 @router.get("/revenue-snapshots")
 async def list_revenue_snapshots(project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
-    return await db.revenue_snapshots.find(q, {"_id": 0}).sort("frozen_at", -1).to_list(100)
+    return await tenant.revenue_snapshots.find(q, {"_id": 0}).sort("frozen_at", -1).to_list(100)
 
 
 @router.get("/revenue-snapshots/{snapshot_id}")
 async def get_revenue_snapshot(snapshot_id: str, user: dict = Depends(require_m2)):
-    s = await db.revenue_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    s = await tenant.revenue_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
     if not s:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     return s
@@ -99,41 +108,42 @@ async def get_revenue_snapshot(snapshot_id: str, user: dict = Depends(require_m2
 @router.get("/profit-by-period/{project_id}")
 async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)):
     """Monthly profit breakdown for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Earned revenue by month (from client acts)
-    acts = await db.client_acts.find(
+    acts = await tenant.client_acts.find(
         {"org_id": org_id, "project_id": project_id, "status": "Accepted"},
         {"_id": 0, "act_date": 1, "subtotal": 1}
     ).to_list(200)
 
     # Billed by month (invoices)
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued",
          "status": {"$nin": ["Draft", "Cancelled"]}},
         {"_id": 0, "issue_date": 1, "subtotal": 1, "total": 1, "paid_amount": 1}
     ).to_list(500)
 
     # Labor by month
-    labor_entries = await db.labor_entries.find(
+    labor_entries = await tenant.labor_entries.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "date": 1, "labor_cost": 1, "hours": 1}
     ).to_list(5000)
 
     # Material by month (from material_entries issues + returns)
-    mat_entries = await db.material_entries.find(
+    mat_entries = await tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id, "movement_type": {"$in": ["issue", "return"]}},
         {"_id": 0, "date": 1, "total_cost": 1}
     ).to_list(5000)
 
     # Subcontract by month (from acts)
-    sub_acts = await db.subcontractor_acts.find(
+    sub_acts = await tenant.subcontractor_acts.find(
         {"org_id": org_id, "project_id": project_id, "status": "confirmed"},
         {"_id": 0, "act_date": 1, "certified_total": 1}
     ).to_list(200)
 
     # Overhead by month
-    oh_allocs = await db.project_overhead_alloc.find(
+    oh_allocs = await tenant.project_overhead_alloc.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "period": 1, "allocated_amount": 1}
     ).to_list(50)
@@ -207,17 +217,18 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
 @router.get("/cash-vs-earned/{project_id}")
 async def get_cash_vs_earned(project_id: str, user: dict = Depends(require_m2)):
     """Cash collected vs earned revenue + gap analysis"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Earned
-    acts = await db.client_acts.find(
+    acts = await tenant.client_acts.find(
         {"org_id": org_id, "project_id": project_id, "status": "Accepted"},
         {"_id": 0, "subtotal": 1}
     ).to_list(200)
     earned = sum(a.get("subtotal", 0) for a in acts)
 
     # Billed
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued",
          "status": {"$nin": ["Draft", "Cancelled"]}},
         {"_id": 0, "subtotal": 1, "total": 1, "paid_amount": 1, "remaining_amount": 1}
@@ -226,7 +237,7 @@ async def get_cash_vs_earned(project_id: str, user: dict = Depends(require_m2)):
     collected = sum(i.get("paid_amount", 0) for i in invoices)
 
     # Costs paid (outflows)
-    sub_payments = await db.subcontractor_payments.find(
+    sub_payments = await tenant.subcontractor_payments.find(
         {"org_id": org_id, "project_id": project_id, "status": "completed"},
         {"_id": 0, "amount": 1}
     ).to_list(200)
@@ -266,11 +277,12 @@ async def get_cash_vs_earned(project_id: str, user: dict = Depends(require_m2)):
 @router.get("/procurement-alerts/{project_id}")
 async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m2)):
     """Procurement risk alerts based on planned vs requested vs purchased vs issued"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     alerts = []
 
     # Load planned materials
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0}
     ).to_list(500)
@@ -280,7 +292,7 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
                 "metrics_available": {"planned_materials": False}}
 
     # Load request coverage
-    requests = await db.material_requests.find(
+    requests = await tenant.material_requests.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$ne": "cancelled"}},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -291,7 +303,7 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
             requested_by_name[name] = requested_by_name.get(name, 0) + float(rl.get("qty_requested", 0))
 
     # Load purchases
-    sinvs = await db.supplier_invoices.find(
+    sinvs = await tenant.supplier_invoices.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "lines": 1, "status": 1}
     ).to_list(100)
@@ -302,7 +314,7 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
             purchased_by_name[name] = purchased_by_name.get(name, 0) + float(sl.get("qty", 0))
 
     # Load warehouse issues
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1}
     ).to_list(200)
@@ -384,19 +396,20 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
 
 async def get_procurement_risk(org_id: str, project_id: str) -> dict:
     """Get procurement risk flags for integration into project risk"""
-    planned_count = await db.planned_materials.count_documents(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    planned_count = await tenant.planned_materials.count_documents(
         {"org_id": org_id, "project_id": project_id, "status": "active"})
 
     if planned_count == 0:
         return {"available": False, "flags": [], "severity": "unknown"}
 
     # Count coverage gaps
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0, "material_name": 1, "planned_qty_with_waste": 1, "planned_qty": 1, "unit": 1}
     ).to_list(500)
 
-    requests = await db.material_requests.find(
+    requests = await tenant.material_requests.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$ne": "cancelled"}},
         {"_id": 0, "lines": 1}
     ).to_list(100)

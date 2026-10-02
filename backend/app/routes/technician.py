@@ -11,6 +11,12 @@ import uuid
 from app.db import db
 from app.tenancy import project_team
 from app.deps.auth import get_current_user
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Technician"])
 
@@ -78,20 +84,21 @@ async def _get_hourly_rate(org_id: str, worker_id: str) -> float:
 
 @router.get("/technician/my-sites")
 async def my_sites(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     uid = user["id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Get assigned projects
     if user["role"] in ["Admin", "Owner", "SiteManager"]:
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"org_id": org_id, "status": {"$in": ["Active", "Draft"]}},
             {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "owner_id": 1, "parent_project_id": 1},
         ).to_list(50)
     else:
         pids = await project_team.assigned_project_ids(
             project_team.tenant_for(db, user), uid, limit=50)
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"org_id": org_id, "id": {"$in": pids}},
             {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1, "parent_project_id": 1},
         ).to_list(50)
@@ -101,7 +108,7 @@ async def my_sites(user: dict = Depends(get_current_user)):
     name_by_id = {p["id"]: p.get("name", "") for p in projects}
     sub_count_map = {}
     if project_ids:
-        agg = await db.projects.aggregate([
+        agg = await tenant.projects.aggregate([
             {"$match": {"org_id": org_id, "parent_project_id": {"$in": project_ids}}},
             {"$group": {"_id": "$parent_project_id", "count": {"$sum": 1}}},
         ]).to_list(500)
@@ -111,7 +118,7 @@ async def my_sites(user: dict = Depends(get_current_user)):
         if p.get("parent_project_id") and p.get("parent_project_id") not in name_by_id
     })
     if parent_ids_needed:
-        parents = await db.projects.find(
+        parents = await tenant.projects.find(
             {"org_id": org_id, "id": {"$in": parent_ids_needed}},
             {"_id": 0, "id": 1, "name": 1},
         ).to_list(200)
@@ -123,28 +130,28 @@ async def my_sites(user: dict = Depends(get_current_user)):
         pid = p["id"]
 
         # Today sessions
-        sessions = await db.work_sessions.find(
+        sessions = await tenant.work_sessions.find(
             {"org_id": org_id, "site_id": pid, "started_at": {"$gte": f"{today}T00:00:00", "$lte": f"{today}T23:59:59"}},
             {"_id": 0, "worker_name": 1, "duration_hours": 1, "smr_type_id": 1},
         ).to_list(100)
         today_sessions = [{"worker_name": s.get("worker_name", ""), "hours": round(s.get("duration_hours") or 0, 1), "smr_type": s.get("smr_type_id", "")} for s in sessions]
 
         # Pending material requests
-        pending_reqs = await db.material_requests.count_documents(
+        pending_reqs = await tenant.material_requests.count_documents(
             {"org_id": org_id, "project_id": pid, "status": {"$in": ["draft", "submitted"]}}
         )
 
         # Has report today
-        report = await db.employee_daily_reports.find_one(
+        report = await tenant.employee_daily_reports.find_one(
             {"org_id": org_id, "project_id": pid, "date": today}
         )
         if not report:
-            report = await db.work_reports.find_one(
+            report = await tenant.work_reports.find_one(
                 {"org_id": org_id, "project_id": pid, "date": today}
             )
 
         # Daily reports for this project today
-        drafts_today = await db.employee_daily_reports.find(
+        drafts_today = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "project_id": pid, "date": today, "worker_id": {"$exists": True}},
             {"_id": 0, "worker_id": 1, "status": 1, "hours": 1},
         ).to_list(100)
@@ -154,7 +161,7 @@ async def my_sites(user: dict = Depends(get_current_user)):
         approved_count = len(set(d.get("worker_id") for d in drafts_today if (d.get("status") or "").upper() == "APPROVED"))
 
         # Roster today
-        roster = await db.site_daily_rosters.find_one(
+        roster = await tenant.site_daily_rosters.find_one(
             {"org_id": org_id, "project_id": pid, "date": today},
             {"_id": 0, "workers": 1},
         )
@@ -189,10 +196,11 @@ async def my_sites(user: dict = Depends(get_current_user)):
 @router.get("/technician/site/{project_id}/detail")
 async def get_site_detail(project_id: str, user: dict = Depends(get_current_user)):
     """Rich object detail for technician: info, contacts, counters, photos."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": project_id, "org_id": org_id},
         {"_id": 0, "id": 1, "name": 1, "code": 1, "address_text": 1,
          "structured_address": 1, "contacts": 1, "object_details": 1,
@@ -207,7 +215,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
 
     # Counters
     # "На обекта" from attendance_entries (source of truth)
-    att_today = await db.attendance_entries.find(
+    att_today = await tenant.attendance_entries.find(
         {"org_id": org_id, "project_id": project_id, "date": today,
          "status": {"$in": ["Present", "Late"]}},
         {"_id": 0, "user_id": 1},
@@ -215,7 +223,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
     on_site_count = len(att_today)
 
     # Fallback to roster if no attendance_entries yet
-    roster = await db.site_daily_rosters.find_one(
+    roster = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0, "workers": 1}
     )
     roster_count = len(roster.get("workers", [])) if roster else 0
@@ -224,7 +232,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
 
     # Fallback 2: from daily reports if neither attendance nor roster
     if on_site_count == 0:
-        report_workers = await db.employee_daily_reports.find(
+        report_workers = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": {"$exists": True}},
             {"_id": 0, "worker_id": 1},
         ).to_list(200)
@@ -232,7 +240,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
         if reported_ids:
             on_site_count = len(reported_ids)
 
-    drafts_today = await db.employee_daily_reports.find(
+    drafts_today = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today,
          "status": {"$in": ["Draft", "Submitted", "SUBMITTED", "APPROVED"]}},
         {"_id": 0, "worker_id": 1, "hours": 1},
@@ -241,7 +249,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
     reported_hours = round(sum(d.get("hours", 0) for d in drafts_today), 1)
 
     # Guidance photos (from media linked to project context)
-    photos = await db.media_files.find(
+    photos = await tenant.media_files.find(
         {"org_id": org_id, "context_type": "project", "context_id": project_id},
         {"_id": 0, "id": 1, "url": 1, "filename": 1},
     ).sort("created_at", -1).to_list(6)
@@ -285,6 +293,7 @@ async def get_site_detail(project_id: str, user: dict = Depends(get_current_user
 
 @router.get("/technician/site/{project_id}/tasks")
 async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Priority order: 1=budget, 2=offer, 3=analysis, 4=missing_smr, 5=history
@@ -326,7 +335,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
         }
 
     # 1. Activity budgets (highest priority)
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "type": 1, "subtype": 1},
     ).to_list(100)
@@ -334,7 +343,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
         _add(b["type"], b.get("subtype", ""), source="budget")
 
     # 2. Offer lines — prioritize Accepted, then Sent, then Draft
-    offers = await db.offers.find(
+    offers = await tenant.offers.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["Accepted", "Sent", "Draft"]}},
         {"_id": 0, "lines": 1, "status": 1, "offer_no": 1},
     ).to_list(50)
@@ -349,7 +358,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
                 _add(t, ln.get("activity_subtype", ""), ln.get("unit", "m2"), ln.get("qty", 0), source)
 
     # 3. SMR analysis lines
-    analyses = await db.smr_analyses.find(
+    analyses = await tenant.smr_analyses.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "lines": 1},
     ).to_list(50)
@@ -359,7 +368,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
                 _add(ln["smr_type"], ln.get("smr_subtype", ""), ln.get("unit", "m2"), ln.get("qty", 0), "analysis")
 
     # 4. Missing SMR records
-    missing = await db.missing_smr.find(
+    missing = await tenant.missing_smr.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$nin": ["closed", "rejected_by_client"]}},
         {"_id": 0, "smr_type": 1, "activity_type": 1, "unit": 1, "qty": 1},
     ).to_list(100)
@@ -369,7 +378,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
             _add(t, "", m.get("unit", "m2"), m.get("qty", 0), "missing_smr")
 
     # 4b. Extra work drafts (user-created SMR entries)
-    extra_drafts = await db.extra_work_drafts.find(
+    extra_drafts = await tenant.extra_work_drafts.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$nin": ["in_offer", "closed"]}},
         {"_id": 0, "title": 1, "unit": 1, "qty": 1},
     ).to_list(100)
@@ -382,7 +391,7 @@ async def site_tasks(project_id: str, user: dict = Depends(get_current_user)):
 
     # 5. History (only if primary sources yielded < 3 tasks)
     if primary_count < 3:
-        distinct_types = await db.work_sessions.distinct(
+        distinct_types = await tenant.work_sessions.distinct(
             "smr_type_id", {"org_id": org_id, "site_id": project_id, "smr_type_id": {"$ne": None}}
         )
         for t in distinct_types:
@@ -417,9 +426,10 @@ class AttendanceRosterSubmit(BaseModel):
 
 @router.get("/technician/site/{project_id}/roster")
 async def get_roster(project_id: str, date: Optional[str] = None, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    doc = await db.site_daily_rosters.find_one(
+    doc = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": d}, {"_id": 0}
     )
     if not doc:
@@ -429,7 +439,7 @@ async def get_roster(project_id: str, date: Optional[str] = None, user: dict = D
     worker_ids = [w.get("worker_id") for w in doc.get("workers", []) if w.get("worker_id")]
     att_entries = {}
     if worker_ids:
-        entries = await db.attendance_entries.find(
+        entries = await tenant.attendance_entries.find(
             {"org_id": org_id, "date": d, "user_id": {"$in": worker_ids}},
             {"_id": 0, "user_id": 1, "status": 1},
         ).to_list(200)
@@ -444,6 +454,7 @@ async def get_roster(project_id: str, date: Optional[str] = None, user: dict = D
 @router.post("/technician/site/{project_id}/attendance", status_code=200)
 async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, user: dict = Depends(get_current_user)):
     """Save daily attendance for workers on a site. Creates attendance_entries (source of truth)."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
@@ -462,16 +473,16 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         submitted_ids.add(wid)
 
         # Upsert attendance_entry (source of truth)
-        existing_att = await db.attendance_entries.find_one(
+        existing_att = await tenant.attendance_entries.find_one(
             {"org_id": org_id, "date": d, "user_id": wid}
         )
         if existing_att:
-            await db.attendance_entries.update_one(
+            await tenant.attendance_entries.update_one(
                 {"id": existing_att["id"]},
                 {"$set": {"status": status, "project_id": project_id, "updated_at": now, "note": ""}}
             )
         else:
-            await db.attendance_entries.insert_one({
+            await tenant.attendance_entries.insert_one({
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
                 "date": d,
@@ -485,23 +496,23 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
             })
 
     # Remove attendance_entries for workers who were in previous roster but not in the new list
-    prev_roster = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    prev_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
     if prev_roster:
         prev_ids = set(w.get("worker_id") for w in prev_roster.get("workers", []))
         removed_ids = prev_ids - submitted_ids
         if removed_ids:
-            await db.attendance_entries.delete_many(
+            await tenant.attendance_entries.delete_many(
                 {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}}
             )
 
     # Also save/update roster
-    existing_roster = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    existing_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
     if existing_roster:
-        await db.site_daily_rosters.update_one({"id": existing_roster["id"]}, {"$set": {
+        await tenant.site_daily_rosters.update_one({"id": existing_roster["id"]}, {"$set": {
             "workers": workers, "updated_at": now,
         }})
     else:
-        await db.site_daily_rosters.insert_one({
+        await tenant.site_daily_rosters.insert_one({
             "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
             "date": d, "workers": workers,
             "created_by": user["id"], "created_at": now, "updated_at": now,
@@ -521,30 +532,32 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
 
 @router.post("/technician/site/{project_id}/roster")
 async def save_roster(project_id: str, data: RosterSubmit, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
     workers = [{"worker_id": w.get("worker_id") or w.get("id", ""), "worker_name": w.get("worker_name") or w.get("name", "")} for w in data.workers if w.get("worker_id") or w.get("id")]
 
-    existing = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    existing = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
     if existing:
-        await db.site_daily_rosters.update_one({"id": existing["id"]}, {"$set": {
+        await tenant.site_daily_rosters.update_one({"id": existing["id"]}, {"$set": {
             "workers": workers, "updated_at": now,
         }})
-        return await db.site_daily_rosters.find_one({"id": existing["id"]}, {"_id": 0})
+        return await tenant.site_daily_rosters.find_one({"id": existing["id"]}, {"_id": 0})
 
     doc = {
         "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
         "date": d, "workers": workers,
         "created_by": user["id"], "created_at": now, "updated_at": now,
     }
-    await db.site_daily_rosters.insert_one(doc)
+    await tenant.site_daily_rosters.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
 @router.get("/technician/site/{project_id}/roster/suggestions")
 async def roster_suggestions(project_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc)
     cutoff = (now - __import__("datetime").timedelta(days=14)).isoformat()
@@ -554,7 +567,7 @@ async def roster_suggestions(project_id: str, user: dict = Depends(get_current_u
     recent = []
 
     # From past rosters
-    past_rosters = await db.site_daily_rosters.find(
+    past_rosters = await tenant.site_daily_rosters.find(
         {"org_id": org_id, "project_id": project_id, "date": {"$gte": cutoff[:10]}},
         {"_id": 0, "workers": 1},
     ).to_list(30)
@@ -566,7 +579,7 @@ async def roster_suggestions(project_id: str, user: dict = Depends(get_current_u
                 recent.append({"worker_id": wid, "worker_name": w.get("worker_name", ""), "source": "recent"})
 
     # From work_sessions
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "started_at": {"$gte": cutoff}},
         {"_id": 0, "worker_id": 1, "worker_name": 1},
     ).to_list(500)
@@ -578,12 +591,12 @@ async def roster_suggestions(project_id: str, user: dict = Depends(get_current_u
 
     # All active employees
     all_employees = []
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
     ).to_list(200)
     profile_ids = {p["user_id"] for p in profiles}
 
-    users = await db.users.find(
+    users = await tenant.users.find(
         {"org_id": org_id, "id": {"$in": list(profile_ids)}},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
     ).to_list(200)
@@ -593,7 +606,7 @@ async def roster_suggestions(project_id: str, user: dict = Depends(get_current_u
 
     # If no profiles, fall back to all org users
     if not all_employees:
-        all_users = await db.users.find(
+        all_users = await tenant.users.find(
             {"org_id": org_id},
             {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
         ).to_list(200)
@@ -606,31 +619,32 @@ async def roster_suggestions(project_id: str, user: dict = Depends(get_current_u
 
 @router.post("/technician/site/{project_id}/roster/copy-yesterday")
 async def copy_yesterday_roster(project_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
     # Find most recent roster before today
-    prev = await db.site_daily_rosters.find_one(
+    prev = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": {"$lt": today}},
         {"_id": 0}, sort=[("date", -1)],
     )
     if not prev or not prev.get("workers"):
         raise HTTPException(status_code=404, detail="No previous roster found")
 
-    existing = await db.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": today})
+    existing = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": today})
     if existing:
-        await db.site_daily_rosters.update_one({"id": existing["id"]}, {"$set": {
+        await tenant.site_daily_rosters.update_one({"id": existing["id"]}, {"$set": {
             "workers": prev["workers"], "updated_at": now,
         }})
-        return await db.site_daily_rosters.find_one({"id": existing["id"]}, {"_id": 0})
+        return await tenant.site_daily_rosters.find_one({"id": existing["id"]}, {"_id": 0})
 
     doc = {
         "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
         "date": today, "workers": prev["workers"],
         "created_by": user["id"], "created_at": now, "updated_at": now,
     }
-    await db.site_daily_rosters.insert_one(doc)
+    await tenant.site_daily_rosters.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
@@ -639,10 +653,11 @@ async def copy_yesterday_roster(project_id: str, user: dict = Depends(get_curren
 @router.get("/technician/site/{project_id}/roster/enriched")
 async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_user)):
     """Get today's roster with profile info (photo, position, daily hours)."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    doc = await db.site_daily_rosters.find_one(
+    doc = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0}
     )
     workers_raw = doc.get("workers", []) if doc else []
@@ -651,7 +666,7 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
     raw_ids = [w.get("worker_id", "") for w in workers_raw if w.get("worker_id")]
     att_map = {}
     if raw_ids:
-        att_entries = await db.attendance_entries.find(
+        att_entries = await tenant.attendance_entries.find(
             {"org_id": org_id, "date": today, "user_id": {"$in": raw_ids}},
             {"_id": 0, "user_id": 1, "status": 1},
         ).to_list(200)
@@ -661,17 +676,17 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
     for w in workers_raw:
         wid = w.get("worker_id", "")
         # Get profile
-        profile = await db.employee_profiles.find_one(
+        profile = await tenant.employee_profiles.find_one(
             {"org_id": org_id, "user_id": wid},
             {"_id": 0, "avatar_url": 1, "position": 1, "role": 1},
         )
         # Get avatar from users collection (primary source)
-        user_doc = await db.users.find_one(
+        user_doc = await tenant.users.find_one(
             {"id": wid}, {"_id": 0, "avatar_url": 1}
         )
         avatar = (user_doc or {}).get("avatar_url") or (profile or {}).get("avatar_url")
         # Get today's hours: ALL projects for this worker (cross-project total)
-        all_today = await db.employee_daily_reports.find(
+        all_today = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "worker_id": wid, "date": today},
             {"_id": 0, "hours": 1, "project_id": 1},
         ).to_list(50)
@@ -701,11 +716,12 @@ async def get_enriched_roster(project_id: str, user: dict = Depends(get_current_
 @router.get("/technician/site/{project_id}/roster/available")
 async def get_available_people(project_id: str, user: dict = Depends(get_current_user)):
     """Get all active employees NOT already in today's roster for this site."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Current roster IDs
-    doc = await db.site_daily_rosters.find_one(
+    doc = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0, "workers": 1}
     )
     existing_ids = {w.get("worker_id") for w in (doc or {}).get("workers", [])}
@@ -713,7 +729,7 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
     # Recent workers on this site (last 14 days)
     cutoff = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=14)).strftime("%Y-%m-%d")
     recent_ids = set()
-    past_rosters = await db.site_daily_rosters.find(
+    past_rosters = await tenant.site_daily_rosters.find(
         {"org_id": org_id, "project_id": project_id, "date": {"$gte": cutoff}},
         {"_id": 0, "workers": 1},
     ).to_list(30)
@@ -722,7 +738,7 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
             recent_ids.add(w.get("worker_id"))
 
     # All active profiles
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "active": True},
         {"_id": 0, "user_id": 1, "avatar_url": 1, "position": 1, "role": 1},
     ).to_list(200)
@@ -731,7 +747,7 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
     positions_set = set()
 
     # All org users (with avatar from users collection)
-    all_users = await db.users.find(
+    all_users = await tenant.users.find(
         {"org_id": org_id},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1},
     ).to_list(200)
@@ -762,13 +778,14 @@ async def get_available_people(project_id: str, user: dict = Depends(get_current
 @router.post("/technician/site/{project_id}/roster/remove-worker")
 async def remove_worker_from_roster(project_id: str, data: dict, user: dict = Depends(get_current_user)):
     """Remove a single worker from today's roster."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     worker_id = data.get("worker_id")
     if not worker_id:
         raise HTTPException(status_code=400, detail="worker_id required")
 
-    doc = await db.site_daily_rosters.find_one(
+    doc = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}
     )
     if not doc:
@@ -776,13 +793,14 @@ async def remove_worker_from_roster(project_id: str, data: dict, user: dict = De
 
     now = datetime.now(timezone.utc).isoformat()
     new_workers = [w for w in doc.get("workers", []) if w.get("worker_id") != worker_id]
-    await db.site_daily_rosters.update_one({"id": doc["id"]}, {"$set": {"workers": new_workers, "updated_at": now}})
+    await tenant.site_daily_rosters.update_one({"id": doc["id"]}, {"$set": {"workers": new_workers, "updated_at": now}})
     return {"ok": True, "remaining": len(new_workers)}
 
 
 @router.post("/technician/site/{project_id}/roster/add-workers")
 async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depends(get_current_user)):
     """Add workers to today's roster (without replacing existing ones)."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     new_workers = data.get("workers", [])
@@ -790,7 +808,7 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
         raise HTTPException(status_code=400, detail="workers list required")
 
     now = datetime.now(timezone.utc).isoformat()
-    doc = await db.site_daily_rosters.find_one(
+    doc = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}
     )
 
@@ -800,7 +818,7 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
         for nw in new_workers:
             if nw.get("worker_id") not in existing_ids:
                 existing.append({"worker_id": nw["worker_id"], "worker_name": nw.get("worker_name", "")})
-        await db.site_daily_rosters.update_one({"id": doc["id"]}, {"$set": {"workers": existing, "updated_at": now}})
+        await tenant.site_daily_rosters.update_one({"id": doc["id"]}, {"$set": {"workers": existing, "updated_at": now}})
     else:
         import uuid as _uuid
         doc = {
@@ -808,9 +826,9 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
             "date": today, "workers": [{"worker_id": w["worker_id"], "worker_name": w.get("worker_name", "")} for w in new_workers],
             "created_by": user["id"], "created_at": now, "updated_at": now,
         }
-        await db.site_daily_rosters.insert_one(doc)
+        await tenant.site_daily_rosters.insert_one(doc)
 
-    result = await db.site_daily_rosters.find_one(
+    result = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}, {"_id": 0}
     )
     return {k: v for k, v in result.items() if k != "_id"}
@@ -825,16 +843,17 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     work_sessions are created on APPROVE, not here.
     See /app/memory/SOURCE_OF_TRUTH.md for full policy.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
-    project = await db.projects.find_one({"id": data.project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Get roster for validation
-    roster = await db.site_daily_rosters.find_one(
+    roster = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": data.project_id, "date": today}, {"_id": 0}
     )
 
@@ -846,11 +865,11 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     attendance_warnings = []
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
-        att = await db.attendance_entries.find_one(
+        att = await tenant.attendance_entries.find_one(
             {"org_id": org_id, "date": today, "user_id": wid},
             {"_id": 0, "status": 1},
         )
-        cal = await db.worker_calendar.find_one(
+        cal = await tenant.worker_calendar.find_one(
             {"org_id": org_id, "date": today, "worker_id": wid, "status": {"$in": ["leave", "sick", "vacation"]}},
             {"_id": 0, "status": 1},
         )
@@ -870,12 +889,12 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
 
     # Get known SMR types
     known_types = set()
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": data.project_id}, {"_id": 0, "type": 1}
     ).to_list(100)
     for b in budgets:
         known_types.add(b["type"].lower())
-    offers = await db.offers.find(
+    offers = await tenant.offers.find(
         {"org_id": org_id, "project_id": data.project_id}, {"_id": 0, "lines": 1}
     ).to_list(50)
     for o in offers:
@@ -883,7 +902,7 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
             t = ln.get("activity_type") or ln.get("activity_name", "")
             if t:
                 known_types.add(t.lower())
-    analyses = await db.smr_analyses.find(
+    analyses = await tenant.smr_analyses.find(
         {"org_id": org_id, "project_id": data.project_id}, {"_id": 0, "lines": 1}
     ).to_list(50)
     for a in analyses:
@@ -936,15 +955,15 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
             "created_at": now,
             "updated_at": now,
         }
-        await db.employee_daily_reports.insert_one(draft)
+        await tenant.employee_daily_reports.insert_one(draft)
         draft_ids.append(draft["id"])
 
         # Auto-create attendance_entry if not exists (report = present)
-        existing_att = await db.attendance_entries.find_one(
+        existing_att = await tenant.attendance_entries.find_one(
             {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}
         )
         if not existing_att:
-            await db.attendance_entries.insert_one({
+            await tenant.attendance_entries.insert_one({
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
                 "date": today,
@@ -987,7 +1006,7 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
                 "linked_offer_id": None,
                 "linked_change_order_id": None,
             }
-            await db.missing_smr.insert_one(ms)
+            await tenant.missing_smr.insert_one(ms)
             missing_smr_created.append(ms["id"])
 
     # Create/update work_report summary
@@ -1007,18 +1026,18 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
         "source": "technician_mobile",
         "status": "Draft",
     }
-    existing_report = await db.work_reports.find_one(
+    existing_report = await tenant.work_reports.find_one(
         {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}
     )
     if existing_report:
-        await db.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
+        await tenant.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
             "entries_count": report["entries_count"], "total_hours": total_hours,
             "general_notes": report["general_notes"], "photos": report["photos"],
             "submitted_at": now, "status": "Draft",
         }})
         report["id"] = existing_report["id"]
     else:
-        await db.work_reports.insert_one(report)
+        await tenant.work_reports.insert_one(report)
 
     # Hours warnings per unique worker
     hours_warnings = []
@@ -1051,8 +1070,9 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
 
 @router.post("/technician/quick-smr", status_code=201)
 async def quick_smr(data: QuickSMR, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": data.project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -1085,7 +1105,7 @@ async def quick_smr(data: QuickSMR, user: dict = Depends(get_current_user)):
         "linked_offer_id": None,
         "linked_change_order_id": None,
     }
-    await db.missing_smr.insert_one(ms)
+    await tenant.missing_smr.insert_one(ms)
     return {"missing_smr_id": ms["id"]}
 
 
@@ -1093,6 +1113,7 @@ async def quick_smr(data: QuickSMR, user: dict = Depends(get_current_user)):
 
 @router.post("/technician/material-request", status_code=201)
 async def material_request(data: MaterialRequestSubmit, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1110,7 +1131,7 @@ async def material_request(data: MaterialRequestSubmit, user: dict = Depends(get
         "created_at": now,
         "updated_at": now,
     }
-    await db.material_requests.insert_one(req)
+    await tenant.material_requests.insert_one(req)
     return {"request_id": req["id"]}
 
 
@@ -1124,6 +1145,7 @@ async def photo_invoice(
     amount: float = Form(0),
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1146,7 +1168,7 @@ async def photo_invoice(
         "file_size": len(content), "context_type": "project", "context_id": project_id,
         "created_at": now,
     }
-    await db.media_files.insert_one(media)
+    await tenant.media_files.insert_one(media)
 
     # Create pending expense
     expense = {
@@ -1168,7 +1190,7 @@ async def photo_invoice(
         "expense_id": None,
         "created_at": now,
     }
-    await db.pending_expenses.insert_one(expense)
+    await tenant.pending_expenses.insert_one(expense)
     return {"expense_id": expense["id"], "media_id": media_id}
 
 
@@ -1176,7 +1198,8 @@ async def photo_invoice(
 
 @router.get("/pending-expenses")
 async def list_pending_expenses(status: str = "pending_approval", user: dict = Depends(get_current_user)):
-    items = await db.pending_expenses.find(
+    tenant = _tenant(user)
+    items = await tenant.pending_expenses.find(
         {"org_id": user["org_id"], "status": status}, {"_id": 0}
     ).sort("submitted_at", -1).to_list(200)
     return {"items": items, "total": len(items)}
@@ -1184,37 +1207,40 @@ async def list_pending_expenses(status: str = "pending_approval", user: dict = D
 
 @router.put("/pending-expenses/{expense_id}/approve")
 async def approve_expense(expense_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    ex = await db.pending_expenses.find_one({"id": expense_id, "org_id": user["org_id"]})
+    ex = await tenant.pending_expenses.find_one({"id": expense_id, "org_id": user["org_id"]})
     if not ex:
         raise HTTPException(status_code=404, detail="Expense not found")
     now = datetime.now(timezone.utc).isoformat()
-    await db.pending_expenses.update_one({"id": expense_id}, {"$set": {
+    await tenant.pending_expenses.update_one({"id": expense_id}, {"$set": {
         "status": "approved", "approved_by": user["id"], "approved_at": now,
     }})
-    return await db.pending_expenses.find_one({"id": expense_id}, {"_id": 0})
+    return await tenant.pending_expenses.find_one({"id": expense_id}, {"_id": 0})
 
 
 @router.put("/pending-expenses/{expense_id}/reject")
 async def reject_expense(expense_id: str, reason: str = "", user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    ex = await db.pending_expenses.find_one({"id": expense_id, "org_id": user["org_id"]})
+    ex = await tenant.pending_expenses.find_one({"id": expense_id, "org_id": user["org_id"]})
     if not ex:
         raise HTTPException(status_code=404, detail="Expense not found")
     now = datetime.now(timezone.utc).isoformat()
-    await db.pending_expenses.update_one({"id": expense_id}, {"$set": {
+    await tenant.pending_expenses.update_one({"id": expense_id}, {"$set": {
         "status": "rejected", "approved_by": user["id"], "approved_at": now, "rejection_reason": reason,
     }})
-    return await db.pending_expenses.find_one({"id": expense_id}, {"_id": 0})
+    return await tenant.pending_expenses.find_one({"id": expense_id}, {"_id": 0})
 
 
 # ── Equipment ──────────────────────────────────────────────────────
 
 @router.get("/technician/my-equipment")
 async def my_equipment(user: dict = Depends(get_current_user)):
-    items = await db.equipment_assignments.find(
+    tenant = _tenant(user)
+    items = await tenant.equipment_assignments.find(
         {"org_id": user["org_id"], "assigned_to": user["id"], "status": "active"},
         {"_id": 0},
     ).to_list(100)
@@ -1223,6 +1249,7 @@ async def my_equipment(user: dict = Depends(get_current_user)):
 
 @router.post("/technician/request-equipment", status_code=201)
 async def request_equipment(data: EquipmentRequest, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     req = {
         "id": str(uuid.uuid4()),
@@ -1237,7 +1264,7 @@ async def request_equipment(data: EquipmentRequest, user: dict = Depends(get_cur
         "status": "pending",
         "created_at": now,
     }
-    await db.equipment_requests.insert_one(req)
+    await tenant.equipment_requests.insert_one(req)
     return {"request_id": req["id"]}
 
 
@@ -1253,23 +1280,24 @@ class DraftLineUpdate(BaseModel):
 @router.post("/technician/site/{project_id}/check-remove-worker")
 async def check_remove_worker(project_id: str, data: dict, user: dict = Depends(get_current_user)):
     """Check if worker has reports for this project+date before removal."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     worker_id = data.get("worker_id", "")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    drafts = await db.employee_daily_reports.find(
+    drafts = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
          "status": {"$in": ["Draft"]}},
         {"_id": 0, "id": 1, "smr_type": 1, "hours": 1},
     ).to_list(50)
 
-    submitted = await db.employee_daily_reports.find(
+    submitted = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
          "status": {"$in": ["Submitted", "SUBMITTED"]}},
         {"_id": 0, "id": 1},
     ).to_list(50)
 
-    approved = await db.employee_daily_reports.find(
+    approved = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
          "status": {"$in": ["Approved", "APPROVED"]}},
         {"_id": 0, "id": 1},
@@ -1288,13 +1316,14 @@ async def check_remove_worker(project_id: str, data: dict, user: dict = Depends(
 @router.post("/technician/site/{project_id}/remove-worker-with-drafts")
 async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = Depends(get_current_user)):
     """Remove worker from attendance AND delete their Draft reports for today."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     worker_id = data.get("worker_id", "")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
     # Check no submitted/approved reports
-    blocking = await db.employee_daily_reports.count_documents(
+    blocking = await tenant.employee_daily_reports.count_documents(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
          "status": {"$in": ["Submitted", "SUBMITTED", "Approved", "APPROVED"]}}
     )
@@ -1302,23 +1331,23 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
         raise HTTPException(status_code=400, detail="Работникът има подаден или одобрен отчет. Първо коригирайте отчета.")
 
     # Delete Draft reports
-    del_result = await db.employee_daily_reports.delete_many(
+    del_result = await tenant.employee_daily_reports.delete_many(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
          "status": {"$in": ["Draft"]}}
     )
 
     # Remove from attendance_entries
-    await db.attendance_entries.delete_many(
+    await tenant.attendance_entries.delete_many(
         {"org_id": org_id, "project_id": project_id, "date": today, "user_id": worker_id}
     )
 
     # Remove from roster
-    roster = await db.site_daily_rosters.find_one(
+    roster = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": project_id, "date": today}
     )
     if roster:
         new_workers = [w for w in roster.get("workers", []) if w.get("worker_id") != worker_id]
-        await db.site_daily_rosters.update_one(
+        await tenant.site_daily_rosters.update_one(
             {"id": roster["id"]},
             {"$set": {"workers": new_workers, "updated_at": now}}
         )
@@ -1334,9 +1363,10 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
 @router.get("/technician/site/{project_id}/my-drafts")
 async def get_my_drafts(project_id: str, user: dict = Depends(get_current_user)):
     """Get current user's draft report entries for a project today."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    drafts = await db.employee_daily_reports.find(
+    drafts = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today,
          "status": {"$in": ["Draft", "Submitted"]},
          "submitted_by": user["id"]},
@@ -1348,7 +1378,8 @@ async def get_my_drafts(project_id: str, user: dict = Depends(get_current_user))
 @router.put("/technician/draft/{draft_id}")
 async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depends(get_current_user)):
     """Edit a draft report line (only if still Draft status)."""
-    doc = await db.employee_daily_reports.find_one(
+    tenant = _tenant(user)
+    doc = await tenant.employee_daily_reports.find_one(
         {"id": draft_id, "org_id": user["org_id"]}
     )
     if not doc:
@@ -1365,21 +1396,22 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     if data.notes is not None:
         update["notes"] = data.notes
 
-    await db.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
-    return await db.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
+    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
 
 
 @router.delete("/technician/draft/{draft_id}")
 async def delete_draft(draft_id: str, user: dict = Depends(get_current_user)):
     """Delete a draft report line (only if still Draft)."""
-    doc = await db.employee_daily_reports.find_one(
+    tenant = _tenant(user)
+    doc = await tenant.employee_daily_reports.find_one(
         {"id": draft_id, "org_id": user["org_id"]}
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Draft not found")
     if doc.get("status") not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Can only delete Draft entries")
-    await db.employee_daily_reports.delete_one({"id": draft_id})
+    await tenant.employee_daily_reports.delete_one({"id": draft_id})
     return {"ok": True}
 
 
@@ -1387,13 +1419,14 @@ async def delete_draft(draft_id: str, user: dict = Depends(get_current_user)):
 @router.get("/technician/worker-day-hours")
 async def get_worker_day_hours(worker_ids: str, date: str = "", user: dict = Depends(get_current_user)):
     """Get total hours per worker across ALL projects for a given date."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     ids = [wid.strip() for wid in worker_ids.split(",") if wid.strip()]
     if not ids:
         return {"workers": {}, "date": d}
 
-    reports = await db.employee_daily_reports.find(
+    reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "date": d, "worker_id": {"$in": ids}},
         {"_id": 0, "worker_id": 1, "hours": 1, "project_id": 1},
     ).to_list(500)

@@ -2,6 +2,7 @@
 Service - Price Modifiers (cascade: org → project → line).
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 DEFAULT_MODIFIERS = {
     "waste_pct": 10,
@@ -25,8 +26,9 @@ MODIFIER_KEYS = list(DEFAULT_MODIFIERS.keys())
 
 async def get_effective_modifiers(org_id: str, project_id: str = None, line_id: str = None) -> dict:
     """Cascade: org_default → project override → line override + auto-rules."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     # 1. Org defaults
-    org_cfg = await db.price_modifiers_config.find_one(
+    org_cfg = await tenant.price_modifiers_config.find_one(
         {"org_id": org_id, "scope": "org_default"}, {"_id": 0}
     )
     mods = {**DEFAULT_MODIFIERS}
@@ -41,7 +43,7 @@ async def get_effective_modifiers(org_id: str, project_id: str = None, line_id: 
 
     # 2. Project override
     if project_id:
-        proj_cfg = await db.price_modifiers_config.find_one(
+        proj_cfg = await tenant.price_modifiers_config.find_one(
             {"org_id": org_id, "scope": "project", "project_id": project_id}, {"_id": 0}
         )
         if proj_cfg:
@@ -53,7 +55,7 @@ async def get_effective_modifiers(org_id: str, project_id: str = None, line_id: 
                     auto[k] = proj_cfg["auto_rules"][k]
 
         # Auto-rules from project data
-        project = await db.projects.find_one(
+        project = await tenant.projects.find_one(
             {"id": project_id, "org_id": org_id},
             {"_id": 0, "object_details": 1},
         )
@@ -74,7 +76,7 @@ async def get_effective_modifiers(org_id: str, project_id: str = None, line_id: 
 
     # 3. Line override
     if line_id:
-        line_cfg = await db.price_modifiers_config.find_one(
+        line_cfg = await tenant.price_modifiers_config.find_one(
             {"org_id": org_id, "scope": "line", "line_id": line_id}, {"_id": 0}
         )
         if line_cfg:

@@ -17,6 +17,12 @@ import re
 
 from app.db import db
 from app.deps.auth import get_current_user, require_admin
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Assets QR"])
 
@@ -33,7 +39,10 @@ def _now() -> str:
 async def _next_qr_id(org_id: str, db_handle=None) -> str:
     """Sequential, human-friendly QR id per organization (QR-000001)."""
     _db = db if db_handle is None else db_handle
-    doc = await _db.asset_counters.find_one_and_update(
+    # W0-03E-A2C + W0-02 PR-04: the tenant view is bound to the handle this
+    # caller gave us, so the read and the write stay in the SAME tenant database.
+    tenant = TenantData.for_resolved_org(_db, org_id)
+    doc = await tenant.asset_counters.find_one_and_update(
         {"org_id": org_id, "name": "qr"},
         {"$inc": {"seq": 1}},
         upsert=True,
@@ -44,13 +53,14 @@ async def _next_qr_id(org_id: str, db_handle=None) -> str:
 
 async def _resolve_name(org_id: str, entity_type: str, entity_id: Optional[str], name: Optional[str]):
     """Return (name, code) for the entity, validating it exists for referenced types."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     if entity_type == "project":
-        p = await db.projects.find_one({"id": entity_id, "org_id": org_id}, {"_id": 0, "name": 1, "code": 1})
+        p = await tenant.projects.find_one({"id": entity_id, "org_id": org_id}, {"_id": 0, "name": 1, "code": 1})
         if not p:
             raise HTTPException(status_code=404, detail="Project not found")
         return p.get("name", ""), p.get("code", "")
     if entity_type == "employee":
-        u = await db.users.find_one(
+        u = await tenant.users.find_one(
             {"id": entity_id, "org_id": org_id},
             {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1},
         )
@@ -61,7 +71,7 @@ async def _resolve_name(org_id: str, entity_type: str, entity_id: Optional[str],
               or (u.get("email", "").split("@")[0] if u.get("email") else ""))
         return nm, ""
     if entity_type == "warehouse":
-        w = await db.warehouses.find_one({"id": entity_id, "org_id": org_id}, {"_id": 0, "name": 1})
+        w = await tenant.warehouses.find_one({"id": entity_id, "org_id": org_id}, {"_id": 0, "name": 1})
         if not w:
             raise HTTPException(status_code=404, detail="Warehouse not found")
         return w.get("name", ""), ""
@@ -76,6 +86,9 @@ async def _make_qr(org_id: str, created_by: str, entity_type: str, entity_id: st
                    db_handle=None) -> dict:
     # W0-02 PR-04: db_handle lets a tenant-resolved caller write into ITS database.
     _db = db if db_handle is None else db_handle
+    # W0-03E-A2C + W0-02 PR-04: the tenant view is bound to the handle this
+    # caller gave us, so the read and the write stay in the SAME tenant database.
+    tenant = TenantData.for_resolved_org(_db, org_id)
     qr_id = await _next_qr_id(org_id, db_handle=_db)
     doc = {
         "id": str(uuid.uuid4()),
@@ -90,7 +103,7 @@ async def _make_qr(org_id: str, created_by: str, entity_type: str, entity_id: st
         "created_by": created_by,
         "last_used_at": None,
     }
-    await _db.asset_qr_codes.insert_one(doc)
+    await tenant.asset_qr_codes.insert_one(doc)
     doc.pop("_id", None)
     return doc
 
@@ -118,6 +131,7 @@ async def list_qr(
     page_size: int = Query(50, ge=1, le=200),
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     query: dict = {"org_id": org_id}
     if type and type != "all":
@@ -127,10 +141,10 @@ async def list_qr(
     if q:
         rx = {"$regex": re.escape(q), "$options": "i"}
         query["$or"] = [{"name": rx}, {"qr_id": rx}, {"code": rx}]
-    total = await db.asset_qr_codes.count_documents(query)
+    total = await tenant.asset_qr_codes.count_documents(query)
     skip = (page - 1) * page_size
     items = await (
-        db.asset_qr_codes.find(query, {"_id": 0})
+        tenant.asset_qr_codes.find(query, {"_id": 0})
         .sort("qr_id", 1)
         .skip(skip)
         .limit(page_size)
@@ -141,6 +155,7 @@ async def list_qr(
 
 @router.post("/assets/qr/generate")
 async def generate_qr(data: QRGenerate, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     et = data.entity_type
     if et not in VALID_TYPES:
@@ -151,7 +166,7 @@ async def generate_qr(data: QRGenerate, user: dict = Depends(require_admin)):
             raise HTTPException(status_code=400, detail="entity_id is required")
         entity_id = data.entity_id
         # Idempotent: one QR per referenced entity
-        existing = await db.asset_qr_codes.find_one(
+        existing = await tenant.asset_qr_codes.find_one(
             {"org_id": org_id, "entity_type": et, "entity_id": entity_id}, {"_id": 0}
         )
         if existing:
@@ -165,23 +180,24 @@ async def generate_qr(data: QRGenerate, user: dict = Depends(require_admin)):
 
 @router.post("/assets/qr/generate-bulk")
 async def generate_bulk(data: QRBulk, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     types = [t for t in (data.types or REFERENCED_TYPES) if t in REFERENCED_TYPES]
     created = {"project": 0, "employee": 0, "warehouse": 0}
 
     if "project" in types:
-        async for p in db.projects.find({"org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "code": 1}):
-            if await db.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "project", "entity_id": p["id"]}):
+        async for p in tenant.projects.find({"org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "code": 1}):
+            if await tenant.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "project", "entity_id": p["id"]}):
                 continue
             await _make_qr(org_id, user["id"], "project", p["id"], p.get("name", ""), p.get("code", ""))
             created["project"] += 1
 
     if "employee" in types:
-        async for u in db.users.find(
+        async for u in tenant.users.find(
             {"org_id": org_id, "is_active": True},
             {"_id": 0, "id": 1, "name": 1, "first_name": 1, "last_name": 1, "email": 1},
         ):
-            if await db.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "employee", "entity_id": u["id"]}):
+            if await tenant.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "employee", "entity_id": u["id"]}):
                 continue
             nm = (u.get("name")
                   or f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
@@ -190,8 +206,8 @@ async def generate_bulk(data: QRBulk, user: dict = Depends(require_admin)):
             created["employee"] += 1
 
     if "warehouse" in types:
-        async for w in db.warehouses.find({"org_id": org_id}, {"_id": 0, "id": 1, "name": 1}):
-            if await db.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "warehouse", "entity_id": w["id"]}):
+        async for w in tenant.warehouses.find({"org_id": org_id}, {"_id": 0, "id": 1, "name": 1}):
+            if await tenant.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "warehouse", "entity_id": w["id"]}):
                 continue
             await _make_qr(org_id, user["id"], "warehouse", w["id"], w.get("name", ""), "")
             created["warehouse"] += 1
@@ -202,12 +218,13 @@ async def generate_bulk(data: QRBulk, user: dict = Depends(require_admin)):
 @router.get("/assets/qr/resolve/{qr_id}")
 async def resolve_qr(qr_id: str, user: dict = Depends(get_current_user)):
     """Universal scan endpoint: returns what this QR points to and stamps last_used_at."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    doc = await db.asset_qr_codes.find_one({"org_id": org_id, "qr_id": qr_id}, {"_id": 0})
+    doc = await tenant.asset_qr_codes.find_one({"org_id": org_id, "qr_id": qr_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="QR not found")
     now = _now()
-    await db.asset_qr_codes.update_one(
+    await tenant.asset_qr_codes.update_one(
         {"org_id": org_id, "qr_id": qr_id}, {"$set": {"last_used_at": now}}
     )
     doc["last_used_at"] = now
@@ -216,10 +233,11 @@ async def resolve_qr(qr_id: str, user: dict = Depends(get_current_user)):
 
 @router.patch("/assets/qr/{qr_id}/status")
 async def set_qr_status(qr_id: str, data: QRStatus, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     if data.status not in ("active", "inactive"):
         raise HTTPException(status_code=400, detail="status must be active or inactive")
     org_id = user["org_id"]
-    res = await db.asset_qr_codes.update_one(
+    res = await tenant.asset_qr_codes.update_one(
         {"org_id": org_id, "qr_id": qr_id}, {"$set": {"status": data.status}}
     )
     if res.matched_count == 0:
@@ -230,8 +248,9 @@ async def set_qr_status(qr_id: str, data: QRStatus, user: dict = Depends(require
 @router.get("/assets/qr/{qr_id}/svg")
 async def qr_svg(qr_id: str, base: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Return the QR code as an SVG image (for printing labels). Offline, no external service."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    doc = await db.asset_qr_codes.find_one({"org_id": org_id, "qr_id": qr_id}, {"_id": 0, "qr_id": 1})
+    doc = await tenant.asset_qr_codes.find_one({"org_id": org_id, "qr_id": qr_id}, {"_id": 0, "qr_id": 1})
     if not doc:
         raise HTTPException(status_code=404, detail="QR not found")
     try:

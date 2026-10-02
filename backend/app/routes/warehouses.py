@@ -80,6 +80,7 @@ async def list_warehouses(
     active_only: bool = True,
 ):
     """List warehouses with pagination, sorting, and filters"""
+    tenant = _tenant(user)
     base_query = {"org_id": user["org_id"]}
     
     if type:
@@ -101,24 +102,24 @@ async def list_warehouses(
         ]
     
     # Count total
-    total = await db.warehouses.count_documents(query)
+    total = await tenant.warehouses.count_documents(query)
     
     # Sort
     sort_direction = 1 if sort_dir == "asc" else -1
     
     # Paginate
     skip = (page - 1) * page_size
-    warehouses = await db.warehouses.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
+    warehouses = await tenant.warehouses.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with reference names
     for wh in warehouses:
         if wh.get("project_id"):
-            proj = await db.projects.find_one({"id": wh["project_id"], "org_id": user["org_id"]},
+            proj = await tenant.projects.find_one({"id": wh["project_id"], "org_id": user["org_id"]},
                                               {"_id": 0, "code": 1, "name": 1})
             wh["project_code"] = proj["code"] if proj else ""
             wh["project_name"] = proj["name"] if proj else ""
         if wh.get("person_id"):
-            person = await db.persons.find_one({"id": wh["person_id"], "org_id": user["org_id"]},
+            person = await tenant.persons.find_one({"id": wh["person_id"], "org_id": user["org_id"]},
                                                {"_id": 0, "first_name": 1, "last_name": 1})
             wh["person_name"] = f"{person['first_name']} {person['last_name']}" if person else ""
         if wh.get("vehicle_id"):
@@ -136,6 +137,7 @@ async def list_warehouses(
 @router.post("/warehouses", status_code=201)
 async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_current_user)):
     """Create a new warehouse"""
+    tenant = _tenant(user)
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -148,7 +150,7 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail="person_id required for person warehouse")
     
     # Check code uniqueness
-    existing = await db.warehouses.find_one({
+    existing = await tenant.warehouses.find_one({
         "org_id": user["org_id"],
         "code": data.code.upper()
     })
@@ -172,7 +174,7 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
         "updated_at": now,
     }
     
-    await db.warehouses.insert_one(warehouse)
+    await tenant.warehouses.insert_one(warehouse)
     await log_audit(user["org_id"], user["id"], user["email"], "warehouse_created", "warehouse", warehouse["id"],
                     {"code": data.code, "type": data.type})
     
@@ -183,13 +185,16 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
 async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
     """За всеки склад: брой машини/инструменти + обща стойност на активите в него.
     Една агрегация — без N+1."""
+    tenant = _tenant(user)
     org = user["org_id"]
     # units по локация-склад, обединени с типа/цената на артикула
+    # W0-03E-A2C: the join was `$lookup` on item_id ALONE, so a colliding asset
+    # item id in another tenant was joined into this tenant's summary and changed
+    # its machine/tool counts and asset value. TenantData.lookup filters the
+    # joined array on the tenant before any later stage can read it.
     pipeline = [
         {"$match": {"org_id": org, "location_type": "warehouse", "status": {"$ne": "written_off"}}},
-        {"$lookup": {
-            "from": "asset_items", "localField": "item_id", "foreignField": "id", "as": "item",
-        }},
+        *tenant.lookup("asset_items", "item_id", "item"),
         {"$unwind": {"path": "$item", "preserveNullAndEmptyArrays": True}},
         {"$group": {
             "_id": "$location_id",
@@ -198,7 +203,7 @@ async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
             "value": {"$sum": {"$ifNull": ["$item.purchase_price", 0]}},
         }},
     ]
-    rows = await db.asset_units.aggregate(pipeline).to_list(1000)
+    rows = await tenant.asset_units.aggregate(pipeline).to_list(1000)
     summary = {r["_id"]: {"machines": r["machines"], "tools": r["tools"], "value": round(r["value"], 2)} for r in rows}
     return {"summary": summary}
 
@@ -206,7 +211,8 @@ async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
 @router.get("/warehouses/{warehouse_id}")
 async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user)):
     """Get warehouse details"""
-    warehouse = await db.warehouses.find_one(
+    tenant = _tenant(user)
+    warehouse = await tenant.warehouses.find_one(
         {"id": warehouse_id, "org_id": user["org_id"]},
         {"_id": 0}
     )
@@ -215,7 +221,7 @@ async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user
     
     # Enrich with reference names
     if warehouse.get("project_id"):
-        proj = await db.projects.find_one({"id": warehouse["project_id"], "org_id": user["org_id"]},
+        proj = await tenant.projects.find_one({"id": warehouse["project_id"], "org_id": user["org_id"]},
                                           {"_id": 0, "code": 1, "name": 1})
         warehouse["project_code"] = proj["code"] if proj else ""
         warehouse["project_name"] = proj["name"] if proj else ""
@@ -226,10 +232,11 @@ async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user
 @router.put("/warehouses/{warehouse_id}")
 async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict = Depends(get_current_user)):
     """Update warehouse"""
+    tenant = _tenant(user)
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    warehouse = await db.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]})
+    warehouse = await tenant.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]})
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     
@@ -247,8 +254,8 @@ async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     # W0-03E-A2B: this tenant's warehouse only (ids collide across tenants).
-    await db.warehouses.update_one({"id": warehouse_id, "org_id": user["org_id"]}, {"$set": update})
-    return await db.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0})
+    await tenant.warehouses.update_one({"id": warehouse_id, "org_id": user["org_id"]}, {"$set": update})
+    return await tenant.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/warehouses/{warehouse_id}")

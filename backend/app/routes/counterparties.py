@@ -96,6 +96,7 @@ async def list_counterparties(
     active_only: bool = True,
 ):
     """List counterparties with pagination, sorting, and filters"""
+    tenant = _tenant(user)
     base_query = {"org_id": user["org_id"]}
     
     if type:
@@ -118,19 +119,19 @@ async def list_counterparties(
         ]
     
     # Count total
-    total = await db.counterparties.count_documents(query)
+    total = await tenant.counterparties.count_documents(query)
     
     # Sort
     sort_direction = 1 if sort_dir == "asc" else -1
     
     # Paginate
     skip = (page - 1) * page_size
-    counterparties = await db.counterparties.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
+    counterparties = await tenant.counterparties.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Add invoice counts
     for cp in counterparties:
         # Count invoices where this is the supplier
-        invoice_count = await db.invoices.count_documents({
+        invoice_count = await tenant.invoices.count_documents({
             "org_id": user["org_id"],
             "supplier_counterparty_id": cp["id"]
         })
@@ -148,6 +149,7 @@ async def list_counterparties(
 @router.post("/counterparties", status_code=201)
 async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(require_m5)):
     """Create a new counterparty (supplier/client)"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -156,7 +158,7 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     
     # Check EIK uniqueness if provided and not empty
     if eik_value:
-        existing = await db.counterparties.find_one({
+        existing = await tenant.counterparties.find_one({
             "org_id": user["org_id"],
             "eik": eik_value
         })
@@ -186,7 +188,7 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
         counterparty["eik"] = eik_value
     
     try:
-        await db.counterparties.insert_one(counterparty)
+        await tenant.counterparties.insert_one(counterparty)
     except Exception as e:
         if "duplicate key" in str(e).lower():
             raise HTTPException(status_code=400, detail="Duplicate key error")
@@ -201,7 +203,8 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
 @router.get("/counterparties/{counterparty_id}")
 async def get_counterparty(counterparty_id: str, user: dict = Depends(require_m5)):
     """Get counterparty details"""
-    counterparty = await db.counterparties.find_one(
+    tenant = _tenant(user)
+    counterparty = await tenant.counterparties.find_one(
         {"id": counterparty_id, "org_id": user["org_id"]},
         {"_id": 0}
     )
@@ -209,7 +212,7 @@ async def get_counterparty(counterparty_id: str, user: dict = Depends(require_m5
         raise HTTPException(status_code=404, detail="Counterparty not found")
     
     # Get related invoices summary
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": user["org_id"], "supplier_counterparty_id": counterparty_id},
         {"_id": 0, "id": 1, "invoice_no": 1, "total": 1, "status": 1, "issue_date": 1}
     ).sort("issue_date", -1).to_list(20)
@@ -287,10 +290,11 @@ async def get_counterparty_types():
 @router.post("/counterparties/{counterparty_id}/link-client")
 async def link_counterparty_to_client(counterparty_id: str, data: dict, user: dict = Depends(require_m5)):
     """Link a counterparty (type=person) to a client record"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
+    counterparty = await tenant.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
     if not counterparty:
         raise HTTPException(status_code=404, detail="Counterparty not found")
     
@@ -299,12 +303,12 @@ async def link_counterparty_to_client(counterparty_id: str, data: dict, user: di
         raise HTTPException(status_code=400, detail="client_id is required")
     
     # Verify client exists
-    client = await db.clients.find_one({"id": client_id, "org_id": user["org_id"]})
+    client = await tenant.clients.find_one({"id": client_id, "org_id": user["org_id"]})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
     # Update counterparty
-    await db.counterparties.update_one(
+    await tenant.counterparties.update_one(
         {"id": counterparty_id},
         {"$set": {"client_id": client_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -318,14 +322,15 @@ async def link_counterparty_to_client(counterparty_id: str, data: dict, user: di
 @router.delete("/counterparties/{counterparty_id}/unlink-client")
 async def unlink_counterparty_from_client(counterparty_id: str, user: dict = Depends(require_m5)):
     """Unlink a counterparty from its client record"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
+    counterparty = await tenant.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
     if not counterparty:
         raise HTTPException(status_code=404, detail="Counterparty not found")
     
-    await db.counterparties.update_one(
+    await tenant.counterparties.update_one(
         {"id": counterparty_id},
         {"$unset": {"client_id": ""}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -336,10 +341,11 @@ async def unlink_counterparty_from_client(counterparty_id: str, user: dict = Dep
 @router.post("/counterparties/{counterparty_id}/auto-link-client")
 async def auto_link_counterparty_to_client(counterparty_id: str, user: dict = Depends(require_m5)):
     """Auto-find or create client from counterparty phone and link them"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    counterparty = await db.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
+    counterparty = await tenant.counterparties.find_one({"id": counterparty_id, "org_id": user["org_id"]})
     if not counterparty:
         raise HTTPException(status_code=404, detail="Counterparty not found")
     
@@ -355,7 +361,7 @@ async def auto_link_counterparty_to_client(counterparty_id: str, user: dict = De
         phone_normalized = re.sub(r"[^0-9]", "", phone)
     
     # Find existing client
-    existing_client = await db.clients.find_one({
+    existing_client = await tenant.clients.find_one({
         "org_id": user["org_id"],
         "phone_normalized": phone_normalized
     })
@@ -384,12 +390,12 @@ async def auto_link_counterparty_to_client(counterparty_id: str, user: dict = De
             "created_at": now,
             "updated_at": now,
         }
-        await db.clients.insert_one(new_client)
+        await tenant.clients.insert_one(new_client)
         client_id = new_client["id"]
         created = True
     
     # Link counterparty to client
-    await db.counterparties.update_one(
+    await tenant.counterparties.update_one(
         {"id": counterparty_id},
         {"$set": {"client_id": client_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )

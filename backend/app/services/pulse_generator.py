@@ -5,16 +5,18 @@ Aggregates daily snapshot from all data sources per project.
 from datetime import datetime, timezone
 from collections import defaultdict
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     """Generate a daily pulse snapshot for a site/project."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc).isoformat()
     ds = f"{date}T00:00:00"
     de = f"{date}T23:59:59"
 
     # a. Workers + hours from work_sessions
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": site_id, "ended_at": {"$ne": None},
          "started_at": {"$gte": ds, "$lte": de}},
         {"_id": 0},
@@ -55,7 +57,7 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     smr_summary = [{"smr_type": k, "total_hours": round(v["hours"], 2), "total_cost": round(v["cost"], 2), "workers_count": len(v["workers"])} for k, v in smr_map.items()]
 
     # c. Materials from warehouse transactions
-    txns = await db.warehouse_transactions.find(
+    txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": site_id, "type": "issue",
          "created_at": {"$gte": ds, "$lte": de}},
         {"_id": 0, "lines": 1},
@@ -72,12 +74,12 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     mat_cost = round(mat_cost, 2)
 
     # d. Budget snapshot
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": site_id}, {"_id": 0, "labor_budget": 1}
     ).to_list(100)
     total_budget = sum(b.get("labor_budget", 0) for b in budgets)
     all_sessions_cost = 0
-    all_sess = await db.work_sessions.find(
+    all_sess = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": site_id, "ended_at": {"$ne": None}},
         {"_id": 0, "labor_cost": 1},
     ).to_list(5000)
@@ -90,7 +92,7 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     }
 
     # e. Calendar summary
-    cal_entries = await db.worker_calendar.find(
+    cal_entries = await tenant.worker_calendar.find(
         {"org_id": org_id, "date": date, "site_id": site_id},
         {"_id": 0, "status": 1},
     ).to_list(200)
@@ -103,12 +105,12 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         elif st == "absent_unauthorized": cal["absent"] += 1
 
     # f. Missing SMR count
-    missing_count = await db.missing_smr.count_documents(
+    missing_count = await tenant.missing_smr.count_documents(
         {"org_id": org_id, "project_id": site_id, "created_at": {"$gte": ds, "$lte": de}}
     )
 
     # g. Daily report
-    report = await db.work_reports.find_one(
+    report = await tenant.work_reports.find_one(
         {"org_id": org_id, "project_id": site_id, "date": date, "status": {"$in": ["Submitted", "Approved"]}},
     )
     report_submitted = report is not None
@@ -129,7 +131,7 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         alerts.append({"type": "sick_spike", "message": f"{cal['sick']} болни на обекта", "severity": "warning"})
 
     # Get project info
-    project = await db.projects.find_one({"id": site_id, "org_id": org_id}, {"_id": 0, "name": 1, "code": 1})
+    project = await tenant.projects.find_one({"id": site_id, "org_id": org_id}, {"_id": 0, "name": 1, "code": 1})
 
     pulse = {
         "id": None,  # set below
@@ -158,20 +160,21 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
 
     # Upsert
     import uuid
-    existing = await db.site_pulses.find_one({"org_id": org_id, "site_id": site_id, "date": date})
+    existing = await tenant.site_pulses.find_one({"org_id": org_id, "site_id": site_id, "date": date})
     if existing:
         pulse["id"] = existing["id"]
-        await db.site_pulses.update_one({"id": existing["id"]}, {"$set": pulse})
+        await tenant.site_pulses.update_one({"id": existing["id"]}, {"$set": pulse})
     else:
         pulse["id"] = str(uuid.uuid4())
-        await db.site_pulses.insert_one(pulse)
+        await tenant.site_pulses.insert_one(pulse)
 
     return {k: v for k, v in pulse.items() if k != "_id"}
 
 
 async def generate_all_pulses(org_id: str, date: str) -> list:
     """Generate pulses for all active projects."""
-    projects = await db.projects.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    projects = await tenant.projects.find(
         {"org_id": org_id, "status": {"$in": ["Active", "Draft"]}},
         {"_id": 0, "id": 1},
     ).to_list(200)

@@ -12,6 +12,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Pay Runs"])
 
@@ -271,6 +277,7 @@ async def generate_pay_run(
     period_end: str = "",
     review_mode: bool = False,  # P0-2A: when True, include paid/batched reports for visual calendar
 ):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
     org_id = user["org_id"]
@@ -296,7 +303,7 @@ async def generate_pay_run(
     for ln in lines:
         enrich_hours(ln)
 
-    employees = await db.users.find(
+    employees = await tenant.users.find(
         {"org_id": org_id, "is_active": True},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1, "email": 1},
     ).to_list(200)
@@ -304,7 +311,7 @@ async def generate_pay_run(
     emp_map = {e["id"]: e for e in employees}
     emp_ids = [e["id"] for e in employees]
 
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "user_id": {"$in": emp_ids}},
         {"_id": 0},
     ).to_list(200)
@@ -320,11 +327,11 @@ async def generate_pay_run(
     pids = list({ln["project_id"] for ln in lines if ln["project_id"]})
     proj_map = {}
     if pids:
-        projects = await db.projects.find({"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        projects = await tenant.projects.find({"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
         proj_map = {p["id"]: p.get("name", "") for p in projects}
 
     # Previously paid — dedup: only count LATEST pay run per week per employee
-    existing_runs = await db.pay_runs.find(
+    existing_runs = await tenant.pay_runs.find(
         {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
          "period_start": {"$lte": period_end}, "period_end": {"$gte": period_start}},
         {"_id": 0, "employee_rows": 1, "week_number": 1, "number": 1},
@@ -341,7 +348,7 @@ async def generate_pay_run(
             eid = row.get("employee_id", "")
             already_paid[eid] = already_paid.get(eid, 0) + row.get("paid_now_amount", 0)
     # Count overlapping runs for warning
-    overlap_count = await db.pay_runs.count_documents(
+    overlap_count = await tenant.pay_runs.count_documents(
         {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
          "period_start": {"$lte": period_end}, "period_end": {"$gte": period_start}})
 
@@ -349,7 +356,7 @@ async def generate_pay_run(
 
     rows = []
     # Open advances per employee → surfaced so Корекции can auto-suggest the deduction
-    _adv_docs = await db.advances.find(
+    _adv_docs = await tenant.advances.find(
         {"org_id": org_id, "status": "Open"},
         {"_id": 0, "id": 1, "user_id": 1, "type": 1, "remaining_amount": 1, "installment_amount": 1},
     ).to_list(1000)
@@ -535,6 +542,7 @@ async def generate_pay_run(
 
 @router.post("/pay-runs")
 async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
     org_id = user["org_id"]
@@ -548,9 +556,9 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     grand = {"earned": 0, "bonuses": 0, "deductions": 0, "paid": 0, "remaining": 0}
 
     # Auto-number
-    run_count = await db.pay_runs.count_documents({"org_id": org_id})
+    run_count = await tenant.pay_runs.count_documents({"org_id": org_id})
     run_number = f"PR-{run_count + 1:04d}"
-    slip_counter = await db.payment_slips.count_documents({"org_id": org_id})
+    slip_counter = await tenant.payment_slips.count_documents({"org_id": org_id})
 
     week_num = data.week_number
     if not week_num:
@@ -707,10 +715,10 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
         }],
     }
 
-    await db.pay_runs.insert_one(pay_run)
+    await tenant.pay_runs.insert_one(pay_run)
     # Only generate slips for confirmed runs
     if data.status == "confirmed" and slips:
-        await db.payment_slips.insert_many(slips)
+        await tenant.payment_slips.insert_many(slips)
 
     # Generate allocations for confirmed runs
     # ═══════════════════════════════════════════════════════════════
@@ -829,7 +837,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             })
 
         if allocations:
-            await db.pay_run_allocations.insert_many(allocations)
+            await tenant.pay_run_allocations.insert_many(allocations)
 
         # Store allocation summary on the pay_run
         site_summary = {}
@@ -847,7 +855,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             v["remaining"] = round(v["remaining"], 2)
             v["hours"] = round(v["hours"], 1)
 
-        await db.pay_runs.update_one({"id": run_id}, {"$set": {
+        await tenant.pay_runs.update_one({"id": run_id}, {"$set": {
             "allocation_summary": list(site_summary.values()),
         }})
 
@@ -867,12 +875,13 @@ async def list_pay_runs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     q = {"org_id": org_id, "archived": {"$ne": True}}
     if status:
         q["status"] = status
-    total = await db.pay_runs.count_documents(q)
-    runs = await db.pay_runs.find(
+    total = await tenant.pay_runs.count_documents(q)
+    runs = await tenant.pay_runs.find(
         q, {"_id": 0, "id": 1, "number": 1, "run_type": 1,
             "period_start": 1, "period_end": 1, "week_number": 1,
             "status": 1, "totals": 1, "created_at": 1, "paid_at": 1},
@@ -885,16 +894,17 @@ async def list_pay_runs(
 @router.get("/pay-runs/audit-check")
 async def audit_check(user: dict = Depends(get_current_user)):
     """Automated payroll data integrity check."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     issues = []
 
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1}
     ).to_list(500)
     users_map = {}
     if profiles:
         uids = [p["user_id"] for p in profiles]
-        users_list = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(500)
+        users_list = await tenant.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(500)
         users_map = {u["id"]: f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users_list}
 
     for p in profiles:
@@ -903,7 +913,7 @@ async def audit_check(user: dict = Depends(get_current_user)):
             issues.append({"type": "missing_rate", "severity": "critical",
                 "message": f"{name} няма зададена ставка/заплата"})
 
-    recent_runs = await db.pay_runs.find(
+    recent_runs = await tenant.pay_runs.find(
         {"org_id": org_id}, {"_id": 0, "id": 1, "number": 1, "employee_rows": 1, "status": 1}
     ).sort("created_at", -1).to_list(5)
     for run in recent_runs:
@@ -913,7 +923,7 @@ async def audit_check(user: dict = Depends(get_current_user)):
                     "message": f"{row.get('first_name','')} {row.get('last_name','')}: {row['approved_hours']}ч но заработка=0 в {run.get('number','?')}"})
 
     for run in recent_runs:
-        allocs = await db.pay_run_allocations.find(
+        allocs = await tenant.pay_run_allocations.find(
             {"pay_run_id": run["id"]}, {"_id": 0, "validation": 1, "employee_id": 1}
         ).to_list(200)
         for alloc in allocs:
@@ -922,11 +932,11 @@ async def audit_check(user: dict = Depends(get_current_user)):
                 issues.append({"type": "allocation_mismatch", "severity": "critical",
                     "message": f"Разминаване в {run.get('number','?')} за {ename}"})
 
-    confirmed = await db.pay_runs.find(
+    confirmed = await tenant.pay_runs.find(
         {"org_id": org_id, "status": "confirmed"}, {"_id": 0, "id": 1, "number": 1}
     ).to_list(50)
     for run in confirmed:
-        sync_count = await db.payroll_payment_allocations.count_documents(
+        sync_count = await tenant.payroll_payment_allocations.count_documents(
             {"source_pay_run_id": run["id"], "status": {"$in": ["provisional", "active"]}})
         if sync_count == 0:
             issues.append({"type": "sync_missing", "severity": "critical",
@@ -942,7 +952,8 @@ async def audit_check(user: dict = Depends(get_current_user)):
 
 @router.get("/pay-runs/{run_id}")
 async def get_pay_run(run_id: str, user: dict = Depends(get_current_user)):
-    run = await db.pay_runs.find_one({"id": run_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    run = await tenant.pay_runs.find_one({"id": run_id, "org_id": user["org_id"]}, {"_id": 0})
     if not run:
         raise HTTPException(status_code=404, detail="Pay run not found")
     return run
@@ -958,10 +969,11 @@ class MarkPaidInput(BaseModel):
 
 @router.post("/pay-runs/{run_id}/mark-paid")
 async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
     org_id = user["org_id"]
-    run = await db.pay_runs.find_one({"id": run_id, "org_id": org_id})
+    run = await tenant.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
     if run.get("status") == "paid":
@@ -976,10 +988,10 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
         "payment_reference": (body.payment_reference if body else "") or "",
         "payment_note": (body.payment_note if body else "") or "",
     }
-    await db.pay_runs.update_one({"id": run_id}, {"$set": payment_info})
+    await tenant.pay_runs.update_one({"id": run_id}, {"$set": payment_info})
 
     # Update v3 slips
-    await db.payment_slips.update_many(
+    await tenant.payment_slips.update_many(
         {"pay_run_id": run_id, "org_id": org_id},
         {"$set": {"status": "paid", "paid_at": now,
                   "payment_method": payment_info["payment_method"],
@@ -987,7 +999,7 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
     )
 
     # Add to version history
-    await db.pay_runs.update_one({"id": run_id}, {"$push": {"history": {
+    await tenant.pay_runs.update_one({"id": run_id}, {"$push": {"history": {
         "version": (run.get("version") or 1) + 1,
         "action": "marked_paid",
         "changed_by": user["id"],
@@ -1003,12 +1015,12 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
     for er in run.get("employee_rows", []):
         for adj in er.get("adjustments", []) or []:
             if adj.get("type") in ("advance", "loan") and adj.get("ref_id") and (adj.get("amount") or 0) > 0:
-                adv = await db.advances.find_one({"id": adj["ref_id"], "org_id": org_id})
+                adv = await tenant.advances.find_one({"id": adj["ref_id"], "org_id": org_id})
                 if adv and adv.get("status") != "Closed":
                     new_remaining = round((adv.get("remaining_amount") or 0) - adj["amount"], 2)
                     if new_remaining < 0:
                         new_remaining = 0
-                    await db.advances.update_one(
+                    await tenant.advances.update_one(
                         {"id": adj["ref_id"], "org_id": org_id},
                         {"$set": {"remaining_amount": new_remaining,
                                   "status": "Closed" if new_remaining <= 0 else "Open",
@@ -1020,8 +1032,8 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
     # Salary leaves Каса/Банка — one cash movement per employee (with name + avatar in the register)
     method = (payment_info.get("payment_method") or "cash").lower()
     acc_type = "Bank" if method in ("bank_transfer", "bank", "transfer") else "Cash"
-    account = await db.financial_accounts.find_one({"org_id": org_id, "type": acc_type}) \
-        or await db.financial_accounts.find_one({"org_id": org_id, "type": "Cash"})
+    account = await tenant.financial_accounts.find_one({"org_id": org_id, "type": acc_type}) \
+        or await tenant.financial_accounts.find_one({"org_id": org_id, "type": "Cash"})
     if account:
         run_label = ("Заплата " + str(run.get("number", ""))).strip()
         for er in run.get("employee_rows", []):
@@ -1029,7 +1041,7 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
             if paid <= 0:
                 continue
             emp_name = (" ".join(filter(None, [er.get("first_name"), er.get("last_name")])) or "Служител").strip()
-            await db.finance_payments.insert_one({
+            await tenant.finance_payments.insert_one({
                 "id": str(uuid.uuid4()), "org_id": org_id, "direction": "Outflow",
                 "amount": paid, "currency": "EUR", "date": now[:10],
                 "method": "BankTransfer" if acc_type == "Bank" else "Cash",
@@ -1052,10 +1064,11 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
 @router.patch("/pay-runs/{run_id}")
 async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depends(get_current_user)):
     """Update a draft or reopened pay run. Increments version."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
     org_id = user["org_id"]
-    run = await db.pay_runs.find_one({"id": run_id, "org_id": org_id})
+    run = await tenant.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
     if run.get("status") not in ("draft", "reopened"):
@@ -1132,7 +1145,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         },
     }
 
-    await db.pay_runs.update_one({"id": run_id}, {
+    await tenant.pay_runs.update_one({"id": run_id}, {
         "$set": {
             "employee_rows": employee_rows,
             "version": new_version,
@@ -1156,8 +1169,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
     # Generate slips if confirming
     if data.status == "confirmed":
         # Delete old slips for this run
-        await db.payment_slips.delete_many({"pay_run_id": run_id, "org_id": org_id})
-        slip_counter = await db.payment_slips.count_documents({"org_id": org_id})
+        await tenant.payment_slips.delete_many({"pay_run_id": run_id, "org_id": org_id})
+        slip_counter = await tenant.payment_slips.count_documents({"org_id": org_id})
         slips = []
         week_num = run.get("week_number", 0)
         for er in employee_rows:
@@ -1190,14 +1203,14 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
                 "status": "confirmed", "paid_at": None, "created_at": now,
             })
         if slips:
-            await db.payment_slips.insert_many(slips)
+            await tenant.payment_slips.insert_many(slips)
 
     # Sync downstream on re-confirm
     if data.status == "confirmed":
-        updated_run = await db.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        updated_run = await tenant.pay_runs.find_one({"id": run_id}, {"_id": 0})
         await sync_on_confirm(updated_run, org_id, user["id"])
 
-    updated = await db.pay_runs.find_one({"id": run_id}, {"_id": 0})
+    updated = await tenant.pay_runs.find_one({"id": run_id}, {"_id": 0})
     return updated
 
 
@@ -1206,10 +1219,11 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
 @router.post("/pay-runs/{run_id}/reopen")
 async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depends(get_current_user)):
     """Reopen entire batch or specific employee rows."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
     org_id = user["org_id"]
-    run = await db.pay_runs.find_one({"id": run_id, "org_id": org_id})
+    run = await tenant.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
     if run.get("status") == "cancelled":
@@ -1238,7 +1252,7 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
 
     new_status = "reopened" if reopen_all else run.get("status", "confirmed")
 
-    await db.pay_runs.update_one({"id": run_id}, {
+    await tenant.pay_runs.update_one({"id": run_id}, {
         "$set": {
             "status": new_status,
             "version": new_version,
@@ -1250,12 +1264,12 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
 
     # Mark affected slips as superseded
     if reopen_all:
-        await db.payment_slips.update_many(
+        await tenant.payment_slips.update_many(
             {"pay_run_id": run_id, "org_id": org_id},
             {"$set": {"status": "superseded"}},
         )
     elif data.employee_ids:
-        await db.payment_slips.update_many(
+        await tenant.payment_slips.update_many(
             {"pay_run_id": run_id, "org_id": org_id, "employee_id": {"$in": data.employee_ids}},
             {"$set": {"status": "superseded"}},
         )
@@ -1270,7 +1284,8 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
 
 @router.get("/pay-runs/{run_id}/history")
 async def get_pay_run_history(run_id: str, user: dict = Depends(get_current_user)):
-    run = await db.pay_runs.find_one(
+    tenant = _tenant(user)
+    run = await tenant.pay_runs.find_one(
         {"id": run_id, "org_id": user["org_id"]},
         {"_id": 0, "id": 1, "number": 1, "version": 1, "status": 1, "history": 1},
     )
@@ -1286,13 +1301,14 @@ async def get_pay_run_history(run_id: str, user: dict = Depends(get_current_user
 @router.get("/pay-runs/{run_id}/allocations")
 async def get_pay_run_allocations(run_id: str, user: dict = Depends(get_current_user)):
     """Get allocation breakdown for a pay run — by employee, day, site."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    allocs = await db.pay_run_allocations.find(
+    allocs = await tenant.pay_run_allocations.find(
         {"org_id": org_id, "pay_run_id": run_id}, {"_id": 0}
     ).to_list(200)
 
     # Also get allocation_summary from the run itself
-    run = await db.pay_runs.find_one(
+    run = await tenant.pay_runs.find_one(
         {"id": run_id, "org_id": org_id},
         {"_id": 0, "allocation_summary": 1},
     )
@@ -1319,6 +1335,7 @@ async def list_payment_slips(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     # Сигурност: техникът вижда само своите фишове; платежни роли (Admin/Owner/Accountant) — всички; други — забранено.
     if user["role"] == "Technician":
@@ -1330,8 +1347,8 @@ async def list_payment_slips(
         q["employee_id"] = employee_id
     if status:
         q["status"] = status
-    total = await db.payment_slips.count_documents(q)
-    slips = await db.payment_slips.find(
+    total = await tenant.payment_slips.count_documents(q)
+    slips = await tenant.payment_slips.find(
         q, {"_id": 0},
     ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     return {"items": slips, "total": total, "page": page, "page_size": page_size}
@@ -1339,7 +1356,8 @@ async def list_payment_slips(
 
 @router.get("/payment-slips/{slip_id}")
 async def get_payment_slip(slip_id: str, user: dict = Depends(get_current_user)):
-    slip = await db.payment_slips.find_one(
+    tenant = _tenant(user)
+    slip = await tenant.payment_slips.find_one(
         {"id": slip_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not slip:
@@ -1356,15 +1374,16 @@ async def get_payment_slip(slip_id: str, user: dict = Depends(get_current_user))
 @router.get("/payment-slips/{slip_id}/pdf")
 async def export_slip_pdf(slip_id: str, user: dict = Depends(get_current_user)):
     """Generate printable PDF payment slip."""
+    tenant = _tenant(user)
     from fastapi.responses import StreamingResponse
     import io
 
     org_id = user["org_id"]
-    slip = await db.payment_slips.find_one({"id": slip_id, "org_id": org_id}, {"_id": 0})
+    slip = await tenant.payment_slips.find_one({"id": slip_id, "org_id": org_id}, {"_id": 0})
     if not slip:
         raise HTTPException(status_code=404, detail="Slip not found")
 
-    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "name": 1, "eik": 1, "address": 1, "city": 1})
+    org = await tenant.own_organization({"_id": 0, "name": 1, "eik": 1, "address": 1, "city": 1})
     org_name = (org or {}).get("name", "")
 
     try:
@@ -1501,12 +1520,13 @@ async def get_payroll_weeks(
     """
     Payroll weeks view: all pay run rows grouped by week + unmatched approved weeks.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     q = {"org_id": org_id, "archived": {"$ne": True}}
     if status:
         q["status"] = status
-    runs = await db.pay_runs.find(q, {"_id": 0}).sort("period_start", -1).to_list(200)
+    runs = await tenant.pay_runs.find(q, {"_id": 0}).sort("period_start", -1).to_list(200)
 
     # Flatten: one row per employee per pay run
     rows = []
@@ -1556,7 +1576,7 @@ async def get_payroll_weeks(
                 continue
 
             # Find associated slip
-            slip = await db.payment_slips.find_one(
+            slip = await tenant.payment_slips.find_one(
                 {"org_id": org_id, "pay_run_id": run["id"], "employee_id": er["employee_id"]},
                 {"_id": 0, "id": 1, "slip_number": 1, "status": 1},
             )

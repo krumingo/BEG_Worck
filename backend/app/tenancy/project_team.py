@@ -520,3 +520,31 @@ def tenant_for(db, user: Mapping) -> TenantData:
     value.
     """
     return TenantData.for_user(db, user)
+
+
+# ------------------------------------------------------------------- indexes
+#: The indexes the authorization relation needs, in the order the hot paths use
+#: them. ``(tenant, project, user)`` answers :func:`is_member`, ``(tenant, user,
+#: active)`` answers :func:`assigned_project_ids`. The two legacy ID-only
+#: indexes remain for the rows that still await a provenance decision (W0-03E-A2).
+INDEXES: tuple = (
+    ([(TENANT_KEY, 1), ("project_id", 1), ("user_id", 1)], {}),
+    ([(TENANT_KEY, 1), ("user_id", 1), ("active", 1)], {}),
+    ([("project_id", 1), ("user_id", 1)], {}),
+    ("user_id", {}),
+)
+
+
+async def ensure_indexes(db) -> int:
+    """Create the relation's indexes. Returns how many were ensured.
+
+    W0-03E-A2C: the startup bootstrap used to reach the raw relation handle
+    directly in ``server.py``, which is the one thing rule ``A2-TEAM`` forbids
+    everywhere else — and an index bootstrap is exactly where a reader looks to
+    learn which fields a lookup may use, so a bare ``(project_id, user_id)``
+    index sitting there invites the bare membership query W0-03E-A2 removed. The
+    relation owns its own indexes; ``server.py`` calls this.
+    """
+    for keys, opts in INDEXES:
+        await db[COLLECTION].create_index(keys, **opts)
+    return len(INDEXES)

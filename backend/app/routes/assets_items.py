@@ -14,6 +14,12 @@ from app.db import db
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user, require_admin
 from app.routes.asset_item_types import all_type_keys
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["AssetItems"])
 
@@ -84,8 +90,9 @@ def _build_query(filters: dict, base_query: dict) -> dict:
 
 async def _count_units(org_id: str, item_id: str) -> int:
     # Units (asset_units) come in Етап 1B; collection may not exist yet -> 0.
+    tenant = TenantData.for_resolved_org(db, org_id)
     try:
-        return await db.asset_units.count_documents({"org_id": org_id, "item_id": item_id})
+        return await tenant.asset_units.count_documents({"org_id": org_id, "item_id": item_id})
     except Exception:
         return 0
 
@@ -103,6 +110,7 @@ async def list_asset_items(
     active_only: bool = False,
 ):
     """List asset items (артикули) with pagination, sorting, search, filters."""
+    tenant = _tenant(user)
     base_query = {"org_id": user["org_id"]}
     if type:
         base_query["type"] = type
@@ -119,11 +127,11 @@ async def list_asset_items(
             {"article_no": {"$regex": re.escape(search), "$options": "i"}},
         ]
 
-    total = await db.asset_items.count_documents(query)
+    total = await tenant.asset_items.count_documents(query)
     sort_direction = 1 if sort_dir == "asc" else -1
     skip = (page - 1) * page_size
     items = (
-        await db.asset_items.find(query, {"_id": 0})
+        await tenant.asset_items.find(query, {"_id": 0})
         .sort(sort_by, sort_direction)
         .skip(skip)
         .limit(page_size)
@@ -143,6 +151,7 @@ async def list_asset_items(
 
 @router.post("/assets/items", status_code=201)
 async def create_asset_item(data: AssetItemCreate, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     valid_types = await all_type_keys(user["org_id"])
     if data.type not in valid_types:
         raise HTTPException(status_code=400, detail="Invalid type")
@@ -166,7 +175,7 @@ async def create_asset_item(data: AssetItemCreate, user: dict = Depends(require_
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"],
     }
-    await db.asset_items.insert_one(item)
+    await tenant.asset_items.insert_one(item)
     item.pop("_id", None)
     item["asset_count"] = 0
     return item
@@ -174,7 +183,8 @@ async def create_asset_item(data: AssetItemCreate, user: dict = Depends(require_
 
 @router.get("/assets/items/{item_id}")
 async def get_asset_item(item_id: str, user: dict = Depends(get_current_user)):
-    item = await db.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    item = await tenant.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Not found")
     item["asset_count"] = await _count_units(user["org_id"], item_id)
@@ -183,6 +193,7 @@ async def get_asset_item(item_id: str, user: dict = Depends(get_current_user)):
 
 @router.put("/assets/items/{item_id}")
 async def update_asset_item(item_id: str, data: AssetItemUpdate, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     update = {k: v for k, v in data.dict(exclude_unset=True).items()}
     if "type" in update:
         valid_types = await all_type_keys(user["org_id"])
@@ -190,12 +201,12 @@ async def update_asset_item(item_id: str, data: AssetItemUpdate, user: dict = De
             raise HTTPException(status_code=400, detail="Invalid type")
     if not update:
         raise HTTPException(status_code=400, detail="Nothing to update")
-    res = await db.asset_items.update_one(
+    res = await tenant.asset_items.update_one(
         {"id": item_id, "org_id": user["org_id"]}, {"$set": update}
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
-    item = await db.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
+    item = await tenant.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
     item["asset_count"] = await _count_units(user["org_id"], item_id)
     return item
 
@@ -203,15 +214,16 @@ async def update_asset_item(item_id: str, data: AssetItemUpdate, user: dict = De
 @router.delete("/assets/items/{item_id}")
 async def delete_asset_item(item_id: str, request: Request, user: dict = Depends(require_admin)):
     # Safety: block delete if this артикул already has физически активи.
+    tenant = _tenant(user)
     if await _count_units(user["org_id"], item_id) > 0:
         raise HTTPException(status_code=400, detail="Има активи към този артикул")
-    if await db.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}) is None:
+    if await tenant.asset_items.find_one({"id": item_id, "org_id": user["org_id"]}) is None:
         raise HTTPException(status_code=404, detail="Not found")
     done = await guarded_identity_delete(user, request, db, collection="asset_items",
                                          legacy_id=item_id, deleted_response={"deleted": True})
     if done is not None:
         return done
-    res = await db.asset_items.delete_one({"id": item_id, "org_id": user["org_id"]})
+    res = await tenant.asset_items.delete_one({"id": item_id, "org_id": user["org_id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
     return {"deleted": True}

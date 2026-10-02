@@ -74,6 +74,7 @@ async def get_personnel_today(user: dict = Depends(get_current_user)):
     Read-only dashboard projection: today's personnel status.
     Sources: users, employee_profiles, worker_calendar, site_daily_rosters, employee_daily_reports
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -88,21 +89,21 @@ async def get_personnel_today(user: dict = Depends(get_current_user)):
     emp_ids = [e["id"] for e in employees]
 
     # 2) Profiles (position)
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "user_id": {"$in": emp_ids}},
         {"_id": 0, "user_id": 1, "position": 1},
     ).to_list(200)
     profile_map = {p["user_id"]: p for p in profiles}
 
     # 3) Worker calendar entries for today (source of approved statuses)
-    calendar = await db.worker_calendar.find(
+    calendar = await tenant.worker_calendar.find(
         {"org_id": org_id, "date": today, "worker_id": {"$in": emp_ids}},
         {"_id": 0, "worker_id": 1, "status": 1, "site_id": 1, "hours": 1, "notes": 1},
     ).to_list(200)
     cal_map = {c["worker_id"]: c for c in calendar}
 
     # 4) Roster presence today (across all projects)
-    rosters = await db.site_daily_rosters.find(
+    rosters = await tenant.site_daily_rosters.find(
         {"org_id": org_id, "date": today},
         {"_id": 0, "project_id": 1, "workers": 1},
     ).to_list(100)
@@ -115,7 +116,7 @@ async def get_personnel_today(user: dict = Depends(get_current_user)):
                 roster_map[wid] = r["project_id"]
 
     # 5) Draft/submitted/approved reports today
-    reports = await db.employee_daily_reports.find(
+    reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "date": today, "worker_id": {"$in": emp_ids}},
         {"_id": 0, "worker_id": 1, "status": 1, "approval_status": 1, "hours": 1, "project_id": 1},
     ).to_list(500)
@@ -303,6 +304,7 @@ async def get_finance_series(
     Get monthly finance totals for the last N months.
     Used for rolling period charts on dashboard.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     # Calculate date range
@@ -339,7 +341,7 @@ async def get_finance_series(
         income_invoices = sum((inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)) for inv in issued_invoices)
         
         # Income from cash
-        cash_income = await db.cash_transactions.find({
+        cash_income = await tenant.cash_transactions.find({
             "org_id": org_id,
             "date": {"$gte": date_from, "$lte": date_to},
             "type": "income"
@@ -355,7 +357,7 @@ async def get_finance_series(
         expenses_invoices = sum((inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)) for inv in received_invoices)
         
         # Expenses from cash
-        cash_expense = await db.cash_transactions.find({
+        cash_expense = await tenant.cash_transactions.find({
             "org_id": org_id,
             "date": {"$gte": date_from, "$lte": date_to},
             "type": "expense"
@@ -363,7 +365,7 @@ async def get_finance_series(
         expenses_cash = sum(t.get("amount", 0) for t in cash_expense)
         
         # Overhead
-        overhead = await db.overhead_transactions.find({
+        overhead = await tenant.overhead_transactions.find({
             "org_id": org_id,
             "date": {"$gte": date_from, "$lte": date_to}
         }, {"_id": 0, "amount": 1}).to_list(1000)
@@ -374,7 +376,7 @@ async def get_finance_series(
         expenses_payroll = sum(p.get("net_salary", 0) for p in payroll)
         
         # Bonus
-        bonus = await db.bonus_payments.find({
+        bonus = await tenant.bonus_payments.find({
             "org_id": org_id,
             "date": {"$gte": date_from, "$lte": date_to}
         }, {"_id": 0, "amount": 1}).to_list(1000)
@@ -766,6 +768,7 @@ async def get_finance_transactions(
     sort_dir: str = Query("desc"),
 ):
     """Get list of all transactions with filters."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     if preset and not (date_from and date_to):
@@ -827,7 +830,7 @@ async def get_finance_transactions(
     # Overhead
     if not transaction_type or transaction_type == "overhead":
         if not direction or direction == "expense":
-            overhead = await db.overhead_transactions.find({
+            overhead = await tenant.overhead_transactions.find({
                 "org_id": org_id,
                 "date": {"$gte": date_from, "$lte": date_to}
             }, {"_id": 0}).to_list(1000)
@@ -862,7 +865,7 @@ async def get_finance_transactions(
     # Bonus
     if not transaction_type or transaction_type == "bonus":
         if not direction or direction == "expense":
-            bonus = await db.bonus_payments.find({
+            bonus = await tenant.bonus_payments.find({
                 "org_id": org_id,
                 "date": {"$gte": date_from, "$lte": date_to}
             }, {"_id": 0}).to_list(1000)

@@ -11,6 +11,7 @@ Priority:
 6. None → missing_rate warning
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 DEFAULT_WORKING_DAYS = 22
 DEFAULT_HOURS_PER_DAY = 8
@@ -21,7 +22,8 @@ async def resolve_worker_hourly_rate(worker_id: str, org_id: str) -> dict:
     Resolve hourly rate from employee profile fields.
     Returns: { rate: float, source: str, missing_rate: bool, missing_rate_reason: str|None }
     """
-    profile = await db.employee_profiles.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    profile = await tenant.employee_profiles.find_one(
         {"org_id": org_id, "user_id": worker_id}, {"_id": 0}
     )
 

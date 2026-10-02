@@ -45,6 +45,7 @@ from app.master_data.deps import (
 from app.master_data.models import ENTITY_PERSON, STATUS_ACTIVE
 from app.master_data.normalize import normalize_name
 from app.master_data.service import SOURCE_FLOW, MasterDataRefused
+from app.tenancy.data_access import TenantData
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +464,8 @@ async def advance_mapping_report(db, *, tenant_id: str, org_id: str) -> Dict[str
     Meant for a restored copy. Proposes, never maps: an exact name match is shown
     as a candidate and nothing more; no advance, person or Master record is written.
     """
-    advances = await db["advances"].find({"org_id": org_id, "guest_name": {"$nin": [None, ""]}},
+    tenant = TenantData.for_resolved_org(db, org_id)
+    advances = await tenant.advances.find({"org_id": org_id, "guest_name": {"$nin": [None, ""]}},
                                          {"_id": 0}).to_list(None)
     advances = sorted((a for a in advances if not a.get("user_id")),
                       key=lambda a: str(a.get("id")))

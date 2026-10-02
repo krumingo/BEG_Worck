@@ -14,6 +14,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Material Cost by SMR"])
 
@@ -25,16 +31,17 @@ router = APIRouter(tags=["Material Cost by SMR"])
 @router.post("/material-entries/sync/{project_id}")
 async def sync_material_entries(project_id: str, user: dict = Depends(require_m2)):
     """Sync material entries from warehouse transactions + consumption ops, linking to execution packages"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Load execution packages for mapping
-    exec_pkgs = await db.execution_packages.find(
+    exec_pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "id": 1, "activity_name": 1, "offer_line_id": 1}
     ).to_list(200)
 
     # Load planned materials for mapping (material_name → execution_package_id)
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0, "id": 1, "material_name": 1, "execution_package_id": 1, "offer_line_id": 1}
     ).to_list(500)
@@ -45,13 +52,13 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
             planned_by_name[name] = pm
 
     # Clear old synced entries
-    await db.material_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "sync"})
+    await tenant.material_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "sync"})
 
     now = datetime.now(timezone.utc).isoformat()
     created = 0
 
     # Process warehouse issues
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0}
     ).to_list(200)
     for txn in issues:
@@ -77,11 +84,11 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
                 "mapped": pm is not None,
                 "source": "sync", "created_at": now,
             }
-            await db.material_entries.insert_one(entry)
+            await tenant.material_entries.insert_one(entry)
             created += 1
 
     # Process returns
-    returns = await db.warehouse_transactions.find(
+    returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"}, {"_id": 0}
     ).to_list(200)
     for txn in returns:
@@ -100,11 +107,11 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
                 "date": txn.get("return_date", txn.get("created_at", "")[:10]),
                 "mapped": pm is not None, "source": "sync", "created_at": now,
             }
-            await db.material_entries.insert_one(entry)
+            await tenant.material_entries.insert_one(entry)
             created += 1
 
     # Process consumption
-    consumptions = await db.project_material_ops.find(
+    consumptions = await tenant.project_material_ops.find(
         {"org_id": org_id, "project_id": project_id, "type": "consumption"}, {"_id": 0}
     ).to_list(200)
     for op in consumptions:
@@ -122,7 +129,7 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
                 "date": op.get("date", op.get("created_at", "")[:10]),
                 "mapped": pm is not None, "source": "sync", "created_at": now,
             }
-            await db.material_entries.insert_one(entry)
+            await tenant.material_entries.insert_one(entry)
             created += 1
 
     return {"ok": True, "synced": created, "project_id": project_id}
@@ -133,11 +140,12 @@ async def list_material_entries(
     project_id: Optional[str] = None, execution_package_id: Optional[str] = None,
     planned_material_id: Optional[str] = None, user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if planned_material_id: q["planned_material_id"] = planned_material_id
-    return await db.material_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    return await tenant.material_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -147,12 +155,13 @@ async def list_material_entries(
 @router.get("/material-cost/by-execution-package/{pkg_id}")
 async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(require_m2)):
     """Detailed material cost breakdown for an execution package"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    entries = await db.material_entries.find(
+    entries = await tenant.material_entries.find(
         {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
     ).sort("date", -1).to_list(500)
 
@@ -219,13 +228,14 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
 @router.post("/execution-packages/recompute-material/{project_id}")
 async def recompute_execution_package_material(project_id: str, user: dict = Depends(require_m2)):
     """Recompute material budget and actual for execution packages"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
     if not pkgs:
         return {"ok": True, "updated": 0}
 
     # Load planned materials for budget linkage
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0, "execution_package_id": 1, "planned_total_cost": 1}
     ).to_list(500)
@@ -236,7 +246,7 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
             budget_by_pkg[ep_id] = budget_by_pkg.get(ep_id, 0) + (pm.get("planned_total_cost", 0) or 0)
 
     # Aggregate actual from material_entries
-    entries = await db.material_entries.find(
+    entries = await tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id, "movement_type": {"$in": ["issue", "return"]}},
         {"_id": 0, "execution_package_id": 1, "total_cost": 1}
     ).to_list(5000)
@@ -254,7 +264,7 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
         variance_val = round(actual - budget, 2) if budget > 0 else None
         variance_pct = round(variance_val / budget * 100, 1) if budget > 0 and variance_val is not None else None
 
-        await db.execution_packages.update_one({"id": pid}, {"$set": {
+        await tenant.execution_packages.update_one({"id": pid}, {"$set": {
             "material_budget_total": round(budget, 2),
             "actual_material_cost": actual,
             "material_variance_value": variance_val,
@@ -273,8 +283,9 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
 @router.get("/execution-packages/{pkg_id}/financial")
 async def get_package_financial_summary(pkg_id: str, user: dict = Depends(require_m2)):
     """Package-level financial summary with margin impact"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
 
@@ -283,7 +294,7 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
     lab_actual = pkg.get("actual_labor_cost", 0)
 
     # Subcontract for this package
-    sub_lines = await db.subcontractor_package_lines.find(
+    sub_lines = await tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "execution_package_id": pkg_id},
         {"_id": 0, "certified_total": 1}
     ).to_list(50)
@@ -330,11 +341,12 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
 @router.get("/execution-packages/financial-breakdown/{project_id}")
 async def get_project_package_breakdown(project_id: str, user: dict = Depends(require_m2)):
     """All execution packages financial breakdown for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
 
     # Load subcontract by package
-    sub_lines = await db.subcontractor_package_lines.find(
+    sub_lines = await tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "execution_package_id": 1, "certified_total": 1}
     ).to_list(500)
@@ -382,14 +394,15 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
 @router.get("/material-warnings/{project_id}")
 async def get_material_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Material cost warnings for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
-    unmapped = await db.material_entries.count_documents(
+    unmapped = await tenant.material_entries.count_documents(
         {"org_id": org_id, "project_id": project_id, "execution_package_id": None})
-    total = await db.material_entries.count_documents(
+    total = await tenant.material_entries.count_documents(
         {"org_id": org_id, "project_id": project_id})
 
     warnings = []
@@ -414,19 +427,20 @@ async def get_material_warnings(project_id: str, user: dict = Depends(require_m2
 
 async def get_material_summary_for_project(org_id: str, project_id: str) -> dict:
     """Get aggregated material cost summary for profit integration"""
-    mapped = await db.material_entries.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    mapped = await tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id, "execution_package_id": {"$ne": None}, "movement_type": {"$in": ["issue", "return"]}},
         {"_id": 0, "total_cost": 1}
     ).to_list(5000)
     mapped_cost = sum(float(e["total_cost"]) for e in mapped if e.get("total_cost") is not None)
 
-    unmapped = await db.material_entries.find(
+    unmapped = await tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id, "execution_package_id": None, "movement_type": {"$in": ["issue", "return"]}},
         {"_id": 0, "total_cost": 1}
     ).to_list(5000)
     unmapped_cost = sum(float(e["total_cost"]) for e in unmapped if e.get("total_cost") is not None)
 
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "material_budget_total": 1}
     ).to_list(200)

@@ -4,13 +4,15 @@ P&L Aggregator — Aggregates P&L across parent+children projects and computes p
 from app.db import db
 from app.services.project_pnl import compute_project_pnl
 import logging
+from app.tenancy.data_access import TenantData
 
 logger = logging.getLogger(__name__)
 
 
 async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
     """Sum P&L across parent + all children."""
-    children = await db.projects.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    children = await tenant.projects.find(
         {"org_id": org_id, "parent_project_id": parent_project_id},
         {"_id": 0, "id": 1, "name": 1, "code": 1},
     ).sort("code", 1).to_list(50)
@@ -82,7 +84,8 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
 
 async def compute_org_profit_attribution(org_id: str) -> dict:
     """Identifies WHY org is in profit/loss — top contributors and detractors."""
-    projects = await db.projects.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    projects = await tenant.projects.find(
         {"org_id": org_id, "parent_project_id": {"$in": [None, ""]}},
         {"_id": 0, "id": 1, "name": 1, "code": 1},
     ).to_list(200)

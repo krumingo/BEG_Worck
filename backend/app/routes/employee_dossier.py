@@ -9,6 +9,12 @@ from datetime import datetime, timezone, timedelta
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, enrich_hours_batch, NORMAL_DAY
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 
 router = APIRouter(tags=["Employee Dossier"])
@@ -33,6 +39,7 @@ async def get_employee_dossier(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     if not date_from:
         date_from = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%d")
@@ -40,7 +47,7 @@ async def get_employee_dossier(
         date_to = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # 1) Employee basic info
-    emp = await db.users.find_one(
+    emp = await tenant.users.find_one(
         {"id": worker_id, "org_id": org_id},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1,
          "role": 1, "avatar_url": 1, "phone": 1, "is_active": 1},
@@ -48,7 +55,7 @@ async def get_employee_dossier(
     if not emp:
         return {"error": "Employee not found"}
 
-    prof = await db.employee_profiles.find_one(
+    prof = await tenant.employee_profiles.find_one(
         {"org_id": org_id, "user_id": worker_id},
         {"_id": 0, "position": 1, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1,
          "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1,
@@ -88,7 +95,7 @@ async def get_employee_dossier(
             pids.add(rl["project_id"])
     proj_map = {}
     if pids:
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"id": {"$in": list(pids)}}, {"_id": 0, "id": 1, "name": 1}
         ).to_list(200)
         proj_map = {p["id"]: p.get("name", "") for p in projects}
@@ -161,7 +168,7 @@ async def get_employee_dossier(
     #   pay_run.period_end >= date_from AND pay_run.period_start <= date_to.
     # Before: no period filter (showed ALL pay-runs for worker) + no archived filter
     # → made "Платено" card and "Заплати" tab disagree silently.
-    pay_runs = await db.pay_runs.find(
+    pay_runs = await tenant.pay_runs.find(
         {"org_id": org_id,
          "employee_rows.employee_id": worker_id,
          "archived": {"$ne": True},
@@ -203,7 +210,7 @@ async def get_employee_dossier(
     total_paid = round(sum(w["net"] for w in payroll_weeks if w["status"] == "paid"), 2)
 
     # 4) Advances / loans
-    advances = await db.advances.find(
+    advances = await tenant.advances.find(
         {"org_id": org_id, "user_id": worker_id},
         {"_id": 0},
     ).sort("issued_date", -1).to_list(100)
@@ -224,7 +231,7 @@ async def get_employee_dossier(
     cal_from = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     cal_to = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    calendar_entries = await db.worker_calendar.find(
+    calendar_entries = await tenant.worker_calendar.find(
         {"org_id": org_id, "worker_id": worker_id,
          "date": {"$gte": cal_from, "$lte": cal_to}},
         {"_id": 0, "date": 1, "status": 1, "site_id": 1, "hours": 1},
@@ -232,7 +239,7 @@ async def get_employee_dossier(
 
     # Also check rosters
     roster_dates = set()
-    rosters = await db.site_daily_rosters.find(
+    rosters = await tenant.site_daily_rosters.find(
         {"org_id": org_id, "date": {"$gte": cal_from, "$lte": cal_to},
          "workers.worker_id": worker_id},
         {"_id": 0, "date": 1, "project_id": 1},

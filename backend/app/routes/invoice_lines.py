@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.utils.audit import log_audit
@@ -20,6 +21,19 @@ from ..models.invoice_lines import (
 )
 
 router = APIRouter(tags=["InvoiceLines"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only.
+
+    W0-03E-A2C: every read, enrichment and write below goes through this view, so
+    the tenant predicate is part of the query rather than something a later line
+    has to remember. The W0-03E-A2B review found this module resolving buyers,
+    projects, warehouses, persons and companies by bare ``id`` and updating
+    invoices and lines by bare ``id`` after a scoped read — with colliding ids
+    that returned and modified ANOTHER tenant's financial records.
+    """
+    return TenantData.for_user(db, user)
 
 
 def finance_permission(user: dict) -> bool:
@@ -105,47 +119,56 @@ def compute_allocation_stats(line: dict) -> dict:
     return line
 
 
-async def validate_allocation_refs(allocations: List[dict], org_id: str):
-    """Validate that all allocation references exist"""
+async def validate_allocation_refs(tenant: TenantData, allocations: List[dict]):
+    """Validate that all allocation references exist IN THIS TENANT.
+
+    A ref that exists only in another tenant is "not found" here, so an
+    allocation can never point across the boundary.
+    """
     for alloc in allocations:
         alloc_type = alloc.get("type")
         ref_id = alloc.get("ref_id")
         
         if alloc_type == "project":
-            ref = await db.projects.find_one({"id": ref_id, "org_id": org_id})
+            ref = await tenant.projects.get(ref_id)
             if not ref:
                 raise HTTPException(status_code=404, detail=f"Project {ref_id} not found")
         elif alloc_type == "warehouse":
-            ref = await db.warehouses.find_one({"id": ref_id, "org_id": org_id})
+            ref = await tenant.warehouses.get(ref_id)
             if not ref:
                 raise HTTPException(status_code=404, detail=f"Warehouse {ref_id} not found")
         elif alloc_type == "client":
             # Check in persons or companies
-            ref = await db.persons.find_one({"id": ref_id, "org_id": org_id})
+            ref = await tenant.persons.get(ref_id)
             if not ref:
-                ref = await db.companies.find_one({"id": ref_id, "org_id": org_id})
+                ref = await tenant.companies.get(ref_id)
             if not ref:
                 raise HTTPException(status_code=404, detail=f"Client {ref_id} not found")
 
 
-async def get_org_require_full_allocation(org_id: str) -> bool:
-    """Get organization setting for requireFullAllocation"""
-    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "require_full_allocation": 1})
+async def get_org_require_full_allocation(tenant: TenantData) -> bool:
+    """Get THIS tenant's requireFullAllocation setting (its own organization row)."""
+    org = await tenant.own_organization({"_id": 0, "require_full_allocation": 1})
     return org.get("require_full_allocation", False) if org else False
 
 
-async def recalculate_invoice_totals(invoice_id: str, org_id: str):
-    """Recalculate invoice totals from its lines"""
-    lines = await db.invoice_lines.find({"invoice_id": invoice_id, "org_id": org_id}).to_list(1000)
+async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str):
+    """Recalculate THIS tenant's invoice totals from its own lines.
+
+    Both the invoice read and the invoice write carry the tenant predicate. The
+    write filter in particular: a scoped read of the lines said nothing about
+    which tenant's invoice ``{"id": invoice_id}`` alone would have updated.
+    """
+    lines = await tenant.invoice_lines.find({"invoice_id": invoice_id}).to_list(1000)
     
     subtotal = sum(l.get("line_total_ex_vat", 0) for l in lines)
     vat_total = sum(l.get("vat_amount", 0) for l in lines)
     total = round(subtotal + vat_total, 2)
     
-    invoice = await db.invoices.find_one({"id": invoice_id})
+    invoice = await tenant.invoices.get(invoice_id)
     paid_amount = invoice.get("paid_amount", 0) if invoice else 0
     
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "subtotal": round(subtotal, 2),
         "vat_amount": round(vat_total, 2),
         "total": total,
@@ -155,10 +178,16 @@ async def recalculate_invoice_totals(invoice_id: str, org_id: str):
     }})
 
 
-async def enrich_line_with_names(line: dict) -> dict:
-    """Enrich line with human-readable names for allocations"""
+async def enrich_line_with_names(tenant: TenantData, line: dict) -> dict:
+    """Enrich line with human-readable names, resolved IN THIS TENANT only.
+
+    A name that exists only in another tenant resolves to ``""`` (absent), never
+    to that tenant's value — this is the enrichment leak the A2B review
+    reproduced for buyer, project, warehouse, person and company.
+    """
     if line.get("purchased_by_user_id"):
-        buyer = await db.users.find_one({"id": line["purchased_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+        buyer = await tenant.users.get(line["purchased_by_user_id"],
+                                       {"_id": 0, "first_name": 1, "last_name": 1})
         line["purchased_by_name"] = f"{buyer['first_name']} {buyer['last_name']}" if buyer else ""
     
     # Enrich allocations
@@ -168,17 +197,17 @@ async def enrich_line_with_names(line: dict) -> dict:
         ref_id = alloc.get("ref_id")
         
         if alloc_type == "project":
-            ref = await db.projects.find_one({"id": ref_id}, {"_id": 0, "code": 1, "name": 1})
+            ref = await tenant.projects.get(ref_id, {"_id": 0, "code": 1, "name": 1})
             alloc["ref_name"] = f"{ref['code']} - {ref['name']}" if ref else ""
         elif alloc_type == "warehouse":
-            ref = await db.warehouses.find_one({"id": ref_id}, {"_id": 0, "code": 1, "name": 1})
+            ref = await tenant.warehouses.get(ref_id, {"_id": 0, "code": 1, "name": 1})
             alloc["ref_name"] = f"{ref['code']} - {ref['name']}" if ref else ""
         elif alloc_type == "client":
-            ref = await db.persons.find_one({"id": ref_id}, {"_id": 0, "first_name": 1, "last_name": 1})
+            ref = await tenant.persons.get(ref_id, {"_id": 0, "first_name": 1, "last_name": 1})
             if ref:
                 alloc["ref_name"] = f"{ref['first_name']} {ref['last_name']}"
             else:
-                ref = await db.companies.find_one({"id": ref_id}, {"_id": 0, "name": 1})
+                ref = await tenant.companies.get(ref_id, {"_id": 0, "name": 1})
                 alloc["ref_name"] = ref["name"] if ref else ""
     
     return line
@@ -196,6 +225,7 @@ async def list_invoice_lines(
     unallocated_only: bool = False,
 ):
     """List invoice lines with filters"""
+    tenant = _tenant(user)
     if not invoice_id and not allocation_ref_id and not unallocated_only:
         raise HTTPException(status_code=400, detail="Must specify invoice_id, allocation_ref_id, or unallocated_only")
     
@@ -215,7 +245,7 @@ async def list_invoice_lines(
             }
         }
     
-    lines = await db.invoice_lines.find(query, {"_id": 0}).sort("line_no", 1).to_list(1000)
+    lines = await tenant.invoice_lines.find(query, {"_id": 0}).sort("line_no", 1).to_list(1000)
     
     # Normalize and compute stats
     result = []
@@ -227,7 +257,7 @@ async def list_invoice_lines(
         if unallocated_only and line["is_fully_allocated"]:
             continue
         
-        await enrich_line_with_names(line)
+        await enrich_line_with_names(tenant, line)
         result.append(line)
     
     return result
@@ -238,7 +268,8 @@ async def list_invoice_lines(
 @router.get("/invoice-lines/unallocated")
 async def get_unallocated_lines(user: dict = Depends(require_m5)):
     """Get all invoice lines that are not fully allocated"""
-    lines = await db.invoice_lines.find(
+    tenant = _tenant(user)
+    lines = await tenant.invoice_lines.find(
         {"org_id": user["org_id"], "is_fully_allocated": {"$ne": True}},
         {"_id": 0}
     ).to_list(1000)
@@ -250,7 +281,7 @@ async def get_unallocated_lines(user: dict = Depends(require_m5)):
         
         # Only include if really not fully allocated
         if not line.get("is_fully_allocated", False):
-            invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1})
+            invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1})
             if invoice:
                 line["invoice_no"] = invoice["invoice_no"]
                 line["invoice_date"] = invoice["issue_date"]
@@ -276,11 +307,12 @@ async def get_invoice_line_enums():
 @router.post("/invoice-lines", status_code=201)
 async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(require_m5)):
     """Create a single invoice line"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     # Verify invoice exists
-    invoice = await db.invoices.find_one({"id": data.invoice_id, "org_id": user["org_id"]})
+    invoice = await tenant.invoices.find_one({"id": data.invoice_id, "org_id": user["org_id"]})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -296,17 +328,17 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
             raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({data.qty})")
         
         # Check if full allocation required
-        require_full = await get_org_require_full_allocation(user["org_id"])
+        require_full = await get_org_require_full_allocation(tenant)
         if require_full and abs(total_allocated - data.qty) > 0.0001:
             raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {data.qty}")
         
         # Validate refs
         allocs_dict = [a.model_dump() for a in data.allocations]
-        await validate_allocation_refs(allocs_dict, user["org_id"])
+        await validate_allocation_refs(tenant, allocs_dict)
         allocations = allocs_dict
     elif data.allocation_type and data.allocation_ref_id:
         # Backward compatibility: convert old format
-        await validate_allocation_refs([{"type": data.allocation_type, "ref_id": data.allocation_ref_id}], user["org_id"])
+        await validate_allocation_refs(tenant, [{"type": data.allocation_type, "ref_id": data.allocation_ref_id}])
         allocations = [{
             "type": data.allocation_type,
             "ref_id": data.allocation_ref_id,
@@ -339,10 +371,10 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
     line = compute_line_totals(line)
     line = compute_allocation_stats(line)
     
-    await db.invoice_lines.insert_one(line)
+    await tenant.invoice_lines.insert_one(line)
     
     # Recalculate invoice totals
-    await recalculate_invoice_totals(data.invoice_id, user["org_id"])
+    await recalculate_invoice_totals(tenant, data.invoice_id)
     
     return {k: v for k, v in line.items() if k != "_id"}
 
@@ -350,6 +382,7 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
 @router.post("/invoice-lines/bulk", status_code=201)
 async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = Depends(require_m5)):
     """Create multiple invoice lines at once"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -362,14 +395,14 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
         raise HTTPException(status_code=400, detail="All lines must be for the same invoice")
     
     invoice_id = data.lines[0].invoice_id
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    invoice = await tenant.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     if invoice["status"] not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Can only add lines to Draft invoices")
     
-    require_full = await get_org_require_full_allocation(user["org_id"])
+    require_full = await get_org_require_full_allocation(tenant)
     now = datetime.now(timezone.utc).isoformat()
     created_lines = []
     
@@ -385,10 +418,10 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
                 raise HTTPException(status_code=400, detail=f"Line {line_data.line_no}: Full allocation required")
             
             allocs_dict = [a.model_dump() for a in line_data.allocations]
-            await validate_allocation_refs(allocs_dict, user["org_id"])
+            await validate_allocation_refs(tenant, allocs_dict)
             allocations = allocs_dict
         elif line_data.allocation_type and line_data.allocation_ref_id:
-            await validate_allocation_refs([{"type": line_data.allocation_type, "ref_id": line_data.allocation_ref_id}], user["org_id"])
+            await validate_allocation_refs(tenant, [{"type": line_data.allocation_type, "ref_id": line_data.allocation_ref_id}])
             allocations = [{
                 "type": line_data.allocation_type,
                 "ref_id": line_data.allocation_ref_id,
@@ -421,8 +454,8 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
         created_lines.append(line)
     
     if created_lines:
-        await db.invoice_lines.insert_many(created_lines)
-        await recalculate_invoice_totals(invoice_id, user["org_id"])
+        await tenant.invoice_lines.insert_many(created_lines)
+        await recalculate_invoice_totals(tenant, invoice_id)
     
     return {"ok": True, "count": len(created_lines), "lines": [{k: v for k, v in l.items() if k != "_id"} for l in created_lines]}
 
@@ -430,16 +463,17 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
 @router.get("/invoice-lines/{line_id}")
 async def get_invoice_line(line_id: str, user: dict = Depends(require_m5)):
     """Get invoice line details"""
-    line = await db.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    line = await tenant.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]}, {"_id": 0})
     if not line:
         raise HTTPException(status_code=404, detail="Invoice line not found")
     
     line = normalize_allocations(line)
     line = compute_allocation_stats(line)
-    await enrich_line_with_names(line)
+    await enrich_line_with_names(tenant, line)
     
     # Get invoice info
-    invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "direction": 1, "status": 1})
+    invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "direction": 1, "status": 1})
     if invoice:
         line["invoice_no"] = invoice["invoice_no"]
         line["invoice_direction"] = invoice["direction"]
@@ -451,15 +485,16 @@ async def get_invoice_line(line_id: str, user: dict = Depends(require_m5)):
 @router.put("/invoice-lines/{line_id}")
 async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict = Depends(require_m5)):
     """Update invoice line"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    line = await db.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]})
+    line = await tenant.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]})
     if not line:
         raise HTTPException(status_code=404, detail="Invoice line not found")
     
     # Check invoice status
-    invoice = await db.invoices.find_one({"id": line["invoice_id"]})
+    invoice = await tenant.invoices.find_one({"id": line["invoice_id"]})
     if invoice and invoice["status"] not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Can only edit lines of Draft invoices")
     
@@ -474,11 +509,11 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
         if total_allocated > qty:
             raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({qty})")
         
-        require_full = await get_org_require_full_allocation(user["org_id"])
+        require_full = await get_org_require_full_allocation(tenant)
         if require_full and abs(total_allocated - qty) > 0.0001:
             raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {qty}")
         
-        await validate_allocation_refs(allocs, user["org_id"])
+        await validate_allocation_refs(tenant, allocs)
         update["allocations"] = [a if isinstance(a, dict) else a.model_dump() for a in allocs]
     
     # Handle scan_line_ref
@@ -492,7 +527,7 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
     merged = compute_line_totals(merged)
     merged = compute_allocation_stats(merged)
     
-    await db.invoice_lines.update_one({"id": line_id}, {"$set": {
+    await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
         **update,
         "line_total_ex_vat": merged["line_total_ex_vat"],
         "vat_amount": merged["vat_amount"],
@@ -503,9 +538,9 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
     }})
     
     # Recalculate invoice
-    await recalculate_invoice_totals(line["invoice_id"], user["org_id"])
+    await recalculate_invoice_totals(tenant, line["invoice_id"])
     
-    result = await db.invoice_lines.find_one({"id": line_id}, {"_id": 0})
+    result = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
     result = normalize_allocations(result)
     result = compute_allocation_stats(result)
     return result
@@ -518,10 +553,11 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
     Replaces ALL existing allocations with the new set.
     Supports splitting qty across multiple projects/warehouses/clients.
     """
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    line = await db.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]})
+    line = await tenant.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]})
     if not line:
         raise HTTPException(status_code=404, detail="Invoice line not found")
     
@@ -538,7 +574,7 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
         )
     
     # Check if full allocation required
-    require_full = await get_org_require_full_allocation(user["org_id"])
+    require_full = await get_org_require_full_allocation(tenant)
     if require_full and abs(total_allocated - qty_purchased) > 0.0001:
         raise HTTPException(
             status_code=400, 
@@ -546,11 +582,11 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
         )
     
     # Validate all refs exist
-    await validate_allocation_refs(allocs, user["org_id"])
+    await validate_allocation_refs(tenant, allocs)
     
     now = datetime.now(timezone.utc).isoformat()
     
-    await db.invoice_lines.update_one({"id": line_id}, {"$set": {
+    await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
         "allocations": allocs,
         "qty_allocated": round(total_allocated, 4),
         "qty_unallocated": round(qty_purchased - total_allocated, 4),
@@ -561,10 +597,10 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_line_allocated", "invoice_line", line_id,
                     {"allocations_count": len(allocs), "total_allocated": total_allocated})
     
-    result = await db.invoice_lines.find_one({"id": line_id}, {"_id": 0})
+    result = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
     result = normalize_allocations(result)
     result = compute_allocation_stats(result)
-    await enrich_line_with_names(result)
+    await enrich_line_with_names(tenant, result)
     
     return result
 
@@ -572,23 +608,24 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
 @router.delete("/invoice-lines/{line_id}")
 async def delete_invoice_line(line_id: str, user: dict = Depends(require_m5)):
     """Delete invoice line"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    line = await db.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]})
+    line = await tenant.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]})
     if not line:
         raise HTTPException(status_code=404, detail="Invoice line not found")
     
     # Check invoice status
-    invoice = await db.invoices.find_one({"id": line["invoice_id"]})
+    invoice = await tenant.invoices.find_one({"id": line["invoice_id"]})
     if invoice and invoice["status"] not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Can only delete lines of Draft invoices")
     
     invoice_id = line["invoice_id"]
-    await db.invoice_lines.delete_one({"id": line_id})
+    await tenant.invoice_lines.delete_one({"id": line_id})
     
     # Recalculate invoice
-    await recalculate_invoice_totals(invoice_id, user["org_id"])
+    await recalculate_invoice_totals(tenant, invoice_id)
     
     return {"ok": True}
 
@@ -601,8 +638,9 @@ async def get_lines_by_project(project_id: str, user: dict = Depends(require_m5)
     Get all invoice line allocations for a specific project.
     Uses aggregation to properly handle multi-allocation.
     """
+    tenant = _tenant(user)
     # Verify project exists
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "code": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -630,7 +668,7 @@ async def get_lines_by_project(project_id: str, user: dict = Depends(require_m5)
         {"$sort": {"created_at": -1}}
     ]
     
-    lines = await db.invoice_lines.aggregate(pipeline).to_list(1000)
+    lines = await tenant.invoice_lines.aggregate(pipeline).to_list(1000)
     
     # Calculate totals based on allocated qty proportion
     total_ex_vat = 0
@@ -653,7 +691,7 @@ async def get_lines_by_project(project_id: str, user: dict = Depends(require_m5)
         total_vat += line_vat
         
         # Get invoice info
-        invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
+        invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
         if invoice:
             line["invoice_no"] = invoice["invoice_no"]
             line["invoice_date"] = invoice["issue_date"]
@@ -661,7 +699,7 @@ async def get_lines_by_project(project_id: str, user: dict = Depends(require_m5)
         
         # Get purchaser name
         if line.get("purchased_by_user_id"):
-            buyer = await db.users.find_one({"id": line["purchased_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            buyer = await tenant.users.find_one({"id": line["purchased_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             line["purchased_by_name"] = f"{buyer['first_name']} {buyer['last_name']}" if buyer else ""
     
     return {
@@ -682,8 +720,9 @@ async def get_lines_by_warehouse(warehouse_id: str, user: dict = Depends(require
     Get all invoice line allocations for a specific warehouse.
     Uses aggregation to properly handle multi-allocation.
     """
+    tenant = _tenant(user)
     # Verify warehouse exists
-    warehouse = await db.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0, "code": 1, "name": 1})
+    warehouse = await tenant.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0, "code": 1, "name": 1})
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     
@@ -709,7 +748,7 @@ async def get_lines_by_warehouse(warehouse_id: str, user: dict = Depends(require
         {"$sort": {"created_at": -1}}
     ]
     
-    lines = await db.invoice_lines.aggregate(pipeline).to_list(1000)
+    lines = await tenant.invoice_lines.aggregate(pipeline).to_list(1000)
     
     total_ex_vat = 0
     total_vat = 0
@@ -729,7 +768,7 @@ async def get_lines_by_warehouse(warehouse_id: str, user: dict = Depends(require
         total_ex_vat += line_value
         total_vat += line_vat
         
-        invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
+        invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
         if invoice:
             line["invoice_no"] = invoice["invoice_no"]
             line["invoice_date"] = invoice["issue_date"]
@@ -753,13 +792,14 @@ async def get_lines_by_client(client_id: str, user: dict = Depends(require_m5)):
     Get all invoice line allocations for a specific client (person or company).
     Uses aggregation to properly handle multi-allocation.
     """
+    tenant = _tenant(user)
     # Check if client exists (person or company)
-    client = await db.persons.find_one({"id": client_id, "org_id": user["org_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+    client = await tenant.persons.find_one({"id": client_id, "org_id": user["org_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
     client_name = f"{client['first_name']} {client['last_name']}" if client else None
     client_type = "person" if client else None
     
     if not client:
-        client = await db.companies.find_one({"id": client_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
+        client = await tenant.companies.find_one({"id": client_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
         client_name = client["name"] if client else None
         client_type = "company" if client else None
     
@@ -788,7 +828,7 @@ async def get_lines_by_client(client_id: str, user: dict = Depends(require_m5)):
         {"$sort": {"created_at": -1}}
     ]
     
-    lines = await db.invoice_lines.aggregate(pipeline).to_list(1000)
+    lines = await tenant.invoice_lines.aggregate(pipeline).to_list(1000)
     
     total_ex_vat = 0
     total_vat = 0
@@ -808,7 +848,7 @@ async def get_lines_by_client(client_id: str, user: dict = Depends(require_m5)):
         total_ex_vat += line_value
         total_vat += line_vat
         
-        invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
+        invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
         if invoice:
             line["invoice_no"] = invoice["invoice_no"]
             line["invoice_date"] = invoice["issue_date"]
@@ -829,13 +869,14 @@ async def get_lines_by_client(client_id: str, user: dict = Depends(require_m5)):
 @router.get("/invoice-lines/by-purchaser/{user_id}")
 async def get_lines_by_purchaser(user_id: str, user: dict = Depends(require_m5)):
     """Get all invoice lines purchased by a specific user (driver/employee)"""
-    lines = await db.invoice_lines.find({
+    tenant = _tenant(user)
+    lines = await tenant.invoice_lines.find({
         "org_id": user["org_id"],
         "purchased_by_user_id": user_id
     }, {"_id": 0}).to_list(1000)
     
     # Get purchaser name
-    purchaser = await db.users.find_one({"id": user_id}, {"_id": 0, "first_name": 1, "last_name": 1})
+    purchaser = await tenant.users.find_one({"id": user_id}, {"_id": 0, "first_name": 1, "last_name": 1})
     purchaser_name = f"{purchaser['first_name']} {purchaser['last_name']}" if purchaser else ""
     
     total_ex_vat = 0
@@ -848,7 +889,7 @@ async def get_lines_by_purchaser(user_id: str, user: dict = Depends(require_m5))
         total_ex_vat += line.get("line_total_ex_vat", 0)
         total_vat += line.get("vat_amount", 0)
         
-        invoice = await db.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
+        invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
         if invoice:
             line["invoice_no"] = invoice["invoice_no"]
             line["invoice_date"] = invoice["issue_date"]

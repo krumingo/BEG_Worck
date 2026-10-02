@@ -17,6 +17,12 @@ import os, json, uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.routes.asset_item_types import all_type_keys, BUILTIN_TYPES
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["AssetsBatchIntake"])
 
@@ -70,9 +76,10 @@ def _num(v):
 
 async def _match_existing_item(org_id: str, name: str, brand: Optional[str], model: Optional[str]):
     """Групиране: намери съществуващ артикул по име (и марка/модел ако има)."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     if not name:
         return None
-    candidates = await db.asset_items.find(
+    candidates = await tenant.asset_items.find(
         {"org_id": org_id, "is_active": True}, {"_id": 0, "id": 1, "name": 1, "brand": 1, "model": 1, "type": 1}
     ).to_list(500)
     nl = name.strip().lower()
@@ -95,6 +102,7 @@ async def _match_existing_item(org_id: str, name: str, brand: Optional[str], mod
 @router.post("/assets/batch-intake/recognize")
 async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_user)):
     # Достъпно за всеки с право да заскладява (не само админ) — техникът също разпознава
+    tenant = _tenant(user)
     from app.routes.assets_intake_pending import _can_submit
     if not await _can_submit(user):
         raise HTTPException(status_code=403, detail="Нямате право да заскладявате")
@@ -143,7 +151,7 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
     # съпоставяне на типа: ламбда срещу вградени + динамични по label
     type_keys = await all_type_keys(org)
     label_to_key = {b["label_bg"].lower(): b["key"] for b in BUILTIN_TYPES}
-    async for t in db.asset_item_types.find({"org_id": org}, {"_id": 0, "key": 1, "label_bg": 1}):
+    async for t in tenant.asset_item_types.find({"org_id": org}, {"_id": 0, "key": 1, "label_bg": 1}):
         label_to_key[(t["label_bg"] or "").lower()] = t["key"]
     matched_type_key = label_to_key.get(type_label.lower())
     type_is_new = matched_type_key is None and bool(type_label)

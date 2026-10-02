@@ -57,6 +57,7 @@ PKG_STATUSES = ["draft", "confirmed", "in_progress", "partially_certified", "com
 
 @router.post("/subcontractors", status_code=201)
 async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     sub = {
         "id": str(uuid.uuid4()), "org_id": user["org_id"],
@@ -65,13 +66,14 @@ async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(r
         "email": data.email, "address": data.address, "notes": data.notes,
         "active": True, "created_at": now, "updated_at": now,
     }
-    await db.subcontractors.insert_one(sub)
+    await tenant.subcontractors.insert_one(sub)
     return {k: v for k, v in sub.items() if k != "_id"}
 
 
 @router.get("/subcontractors")
 async def list_subcontractors(user: dict = Depends(require_m2)):
-    subs = await db.subcontractors.find({"org_id": user["org_id"]}, {"_id": 0}).sort("name", 1).to_list(200)
+    tenant = _tenant(user)
+    subs = await tenant.subcontractors.find({"org_id": user["org_id"]}, {"_id": 0}).sort("name", 1).to_list(200)
     return subs
 
 
@@ -86,7 +88,8 @@ async def get_subcontractor(sub_id: str, user: dict = Depends(require_m2)):
 
 
 async def _get_next_pkg_no(org_id):
-    last = await db.subcontractor_packages.find_one({"org_id": org_id}, {"_id": 0, "package_no": 1}, sort=[("created_at", -1)])
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.subcontractor_packages.find_one({"org_id": org_id}, {"_id": 0, "package_no": 1}, sort=[("created_at", -1)])
     n = 1
     if last and last.get("package_no"):
         try: n = int(last["package_no"].split("-")[1]) + 1
@@ -96,11 +99,12 @@ async def _get_next_pkg_no(org_id):
 
 @router.post("/subcontractor-packages", status_code=201)
 async def create_package(data: PackageCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": data.project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    sub = await db.subcontractors.find_one({"id": data.subcontractor_id, "org_id": org_id})
+    sub = await tenant.subcontractors.find_one({"id": data.subcontractor_id, "org_id": org_id})
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
 
@@ -117,65 +121,69 @@ async def create_package(data: PackageCreate, user: dict = Depends(require_m2)):
         "notes": data.notes, "status": "draft",
         "created_at": now, "updated_at": now,
     }
-    await db.subcontractor_packages.insert_one(pkg)
+    await tenant.subcontractor_packages.insert_one(pkg)
     return {k: v for k, v in pkg.items() if k != "_id"}
 
 
 @router.get("/subcontractor-packages")
 async def list_packages(project_id: Optional[str] = None, subcontractor_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
     if subcontractor_id: q["subcontractor_id"] = subcontractor_id
-    pkgs = await db.subcontractor_packages.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    pkgs = await tenant.subcontractor_packages.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     return pkgs
 
 
 @router.get("/subcontractor-packages/{pkg_id}")
 async def get_package(pkg_id: str, user: dict = Depends(require_m2)):
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
-    lines = await db.subcontractor_package_lines.find({"package_id": pkg_id}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    lines = await tenant.subcontractor_package_lines.find({"package_id": pkg_id}, {"_id": 0}).sort("sort_order", 1).to_list(200)
     pkg["lines"] = lines
     return pkg
 
 
 @router.post("/subcontractor-packages/{pkg_id}/confirm")
 async def confirm_package(pkg_id: str, user: dict = Depends(require_m2)):
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
     if pkg["status"] != "draft":
         raise HTTPException(status_code=400, detail="Only draft packages can be confirmed")
-    lines = await db.subcontractor_package_lines.count_documents({"package_id": pkg_id})
+    lines = await tenant.subcontractor_package_lines.count_documents({"package_id": pkg_id})
     if lines == 0:
         raise HTTPException(status_code=400, detail="Package has no lines")
 
-    all_lines = await db.subcontractor_package_lines.find({"package_id": pkg_id}, {"_id": 0}).to_list(200)
+    all_lines = await tenant.subcontractor_package_lines.find({"package_id": pkg_id}, {"_id": 0}).to_list(200)
     contract_total = sum(l.get("subcontract_total", 0) for l in all_lines)
     sale_total = sum(l.get("sale_total_for_assigned_qty", 0) for l in all_lines)
     planned_margin = round(sale_total - contract_total, 2)
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
+    await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
         "status": "confirmed", "confirmed_at": now, "updated_at": now,
         "contract_total": round(contract_total, 2),
         "remaining_contract_total": round(contract_total, 2),
         "planned_margin": planned_margin,
     }})
-    return await db.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0})
+    return await tenant.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0})
 
 
 @router.post("/subcontractor-packages/{pkg_id}/close")
 async def close_package(pkg_id: str, user: dict = Depends(require_m2)):
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
     if pkg["status"] in ["draft", "closed"]:
         raise HTTPException(status_code=400, detail=f"Cannot close package in {pkg['status']} status")
     now = datetime.now(timezone.utc).isoformat()
-    await db.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {"status": "closed", "closed_at": now, "updated_at": now}})
-    return await db.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0})
+    await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {"status": "closed", "closed_at": now, "updated_at": now}})
+    return await tenant.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -199,17 +207,19 @@ class PackageLineInput(BaseModel):
 
 async def _get_assigned_qty(org_id: str, offer_line_id: str, exclude_pkg_id: str = None) -> float:
     """Get total already-assigned qty for an offer line across all packages"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     q = {"org_id": org_id, "offer_line_id": offer_line_id}
     if exclude_pkg_id:
         q["package_id"] = {"$ne": exclude_pkg_id}
-    lines = await db.subcontractor_package_lines.find(q, {"_id": 0, "assigned_qty": 1}).to_list(100)
+    lines = await tenant.subcontractor_package_lines.find(q, {"_id": 0, "assigned_qty": 1}).to_list(100)
     return sum(l.get("assigned_qty", 0) for l in lines)
 
 
 @router.post("/subcontractor-packages/{pkg_id}/lines", status_code=201)
 async def add_package_lines(pkg_id: str, data: dict, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
     if pkg["status"] != "draft":
@@ -219,7 +229,7 @@ async def add_package_lines(pkg_id: str, data: dict, user: dict = Depends(requir
     if not input_lines:
         raise HTTPException(status_code=400, detail="No lines provided")
 
-    existing_count = await db.subcontractor_package_lines.count_documents({"package_id": pkg_id})
+    existing_count = await tenant.subcontractor_package_lines.count_documents({"package_id": pkg_id})
     now = datetime.now(timezone.utc).isoformat()
     created = []
 
@@ -279,7 +289,7 @@ async def add_package_lines(pkg_id: str, data: dict, user: dict = Depends(requir
             "status": "active", "sort_order": existing_count + i,
             "created_at": now,
         }
-        await db.subcontractor_package_lines.insert_one(line)
+        await tenant.subcontractor_package_lines.insert_one(line)
         created.append({k: v for k, v in line.items() if k != "_id"})
 
     return {"ok": True, "count": len(created), "lines": created}
@@ -288,18 +298,19 @@ async def add_package_lines(pkg_id: str, data: dict, user: dict = Depends(requir
 @router.post("/subcontractor-packages/{pkg_id}/lines-from-offer/{offer_id}", status_code=201)
 async def add_lines_from_offer(pkg_id: str, offer_id: str, user: dict = Depends(require_m2)):
     """Populate package lines from offer lines with availability check"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg or pkg["status"] != "draft":
         raise HTTPException(status_code=400, detail="Package must be draft")
 
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
     # Load execution packages for linkage
     epkgs = {}
-    for ep in await db.execution_packages.find({"org_id": org_id, "source_offer_id": offer_id}, {"_id": 0, "id": 1, "offer_line_id": 1}).to_list(200):
+    for ep in await tenant.execution_packages.find({"org_id": org_id, "source_offer_id": offer_id}, {"_id": 0, "id": 1, "offer_line_id": 1}).to_list(200):
         if ep.get("offer_line_id"): epkgs[ep["offer_line_id"]] = ep["id"]
 
     lines_input = []
@@ -330,13 +341,14 @@ async def add_lines_from_offer(pkg_id: str, offer_id: str, user: dict = Depends(
 
 @router.delete("/subcontractor-package-lines/{line_id}")
 async def remove_package_line(line_id: str, user: dict = Depends(require_m2)):
-    line = await db.subcontractor_package_lines.find_one({"id": line_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    line = await tenant.subcontractor_package_lines.find_one({"id": line_id, "org_id": user["org_id"]})
     if not line:
         raise HTTPException(status_code=404, detail="Line not found")
-    pkg = await db.subcontractor_packages.find_one({"id": line["package_id"]})
+    pkg = await tenant.subcontractor_packages.find_one({"id": line["package_id"]})
     if not pkg or pkg["status"] != "draft":
         raise HTTPException(status_code=400, detail="Can only remove lines from draft packages")
-    await db.subcontractor_package_lines.delete_one({"id": line_id})
+    await tenant.subcontractor_package_lines.delete_one({"id": line_id})
     return {"ok": True}
 
 
@@ -345,7 +357,8 @@ async def remove_package_line(line_id: str, user: dict = Depends(require_m2)):
 # ═══════════════════════════════════════════════════════════════════
 
 async def _get_next_act_no(org_id):
-    last = await db.subcontractor_acts.find_one({"org_id": org_id}, {"_id": 0, "act_no": 1}, sort=[("created_at", -1)])
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.subcontractor_acts.find_one({"org_id": org_id}, {"_id": 0, "act_no": 1}, sort=[("created_at", -1)])
     n = 1
     if last and last.get("act_no"):
         try: n = int(last["act_no"].split("-")[1]) + 1
@@ -355,9 +368,10 @@ async def _get_next_act_no(org_id):
 
 @router.post("/subcontractor-acts", status_code=201)
 async def create_subcontractor_act(data: dict, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("package_id")
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
     if pkg["status"] == "draft":
@@ -367,7 +381,7 @@ async def create_subcontractor_act(data: dict, user: dict = Depends(require_m2))
     act_lines = []
     for al in data.get("lines", []):
         pl_id = al.get("package_line_id")
-        pl = await db.subcontractor_package_lines.find_one({"id": pl_id}, {"_id": 0})
+        pl = await tenant.subcontractor_package_lines.find_one({"id": pl_id}, {"_id": 0})
         if not pl:
             continue
         current_qty = float(al.get("current_certified_qty", 0))
@@ -402,21 +416,23 @@ async def create_subcontractor_act(data: dict, user: dict = Depends(require_m2))
         "status": "draft",
         "created_at": now, "updated_at": now,
     }
-    await db.subcontractor_acts.insert_one(act)
+    await tenant.subcontractor_acts.insert_one(act)
     return {k: v for k, v in act.items() if k != "_id"}
 
 
 @router.get("/subcontractor-acts")
 async def list_subcontractor_acts(project_id: Optional[str] = None, package_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
     if package_id: q["package_id"] = package_id
-    return await db.subcontractor_acts.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return await tenant.subcontractor_acts.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 
 @router.post("/subcontractor-acts/{act_id}/confirm")
 async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2)):
-    act = await db.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    act = await tenant.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
     if act["status"] != "draft":
@@ -430,7 +446,7 @@ async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2
         new_cert = al["total_certified_qty"]
         new_cert_total = round(new_cert * al["subcontract_unit_price"], 2)
         new_remaining = round(al["assigned_qty"] - new_cert, 2)
-        await db.subcontractor_package_lines.update_one({"id": pl_id}, {"$set": {
+        await tenant.subcontractor_package_lines.update_one({"id": pl_id}, {"$set": {
             "certified_qty": new_cert, "certified_total": new_cert_total,
             "remaining_qty": new_remaining,
             "remaining_value": round(new_remaining * al["subcontract_unit_price"], 2),
@@ -438,7 +454,7 @@ async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2
 
     # Update package totals
     pkg_id = act["package_id"]
-    all_pl = await db.subcontractor_package_lines.find({"package_id": pkg_id}, {"_id": 0}).to_list(200)
+    all_pl = await tenant.subcontractor_package_lines.find({"package_id": pkg_id}, {"_id": 0}).to_list(200)
     total_cert = sum(l.get("certified_total", 0) for l in all_pl)
     contract_total = sum(l.get("subcontract_total", 0) for l in all_pl)
     total_remaining = sum(l.get("remaining_qty", 0) for l in all_pl)
@@ -449,15 +465,15 @@ async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2
     elif total_cert > 0:
         pkg_status = "partially_certified"
 
-    await db.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
+    await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
         "certified_total": round(total_cert, 2),
-        "payable_total": round(total_cert - (await db.subcontractor_packages.find_one({"id": pkg_id})).get("paid_total", 0), 2),
+        "payable_total": round(total_cert - (await tenant.subcontractor_packages.find_one({"id": pkg_id})).get("paid_total", 0), 2),
         "remaining_contract_total": round(contract_total - total_cert, 2),
         "status": pkg_status, "updated_at": now,
     }})
 
-    await db.subcontractor_acts.update_one({"id": act_id}, {"$set": {"status": "confirmed", "confirmed_at": now, "updated_at": now}})
-    return await db.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
+    await tenant.subcontractor_acts.update_one({"id": act_id}, {"$set": {"status": "confirmed", "confirmed_at": now, "updated_at": now}})
+    return await tenant.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -465,7 +481,8 @@ async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2
 # ═══════════════════════════════════════════════════════════════════
 
 async def _get_next_pay_no(org_id):
-    last = await db.subcontractor_payments.find_one({"org_id": org_id}, {"_id": 0, "payment_no": 1}, sort=[("created_at", -1)])
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.subcontractor_payments.find_one({"org_id": org_id}, {"_id": 0, "payment_no": 1}, sort=[("created_at", -1)])
     n = 1
     if last and last.get("payment_no"):
         try: n = int(last["payment_no"].split("-")[1]) + 1
@@ -475,9 +492,10 @@ async def _get_next_pay_no(org_id):
 
 @router.post("/subcontractor-payments", status_code=201)
 async def create_subcontractor_payment(data: dict, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("package_id")
-    pkg = await db.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
 
@@ -491,9 +509,9 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
     # Resolve cash/bank account for the outflow (default = first Cash account = Каса)
     req_account_id = data.get("account_id")
     if req_account_id:
-        account = await db.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
+        account = await tenant.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
     else:
-        account = await db.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
+        account = await tenant.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
     account_id = account["id"] if account else None
 
     payment = {
@@ -510,11 +528,11 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         "account_id": account_id,
         "created_at": now,
     }
-    await db.subcontractor_payments.insert_one(payment)
+    await tenant.subcontractor_payments.insert_one(payment)
 
     # Cash outflow from the chosen account (Каса/Банка) — keeps cash flow / account balance correct
     if account_id:
-        await db.finance_payments.insert_one({
+        await tenant.finance_payments.insert_one({
             "id": str(uuid.uuid4()), "org_id": org_id,
             "direction": "Outflow", "amount": amount,
             "currency": pkg.get("currency", "EUR"),
@@ -530,12 +548,12 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         })
 
     # Update package paid totals
-    all_pays = await db.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)
+    all_pays = await tenant.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)
     total_paid = sum(p["amount"] for p in all_pays)
     certified = pkg.get("certified_total", 0)
     payable = round(certified - total_paid, 2)
 
-    await db.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
+    await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
         "paid_total": round(total_paid, 2), "payable_total": max(0, payable), "updated_at": now,
     }})
 
@@ -544,10 +562,11 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
 
 @router.get("/subcontractor-payments")
 async def list_subcontractor_payments(project_id: Optional[str] = None, package_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
     if package_id: q["package_id"] = package_id
-    return await db.subcontractor_payments.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return await tenant.subcontractor_payments.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -556,7 +575,8 @@ async def list_subcontractor_payments(project_id: Optional[str] = None, package_
 
 async def get_subcontract_metrics(org_id: str, project_id: str) -> dict:
     """Get aggregated subcontract metrics for a project"""
-    pkgs = await db.subcontractor_packages.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    pkgs = await tenant.subcontractor_packages.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$ne": "draft"}},
         {"_id": 0, "contract_total": 1, "certified_total": 1, "paid_total": 1, "payable_total": 1, "remaining_contract_total": 1}
     ).to_list(100)

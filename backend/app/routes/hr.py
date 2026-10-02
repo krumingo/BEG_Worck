@@ -35,16 +35,17 @@ def payroll_permission(user: dict) -> bool:
 
 @router.get("/employees")
 async def list_employees(user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    users = await db.users.find(
+    users = await tenant.users.find(
         {"org_id": user["org_id"]},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "name": 1, "email": 1, "role": 1, "phone": 1, "avatar_url": 1}
     ).to_list(500)
     
     # Get profiles
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": user["org_id"]},
         {"_id": 0}
     ).to_list(500)
@@ -64,17 +65,18 @@ async def list_employees(user: dict = Depends(require_m4)):
 @router.get("/employees/{user_id}")
 async def get_employee(user_id: str, user: dict = Depends(require_m4)):
     # Technicians can view own profile
+    tenant = _tenant(user)
     if user["id"] != user_id and not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    target = await db.users.find_one(
+    target = await tenant.users.find_one(
         {"id": user_id, "org_id": user["org_id"]},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
     )
     if not target:
         raise HTTPException(status_code=404, detail="Employee not found")
     
-    profile = await db.employee_profiles.find_one(
+    profile = await tenant.employee_profiles.find_one(
         {"org_id": user["org_id"], "user_id": user_id},
         {"_id": 0}
     )
@@ -83,15 +85,16 @@ async def get_employee(user_id: str, user: dict = Depends(require_m4)):
 
 @router.post("/employees", status_code=201)
 async def upsert_employee_profile(data: EmployeeProfileCreate, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    target = await db.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
+    target = await tenant.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
     now = datetime.now(timezone.utc).isoformat()
-    existing = await db.employee_profiles.find_one({"org_id": user["org_id"], "user_id": data.user_id})
+    existing = await tenant.employee_profiles.find_one({"org_id": user["org_id"], "user_id": data.user_id})
     
     profile = {
         "org_id": user["org_id"],
@@ -113,7 +116,7 @@ async def upsert_employee_profile(data: EmployeeProfileCreate, user: dict = Depe
     }
     
     if existing:
-        await db.employee_profiles.update_one(
+        await tenant.employee_profiles.update_one(
             {"id": existing["id"]},
             {"$set": profile}
         )
@@ -122,7 +125,7 @@ async def upsert_employee_profile(data: EmployeeProfileCreate, user: dict = Depe
     else:
         profile["id"] = str(uuid.uuid4())
         profile["created_at"] = now
-        await db.employee_profiles.insert_one(profile)
+        await tenant.employee_profiles.insert_one(profile)
     
     await log_audit(user["org_id"], user["id"], user["email"], "employee_profile_updated", "employee", data.user_id,
                     {"pay_type": data.pay_type})
@@ -132,10 +135,11 @@ async def upsert_employee_profile(data: EmployeeProfileCreate, user: dict = Depe
 
 @router.put("/employees/{user_id}")
 async def update_employee_profile(user_id: str, data: EmployeeProfileUpdate, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    profile = await db.employee_profiles.find_one({"org_id": user["org_id"], "user_id": user_id})
+    profile = await tenant.employee_profiles.find_one({"org_id": user["org_id"], "user_id": user_id})
     if not profile:
         # Auto-create profile if missing
         now = datetime.now(timezone.utc).isoformat()
@@ -150,24 +154,25 @@ async def update_employee_profile(user_id: str, data: EmployeeProfileUpdate, use
             "created_at": now,
             "updated_at": now,
         }
-        await db.employee_profiles.insert_one(profile)
+        await tenant.employee_profiles.insert_one(profile)
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.employee_profiles.update_one({"id": profile["id"]}, {"$set": update})
+    await tenant.employee_profiles.update_one({"id": profile["id"]}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "employee_profile_updated", "employee", user_id, update)
     
-    return await db.employee_profiles.find_one({"id": profile["id"]}, {"_id": 0})
+    return await tenant.employee_profiles.find_one({"id": profile["id"]}, {"_id": 0})
 
 
 @router.put("/employees/{user_id}/basic")
 async def update_employee_basic(user_id: str, data: dict, user: dict = Depends(require_m4)):
     """Update employee basic info (name, phone, role)"""
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
+    target = await tenant.users.find_one({"id": user_id, "org_id": user["org_id"]})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -175,9 +180,9 @@ async def update_employee_basic(user_id: str, data: dict, user: dict = Depends(r
     update = {k: v for k, v in data.items() if k in allowed and v is not None}
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.users.update_one({"id": user_id}, {"$set": update})
+        await tenant.users.update_one({"id": user_id}, {"$set": update})
     
-    return await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "role": 1, "avatar_url": 1})
+    return await tenant.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "role": 1, "avatar_url": 1})
 
 
 # ── Advances / Loans ───────────────────────────────────────────────
@@ -296,7 +301,7 @@ async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict =
     }
     if master_person:
         advance["master_person_id"] = master_person["master_person_id"]
-    await db.advances.insert_one(advance)
+    await tenant.advances.insert_one(advance)
 
     await log_audit(org, user["id"], user["email"], "advance_created", "advance", advance["id"],
                     {"recipient": recipient_name, "type": data.type, "amount": data.amount})
@@ -306,10 +311,11 @@ async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict =
 
 @router.post("/advances/{advance_id}/apply-deduction")
 async def apply_advance_deduction(advance_id: str, amount: float, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    advance = await db.advances.find_one({"id": advance_id, "org_id": user["org_id"]})
+    advance = await tenant.advances.find_one({"id": advance_id, "org_id": user["org_id"]})
     if not advance:
         raise HTTPException(status_code=404, detail="Advance not found")
     if advance["status"] == "Closed":
@@ -320,22 +326,23 @@ async def apply_advance_deduction(advance_id: str, amount: float, user: dict = D
     new_remaining = round(advance["remaining_amount"] - amount, 2)
     new_status = "Closed" if new_remaining <= 0 else "Open"
     
-    await db.advances.update_one({"id": advance_id}, {"$set": {
+    await tenant.advances.update_one({"id": advance_id}, {"$set": {
         "remaining_amount": new_remaining,
         "status": new_status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }})
     
-    return await db.advances.find_one({"id": advance_id}, {"_id": 0})
+    return await tenant.advances.find_one({"id": advance_id}, {"_id": 0})
 
 
 @router.post("/advances/{advance_id}/repay")
 async def repay_advance(advance_id: str, amount: float, account_id: str = None, user: dict = Depends(require_m4)):
     """Repay a loan with money: records a cash INFLOW and reduces the balance."""
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     org_id = user["org_id"]
-    advance = await db.advances.find_one({"id": advance_id, "org_id": org_id})
+    advance = await tenant.advances.find_one({"id": advance_id, "org_id": org_id})
     if not advance:
         raise HTTPException(status_code=404, detail="Advance not found")
     if advance.get("status") == "Closed":
@@ -352,7 +359,7 @@ async def repay_advance(advance_id: str, amount: float, account_id: str = None, 
         new_remaining = 0
     acc_id = account_id or advance.get("account_id")
     label = advance.get("recipient_name") or advance.get("guest_name") or "Заем"
-    await db.finance_payments.insert_one({
+    await tenant.finance_payments.insert_one({
         "id": str(uuid.uuid4()), "org_id": org_id, "direction": "Inflow",
         "amount": amt, "currency": advance.get("currency", "EUR"), "date": now[:10],
         "method": "Cash", "account_id": acc_id, "counterparty_name": label,
@@ -360,13 +367,13 @@ async def repay_advance(advance_id: str, amount: float, account_id: str = None, 
         "user_id": advance.get("user_id"),
         "created_at": now, "updated_at": now,
     })
-    await db.advances.update_one({"id": advance_id, "org_id": org_id}, {
+    await tenant.advances.update_one({"id": advance_id, "org_id": org_id}, {
         "$set": {"remaining_amount": new_remaining,
                  "status": "Closed" if new_remaining <= 0 else "Open",
                  "updated_at": now},
         "$push": {"repayments": {"amount": amt, "date": now[:10], "account_id": acc_id, "at": now}},
     })
-    return await db.advances.find_one({"id": advance_id}, {"_id": 0})
+    return await tenant.advances.find_one({"id": advance_id}, {"_id": 0})
 
 
 # ── Payslips ───────────────────────────────────────────────────────
@@ -378,6 +385,7 @@ async def list_payslips(
     user_id: Optional[str] = None,
 ):
     # Technicians can only view own
+    tenant = _tenant(user)
     if user["role"] == "Technician":
         user_id = user["id"]
     elif not payroll_permission(user):
@@ -393,7 +401,7 @@ async def list_payslips(
     # Enrich
     for ps in payslips:
         uid = ps.get("user_id") or ps.get("employee_id")
-        u = await db.users.find_one({"id": uid}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        u = await tenant.users.find_one({"id": uid}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
         if u:
             ps["user_name"] = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or u.get("email", "Unknown").split("@")[0]
         elif ps.get("employee_name"):
@@ -404,7 +412,7 @@ async def list_payslips(
         if not ps.get("period_start"):
             src_id = ps.get("source_pay_run_id") or ps.get("payroll_run_id")
             if src_id:
-                run = await db.pay_runs.find_one({"id": src_id}, {"_id": 0, "period_start": 1, "period_end": 1})
+                run = await tenant.pay_runs.find_one({"id": src_id}, {"_id": 0, "period_start": 1, "period_end": 1})
                 if run:
                     ps["period_start"] = run.get("period_start")
                     ps["period_end"] = run.get("period_end")
@@ -414,6 +422,7 @@ async def list_payslips(
 
 @router.get("/payslips/{payslip_id}")
 async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     payslip = await legacy_payslip_one(user["org_id"], payslip_id)
     if not payslip:
         raise HTTPException(status_code=404, detail="Payslip not found")
@@ -423,12 +432,12 @@ async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Enrich
-    u = await db.users.find_one({"id": payslip["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+    u = await tenant.users.find_one({"id": payslip["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     payslip["user_name"] = u.get("name", u.get("email", "Unknown").split("@")[0]) if u else "Unknown"
     payslip["user_email"] = u.get("email", "") if u else ""
     
     src_id = payslip.get("source_pay_run_id") or payslip.get("payroll_run_id")
-    run = await db.pay_runs.find_one({"id": src_id}, {"_id": 0}) if src_id else None
+    run = await tenant.pay_runs.find_one({"id": src_id}, {"_id": 0}) if src_id else None
     payslip["payroll_run"] = run
     
     return payslip
@@ -441,21 +450,22 @@ async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
 @router.get("/employees/{user_id}/dashboard")
 async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4)):
     """Comprehensive employee detail with attendance, projects, hours"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     if user["id"] != user_id and not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    target = await db.users.find_one({"id": user_id, "org_id": org_id},
+    target = await tenant.users.find_one({"id": user_id, "org_id": org_id},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1, "phone": 1, "avatar_url": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Employee not found")
     
-    profile = await db.employee_profiles.find_one({"org_id": org_id, "user_id": user_id}, {"_id": 0})
+    profile = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": user_id}, {"_id": 0})
     
     # Recent attendance (last 30 days)
     from datetime import timedelta
     cutoff_30 = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
-    attendance = await db.attendance_entries.find(
+    attendance = await tenant.attendance_entries.find(
         {"org_id": org_id, "user_id": user_id, "date": {"$gte": cutoff_30}},
         {"_id": 0}
     ).sort("date", -1).to_list(60)
@@ -463,7 +473,7 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     # Enrich attendance with project names
     for att in attendance:
         if att.get("project_id"):
-            p = await db.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            p = await tenant.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
             att["project_code"] = p["code"] if p else ""
             att["project_name"] = p["name"] if p else ""
     
@@ -476,13 +486,13 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     
     project_history = []
     for te in team_entries:
-        p = await db.projects.find_one({"id": te["project_id"], "org_id": org_id}, {"_id": 0, "code": 1, "name": 1, "status": 1})
+        p = await tenant.projects.find_one({"id": te["project_id"], "org_id": org_id}, {"_id": 0, "code": 1, "name": 1, "status": 1})
         if p:
             # Count attendance days for this project
-            days = await db.attendance_entries.count_documents(
+            days = await tenant.attendance_entries.count_documents(
                 {"org_id": org_id, "user_id": user_id, "project_id": te["project_id"], "status": "Present"})
             # Count work report hours
-            reports = await db.work_reports.find(
+            reports = await tenant.work_reports.find(
                 {"org_id": org_id, "user_id": user_id, "project_id": te["project_id"]},
                 {"_id": 0, "lines": 1}
             ).to_list(500)
@@ -490,7 +500,7 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
                 sum(l.get("hours", 0) for l in r.get("lines", []))
                 for r in reports
             )
-            last_att = await db.attendance_entries.find_one(
+            last_att = await tenant.attendance_entries.find_one(
                 {"org_id": org_id, "user_id": user_id, "project_id": te["project_id"]},
                 {"_id": 0, "date": 1}, sort=[("date", -1)])
             
@@ -509,16 +519,16 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     project_history.sort(key=lambda x: x.get("last_attendance") or "", reverse=True)
     
     # Also include projects from daily reports not covered by project_team
-    daily_project_ids = await db.employee_daily_reports.distinct("day_entries.project_id", {"org_id": org_id, "employee_id": user_id})
+    daily_project_ids = await tenant.employee_daily_reports.distinct("day_entries.project_id", {"org_id": org_id, "employee_id": user_id})
     existing_pids = set(ph["project_id"] for ph in project_history)
     for dpid in daily_project_ids:
         if not dpid or dpid in existing_pids:
             continue
-        p = await db.projects.find_one({"id": dpid, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1, "status": 1})
+        p = await tenant.projects.find_one({"id": dpid, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1, "status": 1})
         if not p:
             continue
         # Count hours from daily reports
-        dr_list = await db.employee_daily_reports.find(
+        dr_list = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "employee_id": user_id, "day_entries.project_id": dpid},
             {"_id": 0, "day_entries": 1, "report_date": 1}
         ).to_list(500)
@@ -548,16 +558,16 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     
     # Hours summary (current month) — includes both old work_reports and new daily_reports
     month_start = datetime.now(timezone.utc).strftime("%Y-%m-01")
-    month_att = await db.attendance_entries.count_documents(
+    month_att = await tenant.attendance_entries.count_documents(
         {"org_id": org_id, "user_id": user_id, "date": {"$gte": month_start}, "status": "Present"})
-    month_reports = await db.work_reports.find(
+    month_reports = await tenant.work_reports.find(
         {"org_id": org_id, "user_id": user_id, "created_at": {"$gte": month_start + "T00:00:00"}},
         {"_id": 0, "lines": 1}
     ).to_list(100)
     month_hours = sum(sum(l.get("hours", 0) for l in r.get("lines", [])) for r in month_reports)
     
     # Add hours from daily reports
-    month_daily = await db.employee_daily_reports.find(
+    month_daily = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "employee_id": user_id, "report_date": {"$gte": month_start}},
         {"_id": 0, "total_hours": 1, "report_date": 1}
     ).to_list(31)
@@ -573,7 +583,7 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     payslips = []
     for ps in payslips_raw:
         src_id = ps.get("source_pay_run_id") or ps.get("payroll_run_id")
-        run = await db.pay_runs.find_one({"id": src_id}, {"_id": 0, "period_start": 1, "period_end": 1}) if src_id else None
+        run = await tenant.pay_runs.find_one({"id": src_id}, {"_id": 0, "period_start": 1, "period_end": 1}) if src_id else None
         ps["period_start"] = run.get("period_start") if run else None
         ps["period_end"] = run.get("period_end") if run else None
         ps["gross_pay"] = ps.get("base_amount", 0)
@@ -599,6 +609,7 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
 @router.get("/employees/{user_id}/calendar")
 async def get_employee_calendar(user_id: str, month: str = None, user: dict = Depends(require_m4)):
     """Get calendar data for employee (attendance + work reports by day)"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     if user["id"] != user_id and not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -614,7 +625,7 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
     else:
         date_to = f"{y}-{m+1:02d}-01"
     
-    attendance = await db.attendance_entries.find(
+    attendance = await tenant.attendance_entries.find(
         {"org_id": org_id, "user_id": user_id, "date": {"$gte": date_from, "$lt": date_to}},
         {"_id": 0}
     ).to_list(31)
@@ -622,7 +633,7 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
     # Enrich with project info
     for att in attendance:
         if att.get("project_id"):
-            p = await db.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            p = await tenant.projects.find_one({"id": att["project_id"]}, {"_id": 0, "code": 1, "name": 1})
             att["project_code"] = p["code"] if p else ""
     
     # ─────────────────────────────────────────────────────────────
@@ -648,7 +659,7 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
     pids = {ln.get("project_id") for ln in raw_lines if ln.get("project_id")}
     proj_code_map = {}
     if pids:
-        projs = await db.projects.find(
+        projs = await tenant.projects.find(
             {"id": {"$in": list(pids)}}, {"_id": 0, "id": 1, "code": 1}
         ).to_list(200)
         proj_code_map = {p["id"]: p.get("code", "") for p in projs}
@@ -705,7 +716,7 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
     # Normalizer flattens OLD entries into report lines (one per day_entry) but doesn't
     # carry day_status (it's a day-level field, not entry-level). We read it here purely
     # to populate days[d].daily_report.day_status — used by frontend for Leave/Sick badges.
-    old_day_meta = await db.employee_daily_reports.find(
+    old_day_meta = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "employee_id": user_id, "report_date": {"$gte": date_from, "$lt": date_to}},
         {"_id": 0, "report_date": 1, "day_status": 1, "approval_status": 1, "total_hours": 1, "day_entries": 1}
     ).to_list(31)
@@ -723,7 +734,7 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
             if pid:
                 code = proj_code_map.get(pid, "")
                 if not code:
-                    p = await db.projects.find_one({"id": pid}, {"_id": 0, "code": 1})
+                    p = await tenant.projects.find_one({"id": pid}, {"_id": 0, "code": 1})
                     code = p["code"] if p else ""
                 if code:
                     proj_codes.append(code)
@@ -761,6 +772,11 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
 from pydantic import BaseModel as PydanticBaseModel
 from typing import List as TypingList
 
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
+
 class WeeklyRunCreate(PydanticBaseModel):
     week_start: str
     week_end: str
@@ -791,6 +807,7 @@ class PayTrancheRequest(PydanticBaseModel):
 
 @router.post("/contract-payments", status_code=201)
 async def create_contract_payment(data: ContractPaymentCreate, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -821,7 +838,7 @@ async def create_contract_payment(data: ContractPaymentCreate, user: dict = Depe
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.contract_payments.insert_one(doc)
+    await tenant.contract_payments.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
@@ -832,6 +849,7 @@ async def list_contract_payments(
     worker_name: Optional[str] = None,
     user: dict = Depends(require_m4),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if site_id:
         query["site_id"] = site_id
@@ -839,13 +857,14 @@ async def list_contract_payments(
         query["status"] = status
     if worker_name:
         query["worker_name"] = {"$regex": worker_name, "$options": "i"}
-    items = await db.contract_payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    items = await tenant.contract_payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"items": items, "total": len(items)}
 
 
 @router.get("/contract-payments/{payment_id}")
 async def get_contract_payment(payment_id: str, user: dict = Depends(require_m4)):
-    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Contract payment not found")
     return doc
@@ -853,23 +872,25 @@ async def get_contract_payment(payment_id: str, user: dict = Depends(require_m4)
 
 @router.put("/contract-payments/{payment_id}")
 async def update_contract_payment(payment_id: str, data: ContractPaymentUpdate, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.contract_payments.update_one({"id": payment_id}, {"$set": update})
-    return await db.contract_payments.find_one({"id": payment_id}, {"_id": 0})
+    await tenant.contract_payments.update_one({"id": payment_id}, {"$set": update})
+    return await tenant.contract_payments.find_one({"id": payment_id}, {"_id": 0})
 
 
 @router.post("/contract-payments/{payment_id}/pay-tranche")
 async def pay_tranche(payment_id: str, data: PayTrancheRequest, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -890,21 +911,22 @@ async def pay_tranche(payment_id: str, data: PayTrancheRequest, user: dict = Dep
     all_paid = all(t["status"] == "paid" for t in tranches)
     new_status = "completed" if all_paid else "active"
 
-    await db.contract_payments.update_one(
+    await tenant.contract_payments.update_one(
         {"id": payment_id},
         {"$set": {"tranches": tranches, "status": new_status, "updated_at": now}},
     )
-    return await db.contract_payments.find_one({"id": payment_id}, {"_id": 0})
+    return await tenant.contract_payments.find_one({"id": payment_id}, {"_id": 0})
 
 
 @router.delete("/contract-payments/{payment_id}")
 async def delete_contract_payment(payment_id: str, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    doc = await db.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     if any(t["status"] == "paid" for t in doc.get("tranches", [])):
         raise HTTPException(status_code=400, detail="Cannot delete: has paid tranches")
-    await db.contract_payments.delete_one({"id": payment_id})
+    await tenant.contract_payments.delete_one({"id": payment_id})
     return {"ok": True}

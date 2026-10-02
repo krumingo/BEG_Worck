@@ -5,9 +5,11 @@ Service - Cash Flow Forecast v1 (rule-based).
 from datetime import datetime, timezone, timedelta
 from app.db import db
 from app.services.legacy_payslips import legacy_payslips
+from app.tenancy.data_access import TenantData
 
 
 async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str = None) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc)
     start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else now
     start_str = start.strftime("%Y-%m-%d")
@@ -15,7 +17,7 @@ async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str =
     end_str = end.strftime("%Y-%m-%d")
 
     # ── A. Incoming (unpaid invoices) ───────────────────────────
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "status": {"$in": ["Sent", "PartiallyPaid"]}},
         {"_id": 0, "id": 1, "invoice_number": 1, "counterparty_name": 1,
          "project_id": 1, "due_date": 1, "total": 1, "paid_amount": 1},
@@ -53,7 +55,7 @@ async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str =
 
     # Fixed expenses (spread monthly)
     month = start.strftime("%Y-%m")
-    fe = await db.fixed_expenses.find_one({"org_id": org_id, "month": month}, {"_id": 0})
+    fe = await tenant.fixed_expenses.find_one({"org_id": org_id, "month": month}, {"_id": 0})
     monthly_fixed = (fe.get("total", 0) if fe else 0)
     if monthly_fixed > 0:
         daily_fixed = round(monthly_fixed / 30, 2)
@@ -68,7 +70,7 @@ async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str =
             outgoing_by_date[pay_day] = outgoing_by_date.get(pay_day, 0) + monthly_fixed
 
     # Contract payment tranches
-    contracts = await db.contract_payments.find(
+    contracts = await tenant.contract_payments.find(
         {"org_id": org_id, "status": "active"}, {"_id": 0}
     ).to_list(200)
     for c in contracts:
@@ -86,7 +88,7 @@ async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str =
                 outgoing_by_date[due] = outgoing_by_date.get(due, 0) + amt
 
     # Subcontractor confirmed payments
-    sub_payments = await db.subcontractor_payments.find(
+    sub_payments = await tenant.subcontractor_payments.find(
         {"org_id": org_id, "status": {"$in": ["confirmed", "pending"]}},
         {"_id": 0, "amount": 1, "created_at": 1, "id": 1},
     ).to_list(200)

@@ -12,8 +12,15 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
+from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Labor by SMR"])
 
@@ -25,6 +32,7 @@ router = APIRouter(tags=["Labor by SMR"])
 @router.post("/labor-entries", status_code=201)
 async def create_labor_entry(data: dict, user: dict = Depends(require_m2)):
     """Create a labor time entry linked to an execution package"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
 
@@ -47,25 +55,26 @@ async def create_labor_entry(data: dict, user: dict = Depends(require_m2)):
     }
 
     # Resolve hourly rate
-    profile = await db.employee_profiles.find_one({"org_id": org_id, "user_id": entry["employee_id"]}, {"_id": 0, "hourly_rate": 1})
+    profile = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": entry["employee_id"]}, {"_id": 0, "hourly_rate": 1})
     if profile and profile.get("hourly_rate"):
         entry["hourly_rate"] = profile["hourly_rate"]
         entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
 
-    await db.labor_entries.insert_one(entry)
+    await tenant.labor_entries.insert_one(entry)
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
 @router.post("/labor-entries/sync-from-work-reports")
 async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(require_m2)):
     """Sync labor entries from existing work reports for a project, with optional execution package mapping"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     project_id = data.get("project_id")
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id required")
 
     # Load execution packages for name-based mapping
-    exec_pkgs = await db.execution_packages.find(
+    exec_pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "activity_name": 1, "offer_line_id": 1}
     ).to_list(200)
     pkg_by_name = {}
@@ -75,16 +84,16 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
             pkg_by_name[name] = ep
 
     # Load employee rates
-    profiles = await db.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
+    profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
     rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
 
     # Load work reports
-    reports = await db.work_reports.find(
+    reports = await tenant.work_reports.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(1000)
 
     # Clear old synced entries for this project
-    await db.labor_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "work_report_sync"})
+    await tenant.labor_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "work_report_sync"})
 
     now = datetime.now(timezone.utc).isoformat()
     created = 0
@@ -123,7 +132,7 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
                 "mapped": ep_id is not None,
                 "created_at": now,
             }
-            await db.labor_entries.insert_one(entry)
+            await tenant.labor_entries.insert_one(entry)
             created += 1
 
     return {"ok": True, "synced": created, "project_id": project_id}
@@ -136,11 +145,12 @@ async def list_labor_entries(
     employee_id: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if employee_id: q["employee_id"] = employee_id
-    entries = await db.labor_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    entries = await tenant.labor_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
     return entries
 
 
@@ -151,14 +161,15 @@ async def list_labor_entries(
 @router.post("/execution-packages/recompute-labor/{project_id}")
 async def recompute_execution_package_labor(project_id: str, user: dict = Depends(require_m2)):
     """Recompute planned hours and labor budget for execution packages"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
     if not pkgs:
         return {"ok": True, "updated": 0}
 
     # Load offer lines for labor_hours_per_unit
     offer_ids = list(set(p.get("source_offer_id") for p in pkgs if p.get("source_offer_id")))
-    offers = await db.offers.find({"id": {"$in": offer_ids}}, {"_id": 0, "lines": 1}).to_list(20)
+    offers = await tenant.offers.find({"id": {"$in": offer_ids}}, {"_id": 0, "lines": 1}).to_list(20)
     offer_line_map = {}
     for o in offers:
         for l in o.get("lines", []):
@@ -166,11 +177,13 @@ async def recompute_execution_package_labor(project_id: str, user: dict = Depend
                 offer_line_map[l["id"]] = l
 
     # Load org worker rates for estimation
-    settings = await db.settings.find_one({"_id": "worker_rates", "org_id": org_id})
+    # W0-03E-A2C: per-tenant settings row id + tenant-scoped read.
+    settings = await TenantData.for_resolved_org(db, org_id).settings.find_one(
+        {"_id": settings_id(WORKER_RATES, org_id)})
     default_rate = 18  # EUR/h fallback
 
     # Aggregate used hours from labor_entries
-    entries = await db.labor_entries.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "execution_package_id": 1, "hours": 1, "labor_cost": 1}).to_list(5000)
+    entries = await tenant.labor_entries.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "execution_package_id": 1, "hours": 1, "labor_cost": 1}).to_list(5000)
     used_by_pkg = {}
     cost_by_pkg = {}
     for e in entries:
@@ -219,7 +232,7 @@ async def recompute_execution_package_labor(project_id: str, user: dict = Depend
             "labor_variance_percent": labor_variance_percent,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.execution_packages.update_one({"id": pkg["id"]}, {"$set": update_fields})
+        await tenant.execution_packages.update_one({"id": pkg["id"]}, {"$set": update_fields})
         updated += 1
 
     return {"ok": True, "updated": updated}
@@ -232,18 +245,19 @@ async def recompute_execution_package_labor(project_id: str, user: dict = Depend
 @router.get("/labor-cost/by-execution-package/{pkg_id}")
 async def get_labor_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(require_m2)):
     """Detailed labor cost breakdown for an execution package"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    entries = await db.labor_entries.find(
+    entries = await tenant.labor_entries.find(
         {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
     ).sort("date", -1).to_list(500)
 
     # Load employee names
     emp_ids = list(set(e["employee_id"] for e in entries))
-    users = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
+    users = await tenant.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
 
     total_hours = 0
@@ -306,16 +320,17 @@ async def get_labor_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(require_m
 @router.get("/labor-warnings/{project_id}")
 async def get_labor_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Get labor warnings for all execution packages in a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
     # Count unmapped entries
-    unmapped = await db.labor_entries.count_documents(
+    unmapped = await tenant.labor_entries.count_documents(
         {"org_id": org_id, "project_id": project_id, "execution_package_id": None}
     )
-    total_entries = await db.labor_entries.count_documents(
+    total_entries = await tenant.labor_entries.count_documents(
         {"org_id": org_id, "project_id": project_id}
     )
 
@@ -378,8 +393,9 @@ async def get_labor_warnings(project_id: str, user: dict = Depends(require_m2)):
 
 async def get_labor_summary_for_project(org_id: str, project_id: str) -> dict:
     """Get aggregated labor summary for project profit integration"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     # Mapped labor (linked to execution packages)
-    mapped = await db.labor_entries.find(
+    mapped = await tenant.labor_entries.find(
         {"org_id": org_id, "project_id": project_id, "execution_package_id": {"$ne": None}},
         {"_id": 0, "hours": 1, "labor_cost": 1}
     ).to_list(5000)
@@ -387,7 +403,7 @@ async def get_labor_summary_for_project(org_id: str, project_id: str) -> dict:
     mapped_cost = sum(float(e["labor_cost"]) for e in mapped if e.get("labor_cost") is not None)
 
     # Unmapped labor
-    unmapped = await db.labor_entries.find(
+    unmapped = await tenant.labor_entries.find(
         {"org_id": org_id, "project_id": project_id, "execution_package_id": None},
         {"_id": 0, "hours": 1, "labor_cost": 1}
     ).to_list(5000)
@@ -395,7 +411,7 @@ async def get_labor_summary_for_project(org_id: str, project_id: str) -> dict:
     unmapped_cost = sum(float(e["labor_cost"]) for e in unmapped if e.get("labor_cost") is not None)
 
     # Budget from execution packages
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "labor_budget_total": 1, "planned_hours": 1}
     ).to_list(200)

@@ -18,6 +18,12 @@ from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user, require_admin
 from app.routes.assets_qr import _make_qr
 from app.routes.assets_custody import custody_after_move
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["AssetUnits"])
 
@@ -53,17 +59,18 @@ class AssetUnitUpdate(BaseModel):
 
 
 async def _location_name(org_id: str, ltype: Optional[str], lid: Optional[str]) -> str:
+    tenant = TenantData.for_resolved_org(db, org_id)
     if not ltype or not lid:
         return ""
     try:
         if ltype == "warehouse":
-            w = await db.warehouses.find_one({"id": lid, "org_id": org_id}, {"_id": 0, "name": 1})
+            w = await tenant.warehouses.find_one({"id": lid, "org_id": org_id}, {"_id": 0, "name": 1})
             return w.get("name", "") if w else ""
         if ltype == "project":
-            p = await db.projects.find_one({"id": lid, "org_id": org_id}, {"_id": 0, "name": 1})
+            p = await tenant.projects.find_one({"id": lid, "org_id": org_id}, {"_id": 0, "name": 1})
             return p.get("name", "") if p else ""
         if ltype == "employee":
-            u = await db.users.find_one({"id": lid, "org_id": org_id}, {"_id": 0, "first_name": 1, "last_name": 1, "name": 1})
+            u = await tenant.users.find_one({"id": lid, "org_id": org_id}, {"_id": 0, "first_name": 1, "last_name": 1, "name": 1})
             if not u:
                 return ""
             return u.get("name") or f"{u.get('first_name','')} {u.get('last_name','')}".strip()
@@ -73,7 +80,8 @@ async def _location_name(org_id: str, ltype: Optional[str], lid: Optional[str]) 
 
 
 async def _enrich(org_id: str, unit: dict) -> dict:
-    item = await db.asset_items.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    item = await tenant.asset_items.find_one(
         {"id": unit.get("item_id"), "org_id": org_id},
         {"_id": 0, "name": 1, "type": 1, "brand": 1, "model": 1, "photo_url": 1, "purchase_date": 1, "warranty_months": 1},
     )
@@ -90,7 +98,7 @@ async def _enrich(org_id: str, unit: dict) -> dict:
     # кой е въвел бройката (име)
     cb = unit.get("created_by")
     if cb:
-        u = await db.users.find_one({"id": cb, "org_id": org_id}, {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1})
+        u = await tenant.users.find_one({"id": cb, "org_id": org_id}, {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1})
         if u:
             unit["created_by_name"] = u.get("name") or f"{u.get('first_name','')} {u.get('last_name','')}".strip() or u.get("email") or ""
         else:
@@ -111,6 +119,7 @@ async def list_asset_units(
     location_id: Optional[str] = None,
     search: Optional[str] = None,
 ):
+    tenant = _tenant(user)
     org = user["org_id"]
     query = {"org_id": org}
     if item_id:
@@ -125,10 +134,10 @@ async def list_asset_units(
         rx = {"$regex": re.escape(search), "$options": "i"}
         query["$or"] = [{"qr_id": rx}, {"serial_no": rx}, {"inventory_no": rx}]
 
-    total = await db.asset_units.count_documents(query)
+    total = await tenant.asset_units.count_documents(query)
     skip = (page - 1) * page_size
     units = (
-        await db.asset_units.find(query, {"_id": 0})
+        await tenant.asset_units.find(query, {"_id": 0})
         .sort("created_at", -1)
         .skip(skip)
         .limit(page_size)
@@ -142,13 +151,14 @@ async def list_asset_units(
 
 @router.post("/assets/units", status_code=201)
 async def create_asset_unit(data: AssetUnitCreate, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     org = user["org_id"]
     if data.status not in STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
     if data.location_type and data.location_type not in LOCATION_TYPES:
         raise HTTPException(status_code=400, detail="Invalid location_type")
 
-    item = await db.asset_items.find_one({"id": data.item_id, "org_id": org}, {"_id": 0})
+    item = await tenant.asset_items.find_one({"id": data.item_id, "org_id": org}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Артикулът не е намерен")
 
@@ -174,7 +184,7 @@ async def create_asset_unit(data: AssetUnitCreate, user: dict = Depends(require_
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"],
     }
-    await db.asset_units.insert_one(doc)
+    await tenant.asset_units.insert_one(doc)
     doc.pop("_id", None)
     await _enrich(org, doc)
     return doc
@@ -182,7 +192,8 @@ async def create_asset_unit(data: AssetUnitCreate, user: dict = Depends(require_
 
 @router.get("/assets/units/{unit_id}")
 async def get_asset_unit(unit_id: str, user: dict = Depends(get_current_user)):
-    unit = await db.asset_units.find_one({"id": unit_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    unit = await tenant.asset_units.find_one({"id": unit_id, "org_id": user["org_id"]}, {"_id": 0})
     if not unit:
         raise HTTPException(status_code=404, detail="Not found")
     await _enrich(user["org_id"], unit)
@@ -191,6 +202,7 @@ async def get_asset_unit(unit_id: str, user: dict = Depends(get_current_user)):
 
 @router.put("/assets/units/{unit_id}")
 async def update_asset_unit(unit_id: str, data: AssetUnitUpdate, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     org = user["org_id"]
     update = {k: v for k, v in data.dict(exclude_unset=True).items()}
     if "status" in update and update["status"] not in STATUSES:
@@ -199,23 +211,24 @@ async def update_asset_unit(unit_id: str, data: AssetUnitUpdate, user: dict = De
         raise HTTPException(status_code=400, detail="Invalid location_type")
     if not update:
         raise HTTPException(status_code=400, detail="Nothing to update")
-    res = await db.asset_units.update_one({"id": unit_id, "org_id": org}, {"$set": update})
+    res = await tenant.asset_units.update_one({"id": unit_id, "org_id": org}, {"$set": update})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
-    unit = await db.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
+    unit = await tenant.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
     await _enrich(org, unit)
     return unit
 
 
 @router.delete("/assets/units/{unit_id}")
 async def delete_asset_unit(unit_id: str, request: Request, user: dict = Depends(require_admin)):
-    if await db.asset_units.find_one({"id": unit_id, "org_id": user["org_id"]}) is None:
+    tenant = _tenant(user)
+    if await tenant.asset_units.find_one({"id": unit_id, "org_id": user["org_id"]}) is None:
         raise HTTPException(status_code=404, detail="Not found")
     done = await guarded_identity_delete(user, request, db, collection="asset_units",
                                          legacy_id=unit_id, deleted_response={"deleted": True})
     if done is not None:
         return done
-    res = await db.asset_units.delete_one({"id": unit_id, "org_id": user["org_id"]})
+    res = await tenant.asset_units.delete_one({"id": unit_id, "org_id": user["org_id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
     return {"deleted": True}
@@ -242,10 +255,11 @@ def _user_name(user: dict) -> str:
 @router.post("/assets/units/{unit_id}/move")
 async def move_unit(unit_id: str, data: MoveAction, user: dict = Depends(get_current_user)):
     """Record a custody movement (scan-driven). Any logged-in user can act."""
+    tenant = _tenant(user)
     org = user["org_id"]
     if data.action not in ACTIONS:
         raise HTTPException(status_code=400, detail="Invalid action")
-    unit = await db.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
+    unit = await tenant.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
     if not unit:
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -281,22 +295,23 @@ async def move_unit(unit_id: str, data: MoveAction, user: dict = Depends(get_cur
         "note": (data.note or "").strip() or None,
         "at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.asset_movements.insert_one(mv)
+    await tenant.asset_movements.insert_one(mv)
     await custody_after_move(org, unit_id, act, data.to_id, user)
-    await db.asset_units.update_one(
+    await tenant.asset_units.update_one(
         {"id": unit_id, "org_id": org},
         {"$set": {"location_type": to_type, "location_id": to_id, "status": status}},
     )
-    unit = await db.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
+    unit = await tenant.asset_units.find_one({"id": unit_id, "org_id": org}, {"_id": 0})
     await _enrich(org, unit)
     return unit
 
 
 @router.get("/assets/units/{unit_id}/movements")
 async def list_movements(unit_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org = user["org_id"]
     movements = (
-        await db.asset_movements.find({"org_id": org, "unit_id": unit_id}, {"_id": 0})
+        await tenant.asset_movements.find({"org_id": org, "unit_id": unit_id}, {"_id": 0})
         .sort("at", -1)
         .to_list(200)
     )

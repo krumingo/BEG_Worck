@@ -11,6 +11,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user, can_manage_project
 from app.utils.audit import log_audit
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Offer Versions"])
 
@@ -75,7 +81,8 @@ async def create_snapshot(offer: dict) -> dict:
 
 async def get_next_version_number(org_id: str, offer_id: str) -> int:
     """Get next version number for an offer."""
-    last = await db.offer_versions.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.offer_versions.find_one(
         {"org_id": org_id, "offer_id": offer_id},
         {"_id": 0, "version_number": 1},
         sort=[("version_number", -1)]
@@ -86,14 +93,15 @@ async def get_next_version_number(org_id: str, offer_id: str) -> int:
 @router.get("/offers/{offer_id}/versions")
 async def list_offer_versions(offer_id: str, user: dict = Depends(get_current_user)):
     """List all versions for an offer (latest first)."""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
     if not await can_manage_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
     
-    versions = await db.offer_versions.find(
+    versions = await tenant.offer_versions.find(
         {"org_id": user["org_id"], "offer_id": offer_id},
         {"_id": 0, "snapshot_json": 0}  # Exclude large snapshot in list
     ).sort("version_number", -1).to_list(100)
@@ -101,7 +109,7 @@ async def list_offer_versions(offer_id: str, user: dict = Depends(get_current_us
     # Enrich with user names
     for v in versions:
         if v.get("created_by"):
-            u = await db.users.find_one({"id": v["created_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            u = await tenant.users.find_one({"id": v["created_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             v["created_by_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
         else:
             v["created_by_name"] = ""
@@ -112,11 +120,12 @@ async def list_offer_versions(offer_id: str, user: dict = Depends(get_current_us
 @router.post("/offers/{offer_id}/versions", status_code=201)
 async def create_offer_version(offer_id: str, data: VersionCreate, user: dict = Depends(get_current_user)):
     """Create a new version (snapshot) of the current offer state."""
+    tenant = _tenant(user)
     # Check permissions
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions to create versions")
     
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
@@ -140,7 +149,7 @@ async def create_offer_version(offer_id: str, data: VersionCreate, user: dict = 
         "is_auto_backup": False,
     }
     
-    await db.offer_versions.insert_one(version)
+    await tenant.offer_versions.insert_one(version)
     await log_audit(user["org_id"], user["id"], user["email"], "version_created", "offer_version", version["id"], {
         "offer_id": offer_id,
         "version_number": version_number,
@@ -158,14 +167,15 @@ async def create_offer_version(offer_id: str, data: VersionCreate, user: dict = 
 @router.get("/offers/{offer_id}/versions/{version_number}")
 async def get_offer_version(offer_id: str, version_number: int, user: dict = Depends(get_current_user)):
     """Get a specific version snapshot for preview."""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
     if not await can_manage_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
     
-    version = await db.offer_versions.find_one(
+    version = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id, "version_number": version_number},
         {"_id": 0}
     )
@@ -174,7 +184,7 @@ async def get_offer_version(offer_id: str, version_number: int, user: dict = Dep
     
     # Enrich with creator name
     if version.get("created_by"):
-        u = await db.users.find_one({"id": version["created_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+        u = await tenant.users.find_one({"id": version["created_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
         version["created_by_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
     
     return version
@@ -187,11 +197,12 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     - Creates an automatic backup version BEFORE restore
     - Overwrites current offer with the snapshot data
     """
+    tenant = _tenant(user)
     # Check permissions
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions to restore versions")
     
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
@@ -199,7 +210,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Get the version to restore
-    version = await db.offer_versions.find_one(
+    version = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id, "version_number": version_number}
     )
     if not version:
@@ -223,7 +234,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
         "snapshot_json": backup_snapshot,
         "is_auto_backup": True,
     }
-    await db.offer_versions.insert_one(backup)
+    await tenant.offer_versions.insert_one(backup)
     
     # Step 2: Restore the snapshot to the current offer
     snapshot = version["snapshot_json"]
@@ -253,7 +264,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
         update_data["vat_amount"] = vat_amount
         update_data["total"] = round(subtotal + vat_amount, 2)
     
-    await db.offers.update_one({"id": offer_id}, {"$set": update_data})
+    await tenant.offers.update_one({"id": offer_id}, {"$set": update_data})
     
     await log_audit(user["org_id"], user["id"], user["email"], "version_restored", "offer", offer_id, {
         "restored_version": version_number,
@@ -261,7 +272,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     })
     
     # Return the updated offer
-    updated_offer = await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    updated_offer = await tenant.offers.find_one({"id": offer_id}, {"_id": 0})
     
     return {
         "ok": True,
@@ -274,25 +285,26 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
 @router.delete("/offers/{offer_id}/versions/{version_number}")
 async def delete_offer_version(offer_id: str, version_number: int, user: dict = Depends(get_current_user)):
     """Delete a specific version (admin only, cannot delete if it's the only version)."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin can delete versions")
     
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
-    version = await db.offer_versions.find_one(
+    version = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id, "version_number": version_number}
     )
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
     
     # Don't allow deleting if it's the only version
-    count = await db.offer_versions.count_documents({"org_id": user["org_id"], "offer_id": offer_id})
+    count = await tenant.offer_versions.count_documents({"org_id": user["org_id"], "offer_id": offer_id})
     if count <= 1:
         raise HTTPException(status_code=400, detail="Cannot delete the only remaining version")
     
-    await db.offer_versions.delete_one({"id": version["id"]})
+    await tenant.offer_versions.delete_one({"id": version["id"]})
     await log_audit(user["org_id"], user["id"], user["email"], "version_deleted", "offer_version", version["id"], {
         "version_number": version_number
     })

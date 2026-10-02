@@ -12,6 +12,12 @@ from pydantic import BaseModel, Field
 
 from app.deps.auth import get_current_user
 from app.db import db
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter()
 
@@ -29,10 +35,7 @@ class PayrollWeekSettings(BaseModel):
 @router.get("/settings/payroll-week")
 async def get_payroll_week(user: dict = Depends(get_current_user)):
     """Return current organization's payroll week first_day. Default: 6 (Saturday)."""
-    org = await db.organizations.find_one(
-        {"id": user["org_id"]},
-        {"_id": 0, "payroll_week": 1}
-    )
+    org = await _tenant(user).own_organization({"_id": 0, "payroll_week": 1})
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
@@ -62,10 +65,8 @@ async def update_payroll_week(
         "updated_by": user["id"],
     }
 
-    result = await db.organizations.update_one(
-        {"id": user["org_id"]},
-        {"$set": {"payroll_week": payroll_week}}
-    )
+    result = await _tenant(user).update_own_organization(
+        {"$set": {"payroll_week": payroll_week}})
 
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -84,7 +85,7 @@ class AssetIntakeRoles(BaseModel):
 
 @router.get("/settings/asset-intake-roles")
 async def get_asset_intake_roles(user: dict = Depends(get_current_user)):
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "asset_intake_roles": 1})
+    org = await _tenant(user).own_organization({"_id": 0, "asset_intake_roles": 1})
     roles = (org or {}).get("asset_intake_roles") or {}
     return {"technician": bool(roles.get("technician")), "site_manager": bool(roles.get("site_manager"))}
 
@@ -93,10 +94,9 @@ async def get_asset_intake_roles(user: dict = Depends(get_current_user)):
 async def update_asset_intake_roles(data: AssetIntakeRoles, user: dict = Depends(get_current_user)):
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner can change this")
-    await db.organizations.update_one(
-        {"id": user["org_id"]},
-        {"$set": {"asset_intake_roles": {"technician": data.technician, "site_manager": data.site_manager}}},
-    )
+    await _tenant(user).update_own_organization(
+        {"$set": {"asset_intake_roles": {"technician": data.technician,
+                                          "site_manager": data.site_manager}}})
     return {"technician": data.technician, "site_manager": data.site_manager}
 
 
@@ -107,7 +107,7 @@ class WorkersSeePay(BaseModel):
 
 @router.get("/settings/workers-see-pay")
 async def get_workers_see_pay(user: dict = Depends(get_current_user)):
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "workers_see_pay": 1})
+    org = await _tenant(user).own_organization({"_id": 0, "workers_see_pay": 1})
     return {"enabled": bool((org or {}).get("workers_see_pay"))}
 
 
@@ -115,10 +115,8 @@ async def get_workers_see_pay(user: dict = Depends(get_current_user)):
 async def update_workers_see_pay(data: WorkersSeePay, user: dict = Depends(get_current_user)):
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner can change this")
-    await db.organizations.update_one(
-        {"id": user["org_id"]},
-        {"$set": {"workers_see_pay": data.enabled}},
-    )
+    await _tenant(user).update_own_organization(
+        {"$set": {"workers_see_pay": data.enabled}})
     return {"enabled": data.enabled}
 
 
@@ -126,10 +124,11 @@ async def update_workers_see_pay(data: WorkersSeePay, user: dict = Depends(get_c
 async def my_pay_summary(user: dict = Depends(get_current_user)):
     """Worker self-view: owed (unpaid slips' period net) + payment history.
     Gated by the org 'workers_see_pay' setting; always own-scoped."""
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "workers_see_pay": 1})
+    tenant = _tenant(user)
+    org = await tenant.own_organization({"_id": 0, "workers_see_pay": 1})
     if not bool((org or {}).get("workers_see_pay")):
         raise HTTPException(status_code=403, detail="Disabled")
-    slips = await db.payment_slips.find(
+    slips = await tenant.payment_slips.find(
         {"org_id": user["org_id"], "employee_id": user["id"], "archived": {"$ne": True}},
         {"_id": 0},
     ).sort("created_at", -1).to_list(200)

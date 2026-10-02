@@ -13,6 +13,12 @@ from app.db import db
 from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
+from app.tenancy.data_access import TenantData, all_tenant_ids
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["attendance"])
 
@@ -83,7 +89,8 @@ def now_hour():
     return datetime.now(timezone.utc).hour
 
 async def get_org_attendance_window(org_id: str):
-    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "attendance_start": 1, "attendance_end": 1})
+    org = await TenantData.for_resolved_org(db, org_id).own_organization(
+        {"_id": 0, "attendance_start": 1, "attendance_end": 1})
     start = org.get("attendance_start", "06:00") if org else "06:00"
     end = org.get("attendance_end", "10:00") if org else "10:00"
     return start, end
@@ -103,7 +110,8 @@ async def is_past_deadline(org_id: str):
     return now_hour() >= end_hour
 
 async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source):
-    existing = await db.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": user_id})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    existing = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": user_id})
     if existing:
         raise HTTPException(status_code=400, detail="Attendance already marked for this user today")
     if status not in ATTENDANCE_STATUSES:
@@ -122,7 +130,7 @@ async def create_attendance_entry(org_id, date, project_id, user_id, status, not
         "marked_by_user_id": marked_by,
         "source": source,
     }
-    await db.attendance_entries.insert_one(entry)
+    await tenant.attendance_entries.insert_one(entry)
     await auto_resolve_reminders(org_id, "MissingAttendance", date, user_id, user_id)
     return {k: v for k, v in entry.items() if k != "_id"}
 
@@ -152,7 +160,7 @@ def enrich_report(report: dict) -> dict:
 
 # Reminder helpers
 async def get_org_reminder_policy(org_id: str):
-    org = await db.organizations.find_one({"id": org_id}, {"_id": 0})
+    org = await TenantData.for_resolved_org(db, org_id).own_organization({"_id": 0})
     return {
         "attendance_deadline": org.get("attendance_end", "10:00") if org else "10:00",
         "work_report_deadline": org.get("work_report_deadline", "18:30") if org else "18:30",
@@ -169,10 +177,11 @@ def get_local_now(tz_name: str):
     return datetime.now(tz)
 
 async def compute_missing_attendance(org_id: str, date: str, scoped_project_ids=None):
+    tenant = TenantData.for_resolved_org(db, org_id)
     if scoped_project_ids:
         pids = scoped_project_ids
     else:
-        active = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
+        active = await tenant.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
         pids = [p["id"] for p in active]
     if not pids:
         return []
@@ -185,20 +194,21 @@ async def compute_missing_attendance(org_id: str, date: str, scoped_project_ids=
             unique_uids.append(m["user_id"])
     if not unique_uids:
         return []
-    marked = await db.attendance_entries.find(
+    marked = await tenant.attendance_entries.find(
         {"org_id": org_id, "date": date, "user_id": {"$in": unique_uids}}, {"_id": 0, "user_id": 1}
     ).to_list(1000)
     marked_set = {e["user_id"] for e in marked}
     missing = []
     for uid in unique_uids:
         if uid not in marked_set:
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
+            u = await tenant.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
             if u and u.get("role") not in ["Admin", "Owner"]:
                 missing.append({"user_id": uid, "user_name": f"{u['first_name']} {u['last_name']}", "user_email": u["email"], "user_role": u.get("role", "")})
     return missing
 
 async def compute_missing_work_reports(org_id: str, date: str, scoped_project_ids=None):
-    present = await db.attendance_entries.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    present = await tenant.attendance_entries.find(
         {"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "user_id": 1}
     ).to_list(1000)
     present_uids = list({e["user_id"] for e in present})
@@ -207,14 +217,14 @@ async def compute_missing_work_reports(org_id: str, date: str, scoped_project_id
     if scoped_project_ids:
         pids = scoped_project_ids
     else:
-        active = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
+        active = await tenant.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(200)
         pids = [p["id"] for p in active]
     members = await project_team.project_rows(_team_org(org_id), pids, {"_id": 0},
                                               limit=1000, user_ids=present_uids)
     user_projects = {}
     for m in members:
         user_projects.setdefault(m["user_id"], []).append(m["project_id"])
-    submitted = await db.work_reports.find(
+    submitted = await tenant.work_reports.find(
         {"org_id": org_id, "date": date, "status": {"$in": ["Submitted", "Approved"]}}, {"_id": 0, "user_id": 1, "project_id": 1}
     ).to_list(1000)
     submitted_keys = {(r["user_id"], r["project_id"]) for r in submitted}
@@ -222,8 +232,8 @@ async def compute_missing_work_reports(org_id: str, date: str, scoped_project_id
     for uid, proj_ids in user_projects.items():
         for pid in proj_ids:
             if (uid, pid) not in submitted_keys:
-                u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1})
-                p = await db.projects.find_one({"id": pid}, {"_id": 0, "code": 1, "name": 1})
+                u = await tenant.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1})
+                p = await tenant.projects.find_one({"id": pid}, {"_id": 0, "code": 1, "name": 1})
                 if u:
                     missing.append({
                         "user_id": uid, "project_id": pid,
@@ -233,6 +243,7 @@ async def compute_missing_work_reports(org_id: str, date: str, scoped_project_id
     return missing
 
 async def create_notification(org_id, user_id, ntype, title, message, data=None):
+    tenant = TenantData.for_resolved_org(db, org_id)
     notif = {
         "id": str(uuid.uuid4()),
         "org_id": org_id,
@@ -244,14 +255,15 @@ async def create_notification(org_id, user_id, ntype, title, message, data=None)
         "is_read": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.notifications.insert_one(notif)
+    await tenant.notifications.insert_one(notif)
     return {k: v for k, v in notif.items() if k != "_id"}
 
 async def send_reminder_for_user(org_id, rtype, date, user_id, project_id, policy, triggered_by="system"):
+    tenant = TenantData.for_resolved_org(db, org_id)
     key = {"org_id": org_id, "type": rtype, "date": date, "user_id": user_id}
     if project_id:
         key["project_id"] = project_id
-    existing = await db.reminder_logs.find_one(key)
+    existing = await tenant.reminder_logs.find_one(key)
     now = datetime.now(timezone.utc).isoformat()
     if existing:
         if existing["status"] in ["Resolved", "Excused"]:
@@ -262,7 +274,7 @@ async def send_reminder_for_user(org_id, rtype, date, user_id, project_id, polic
             last = datetime.fromisoformat(existing["last_reminded_at"])
             if (datetime.now(timezone.utc) - last).total_seconds() < 3600:
                 return None
-        await db.reminder_logs.update_one({"id": existing["id"]}, {"$set": {
+        await tenant.reminder_logs.update_one({"id": existing["id"]}, {"$set": {
             "status": "Reminded", "reminder_count": existing["reminder_count"] + 1,
             "last_reminded_at": now, "updated_at": now,
         }})
@@ -276,7 +288,7 @@ async def send_reminder_for_user(org_id, rtype, date, user_id, project_id, polic
             "resolved_by_user_id": None, "excused_reason": None,
             "created_at": now, "updated_at": now,
         }
-        await db.reminder_logs.insert_one(log_entry)
+        await tenant.reminder_logs.insert_one(log_entry)
     if rtype == "MissingAttendance":
         title = "Attendance Reminder"
         message = f"You haven't marked attendance for {date}. Please mark now."
@@ -287,17 +299,24 @@ async def send_reminder_for_user(org_id, rtype, date, user_id, project_id, polic
     return reminder_id
 
 async def auto_resolve_reminders(org_id, rtype, date, user_id, resolved_by=None):
+    tenant = TenantData.for_resolved_org(db, org_id)
     query = {"org_id": org_id, "type": rtype, "date": date, "user_id": user_id, "status": {"$in": ["Open", "Reminded"]}}
     now = datetime.now(timezone.utc).isoformat()
-    result = await db.reminder_logs.update_many(query, {"$set": {
+    result = await tenant.reminder_logs.update_many(query, {"$set": {
         "status": "Resolved", "resolved_at": now, "resolved_by_user_id": resolved_by, "updated_at": now,
     }})
     return result.modified_count
 
 async def run_reminder_jobs():
-    orgs = await db.organizations.find({}, {"_id": 0, "id": 1}).to_list(100)
-    for org in orgs:
-        org_id = org["id"]
+    """Platform-level scheduler: it walks EVERY tenant and then works inside one.
+
+    W0-03E-A2C: the organization enumeration is deliberately cross-tenant — that
+    is what a scheduler does — but everything it reads or writes per organization
+    goes through that organization's own ``TenantData`` view, so one tenant's
+    reminder run can never read or notify another tenant's people.
+    """
+    for org_id in await all_tenant_ids(db, limit=100):
+        tenant = TenantData.for_resolved_org(db, org_id)
         policy = await get_org_reminder_policy(org_id)
         local_now = get_local_now(policy["timezone"])
         date = local_now.strftime("%Y-%m-%d")
@@ -316,17 +335,17 @@ async def run_reminder_jobs():
         # Unclear status reminders at 09:00, 12:00, 17:00
         if current_hour in (9, 12, 17):
             reminder_type = f"UnclearStatus_{current_hour:02d}"
-            existing = await db.reminder_logs.find_one(
+            existing = await tenant.reminder_logs.find_one(
                 {"org_id": org_id, "type": reminder_type, "date": date}
             )
             if not existing:
                 # Count unclear workers
-                profiles = await db.employee_profiles.find(
+                profiles = await tenant.employee_profiles.find(
                     {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
                 ).to_list(500)
                 active_ids = [p["user_id"] for p in profiles]
                 if active_ids:
-                    att = await db.attendance_entries.find(
+                    att = await tenant.attendance_entries.find(
                         {"org_id": org_id, "date": date, "user_id": {"$in": active_ids}},
                         {"_id": 0, "user_id": 1}
                     ).to_list(500)
@@ -336,35 +355,35 @@ async def run_reminder_jobs():
                         level = "info" if current_hour == 9 else "warning" if current_hour == 12 else "critical"
                         msg = {9: "Присъствието не е попълнено", 12: f"{unclear_count} неясни по статут", 17: f"ФИНАЛНО: {unclear_count} без статус за деня"}[current_hour]
                         # Create notification for admins
-                        admins = await db.users.find(
+                        admins = await tenant.users.find(
                             {"org_id": org_id, "role": {"$in": ["Admin", "Owner"]}},
                             {"_id": 0, "id": 1}
                         ).to_list(20)
                         for admin in admins:
-                            await db.notifications.insert_one({
+                            await tenant.notifications.insert_one({
                                 "id": str(uuid.uuid4()), "org_id": org_id, "user_id": admin["id"],
                                 "type": "UnclearStatus", "level": level,
                                 "title": f"Неясни по статут ({current_hour}:00)",
                                 "message": msg, "is_read": False,
                                 "created_at": datetime.now(timezone.utc).isoformat(),
                             })
-                        await db.reminder_logs.insert_one({
+                        await tenant.reminder_logs.insert_one({
                             "id": str(uuid.uuid4()), "org_id": org_id,
                             "type": reminder_type, "date": date,
                             "unclear_count": unclear_count, "level": level,
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         })
 
-        open_reminders = await db.reminder_logs.find(
+        open_reminders = await tenant.reminder_logs.find(
             {"org_id": org_id, "date": date, "status": {"$in": ["Open", "Reminded"]}}, {"_id": 0}
         ).to_list(1000)
         for rl in open_reminders:
             if rl["type"] == "MissingAttendance":
-                att = await db.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": rl["user_id"]})
+                att = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": rl["user_id"]})
                 if att:
                     await auto_resolve_reminders(org_id, "MissingAttendance", date, rl["user_id"])
             elif rl["type"] == "MissingWorkReport":
-                rep = await db.work_reports.find_one({
+                rep = await tenant.work_reports.find_one({
                     "org_id": org_id, "date": date, "user_id": rl["user_id"],
                     "project_id": rl.get("project_id"), "status": {"$in": ["Submitted", "Approved"]}
                 })
@@ -390,9 +409,10 @@ async def mark_attendance_self(data: AttendanceMarkSelf, user: dict = Depends(ge
 
 @router.post("/attendance/mark-for-user", status_code=201)
 async def mark_attendance_for_user(data: AttendanceMarkForUser, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only managers/admins can mark for others")
-    target = await db.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
+    target = await tenant.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if user["role"] == "SiteManager":
@@ -412,24 +432,26 @@ async def mark_attendance_for_user(data: AttendanceMarkForUser, user: dict = Dep
 
 @router.get("/attendance/my-today")
 async def get_my_attendance_today(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     date = today_str()
-    entry = await db.attendance_entries.find_one({"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0})
+    entry = await tenant.attendance_entries.find_one({"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0})
     past_deadline = await is_past_deadline(user["org_id"])
     active_pids = await get_user_active_project_ids(user["id"], user["org_id"])
     projects = []
     if active_pids:
-        projs = await db.projects.find({"id": {"$in": active_pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
+        projs = await tenant.projects.find({"id": {"$in": active_pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
         projects = projs
     _, end = await get_org_attendance_window(user["org_id"])
     return {"entry": entry, "date": date, "past_deadline": past_deadline, "deadline": end, "active_projects": projects}
 
 @router.get("/attendance/my-range")
 async def get_my_attendance_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):
+    tenant = _tenant(user)
     if not from_date:
         from_date = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%d")
     if not to_date:
         to_date = today_str()
-    entries = await db.attendance_entries.find(
+    entries = await tenant.attendance_entries.find(
         {"org_id": user["org_id"], "user_id": user["id"], "date": {"$gte": from_date, "$lte": to_date}},
         {"_id": 0}
     ).sort("date", -1).to_list(100)
@@ -437,6 +459,7 @@ async def get_my_attendance_range(user: dict = Depends(get_current_user), from_d
 
 @router.get("/attendance/site-today")
 async def get_site_attendance_today(user: dict = Depends(get_current_user), project_id: str = ""):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Manager access required")
     date = today_str()
@@ -449,7 +472,7 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
         members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
 
         # Include workers with attendance_entries for this project today (source of truth from TechPortal → Хора)
-        att_entries = await db.attendance_entries.find(
+        att_entries = await tenant.attendance_entries.find(
             {"org_id": org_id, "project_id": project_id, "date": date},
             {"_id": 0, "user_id": 1},
         ).to_list(200)
@@ -459,11 +482,11 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
                 members.append({"user_id": uid})
 
         # Also include workers who reported on this project today
-        old_reports = await db.employee_daily_reports.find(
+        old_reports = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "project_id": project_id, "date": date, "worker_id": {"$exists": True}},
             {"_id": 0, "worker_id": 1},
         ).to_list(200)
-        new_reports = await db.employee_daily_reports.find(
+        new_reports = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "report_date": date, "day_entries.project_id": project_id},
             {"_id": 0, "employee_id": 1},
         ).to_list(200)
@@ -477,12 +500,12 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
             pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
             members = await project_team.project_rows(_team(user), pids, {"_id": 0}, limit=500)
         else:
-            active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
+            active_projs = await tenant.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
             pids = [p["id"] for p in active_projs]
             members = await project_team.project_rows(_team(user), pids, {"_id": 0}, limit=500)
 
         # Also include workers from attendance_entries + daily reports (both schemas)
-        att_all = await db.attendance_entries.find(
+        att_all = await tenant.attendance_entries.find(
             {"org_id": org_id, "date": date}, {"_id": 0, "user_id": 1}
         ).to_list(500)
         for ae in att_all:
@@ -490,7 +513,7 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
             if uid and not any(m.get("user_id") == uid for m in members):
                 members.append({"user_id": uid})
 
-        old_reps = await db.employee_daily_reports.find(
+        old_reps = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "date": date, "worker_id": {"$exists": True, "$ne": None}},
             {"_id": 0, "worker_id": 1}
         ).to_list(500)
@@ -499,7 +522,7 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
             if uid and not any(m.get("user_id") == uid for m in members):
                 members.append({"user_id": uid})
 
-        new_reps = await db.employee_daily_reports.find(
+        new_reps = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "report_date": date, "employee_id": {"$exists": True, "$ne": None}},
             {"_id": 0, "employee_id": 1}
         ).to_list(500)
@@ -515,18 +538,18 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
             unique_user_ids.append(m["user_id"])
     entries_map = {}
     if unique_user_ids:
-        entries = await db.attendance_entries.find(
+        entries = await tenant.attendance_entries.find(
             {"org_id": org_id, "date": date, "user_id": {"$in": unique_user_ids}}, {"_id": 0}
         ).to_list(500)
         entries_map = {e["user_id"]: e for e in entries}
     result = []
     for uid in unique_user_ids:
-        u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
+        u = await tenant.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
         if not u:
             continue
         entry = entries_map.get(uid)
         # Check for daily reports (for workers without attendance but with reports)
-        report_check = await db.employee_daily_reports.find_one(
+        report_check = await tenant.employee_daily_reports.find_one(
             {"org_id": org_id, "date": date, "worker_id": uid,
              **({"project_id": project_id} if project_id else {})},
             {"_id": 0, "id": 1},
@@ -542,6 +565,7 @@ async def get_site_attendance_today(user: dict = Depends(get_current_user), proj
 
 @router.get("/attendance/missing-today")
 async def get_missing_attendance_today(user: dict = Depends(get_current_user), project_id: str = ""):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Manager access required")
     date = today_str()
@@ -551,7 +575,7 @@ async def get_missing_attendance_today(user: dict = Depends(get_current_user), p
             if not await project_team.is_member(_team(user), user["id"], project_id,
                                                 project_team.ROLE_SITE_MANAGER):
                 raise HTTPException(status_code=403, detail="Not managing this project")
-        proj = await db.projects.find_one({"id": project_id, "org_id": org_id, "status": "Active"})
+        proj = await tenant.projects.find_one({"id": project_id, "org_id": org_id, "status": "Active"})
         if not proj:
             return {"missing": [], "count": 0}
         members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
@@ -559,7 +583,7 @@ async def get_missing_attendance_today(user: dict = Depends(get_current_user), p
         if user["role"] == "SiteManager":
             pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
         else:
-            active_projs = await db.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
+            active_projs = await tenant.projects.find({"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1}).to_list(100)
             pids = [p["id"] for p in active_projs]
         members = await project_team.project_rows(_team(user), pids, {"_id": 0}, limit=500)
     seen = set()
@@ -570,14 +594,14 @@ async def get_missing_attendance_today(user: dict = Depends(get_current_user), p
             unique_uids.append(m["user_id"])
     marked_uids = set()
     if unique_uids:
-        entries = await db.attendance_entries.find(
+        entries = await tenant.attendance_entries.find(
             {"org_id": org_id, "date": date, "user_id": {"$in": unique_uids}}, {"_id": 0, "user_id": 1}
         ).to_list(500)
         marked_uids = {e["user_id"] for e in entries}
     missing = []
     for uid in unique_uids:
         if uid not in marked_uids:
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1})
+            u = await tenant.users.find_one({"id": uid}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1})
             if u:
                 missing.append({"user_id": uid, "user_name": f"{u['first_name']} {u['last_name']}", "user_email": u["email"]})
     return {"missing": missing, "count": len(missing), "date": date}
@@ -592,18 +616,19 @@ async def get_attendance_statuses():
 
 @router.post("/work-reports/draft", status_code=201)
 async def create_or_get_draft(data: WorkReportDraftCreate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     date = data.date or today_str()
     org_id = user["org_id"]
-    att = await db.attendance_entries.find_one({
+    att = await tenant.attendance_entries.find_one({
         "org_id": org_id, "date": date, "user_id": user["id"],
         "status": {"$in": ["Present", "Late"]}
     })
     if not att:
         raise HTTPException(status_code=400, detail="Attendance must be marked as Present or Late before creating a work report")
-    project = await db.projects.find_one({"id": data.project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    existing = await db.work_reports.find_one({
+    existing = await tenant.work_reports.find_one({
         "org_id": org_id, "date": date, "user_id": user["id"], "project_id": data.project_id
     }, {"_id": 0})
     if existing:
@@ -617,13 +642,14 @@ async def create_or_get_draft(data: WorkReportDraftCreate, user: dict = Depends(
         "approved_at": None, "approved_by_user_id": None,
         "reject_reason": None, "created_at": now, "updated_at": now,
     }
-    await db.work_reports.insert_one(report)
+    await tenant.work_reports.insert_one(report)
     await log_audit(org_id, user["id"], user["email"], "report_draft_created", "work_report", report["id"], {"date": date, "project": data.project_id})
     return enrich_report(report)
 
 @router.put("/work-reports/{report_id}")
 async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict = Depends(get_current_user)):
-    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    report = await tenant.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if report["user_id"] != user["id"]:
@@ -641,14 +667,15 @@ async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict 
     if report["status"] == "Rejected":
         update["status"] = "Draft"
         update["reject_reason"] = None
-    await db.work_reports.update_one({"id": report_id}, {"$set": update})
+    await tenant.work_reports.update_one({"id": report_id}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "report_edited", "work_report", report_id)
-    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
     return enrich_report(updated)
 
 @router.post("/work-reports/{report_id}/submit")
 async def submit_work_report(report_id: str, user: dict = Depends(get_current_user)):
-    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    report = await tenant.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if report["user_id"] != user["id"]:
@@ -658,17 +685,18 @@ async def submit_work_report(report_id: str, user: dict = Depends(get_current_us
     if not report.get("lines") or len(report["lines"]) == 0:
         raise HTTPException(status_code=400, detail="Report must have at least one activity line")
     now = datetime.now(timezone.utc).isoformat()
-    await db.work_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.work_reports.update_one({"id": report_id}, {"$set": {
         "status": "Submitted", "submitted_at": now, "reject_reason": None, "updated_at": now
     }})
     await log_audit(user["org_id"], user["id"], user["email"], "report_submitted", "work_report", report_id, {"date": report["date"]})
     await auto_resolve_reminders(user["org_id"], "MissingWorkReport", report["date"], user["id"], user["id"])
-    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
     return enrich_report(updated)
 
 @router.post("/work-reports/{report_id}/approve")
 async def approve_work_report(report_id: str, user: dict = Depends(get_current_user)):
-    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    report = await tenant.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if not await can_review_report(user, report):
@@ -676,16 +704,17 @@ async def approve_work_report(report_id: str, user: dict = Depends(get_current_u
     if report["status"] != "Submitted":
         raise HTTPException(status_code=400, detail="Only submitted reports can be approved")
     now = datetime.now(timezone.utc).isoformat()
-    await db.work_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.work_reports.update_one({"id": report_id}, {"$set": {
         "status": "Approved", "approved_at": now, "approved_by_user_id": user["id"], "updated_at": now
     }})
     await log_audit(user["org_id"], user["id"], user["email"], "report_approved", "work_report", report_id, {"date": report["date"]})
-    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
     return enrich_report(updated)
 
 @router.post("/work-reports/{report_id}/reject")
 async def reject_work_report(report_id: str, data: WorkReportReject, user: dict = Depends(get_current_user)):
-    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    report = await tenant.work_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if not await can_review_report(user, report):
@@ -693,28 +722,30 @@ async def reject_work_report(report_id: str, data: WorkReportReject, user: dict 
     if report["status"] != "Submitted":
         raise HTTPException(status_code=400, detail="Only submitted reports can be rejected")
     now = datetime.now(timezone.utc).isoformat()
-    await db.work_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.work_reports.update_one({"id": report_id}, {"$set": {
         "status": "Rejected", "reject_reason": data.reason, "updated_at": now
     }})
     await log_audit(user["org_id"], user["id"], user["email"], "report_rejected", "work_report", report_id, {"reason": data.reason})
-    updated = await db.work_reports.find_one({"id": report_id}, {"_id": 0})
+    updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
     return enrich_report(updated)
 
 @router.get("/work-reports/my-today")
 async def get_my_work_reports_today(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     date = today_str()
-    reports = await db.work_reports.find(
+    reports = await tenant.work_reports.find(
         {"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0}
     ).to_list(50)
     return [enrich_report(r) for r in reports]
 
 @router.get("/work-reports/my-range")
 async def get_my_work_reports_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):
+    tenant = _tenant(user)
     if not from_date:
         from_date = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%d")
     if not to_date:
         to_date = today_str()
-    reports = await db.work_reports.find(
+    reports = await tenant.work_reports.find(
         {"org_id": user["org_id"], "user_id": user["id"], "date": {"$gte": from_date, "$lte": to_date}},
         {"_id": 0}
     ).sort("date", -1).to_list(200)
@@ -722,6 +753,7 @@ async def get_my_work_reports_range(user: dict = Depends(get_current_user), from
 
 @router.get("/work-reports/project-day")
 async def get_project_day_reports(user: dict = Depends(get_current_user), project_id: str = "", date: str = ""):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Manager access required")
     if not date:
@@ -736,14 +768,14 @@ async def get_project_day_reports(user: dict = Depends(get_current_user), projec
     elif user["role"] == "SiteManager":
         pids = await project_team.managed_project_ids(_team(user), user["id"], limit=100)
         query["project_id"] = {"$in": pids}
-    reports = await db.work_reports.find(query, {"_id": 0}).to_list(200)
+    reports = await tenant.work_reports.find(query, {"_id": 0}).to_list(200)
     enriched = []
     for r in reports:
         er = enrich_report(r)
-        u = await db.users.find_one({"id": r["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        u = await tenant.users.find_one({"id": r["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
         er["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
         er["user_email"] = u["email"] if u else ""
-        p = await db.projects.find_one({"id": r["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+        p = await tenant.projects.find_one({"id": r["project_id"]}, {"_id": 0, "code": 1, "name": 1})
         er["project_code"] = p["code"] if p else ""
         er["project_name"] = p["name"] if p else ""
         enriched.append(er)
@@ -751,13 +783,14 @@ async def get_project_day_reports(user: dict = Depends(get_current_user), projec
 
 @router.get("/work-reports/{report_id}")
 async def get_work_report(report_id: str, user: dict = Depends(get_current_user)):
-    report = await db.work_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    report = await tenant.work_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if not await can_access_report(user, report):
         raise HTTPException(status_code=403, detail="Access denied")
     er = enrich_report(report)
-    p = await db.projects.find_one({"id": report["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+    p = await tenant.projects.find_one({"id": report["project_id"]}, {"_id": 0, "code": 1, "name": 1})
     er["project_code"] = p["code"] if p else ""
     er["project_name"] = p["name"] if p else ""
     return er
@@ -794,6 +827,7 @@ async def api_missing_work_reports(user: dict = Depends(get_current_user), date:
 
 @router.get("/reminders/logs")
 async def get_reminder_logs(user: dict = Depends(get_current_user), date: str = "", rtype: str = ""):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Manager access required")
     if not date:
@@ -807,13 +841,13 @@ async def get_reminder_logs(user: dict = Depends(get_current_user), date: str = 
                                                   limit=500)
         uids = list({m["user_id"] for m in members})
         query["user_id"] = {"$in": uids}
-    logs = await db.reminder_logs.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    logs = await tenant.reminder_logs.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
     for rl in logs:
-        u = await db.users.find_one({"id": rl["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        u = await tenant.users.find_one({"id": rl["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
         rl["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
         rl["user_email"] = u["email"] if u else ""
         if rl.get("project_id"):
-            p = await db.projects.find_one({"id": rl["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            p = await tenant.projects.find_one({"id": rl["project_id"]}, {"_id": 0, "code": 1, "name": 1})
             rl["project_code"] = p["code"] if p else ""
         else:
             rl["project_code"] = ""
@@ -837,19 +871,20 @@ async def send_reminders_manual(data: SendReminderRequest, user: dict = Depends(
 
 @router.post("/reminders/excuse")
 async def excuse_reminder(data: ExcuseRequest, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Manager access required")
     query = {"org_id": user["org_id"], "type": data.type, "date": data.date, "user_id": data.user_id}
     if data.project_id:
         query["project_id"] = data.project_id
-    existing = await db.reminder_logs.find_one(query)
+    existing = await tenant.reminder_logs.find_one(query)
     now = datetime.now(timezone.utc).isoformat()
     if existing:
-        await db.reminder_logs.update_one({"id": existing["id"]}, {"$set": {
+        await tenant.reminder_logs.update_one({"id": existing["id"]}, {"$set": {
             "status": "Excused", "excused_reason": data.reason, "resolved_by_user_id": user["id"], "updated_at": now,
         }})
     else:
-        await db.reminder_logs.insert_one({
+        await tenant.reminder_logs.insert_one({
             "id": str(uuid.uuid4()), "org_id": user["org_id"], "type": data.type, "date": data.date,
             "user_id": data.user_id, "project_id": data.project_id, "status": "Excused",
             "reminder_count": 0, "last_reminded_at": None, "resolved_at": None,
@@ -870,15 +905,17 @@ async def trigger_reminder_jobs():
 
 @router.get("/notifications/my")
 async def get_my_notifications(user: dict = Depends(get_current_user), limit: int = 30):
-    notifs = await db.notifications.find(
+    tenant = _tenant(user)
+    notifs = await tenant.notifications.find(
         {"org_id": user["org_id"], "user_id": user["id"]}, {"_id": 0}
     ).sort("created_at", -1).limit(limit).to_list(limit)
-    unread = await db.notifications.count_documents({"org_id": user["org_id"], "user_id": user["id"], "is_read": False})
+    unread = await tenant.notifications.count_documents({"org_id": user["org_id"], "user_id": user["id"], "is_read": False})
     return {"notifications": notifs, "unread_count": unread}
 
 @router.post("/notifications/mark-read")
 async def mark_notifications_read(user: dict = Depends(get_current_user)):
-    await db.notifications.update_many(
+    tenant = _tenant(user)
+    await tenant.notifications.update_many(
         {"org_id": user["org_id"], "user_id": user["id"], "is_read": False},
         {"$set": {"is_read": True}}
     )
@@ -892,6 +929,7 @@ async def mark_notifications_read(user: dict = Depends(get_current_user)):
 @router.get("/attendance/unclear-status")
 async def get_unclear_status(user: dict = Depends(get_current_user), project_id: str = ""):
     """Get workers with unclear daily status — not Present, not Leave, not SickLeave, no report elsewhere."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Manager access required")
 
@@ -899,14 +937,14 @@ async def get_unclear_status(user: dict = Depends(get_current_user), project_id:
     date = today_str()
 
     # Get all active employees from profiles
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
     ).to_list(500)
     all_active_ids = [p["user_id"] for p in profiles]
 
     # If no profiles, fallback to all users with Technician role
     if not all_active_ids:
-        techs = await db.users.find(
+        techs = await tenant.users.find(
             {"org_id": org_id, "role": {"$in": ["Technician", "SiteManager"]}},
             {"_id": 0, "id": 1}
         ).to_list(500)
@@ -919,7 +957,7 @@ async def get_unclear_status(user: dict = Depends(get_current_user), project_id:
     if project_id:
         team_ids = set(await project_team.project_member_ids(_team(user), project_id, limit=200))
         # Also include workers from today's roster
-        roster = await db.site_daily_rosters.find_one(
+        roster = await tenant.site_daily_rosters.find_one(
             {"org_id": org_id, "project_id": project_id, "date": date}, {"_id": 0, "workers": 1}
         )
         if roster:
@@ -927,21 +965,21 @@ async def get_unclear_status(user: dict = Depends(get_current_user), project_id:
         all_active_ids = [uid for uid in all_active_ids if uid in team_ids]
 
     # Get attendance entries for today
-    att_entries = await db.attendance_entries.find(
+    att_entries = await tenant.attendance_entries.find(
         {"org_id": org_id, "date": date, "user_id": {"$in": all_active_ids}},
         {"_id": 0, "user_id": 1, "status": 1, "project_id": 1},
     ).to_list(500)
     att_map = {e["user_id"]: e for e in att_entries}
 
     # Get workers with reports today (on any project)
-    reports_today = await db.employee_daily_reports.find(
+    reports_today = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "date": date, "worker_id": {"$in": all_active_ids}},
         {"_id": 0, "worker_id": 1},
     ).to_list(500)
     reported_ids = set(r["worker_id"] for r in reports_today)
 
     # Get worker_calendar entries (admin leave/sick)
-    cal_entries = await db.worker_calendar.find(
+    cal_entries = await tenant.worker_calendar.find(
         {"org_id": org_id, "date": date, "worker_id": {"$in": all_active_ids},
          "status": {"$in": ["leave", "sick", "vacation"]}},
         {"_id": 0, "worker_id": 1, "status": 1},
@@ -975,7 +1013,7 @@ async def get_unclear_status(user: dict = Depends(get_current_user), project_id:
     # Enrich with names
     if unclear:
         uids = [u["user_id"] for u in unclear]
-        users = await db.users.find(
+        users = await tenant.users.find(
             {"id": {"$in": uids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}
         ).to_list(300)
         umap = {u["id"]: f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users}

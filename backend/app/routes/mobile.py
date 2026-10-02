@@ -18,6 +18,12 @@ from app.deps.auth import get_current_user, require_platform_admin
 from app.utils.audit import log_audit
 from app.constants import ROLES
 from app.models.mobile import MobileSettingsUpdate, MobileViewConfigUpdate
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Mobile"])
 
@@ -26,7 +32,8 @@ router = APIRouter(tags=["Mobile"])
 
 async def get_org_mobile_settings(org_id: str) -> dict:
     """Get mobile settings for organization, with defaults if not set"""
-    settings = await db.org_mobile_settings.find_one({"org_id": org_id}, {"_id": 0})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    settings = await tenant.org_mobile_settings.find_one({"org_id": org_id}, {"_id": 0})
     if not settings:
         # Return default settings
         return {
@@ -39,7 +46,8 @@ async def get_org_mobile_settings(org_id: str) -> dict:
 
 async def get_mobile_view_config(org_id: str, role: str, module_code: str) -> dict:
     """Get mobile view config for a specific role and module"""
-    config = await db.mobile_view_configs.find_one({
+    tenant = TenantData.for_resolved_org(db, org_id)
+    config = await tenant.mobile_view_configs.find_one({
         "org_id": org_id,
         "role": role,
         "module_code": module_code,
@@ -196,6 +204,7 @@ async def update_mobile_settings(data: MobileSettingsUpdate, user: dict = Depend
     
     SECURITY: This endpoint is restricted to platform administrators only.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
     
@@ -204,7 +213,7 @@ async def update_mobile_settings(data: MobileSettingsUpdate, user: dict = Depend
     if invalid_modules:
         raise HTTPException(status_code=400, detail=f"Invalid modules: {invalid_modules}")
     
-    await db.org_mobile_settings.update_one(
+    await tenant.org_mobile_settings.update_one(
         {"org_id": org_id},
         {"$set": {
             "org_id": org_id,
@@ -226,8 +235,9 @@ async def list_mobile_view_configs(user: dict = Depends(require_platform_admin))
     
     SECURITY: This endpoint is restricted to platform administrators only.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    configs = await db.mobile_view_configs.find({"org_id": org_id}, {"_id": 0}).to_list(1000)
+    configs = await tenant.mobile_view_configs.find({"org_id": org_id}, {"_id": 0}).to_list(1000)
     
     # Include defaults for roles/modules not customized
     all_configs = {}
@@ -264,6 +274,7 @@ async def update_mobile_view_config(data: MobileViewConfigUpdate, user: dict = D
     
     SECURITY: This endpoint is restricted to platform administrators only.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
     
@@ -302,7 +313,7 @@ async def update_mobile_view_config(data: MobileViewConfigUpdate, user: dict = D
         "updated_at": now,
     }
     
-    await db.mobile_view_configs.update_one(
+    await tenant.mobile_view_configs.update_one(
         {"org_id": org_id, "role": data.role, "module_code": data.module_code},
         {"$set": config},
         upsert=True
@@ -320,9 +331,10 @@ async def reset_mobile_view_config(role: str, module_code: str, user: dict = Dep
     
     SECURITY: This endpoint is restricted to platform administrators only.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
-    result = await db.mobile_view_configs.delete_one({
+    result = await tenant.mobile_view_configs.delete_one({
         "org_id": org_id,
         "role": role,
         "module_code": module_code,

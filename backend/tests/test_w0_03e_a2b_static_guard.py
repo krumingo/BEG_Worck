@@ -274,6 +274,8 @@ _DB_API = frozenset({
     "list_collection_names", "list_collections", "command", "client", "name",
     "get_collection", "create_collection", "drop_collection", "collection", "entity",
     "own_organization", "scoped", "lookup", "get", "org_id", "db", "lower",
+    # W0-03E-A2C added these TenantData methods; they are accessors, not collections.
+    "update_own_organization", "own_organization_exists", "require", "get_many",
 })
 
 

@@ -3,19 +3,21 @@ Service - Project P&L (Profit & Loss) computation.
 Aggregates data from ALL sources into a unified financial view.
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     """Compute complete P&L for a single project."""
+    tenant = TenantData.for_resolved_org(db, org_id)
 
     # ── a. BUDGET (planned) ────────────────────────────────────────
-    offers = await db.offers.find(
+    offers = await tenant.offers.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["Accepted", "Sent", "Draft"]}},
         {"_id": 0, "total": 1, "subtotal": 1, "status": 1},
     ).to_list(100)
     offer_total = sum(o.get("subtotal") or o.get("total") or 0 for o in offers)
 
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "labor_budget": 1, "materials_budget": 1}
     ).to_list(100)
     labor_budget = sum(b.get("labor_budget", 0) for b in budgets)
@@ -23,7 +25,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     total_budget = offer_total if offer_total > 0 else (labor_budget + materials_budget)
 
     # ── b. REVENUE ─────────────────────────────────────────────────
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
@@ -40,14 +42,14 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     paid_total = sum(i.get("paid_amount", 0) or 0 for i in invoices)
 
     # Client acts revenue
-    acts = await db.client_acts.find(
+    acts = await tenant.client_acts.find(
         {"org_id": org_id, "project_id": project_id, "status": "confirmed"},
         {"_id": 0, "total_amount": 1},
     ).to_list(100)
     acts_total = sum(a.get("total_amount", 0) for a in acts)
 
     # Additional SMR offered
-    additional = await db.missing_smr.find(
+    additional = await tenant.missing_smr.find(
         {"org_id": org_id, "project_id": project_id, "status": "offered"},
         {"_id": 0, "ai_estimated_price": 1},
     ).to_list(200)
@@ -58,7 +60,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     # ── c. LABOR COST (from work_sessions) ─────────────────────────
     # READS FROM: work_sessions — the source of truth for labor cost.
     # See /app/memory/SOURCE_OF_TRUTH.md
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "labor_cost": 1, "duration_hours": 1, "is_overtime": 1},
     ).to_list(5000)
@@ -68,7 +70,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     # ── d. MATERIAL COST ───────────────────────────────────────────
     # From supplier invoices allocated to project — NET (без ДДС); their VAT = input VAT
-    inv_lines = await db.invoice_lines.find(
+    inv_lines = await tenant.invoice_lines.find(
         {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
         {"_id": 0, "line_total_ex_vat": 1, "vat_amount": 1},
     ).to_list(500)
@@ -76,7 +78,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
 
     # From warehouse issue transactions
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1},
     ).to_list(200)
@@ -89,14 +91,14 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     material_cost = max(material_cost_invoices, material_cost_warehouse)
 
     # ── e. SUBCONTRACTOR COST ──────────────────────────────────────
-    sub_payments = await db.subcontractor_payments.find(
+    sub_payments = await tenant.subcontractor_payments.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
         {"_id": 0, "amount": 1},
     ).to_list(200)
     subcontractor_cost = round(sum(p.get("amount", 0) for p in sub_payments), 2)
 
     # Contract payments (external workers)
-    contract_docs = await db.contract_payments.find(
+    contract_docs = await tenant.contract_payments.find(
         {"org_id": org_id, "site_id": project_id}, {"_id": 0, "tranches": 1}
     ).to_list(200)
     contract_cost = 0
@@ -107,13 +109,13 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     contract_cost = round(contract_cost, 2)
 
     # ── f. OVERHEAD ────────────────────────────────────────────────
-    allocs = await db.project_overhead_allocations.find(
+    allocs = await tenant.project_overhead_allocations.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "allocated_amount": 1}
     ).to_list(50)
     overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
 
     # ── f2. OTHER — documentless cash expenses booked straight to the project ──
-    other_docs = await db.finance_payments.find(
+    other_docs = await tenant.finance_payments.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Outflow", "category": "Други"},
         {"_id": 0, "amount": 1},
     ).to_list(500)
@@ -171,6 +173,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
 async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> list:
     """Monthly P&L trend for the last N months."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     from datetime import datetime, timezone, timedelta
 
     now = datetime.now(timezone.utc)
@@ -189,7 +192,7 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
         label = m_start.strftime("%Y-%m")
 
         # Revenue (invoices issued in this month)
-        inv = await db.invoices.find(
+        inv = await tenant.invoices.find(
             {"org_id": org_id, "project_id": project_id,
              "created_at": {"$gte": ms, "$lt": me}},
             {"_id": 0, "total": 1, "subtotal": 1, "status": 1},
@@ -197,7 +200,7 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
         revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in inv if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
 
         # Expense (work sessions in this month)
-        sess = await db.work_sessions.find(
+        sess = await tenant.work_sessions.find(
             {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None},
              "started_at": {"$gte": ms, "$lt": me}},
             {"_id": 0, "labor_cost": 1},

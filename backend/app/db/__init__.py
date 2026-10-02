@@ -15,50 +15,19 @@ db_name = os.environ.get('DB_NAME', 'begwork')
 client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 
-# Collection accessors for type hints and easy refactoring
-users = db.users
-organizations = db.organizations
-subscriptions = db.subscriptions
-feature_flags = db.feature_flags
-audit_logs = db.audit_logs
-projects = db.projects
-# W0-03E-A2: no pre-bound ``project_team`` handle. It is a tenant-bound
-# authorization relation, reached only through app.tenancy.project_team, so a
-# module-level alias here would be a ready-made bypass of the tenant predicate
-# (``scripts/w0_03e_a1_tenant_access_guard.py``, rule A2-TEAM).
-project_phases = db.project_phases
-offers = db.offers
-activity_catalog = db.activity_catalog
-attendance_entries = db.attendance_entries
-work_reports = db.work_reports
-notifications = db.notifications
-reminder_logs = db.reminder_logs
-employee_profiles = db.employee_profiles
-advances = db.advances
-payroll_runs = db.payroll_runs
-payslips = db.payslips
-payroll_payments = db.payroll_payments
-financial_accounts = db.financial_accounts
-invoices = db.invoices
-finance_payments = db.finance_payments
-payment_allocations = db.payment_allocations
-overhead_categories = db.overhead_categories
-overhead_costs = db.overhead_costs
-overhead_assets = db.overhead_assets
-overhead_snapshots = db.overhead_snapshots
-project_overhead_allocations = db.project_overhead_allocations
-org_mobile_settings = db.org_mobile_settings
-mobile_view_configs = db.mobile_view_configs
-media_files = db.media_files
-
-# Finance/Reports collections
-cash_transactions = db.cash_transactions
-overhead_transactions = db.overhead_transactions
-bonus_payments = db.bonus_payments
-
-# Data module
-warehouses = db.warehouses
-counterparties = db.counterparties
-items = db.items
-invoice_lines = db.invoice_lines
-clients = db.clients
+# W0-03E-A2C — no pre-bound collection handles.
+#
+# This module used to bind every legacy collection to a module-level name
+# (``users = db.users``, ``invoices = db.invoices``, ...). Nothing imported them
+# (verified over ``app/``, ``server.py``, ``scripts/`` and ``tests/``), and each
+# one was a ready-made bypass of the tenant predicate: ``from app.db import
+# invoices`` hands a caller a raw handle with no tenant in sight, which is
+# exactly the defect W0-03E-A1 removed from the protected surface and W0-03E-A2
+# removed for ``project_team``.
+#
+# Tenant-owned collections are reached ONLY through
+# ``app.tenancy.data_access.TenantData`` (rule A1-IDENTITY / A2C-READ of
+# ``scripts/w0_03e_a2c_tenant_boundary_guard.py``); ``db`` itself stays exported
+# for the tenancy layer, the migration/bootstrap scripts and the W0-03/W0-04
+# stores that carry their own ``tenant_id`` contract.
+__all__ = ["client", "db", "mongo_url", "db_name"]

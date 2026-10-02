@@ -595,7 +595,7 @@ async def get_company_finance_summary(
             weekly_data[week_num]["expenses"] += _net
     
     # 3. Cash Transactions
-    cash_txns = await db.cash_transactions.find({
+    cash_txns = await tenant.cash_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "type": 1, "amount": 1}).to_list(1000)
@@ -611,7 +611,7 @@ async def get_company_finance_summary(
                 weekly_data[week_num]["expenses"] += txn.get("amount", 0)
     
     # 4. Overhead Transactions
-    overhead_txns = await db.overhead_transactions.find({
+    overhead_txns = await tenant.overhead_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -632,7 +632,7 @@ async def get_company_finance_summary(
             weekly_data[week_num]["expenses"] += pay.get("net_salary", 0)
     
     # 6. Bonus Payments
-    bonus_payments = await db.bonus_payments.find({
+    bonus_payments = await tenant.bonus_payments.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -741,7 +741,7 @@ async def get_month_finance_totals(tenant: TenantData, year: int, month: int) ->
     expenses_invoices = sum(inv.get("total", 0) for inv in received_invoices)
     
     # 3. Cash Transactions
-    cash_txns = await db.cash_transactions.find({
+    cash_txns = await tenant.cash_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "type": 1, "amount": 1}).to_list(1000)
@@ -753,7 +753,7 @@ async def get_month_finance_totals(tenant: TenantData, year: int, month: int) ->
             expenses_cash += txn.get("amount", 0)
     
     # 4. Overhead Transactions
-    overhead_txns = await db.overhead_transactions.find({
+    overhead_txns = await tenant.overhead_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "amount": 1}).to_list(1000)
@@ -764,7 +764,7 @@ async def get_month_finance_totals(tenant: TenantData, year: int, month: int) ->
     expenses_payroll = sum(pay.get("net_salary", 0) for pay in payroll_payments)
     
     # 6. Bonus Payments
-    bonus_payments_list = await db.bonus_payments.find({
+    bonus_payments_list = await tenant.bonus_payments.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "amount": 1}).to_list(1000)
@@ -943,6 +943,7 @@ async def create_cash_transaction(
     user: dict = Depends(require_m5),
 ):
     """Create a cash transaction (income or expense)"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     txn = {
         "id": str(__import__("uuid").uuid4()),
@@ -955,7 +956,7 @@ async def create_cash_transaction(
         "created_by": user["id"],
         "created_at": now,
     }
-    await db.cash_transactions.insert_one(txn)
+    await tenant.cash_transactions.insert_one(txn)
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -996,6 +997,7 @@ async def create_overhead_transaction(
     user: dict = Depends(require_m5),
 ):
     """Create an overhead transaction"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     txn = {
         "id": str(__import__("uuid").uuid4()),
@@ -1007,7 +1009,7 @@ async def create_overhead_transaction(
         "created_by": user["id"],
         "created_at": now,
     }
-    await db.overhead_transactions.insert_one(txn)
+    await tenant.overhead_transactions.insert_one(txn)
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -1048,6 +1050,7 @@ async def create_bonus_payment(
     user: dict = Depends(require_m5),
 ):
     """Create a bonus payment"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     payment = {
         "id": str(__import__("uuid").uuid4()),
@@ -1059,7 +1062,7 @@ async def create_bonus_payment(
         "created_by": user["id"],
         "created_at": now,
     }
-    await db.bonus_payments.insert_one(payment)
+    await tenant.bonus_payments.insert_one(payment)
     return {k: v for k, v in payment.items() if k != "_id"}
 
 
@@ -1141,7 +1144,7 @@ async def export_company_finance(
             weekly_data[week_num]["expenses"] += _net
     
     # 3. Cash Transactions
-    cash_txns = await db.cash_transactions.find({
+    cash_txns = await tenant.cash_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "type": 1, "amount": 1}).to_list(1000)
@@ -1157,7 +1160,7 @@ async def export_company_finance(
                 weekly_data[week_num]["expenses"] += txn.get("amount", 0)
     
     # 4. Overhead Transactions
-    overhead_txns = await db.overhead_transactions.find({
+    overhead_txns = await tenant.overhead_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -1178,7 +1181,7 @@ async def export_company_finance(
             weekly_data[week_num]["expenses"] += pay.get("net_salary", 0)
     
     # 6. Bonus Payments
-    bonus_payments_data = await db.bonus_payments.find({
+    bonus_payments_data = await tenant.bonus_payments.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)

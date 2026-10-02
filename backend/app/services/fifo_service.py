@@ -8,6 +8,7 @@ import uuid
 import logging
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +23,9 @@ class InsufficientStockError(Exception):
 
 
 async def generate_batch_number(org_id: str) -> str:
+    tenant = TenantData.for_resolved_org(db, org_id)
     year = datetime.now(timezone.utc).strftime("%Y")
-    last = await db.warehouse_batches.find_one(
+    last = await tenant.warehouse_batches.find_one(
         {"org_id": org_id, "batch_number": {"$regex": f"^BATCH-{year}-"}},
         sort=[("batch_number", -1)],
     )
@@ -53,6 +55,7 @@ async def add_batch(
     batch_number: str = None,
     received_at: str = None,
 ) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc).isoformat()
     if not batch_number:
         batch_number = await generate_batch_number(org_id)
@@ -79,7 +82,7 @@ async def add_batch(
         "created_at": now,
         "updated_at": now,
     }
-    await db.warehouse_batches.insert_one(batch)
+    await tenant.warehouse_batches.insert_one(batch)
     clean = {k: v for k, v in batch.items() if k != "_id"}
     return clean
 
@@ -95,7 +98,8 @@ async def consume_fifo(
     Returns list of { batch_id, batch_number, qty_taken, unit_cost, total_cost }.
     Raises InsufficientStockError if not enough stock.
     """
-    batches = await db.warehouse_batches.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    batches = await tenant.warehouse_batches.find(
         {
             "org_id": org_id,
             "item_id": item_id,
@@ -122,7 +126,7 @@ async def consume_fifo(
         new_remaining = round(batch["remaining_qty"] - take, 4)
         new_status = "depleted" if new_remaining <= 0 else "active"
 
-        await db.warehouse_batches.update_one(
+        await tenant.warehouse_batches.update_one(
             {"id": batch["id"]},
             {"$set": {"remaining_qty": new_remaining, "status": new_status, "updated_at": now}},
         )
@@ -140,11 +144,12 @@ async def consume_fifo(
 
 
 async def get_current_stock(org_id: str, item_id: str, warehouse_id: Optional[str] = None) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     query = {"org_id": org_id, "item_id": item_id, "status": "active", "remaining_qty": {"$gt": 0}}
     if warehouse_id:
         query["warehouse_id"] = warehouse_id
 
-    batches = await db.warehouse_batches.find(query, {"_id": 0}).to_list(500)
+    batches = await tenant.warehouse_batches.find(query, {"_id": 0}).to_list(500)
 
     total_qty = sum(b["remaining_qty"] for b in batches)
     total_value = sum(b["remaining_qty"] * b["unit_cost"] for b in batches)
@@ -161,7 +166,8 @@ async def get_current_stock(org_id: str, item_id: str, warehouse_id: Optional[st
 
 
 async def get_stock_value(org_id: str, warehouse_id: str) -> dict:
-    batches = await db.warehouse_batches.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    batches = await tenant.warehouse_batches.find(
         {"org_id": org_id, "warehouse_id": warehouse_id, "status": "active", "remaining_qty": {"$gt": 0}},
         {"_id": 0, "remaining_qty": 1, "unit_cost": 1, "item_id": 1},
     ).to_list(5000)

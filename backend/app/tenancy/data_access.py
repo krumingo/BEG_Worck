@@ -142,6 +142,10 @@ class TenantCollection:
     async def count(self, flt: Optional[Mapping] = None) -> int:
         return await self._raw.count_documents(self._scope.scoped(flt))
 
+    async def count_documents(self, flt: Optional[Mapping] = None) -> int:
+        """The motor name, so a converted call site reads like the original."""
+        return await self.count(flt)
+
     async def distinct(self, key: str, flt: Optional[Mapping] = None) -> List:
         return await self._raw.distinct(key, self._scope.scoped(flt))
 
@@ -152,21 +156,10 @@ class TenantCollection:
 
     # --------------------------------------------------------------- writes
     async def insert_one(self, doc: Dict):
-        owner = doc.get(TENANT_KEY)
-        if owner is None:
-            doc[TENANT_KEY] = self._scope.org_id
-        elif owner != self._scope.org_id:
-            raise TenantScopeViolation("insert into another tenant refused")
-        return await self._raw.insert_one(doc)
+        return await self._raw.insert_one(self._own(doc))
 
     async def insert_many(self, docs: List[Dict]):
-        for doc in docs:
-            owner = doc.get(TENANT_KEY)
-            if owner is None:
-                doc[TENANT_KEY] = self._scope.org_id
-            elif owner != self._scope.org_id:
-                raise TenantScopeViolation("insert into another tenant refused")
-        return await self._raw.insert_many(docs)
+        return await self._raw.insert_many([self._own(d) for d in docs])
 
     async def update_one(self, flt: Mapping, update: Mapping, **kw):
         return await self._raw.update_one(self._scope.scoped(flt), update, **kw)
@@ -177,8 +170,36 @@ class TenantCollection:
     async def delete_one(self, flt: Mapping):
         return await self._raw.delete_one(self._scope.scoped(flt))
 
+    async def delete_many(self, flt: Optional[Mapping] = None):
+        """W0-03E-A2C: a scoped bulk delete. An empty filter deletes only THIS
+        tenant's documents, never the collection."""
+        return await self._raw.delete_many(self._scope.scoped(flt))
+
     async def find_one_and_update(self, flt: Mapping, update: Mapping, **kw):
         return await self._raw.find_one_and_update(self._scope.scoped(flt), update, **kw)
+
+    async def find_one_and_delete(self, flt: Mapping, **kw):
+        return await self._raw.find_one_and_delete(self._scope.scoped(flt), **kw)
+
+    async def replace_one(self, flt: Mapping, replacement: Dict, **kw):
+        """Scoped replace. The replacement document is stamped with this tenant,
+        and one that names another tenant is refused — a replace rewrites the
+        whole document, so an absent owner would silently unbind the record."""
+        return await self._raw.replace_one(self._scope.scoped(flt),
+                                           self._own(replacement), **kw)
+
+    async def find_one_and_replace(self, flt: Mapping, replacement: Dict, **kw):
+        return await self._raw.find_one_and_replace(self._scope.scoped(flt),
+                                                     self._own(replacement), **kw)
+
+    def _own(self, doc: Dict) -> Dict:
+        """``doc`` with this tenant stamped; a foreign owner is refused."""
+        owner = doc.get(TENANT_KEY)
+        if owner is None:
+            doc[TENANT_KEY] = self._scope.org_id
+        elif owner != self._scope.org_id:
+            raise TenantScopeViolation("write into another tenant refused")
+        return doc
 
 
 class TenantData:
@@ -248,6 +269,17 @@ class TenantData:
         """The tenant's own ``organizations`` record (its ``id`` IS the tenant key)."""
         return await self._db["organizations"].find_one({"id": self.org_id}, _proj(projection))
 
+    async def update_own_organization(self, update: Mapping, **kw):
+        """Update the tenant's OWN ``organizations`` row — W0-03E-A2C.
+
+        The filter is this tenant's id, which for the tenant root IS the tenant
+        key, so the write cannot reach another organization's row. Routes that
+        edit organization settings (payroll week, asset-intake roles,
+        workers-see-pay, company profile) call this instead of
+        ``db.organizations.update_one({"id": <a variable>}, ...)``.
+        """
+        return await self._db["organizations"].update_one({"id": self.org_id}, update, **kw)
+
     # ------------------------------------------------------------- filters
     def scoped(self, flt: Optional[Mapping] = None) -> Dict[str, Any]:
         """``flt`` restricted to this tenant. A different tenant in ``flt`` is refused."""
@@ -306,7 +338,51 @@ async def count_ownerless(db, collection: str) -> int:
                                                          {TENANT_KEY: {"$exists": False}}]})
 
 
+# ------------------------------------------------------------------ all tenants
+async def all_tenant_ids(db, limit: Optional[int] = None) -> List[str]:
+    """Every tenant's ``org_id`` — the ONE deliberate platform-level enumeration.
+
+    W0-03E-A2C. A scheduled job (``app/routes/attendance.py::run_reminder_jobs``)
+    has to visit every tenant in turn, which no :class:`TenantData` can express:
+    a tenant view is one tenant by construction. Rather than leave a raw
+    ``db.organizations.find({})`` in a route — indistinguishable, to a reader or
+    to the static guard, from the cross-tenant reads W0-03E removed — the
+    enumeration lives here, named for what it is, and returns ONLY tenant ids.
+
+    It discloses no tenant's business data: the caller gets identifiers and must
+    then build that tenant's own :meth:`TenantData.for_resolved_org` view to read
+    anything. Callers are therefore auditable by searching for this one name.
+    """
+    cursor = db["organizations"].find({}, {"_id": 0, "id": 1})
+    docs = await cursor.to_list(limit)
+    return [d["id"] for d in docs if isinstance(d.get("id"), str) and d["id"]]
+
+
 # ------------------------------------------------------------------ public token
+async def resolve_owner_by_unique_key(db, collection: str, key: str, value: Any,
+                                      projection: Optional[Mapping] = None):
+    """``(tenant, doc)`` for a record named by a GLOBALLY UNIQUE EXTERNAL key.
+
+    W0-03E-A2C. Some records are reached by an identifier this installation did
+    not mint and no request can guess: a public offer review token, a Stripe
+    subscription or customer id. The caller has no session, so there is no tenant
+    yet — the record itself is what says which tenant this is about.
+
+    Fail closed, never first-match: the key must select EXACTLY ONE document that
+    carries a usable owner. No value, an owner-less row, or two rows sharing the
+    key (two tenants, or a corrupt copy) resolves to ``(None, None)``. Everything
+    read or written afterwards goes through the returned tenant's view, so one
+    external callback can only ever touch the tenant that owns the record.
+    """
+    if value in (None, ""):
+        return None, None
+    proj = _proj(projection)
+    docs = await db[collection].find({key: value}, proj).limit(2).to_list(2)
+    if len(docs) != 1 or not isinstance(docs[0].get(TENANT_KEY), str) or not docs[0][TENANT_KEY]:
+        return None, None
+    return TenantData.for_owner_of(db, docs[0]), docs[0]
+
+
 async def resolve_review_token(db, token: Any, projection: Optional[Mapping] = None):
     """``(tenant, offer)`` for a public offer-review token; ``(None, None)`` otherwise.
 

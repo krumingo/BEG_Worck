@@ -12,6 +12,12 @@ from app.db import db
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["SMR Groups"])
 
@@ -61,10 +67,11 @@ def _source_collection(source: str):
 
 async def _get_group_lines(org_id: str, group_id: str) -> list:
     """Fetch all lines assigned to a group from all sources."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     lines = []
 
     # SMR Analysis lines (embedded in analysis.lines[])
-    analyses = await db.smr_analyses.find(
+    analyses = await tenant.smr_analyses.find(
         {"org_id": org_id, "lines.group_id": group_id}, {"_id": 0}
     ).to_list(100)
     for a in analyses:
@@ -76,7 +83,7 @@ async def _get_group_lines(org_id: str, group_id: str) -> list:
                 })
 
     # Missing SMR
-    missing = await db.missing_smr.find(
+    missing = await tenant.missing_smr.find(
         {"org_id": org_id, "group_id": group_id}, {"_id": 0}
     ).to_list(200)
     for m in missing:
@@ -90,7 +97,7 @@ async def _get_group_lines(org_id: str, group_id: str) -> list:
         })
 
     # Extra work drafts
-    extras = await db.extra_work_drafts.find(
+    extras = await tenant.extra_work_drafts.find(
         {"org_id": org_id, "group_id": group_id}, {"_id": 0}
     ).to_list(200)
     for e in extras:
@@ -137,13 +144,14 @@ def _compute_summary(lines: list) -> dict:
 
 @router.post("/projects/{project_id}/smr-groups", status_code=201)
 async def create_group(project_id: str, data: GroupCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if data.location_id:
-        loc = await db.location_nodes.find_one({"id": data.location_id, "org_id": user["org_id"]})
+        loc = await tenant.location_nodes.find_one({"id": data.location_id, "org_id": user["org_id"]})
         if not loc:
             raise HTTPException(status_code=404, detail="Location not found")
 
@@ -162,7 +170,7 @@ async def create_group(project_id: str, data: GroupCreate, user: dict = Depends(
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.smr_groups.insert_one(group)
+    await tenant.smr_groups.insert_one(group)
     return {k: v for k, v in group.items() if k != "_id"}
 
 
@@ -172,10 +180,11 @@ async def list_groups(
     location_id: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"], "project_id": project_id}
     if location_id:
         query["location_id"] = location_id
-    groups = await db.smr_groups.find(query, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    groups = await tenant.smr_groups.find(query, {"_id": 0}).sort("sort_order", 1).to_list(200)
 
     # Attach summary to each group
     for g in groups:
@@ -188,16 +197,17 @@ async def list_groups(
 @router.get("/projects/{project_id}/smr-groups/tree")
 async def get_groups_tree(project_id: str, user: dict = Depends(require_m2)):
     """Full tree: Location → Group → SMR lines."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Get all locations for project
-    locations = await db.location_nodes.find(
+    locations = await tenant.location_nodes.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(500)
     loc_map = {loc["id"]: loc for loc in locations}
 
     # Get all groups for project
-    groups = await db.smr_groups.find(
+    groups = await tenant.smr_groups.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).sort("sort_order", 1).to_list(500)
 
@@ -240,20 +250,22 @@ async def get_groups_tree(project_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/smr-groups/{group_id}")
 async def update_group(group_id: str, data: GroupUpdate, user: dict = Depends(require_m2)):
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.smr_groups.update_one({"id": group_id, "org_id": user["org_id"]}, {"$set": update})
-    return await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
+    await tenant.smr_groups.update_one({"id": group_id, "org_id": user["org_id"]}, {"$set": update})
+    return await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/smr-groups/{group_id}")
 async def delete_group(group_id: str, request: Request, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -265,11 +277,11 @@ async def delete_group(group_id: str, request: Request, user: dict = Depends(req
         return done
     # Unassign all lines (clear group_id) — lines keep existing
     org = user["org_id"]
-    await db.missing_smr.update_many({"group_id": group_id, "org_id": org}, {"$unset": {"group_id": ""}})
-    await db.extra_work_drafts.update_many({"group_id": group_id, "org_id": org},
+    await tenant.missing_smr.update_many({"group_id": group_id, "org_id": org}, {"$unset": {"group_id": ""}})
+    await tenant.extra_work_drafts.update_many({"group_id": group_id, "org_id": org},
                                            {"$unset": {"group_id": ""}})
     # For smr_analyses, need to update embedded lines
-    analyses = await db.smr_analyses.find(
+    analyses = await tenant.smr_analyses.find(
         {"org_id": user["org_id"], "lines.group_id": group_id}
     ).to_list(100)
     for a in analyses:
@@ -277,9 +289,9 @@ async def delete_group(group_id: str, request: Request, user: dict = Depends(req
         for ln in lines:
             if ln.get("group_id") == group_id:
                 ln.pop("group_id", None)
-        await db.smr_analyses.update_one({"id": a["id"], "org_id": org}, {"$set": {"lines": lines}})
+        await tenant.smr_analyses.update_one({"id": a["id"], "org_id": org}, {"$set": {"lines": lines}})
 
-    await db.smr_groups.delete_one({"id": group_id, "org_id": org})
+    await tenant.smr_groups.delete_one({"id": group_id, "org_id": org})
     return {"ok": True}
 
 
@@ -287,14 +299,15 @@ async def delete_group(group_id: str, request: Request, user: dict = Depends(req
 
 @router.post("/smr-groups/{group_id}/assign-line")
 async def assign_line(group_id: str, data: AssignLine, user: dict = Depends(require_m2)):
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
     now = datetime.now(timezone.utc).isoformat()
 
     if data.source == "missing_smr":
-        r = await db.missing_smr.update_one(
+        r = await tenant.missing_smr.update_one(
             {"id": data.line_id, "org_id": user["org_id"]},
             {"$set": {"group_id": group_id, "updated_at": now}},
         )
@@ -302,7 +315,7 @@ async def assign_line(group_id: str, data: AssignLine, user: dict = Depends(requ
             raise HTTPException(status_code=404, detail="Line not found")
 
     elif data.source == "extra_work":
-        r = await db.extra_work_drafts.update_one(
+        r = await tenant.extra_work_drafts.update_one(
             {"id": data.line_id, "org_id": user["org_id"]},
             {"$set": {"group_id": group_id, "updated_at": now}},
         )
@@ -312,7 +325,7 @@ async def assign_line(group_id: str, data: AssignLine, user: dict = Depends(requ
     elif data.source == "smr_analysis":
         # line_id is the line_id inside an analysis
         found = False
-        analyses = await db.smr_analyses.find(
+        analyses = await tenant.smr_analyses.find(
             {"org_id": user["org_id"], "lines.line_id": data.line_id}
         ).to_list(10)
         for a in analyses:
@@ -320,7 +333,7 @@ async def assign_line(group_id: str, data: AssignLine, user: dict = Depends(requ
                 if ln["line_id"] == data.line_id:
                     ln["group_id"] = group_id
                     found = True
-            await db.smr_analyses.update_one(
+            await tenant.smr_analyses.update_one(
                 {"id": a["id"]}, {"$set": {"lines": a["lines"], "updated_at": now}}
             )
         if not found:
@@ -333,31 +346,32 @@ async def assign_line(group_id: str, data: AssignLine, user: dict = Depends(requ
 
 @router.post("/smr-groups/{group_id}/unassign-line")
 async def unassign_line(group_id: str, data: AssignLine, user: dict = Depends(require_m2)):
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
     now = datetime.now(timezone.utc).isoformat()
 
     if data.source == "missing_smr":
-        await db.missing_smr.update_one(
+        await tenant.missing_smr.update_one(
             {"id": data.line_id, "org_id": user["org_id"]},
             {"$unset": {"group_id": ""}, "$set": {"updated_at": now}},
         )
     elif data.source == "extra_work":
-        await db.extra_work_drafts.update_one(
+        await tenant.extra_work_drafts.update_one(
             {"id": data.line_id, "org_id": user["org_id"]},
             {"$unset": {"group_id": ""}, "$set": {"updated_at": now}},
         )
     elif data.source == "smr_analysis":
-        analyses = await db.smr_analyses.find(
+        analyses = await tenant.smr_analyses.find(
             {"org_id": user["org_id"], "lines.line_id": data.line_id}
         ).to_list(10)
         for a in analyses:
             for ln in a.get("lines", []):
                 if ln["line_id"] == data.line_id:
                     ln.pop("group_id", None)
-            await db.smr_analyses.update_one(
+            await tenant.smr_analyses.update_one(
                 {"id": a["id"]}, {"$set": {"lines": a["lines"], "updated_at": now}}
             )
 
@@ -368,7 +382,8 @@ async def unassign_line(group_id: str, data: AssignLine, user: dict = Depends(re
 
 @router.get("/smr-groups/{group_id}/lines")
 async def get_group_lines(group_id: str, user: dict = Depends(require_m2)):
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     lines = await _get_group_lines(user["org_id"], group_id)
@@ -377,7 +392,8 @@ async def get_group_lines(group_id: str, user: dict = Depends(require_m2)):
 
 @router.get("/smr-groups/{group_id}/summary")
 async def get_group_summary(group_id: str, user: dict = Depends(require_m2)):
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]}, {"_id": 0})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     lines = await _get_group_lines(user["org_id"], group_id)
@@ -388,11 +404,12 @@ async def get_group_summary(group_id: str, user: dict = Depends(require_m2)):
 
 @router.get("/projects/{project_id}/smr-by-type")
 async def smr_by_type(project_id: str, smr_type: str, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     results = []
 
     # Search in smr_analyses
-    analyses = await db.smr_analyses.find(
+    analyses = await tenant.smr_analyses.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
     for a in analyses:
@@ -406,7 +423,7 @@ async def smr_by_type(project_id: str, smr_type: str, user: dict = Depends(requi
                 })
 
     # Search in missing_smr
-    missing = await db.missing_smr.find(
+    missing = await tenant.missing_smr.find(
         {"org_id": org_id, "project_id": project_id,
          "$or": [
              {"smr_type": {"$regex": smr_type, "$options": "i"}},
@@ -427,10 +444,10 @@ async def smr_by_type(project_id: str, smr_type: str, user: dict = Depends(requi
     groups = {}
     locs = {}
     if group_ids:
-        gs = await db.smr_groups.find({"id": {"$in": list(group_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        gs = await tenant.smr_groups.find({"id": {"$in": list(group_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
         groups = {g["id"]: g["name"] for g in gs}
     if loc_ids:
-        ls = await db.location_nodes.find({"id": {"$in": list(loc_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        ls = await tenant.location_nodes.find({"id": {"$in": list(loc_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
         locs = {l["id"]: l["name"] for l in ls}
     for r in results:
         r["group_name"] = groups.get(r.get("group_id"), "")
@@ -443,7 +460,8 @@ async def smr_by_type(project_id: str, smr_type: str, user: dict = Depends(requi
 
 @router.post("/smr-groups/{group_id}/report")
 async def submit_group_report(group_id: str, data: GroupReport, user: dict = Depends(require_m2)):
-    group = await db.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -468,5 +486,5 @@ async def submit_group_report(group_id: str, data: GroupReport, user: dict = Dep
         report["total_cost"] = data.total_cost or 0
         report["line_reports"] = []
 
-    await db.smr_group_reports.insert_one(report)
+    await tenant.smr_group_reports.insert_one(report)
     return {k: v for k, v in report.items() if k != "_id"}

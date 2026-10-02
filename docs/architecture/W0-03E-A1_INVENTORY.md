@@ -22,13 +22,14 @@
 | app/routes/finance.py:update_invoice_status | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice_status | (helper) | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice_status | (helper) | payment_allocations | find(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:get_invoice_settings | (helper) | invoice_settings | find_one((tenant only)) | literal org_id | scoped@base | SAFE |
+| app/routes/finance.py:get_invoice_settings | (helper) | invoice_settings | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/finance.py:get_invoice_settings | (helper) | invoice_settings | insert_one(settings) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_next_invoice_no | (helper) | invoices | find_one(invoice_no) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_next_invoice_no | (helper) | invoices | find(invoice_no) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:validate_invoice_no_unique | (helper) | invoices | find_one(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_safe_starting_number | (helper) | invoices | find_one(direction, invoice_no) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_settings | GET /finance/invoice-settings | invoices | find_one(direction) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:update_settings | PUT /finance/invoice-settings | invoice_settings | update_one((tenant only)) | literal org_id | scoped@base | SAFE |
+| app/routes/finance.py:update_settings | PUT /finance/invoice-settings | invoice_settings | update_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_accounts | GET /finance/accounts | finance_payments | aggregate(pipeline) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_accounts | GET /finance/accounts | financial_accounts | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:create_transfer | POST /finance/transfers | financial_accounts | get(id = from_id) | TenantData org_id (session) | scoped@base | SAFE |
@@ -127,8 +128,10 @@
 | app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_versions | find_one(offer_id) | literal user['org_id'] | scoped@base | SAFE |
+| app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_versions | find_one(offer_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_versions | insert_one(id, project_id, offer_id, version_number, created_at, create) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_events | insert_one(id, offer_id, event_type, actor, created_at, details) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:accept_offer | POST /offers/{offer_id}/accept | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:accept_offer | POST /offers/{offer_id}/accept | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:reject_offer | POST /offers/{offer_id}/reject | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
@@ -139,10 +142,11 @@
 | app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:list_activity_catalog | GET /activity-catalog | activity_catalog | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:create_activity | POST /activity-catalog | projects | get(id = data.project_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/offers.py:update_activity | PUT /activity-catalog/{item_id} | activity_catalog | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/offers.py:update_activity | PUT /activity-catalog/{item_id} | activity_catalog | update_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/offers.py:delete_activity | DELETE /activity-catalog/{item_id} | activity_catalog | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/offers.py:delete_activity | DELETE /activity-catalog/{item_id} | activity_catalog | delete_one(id) | literal user['org_id'] | BARE@base | FIXED |
+| app/routes/offers.py:create_activity | POST /activity-catalog | activity_catalog | insert_one(item) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:update_activity | PUT /activity-catalog/{item_id} | activity_catalog | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:update_activity | PUT /activity-catalog/{item_id} | activity_catalog | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:delete_activity | DELETE /activity-catalog/{item_id} | activity_catalog | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:delete_activity | DELETE /activity-catalog/{item_id} | activity_catalog | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:export_offer_pdf | GET /offers/{offer_id}/pdf | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:export_offer_pdf | GET /offers/{offer_id}/pdf | organizations | own_organization(id = tenant org_id) | TenantData | scoped@base | SAFE |
 | app/routes/offers.py:export_offer_pdf | GET /offers/{offer_id}/pdf | projects | get(id = offer.get('project_id')) | TenantData org_id (session) | scoped@base | SAFE |
@@ -159,7 +163,7 @@
 | app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offers | resolve_review_token(review_token (unique, fail-closed)) | data_access helper | BARE@base | FIXED |
 | app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offers | update_one(id, review_token) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:get_offer_events | GET /offers/{offer_id}/events | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/offers.py:get_offer_events | GET /offers/{offer_id}/events | offer_events | find(offer_id) | literal user['org_id'] | scoped@base | SAFE |
+| app/routes/offers.py:get_offer_events | GET /offers/{offer_id}/events | offer_events | find(offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:get_price_history | GET /prices | invoices | $lookup(? → id) | TenantData.lookup $filter org_id | new read | SAFE |
 | app/routes/reports.py:get_price_history | GET /prices | invoice_lines | aggregate(pipeline) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:get_price_history | GET /prices | counterparties | get(id = item['supplier_id']) | TenantData org_id (session) | scoped@base | SAFE |
@@ -174,37 +178,40 @@
 | app/routes/reports.py:get_turnover_by_client | GET /reports/turnover-by-client | invoices | aggregate(pipeline) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:get_turnover_by_client | GET /reports/turnover-by-client | counterparties | find_one(id, type) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | invoices | find(direction, issue_date) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | cash_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | overhead_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | bonus_payments | find(date) | literal org_id | scoped@base | SAFE |
+| app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | cash_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | overhead_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/reports.py:get_company_finance_summary | GET /reports/company-finance-summary | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:get_month_finance_totals | (helper) | invoices | find(direction, issue_date) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/reports.py:get_month_finance_totals | (helper) | cash_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/reports.py:get_month_finance_totals | (helper) | overhead_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/reports.py:get_month_finance_totals | (helper) | bonus_payments | find(date) | literal org_id | scoped@base | SAFE |
+| app/routes/reports.py:get_month_finance_totals | (helper) | cash_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/reports.py:get_month_finance_totals | (helper) | overhead_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/reports.py:get_month_finance_totals | (helper) | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:list_cash_transactions | GET /finance/cash-transactions | cash_transactions | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_cash_transactions | GET /finance/cash-transactions | cash_transactions | find(query) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | insert_one(txn) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:list_overhead_transactions | GET /finance/overhead-transactions | overhead_transactions | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_overhead_transactions | GET /finance/overhead-transactions | overhead_transactions | find(query) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | insert_one(txn) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:list_bonus_payments | GET /finance/bonus-payments | bonus_payments | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_bonus_payments | GET /finance/bonus-payments | bonus_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | insert_one(payment) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | organizations | own_organization(id = tenant org_id) | TenantData | scoped@base | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | invoices | find(direction, issue_date) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | cash_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | overhead_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | bonus_payments | find(date) | literal org_id | scoped@base | SAFE |
+| app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | cash_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | overhead_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_pending_payments | GET /dashboard/pending-payments | invoices | find(direction, status) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | projects | get_many(id ∈ all_project_ids) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | users | find(is_active) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | employee_profiles | find(user_id) | literal org_id | scoped@base | SAFE |
-| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | worker_calendar | find(date, worker_id) | literal org_id | scoped@base | SAFE |
-| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | site_daily_rosters | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | employee_daily_reports | find(date, worker_id) | literal org_id | scoped@base | SAFE |
+| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | employee_profiles | find(user_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | worker_calendar | find(date, worker_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | site_daily_rosters | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/dashboard.py:get_personnel_today | GET /dashboard/personnel-today | employee_daily_reports | find(date, worker_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_dashboard_activity | GET /dashboard/activity | audit_logs | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_dashboard_activity | GET /dashboard/activity | audit_logs | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | invoices | find(direction, issue_date) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | cash_transactions | find(date, type) | literal org_id | scoped@base | SAFE |
-| app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | overhead_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | bonus_payments | find(date) | literal org_id | scoped@base | SAFE |
+| app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | cash_transactions | find(date, type) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | overhead_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/dashboard.py:get_finance_series | GET /reports/company-finance-series | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_finance_details_summary | GET /reports/finance-details/summary | invoices | find(issued_query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_finance_details_summary | GET /reports/finance-details/summary | invoices | find(received_query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_finance_details_summary | GET /reports/finance-details/summary | cash_transactions | find(cash_query) | TenantData org_id (session) | BARE@base | FIXED |
@@ -216,8 +223,8 @@
 | app/routes/dashboard.py:get_finance_by_project | GET /reports/finance-details/by-project | projects | find(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | invoices | find(inv_query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | cash_transactions | find(cash_query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | overhead_transactions | find(date) | literal org_id | scoped@base | SAFE |
-| app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | bonus_payments | find(date) | literal org_id | scoped@base | SAFE |
+| app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | overhead_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_top_counterparties | GET /reports/finance-details/top-counterparties | invoices | aggregate(pipeline) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_top_counterparties | GET /reports/finance-details/top-counterparties | counterparties | find(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/master_data/legacy_adapter.py:_resolve_row | (helper) | <dynamic> | find_one(_id) | literal tenant_id | scoped@base | SAFE |
@@ -227,7 +234,7 @@
 | app/master_data/legacy_adapter.py:guarded_identity_delete | (helper) | <dynamic> | find_one(_id) | literal ctx.tenant_id | BARE@base | FIXED |
 | app/master_data/legacy_adapter.py:guarded_identity_delete | (helper) | <dynamic> | delete_one(id) | literal ctx.org_id | BARE@base | FIXED |
 | app/master_data/legacy_adapter.py:guarded_identity_delete | (helper) | <dynamic> | update_one(id) | literal ctx.org_id | BARE@base | FIXED |
-| app/master_data/legacy_adapter.py:advance_mapping_report | (helper) | advances | find(guest_name) | literal org_id | scoped@base | SAFE |
+| app/master_data/legacy_adapter.py:advance_mapping_report | (helper) | advances | find(guest_name) | TenantData org_id (session) | scoped@base | SAFE |
 | app/master_data/legacy_adapter.py:advance_mapping_report | (helper) | md_person | find(status) | literal tenant_id | scoped@base | SAFE |
 | app/master_data/legacy_adapter.py:advance_mapping_report | (helper) | <dynamic> | find(status) | literal tenant_id | scoped@base | SAFE |
 | app/master_data/legacy_adapter.py:advance_mapping_report | (helper) | <dynamic> | find((tenant only)) | literal org_id | scoped@base | SAFE |
@@ -273,27 +280,29 @@
 | app/master_data/legacy_migration.py:resolve_mapping | (helper) | <dynamic> | find_one(id) | literal org_id | scoped@base | SAFE |
 | app/master_data/legacy_migration.py:resolve_mapping | (helper) | <dynamic> | find_one(id) | literal tenant_id | scoped@base | SAFE |
 | app/master_data/legacy_migration.py:resolve_mapping | (helper) | <dynamic> | update_one(_id, status) | literal tenant_id | scoped@base | SAFE |
-| app/routes/ocr_invoice.py:from_media | POST /ocr-invoice/from-media | media_files | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/ocr_invoice.py:list_intakes | GET /ocr-invoice | ocr_invoice_intake | find((tenant only)) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:get_intake | GET /ocr-invoice/{intake_id} | ocr_invoice_intake | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/ocr_invoice.py:get_raw_text | GET /ocr-invoice/{intake_id}/raw-text | ocr_invoice_intake | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/ocr_invoice.py:review_intake | PUT /ocr-invoice/{intake_id}/review | ocr_invoice_intake | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:review_intake | PUT /ocr-invoice/{intake_id}/review | ocr_invoice_intake | update_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | ocr_invoice_intake | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | ocr_invoice_intake | update_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:reject_intake | PUT /ocr-invoice/{intake_id}/reject | ocr_invoice_intake | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:reject_intake | PUT /ocr-invoice/{intake_id}/reject | ocr_invoice_intake | update_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/assets_batch_intake.py:_match_existing_item | (helper) | asset_items | find(is_active) | literal org_id | scoped@base | SAFE |
-| app/routes/assets_batch_intake.py:recognize | POST /assets/batch-intake/recognize | asset_item_types | find((tenant only)) | literal org | scoped@base | SAFE |
-| app/services/paid_labor.py:paid_labor_v3 | (helper) | payment_slips | find(status, archived, paid_at) | literal org_id | scoped@base | SAFE |
-| app/services/paid_labor.py:_paid_alloc_rows | (helper) | projects | find_one(name) | literal org_id | scoped@base | SAFE |
-| app/services/paid_labor.py:_paid_alloc_rows | (helper) | pay_runs | find(status, archived) | literal org_id | scoped@base | SAFE |
-| app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | find_one((tenant only)) | literal org_id | scoped@base | SAFE |
-| app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | update_one((tenant only)) | literal org_id | scoped@base | SAFE |
-| app/deps/modules.py:get_plan_limits | (helper) | subscriptions | find_one((tenant only)) | literal org_id | scoped@base | SAFE |
-| app/deps/modules.py:enforce_limit | (helper) | users | count_documents((tenant only)) | literal org_id | scoped@base | SAFE |
-| app/deps/modules.py:enforce_limit | (helper) | projects | count_documents((tenant only)) | literal org_id | scoped@base | SAFE |
-| app/deps/modules.py:enforce_limit | (helper) | invoices | count_documents(created_at) | literal org_id | scoped@base | SAFE |
+| app/routes/ocr_invoice.py:upload_invoice | POST /ocr-invoice/upload | media_files | insert_one(media) | TenantData org_id (session) | new read | SAFE |
+| app/routes/ocr_invoice.py:from_media | POST /ocr-invoice/from-media | media_files | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/ocr_invoice.py:list_intakes | GET /ocr-invoice | ocr_invoice_intake | find((tenant only)) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:get_intake | GET /ocr-invoice/{intake_id} | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/ocr_invoice.py:get_raw_text | GET /ocr-invoice/{intake_id}/raw-text | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/ocr_invoice.py:review_intake | PUT /ocr-invoice/{intake_id}/review | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:review_intake | PUT /ocr-invoice/{intake_id}/review | ocr_invoice_intake | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | pending_expenses | insert_one(expense) | TenantData org_id (session) | new read | SAFE |
+| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | ocr_invoice_intake | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:reject_intake | PUT /ocr-invoice/{intake_id}/reject | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:reject_intake | PUT /ocr-invoice/{intake_id}/reject | ocr_invoice_intake | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/assets_batch_intake.py:_match_existing_item | (helper) | asset_items | find(is_active) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_batch_intake.py:recognize | POST /assets/batch-intake/recognize | asset_item_types | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/services/paid_labor.py:paid_labor_v3 | (helper) | payment_slips | find(status, archived, paid_at) | TenantData org_id (session) | scoped@base | SAFE |
+| app/services/paid_labor.py:_paid_alloc_rows | (helper) | projects | find_one(name) | TenantData org_id (session) | scoped@base | SAFE |
+| app/services/paid_labor.py:_paid_alloc_rows | (helper) | pay_runs | find(status, archived) | TenantData org_id (session) | scoped@base | SAFE |
+| app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | update_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/deps/modules.py:get_plan_limits | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/deps/modules.py:enforce_limit | (helper) | users | count_documents((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/deps/modules.py:enforce_limit | (helper) | projects | count_documents((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/deps/modules.py:enforce_limit | (helper) | invoices | count_documents(created_at) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | projects | get(id = project_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | projects | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | companies | get(id = owner_id) | TenantData org_id (session) | scoped@base | SAFE |
@@ -311,6 +320,7 @@
 | app/routes/projects.py:delete_company | DELETE /companies/{company_id} | companies | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | users | get(id = adv['user_id']) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | advances | find(query) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/hr.py:create_advance | POST /advances | advances | insert_one(advance) | TenantData org_id (session) | new read | SAFE |
 | app/routes/hr.py:create_advance | POST /advances | users | get(id = data.user_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:create_advance | POST /advances | financial_accounts | get(id = data.account_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:create_advance | POST /advances | finance_payments | insert_one(id, direction, amount, currency, date, method, account_id, c) | TenantData org_id (session) | new read | SAFE |
@@ -328,29 +338,29 @@
 | app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | invoices | count(supplier_counterparty_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | counterparties | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | counterparties | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/locations.py:update_location | PUT /locations/{node_id} | location_nodes | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/locations.py:update_location | PUT /locations/{node_id} | location_nodes | update_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | count_documents(parent_id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | missing_smr | count_documents(location_id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | extra_work_drafts | count_documents(location_id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | delete_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/smr_groups.py:update_group | PUT /smr-groups/{group_id} | smr_groups | find_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/smr_groups.py:update_group | PUT /smr-groups/{group_id} | smr_groups | update_one(id) | literal user['org_id'] | BARE@base | FIXED |
-| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_groups | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | missing_smr | update_many(group_id) | literal org | scoped@base | SAFE |
-| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | extra_work_drafts | update_many(group_id) | literal org | scoped@base | SAFE |
-| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_groups | delete_one(id) | literal org | scoped@base | SAFE |
-| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_analyses | update_one(id) | literal org | scoped@base | SAFE |
-| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_analyses | find(lines.group_id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/assets_items.py:update_asset_item | PUT /assets/items/{item_id} | asset_items | update_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/assets_items.py:update_asset_item | PUT /assets/items/{item_id} | asset_items | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/assets_items.py:delete_asset_item | DELETE /assets/items/{item_id} | asset_items | delete_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/assets_items.py:delete_asset_item | DELETE /assets/items/{item_id} | asset_items | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/assets_units.py:update_asset_unit | PUT /assets/units/{unit_id} | asset_units | update_one(id) | literal org | scoped@base | SAFE |
-| app/routes/assets_units.py:update_asset_unit | PUT /assets/units/{unit_id} | asset_units | find_one(id) | literal org | scoped@base | SAFE |
-| app/routes/assets_units.py:delete_asset_unit | DELETE /assets/units/{unit_id} | asset_units | delete_one(id) | literal user['org_id'] | scoped@base | SAFE |
-| app/routes/assets_units.py:delete_asset_unit | DELETE /assets/units/{unit_id} | asset_units | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
+| app/routes/locations.py:update_location | PUT /locations/{node_id} | location_nodes | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/locations.py:update_location | PUT /locations/{node_id} | location_nodes | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | count_documents(parent_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | missing_smr | count_documents(location_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | extra_work_drafts | count_documents(location_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/smr_groups.py:update_group | PUT /smr-groups/{group_id} | smr_groups | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/smr_groups.py:update_group | PUT /smr-groups/{group_id} | smr_groups | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_groups | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | missing_smr | update_many(group_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | extra_work_drafts | update_many(group_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_groups | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_analyses | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/smr_groups.py:delete_group | DELETE /smr-groups/{group_id} | smr_analyses | find(lines.group_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_items.py:update_asset_item | PUT /assets/items/{item_id} | asset_items | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_items.py:update_asset_item | PUT /assets/items/{item_id} | asset_items | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_items.py:delete_asset_item | DELETE /assets/items/{item_id} | asset_items | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_items.py:delete_asset_item | DELETE /assets/items/{item_id} | asset_items | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_units.py:update_asset_unit | PUT /assets/units/{unit_id} | asset_units | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_units.py:update_asset_unit | PUT /assets/units/{unit_id} | asset_units | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_units.py:delete_asset_unit | DELETE /assets/units/{unit_id} | asset_units | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/assets_units.py:delete_asset_unit | DELETE /assets/units/{unit_id} | asset_units | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/auth.py:update_user | PUT /users/{user_id} | users | get(id = user_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/auth.py:update_user | PUT /users/{user_id} | users | update_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/auth.py:delete_user | DELETE /users/{user_id} | users | get(id = user_id) | TenantData org_id (session) | scoped@base | SAFE |
@@ -362,4 +372,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 347 accesses — FIXED 130, SAFE 217
+Totals: 357 accesses — FIXED 130, SAFE 227

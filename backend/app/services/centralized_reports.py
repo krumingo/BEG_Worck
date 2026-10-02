@@ -8,6 +8,7 @@ from collections import defaultdict
 from app.db import db
 from app.services.budget_formula import calculate_budget_formula_sync
 from app.services.resolve_hourly_rate import resolve_worker_hourly_rate
+from app.tenancy.data_access import TenantData
 
 
 async def get_overhead_rate(org_id: str) -> float:
@@ -28,6 +29,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     - work_sessions (Approved entries, source of truth for cost)
     Returns: unified entries list + three projections.
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     overhead_rate = await get_overhead_rate(org_id)
     overhead_hourly = round(overhead_rate / 8, 2) if overhead_rate > 0 else 0
 
@@ -35,7 +37,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     entries = []
 
     # A) Draft/Submitted entries from employee_daily_reports
-    drafts = await db.employee_daily_reports.find(
+    drafts = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id,
          "status": {"$in": ["Draft", "Submitted", "SUBMITTED"]}},
         {"_id": 0},
@@ -80,7 +82,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         })
 
     # B) Approved entries from work_sessions
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None},
          "is_flagged": {"$ne": True}},
         {"_id": 0},
@@ -111,7 +113,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         approved_by = None
         payroll_ready = False
         if rid:
-            rep = await db.employee_daily_reports.find_one(
+            rep = await tenant.employee_daily_reports.find_one(
                 {"id": rid}, {"_id": 0, "slip_number": 1, "approved_by": 1, "payroll_ready": 1}
             )
             if rep:
@@ -147,12 +149,12 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     def _is_noise(name):
         return name.lower().strip().startswith(NOISE_PREFIXES) if name else True
 
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
     # Extra activities from missing_smr
-    extras = await db.missing_smr.find(
+    extras = await tenant.missing_smr.find(
         {"org_id": org_id, "project_id": project_id,
          "status": {"$nin": ["closed", "rejected_by_client"]}},
         {"_id": 0, "smr_type": 1, "activity_type": 1, "qty": 1, "unit": 1},
@@ -313,7 +315,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     draft_oh = round(sum(e["amount_overhead"] for e in entries if e["approval_status"] == "draft"), 2)
 
     # Materials from warehouse
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0, "lines": 1}
     ).to_list(200)
     total_materials = 0
@@ -323,7 +325,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     total_materials = round(total_materials, 2)
 
     # Revenue from invoices
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(200)

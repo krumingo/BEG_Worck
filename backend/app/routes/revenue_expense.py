@@ -18,6 +18,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Revenue & Expense"])
 
@@ -47,7 +53,8 @@ class ClientActCreate(BaseModel):
 
 
 async def get_next_act_number(org_id: str) -> str:
-    last = await db.client_acts.find_one({"org_id": org_id}, {"_id": 0, "act_number": 1}, sort=[("created_at", -1)])
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.client_acts.find_one({"org_id": org_id}, {"_id": 0, "act_number": 1}, sort=[("created_at", -1)])
     num = 1
     if last and last.get("act_number"):
         try: num = int(last["act_number"].split("-")[1]) + 1
@@ -58,8 +65,9 @@ async def get_next_act_number(org_id: str) -> str:
 @router.post("/client-acts", status_code=201)
 async def create_client_act(data: ClientActCreate, user: dict = Depends(require_m2)):
     """Create a draft client act for executed works"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": data.project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -105,22 +113,24 @@ async def create_client_act(data: ClientActCreate, user: dict = Depends(require_
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.client_acts.insert_one(act)
+    await tenant.client_acts.insert_one(act)
     return {k: v for k, v in act.items() if k != "_id"}
 
 
 @router.get("/client-acts")
 async def list_client_acts(project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
-    acts = await db.client_acts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    acts = await tenant.client_acts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     return acts
 
 
 @router.get("/client-acts/{act_id}")
 async def get_client_act(act_id: str, user: dict = Depends(require_m2)):
-    act = await db.client_acts.find_one({"id": act_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]}, {"_id": 0})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
     return act
@@ -128,7 +138,8 @@ async def get_client_act(act_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/client-acts/{act_id}")
 async def update_client_act(act_id: str, data: dict, user: dict = Depends(require_m2)):
-    act = await db.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
     if act["status"] not in ["Draft"]:
@@ -149,14 +160,15 @@ async def update_client_act(act_id: str, data: dict, user: dict = Depends(requir
         update["total"] = round(subtotal * 1.2, 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.client_acts.update_one({"id": act_id}, {"$set": update})
-    return await db.client_acts.find_one({"id": act_id}, {"_id": 0})
+    await tenant.client_acts.update_one({"id": act_id}, {"$set": update})
+    return await tenant.client_acts.find_one({"id": act_id}, {"_id": 0})
 
 
 @router.post("/client-acts/{act_id}/confirm")
 async def confirm_client_act(act_id: str, user: dict = Depends(require_m2)):
     """Confirm act → status=Accepted → earned revenue"""
-    act = await db.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
     if act["status"] != "Draft":
@@ -165,18 +177,19 @@ async def confirm_client_act(act_id: str, user: dict = Depends(require_m2)):
         raise HTTPException(status_code=400, detail="Act has no lines")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.client_acts.update_one({"id": act_id}, {"$set": {
+    await tenant.client_acts.update_one({"id": act_id}, {"$set": {
         "status": "Accepted", "accepted_at": now, "accepted_by": user["id"], "updated_at": now,
     }})
     await log_audit(user["org_id"], user["id"], user.get("email", ""), "client_act_confirmed", "client_act", act_id,
                     {"act_number": act["act_number"], "total": act["total"]})
-    return await db.client_acts.find_one({"id": act_id}, {"_id": 0})
+    return await tenant.client_acts.find_one({"id": act_id}, {"_id": 0})
 
 
 @router.post("/client-acts/from-offer/{offer_id}", status_code=201)
 async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(require_m2)):
     """Generate client act lines from accepted offer"""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
@@ -225,7 +238,7 @@ async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.client_acts.insert_one(act)
+    await tenant.client_acts.insert_one(act)
     return {k: v for k, v in act.items() if k != "_id"}
 
 
@@ -236,10 +249,11 @@ async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(
 @router.get("/labor-cost/by-project/{project_id}")
 async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate labor cost by project from work reports × employee rates"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Load employee rates
-    profiles = await db.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
+    profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
     rate_map = {}
     for p in profiles:
         hr = p.get("hourly_rate") or 0
@@ -248,7 +262,7 @@ async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = 
         rate_map[p["user_id"]] = hr
 
     # Load user names
-    users = await db.users.find({"org_id": org_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
+    users = await tenant.users.find({"org_id": org_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
 
     # Query work reports
@@ -258,7 +272,7 @@ async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = 
     if date_to:
         wr_query.setdefault("date", {})["$lte"] = date_to
 
-    reports = await db.work_reports.find(wr_query, {"_id": 0}).to_list(1000)
+    reports = await tenant.work_reports.find(wr_query, {"_id": 0}).to_list(1000)
 
     # Aggregate
     by_employee = {}
@@ -312,12 +326,13 @@ async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = 
 @router.post("/execution-packages/from-offer/{offer_id}", status_code=201)
 async def generate_execution_packages(offer_id: str, user: dict = Depends(require_m2)):
     """Generate execution packages from accepted offer lines"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
-    existing = await db.execution_packages.count_documents({"org_id": org_id, "source_offer_id": offer_id})
+    existing = await tenant.execution_packages.count_documents({"org_id": org_id, "source_offer_id": offer_id})
     if existing > 0:
         raise HTTPException(status_code=400, detail="Execution packages already exist for this offer")
 
@@ -365,25 +380,27 @@ async def generate_execution_packages(offer_id: str, user: dict = Depends(requir
         packages.append(pkg)
 
     if packages:
-        await db.execution_packages.insert_many(packages)
+        await tenant.execution_packages.insert_many(packages)
 
     return {"ok": True, "count": len(packages), "offer_id": offer_id, "project_id": offer["project_id"]}
 
 
 @router.get("/execution-packages")
 async def list_execution_packages(project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     if offer_id:
         query["source_offer_id"] = offer_id
-    pkgs = await db.execution_packages.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
+    pkgs = await tenant.execution_packages.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
     return pkgs
 
 
 @router.put("/execution-packages/{pkg_id}")
 async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends(require_m2)):
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
 
@@ -400,8 +417,8 @@ async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends
         update["actual_total_cost"] = round(mat + lab + sub + ovh, 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.execution_packages.update_one({"id": pkg_id}, {"$set": update})
-    return await db.execution_packages.find_one({"id": pkg_id}, {"_id": 0})
+    await tenant.execution_packages.update_one({"id": pkg_id}, {"$set": update})
+    return await tenant.execution_packages.find_one({"id": pkg_id}, {"_id": 0})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -411,28 +428,29 @@ async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends
 @router.get("/project-profit/{project_id}")
 async def get_project_profit_summary(project_id: str, user: dict = Depends(require_m2)):
     """Comprehensive project financial summary — revenue, costs, profit"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # ── REVENUE ──
     # R1: Contracted (accepted offers)
-    accepted_offers = await db.offers.find(
+    accepted_offers = await tenant.offers.find(
         {"project_id": project_id, "org_id": org_id, "status": "Accepted"},
         {"_id": 0, "total": 1, "subtotal": 1}
     ).to_list(100)
     contracted_revenue = sum(o.get("subtotal", 0) or o.get("total", 0) for o in accepted_offers)
 
     # R2: Earned (accepted client acts)
-    accepted_acts = await db.client_acts.find(
+    accepted_acts = await tenant.client_acts.find(
         {"project_id": project_id, "org_id": org_id, "status": "Accepted"},
         {"_id": 0, "subtotal": 1}
     ).to_list(100)
     earned_revenue = sum(a.get("subtotal", 0) for a in accepted_acts)
 
     # R3: Billed (issued invoices)
-    issued_invoices = await db.invoices.find(
+    issued_invoices = await tenant.invoices.find(
         {"project_id": project_id, "org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled"]}},
         {"_id": 0, "subtotal": 1, "total": 1, "paid_amount": 1}
     ).to_list(100)
@@ -443,14 +461,14 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
 
     # ── EXPENSES ──
     # Material cost: from warehouse issues to this project
-    wh_issues = await db.warehouse_transactions.find(
+    wh_issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "total": 1, "lines": 1}
     ).to_list(100)
     material_cost = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
 
     # Returns reduce material cost
-    wh_returns = await db.warehouse_transactions.find(
+    wh_returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -472,9 +490,9 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         labor_hours = labor_summary["total_hours"]
     else:
         # Fallback to old work_reports aggregation
-        profiles = await db.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
+        profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
         rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
-        reports = await db.work_reports.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "user_id": 1, "lines": 1}).to_list(1000)
+        reports = await tenant.work_reports.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "user_id": 1, "lines": 1}).to_list(1000)
         labor_cost = 0
         labor_hours = 0
         for wr in reports:
@@ -494,14 +512,14 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     if sub_metrics.get("available"):
         subcontract_cost = sub_metrics["certified"]  # certified = execution cost basis
     else:
-        received_invoices = await db.invoices.find(
+        received_invoices = await tenant.invoices.find(
             {"project_id": project_id, "org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled"]}},
             {"_id": 0, "subtotal": 1, "total": 1}
         ).to_list(100)
         subcontract_cost = sum(i.get("subtotal", 0) or i.get("total", 0) for i in received_invoices)
 
     # Overhead: from allocations if exist
-    overhead_allocs = await db.project_overhead_alloc.find(
+    overhead_allocs = await tenant.project_overhead_alloc.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "allocated_amount": 1}
     ).to_list(50)
@@ -516,7 +534,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     receivables = round(billed_revenue - collected_revenue, 2)
 
     # ── EXECUTION PACKAGES BREAKDOWN ──
-    exec_pkgs = await db.execution_packages.find(
+    exec_pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0}
     ).to_list(200)
@@ -596,32 +614,33 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
 @router.get("/project-smr-view/{project_id}")
 async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)):
     """Operational SMR view for project — main offer + execution packages with labor focus"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Main offer (accepted, non-extra, most recent)
-    main_offer = await db.offers.find_one(
+    main_offer = await tenant.offers.find_one(
         {"org_id": org_id, "project_id": project_id, "status": "Accepted", "offer_type": {"$ne": "extra"}},
         {"_id": 0, "id": 1, "offer_no": 1, "title": 1, "status": 1, "total": 1, "subtotal": 1, "currency": 1, "accepted_at": 1, "lines": 1},
         sort=[("accepted_at", -1)]
     )
     if not main_offer:
         # Fallback to latest non-draft
-        main_offer = await db.offers.find_one(
+        main_offer = await tenant.offers.find_one(
             {"org_id": org_id, "project_id": project_id, "offer_type": {"$ne": "extra"}, "status": {"$nin": ["Draft"]}},
             {"_id": 0, "id": 1, "offer_no": 1, "title": 1, "status": 1, "total": 1, "subtotal": 1, "currency": 1, "lines": 1},
             sort=[("created_at", -1)]
         )
 
     # Execution packages with progress + labor
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
     # Subcontract by package
-    sub_lines = await db.subcontractor_package_lines.find(
+    sub_lines = await tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "execution_package_id": 1, "subcontract_total": 1, "certified_total": 1, "assigned_qty": 1}
     ).to_list(500)

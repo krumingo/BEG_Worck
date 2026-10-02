@@ -14,17 +14,18 @@ over every org (the endpoint is scoped to a single admin's org).
 import asyncio
 
 from app.db import db
+from app.tenancy.data_access import all_tenant_ids
 from app.routes.assets_qr import _make_qr
 
 CREATED_BY = "system-backfill"
 
 
 async def backfill():
-    org_ids = set()
-    for coll in (db.projects, db.users, db.warehouses):
-        for oid in await coll.distinct("org_id"):
-            if oid:
-                org_ids.add(oid)
+    # W0-03E-A2C: tenants come from the one declared enumeration helper
+    # (app.tenancy.data_access.all_tenant_ids), not from distinct("org_id") over
+    # three business collections — that read a raw handle for each of them and
+    # would also "find" a tenant that has no organization row at all.
+    org_ids = set(await all_tenant_ids(db))
 
     grand = {"project": 0, "employee": 0, "warehouse": 0}
 

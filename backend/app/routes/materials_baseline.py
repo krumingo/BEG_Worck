@@ -13,6 +13,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Materials Baseline"])
 
@@ -24,8 +30,9 @@ router = APIRouter(tags=["Materials Baseline"])
 @router.post("/planned-materials/from-offer/{offer_id}", status_code=201)
 async def generate_planned_materials(offer_id: str, data: dict = {}, user: dict = Depends(require_m2)):
     """Generate planned materials snapshot from accepted offer + AI material suggestions"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
@@ -33,13 +40,13 @@ async def generate_planned_materials(offer_id: str, data: dict = {}, user: dict 
     waste_percent = float(data.get("waste_percent", 10))
 
     # Duplicate protection
-    existing = await db.planned_materials.count_documents({"org_id": org_id, "source_offer_id": offer_id})
+    existing = await tenant.planned_materials.count_documents({"org_id": org_id, "source_offer_id": offer_id})
     if existing > 0:
         raise HTTPException(status_code=400, detail="Planned materials already exist for this offer. Use regenerate endpoint.")
 
     # Load execution packages for linkage
     exec_pkgs = {}
-    pkgs = await db.execution_packages.find({"org_id": org_id, "source_offer_id": offer_id}, {"_id": 0, "id": 1, "offer_line_id": 1}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "source_offer_id": offer_id}, {"_id": 0, "id": 1, "offer_line_id": 1}).to_list(200)
     for p in pkgs:
         if p.get("offer_line_id"):
             exec_pkgs[p["offer_line_id"]] = p["id"]
@@ -47,7 +54,7 @@ async def generate_planned_materials(offer_id: str, data: dict = {}, user: dict 
     # Load AI material suggestions from extra work drafts linked to this offer
     ai_materials = {}
     if offer.get("source_batch_id"):
-        drafts = await db.extra_work_drafts.find(
+        drafts = await tenant.extra_work_drafts.find(
             {"group_batch_id": offer["source_batch_id"]},
             {"_id": 0, "title": 1, "suggested_materials": 1}
         ).to_list(50)
@@ -127,26 +134,28 @@ async def generate_planned_materials(offer_id: str, data: dict = {}, user: dict 
         })
 
     if rows:
-        await db.planned_materials.insert_many(rows)
+        await tenant.planned_materials.insert_many(rows)
 
     return {"ok": True, "count": len(rows), "offer_id": offer_id, "project_id": project_id}
 
 
 @router.get("/planned-materials")
 async def list_planned_materials(project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     if offer_id:
         query["source_offer_id"] = offer_id
-    rows = await db.planned_materials.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
+    rows = await tenant.planned_materials.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
     return rows
 
 
 @router.delete("/planned-materials/by-offer/{offer_id}")
 async def delete_planned_materials(offer_id: str, user: dict = Depends(require_m2)):
     """Delete planned materials for an offer (allows regeneration)"""
-    result = await db.planned_materials.delete_many({"org_id": user["org_id"], "source_offer_id": offer_id})
+    tenant = _tenant(user)
+    result = await tenant.planned_materials.delete_many({"org_id": user["org_id"], "source_offer_id": offer_id})
     return {"ok": True, "deleted": result.deleted_count}
 
 
@@ -157,9 +166,10 @@ async def delete_planned_materials(offer_id: str, user: dict = Depends(require_m
 @router.get("/planned-materials/coverage/{project_id}")
 async def get_material_coverage(project_id: str, user: dict = Depends(require_m2)):
     """Get planned materials with request/purchase/warehouse coverage"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0}
     ).to_list(500)
@@ -168,7 +178,7 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
         return {"project_id": project_id, "rows": [], "summary": _empty_summary()}
 
     # Load all material requests for this project
-    requests = await db.material_requests.find(
+    requests = await tenant.material_requests.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$ne": "cancelled"}},
         {"_id": 0, "lines": 1, "source_offer_id": 1}
     ).to_list(100)
@@ -180,7 +190,7 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
             requested_by_name[name] = requested_by_name.get(name, 0) + float(rl.get("qty_requested", 0))
 
     # Load supplier invoices for this project
-    sinvs = await db.supplier_invoices.find(
+    sinvs = await tenant.supplier_invoices.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$ne": "uploaded"}},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -192,7 +202,7 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
             purchased_by_name[name] = purchased_by_name.get(name, 0) + float(sl.get("qty", 0))
 
     # Load warehouse transactions
-    wh_txns = await db.warehouse_transactions.find(
+    wh_txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "type": 1, "lines": 1}
     ).to_list(200)
@@ -211,7 +221,7 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
                 returned_by_name[name] = returned_by_name.get(name, 0) + float(wl.get("qty_returned", 0))
 
     # Load consumption
-    consumptions = await db.project_material_ops.find(
+    consumptions = await tenant.project_material_ops.find(
         {"org_id": org_id, "project_id": project_id, "type": "consumption"},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -288,34 +298,35 @@ def _empty_summary():
 @router.get("/project-material-summary/{project_id}")
 async def get_project_material_summary(project_id: str, user: dict = Depends(require_m2)):
     """Comprehensive material financial summary for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Planned materials
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0}
     ).to_list(500)
     planned_value = sum(p.get("planned_total_cost", 0) for p in planned)
 
     # Actual purchases (supplier invoices posted)
-    sinvs = await db.supplier_invoices.find(
+    sinvs = await tenant.supplier_invoices.find(
         {"org_id": org_id, "project_id": project_id, "posted_to_warehouse": True},
         {"_id": 0, "subtotal": 1, "total": 1, "lines": 1}
     ).to_list(100)
     purchased_value = sum(si.get("subtotal", 0) or sum(l.get("total_price", 0) for l in si.get("lines", [])) for si in sinvs)
 
     # Warehouse issue value
-    wh_issues = await db.warehouse_transactions.find(
+    wh_issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "total": 1, "lines": 1}
     ).to_list(100)
     issued_value = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
 
     # Returns value
-    wh_returns = await db.warehouse_transactions.find(
+    wh_returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
     ).to_list(100)

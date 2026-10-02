@@ -47,7 +47,18 @@ def main():
         ],
     }
 
-    reports = list(db.employee_daily_reports.find(query, {"_id": 0}))
+    # W0-03E-A2C: the migration walks ONE TENANT AT A TIME and every read and
+    # write carries that tenant. It used to read every tenant's reports in one
+    # query and update by bare ``{"id": rid}``, which with ids colliding across
+    # tenants rewrites another tenant's approved report — a frozen payroll split,
+    # i.e. a financial record. Iterating tenants also means an ownerless row is
+    # simply never visited, instead of being migrated under a guessed owner.
+    reports = []
+    for org_id in sorted(db.organizations.distinct("id")):
+        if not isinstance(org_id, str) or not org_id:
+            continue
+        reports.extend(db.employee_daily_reports.find(
+            {**query, "org_id": org_id}, {"_id": 0}))
     print(f"Found {len(reports)} APPROVED reports without frozen split.\n")
 
     updated = 0
@@ -60,8 +71,12 @@ def main():
         worker = r.get("worker_name") or r.get("worker_id", "?")
 
         # Try to find matching work_session
+        org_id = r.get("org_id")
+        if not org_id:
+            print(f"  [skip] {rid[:8]}... has no org_id; refusing to migrate an ownerless row")
+            continue
         session = db.work_sessions.find_one(
-            {"approved_report_id": rid},
+            {"approved_report_id": rid, "org_id": org_id},
             {"_id": 0, "regular_hours": 1, "overtime_hours": 1,
              "overtime_coefficient": 1, "overtime_reason": 1, "labor_cost": 1},
         )
@@ -100,7 +115,7 @@ def main():
 
         if apply:
             db.employee_daily_reports.update_one(
-                {"id": rid},
+                {"id": rid, "org_id": org_id},
                 {"$set": update_fields},
             )
         updated += 1

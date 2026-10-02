@@ -9,6 +9,12 @@ from datetime import datetime, timezone, timedelta
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours_batch, NORMAL_DAY
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["All Reports"])
 
@@ -28,6 +34,7 @@ async def get_all_reports(
     sort_by: str = Query("date"),
     sort_dir: str = Query("desc"),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     if not date_from:
@@ -62,20 +69,20 @@ async def get_all_reports(
         + [r["approved_by"] for r in rows if r.get("approved_by")]
     ))
 
-    users_docs = await db.users.find(
+    users_docs = await tenant.users.find(
         {"id": {"$in": all_user_ids}},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1},
     ).to_list(300)
     user_map = {u["id"]: u for u in users_docs}
 
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "user_id": {"$in": worker_ids}},
         {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1,
          "pay_type": 1, "position": 1, "working_days_per_month": 1, "standard_hours_per_day": 1},
     ).to_list(300)
     prof_map = {p["user_id"]: p for p in profiles}
 
-    projects = await db.projects.find(
+    projects = await tenant.projects.find(
         {"id": {"$in": project_ids}},
         {"_id": 0, "id": 1, "name": 1, "code": 1},
     ).to_list(200)

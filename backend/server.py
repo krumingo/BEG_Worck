@@ -66,6 +66,7 @@ from app.deps.modules import (  # noqa: F401
 from app.utils.audit import log_audit  # noqa: F401
 
 # ── Seed & background jobs ──────────────────────────────────────────────
+from app.tenancy import project_team
 from app.core.seed import seed_data
 from app.routes.attendance import run_reminder_jobs
 
@@ -391,13 +392,10 @@ async def startup():
     await db.audit_logs.create_index([("org_id", 1), ("timestamp", -1)])
     await db.projects.create_index([("org_id", 1), ("code", 1)], unique=True)
     await db.projects.create_index([("org_id", 1), ("status", 1)])
-    # W0-03E-A2: project_team is a tenant-bound authorization relation, so the
-    # hot path is (tenant, project, user) and (tenant, user). The two legacy
-    # indexes stay for the rows that still await a provenance decision.
-    await db.project_team.create_index([("org_id", 1), ("project_id", 1), ("user_id", 1)])
-    await db.project_team.create_index([("org_id", 1), ("user_id", 1), ("active", 1)])
-    await db.project_team.create_index([("project_id", 1), ("user_id", 1)])
-    await db.project_team.create_index("user_id")
+    # W0-03E-A2/A2C: project_team is a tenant-bound authorization relation and
+    # owns its own indexes, so this bootstrap does not reach the collection
+    # directly (rule A2-TEAM).
+    await project_team.ensure_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

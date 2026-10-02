@@ -9,130 +9,130 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 
 | collection | family | key | migration action | creating writer paths |
 |---|---|---|---|---|
-| `activity_budgets` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/activity_budgets.py:140<br>app/routes/excel_import_v2.py:318 |
-| `activity_catalog` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offers.py:508 |
-| `advances` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/hr.py:299 |
-| `ai_cache` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/smr_analysis.py:1027 |
-| `ai_calibration_events` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/ai_calibration.py:149 |
-| `ai_calibrations` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/ai_calibration.py:339 |
-| `alarm_events` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/alarm_engine.py:183 |
-| `alarm_rules` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/alarms.py:177 |
-| `asset_counters` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_qr.py:36 |
-| `asset_custody` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_custody.py:69<br>app/routes/assets_custody.py:78<br>app/routes/assets_custody.py:110 |
-| `asset_intake_pending` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:79 |
-| `asset_item_types` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/asset_item_types.py:58<br>app/routes/assets_intake_pending.py:112 |
-| `asset_items` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:123<br>app/routes/assets_items.py:169 |
-| `asset_movements` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_units.py:284 |
-| `asset_qr_codes` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_qr.py:93 |
-| `asset_repairs` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_repairs.py:122 |
-| `asset_units` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:146<br>app/routes/assets_units.py:177 |
-| `attendance_entries` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/attendance.py:125<br>app/routes/technician.py:474<br>app/routes/technician.py:947 |
-| `audit_logs` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/platform.py:256<br>app/routes/platform.py:334<br>app/services/audit.py:22<br>app/utils/audit.py:78 |
-| `bonus_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/reports.py:1062 |
-| `brigades` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/brigades.py:62 |
-| `budget_freezes` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/budget_progress.py:96 |
-| `cash_transactions` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/reports.py:958 |
-| `change_orders` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/work_logs.py:461 |
-| `client_acts` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/revenue_expense.py:108<br>app/routes/revenue_expense.py:228 |
-| `clients` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/clients.py:207<br>app/routes/clients.py:343<br>app/routes/counterparties.py:387 |
-| `companies` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/clients.py:536<br>app/routes/projects.py:761 |
-| `contract_payments` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/hr.py:824 |
-| `counterparties` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/counterparties.py:189 |
-| `daily_work_logs` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/work_logs.py:262 |
+| `activity_budgets` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `activity_catalog` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `advances` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `ai_cache` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `ai_calibration_events` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `ai_calibrations` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `alarm_events` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `alarm_rules` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_counters` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_custody` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_intake_pending` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_item_types` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:120 |
+| `asset_items` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:131 |
+| `asset_movements` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_qr_codes` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_repairs` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `asset_units` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:154 |
+| `attendance_entries` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `audit_logs` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/platform.py:256<br>app/routes/platform.py:334<br>app/utils/audit.py:78 |
+| `bonus_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `brigades` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `budget_freezes` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `cash_transactions` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `change_orders` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `client_acts` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `clients` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `companies` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `contract_payments` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `counterparties` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `daily_work_logs` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `deliveries` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `employee_daily_reports` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/daily_reports.py:225<br>app/routes/daily_reports.py:971<br>app/routes/technician.py:939 |
-| `employee_profiles` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/hr.py:125<br>app/routes/hr.py:153<br>scripts/create_company.py:61 |
+| `employee_daily_reports` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `employee_profiles` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | scripts/create_company.py:61 |
 | `equipment_assignments` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `equipment_requests` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/technician.py:1240 |
-| `excel_import_templates` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/excel_import_v2.py:180 |
-| `execution_packages` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/revenue_expense.py:368 |
-| `extra_work_drafts` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/extra_works.py:208<br>app/routes/extra_works.py:615<br>app/routes/missing_smr.py:365 |
-| `feature_flags` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:85<br>app/routes/billing.py:135 |
-| `finance_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/hr.py:355<br>app/routes/pay_runs.py:1032<br>app/routes/subcontractors.py:517 |
+| `equipment_requests` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `excel_import_templates` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `execution_packages` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `extra_work_drafts` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `feature_flags` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:85<br>app/routes/billing.py:141 |
+| `finance_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `financial_accounts` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | scripts/create_company.py:65 |
-| `fixed_expenses` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/overhead_realtime.py:196 |
-| `historical_import_batches` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/historical_offers.py:253 |
-| `historical_offer_rows` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/historical_offers.py:249 |
-| `invoice_lines` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/invoice_lines.py:342<br>app/routes/invoice_lines.py:424 |
-| `invoice_settings` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/finance.py:172<br>app/routes/finance.py:325 |
+| `fixed_expenses` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `historical_import_batches` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `historical_offer_rows` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `invoice_lines` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `invoice_settings` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `invoice_versions` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `items` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/items.py:134 |
-| `labor_entries` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/labor_smr.py:55<br>app/routes/labor_smr.py:126 |
-| `location_nodes` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/locations.py:117 |
+| `labor_entries` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `location_nodes` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `machines` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `material_consumption_log` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/warehouse_batches.py:126 |
-| `material_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/material_smr.py:80<br>app/routes/material_smr.py:103<br>app/routes/material_smr.py:125 |
-| `material_prices` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/pricing_engine.py:329 |
-| `material_requests` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/procurement.py:128<br>app/routes/procurement.py:262<br>app/routes/technician.py:1113 |
-| `material_waste_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/material_waste.py:72 |
-| `media_files` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/media.py:116<br>app/routes/ocr_invoice.py:77<br>app/routes/technician.py:1149 |
-| `missing_smr` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/missing_smr.py:148<br>app/routes/technician.py:990<br>app/routes/technician.py:1088 |
-| `mobile_view_configs` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/mobile.py:305 |
-| `notifications` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/ai_calibration.py:98<br>app/routes/attendance.py:247<br>app/routes/attendance.py:344 |
-| `ocr_invoice_intake` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/ocr_invoice.py:174 |
-| `offer_events` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offers.py:338<br>app/routes/offers.py:1099<br>app/routes/offers.py:1167 |
-| `offer_line_budgets` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offer_budget.py:116 |
-| `offer_versions` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offer_versions.py:143<br>app/routes/offer_versions.py:226<br>app/routes/offers.py:324 |
-| `offers` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/extra_works.py:536<br>app/routes/extra_works.py:816<br>app/routes/missing_smr.py:475<br>app/routes/missing_smr.py:766<br>app/routes/smr_analysis.py:594 |
-| `org_counters` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/daily_reports.py:351 |
-| `org_mobile_settings` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/mobile.py:207 |
-| `overhead_assets` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/overhead.py:259 |
-| `overhead_categories` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/overhead.py:97 |
-| `overhead_costs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/overhead.py:186 |
-| `overhead_snapshots` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/full_cost.py:111<br>app/routes/overhead.py:381 |
-| `overhead_transactions` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/reports.py:1010 |
-| `pay_run_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/pay_runs.py:832 |
-| `pay_runs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/pay_runs.py:710 |
+| `material_consumption_log` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `material_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `material_prices` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `material_requests` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `material_waste_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `media_files` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `missing_smr` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `mobile_view_configs` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `notifications` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `ocr_invoice_intake` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `offer_events` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offers.py:1103<br>app/routes/offers.py:1171 |
+| `offer_line_budgets` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `offer_versions` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `offers` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `org_counters` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `org_mobile_settings` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `overhead_assets` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `overhead_categories` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `overhead_costs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `overhead_snapshots` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `overhead_transactions` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `pay_run_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `pay_runs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `payment_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `payment_slips` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/pay_runs.py:713<br>app/routes/pay_runs.py:1193 |
+| `payment_slips` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `payroll_entries` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `payroll_payment_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/payroll_sync.py:90 |
+| `payroll_payment_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `payroll_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `payroll_runs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `payslips` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `pending_expenses` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/ocr_invoice.py:198<br>app/routes/technician.py:1171 |
-| `persons` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/clients.py:615<br>app/routes/projects.py:645 |
-| `planned_materials` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/materials_baseline.py:130 |
-| `price_modifiers_config` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/price_modifiers.py:60<br>app/routes/price_modifiers.py:96 |
-| `progress_updates` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/budget_progress.py:151 |
-| `project_material_ops` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/procurement.py:698 |
-| `project_overhead_alloc` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/full_cost.py:206 |
-| `project_overhead_allocations` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/overhead.py:534 |
+| `pending_expenses` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `persons` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `planned_materials` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `price_modifiers_config` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `progress_updates` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `project_material_ops` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `project_overhead_alloc` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `project_overhead_allocations` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `project_payments` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `project_phases` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/projects.py:528 |
-| `project_photos` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/projects.py:892 |
+| `project_phases` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `project_photos` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `project_team` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `projects` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/projects.py:224<br>app/routes/projects.py:1532<br>app/routes/projects.py:1614<br>app/routes/projects.py:1663<br>app/routes/projects.py:1730<br>app/routes/projects.py:1757<br>app/routes/projects.py:1817 |
-| `reminder_logs` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/attendance.py:279<br>app/routes/attendance.py:351<br>app/routes/attendance.py:852 |
-| `resource_model_config` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/resource_model.py:71 |
-| `revenue_snapshots` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/revenue_snapshot.py:76 |
-| `sales` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/sales.py:252 |
-| `scan_docs` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/scan_docs.py:83 |
-| `settings` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/extra_works.py:641<br>app/routes/full_cost.py:76<br>app/routes/sales.py:166 |
-| `site_daily_rosters` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/technician.py:504<br>app/routes/technician.py:542<br>app/routes/technician.py:633<br>app/routes/technician.py:811 |
-| `site_pulses` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/pulse_generator.py:167 |
+| `projects` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `reminder_logs` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `resource_model_config` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `revenue_snapshots` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `sales` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `scan_docs` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `settings` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `site_daily_rosters` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `site_pulses` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `sites` | projects / project_team / project relations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `smr_analyses` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/excel_import_v2.py:185<br>app/routes/smr_analysis.py:209<br>app/routes/smr_analysis.py:491<br>app/routes/smr_analysis.py:671<br>app/routes/smr_analysis.py:927 |
-| `smr_group_reports` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/smr_groups.py:471 |
-| `smr_groups` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/smr_groups.py:165 |
-| `stock_thresholds` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/procurement.py:991 |
-| `subcontractor_acts` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/subcontractors.py:405 |
-| `subcontractor_package_lines` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/subcontractors.py:282 |
-| `subcontractor_packages` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/subcontractors.py:120 |
-| `subcontractor_payments` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/subcontractors.py:513 |
-| `subcontractor_performance` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/subcontractor_performance.py:78 |
-| `subcontractors` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/subcontractors.py:68 |
-| `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:96<br>app/routes/billing.py:120 |
-| `supplier_invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/procurement.py:298 |
-| `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:70<br>app/routes/auth.py:234<br>app/routes/auth.py:275<br>app/routes/auth.py:275<br>app/routes/platform.py:312<br>app/tenancy/onboarding.py:104 |
-| `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/fifo_service.py:82 |
-| `warehouse_transactions` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/procurement.py:459<br>app/routes/procurement.py:637<br>app/routes/procurement.py:756 |
-| `warehouses` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/procurement.py:415<br>app/routes/warehouses.py:175 |
-| `work_reports` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/attendance.py:620<br>app/routes/technician.py:1021 |
-| `work_sessions` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/daily_reports.py:397<br>app/routes/work_sessions.py:184<br>app/routes/work_sessions.py:415 |
-| `work_types` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/work_logs.py:74 |
-| `worker_calendar` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/daily_reports.py:429<br>app/routes/overhead_realtime.py:85<br>app/routes/overhead_realtime.py:128<br>app/routes/overhead_realtime.py:173 |
+| `smr_analyses` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `smr_group_reports` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `smr_groups` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `stock_thresholds` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subcontractor_acts` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subcontractor_package_lines` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subcontractor_packages` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subcontractor_payments` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subcontractor_performance` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subcontractors` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:96<br>app/routes/billing.py:126 |
+| `supplier_invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:70<br>app/routes/auth.py:242<br>app/routes/auth.py:283<br>app/routes/auth.py:283<br>app/routes/platform.py:312<br>app/tenancy/onboarding.py:104 |
+| `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `warehouse_transactions` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `warehouses` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `work_reports` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `work_sessions` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `work_types` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `worker_calendar` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `md_*`, `audit_events`, `audit_idempotency`, `audit_counters` | W0-03 Master Data / W0-04 audit | `tenant_id` | never backfilled; an ownerless row BLOCKS | repository / store (require tenant_id) |
 | `organizations` | tenant root | `id` | inventoried; a second operating org BLOCKS | `app/tenancy/onboarding.py` |
 | `md_uniqueness_runs` | technical | — | none | index bootstrap ledger |
@@ -140,210 +140,21 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 
 ## 2. Dry-run figures
 
-Source: the real-MongoDB A2B gate evidence (CLI dry run). The real BEG database was NOT read (no production access is authorized); these are the figures of the synthetic legacy dataset of the disposable gate, which puts all three ownerless forms (missing / `null` / `""`) into every org-keyed collection.
-
-| collection | family | total | already tenant-bound | ownerless | conflicting | platform | migration action |
-|---|---|---|---|---|---|---|---|
-| `activity_budgets` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `activity_catalog` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `advances` | payments / allocations / advances / payroll / overhead | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `ai_cache` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `ai_calibration_events` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `ai_calibrations` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `alarm_events` | tasks / schedules / alarms | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `alarm_rules` | tasks / schedules / alarms | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_counters` | asset types / items / units | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_custody` | asset types / items / units | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_intake_pending` | asset types / items / units | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_item_types` | asset types / items / units | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_items` | asset types / items / units | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_movements` | asset types / items / units | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_qr_codes` | asset types / items / units | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_repairs` | asset types / items / units | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `asset_units` | asset types / items / units | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `attendance_entries` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `audit_logs` | audit / business history | 6 | 1 | 4 | 0 | 1 | BACKFILL_TO_RESOLVED_TENANT |
-| `bonus_payments` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `brigades` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `budget_freezes` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `cash_transactions` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `change_orders` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `client_acts` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `clients` | companies / clients / counterparties / subcontractors | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `companies` | companies / clients / counterparties / subcontractors | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `contract_payments` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `counterparties` | companies / clients / counterparties / subcontractors | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `daily_work_logs` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `deliveries` | warehouses / locations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `employee_daily_reports` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `employee_profiles` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `equipment_assignments` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `equipment_requests` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `excel_import_templates` | file / document metadata | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `execution_packages` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `extra_work_drafts` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `feature_flags` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `finance_payments` | payments / allocations / advances / payroll / overhead | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `financial_accounts` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `fixed_expenses` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `historical_import_batches` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `historical_offer_rows` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `invoice_lines` | offers / contracts / invoices / invoice_lines | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `invoice_settings` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `invoice_versions` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `invoices` | offers / contracts / invoices / invoice_lines | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `items` | items / materials / requests | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `labor_entries` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `location_nodes` | warehouses / locations | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `machines` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `material_consumption_log` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `material_entries` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `material_prices` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `material_requests` | items / materials / requests | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `material_waste_entries` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `media_files` | file / document metadata | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `missing_smr` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `mobile_view_configs` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `notifications` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `ocr_invoice_intake` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `offer_events` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `offer_line_budgets` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `offer_versions` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `offers` | offers / contracts / invoices / invoice_lines | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `org_counters` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `org_mobile_settings` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `organizations` | tenant root | 2 | 1 | 0 | 0 | 1 | NONE |
-| `overhead_assets` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `overhead_categories` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `overhead_costs` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `overhead_snapshots` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `overhead_transactions` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `pay_run_allocations` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `pay_runs` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payment_allocations` | payments / allocations / advances / payroll / overhead | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payment_slips` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payroll_entries` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payroll_payment_allocations` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payroll_payments` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payroll_runs` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `payslips` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `pending_expenses` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `persons` | users / persons / employee_profiles / attendance | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `planned_materials` | items / materials / requests | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `price_modifiers_config` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `progress_updates` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_material_ops` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_overhead_alloc` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_overhead_allocations` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_payments` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_phases` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_photos` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `project_team` | projects / project_team / project relations | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `projects` | projects / project_team / project relations | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `reminder_logs` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `resource_model_config` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `revenue_snapshots` | payments / allocations / advances / payroll / overhead | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `sales` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `scan_docs` | file / document metadata | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `settings` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `site_daily_rosters` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `site_pulses` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `sites` | projects / project_team / project relations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `smr_analyses` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `smr_group_reports` | work types / SMR identities | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `smr_groups` | work types / SMR identities | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `stock_thresholds` | warehouses / locations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subcontractor_acts` | companies / clients / counterparties / subcontractors | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subcontractor_package_lines` | companies / clients / counterparties / subcontractors | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subcontractor_packages` | companies / clients / counterparties / subcontractors | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subcontractor_payments` | companies / clients / counterparties / subcontractors | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subcontractor_performance` | companies / clients / counterparties / subcontractors | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subcontractors` | companies / clients / counterparties / subcontractors | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `subscriptions` | tenant settings / counters / subscription | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `supplier_invoices` | offers / contracts / invoices / invoice_lines | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `users` | users / persons / employee_profiles / attendance | 8 | 3 | 4 | 0 | 1 | BACKFILL_TO_RESOLVED_TENANT |
-| `warehouse_batches` | warehouses / locations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `warehouse_transactions` | warehouses / locations | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `warehouses` | warehouses / locations | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `work_reports` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `work_sessions` | users / persons / employee_profiles / attendance | 4 | 1 | 3 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `work_types` | work types / SMR identities | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-| `worker_calendar` | tasks / schedules / alarms | 5 | 1 | 4 | 0 | 0 | BACKFILL_TO_RESOLVED_TENANT |
-
-Totals: authorization_ownerless=8, backfill_collections=124, blocked_collections=0, bound=127, collections=125, conflicting=0, ownerless=398, platform=3, total=528
+_No report given (`--report`)._
 
 ## 3. Residual debt — raw tenant-owned access without a literal tenant filter
 
-Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out of W0-03E). Under colliding ids these are cross-tenant reads/writes. The routes on the Issue #38 matrix (project/team, finance, offers, reports, payments, Master/legacy reads, warehouses, items) were fixed where the matrix exercises them; the rest is listed here as debt for the decision that authorizes a REAL second tenant. Reads: 314, writes: 169.
+Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out of W0-03E). Under colliding ids these are cross-tenant reads/writes. The routes on the Issue #38 matrix (project/team, finance, offers, reports, payments, Master/legacy reads, warehouses, items) were fixed where the matrix exercises them; the rest is listed here as debt for the decision that authorizes a REAL second tenant. Reads: 12, writes: 2.
 
 | module | unscoped reads | unscoped writes |
 |---|---|---|
 | `app/core/seed.py` | 1 | 0 |
-| `app/routes/activity_budgets.py` | 10 | 4 |
-| `app/routes/ai_calibration.py` | 4 | 0 |
-| `app/routes/alarms.py` | 4 | 4 |
-| `app/routes/all_reports.py` | 2 | 0 |
+| `app/routes/activity_budgets.py` | 1 | 0 |
 | `app/routes/assets_intake_pending.py` | 1 | 1 |
-| `app/routes/assets_items.py` | 2 | 0 |
-| `app/routes/assets_qr.py` | 2 | 0 |
-| `app/routes/assets_units.py` | 2 | 0 |
-| `app/routes/attendance.py` | 21 | 7 |
-| `app/routes/auth.py` | 1 | 1 |
-| `app/routes/billing.py` | 4 | 4 |
-| `app/routes/brigades.py` | 1 | 4 |
-| `app/routes/budget_progress.py` | 3 | 1 |
-| `app/routes/clients.py` | 2 | 2 |
-| `app/routes/counterparties.py` | 2 | 3 |
-| `app/routes/daily_reports.py` | 15 | 9 |
-| `app/routes/employee_dossier.py` | 1 | 0 |
-| `app/routes/excel_import_v2.py` | 2 | 2 |
-| `app/routes/extra_works.py` | 3 | 4 |
-| `app/routes/full_cost.py` | 2 | 1 |
-| `app/routes/historical_offers.py` | 3 | 0 |
-| `app/routes/hr.py` | 16 | 7 |
-| `app/routes/invoice_lines.py` | 22 | 4 |
+| `app/routes/auth.py` | 1 | 0 |
 | `app/routes/items.py` | 2 | 1 |
-| `app/routes/labor_smr.py` | 3 | 1 |
-| `app/routes/locations.py` | 4 | 0 |
-| `app/routes/material_smr.py` | 1 | 1 |
-| `app/routes/materials_baseline.py` | 2 | 0 |
-| `app/routes/media.py` | 2 | 2 |
-| `app/routes/missing_smr.py` | 11 | 13 |
-| `app/routes/offer_budget.py` | 1 | 0 |
-| `app/routes/offer_versions.py` | 3 | 2 |
-| `app/routes/overhead.py` | 15 | 4 |
-| `app/routes/overhead_realtime.py` | 3 | 4 |
-| `app/routes/pay_runs.py` | 11 | 5 |
 | `app/routes/platform.py` | 1 | 0 |
-| `app/routes/price_modifiers.py` | 1 | 1 |
-| `app/routes/pricing.py` | 2 | 1 |
-| `app/routes/procurement.py` | 10 | 7 |
-| `app/routes/projects.py` | 9 | 7 |
-| `app/routes/pulse.py` | 1 | 0 |
-| `app/routes/revenue_expense.py` | 6 | 3 |
-| `app/routes/revenue_snapshot.py` | 1 | 0 |
-| `app/routes/sales.py` | 8 | 1 |
-| `app/routes/scan_docs.py` | 6 | 7 |
-| `app/routes/smr_analysis.py` | 10 | 13 |
-| `app/routes/smr_groups.py` | 3 | 2 |
-| `app/routes/subcontractor_performance.py` | 2 | 1 |
-| `app/routes/subcontractors.py` | 16 | 7 |
-| `app/routes/technician.py` | 6 | 12 |
-| `app/routes/warehouse_batches.py` | 2 | 1 |
-| `app/routes/warehouses.py` | 3 | 0 |
-| `app/routes/work_logs.py` | 20 | 8 |
-| `app/routes/work_sessions.py` | 6 | 5 |
-| `app/services/alarm_engine.py` | 3 | 0 |
-| `app/services/centralized_reports.py` | 1 | 0 |
-| `app/services/expected_actual.py` | 1 | 0 |
-| `app/services/fifo_service.py` | 1 | 1 |
-| `app/services/hours_validator.py` | 1 | 0 |
-| `app/services/legacy_payslips.py` | 1 | 0 |
-| `app/services/material_waste.py` | 1 | 0 |
-| `app/services/ocr_invoice.py` | 1 | 0 |
-| `app/services/pulse_generator.py` | 0 | 1 |
-| `app/services/report_normalizer.py` | 3 | 0 |
-| `app/services/subcontractor_performance.py` | 1 | 0 |
+| `app/routes/sales.py` | 2 | 0 |
 | `app/tenancy/data_access.py` | 1 | 0 |
 | `app/tenancy/onboarding.py` | 1 | 0 |
 | `app/tenancy/project_team.py` | 1 | 0 |
@@ -353,485 +164,16 @@ Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out 
 ```
 app/core/seed.py:43 users.find_one in seed_data()
 app/routes/activity_budgets.py:77 activity_budgets.find in list_activity_budgets()
-app/routes/activity_budgets.py:120 activity_budgets.update_one in upsert_activity_budget()
-app/routes/activity_budgets.py:122 activity_budgets.find_one in upsert_activity_budget()
-app/routes/activity_budgets.py:161 activity_budgets.delete_one in delete_activity_budget()
-app/routes/activity_budgets.py:349 work_sessions.find in get_work_session_burn()
-app/routes/activity_budgets.py:423 activity_budgets.update_one in calculate_snapshot()
-app/routes/activity_budgets.py:424 activity_budgets.find_one in calculate_snapshot()
-app/routes/activity_budgets.py:445 activity_budgets.update_one in calculate_all_snapshots()
-app/routes/activity_budgets.py:814 work_sessions.find in get_activity_reports()
-app/routes/activity_budgets.py:844 employee_daily_reports.find_one in get_activity_reports()
-app/routes/activity_budgets.py:925 employee_daily_reports.find_one in get_session_detail()
-app/routes/activity_budgets.py:932 users.find_one in get_session_detail()
-app/routes/activity_budgets.py:936 users.find_one in get_session_detail()
-app/routes/activity_budgets.py:942 projects.find_one in get_session_detail()
-app/routes/ai_calibration.py:36 ai_calibration_events.count_documents in check_and_notify_calibration_ready()
-app/routes/ai_calibration.py:186 ai_calibration_events.aggregate in get_calibration_overview()
-app/routes/ai_calibration.py:200 ai_calibration_events.aggregate in get_calibration_overview()
-app/routes/ai_calibration.py:253 ai_calibration_events.aggregate in get_calibration_categories()
-app/routes/alarms.py:132 alarm_events.update_one in acknowledge_alarm()
-app/routes/alarms.py:135 alarm_events.find_one in acknowledge_alarm()
-app/routes/alarms.py:144 alarm_events.update_one in resolve_alarm()
-app/routes/alarms.py:147 alarm_events.find_one in resolve_alarm()
-app/routes/alarms.py:190 alarm_rules.update_one in update_rule()
-app/routes/alarms.py:191 alarm_rules.find_one in update_rule()
-app/routes/alarms.py:201 alarm_rules.update_one in toggle_rule()
-app/routes/alarms.py:202 alarm_rules.find_one in toggle_rule()
-app/routes/all_reports.py:65 users.find in get_all_reports()
-app/routes/all_reports.py:78 projects.find in get_all_reports()
-app/routes/assets_intake_pending.py:175 asset_intake_pending.find_one in approve_intake()
-app/routes/assets_intake_pending.py:181 asset_intake_pending.update_one in approve_intake()
-app/routes/assets_items.py:122 asset_items.count_documents in list_asset_items()
-app/routes/assets_items.py:126 asset_items.find in list_asset_items()
-app/routes/assets_qr.py:130 asset_qr_codes.count_documents in list_qr()
-app/routes/assets_qr.py:133 asset_qr_codes.find in list_qr()
-app/routes/assets_units.py:128 asset_units.count_documents in list_asset_units()
-app/routes/assets_units.py:131 asset_units.find in list_asset_units()
-app/routes/attendance.py:195 users.find_one in compute_missing_attendance()
-app/routes/attendance.py:225 users.find_one in compute_missing_work_reports()
-app/routes/attendance.py:226 projects.find_one in compute_missing_work_reports()
-app/routes/attendance.py:254 reminder_logs.find_one in send_reminder_for_user()
-app/routes/attendance.py:265 reminder_logs.update_one in send_reminder_for_user()
-app/routes/attendance.py:292 reminder_logs.update_many in auto_resolve_reminders()
-app/routes/attendance.py:421 projects.find in get_my_attendance_today()
-app/routes/attendance.py:524 users.find_one in get_site_attendance_today()
-app/routes/attendance.py:529 employee_daily_reports.find_one in get_site_attendance_today()
-app/routes/attendance.py:580 users.find_one in get_missing_attendance_today()
-app/routes/attendance.py:644 work_reports.update_one in update_work_report()
-app/routes/attendance.py:646 work_reports.find_one in update_work_report()
-app/routes/attendance.py:661 work_reports.update_one in submit_work_report()
-app/routes/attendance.py:666 work_reports.find_one in submit_work_report()
-app/routes/attendance.py:679 work_reports.update_one in approve_work_report()
-app/routes/attendance.py:683 work_reports.find_one in approve_work_report()
-app/routes/attendance.py:696 work_reports.update_one in reject_work_report()
-app/routes/attendance.py:700 work_reports.find_one in reject_work_report()
-app/routes/attendance.py:739 work_reports.find in get_project_day_reports()
-app/routes/attendance.py:743 users.find_one in get_project_day_reports()
-app/routes/attendance.py:746 projects.find_one in get_project_day_reports()
-app/routes/attendance.py:760 projects.find_one in get_work_report()
-app/routes/attendance.py:810 reminder_logs.find in get_reminder_logs()
-app/routes/attendance.py:812 users.find_one in get_reminder_logs()
-app/routes/attendance.py:816 projects.find_one in get_reminder_logs()
-app/routes/attendance.py:845 reminder_logs.find_one in excuse_reminder()
-app/routes/attendance.py:848 reminder_logs.update_one in excuse_reminder()
-app/routes/attendance.py:978 users.find in get_unclear_status()
-app/routes/auth.py:69 users.find_one in login()
-app/routes/auth.py:451 users.update_one in admin_set_password()
-app/routes/billing.py:379 subscriptions.find_one in stripe_webhook()
-app/routes/billing.py:387 subscriptions.update_one in stripe_webhook()
-app/routes/billing.py:392 subscriptions.find_one in stripe_webhook()
-app/routes/billing.py:396 subscriptions.update_one in stripe_webhook()
-app/routes/billing.py:415 subscriptions.find_one in stripe_webhook()
-app/routes/billing.py:417 subscriptions.update_one in stripe_webhook()
-app/routes/billing.py:426 subscriptions.find_one in stripe_webhook()
-app/routes/billing.py:428 subscriptions.update_one in stripe_webhook()
-app/routes/brigades.py:72 brigades.find in list_brigades()
-app/routes/brigades.py:93 brigades.update_one in update_brigade()
-app/routes/brigades.py:106 brigades.update_one in add_brigade_member()
-app/routes/brigades.py:119 brigades.update_one in remove_brigade_member()
-app/routes/brigades.py:132 brigades.update_one in delete_brigade()
-app/routes/budget_progress.py:103 budget_freezes.find in list_budget_freezes()
-app/routes/budget_progress.py:154 execution_packages.update_one in create_progress_update()
-app/routes/budget_progress.py:173 progress_updates.find in list_progress_updates()
-app/routes/budget_progress.py:202 users.find in get_progress_history()
-app/routes/clients.py:134 clients.count_documents in list_clients()
-app/routes/clients.py:141 clients.find in list_clients()
-app/routes/clients.py:703 projects.update_one in update_project_client_link()
-app/routes/clients.py:726 projects.update_one in update_project_client_link()
-app/routes/counterparties.py:121 counterparties.count_documents in list_counterparties()
-app/routes/counterparties.py:128 counterparties.find in list_counterparties()
-app/routes/counterparties.py:307 counterparties.update_one in link_counterparty_to_client()
-app/routes/counterparties.py:328 counterparties.update_one in unlink_counterparty_from_client()
-app/routes/counterparties.py:392 counterparties.update_one in auto_link_counterparty_to_client()
-app/routes/daily_reports.py:83 employee_daily_reports.find in check_employee_hours()
-app/routes/daily_reports.py:255 employee_daily_reports.update_one in update_daily_report()
-app/routes/daily_reports.py:256 employee_daily_reports.find_one in update_daily_report()
-app/routes/daily_reports.py:268 employee_daily_reports.update_one in submit_daily_report()
-app/routes/daily_reports.py:271 employee_daily_reports.find_one in submit_daily_report()
-app/routes/daily_reports.py:314 projects.find_one in approve_report_one()
-app/routes/daily_reports.py:409 activity_budgets.update_one in approve_report_one()
-app/routes/daily_reports.py:424 worker_calendar.update_one in approve_report_one()
-app/routes/daily_reports.py:442 employee_daily_reports.update_one in approve_report_one()
-app/routes/daily_reports.py:443 employee_daily_reports.find_one in approve_report_one()
-app/routes/daily_reports.py:470 employee_daily_reports.update_one in reject_report_one()
-app/routes/daily_reports.py:524 employee_daily_reports.find_one in reject_daily_report()
-app/routes/daily_reports.py:573 activity_budgets.update_one in reset_daily_report()
-app/routes/daily_reports.py:583 employee_daily_reports.update_one in reset_daily_report()
-app/routes/daily_reports.py:589 employee_daily_reports.find_one in reset_daily_report()
-app/routes/daily_reports.py:648 employee_daily_reports.find in get_reports_table()
-app/routes/daily_reports.py:652 users.find in get_reports_table()
-app/routes/daily_reports.py:655 employee_profiles.find in get_reports_table()
-app/routes/daily_reports.py:666 projects.find in get_reports_table()
-app/routes/daily_reports.py:743 employee_daily_reports.find in get_reports_calendar()
-app/routes/daily_reports.py:747 users.find in get_reports_calendar()
-app/routes/daily_reports.py:798 employee_daily_reports.find in list_daily_reports()
-app/routes/daily_reports.py:952 employee_daily_reports.update_one in batch_save_daily_entries()
-app/routes/daily_reports.py:990 users.find in get_project_daily_entries()
-app/routes/employee_dossier.py:91 projects.find in get_employee_dossier()
-app/routes/excel_import_v2.py:80 excel_import_templates.find in list_templates()
-app/routes/excel_import_v2.py:99 excel_import_templates.update_one in update_template()
-app/routes/excel_import_v2.py:100 excel_import_templates.find_one in update_template()
-app/routes/excel_import_v2.py:304 activity_budgets.update_one in commit_budget_import()
-app/routes/extra_works.py:224 extra_work_drafts.find in list_extra_works()
-app/routes/extra_works.py:246 extra_work_drafts.update_one in update_extra_work()
-app/routes/extra_works.py:247 extra_work_drafts.find_one in update_extra_work()
-app/routes/extra_works.py:257 extra_work_drafts.delete_one in delete_extra_work()
-app/routes/extra_works.py:416 extra_work_drafts.update_one in apply_ai_to_draft()
-app/routes/extra_works.py:418 extra_work_drafts.find_one in apply_ai_to_draft()
-app/routes/extra_works.py:538 extra_work_drafts.update_many in create_offer_from_drafts()
-app/routes/full_cost.py:119 overhead_snapshots.find in list_overhead_snapshots()
-app/routes/full_cost.py:136 overhead_snapshots.aggregate in aggregate_overhead()
-app/routes/full_cost.py:228 execution_packages.update_one in compute_overhead_allocation()
-app/routes/historical_offers.py:308 historical_offer_rows.aggregate in get_historical_analytics()
-app/routes/historical_offers.py:369 historical_offer_rows.find in get_internal_price_hint()
-app/routes/historical_offers.py:375 historical_offer_rows.find in get_internal_price_hint()
-app/routes/hr.py:116 employee_profiles.update_one in upsert_employee_profile()
-app/routes/hr.py:158 employee_profiles.update_one in update_employee_profile()
-app/routes/hr.py:161 employee_profiles.find_one in update_employee_profile()
-app/routes/hr.py:178 users.update_one in update_employee_basic()
-app/routes/hr.py:180 users.find_one in update_employee_basic()
-app/routes/hr.py:323 advances.update_one in apply_advance_deduction()
-app/routes/hr.py:329 advances.find_one in apply_advance_deduction()
-app/routes/hr.py:369 advances.find_one in repay_advance()
-app/routes/hr.py:396 users.find_one in list_payslips()
-app/routes/hr.py:407 pay_runs.find_one in list_payslips()
-app/routes/hr.py:426 users.find_one in get_payslip()
-app/routes/hr.py:431 pay_runs.find_one in get_payslip()
-app/routes/hr.py:466 projects.find_one in get_employee_dashboard()
-app/routes/hr.py:576 pay_runs.find_one in get_employee_dashboard()
-app/routes/hr.py:625 projects.find_one in get_employee_calendar()
-app/routes/hr.py:651 projects.find in get_employee_calendar()
-app/routes/hr.py:726 projects.find_one in get_employee_calendar()
-app/routes/hr.py:842 contract_payments.find in list_contract_payments()
-app/routes/hr.py:863 contract_payments.update_one in update_contract_payment()
-app/routes/hr.py:864 contract_payments.find_one in update_contract_payment()
-app/routes/hr.py:893 contract_payments.update_one in pay_tranche()
-app/routes/hr.py:897 contract_payments.find_one in pay_tranche()
-app/routes/hr.py:909 contract_payments.delete_one in delete_contract_payment()
-app/routes/invoice_lines.py:145 invoices.find_one in recalculate_invoice_totals()
-app/routes/invoice_lines.py:148 invoices.update_one in recalculate_invoice_totals()
-app/routes/invoice_lines.py:161 users.find_one in enrich_line_with_names()
-app/routes/invoice_lines.py:171 projects.find_one in enrich_line_with_names()
-app/routes/invoice_lines.py:174 warehouses.find_one in enrich_line_with_names()
-app/routes/invoice_lines.py:177 persons.find_one in enrich_line_with_names()
-app/routes/invoice_lines.py:181 companies.find_one in enrich_line_with_names()
-app/routes/invoice_lines.py:218 invoice_lines.find in list_invoice_lines()
-app/routes/invoice_lines.py:253 invoices.find_one in get_unallocated_lines()
-app/routes/invoice_lines.py:442 invoices.find_one in get_invoice_line()
-app/routes/invoice_lines.py:462 invoices.find_one in update_invoice_line()
-app/routes/invoice_lines.py:495 invoice_lines.update_one in update_invoice_line()
-app/routes/invoice_lines.py:508 invoice_lines.find_one in update_invoice_line()
-app/routes/invoice_lines.py:553 invoice_lines.update_one in allocate_invoice_line()
-app/routes/invoice_lines.py:564 invoice_lines.find_one in allocate_invoice_line()
-app/routes/invoice_lines.py:583 invoices.find_one in delete_invoice_line()
-app/routes/invoice_lines.py:588 invoice_lines.delete_one in delete_invoice_line()
-app/routes/invoice_lines.py:633 invoice_lines.aggregate in get_lines_by_project()
-app/routes/invoice_lines.py:656 invoices.find_one in get_lines_by_project()
-app/routes/invoice_lines.py:664 users.find_one in get_lines_by_project()
-app/routes/invoice_lines.py:712 invoice_lines.aggregate in get_lines_by_warehouse()
-app/routes/invoice_lines.py:732 invoices.find_one in get_lines_by_warehouse()
-app/routes/invoice_lines.py:791 invoice_lines.aggregate in get_lines_by_client()
-app/routes/invoice_lines.py:811 invoices.find_one in get_lines_by_client()
-app/routes/invoice_lines.py:838 users.find_one in get_lines_by_purchaser()
-app/routes/invoice_lines.py:851 invoices.find_one in get_lines_by_purchaser()
+app/routes/assets_intake_pending.py:183 asset_intake_pending.find_one in approve_intake()
+app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in approve_intake()
+app/routes/auth.py:74 users.find_one in login()
 app/routes/items.py:88 items.count_documents in list_items()
 app/routes/items.py:95 items.find in list_items()
 app/routes/items.py:181 items.update_one in delete_item()
-app/routes/labor_smr.py:143 labor_entries.find in list_labor_entries()
-app/routes/labor_smr.py:161 offers.find in recompute_execution_package_labor()
-app/routes/labor_smr.py:222 execution_packages.update_one in recompute_execution_package_labor()
-app/routes/labor_smr.py:246 users.find in get_labor_cost_by_exec_pkg()
-app/routes/locations.py:262 missing_smr.find in get_location_smr()
-app/routes/locations.py:270 extra_work_drafts.find in get_location_smr()
-app/routes/locations.py:326 missing_smr.find in smr_reverse_lookup()
-app/routes/locations.py:338 extra_work_drafts.find in smr_reverse_lookup()
-app/routes/material_smr.py:140 material_entries.find in list_material_entries()
-app/routes/material_smr.py:257 execution_packages.update_one in recompute_execution_package_material()
-app/routes/materials_baseline.py:50 extra_work_drafts.find in generate_planned_materials()
-app/routes/materials_baseline.py:142 planned_materials.find in list_planned_materials()
-app/routes/media.py:161 media_files.update_one in link_media()
-app/routes/media.py:193 users.find_one in get_media()
-app/routes/media.py:289 media_files.find in list_media()
-app/routes/media.py:465 media_files.delete_one in delete_media()
-app/routes/missing_smr.py:215 missing_smr.update_one in update_missing_smr()
-app/routes/missing_smr.py:216 missing_smr.find_one in update_missing_smr()
-app/routes/missing_smr.py:226 missing_smr.delete_one in delete_missing_smr()
-app/routes/missing_smr.py:255 missing_smr.update_one in update_status()
-app/routes/missing_smr.py:259 missing_smr.find_one in update_status()
-app/routes/missing_smr.py:279 missing_smr.update_one in add_attachment()
-app/routes/missing_smr.py:286 missing_smr.find_one in add_attachment()
-app/routes/missing_smr.py:297 missing_smr.update_one in remove_attachment()
-app/routes/missing_smr.py:304 missing_smr.find_one in remove_attachment()
-app/routes/missing_smr.py:367 missing_smr.update_one in bridge_to_analysis()
-app/routes/missing_smr.py:376 missing_smr.find_one in bridge_to_analysis()
-app/routes/missing_smr.py:477 missing_smr.update_one in bridge_to_offer()
-app/routes/missing_smr.py:486 missing_smr.find_one in bridge_to_offer()
-app/routes/missing_smr.py:537 missing_smr.update_one in execute_emergency()
-app/routes/missing_smr.py:544 missing_smr.find_one in execute_emergency()
-app/routes/missing_smr.py:569 missing_smr.update_one in request_approval()
-app/routes/missing_smr.py:574 missing_smr.find_one in request_approval()
-app/routes/missing_smr.py:595 missing_smr.update_one in client_approve()
-app/routes/missing_smr.py:600 missing_smr.find_one in client_approve()
-app/routes/missing_smr.py:620 missing_smr.update_one in client_reject()
-app/routes/missing_smr.py:625 missing_smr.find_one in client_reject()
-app/routes/missing_smr.py:671 missing_smr.update_one in ai_estimate()
-app/routes/missing_smr.py:680 missing_smr.find_one in ai_estimate()
-app/routes/missing_smr.py:771 missing_smr.update_one in batch_to_offer()
-app/routes/offer_budget.py:143 extra_work_drafts.find in get_offer_planned_materials()
-app/routes/offer_versions.py:104 users.find_one in list_offer_versions()
-app/routes/offer_versions.py:177 users.find_one in get_offer_version()
-app/routes/offer_versions.py:256 offers.update_one in restore_offer_version()
-app/routes/offer_versions.py:264 offers.find_one in restore_offer_version()
-app/routes/offer_versions.py:295 offer_versions.delete_one in delete_offer_version()
-app/routes/overhead.py:111 overhead_categories.update_one in update_overhead_category()
-app/routes/overhead.py:113 overhead_categories.find_one in update_overhead_category()
-app/routes/overhead.py:148 overhead_costs.find in list_overhead_costs()
-app/routes/overhead.py:154 overhead_categories.find in list_overhead_costs()
-app/routes/overhead.py:204 overhead_costs.update_one in update_overhead_cost()
-app/routes/overhead.py:206 overhead_costs.find_one in update_overhead_cost()
-app/routes/overhead.py:230 overhead_assets.find in list_overhead_assets()
-app/routes/overhead.py:277 overhead_assets.update_one in update_overhead_asset()
-app/routes/overhead.py:279 overhead_assets.find_one in update_overhead_asset()
-app/routes/overhead.py:342 attendance_entries.aggregate in compute_overhead_snapshot()
-app/routes/overhead.py:354 work_reports.aggregate in compute_overhead_snapshot()
-app/routes/overhead.py:402 overhead_snapshots.find in list_overhead_snapshots()
-app/routes/overhead.py:414 project_overhead_allocations.find in get_overhead_snapshot()
-app/routes/overhead.py:437 project_overhead_allocations.delete_many in allocate_overhead_to_projects()
-app/routes/overhead.py:460 attendance_entries.aggregate in allocate_overhead_to_projects()
-app/routes/overhead.py:465 projects.find in allocate_overhead_to_projects()
-app/routes/overhead.py:503 work_reports.aggregate in allocate_overhead_to_projects()
-app/routes/overhead.py:508 projects.find in allocate_overhead_to_projects()
-app/routes/overhead.py:558 project_overhead_allocations.find in list_overhead_allocations()
-app/routes/overhead_realtime.py:51 worker_calendar.find in get_worker_calendar()
-app/routes/overhead_realtime.py:79 worker_calendar.update_one in create_calendar_entry()
-app/routes/overhead_realtime.py:80 worker_calendar.find_one in create_calendar_entry()
-app/routes/overhead_realtime.py:98 worker_calendar.update_one in update_calendar_entry()
-app/routes/overhead_realtime.py:102 worker_calendar.find_one in update_calendar_entry()
-app/routes/overhead_realtime.py:122 worker_calendar.update_one in bulk_calendar()
-app/routes/overhead_realtime.py:167 worker_calendar.update_one in sync_from_sessions()
-app/routes/pay_runs.py:323 projects.find in generate_pay_run()
-app/routes/pay_runs.py:850 pay_runs.update_one in create_pay_run()
-app/routes/pay_runs.py:874 pay_runs.count_documents in list_pay_runs()
-app/routes/pay_runs.py:875 pay_runs.find in list_pay_runs()
-app/routes/pay_runs.py:897 users.find in audit_check()
-app/routes/pay_runs.py:916 pay_run_allocations.find in audit_check()
-app/routes/pay_runs.py:929 payroll_payment_allocations.count_documents in audit_check()
-app/routes/pay_runs.py:979 pay_runs.update_one in mark_pay_run_paid()
-app/routes/pay_runs.py:990 pay_runs.update_one in mark_pay_run_paid()
-app/routes/pay_runs.py:1135 pay_runs.update_one in update_pay_run()
-app/routes/pay_runs.py:1197 pay_runs.find_one in update_pay_run()
-app/routes/pay_runs.py:1200 pay_runs.find_one in update_pay_run()
-app/routes/pay_runs.py:1241 pay_runs.update_one in reopen_pay_run()
-app/routes/pay_runs.py:1333 payment_slips.count_documents in list_payment_slips()
-app/routes/pay_runs.py:1334 payment_slips.find in list_payment_slips()
-app/routes/pay_runs.py:1509 pay_runs.find in get_payroll_weeks()
 app/routes/platform.py:242 users.find_one in bootstrap_create_platform_admin()
-app/routes/price_modifiers.py:176 smr_analyses.update_one in recalculate_with_modifiers()
-app/routes/price_modifiers.py:180 smr_analyses.find_one in recalculate_with_modifiers()
-app/routes/pricing.py:69 material_prices.find in get_catalog()
-app/routes/pricing.py:132 smr_analyses.update_one in fetch_prices_for_line()
-app/routes/pricing.py:137 smr_analyses.find_one in fetch_prices_for_line()
-app/routes/procurement.py:142 material_requests.find in list_material_requests()
-app/routes/procurement.py:144 projects.find_one in list_material_requests()
-app/routes/procurement.py:167 material_requests.update_one in update_material_request()
-app/routes/procurement.py:168 material_requests.find_one in update_material_request()
-app/routes/procurement.py:180 material_requests.update_one in submit_material_request()
-app/routes/procurement.py:183 material_requests.find_one in submit_material_request()
-app/routes/procurement.py:193 material_requests.delete_one in delete_material_request()
-app/routes/procurement.py:227 extra_work_drafts.find in create_request_from_offer()
-app/routes/procurement.py:315 supplier_invoices.update_one in upload_invoice_file()
-app/routes/procurement.py:333 supplier_invoices.find in list_supplier_invoices()
-app/routes/procurement.py:336 projects.find_one in list_supplier_invoices()
-app/routes/procurement.py:383 supplier_invoices.update_one in update_supplier_invoice()
-app/routes/procurement.py:384 supplier_invoices.find_one in update_supplier_invoice()
-app/routes/procurement.py:462 supplier_invoices.update_one in post_invoice_to_warehouse()
-app/routes/procurement.py:473 material_requests.find_one in post_invoice_to_warehouse()
-app/routes/procurement.py:476 material_requests.update_one in post_invoice_to_warehouse()
-app/routes/procurement.py:499 warehouse_transactions.find in list_warehouse_transactions()
-app/routes/projects.py:150 projects.find in list_projects()
-app/routes/projects.py:312 projects.delete_one in delete_project()
-app/routes/projects.py:319 project_phases.delete_many in delete_project()
-app/routes/projects.py:508 project_phases.find in list_phases()
-app/routes/projects.py:540 project_phases.update_one in update_phase()
-app/routes/projects.py:543 project_phases.find_one in update_phase()
-app/routes/projects.py:552 project_phases.delete_one in delete_phase()
-app/routes/projects.py:614 persons.find in list_persons()
-app/routes/projects.py:729 companies.find in list_companies()
-app/routes/projects.py:934 project_photos.delete_one in delete_project_photo()
-app/routes/projects.py:1136 users.find in get_project_dashboard()
-app/routes/projects.py:1244 payment_allocations.find in get_project_dashboard()
-app/routes/projects.py:1253 finance_payments.find in get_project_dashboard()
-app/routes/projects.py:1497 projects.update_one in create_sub_project()
-app/routes/projects.py:1621 projects.update_one in create_sub_project()
-app/routes/projects.py:1937 users.find in get_site_workers()
-app/routes/pulse.py:34 site_pulses.find in get_pulse_range()
-app/routes/revenue_expense.py:117 client_acts.find in list_client_acts()
-app/routes/revenue_expense.py:152 client_acts.update_one in update_client_act()
-app/routes/revenue_expense.py:153 client_acts.find_one in update_client_act()
-app/routes/revenue_expense.py:168 client_acts.update_one in confirm_client_act()
-app/routes/revenue_expense.py:173 client_acts.find_one in confirm_client_act()
-app/routes/revenue_expense.py:261 work_reports.find in get_labor_cost_by_project()
-app/routes/revenue_expense.py:380 execution_packages.find in list_execution_packages()
-app/routes/revenue_expense.py:403 execution_packages.update_one in update_execution_package()
-app/routes/revenue_expense.py:404 execution_packages.find_one in update_execution_package()
-app/routes/revenue_snapshot.py:84 revenue_snapshots.find in list_revenue_snapshots()
-app/routes/sales.py:79 settings.find_one in _get_margins()
-app/routes/sales.py:166 settings.update_one+upsert in set_sales_margins()
-app/routes/sales.py:295 sales.count_documents in sales_history()
-app/routes/sales.py:296 sales.find in sales_history()
-app/routes/sales.py:304 items.find in sales_history()
-app/routes/sales.py:310 warehouses.find in sales_history()
-app/routes/sales.py:316 users.find in sales_history()
-app/routes/sales.py:344 sales.find in sales_history()
-app/routes/sales.py:373 items.find_one in sale_details()
-app/routes/scan_docs.py:48 scan_docs.find in list_scan_docs()
-app/routes/scan_docs.py:53 users.find_one in list_scan_docs()
-app/routes/scan_docs.py:56 invoices.find_one in list_scan_docs()
-app/routes/scan_docs.py:99 users.find_one in get_scan_doc()
-app/routes/scan_docs.py:102 invoices.find_one in get_scan_doc()
-app/routes/scan_docs.py:121 scan_docs.update_one in update_scan_doc()
-app/routes/scan_docs.py:122 scan_docs.find_one in update_scan_doc()
-app/routes/scan_docs.py:142 scan_docs.update_one in link_scan_to_invoice()
-app/routes/scan_docs.py:148 invoices.update_one in link_scan_to_invoice()
-app/routes/scan_docs.py:176 scan_docs.update_one in unlink_scan_from_invoice()
-app/routes/scan_docs.py:182 invoices.update_one in unlink_scan_from_invoice()
-app/routes/scan_docs.py:202 invoices.update_one in delete_scan_doc()
-app/routes/scan_docs.py:207 scan_docs.delete_one in delete_scan_doc()
-app/routes/smr_analysis.py:249 smr_analyses.update_one in update_analysis()
-app/routes/smr_analysis.py:250 smr_analyses.find_one in update_analysis()
-app/routes/smr_analysis.py:283 smr_analyses.update_one in add_line()
-app/routes/smr_analysis.py:287 smr_analyses.find_one in add_line()
-app/routes/smr_analysis.py:313 smr_analyses.update_one in update_line()
-app/routes/smr_analysis.py:317 smr_analyses.find_one in update_line()
-app/routes/smr_analysis.py:334 smr_analyses.update_one in delete_line()
-app/routes/smr_analysis.py:338 smr_analyses.find_one in delete_line()
-app/routes/smr_analysis.py:354 smr_analyses.update_one in recalculate()
-app/routes/smr_analysis.py:358 smr_analyses.find_one in recalculate()
-app/routes/smr_analysis.py:411 smr_analyses.update_one in ai_suggest()
-app/routes/smr_analysis.py:415 smr_analyses.find_one in ai_suggest()
-app/routes/smr_analysis.py:430 smr_analyses.update_one in approve_analysis()
-app/routes/smr_analysis.py:440 smr_analyses.find_one in approve_analysis()
-app/routes/smr_analysis.py:452 smr_analyses.update_one in lock_analysis()
-app/routes/smr_analysis.py:456 smr_analyses.find_one in lock_analysis()
-app/routes/smr_analysis.py:728 smr_analyses.update_one in toggle_line()
-app/routes/smr_analysis.py:732 smr_analyses.find_one in toggle_line()
-app/routes/smr_analysis.py:792 smr_analyses.update_one in bulk_update()
-app/routes/smr_analysis.py:796 smr_analyses.find_one in bulk_update()
-app/routes/smr_analysis.py:960 smr_analyses.update_one in ai_breakdown()
-app/routes/smr_analysis.py:1024 smr_analyses.update_one in ai_breakdown()
-app/routes/smr_analysis.py:1050 smr_analyses.update_one in ai_breakdown()
-app/routes/smr_groups.py:178 smr_groups.find in list_groups()
-app/routes/smr_groups.py:323 smr_analyses.update_one in assign_line()
-app/routes/smr_groups.py:360 smr_analyses.update_one in unassign_line()
-app/routes/smr_groups.py:430 smr_groups.find in smr_by_type()
-app/routes/smr_groups.py:433 location_nodes.find in smr_by_type()
-app/routes/subcontractor_performance.py:89 subcontractor_performance.update_one in update_performance()
-app/routes/subcontractor_performance.py:90 subcontractor_performance.find_one in update_performance()
-app/routes/subcontractor_performance.py:101 subcontractor_performance.find in get_log()
-app/routes/subcontractors.py:129 subcontractor_packages.find in list_packages()
-app/routes/subcontractors.py:138 subcontractor_package_lines.find in get_package()
-app/routes/subcontractors.py:150 subcontractor_package_lines.count_documents in confirm_package()
-app/routes/subcontractors.py:154 subcontractor_package_lines.find in confirm_package()
-app/routes/subcontractors.py:160 subcontractor_packages.update_one in confirm_package()
-app/routes/subcontractors.py:166 subcontractor_packages.find_one in confirm_package()
-app/routes/subcontractors.py:177 subcontractor_packages.update_one in close_package()
-app/routes/subcontractors.py:178 subcontractor_packages.find_one in close_package()
-app/routes/subcontractors.py:205 subcontractor_package_lines.find in _get_assigned_qty()
-app/routes/subcontractors.py:222 subcontractor_package_lines.count_documents in add_package_lines()
-app/routes/subcontractors.py:336 subcontractor_packages.find_one in remove_package_line()
-app/routes/subcontractors.py:339 subcontractor_package_lines.delete_one in remove_package_line()
-app/routes/subcontractors.py:370 subcontractor_package_lines.find_one in create_subcontractor_act()
-app/routes/subcontractors.py:414 subcontractor_acts.find in list_subcontractor_acts()
-app/routes/subcontractors.py:433 subcontractor_package_lines.update_one in confirm_subcontractor_act()
-app/routes/subcontractors.py:441 subcontractor_package_lines.find in confirm_subcontractor_act()
-app/routes/subcontractors.py:452 subcontractor_packages.update_one in confirm_subcontractor_act()
-app/routes/subcontractors.py:454 subcontractor_packages.find_one in confirm_subcontractor_act()
-app/routes/subcontractors.py:459 subcontractor_acts.update_one in confirm_subcontractor_act()
-app/routes/subcontractors.py:460 subcontractor_acts.find_one in confirm_subcontractor_act()
-app/routes/subcontractors.py:533 subcontractor_payments.find in create_subcontractor_payment()
-app/routes/subcontractors.py:538 subcontractor_packages.update_one in create_subcontractor_payment()
-app/routes/subcontractors.py:550 subcontractor_payments.find in list_subcontractor_payments()
-app/routes/technician.py:469 attendance_entries.update_one in save_site_attendance()
-app/routes/technician.py:500 site_daily_rosters.update_one in save_site_attendance()
-app/routes/technician.py:532 site_daily_rosters.update_one in save_roster()
-app/routes/technician.py:535 site_daily_rosters.find_one in save_roster()
-app/routes/technician.py:623 site_daily_rosters.update_one in copy_yesterday_roster()
-app/routes/technician.py:626 site_daily_rosters.find_one in copy_yesterday_roster()
-app/routes/technician.py:669 users.find_one in get_enriched_roster()
-app/routes/technician.py:779 site_daily_rosters.update_one in remove_worker_from_roster()
-app/routes/technician.py:803 site_daily_rosters.update_one in add_workers_to_roster()
-app/routes/technician.py:1014 work_reports.update_one in submit_daily_report()
-app/routes/technician.py:1193 pending_expenses.update_one in approve_expense()
-app/routes/technician.py:1196 pending_expenses.find_one in approve_expense()
-app/routes/technician.py:1207 pending_expenses.update_one in reject_expense()
-app/routes/technician.py:1210 pending_expenses.find_one in reject_expense()
-app/routes/technician.py:1321 site_daily_rosters.update_one in remove_worker_with_drafts()
-app/routes/technician.py:1368 employee_daily_reports.update_one in update_draft()
-app/routes/technician.py:1369 employee_daily_reports.find_one in update_draft()
-app/routes/technician.py:1382 employee_daily_reports.delete_one in delete_draft()
-app/routes/warehouse_batches.py:58 warehouse_batches.count_documents in list_batches()
-app/routes/warehouse_batches.py:59 warehouse_batches.find in list_batches()
-app/routes/warehouse_batches.py:154 warehouse_batches.update_one in block_batch()
-app/routes/warehouses.py:104 warehouses.count_documents in list_warehouses()
-app/routes/warehouses.py:111 warehouses.find in list_warehouses()
-app/routes/warehouses.py:201 asset_units.aggregate in warehouses_asset_summary()
-app/routes/work_logs.py:51 work_types.find in list_work_types()
-app/routes/work_logs.py:90 work_types.update_one in update_work_type()
-app/routes/work_logs.py:93 work_types.find_one in update_work_type()
-app/routes/work_logs.py:103 work_types.update_one in delete_work_type()
-app/routes/work_logs.py:197 daily_work_logs.count_documents in list_daily_logs()
-app/routes/work_logs.py:200 daily_work_logs.find in list_daily_logs()
-app/routes/work_logs.py:204 projects.find_one in list_daily_logs()
-app/routes/work_logs.py:208 work_types.find_one in list_daily_logs()
-app/routes/work_logs.py:213 users.find_one in list_daily_logs()
-app/routes/work_logs.py:312 daily_work_logs.update_one in update_daily_log()
-app/routes/work_logs.py:315 daily_work_logs.find_one in update_daily_log()
-app/routes/work_logs.py:327 daily_work_logs.delete_one in delete_daily_log()
-app/routes/work_logs.py:391 change_orders.count_documents in list_change_orders()
-app/routes/work_logs.py:394 change_orders.find in list_change_orders()
-app/routes/work_logs.py:398 projects.find_one in list_change_orders()
-app/routes/work_logs.py:403 work_types.find_one in list_change_orders()
-app/routes/work_logs.py:406 users.find_one in list_change_orders()
-app/routes/work_logs.py:410 users.find_one in list_change_orders()
-app/routes/work_logs.py:512 change_orders.update_one in update_change_order()
-app/routes/work_logs.py:521 change_orders.find_one in update_change_order()
-app/routes/work_logs.py:537 change_orders.update_one in submit_change_order()
-app/routes/work_logs.py:546 change_orders.find_one in submit_change_order()
-app/routes/work_logs.py:562 change_orders.update_one in approve_change_order()
-app/routes/work_logs.py:571 change_orders.find_one in approve_change_order()
-app/routes/work_logs.py:591 change_orders.update_one in reject_change_order()
-app/routes/work_logs.py:600 change_orders.find_one in reject_change_order()
-app/routes/work_logs.py:628 projects.find in get_my_sites()
-app/routes/work_logs.py:647 users.find_one in get_site_team()
-app/routes/work_sessions.py:143 work_sessions.update_one in start_session()
-app/routes/work_sessions.py:214 work_sessions.update_one in end_session()
-app/routes/work_sessions.py:227 work_sessions.find_one in end_session()
-app/routes/work_sessions.py:276 work_sessions.find in get_active_sessions()
-app/routes/work_sessions.py:293 work_sessions.find in get_my_today()
-app/routes/work_sessions.py:341 work_sessions.find in get_summary()
-app/routes/work_sessions.py:410 work_sessions.update_one in split_session()
-app/routes/work_sessions.py:443 work_sessions.find in get_overtime_report()
-app/routes/work_sessions.py:507 work_sessions.update_one in update_session()
-app/routes/work_sessions.py:508 work_sessions.find_one in update_session()
-app/routes/work_sessions.py:524 work_sessions.delete_one in delete_session()
-app/services/alarm_engine.py:26 alarm_events.find_one in _check_cooldown()
-app/services/alarm_engine.py:26 alarm_events.find_one in evaluate_rule()
-app/services/alarm_engine.py:100 work_sessions.aggregate in evaluate_rule()
-app/services/centralized_reports.py:114 employee_daily_reports.find_one in build_centralized_reports()
-app/services/expected_actual.py:60 work_sessions.find in build_expected_actual()
-app/services/fifo_service.py:125 warehouse_batches.update_one in consume_fifo()
-app/services/fifo_service.py:147 warehouse_batches.find in get_current_stock()
-app/services/hours_validator.py:18 employee_daily_reports.find in get_worker_hours_for_day()
-app/services/legacy_payslips.py:66 payment_slips.find in legacy_payslips()
-app/services/material_waste.py:90 material_waste_entries.find in build_material_waste_summary()
-app/services/ocr_invoice.py:25 media_files.find_one in extract_invoice_text()
-app/services/pulse_generator.py:164 site_pulses.update_one in generate_pulse()
-app/services/report_normalizer.py:58 employee_daily_reports.find in fetch_normalized_report_lines()
-app/services/report_normalizer.py:100 employee_daily_reports.find in fetch_normalized_report_lines()
-app/services/report_normalizer.py:357 projects.find in fetch_worker_day_map()
-app/services/subcontractor_performance.py:37 subcontractor_performance.find in build_subcontractor_performance()
-app/tenancy/data_access.py:322 offers.find in resolve_review_token()
+app/routes/sales.py:316 items.find in sales_history()
+app/routes/sales.py:386 items.find_one in sale_details()
+app/tenancy/data_access.py:398 offers.find in resolve_review_token()
 app/tenancy/onboarding.py:81 users.find_one in onboard_tenant()
 app/tenancy/project_team.py:267 project_team.count_documents in ownerless_row_count()
 ```

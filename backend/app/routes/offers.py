@@ -292,6 +292,7 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
 
 @router.post("/offers/{offer_id}/send")
 async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
@@ -307,7 +308,7 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     
     # Save version snapshot before sending
     version_number = 1
-    last_ver = await db.offer_versions.find_one(
+    last_ver = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id}, sort=[("version_number", -1)]
     )
     if last_ver:
@@ -321,7 +322,7 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
         "subtotal": offer.get("subtotal"), "vat_amount": offer.get("vat_amount"),
         "total": offer.get("total"),
     }
-    await db.offer_versions.insert_one({
+    await tenant.offer_versions.insert_one({
         "id": str(uuid.uuid4()), "org_id": user["org_id"],
         "project_id": offer["project_id"], "offer_id": offer_id,
         "version_number": version_number, "created_at": now,
@@ -335,7 +336,7 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     }})
     
     # Record event
-    await db.offer_events.insert_one({
+    await tenant.offer_events.insert_one({
         "id": str(uuid.uuid4()), "org_id": user["org_id"],
         "offer_id": offer_id, "event_type": "sent",
         "actor": user["email"], "created_at": now,
@@ -481,6 +482,7 @@ async def list_activity_catalog(
 
 @router.post("/activity-catalog", status_code=201)
 async def create_activity(data: ActivityCatalogCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -505,13 +507,14 @@ async def create_activity(data: ActivityCatalogCreate, user: dict = Depends(requ
         "created_at": now,
         "updated_at": now,
     }
-    await db.activity_catalog.insert_one(item)
+    await tenant.activity_catalog.insert_one(item)
     return {k: v for k, v in item.items() if k != "_id"}
 
 
 @router.put("/activity-catalog/{item_id}")
 async def update_activity(item_id: str, data: ActivityCatalogUpdate, user: dict = Depends(require_m2)):
-    item = await db.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Activity not found")
     if not await can_manage_project(user, item["project_id"]):
@@ -520,19 +523,20 @@ async def update_activity(item_id: str, data: ActivityCatalogUpdate, user: dict 
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.activity_catalog.update_one({"id": item_id, "org_id": user["org_id"]}, {"$set": update})
-    return await db.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
+    await tenant.activity_catalog.update_one({"id": item_id, "org_id": user["org_id"]}, {"$set": update})
+    return await tenant.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/activity-catalog/{item_id}")
 async def delete_activity(item_id: str, user: dict = Depends(require_m2)):
-    item = await db.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.activity_catalog.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Activity not found")
     if not await can_manage_project(user, item["project_id"]):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    await db.activity_catalog.delete_one({"id": item_id, "org_id": user["org_id"]})
+    await tenant.activity_catalog.delete_one({"id": item_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -1179,11 +1183,12 @@ async def respond_to_offer(review_token: str, data: dict):
 @router.get("/offers/{offer_id}/events")
 async def get_offer_events(offer_id: str, user: dict = Depends(require_m2)):
     """Get event history for an offer"""
+    tenant = _tenant(user)
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
-    events = await db.offer_events.find(
+    events = await tenant.offer_events.find(
         {"offer_id": offer_id, "org_id": user["org_id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     return events

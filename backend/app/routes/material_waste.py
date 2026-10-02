@@ -10,6 +10,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.material_waste import build_material_waste_summary
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Material Waste"])
 
@@ -50,6 +56,7 @@ async def get_compact_waste(project_id: str, user: dict = Depends(get_current_us
 
 @router.post("/projects/{project_id}/material-waste", status_code=201)
 async def create_waste_entry(project_id: str, data: WasteEntryCreate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     entry = {
         "id": str(uuid.uuid4()),
@@ -69,13 +76,14 @@ async def create_waste_entry(project_id: str, data: WasteEntryCreate, user: dict
         "created_at": now,
         "updated_at": now,
     }
-    await db.material_waste_entries.insert_one(entry)
+    await tenant.material_waste_entries.insert_one(entry)
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
 @router.get("/projects/{project_id}/material-waste/log")
 async def get_waste_log(project_id: str, user: dict = Depends(get_current_user)):
-    items = await db.material_waste_entries.find(
+    tenant = _tenant(user)
+    items = await tenant.material_waste_entries.find(
         {"org_id": user["org_id"], "project_id": project_id}, {"_id": 0}
     ).sort("date", -1).to_list(200)
     return {"items": items, "total": len(items)}

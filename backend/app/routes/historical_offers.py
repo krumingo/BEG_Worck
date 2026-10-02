@@ -16,6 +16,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Historical Offer Intelligence"])
 
@@ -205,6 +211,7 @@ async def historical_import_preview(file: UploadFile = File(...), user: dict = D
 @router.post("/historical/import-confirm", status_code=201)
 async def historical_import_confirm(data: dict, user: dict = Depends(require_m2)):
     """Confirm and save historical offer data"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
@@ -246,11 +253,11 @@ async def historical_import_confirm(data: dict, user: dict = Depends(require_m2)
             "created_at": now,
             "imported_by": user["id"],
         }
-        await db.historical_offer_rows.insert_one(record)
+        await tenant.historical_offer_rows.insert_one(record)
         saved += 1
     
     # Save batch metadata
-    await db.historical_import_batches.insert_one({
+    await tenant.historical_import_batches.insert_one({
         "id": batch_id, "org_id": user["org_id"],
         "file_name": source_file, "source_project_name": source_project,
         "source_date": source_date, "city": city,
@@ -275,6 +282,7 @@ async def get_historical_analytics(
     user: dict = Depends(require_m2),
 ):
     """Get historical price analytics by category"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
@@ -305,7 +313,7 @@ async def get_historical_analytics(
         {"$sort": {"sample_count": -1}},
     ]
     
-    results = await db.historical_offer_rows.aggregate(pipeline).to_list(200)
+    results = await tenant.historical_offer_rows.aggregate(pipeline).to_list(200)
     
     categories = []
     for r in results:
@@ -333,13 +341,13 @@ async def get_historical_analytics(
             "max_total": round(r["max_total"] or 0, 2),
         })
     
-    total_rows = await db.historical_offer_rows.count_documents({"org_id": user["org_id"]})
-    batches = await db.historical_import_batches.find(
+    total_rows = await tenant.historical_offer_rows.count_documents({"org_id": user["org_id"]})
+    batches = await tenant.historical_import_batches.find(
         {"org_id": user["org_id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     
-    unique_types = await db.historical_offer_rows.distinct("normalized_activity_type", {"org_id": user["org_id"]})
-    unique_cities = await db.historical_offer_rows.distinct("city", {"org_id": user["org_id"]})
+    unique_types = await tenant.historical_offer_rows.distinct("normalized_activity_type", {"org_id": user["org_id"]})
+    unique_cities = await tenant.historical_offer_rows.distinct("city", {"org_id": user["org_id"]})
     
     return {
         "total_rows": total_rows,
@@ -355,6 +363,7 @@ async def get_historical_analytics(
 
 async def get_internal_price_hint(org_id: str, activity_type: str, activity_subtype: str, unit: str = None, city: str = None) -> dict:
     """Lookup historical internal price for AI merge"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     match = {
         "org_id": org_id,
         "normalized_activity_type": activity_type,
@@ -366,13 +375,13 @@ async def get_internal_price_hint(org_id: str, activity_type: str, activity_subt
     if unit:
         match["unit"] = unit
     
-    rows = await db.historical_offer_rows.find(match, {"_id": 0, "material_price_per_unit": 1, "labor_price_per_unit": 1, "total_price_per_unit": 1}).to_list(200)
+    rows = await tenant.historical_offer_rows.find(match, {"_id": 0, "material_price_per_unit": 1, "labor_price_per_unit": 1, "total_price_per_unit": 1}).to_list(200)
     
     if not rows:
         # Try without city
         if city:
             del match["city"]
-            rows = await db.historical_offer_rows.find(match, {"_id": 0, "material_price_per_unit": 1, "labor_price_per_unit": 1, "total_price_per_unit": 1}).to_list(200)
+            rows = await tenant.historical_offer_rows.find(match, {"_id": 0, "material_price_per_unit": 1, "labor_price_per_unit": 1, "total_price_per_unit": 1}).to_list(200)
     
     if not rows:
         return {"available": False, "sample_count": 0}

@@ -7,6 +7,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import SUBSCRIPTION_PLANS
 from app.constants import ROLES, MODULES
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["misc"])
 
@@ -24,7 +30,8 @@ async def list_modules():
 
 @router.get("/subscription")
 async def get_subscription(user: dict = Depends(get_current_user)):
-    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     if sub:
         plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
         sub["plan_name"] = plan["name"]

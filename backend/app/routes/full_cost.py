@@ -14,10 +14,17 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy.data_access import TenantData
+from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
+
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -27,8 +34,9 @@ router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 @router.get("/employee-cost/{user_id}")
 async def get_employee_cost_basis(user_id: str, user: dict = Depends(require_m2)):
     """Employee full cost model — net salary untouched, additional layers separate"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    profile = await db.employee_profiles.find_one({"org_id": org_id, "user_id": user_id}, {"_id": 0})
+    profile = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": user_id}, {"_id": 0})
 
     if not profile:
         return {"user_id": user_id, "available": False, "reason": "no_profile"}
@@ -42,7 +50,9 @@ async def get_employee_cost_basis(user_id: str, user: dict = Depends(require_m2)
     net_hour_cost = round(ms / monthly_hours, 2) if monthly_hours > 0 else None
 
     # Load org additional cost config (if set)
-    cost_cfg = await db.settings.find_one({"_id": "employee_cost_config", "org_id": org_id})
+    # W0-03E-A2C: per-tenant settings row id + tenant-scoped read.
+    cost_cfg = await TenantData.for_resolved_org(db, org_id).settings.find_one(
+        {"_id": settings_id(EMPLOYEE_COST_CONFIG, org_id)})
     add_pct = (cost_cfg or {}).get("additional_cost_percent", 0)
     overhead_pct = (cost_cfg or {}).get("overhead_percent_per_hour", 0)
 
@@ -73,10 +83,12 @@ async def update_employee_cost_config(data: dict, user: dict = Depends(require_m
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     now = datetime.now(timezone.utc).isoformat()
-    await db.settings.update_one(
-        {"_id": "employee_cost_config", "org_id": user["org_id"]},
+    tenant = _tenant(user)
+    row_id = settings_id(EMPLOYEE_COST_CONFIG, tenant.org_id)
+    await tenant.settings.update_one(
+        {"_id": row_id},
         {"$set": {
-            "_id": "employee_cost_config", "org_id": user["org_id"],
+            "_id": row_id, "org_id": tenant.org_id,
             "additional_cost_percent": float(data.get("additional_cost_percent", 0)),
             "overhead_percent_per_hour": float(data.get("overhead_percent_per_hour", 0)),
             "updated_at": now, "updated_by": user["id"],
@@ -93,6 +105,7 @@ async def update_employee_cost_config(data: dict, user: dict = Depends(require_m
 @router.post("/overhead-snapshots", status_code=201)
 async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2)):
     """Create an overhead period snapshot entry"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     entry = {
         "id": str(uuid.uuid4()),
@@ -108,20 +121,22 @@ async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2))
         "created_at": now,
         "created_by": user["id"],
     }
-    await db.overhead_snapshots.insert_one(entry)
+    await tenant.overhead_snapshots.insert_one(entry)
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
 @router.get("/overhead-snapshots")
 async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if period_key: q["period_key"] = period_key
-    return await db.overhead_snapshots.find(q, {"_id": 0}).sort("period_key", -1).to_list(200)
+    return await tenant.overhead_snapshots.find(q, {"_id": 0}).sort("period_key", -1).to_list(200)
 
 
 @router.get("/overhead-snapshots/aggregate")
 async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate overhead by period and category"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     match = {"org_id": org_id, "status": "active"}
     if period_key: match["period_key"] = period_key
@@ -133,10 +148,10 @@ async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depe
                     "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
         {"$sort": {"_id.period": -1, "total": -1}},
     ]
-    results = await db.overhead_snapshots.aggregate(pipeline).to_list(200)
+    results = await tenant.overhead_snapshots.aggregate(pipeline).to_list(200)
 
     # Also aggregate from legacy overhead_transactions
-    legacy = await db.overhead_transactions.find({"org_id": org_id}, {"_id": 0, "date": 1, "amount": 1, "category": 1}).to_list(500)
+    legacy = await tenant.overhead_transactions.find({"org_id": org_id}, {"_id": 0, "date": 1, "amount": 1, "category": 1}).to_list(500)
     legacy_by_period = {}
     for lt in legacy:
         pk = (lt.get("date") or "")[:7]
@@ -170,17 +185,18 @@ async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depe
 @router.post("/overhead-allocation/compute/{project_id}")
 async def compute_overhead_allocation(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
     """Compute overhead allocation for a project based on labor hours share"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     period_key = data.get("period_key", datetime.now().strftime("%Y-%m"))
 
     # Total overhead for period
-    snapshots = await db.overhead_snapshots.find(
+    snapshots = await tenant.overhead_snapshots.find(
         {"org_id": org_id, "period_key": period_key, "status": "active"}, {"_id": 0, "amount": 1}
     ).to_list(100)
     total_overhead = sum(s.get("amount", 0) for s in snapshots)
 
     # Add legacy overhead for the period
-    legacy = await db.overhead_transactions.find(
+    legacy = await tenant.overhead_transactions.find(
         {"org_id": org_id, "date": {"$regex": f"^{period_key}"}}, {"_id": 0, "amount": 1}
     ).to_list(500)
     total_overhead += sum(lt.get("amount", 0) for lt in legacy)
@@ -189,7 +205,7 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
         return {"ok": True, "allocated": 0, "reason": "no_overhead_data", "period": period_key}
 
     # Labor hours by project for allocation basis
-    all_entries = await db.labor_entries.find(
+    all_entries = await tenant.labor_entries.find(
         {"org_id": org_id, "date": {"$regex": f"^{period_key}"}}, {"_id": 0, "project_id": 1, "hours": 1}
     ).to_list(5000)
     total_hours = sum(float(e.get("hours", 0)) for e in all_entries)
@@ -203,7 +219,7 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
 
     now = datetime.now(timezone.utc).isoformat()
     # Upsert allocation
-    await db.project_overhead_alloc.update_one(
+    await tenant.project_overhead_alloc.update_one(
         {"org_id": org_id, "project_id": project_id, "period": period_key},
         {"$set": {
             "org_id": org_id, "project_id": project_id, "period": period_key,
@@ -216,7 +232,7 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
     )
 
     # Also allocate to execution packages by their labor hours
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "used_hours": 1}
     ).to_list(200)
     pkg_total_hours = sum(p.get("used_hours", 0) for p in pkgs)
@@ -225,7 +241,7 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
         pkg_hours = pkg.get("used_hours", 0)
         pkg_share = pkg_hours / pkg_total_hours if pkg_total_hours > 0 else 0
         pkg_alloc = round(allocated * pkg_share, 2)
-        await db.execution_packages.update_one({"id": pkg["id"]}, {"$set": {
+        await tenant.execution_packages.update_one({"id": pkg["id"]}, {"$set": {
             "overhead_actual_allocated": pkg_alloc, "updated_at": now,
         }})
 
@@ -240,8 +256,9 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
 @router.get("/execution-packages/{pkg_id}/net-financial")
 async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2)):
     """Package net financial with overhead and net margin"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
 
@@ -250,7 +267,7 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
     lab = pkg.get("actual_labor_cost", 0)
     overhead = pkg.get("overhead_actual_allocated", 0)
 
-    sub_lines = await db.subcontractor_package_lines.find(
+    sub_lines = await tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0, "certified_total": 1}
     ).to_list(50)
     sub = sum(l.get("certified_total", 0) for l in sub_lines)
@@ -292,19 +309,20 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
 @router.get("/project-net-profit/{project_id}")
 async def get_project_net_profit(project_id: str, user: dict = Depends(require_m2)):
     """Extended project profit with overhead, gross vs net margin, expected vs actual"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Revenue
-    accepted_offers = await db.offers.find({"project_id": project_id, "org_id": org_id, "status": "Accepted"}, {"_id": 0, "subtotal": 1}).to_list(100)
+    accepted_offers = await tenant.offers.find({"project_id": project_id, "org_id": org_id, "status": "Accepted"}, {"_id": 0, "subtotal": 1}).to_list(100)
     contracted = sum(o.get("subtotal", 0) for o in accepted_offers)
 
-    accepted_acts = await db.client_acts.find({"project_id": project_id, "org_id": org_id, "status": "Accepted"}, {"_id": 0, "subtotal": 1}).to_list(100)
+    accepted_acts = await tenant.client_acts.find({"project_id": project_id, "org_id": org_id, "status": "Accepted"}, {"_id": 0, "subtotal": 1}).to_list(100)
     earned = sum(a.get("subtotal", 0) for a in accepted_acts)
 
-    invoices = await db.invoices.find({"project_id": project_id, "org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled"]}}, {"_id": 0, "subtotal": 1, "paid_amount": 1}).to_list(100)
+    invoices = await tenant.invoices.find({"project_id": project_id, "org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled"]}}, {"_id": 0, "subtotal": 1, "paid_amount": 1}).to_list(100)
     billed = sum(i.get("subtotal", 0) for i in invoices)
     collected = sum(i.get("paid_amount", 0) for i in invoices)
 
@@ -324,11 +342,11 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
     sub_certified = sub_metrics.get("certified", 0) if sub_metrics.get("available") else 0
 
     # Overhead
-    allocs = await db.project_overhead_alloc.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "allocated_amount": 1}).to_list(50)
+    allocs = await tenant.project_overhead_alloc.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "allocated_amount": 1}).to_list(50)
     overhead = sum(a.get("allocated_amount", 0) for a in allocs)
 
     # Budget from execution packages
-    pkgs = await db.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "budget_total": 1}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "budget_total": 1}).to_list(200)
     budget_total = sum(p.get("budget_total", 0) for p in pkgs)
 
     gross_cost = round(mat_cost + lab_cost + sub_certified, 2)
@@ -373,11 +391,12 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
 @router.get("/financial-alerts/{project_id}")
 async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)):
     """Core financial alerts for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     alerts = []
 
     # Overhead
-    allocs = await db.project_overhead_alloc.count_documents({"org_id": org_id, "project_id": project_id})
+    allocs = await tenant.project_overhead_alloc.count_documents({"org_id": org_id, "project_id": project_id})
     if allocs == 0:
         alerts.append({"type": "overhead_not_allocated", "severity": "warning", "message": "Режийни разходи не са разпределени към проекта"})
 
@@ -388,28 +407,28 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "subcontract_payable", "severity": "info", "amount": sub["payable"], "message": f"Дължимо към подизпълнители: {sub['payable']} EUR"})
 
     # Client receivable
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"project_id": project_id, "org_id": org_id, "direction": "Issued", "status": {"$in": ["Sent", "PartiallyPaid", "Overdue"]}},
         {"_id": 0, "remaining_amount": 1}
     ).to_list(100)
     receivable = sum(i.get("remaining_amount", 0) for i in invoices)
     if receivable > 0:
-        overdue = await db.invoices.count_documents({"project_id": project_id, "org_id": org_id, "status": "Overdue"})
+        overdue = await tenant.invoices.count_documents({"project_id": project_id, "org_id": org_id, "status": "Overdue"})
         sev = "critical" if overdue > 0 else "info"
         alerts.append({"type": "client_receivable", "severity": sev, "amount": round(receivable, 2), "overdue_count": overdue, "message": f"Вземания: {round(receivable, 2)} EUR ({overdue} просрочени)"})
 
     # Material warnings
-    mat_warn = await db.material_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    mat_warn = await tenant.material_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
     if mat_warn > 0:
         alerts.append({"type": "unmapped_material", "severity": "warning", "count": mat_warn, "message": f"{mat_warn} материални записа без връзка към СМР"})
 
     # Labor warnings
-    lab_unmapped = await db.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
     if lab_unmapped > 0:
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 
     # Margin drop check
-    pkgs = await db.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_material_cost": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_material_cost": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
     for pkg in pkgs:
         sale = pkg.get("sale_total", 0)
         actual = (pkg.get("actual_material_cost", 0) or 0) + (pkg.get("actual_labor_cost", 0) or 0)
@@ -426,14 +445,15 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
 @router.get("/project-risk/{project_id}")
 async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
     """Consolidated project risk summary"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     flags = []
     explanations = []
 
     # Revenue risk
-    accepted = await db.offers.count_documents({"project_id": project_id, "org_id": org_id, "status": "Accepted"})
-    acts = await db.client_acts.count_documents({"project_id": project_id, "org_id": org_id, "status": "Accepted"})
-    overdue = await db.invoices.count_documents({"project_id": project_id, "org_id": org_id, "status": "Overdue"})
+    accepted = await tenant.offers.count_documents({"project_id": project_id, "org_id": org_id, "status": "Accepted"})
+    acts = await tenant.client_acts.count_documents({"project_id": project_id, "org_id": org_id, "status": "Accepted"})
+    overdue = await tenant.invoices.count_documents({"project_id": project_id, "org_id": org_id, "status": "Overdue"})
     if accepted == 0:
         flags.append("no_accepted_offers")
         explanations.append("Няма одобрени оферти")
@@ -442,7 +462,7 @@ async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
         explanations.append(f"{overdue} просрочени фактури")
 
     # Labor risk
-    pkgs = await db.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "planned_hours": 1, "used_hours": 1, "labor_budget_total": 1, "actual_labor_cost": 1}).to_list(200)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "planned_hours": 1, "used_hours": 1, "labor_budget_total": 1, "actual_labor_cost": 1}).to_list(200)
     over_hours = any(p.get("used_hours", 0) > (p.get("planned_hours") or 99999) for p in pkgs if p.get("planned_hours"))
     over_budget = any((p.get("actual_labor_cost", 0) or 0) > p.get("labor_budget_total", 0) > 0 for p in pkgs)
     if over_hours:
@@ -453,7 +473,7 @@ async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
         explanations.append("Надвишен бюджет за труд")
 
     # Material risk
-    unmapped_mat = await db.material_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    unmapped_mat = await tenant.material_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
     if unmapped_mat > 5:
         flags.append("material_tracking_gaps")
         explanations.append(f"{unmapped_mat} нерпроследени материални движения")
@@ -466,7 +486,7 @@ async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
         explanations.append("Забавено плащане към подизпълнители")
 
     # Overhead risk
-    allocs = await db.project_overhead_alloc.count_documents({"org_id": org_id, "project_id": project_id})
+    allocs = await tenant.project_overhead_alloc.count_documents({"org_id": org_id, "project_id": project_id})
     if allocs == 0:
         flags.append("overhead_not_allocated")
         explanations.append("Режийни не са разпределени")

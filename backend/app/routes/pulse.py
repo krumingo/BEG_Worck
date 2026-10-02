@@ -8,14 +8,21 @@ from datetime import datetime, timezone
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.pulse_generator import generate_pulse, generate_all_pulses
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Site Pulse"])
 
 
 @router.get("/sites/{site_id}/pulse")
 async def get_site_pulse(site_id: str, date: Optional[str] = None, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    pulse = await db.site_pulses.find_one(
+    pulse = await tenant.site_pulses.find_one(
         {"org_id": user["org_id"], "site_id": site_id, "date": d}, {"_id": 0}
     )
     if not pulse:
@@ -26,12 +33,13 @@ async def get_site_pulse(site_id: str, date: Optional[str] = None, user: dict = 
 
 @router.get("/sites/{site_id}/pulse/range")
 async def get_pulse_range(site_id: str, date_from: str = "", date_to: str = "", user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"], "site_id": site_id}
     if date_from or date_to:
         query["date"] = {}
         if date_from: query["date"]["$gte"] = date_from
         if date_to: query["date"]["$lte"] = date_to
-    items = await db.site_pulses.find(query, {"_id": 0}).sort("date", -1).to_list(60)
+    items = await tenant.site_pulses.find(query, {"_id": 0}).sort("date", -1).to_list(60)
     return {"items": items, "total": len(items)}
 
 
@@ -44,8 +52,9 @@ async def generate_site_pulse(site_id: str, date: Optional[str] = None, user: di
 
 @router.get("/pulse/today")
 async def get_today_pulses(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    items = await db.site_pulses.find(
+    items = await tenant.site_pulses.find(
         {"org_id": user["org_id"], "date": today}, {"_id": 0}
     ).to_list(100)
     # If no pulses yet, generate for all active projects
@@ -63,8 +72,9 @@ async def generate_all(date: Optional[str] = None, user: dict = Depends(get_curr
 
 @router.get("/pulse/summary")
 async def get_pulse_summary(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    items = await db.site_pulses.find(
+    items = await tenant.site_pulses.find(
         {"org_id": user["org_id"], "date": d}, {"_id": 0}
     ).to_list(100)
 

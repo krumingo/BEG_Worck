@@ -153,7 +153,8 @@ async def update_invoice_status(tenant: TenantData, invoice_id: str):
 
 async def get_invoice_settings(org_id: str) -> dict:
     """Get or create invoice numbering settings for organization"""
-    settings = await db.invoice_settings.find_one({"org_id": org_id})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    settings = await tenant.invoice_settings.find_one({"org_id": org_id})
     if not settings:
         # Create default settings
         settings = {
@@ -169,7 +170,7 @@ async def get_invoice_settings(org_id: str) -> dict:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.invoice_settings.insert_one(settings)
+        await tenant.invoice_settings.insert_one(settings)
     # Remove _id before returning
     if "_id" in settings:
         del settings["_id"]
@@ -282,6 +283,7 @@ async def get_settings(user: dict = Depends(require_m5)):
 @router.put("/finance/invoice-settings")
 async def update_settings(data: dict, user: dict = Depends(require_m5)):
     """Update invoice numbering settings (Admin only)"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Само администратори могат да променят настройките")
     
@@ -322,7 +324,7 @@ async def update_settings(data: dict, user: dict = Depends(require_m5)):
         safe_number = await get_safe_starting_number(_tenant(user), "Received", requested)
         update["received_next_number"] = safe_number
     
-    await db.invoice_settings.update_one(
+    await tenant.invoice_settings.update_one(
         {"org_id": org_id},
         {"$set": update},
         upsert=True
