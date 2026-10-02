@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T16:17:59Z",
+  "validated_at": "2026-10-02T16:57:28Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "0d6a341a78d8e905de49c05158e4e3cfcb368e9e",
-  "control_state_commit_sha": "9c28bf6d24b4f9bada84fe89ab24cb525e6da4e8",
-  "now": "Codex публикува BLOCKED review за точния head: committed real-Mongo gate не стига до A/B сценария. Следва архитектурно/owner решение; няма автоматична корекция.",
+  "active_source_commit_sha": "c82ef0f66c5e02b7670399f1514e289915a1637c",
+  "control_state_commit_sha": "ec6369c4ebade3a31a70c7d799c3eea13eb9bf12",
+  "now": "Codex подготви ограничената C02 корекция на committed real-Mongo gate; изпращането към Claude още не е извършено.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
@@ -21,42 +21,42 @@
     "PR/HANDOFF"
   ],
   "task_id": "W0-03E-A2C",
-  "cycle_id": "C01",
+  "cycle_id": "C02",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-03E-A2C/C01/GPT",
-      "waiting_for": "Krum relay of blocked review and GPT architectural decision",
-      "updated_at": "2026-10-02T16:17:59Z"
+      "work_id": "W0-03E-A2C/C02/GPT",
+      "waiting_for": "Claude implementation and Codex review verdict",
+      "updated_at": "2026-10-02T16:57:28Z"
     },
     "CODEX": {
-      "state": "BLOCKED",
-      "work_id": "W0-03E-A2C/C01/CX",
-      "waiting_for": "GPT/Krum decision on blocked committed real-Mongo gate",
-      "updated_at": "2026-10-02T16:17:59Z"
+      "state": "WORKING",
+      "work_id": "W0-03E-A2C/C02/CX",
+      "waiting_for": "One-time Computer Use Send confirmation",
+      "updated_at": "2026-10-02T16:57:28Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-03E-A2C/C01/CL",
-      "waiting_for": "Codex independent exact-head review",
-      "updated_at": "2026-10-02T16:17:59Z"
+      "state": "WAITING",
+      "work_id": "W0-03E-A2C/C02/CL",
+      "waiting_for": "One confirmed direct Code Cloud Send of bounded C02 assignment",
+      "updated_at": "2026-10-02T16:57:28Z"
     }
   },
-  "current_work_id": "W0-03E-A2C/C01/CX",
-  "state": "BLOCKED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT/Krum decision on blocked committed real-Mongo gate",
+  "current_work_id": "W0-03E-A2C/C02/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "One-time Computer Use Send confirmation",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 42,
   "pr_head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
   "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130",
     "head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
@@ -69,29 +69,29 @@
     "verdict": "BLOCKED"
   },
   "relay": {
-    "last_agent": "CODEX",
-    "last_event": "W0-03E-A2C/C01 exact-head independent BLOCKED review published",
-    "last_result": "BLOCKED",
-    "required_by_krum": true,
-    "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Relay the exact-head BLOCKED review to GPT architect; no correction, merge or deploy is automatic.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363",
-    "updated_at": "2026-10-02T16:17:59Z"
+    "last_agent": "GPT",
+    "last_event": "Owner authorized bounded W0-03E-A2C/C02 correction in PR #42",
+    "last_result": "C02_ASSIGNMENT_AUTHORIZED",
+    "required_by_krum": false,
+    "from": "GPT",
+    "to": "CODEX",
+    "status": "RECEIVED",
+    "instruction": "Codex prepares the one-file C02 correction and waits for explicit one-time Computer Use Send confirmation.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750",
+    "updated_at": "2026-10-02T16:57:28Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "Relay BLOCKED review to GPT architect for next decision",
+  "requires_krum_reason": "CONFIRM SEND TO CLAUDE for W0-03E-A2C/C02",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "1e4c26f94191a1df2e33f4d9fb7619e277a5edc0",
+    "active_blob_sha": "ad418739e7871a3a19b873b91b5fc76d4c05710f",
     "review_path": "coordination/REVIEWS/W0-03E-A2C.md",
     "review_blob_sha": "ecc6f0e2cba73c428604d020daa4e4a6529aac20",
     "canonical_docs": [
@@ -129,7 +129,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T16:17:59Z",
+  "updated_at": "2026-10-02T16:57:28Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -200,6 +200,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363",
       "source_commit_sha": "6b21d41de5b35b5652997fdb305b38e373d09202",
       "summary": "Independent Codex exact-head review BLOCKED: the committed required A2C real-Mongo test indexes os.environ with the already-resolved URI value and raises KeyError before the A/B scenario. Direct separate scenario and predecessor gates passed, but cannot substitute for a failing committed gate. No automatic correction, merge or deploy."
+    },
+    {
+      "event_id": "w0-03e-a2c-c02-bounded-assignment-intent",
+      "occurred_at": "2026-10-02T16:57:28Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "1308f20b38ef94ac396b1607ade49eb7e0d18f46",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750",
+      "source_commit_sha": "c82ef0f66c5e02b7670399f1514e289915a1637c",
+      "summary": "Owner authorized one bounded A2C/C02 correction of the committed real-Mongo test URL usage, same Draft PR #42 and exact base. Canonical one-file assignment prepared; Dispatch PENDING, CODEX WORKING, CLAUDE WAITING. No C02 Send/session, implementation edit, PASS, merge or deploy."
     }
   ]
 }
