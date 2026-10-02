@@ -1,24 +1,24 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2C/C01 BLOCKED — COMMITTED REAL-MONGO GATE FAILS BEFORE SCENARIO
-Human-Summary-BG: Независимият review намери точен дефект в задължителния real-Mongo тест: той пада с KeyError, преди да провери двете фирми. Отделното пряко изпълнение на сценария мина, но committed gate не е PASS. Задачата чака решение от GPT/Крум; няма merge или deploy.
+Status: W0-03E-A2C/C02 BOUNDED CORRECTION AUTHORIZED — DISPATCH PENDING
+Human-Summary-BG: Поправяме само грешката в real-Mongo теста. След това Claude пуска теста наново, а Codex го проверява независимо; ако committed gate мине чисто, A2C може да получи PASS.
 Current-Agent: CODEX
-Current-State: BLOCKED
-Claude-State: HANDOFF_READY
-Codex-State: BLOCKED
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED (CODEX_VERDICT BLOCKED published in canonical REVIEW and PR #42)
-Now: Codex публикува BLOCKED review за точния head: committed real-Mongo gate не стига до A/B сценария. Следва архитектурно/owner решение; няма автоматична корекция.
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: RELAY BLOCKED REVIEW TO GPT ARCHITECT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf
-Dispatch-Observed-At: 2026-10-02T10:17:55Z
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT (C02 assignment prepared; no Send and no Claude start observed)
+Now: Codex подготви ограничената C02 корекция на committed real-Mongo gate; изпращането към Claude още не е извършено.
+Next-Agent: CLAUDE
+Relay-State: RECEIVED
+Relay-From: GPT
+Relay-To: CODEX
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE for C02 (C01 finished session: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf)
+Dispatch-Observed-At: NONE for C02
 Task-ID: W0-03E-A2C
-Cycle-ID: C01
+Cycle-ID: C02
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-a2c-full-tenant-boundary
@@ -28,14 +28,28 @@ Remediation-Base-SHA: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473
 Implementation-Branch-Head: 1308f20b38ef94ac396b1607ade49eb7e0d18f46 (exact final HANDOFF head, rechecked in PR metadata)
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130 (published 2026-10-02T11:33:44Z; real-Mongo explicitly unrun/skipped)
-Review: coordination/REVIEWS/W0-03E-A2C.md — BLOCKED on exact head 1308f20b38ef94ac396b1607ade49eb7e0d18f46; PR comment https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363. Predecessor W0-03E-A2B.md remains BLOCKED.
-Final-Verdict: W0-03E-A2C BLOCKED — committed required real-Mongo test uses URI value as environment key and fails before scenario execution. No PASS, merge, deploy, production migration or automatic correction.
+HANDOFF-URL: C01 https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130; C02 NONE until final exact-head HANDOFF.
+Review: C01 coordination/REVIEWS/W0-03E-A2C.md — BLOCKED on exact head 1308f20b38ef94ac396b1607ade49eb7e0d18f46; PR comment https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956488363. C02 review NOT STARTED.
+Final-Verdict: NONE for C02. C01 BLOCKED remains historical evidence; no C02 PASS, merge, deploy or production migration.
 Predecessor-Task-ID: W0-03E-A2B/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2B.md (final BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473)
 Predecessor-Integration: NONE; PR #40 remains Draft/BLOCKED and unmerged. A2C is a separate owner-authorized stacked task using its exact head as code base only, not main integration.
-Authorization: Issue #41 https://github.com/krumingo/BEG_Worck/issues/41 and the owner decision in PR #40 https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5945977465 authorize the full-active-backend tenant-boundary remediation. Krum separately confirmed exactly one Claude Code Cloud Send; no merge, deploy or production migration is authorized.
-Correction-cycles: W0-03E C02/C03, R1, A1, A2 and A2B outcomes remain immutable. A2C is a separate Task-ID, not C04 or an automatic correction.
+Authorization: Owner's bounded C02 correction in PR #42 https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750 authorizes only the test fix. Issue #41 remains the A2C gate. The user requires one separate Computer Use Send confirmation; no Send is authorized by this PENDING snapshot. No merge, deploy or production migration is authorized.
+Correction-cycles: W0-03E C02/C03, R1, A1, A2 and A2B outcomes remain immutable. A2C/C01 BLOCKED remains historical; A2C/C02 is one owner-authorized bounded correction, not a new Task-ID or C04.
+
+## Canonical W0-03E-A2C/C02 — bounded committed real-Mongo test correction — PENDING Send
+
+**На човешки / Какво правим.** Поправяме само грешката в real-Mongo теста. След това Claude пуска теста наново, а Codex го проверява независимо; ако committed gate мине чисто, A2C може да получи PASS.
+
+**Identity and exact base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-03E-A2C`; Cycle-ID `C02`; same implementation branch `codex/w0-03e-a2c-full-tenant-boundary`; same Draft PR #42 against `main`. Start only from exact head `1308f20b38ef94ac396b1607ade49eb7e0d18f46`. Before Send, recheck selected repository/branch, exact PR head, latest owner authorization https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5956888750, C01 BLOCKED review, and absence of duplicate C02 Claude session/dispatch. Stop on mismatch. No new branch, PR, task or Claude Routine.
+
+**Allowed edit only.** In `backend/tests/test_w0_03e_a2c_two_tenant_boundary.py`, replace the erroneous `AsyncIOMotorClient(os.environ[REAL_URL])` usage with the already-resolved Mongo URI (`REAL_URL`) or exactly equivalent minimal correction. Do not alter `scenario(...)`, A/B fixtures, assertions, skip policy, production/runtime/business logic, guard, inventory, settings, FLOW/D or any other file. The C01 whole-package review remains evidence but is not C02 PASS.
+
+**Claude proof and HANDOFF.** Run the committed A2C real-Mongo pytest test against a disposable local MongoDB bound to `127.0.0.1` with a fresh dbpath: required scenario actually executes, `0 failed / 0 skipped`, scratch DB and server cleaned up. Re-run focused A2C guard/settings/in-process tests; report exact command, collected/passed/failed/skipped, exact new head, one-file diff and cleanup. If Claude Code Cloud cannot run real Mongo, report it as NOT RUN/BLOCKED, not PASS. Publish final exact-head HANDOFF in PR #42 and stop. No intermediate push is HANDOFF.
+
+**Independent Codex gate after HANDOFF.** Confirm Claude session finished and PR head stable, inspect the exact one-file diff, then independently run the **committed test itself** on a separate disposable local MongoDB with `0 failed / 0 skipped`; direct `scenario(...)` invocation is not a substitute. Repeat focused guard/settings checks and exact-head review. Only then may `W0-03E-A2C PASS — FULL ACTIVE TENANT BOUNDARY CLOSED` be recorded, followed by the final W0-03E closure review. Otherwise record exact BLOCKED evidence; do not dispatch another correction automatically.
+
+**Hard boundaries.** No merge, deploy, production migration, Atlas/NAS/production write, real second production tenant, W0-06, unrelated FLOW/D or any change outside this one test file. Krum retains merge/deploy/production decisions. Dispatch remains `PENDING` until a separately confirmed Computer Use Send is actually observed.
 
 ## Canonical W0-03E-A2C/C01 — full active backend tenant boundary — HANDOFF received, independent review in progress
 
