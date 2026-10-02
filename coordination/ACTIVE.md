@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-03E-A2C/C01 IMPLEMENTATION — CLAUDE WORKING
-Human-Summary-BG: Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
-Transition-Phase: OBSERVED (one authorized direct Send and Claude session start observed)
-Now: Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях. Claude работи; Codex чака финален exact-head HANDOFF.
-Next-Agent: CODEX
+Status: W0-03E-A2C/C01 HANDOFF RECEIVED — CODEX INDEPENDENT REVIEW
+Human-Summary-BG: Claude приключи системното затваряне на tenant-разделението по целия активен backend. Сега Codex независимо проверява дали при две фирми няма място, което може да прочете или промени чужди данни, и изпълнява задължителния real-Mongo тест.
+Current-Agent: CODEX
+Current-State: REVIEWING
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: OBSERVED (final exact-head HANDOFF published; Claude session finished; PR #42 head rechecked)
+Now: Claude приключи системното затваряне на tenant-разделението по целия активен backend. Сега Codex независимо проверява дали при две фирми няма място, което може да прочете или промени чужди данни, и изпълнява задължителния real-Mongo тест. PASS не е установен.
+Next-Agent: GPT
 Relay-State: RECEIVED
-Relay-From: CODEX
-Relay-To: CLAUDE
+Relay-From: CLAUDE
+Relay-To: CODEX
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf
 Dispatch-Observed-At: 2026-10-02T10:17:55Z
 Task-ID: W0-03E-A2C
@@ -22,22 +22,22 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
 Implementation-branch: codex/w0-03e-a2c-full-tenant-boundary
-PR-URL: NONE for A2C; PR #40 remains Draft/BLOCKED and untouched
-PR-Head: NONE for A2C
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/42 (Draft, open; PR #40 remains Draft/BLOCKED and untouched)
+PR-Head: 1308f20b38ef94ac396b1607ade49eb7e0d18f46
 Remediation-Base-SHA: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473
-Implementation-Branch-Head-at-Dispatch: 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473 (subsequent pushes are not HANDOFF)
+Implementation-Branch-Head: 1308f20b38ef94ac396b1607ade49eb7e0d18f46 (exact final HANDOFF head, rechecked in PR metadata)
 Merge-SHA: NONE
 Main-Head: bbdb94dafa09a483b35ccdf6ed13604b77b86a96
-HANDOFF-URL: NONE for A2C
-Review: predecessor coordination/REVIEWS/W0-03E-A2B.md is BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473; no A2C review exists yet.
-Final-Verdict: NONE for A2C. Claude implementation is active; no A2C PR, HANDOFF, independent review, merge or deploy yet.
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5951482130 (published 2026-10-02T11:33:44Z; real-Mongo explicitly unrun/skipped)
+Review: coordination/REVIEWS/W0-03E-A2B.md remains predecessor BLOCKED. A2C independent whole-package review and separate disposable real-Mongo A/B gate are IN PROGRESS; no A2C verdict yet.
+Final-Verdict: NONE for A2C. Claude's in-process tests and claimed UNSCOPED=0 are unverified until independent gate; no merge or deploy.
 Predecessor-Task-ID: W0-03E-A2B/C01
 Predecessor-Review: coordination/REVIEWS/W0-03E-A2B.md (final BLOCKED on exact head 62cf2a53a6fe1d3b7c61f1c0ef943e07f2c2c473)
 Predecessor-Integration: NONE; PR #40 remains Draft/BLOCKED and unmerged. A2C is a separate owner-authorized stacked task using its exact head as code base only, not main integration.
 Authorization: Issue #41 https://github.com/krumingo/BEG_Worck/issues/41 and the owner decision in PR #40 https://github.com/krumingo/BEG_Worck/pull/40#issuecomment-5945977465 authorize the full-active-backend tenant-boundary remediation. Krum separately confirmed exactly one Claude Code Cloud Send; no merge, deploy or production migration is authorized.
 Correction-cycles: W0-03E C02/C03, R1, A1, A2 and A2B outcomes remain immutable. A2C is a separate Task-ID, not C04 or an automatic correction.
 
-## Canonical W0-03E-A2C/C01 — full active backend tenant boundary — RUNNING, awaiting HANDOFF
+## Canonical W0-03E-A2C/C01 — full active backend tenant boundary — HANDOFF received, independent review in progress
 
 **На човешки / Какво правим.** Сега пускаме Claude да затвори tenant-разделението по целия активен backend, не само по отделни маршрути. Целта е при две фирми с еднакви ID-та нито четене, нито запис, нито права, нито настройки да могат да прескочат между тях.
 
