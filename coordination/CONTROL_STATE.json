@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-03T09:50:52Z",
+  "validated_at": "2026-10-03T09:56:01Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "26ebea39a79537c1f644e8c213288a51e3d45fdc",
-  "control_state_commit_sha": "26ebea39a79537c1f644e8c213288a51e3d45fdc",
-  "now": "Codex завърши независимия exact-head review. Real-Mongo gate има 1 failed / 0 skipped; CHANGES_REQUESTED е готов, но публикуването на финалния verdict предстои.",
+  "active_source_commit_sha": "8013c8fede38321fe8acd805df9cf1ac92270199",
+  "control_state_commit_sha": "8013c8fede38321fe8acd805df9cf1ac92270199",
+  "now": "Codex публикува CHANGES_REQUESTED за W0-06A/C01 на exact PR #44 head. Real-Mongo gate: 14 passed / 1 failed / 0 skipped. GPT/Крум решават за bounded correction; няма нов dispatch, merge или deploy.",
   "transition": {
     "event": "CODEX_VERDICT",
-    "phase": "INTENT",
-    "evidence_url": null,
-    "verdict_publication": "READY"
+    "phase": "OBSERVED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829",
+    "verdict_publication": "PUBLISHED"
   },
   "generated_from": [
     "ACTIVE",
@@ -29,27 +29,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06A/C01/GPT",
-      "waiting_for": "Independent W0-06A exact-head Codex review verdict",
-      "updated_at": "2026-10-03T07:41:15Z"
+      "waiting_for": "Krum relay of the published W0-06A CHANGES_REQUESTED review",
+      "updated_at": "2026-10-03T09:56:01Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "WAITING",
       "work_id": "W0-06A/C01/CX",
-      "waiting_for": null,
-      "updated_at": "2026-10-03T09:50:52Z"
+      "waiting_for": "GPT/Krum decision on whether to authorize a bounded correction",
+      "updated_at": "2026-10-03T09:56:01Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
+      "state": "WAITING",
       "work_id": "W0-06A/C01/CL",
-      "waiting_for": null,
-      "updated_at": "2026-10-03T09:35:56Z"
+      "waiting_for": "Authorized bounded correction assignment, if any",
+      "updated_at": "2026-10-03T09:56:01Z"
     }
   },
   "current_work_id": "W0-06A/C01/CX",
-  "state": "REVIEW",
+  "state": "CHANGES_REQUESTED",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": null,
+  "waiting_for": "GPT/Krum decision on whether to authorize a bounded correction",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 44,
@@ -62,21 +62,26 @@
     "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
     "at": "2026-10-03T09:25:44Z"
   },
-  "last_review": null,
-  "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "W0-06A/C01 exact-head HANDOFF published in Issue #43",
-    "last_result": "HANDOFF",
-    "required_by_krum": false,
-    "from": "CLAUDE",
-    "to": "CODEX",
-    "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex review is complete; a CHANGES_REQUESTED verdict is ready but not yet published. Do not treat it as confirmed until publication.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
-    "updated_at": "2026-10-03T09:50:52Z"
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-06A.md",
+    "blob_sha": "94ce4b2943ecfcec2d23e2cf8361c2dd40439183",
+    "reviewed_head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+    "verdict": "CHANGES_REQUESTED"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "relay": {
+    "last_agent": "CODEX",
+    "last_event": "W0-06A/C01 independent exact-head review published in PR #44",
+    "last_result": "CHANGES_REQUESTED",
+    "required_by_krum": true,
+    "from": "CODEX",
+    "to": "GPT",
+    "status": "NOT_SENT",
+    "instruction": "Relay the published W0-06A review to GPT for an owner/architect decision. No correction is dispatched by the review alone.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829",
+    "updated_at": "2026-10-03T09:56:01Z"
+  },
+  "requires_krum": true,
+  "requires_krum_reason": "RELAY W0-06A REVIEW TO GPT",
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "REVIEW",
@@ -86,9 +91,9 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "11312de39cbc45dd76befcd745120a421599eeb1",
+    "active_blob_sha": "e6edc82c37254cf328b4669c210df126b6a135a1",
     "review_path": "coordination/REVIEWS/W0-06A.md",
-    "review_blob_sha": "c805a646118ed5cdc2135d5fe7488738e75b212d",
+    "review_blob_sha": "94ce4b2943ecfcec2d23e2cf8361c2dd40439183",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -112,7 +117,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-03T09:50:52Z",
+  "updated_at": "2026-10-03T09:56:01Z",
   "history": [
     {
       "event_id": "w0-06a-c01-assignment-intent",
@@ -155,6 +160,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
       "source_commit_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
       "summary": "Claude published a final exact-head implementation HANDOFF in Issue #43 and the direct session finished. Draft PR #44 head matched the HANDOFF and remained stable; Codex began independent whole-package review. Claude's 15 real-Mongo tests were skipped, not PASS."
+    },
+    {
+      "event_id": "w0-06a-c01-codex-changes-requested",
+      "occurred_at": "2026-10-03T09:56:01Z",
+      "task_id": "W0-06A",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829",
+      "source_commit_sha": "8013c8fede38321fe8acd805df9cf1ac92270199",
+      "summary": "Independent whole-package review published CHANGES_REQUESTED on exact Draft PR #44 head. Required disposable real-Mongo gate: 14 passed, 1 failed, 0 skipped; concurrent AuditEvent sequence duplicated. Relation-target bypass, version-specific delete overstatement and checksum test flake also documented. No correction dispatch, merge, deploy or FLOW-016 Gate PASS."
     }
   ]
 }

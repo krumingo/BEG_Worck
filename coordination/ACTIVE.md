@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06A/C01 REVIEW — CODEX VERDICT READY / PUBLICATION PENDING
+Status: W0-06A/C01 CHANGES_REQUESTED — INDEPENDENT REAL-MONGO GATE FAILED
 Human-Summary-BG: Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се разхвърлят по модулите, а ще сочат към един стабилен file_id.
 Current-Agent: CODEX
-Current-State: REVIEW
-Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Current-State: CHANGES_REQUESTED
+Claude-State: WAITING
+Codex-State: CHANGES_REQUESTED
 Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Codex завърши независимия exact-head review; real-Mongo gate има 1 failed / 0 skipped. CHANGES_REQUESTED е подготвен, но още не е публикуван като финален verdict.
+Now: Codex публикува CHANGES_REQUESTED на exact PR #44 head: real-Mongo gate 14 passed / 1 failed / 0 skipped, плюс bounded File Registry safety findings. GPT/Крум решават дали да разрешат correction; няма нов dispatch.
 Next-Agent: GPT
-Relay-State: NO_RELAY_NEEDED
-Relay-From: CLAUDE
-Relay-To: CODEX
-Krum-Action: NONE
+Relay-State: NOT_SENT
+Relay-From: CODEX
+Relay-To: GPT
+Krum-Action: RELAY W0-06A REVIEW TO GPT
 Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz
 Dispatch-Observed-At: 2026-10-03T08:23:35Z
@@ -22,17 +22,17 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: 79af297612f57c055bb7caef3f0c48493800d1b6
 Implementation-branch: codex/w0-06a-file-registry-foundation
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/44 (Draft; independent review in progress)
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/44 (Draft; independent CHANGES_REQUESTED published; unmerged)
 PR-Head: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/43
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410
-Review: coordination/REVIEWS/W0-06A.md — independent review written; CHANGES_REQUESTED ready, publication pending.
-Final-Verdict: NONE
+Review: coordination/REVIEWS/W0-06A.md — independent CHANGES_REQUESTED on exact head, published https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829.
+Final-Verdict: W0-06A CHANGES_REQUESTED — concurrent AuditEvent chain and bounded File Registry safety defects; no correction dispatched.
 Predecessor-Task-ID: W0-03E-A2C/C02
 Predecessor-Integration: PR #42 merged into main at 79af297612f57c055bb7caef3f0c48493800d1b6; no deploy.
-Authorization: Krum approved proceeding to W0-06A and confirmed the one-time direct Claude Code Cloud Send. Claude published a final HANDOFF in Issue #43 for exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b and the session ended. Codex independently completed review at the same stable head; the committed real-Mongo gate ran 15 tests with 14 passed, 1 failed, 0 skipped. The CHANGES_REQUESTED review is written but not yet published as a final verdict. No merge, deploy, production migration, live provider credential use or customer-file move is authorized.
+Authorization: Krum approved proceeding to W0-06A and confirmed the one-time direct Claude Code Cloud Send. Claude published a final HANDOFF in Issue #43 for exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b and the session ended. Codex independently completed review at the same stable head; the committed real-Mongo gate ran 15 tests with 14 passed, 1 failed, 0 skipped. CHANGES_REQUESTED was published in PR #44 and no correction/next task has been dispatched. PR #44 remains Draft; no merge, deploy, production migration, live provider credential use or customer-file move is authorized.
 
 ## Canonical W0-06A/C01 — File Registry foundation and legacy file inventory
 
@@ -73,7 +73,7 @@ Expected Claude verdict at HANDOFF is implementation complete, not PASS. Codex i
 
 **Hard boundaries.** No merge, deploy, production migration, real BEG/NAS/Drive/S3 file move, live provider credentials, customer-original deletion, W0-07 implementation, unrelated FLOW/D changes, or automatic next task.
 
-**Dispatch protocol.** Krum confirmed one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`; the direct Code Cloud session above was observed starting and verifying the exact base. Final exact-head HANDOFF is published in Issue #43, the session ended, and PR #44 head matches the HANDOFF. Codex is REVIEWING independently; no PASS or second Send.
+**Dispatch protocol.** Krum confirmed one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`; the direct Code Cloud session above was observed starting and verifying the exact base. Final exact-head HANDOFF is published in Issue #43, the session ended, and PR #44 head matches the HANDOFF. Codex published independent CHANGES_REQUESTED in PR #44; no PASS, correction dispatch or second Send.
 
 ---
 
