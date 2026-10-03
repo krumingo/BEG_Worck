@@ -12,6 +12,8 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from control_routing import next_execution_agent
+
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "coordination/CONTROL_STATE.schema.json"
 
@@ -106,6 +108,11 @@ def validate_state(state: dict) -> None:
     step_agent = {"ARCHITECT": "GPT", "ASSIGNMENT": "CODEX", "IMPLEMENTATION": "CLAUDE", "REVIEW": "CODEX", "ARCHITECT_FEEDBACK": "GPT"}
     if state["current_agent"] != step_agent[state["pipeline_step"]]:
         raise ControlError("INVALID", "pipeline step/agent mismatch")
+    # A published PASS returns to the architect. The manual courier is modelled
+    # by relay/requires_krum, never by making KRUM an execution agent.
+    if (state["protocol_version"] == 2 and state["state"] == "PASS" and
+            state["next_agent"] != next_execution_agent("CODEX_PASS_PUBLISHED")):
+        raise ControlError("CONFLICT", "published PASS must route to GPT")
     agents = state["agent_states"]
     current = agents[state["current_agent"]]
     expected_activity = (state["state"] if state["protocol_version"] == 1 else

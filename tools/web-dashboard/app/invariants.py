@@ -123,6 +123,8 @@ def _identity(state: dict, findings: list[Finding]) -> None:
             "PIPELINE_AGENT_MISMATCH",
             f"pipeline_step {step} belongs to {STEP_AGENT[step]}, but current_agent is {agent}.",
         )
+    if state.get("protocol_version") == 2 and state.get("state") == "PASS" and state.get("next_agent") != "GPT":
+        _add(findings, Status.CONFLICT, "PASS_ROUTE", "Published PASS must route to GPT; relay is separate.")
 
 
 def _agents(state: dict, findings: list[Finding]) -> None:
