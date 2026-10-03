@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "beg-orchestrator",
+  "version": "0.1.0",
+  "description": "BEG_WORK local executor protocol for Codex: receive verified GitHub commands and relay bounded prompts to Claude Desktop through Computer Use."
+}

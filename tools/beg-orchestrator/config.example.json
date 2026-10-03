@@ -1,0 +1,13 @@
+{
+  "repository": "krumingo/BEG_Worck",
+  "issue_number": 22,
+  "trusted_github_login": "krumingo",
+  "poll_seconds": 5,
+  "codex_window_title": "Codex",
+  "input_x": null,
+  "input_y": null,
+  "dry_run": true,
+  "post_ack": false,
+  "state_file": "C:\\BEG\\beg-orchestrator\\state.json",
+  "audit_file": "C:\\BEG\\beg-orchestrator\\audit.jsonl"
+}
