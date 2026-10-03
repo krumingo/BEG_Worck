@@ -117,7 +117,19 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_TASKS,
               "worker_calendar", "alarm_rules", "alarm_events"),
     **_family(FAMILY_FILES,
-              "media_files", "scan_docs", "excel_import_templates"),
+              # Legacy per-module file metadata (W0-06A inventory: the records
+              # the File Registry replaces as the identity of a file).
+              "media_files", "scan_docs", "excel_import_templates",
+              # W0-06A canonical File Registry (FLOW-016). ``org_id``-keyed like
+              # every other operational collection, because its relations point
+              # at ``org_id``-keyed business records: splitting the two keys
+              # would put half of each relation on each side of the boundary.
+              # The one list in ``app.files.models.REGISTRY_COLLECTIONS`` must
+              # equal the six names here; ``tests/test_w0_06a_file_registry.py``
+              # proves it, so a seventh collection cannot appear unclassified.
+              "file_registry", "file_versions", "file_relations",
+              "file_provider_locations", "file_derived_cache",
+              "file_delete_requests"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,
