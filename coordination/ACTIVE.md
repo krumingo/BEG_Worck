@@ -1,21 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06A/C01 PENDING — FILE REGISTRY FOUNDATION
+Status: W0-06A/C01 RUNNING — CLAUDE IMPLEMENTING FILE REGISTRY FOUNDATION
 Human-Summary-BG: Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се разхвърлят по модулите, а ще сочат към един стабилен file_id.
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Codex подготвя W0-06A/C01 за еднократно изпращане към Claude.
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Claude работи по W0-06A/C01; Codex чака финален exact-head HANDOFF преди независим review.
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: CODEX
 Relay-To: CLAUDE
-Krum-Action: CONFIRM SEND TO CLAUDE
-Dispatch-State: PENDING
-Dispatch-Run: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING
+Dispatch-Run: https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz
+Dispatch-Observed-At: 2026-10-03T08:23:35Z
 Task-ID: W0-06A
 Cycle-ID: C01
 Base-branch: main
@@ -31,7 +32,7 @@ Review: NONE
 Final-Verdict: NONE
 Predecessor-Task-ID: W0-03E-A2C/C02
 Predecessor-Integration: PR #42 merged into main at 79af297612f57c055bb7caef3f0c48493800d1b6; no deploy.
-Authorization: Krum approved proceeding to W0-06A after W0-03E integration. No deploy, production migration, live provider credential use or customer-file move is authorized.
+Authorization: Krum approved proceeding to W0-06A after W0-03E integration and confirmed the one-time direct Claude Code Cloud Send. Claude start was observed in the selected repository/branch on the exact base; no HANDOFF or review yet. No deploy, production migration, live provider credential use or customer-file move is authorized.
 
 ## Canonical W0-06A/C01 — File Registry foundation and legacy file inventory
 
@@ -72,7 +73,7 @@ Expected Claude verdict at HANDOFF is implementation complete, not PASS. Codex i
 
 **Hard boundaries.** No merge, deploy, production migration, real BEG/NAS/Drive/S3 file move, live provider credentials, customer-original deletion, W0-07 implementation, unrelated FLOW/D changes, or automatic next task.
 
-**Dispatch protocol.** This snapshot is PENDING. Claude must not be sent until Krum explicitly confirms one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`. After observed start, update to RUNNING/CLAUDE WORKING. Only final exact-head HANDOFF moves Codex to REVIEWING.
+**Dispatch protocol.** Krum confirmed one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`; the direct Code Cloud session above was observed starting and verifying the exact base. Dispatch is RUNNING/CLAUDE WORKING. Only final exact-head HANDOFF and ended session move Codex to REVIEWING. No second Send.
 
 ---
 
