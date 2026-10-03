@@ -1,14 +1,14 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-02T19:09:21Z",
+  "validated_at": "2026-10-03T06:44:34Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "d747e191e92b3357cd0301f94f2e867079eb0891",
-  "control_state_commit_sha": "d747e191e92b3357cd0301f94f2e867079eb0891",
-  "now": "PR #42 е open и Ready for review на exact PASS head, но не е merge-нат; Codex чака изрично разрешение за merge, без deploy.",
+  "active_source_commit_sha": "5878ce0925b3bc8798b1af89c13ac1f66c1ad812",
+  "control_state_commit_sha": "5878ce0925b3bc8798b1af89c13ac1f66c1ad812",
+  "now": "PR #42 е merge-нат в main на exact PASS head; GPT е следващ за решение по програмата, без автоматичен deploy или следваща задача.",
   "transition": {
     "event": "CODEX_VERDICT",
     "phase": "OBSERVED",
@@ -29,14 +29,14 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C02/GPT",
-      "waiting_for": "Explicit owner merge approval for PR #42 exact head",
-      "updated_at": "2026-10-02T19:09:21Z"
+      "waiting_for": "PR #42 merge evidence relay and next-stage decision",
+      "updated_at": "2026-10-03T06:44:34Z"
     },
     "CODEX": {
       "state": "WAITING",
       "work_id": "W0-03E-A2C/C02/CX",
-      "waiting_for": "Explicit Krum merge authorization for PR #42 exact head",
-      "updated_at": "2026-10-02T19:09:21Z"
+      "waiting_for": "GPT next-stage direction after PR #42 merge",
+      "updated_at": "2026-10-03T06:44:34Z"
     },
     "CLAUDE": {
       "state": "WAITING",
@@ -49,7 +49,7 @@
   "state": "PASS",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Explicit Krum merge authorization for PR #42 exact head",
+  "waiting_for": "GPT next-stage direction after PR #42 merge",
   "wave": "W0",
   "flow": "FLOW-032",
   "pr_number": 42,
@@ -76,22 +76,22 @@
     "from": "CODEX",
     "to": "GPT",
     "status": "NOT_SENT",
-    "instruction": "Relay the published PASS to GPT; PR #42 is Ready but unmerged and explicit Krum approval of this exact PR/head is required before main merge.",
+    "instruction": "Relay the verified PR #42 merge SHA and W0-03E integration evidence to GPT; no deploy or next task was authorized.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541",
-    "updated_at": "2026-10-02T19:09:21Z"
+    "updated_at": "2026-10-03T06:44:34Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "EXPLICITLY APPROVE PR #42 MERGE AT EXACT HEAD; NO DEPLOY",
+  "requires_krum_reason": "RELAY PR #42 MERGE RESULT TO GPT; NO DEPLOY",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "PASS",
+    "stage": "MERGED",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "3047121f9b5efb857baf5b90f71598a76e1c829f",
+    "active_blob_sha": "996c543c4e0beda4bbe0a135ebb7c20027bdbca9",
     "review_path": "coordination/REVIEWS/W0-03E-A2C.md",
     "review_blob_sha": "110f33b95ef2e564bf846ceeefc6a764d24ebaa4",
     "canonical_docs": [
@@ -129,7 +129,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-02T19:09:21Z",
+  "updated_at": "2026-10-03T06:44:34Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -284,6 +284,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/42",
       "source_commit_sha": "d747e191e92b3357cd0301f94f2e867079eb0891",
       "summary": "PR #42 was marked Ready for review and remains OPEN/UNMERGED on the exact PASS head. An ambiguous standalone yes was not accepted as explicit authorization for the high-impact main merge; merge was not executed. Control state records the specific owner approval now required. No deploy or production migration."
+    },
+    {
+      "event_id": "w0-03e-a2c-c02-pr42-merged-main",
+      "occurred_at": "2026-10-03T06:44:34Z",
+      "task_id": "W0-03E-A2C",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "EVIDENCE",
+      "state_after": "PASS",
+      "head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/42",
+      "source_commit_sha": "79af297612f57c055bb7caef3f0c48493800d1b6",
+      "summary": "Krum explicitly approved merge of PR #42 into main on exact PASS head without deploy. GitHub reports MERGED at 79af297612f57c055bb7caef3f0c48493800d1b6; git ancestry and parents prove 5e16cb90 included. W0-03 A-E code package integrated, FLOW-032 live gate remains OPEN; no deploy, production migration or next task dispatch."
     }
   ]
 }
