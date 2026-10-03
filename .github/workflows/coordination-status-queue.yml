@@ -1,0 +1,33 @@
+name: Coordination status — queue events (draft definition)
+
+on:
+  push:
+    branches:
+      - codex/claude-queue
+    paths:
+      - coordination/ACTIVE.md
+      - coordination/REVIEWS/**
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: read
+
+jobs:
+  project-status:
+    if: github.repository == 'krumingo/BEG_Worck'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/claude-queue
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Project verified queue transition
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_TRUSTED_ACTORS: krumingo
+        run: python tools/coordination_status_events.py

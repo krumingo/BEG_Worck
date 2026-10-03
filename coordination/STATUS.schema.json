@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BEG_Work coordination status projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "wave", "task_id", "task_status", "dispatch_state",
+    "claude_state", "codex_review_state", "base_branch", "base_sha",
+    "pr_number", "pr_head_sha", "last_event", "last_event_at",
+    "next_action", "requires_krum", "requires_krum_reason",
+    "progress_percent", "source_versions"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "wave": { "type": ["integer", "null"], "enum": [0, 1, 2, 3, 4, null] },
+    "task_id": { "type": ["string", "null"] },
+    "task_status": { "type": "string" },
+    "dispatch_state": { "type": "string" },
+    "claude_state": {
+      "enum": ["UNKNOWN", "RUNNING_RECORDED", "HANDOFF_RECORDED", "ENDED_RECORDED"]
+    },
+    "codex_review_state": {
+      "enum": ["UNKNOWN", "PENDING", "PASS", "CHANGES_REQUESTED", "BLOCKED"]
+    },
+    "base_branch": { "type": ["string", "null"] },
+    "base_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+    "pr_number": { "type": ["integer", "null"], "minimum": 1 },
+    "pr_head_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+    "last_event": {
+      "enum": [
+        "UNKNOWN", "ASSIGNMENT", "DISPATCH_STARTED", "PR_HEAD_CHANGED",
+        "CLAUDE_HANDOFF", "CODEX_PASS", "CODEX_CHANGES_REQUESTED",
+        "CODEX_BLOCKED", "NEXT_TASK"
+      ]
+    },
+    "last_event_at": { "type": ["string", "null"], "format": "date-time" },
+    "next_action": {
+      "enum": [
+        "UNKNOWN", "NONE", "WAIT_CLAUDE", "CODEX_REVIEW",
+        "CLAUDE_CORRECTION", "SELECT_NEXT_TASK", "WAIT_KRUM"
+      ]
+    },
+    "requires_krum": { "type": "boolean" },
+    "requires_krum_reason": { "type": ["string", "null"] },
+    "progress_percent": { "const": null },
+    "source_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_commit_sha", "review_commit_sha", "waves_commit_sha",
+        "handoff_comment_url"
+      ],
+      "properties": {
+        "active_commit_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "review_commit_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "waves_commit_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "handoff_comment_url": { "type": ["string", "null"], "format": "uri" }
+      }
+    }
+  }
+}
