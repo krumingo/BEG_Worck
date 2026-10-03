@@ -269,6 +269,25 @@ class TenantData:
         """The tenant's own ``organizations`` record (its ``id`` IS the tenant key)."""
         return await self._db["organizations"].find_one({"id": self.org_id}, _proj(projection))
 
+    def audit_store_db(self):
+        """The database handle of THIS tenant's records, for the W0-04 audit store.
+
+        W0-06A. The canonical AuditEvent store (``app.audit.store``) is not a
+        tenant-owned collection in the sense this class scopes: it keys on
+        ``tenant_id``, maintains its own per-tenant hash chain, and must be
+        appended to with the raw handle rather than through a view that would
+        stamp ``org_id`` onto an audit document. What it does require is that an
+        event lands in the SAME database as the business write it describes —
+        the rule ``app/permissions/audit_hooks.py`` already follows, so that a
+        legacy-database write is never chained into another database's history.
+
+        This accessor is that handle, named for its one use. It returns a
+        database, not a collection, so it cannot become a way to reach a
+        tenant-owned collection unscoped; callers pass it straight to
+        ``record_event``, which scopes by ``tenant_id`` itself.
+        """
+        return self._db
+
     async def update_own_organization(self, update: Mapping, **kw):
         """Update the tenant's OWN ``organizations`` row — W0-03E-A2C.
 
