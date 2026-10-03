@@ -1,99 +1,87 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-03T06:44:34Z",
+  "validated_at": "2026-10-03T07:41:15Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "5878ce0925b3bc8798b1af89c13ac1f66c1ad812",
-  "control_state_commit_sha": "5878ce0925b3bc8798b1af89c13ac1f66c1ad812",
-  "now": "PR #42 е merge-нат в main на exact PASS head; GPT е следващ за решение по програмата, без автоматичен deploy или следваща задача.",
+  "active_source_commit_sha": "9b916b96493d817b6f56e5c430442d0427a148f4",
+  "control_state_commit_sha": null,
+  "now": "Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Codex подготви W0-06A/C01; Claude още не е стартиран.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/43",
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
-    "CANONICAL_DOCS",
-    "PR/HANDOFF"
+    "CANONICAL_DOCS"
   ],
-  "task_id": "W0-03E-A2C",
-  "cycle_id": "C02",
+  "task_id": "W0-06A",
+  "cycle_id": "C01",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-03E-A2C/C02/GPT",
-      "waiting_for": "PR #42 merge evidence relay and next-stage decision",
-      "updated_at": "2026-10-03T06:44:34Z"
+      "work_id": "W0-06A/C01/GPT",
+      "waiting_for": "W0-06A implementation and independent review outcome",
+      "updated_at": "2026-10-03T07:41:15Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-03E-A2C/C02/CX",
-      "waiting_for": "GPT next-stage direction after PR #42 merge",
-      "updated_at": "2026-10-03T06:44:34Z"
+      "state": "WORKING",
+      "work_id": "W0-06A/C01/CX",
+      "waiting_for": "One-time Claude Send confirmation and observed start",
+      "updated_at": "2026-10-03T07:41:15Z"
     },
     "CLAUDE": {
       "state": "WAITING",
-      "work_id": "W0-03E-A2C/C02/CL",
-      "waiting_for": "No new Claude assignment authorized",
-      "updated_at": "2026-10-02T17:34:34Z"
+      "work_id": "W0-06A/C01/CL",
+      "waiting_for": "Codex dispatch of canonical W0-06A/C01 assignment",
+      "updated_at": "2026-10-03T07:41:15Z"
     }
   },
-  "current_work_id": "W0-03E-A2C/C02/CX",
-  "state": "PASS",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT next-stage direction after PR #42 merge",
+  "current_work_id": "W0-06A/C01/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "One-time Claude Send confirmation and observed start",
   "wave": "W0",
-  "flow": "FLOW-032",
-  "pr_number": 42,
-  "pr_head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
-  "pr_draft": false,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/epitaxy/session_01EwGs439P7mdMskveoBbFNf",
-  "last_handoff": {
-    "url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957526882",
-    "head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
-    "at": "2026-10-02T17:15:18Z"
-  },
-  "last_review": {
-    "path": "coordination/REVIEWS/W0-03E-A2C.md",
-    "blob_sha": "110f33b95ef2e564bf846ceeefc6a764d24ebaa4",
-    "reviewed_head_sha": "5e16cb90c175f6b697b256f63b8e652ed9d00e43",
-    "verdict": "PASS"
-  },
+  "flow": "FLOW-016",
+  "pr_number": null,
+  "pr_head_sha": null,
+  "pr_draft": null,
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
+  "last_handoff": null,
+  "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "Independent exact-head C02 PASS published in PR #42",
-    "last_result": "PASS",
-    "required_by_krum": true,
+    "last_event": "W0-06A/C01 canonical assignment prepared",
+    "last_result": "PENDING",
+    "required_by_krum": false,
     "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Relay the verified PR #42 merge SHA and W0-03E integration evidence to GPT; no deploy or next task was authorized.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/42#issuecomment-5957832541",
-    "updated_at": "2026-10-03T06:44:34Z"
+    "to": "CLAUDE",
+    "status": "NO_RELAY_NEEDED",
+    "instruction": "Canonical File Registry foundation assignment is prepared; Claude has not been sent or observed.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/issues/43",
+    "updated_at": "2026-10-03T07:41:15Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "RELAY PR #42 MERGE RESULT TO GPT; NO DEPLOY",
+  "requires_krum_reason": "CONFIRM SEND TO CLAUDE",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "MERGED",
+    "stage": "ASSIGNMENT",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "996c543c4e0beda4bbe0a135ebb7c20027bdbca9",
-    "review_path": "coordination/REVIEWS/W0-03E-A2C.md",
-    "review_blob_sha": "110f33b95ef2e564bf846ceeefc6a764d24ebaa4",
+    "active_blob_sha": "bf5dff3264b2039693083c3819c43b6ce505e77c",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -101,35 +89,23 @@
       },
       {
         "path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md",
-        "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"
+        "blob_sha": "3ad2670d66fa2a528a1c44984c13edd5f2d74bb1"
       },
       {
         "path": "docs/architecture/IMPLEMENTATION_WAVES.md",
-        "blob_sha": "e0ce9c2a2d80cc29e785d8e1f7cde28c03e2c0ca"
-      },
-      {
-        "path": "docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md",
-        "blob_sha": "efa5f37c9c2ee6eb3c520e57d061982ddedb9f59"
+        "blob_sha": "3e43105bf5c338ca54ad0cf3960f64e5a46b3bca"
       },
       {
         "path": "docs/architecture/TENANCY_MODEL.md",
         "blob_sha": "93997df23592d0c808af17fbbd8167324b9dc9a1"
       },
       {
-        "path": "docs/flows/FLOW-032.md",
-        "blob_sha": "94f6be34ed4cab2cd1eaef3ed3fc8baa762291f0"
-      },
-      {
-        "path": "docs/flows/FLOW-002.md",
-        "blob_sha": "5594ffa4507e58bcdb4bcb2cf2071a1b835bc3b5"
-      },
-      {
-        "path": "docs/flows/FLOW-040.md",
-        "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"
+        "path": "docs/flows/FLOW-016.md",
+        "blob_sha": "af092bbdcb473c3111abba1e7a9ebd3fcee663f1"
       }
     ]
   },
-  "updated_at": "2026-10-03T06:44:34Z",
+  "updated_at": "2026-10-03T07:41:15Z",
   "history": [
     {
       "event_id": "w0-03e-a2c-c01-assignment-intent",
@@ -298,6 +274,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/42",
       "source_commit_sha": "79af297612f57c055bb7caef3f0c48493800d1b6",
       "summary": "Krum explicitly approved merge of PR #42 into main on exact PASS head without deploy. GitHub reports MERGED at 79af297612f57c055bb7caef3f0c48493800d1b6; git ancestry and parents prove 5e16cb90 included. W0-03 A-E code package integrated, FLOW-032 live gate remains OPEN; no deploy, production migration or next task dispatch."
+    },
+    {
+      "event_id": "w0-06a-c01-assignment-intent",
+      "occurred_at": "2026-10-03T07:41:15Z",
+      "task_id": "W0-06A",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "79af297612f57c055bb7caef3f0c48493800d1b6",
+      "source_url": "https://github.com/krumingo/BEG_Worck/issues/43",
+      "source_commit_sha": "9b916b96493d817b6f56e5c430442d0427a148f4",
+      "summary": "Krum approved proceeding to W0-06A after W0-03E integration. File Registry foundation assignment prepared on exact main merge head; branch exists at that head. Dispatch PENDING; no Claude Send/session, Draft PR, merge, deploy, production migration or real provider access."
     }
   ]
 }
