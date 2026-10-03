@@ -1,5 +1,85 @@
 # BEG_WORK — active implementation assignment
 
+Status: W0-06A/C01 PENDING — FILE REGISTRY FOUNDATION
+Human-Summary-BG: Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се разхвърлят по модулите, а ще сочат към един стабилен file_id.
+Current-Agent: CODEX
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex подготвя W0-06A/C01 за еднократно изпращане към Claude.
+Next-Agent: CLAUDE
+Relay-State: NO_RELAY_NEEDED
+Relay-From: CODEX
+Relay-To: CLAUDE
+Krum-Action: CONFIRM SEND TO CLAUDE
+Dispatch-State: PENDING
+Dispatch-Run: NONE
+Task-ID: W0-06A
+Cycle-ID: C01
+Base-branch: main
+Base-SHA: 79af297612f57c055bb7caef3f0c48493800d1b6
+Implementation-branch: codex/w0-06a-file-registry-foundation
+PR-URL: NONE (new Draft PR required)
+PR-Head: NONE
+Merge-SHA: NONE
+Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
+Issue: https://github.com/krumingo/BEG_Worck/issues/43
+HANDOFF-URL: NONE
+Review: NONE
+Final-Verdict: NONE
+Predecessor-Task-ID: W0-03E-A2C/C02
+Predecessor-Integration: PR #42 merged into main at 79af297612f57c055bb7caef3f0c48493800d1b6; no deploy.
+Authorization: Krum approved proceeding to W0-06A after W0-03E integration. No deploy, production migration, live provider credential use or customer-file move is authorized.
+
+## Canonical W0-06A/C01 — File Registry foundation and legacy file inventory
+
+**На човешки / Какво правим.** Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се копират и разхвърлят по модулите, а всички ще сочат към един стабилен `file_id`.
+
+**Identity and exact base.** Repository `krumingo/BEG_Worck`; Task-ID `W0-06A`; Cycle-ID `C01`; implementation branch `codex/w0-06a-file-registry-foundation` starts exactly at `main@79af297612f57c055bb7caef3f0c48493800d1b6`. Open one new Draft PR against `main`. Before work, recheck repository, branch, exact head, Issue #43 and absence of duplicate W0-06A PR/session. STOP on drift.
+
+**Read first.** `CLAUDE.md`, `coordination/README.md`, this ACTIVE assignment, Issue #43, `docs/flows/FLOW-016.md`, `docs/architecture/TENANCY_MODEL.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md`, and relevant FLOW-002/FLOW-040 contracts. Treat FLOW-016 as business source of truth. Do not invent provider or deletion business rules.
+
+**Scope.**
+1. Inventory all legacy file/media/document paths and writers in the active backend.
+2. Implement tenant-bound provider-neutral File Registry foundation: File, FileVersion, FileRelation, ProviderLocation/object reference, derived/cache metadata.
+3. Stable `file_id` is the business identity; provider URL/path is never the business ID.
+4. One file may have many business relations without physical duplication.
+5. Versioning must preserve old versions read-only and keep exactly one current version per family.
+6. Implement provider adapter contract only; no live credentials or real provider activation in A.
+7. Use merged tenant boundary infrastructure; all registry reads/writes/relations are tenant-scoped.
+8. Audit/idempotency for register/version/relation/provider-location/integrity/delete-request-result where current W0-04 supports it.
+9. Produce deterministic legacy migration map; no real customer file move.
+10. Add static guards for provider-path-as-business-ID, ownerless File Registry write, tenantless/foreign FileRelation and unsafe physical-delete path.
+11. Add in-memory/fake-adapter tests and a disposable real-Mongo tenant-isolation gate with 0 required skips.
+
+**Required inventory row.** `path | function/route | current storage location | current id/path/url field | tenant field | business relation | read/write/delete behaviour | migration action`. No ASSUMED SAFE.
+
+**Acceptance.** PASS only if:
+- one stable file_id can serve multiple relations without duplicate registry records;
+- tenant A cannot read B metadata/provider location/relations, including colliding IDs;
+- new version never overwrites old;
+- duplicate checksum behavior is deterministic;
+- unlink removes only one relation;
+- unavailable/mutated provider object does not turn preview/cache into canonical original;
+- fake provider contract passes;
+- idempotent retries are proven;
+- guard mutation tests pass;
+- independent real-Mongo isolation gate can be run later by Codex with 0 required skips.
+
+Expected Claude verdict at HANDOFF is implementation complete, not PASS. Codex independently reviews the whole `main→W0-06A` package and runs the real-Mongo gate before PASS.
+
+**Hard boundaries.** No merge, deploy, production migration, real BEG/NAS/Drive/S3 file move, live provider credentials, customer-original deletion, W0-07 implementation, unrelated FLOW/D changes, or automatic next task.
+
+**Dispatch protocol.** This snapshot is PENDING. Claude must not be sent until Krum explicitly confirms one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`. After observed start, update to RUNNING/CLAUDE WORKING. Only final exact-head HANDOFF moves Codex to REVIEWING.
+
+---
+
+## Archived previous assignment
+
+# BEG_WORK — active implementation assignment
+
 Status: W0-03E-A2C/C02 PASS — PR #42 MERGED INTO MAIN; FLOW-032 LIVE GATE OPEN
 Human-Summary-BG: Крум одобри и PR #42 е слят в main с целия W0-03E кодов пакет. Това не е deploy или production migration; FLOW-032 live gate остава отворен.
 Current-Agent: CODEX
