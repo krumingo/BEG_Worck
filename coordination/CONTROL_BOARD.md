@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-03T09:35:56Z · CONTROL STATE: **VALID** as of 2026-10-03T09:35:56Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-03T09:50:52Z · CONTROL STATE: **VALID** as of 2026-10-03T09:50:52Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-06A / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-06A/C01 exact-head HANDOFF published in Issue #43 / HANDOFF
 RELAY: NO_RELAY_NEEDED · CLAUDE → CODEX
-NOW: Claude публикува финален exact-head HANDOFF за общия File Registry и приключи. Codex независимо проверява целия W0-06A/C01 пакет и real-Mongo gate; резултат още няма.
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex завърши независимия exact-head review. Real-Mongo gate има 1 failed / 0 skipped; CHANGES_REQUESTED е готов, но публикуването на финалния verdict предстои.
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: —
@@ -39,14 +39,14 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
 | GPT | WAITING | W0-06A/C01/GPT | Independent W0-06A exact-head Codex review verdict | 2026-10-03T07:41:15Z |
-| CODEX | REVIEWING | W0-06A/C01/CX | — | 2026-10-03T09:35:56Z |
+| CODEX | REVIEWING | W0-06A/C01/CX | — | 2026-10-03T09:50:52Z |
 | CLAUDE | HANDOFF_READY | W0-06A/C01/CL | — | 2026-10-03T09:35:56Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `26ebea39a79537c1f644e8c213288a51e3d45fdc` · blob `c17e7377164ad6ba1836cc262128043b3172753f`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `26ebea39a79537c1f644e8c213288a51e3d45fdc` · blob `11312de39cbc45dd76befcd745120a421599eeb1`
 - Draft PR: [#44](https://github.com/krumingo/BEG_Worck/pull/44) · exact head `9040fc1d4b40d5376cc8912ba316a206c02d207b`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410) · head `9040fc1d4b40d5376cc8912ba316a206c02d207b`
 - Dispatch session: https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz · dispatch state **NONE**

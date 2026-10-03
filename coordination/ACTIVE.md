@@ -1,6 +1,6 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06A/C01 REVIEW — CODEX INDEPENDENT WHOLE-PACKAGE REVIEW
+Status: W0-06A/C01 REVIEW — CODEX VERDICT READY / PUBLICATION PENDING
 Human-Summary-BG: Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се разхвърлят по модулите, а ще сочат към един стабилен file_id.
 Current-Agent: CODEX
 Current-State: REVIEW
@@ -8,7 +8,7 @@ Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Claude публикува финален exact-head HANDOFF и приключи; Codex независимо проверява целия W0-06A/C01 пакет и real-Mongo gate.
+Now: Codex завърши независимия exact-head review; real-Mongo gate има 1 failed / 0 skipped. CHANGES_REQUESTED е подготвен, но още не е публикуван като финален verdict.
 Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: CLAUDE
@@ -28,11 +28,11 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/43
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410
-Review: IN_PROGRESS — exact-head whole-package review and independent disposable real-Mongo gate; no verdict yet.
+Review: coordination/REVIEWS/W0-06A.md — independent review written; CHANGES_REQUESTED ready, publication pending.
 Final-Verdict: NONE
 Predecessor-Task-ID: W0-03E-A2C/C02
 Predecessor-Integration: PR #42 merged into main at 79af297612f57c055bb7caef3f0c48493800d1b6; no deploy.
-Authorization: Krum approved proceeding to W0-06A and confirmed the one-time direct Claude Code Cloud Send. Claude published a final HANDOFF in Issue #43 for exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b and the session ended; Codex observed stable branch/PR head and has started independent review. Claude's 15 real-Mongo tests were skipped, not PASS. No merge, deploy, production migration, live provider credential use or customer-file move is authorized.
+Authorization: Krum approved proceeding to W0-06A and confirmed the one-time direct Claude Code Cloud Send. Claude published a final HANDOFF in Issue #43 for exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b and the session ended. Codex independently completed review at the same stable head; the committed real-Mongo gate ran 15 tests with 14 passed, 1 failed, 0 skipped. The CHANGES_REQUESTED review is written but not yet published as a final verdict. No merge, deploy, production migration, live provider credential use or customer-file move is authorized.
 
 ## Canonical W0-06A/C01 — File Registry foundation and legacy file inventory
 
