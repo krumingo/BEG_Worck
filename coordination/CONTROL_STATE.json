@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-03T08:24:36Z",
+  "validated_at": "2026-10-03T09:35:56Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "34fada263f6e61f8bdf32226ba6257c4ba17b8e6",
-  "control_state_commit_sha": null,
-  "now": "Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Claude работи по W0-06A/C01; Codex чака финален HANDOFF преди review.",
+  "active_source_commit_sha": "26ebea39a79537c1f644e8c213288a51e3d45fdc",
+  "control_state_commit_sha": "26ebea39a79537c1f644e8c213288a51e3d45fdc",
+  "now": "Claude публикува финален exact-head HANDOFF за общия File Registry и приключи. Codex независимо проверява целия W0-06A/C01 пакет и real-Mongo gate; резултат още няма.",
   "transition": {
-    "event": "CLAUDE_START",
+    "event": "CLAUDE_HANDOFF",
     "phase": "OBSERVED",
-    "evidence_url": "https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -22,66 +22,70 @@
   "task_id": "W0-06A",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
-  "current_agent": "CLAUDE",
-  "current_role": "IMPLEMENTER",
+  "current_agent": "CODEX",
+  "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06A/C01/GPT",
-      "waiting_for": "W0-06A implementation and independent review outcome",
+      "waiting_for": "Independent W0-06A exact-head Codex review verdict",
       "updated_at": "2026-10-03T07:41:15Z"
     },
     "CODEX": {
-      "state": "WAITING",
+      "state": "REVIEWING",
       "work_id": "W0-06A/C01/CX",
-      "waiting_for": "Final exact-head Claude HANDOFF and ended session before independent review",
-      "updated_at": "2026-10-03T08:24:36Z"
+      "waiting_for": null,
+      "updated_at": "2026-10-03T09:35:56Z"
     },
     "CLAUDE": {
-      "state": "WORKING",
+      "state": "HANDOFF_READY",
       "work_id": "W0-06A/C01/CL",
       "waiting_for": null,
-      "updated_at": "2026-10-03T08:24:36Z"
+      "updated_at": "2026-10-03T09:35:56Z"
     }
   },
-  "current_work_id": "W0-06A/C01/CL",
-  "state": "WORKING",
-  "pipeline_step": "IMPLEMENTATION",
-  "next_agent": "CODEX",
+  "current_work_id": "W0-06A/C01/CX",
+  "state": "REVIEW",
+  "pipeline_step": "REVIEW",
+  "next_agent": "GPT",
   "waiting_for": null,
   "wave": "W0",
   "flow": "FLOW-016",
-  "pr_number": null,
-  "pr_head_sha": null,
-  "pr_draft": null,
-  "dispatch_state": "RUNNING",
+  "pr_number": 44,
+  "pr_head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+  "pr_draft": true,
+  "dispatch_state": "NONE",
   "dispatch_run_url": "https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz",
-  "last_handoff": null,
+  "last_handoff": {
+    "url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
+    "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+    "at": "2026-10-03T09:25:44Z"
+  },
   "last_review": null,
   "relay": {
-    "last_agent": "CODEX",
-    "last_event": "W0-06A/C01 canonical assignment dispatched to Claude",
-    "last_result": "DISPATCHED",
+    "last_agent": "CLAUDE",
+    "last_event": "W0-06A/C01 exact-head HANDOFF published in Issue #43",
+    "last_result": "HANDOFF",
     "required_by_krum": false,
-    "from": "CODEX",
-    "to": "CLAUDE",
+    "from": "CLAUDE",
+    "to": "CODEX",
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Claude start was observed in the direct Code Cloud session; Codex waits for final exact-head HANDOFF. No second Send.",
-    "source_url": "https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz",
-    "updated_at": "2026-10-03T08:24:36Z"
+    "instruction": "Codex independently reviews the whole exact-head package and runs the disposable real-Mongo gate. No verdict is published yet.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
+    "updated_at": "2026-10-03T09:35:56Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "IMPLEMENTATION",
+    "stage": "REVIEW",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "e1d1b8db159b24889be011154d8980f7658674bc",
+    "active_blob_sha": "c17e7377164ad6ba1836cc262128043b3172753f",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -105,7 +109,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-03T08:24:36Z",
+  "updated_at": "2026-10-03T09:35:56Z",
   "history": [
     {
       "event_id": "w0-06a-c01-assignment-intent",
@@ -134,6 +138,20 @@
       "source_url": "https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz",
       "source_commit_sha": "34fada263f6e61f8bdf32226ba6257c4ba17b8e6",
       "summary": "Krum confirmed one direct Claude Code Cloud Send on krumingo/BEG_Worck branch codex/w0-06a-file-registry-foundation at exact main base. Claude session started, verified repo/branch/head, began reading canonical queue and FLOW-016. Dispatch RUNNING; Claude WORKING; Codex WAITING. No HANDOFF, review, PR, merge or deploy yet."
+    },
+    {
+      "event_id": "w0-06a-c01-claude-final-handoff",
+      "occurred_at": "2026-10-03T09:25:44Z",
+      "task_id": "W0-06A",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CLAUDE",
+      "kind": "HANDOFF",
+      "state_after": "REVIEW",
+      "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+      "source_url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
+      "source_commit_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+      "summary": "Claude published a final exact-head implementation HANDOFF in Issue #43 and the direct session finished. Draft PR #44 head matched the HANDOFF and remained stable; Codex began independent whole-package review. Claude's 15 real-Mongo tests were skipped, not PASS."
     }
   ]
 }

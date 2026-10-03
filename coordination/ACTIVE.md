@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06A/C01 RUNNING — CLAUDE IMPLEMENTING FILE REGISTRY FOUNDATION
+Status: W0-06A/C01 REVIEW — CODEX INDEPENDENT WHOLE-PACKAGE REVIEW
 Human-Summary-BG: Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се разхвърлят по модулите, а ще сочат към един стабилен file_id.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Claude работи по W0-06A/C01; Codex чака финален exact-head HANDOFF преди независим review.
-Next-Agent: CODEX
+Now: Claude публикува финален exact-head HANDOFF и приключи; Codex независимо проверява целия W0-06A/C01 пакет и real-Mongo gate.
+Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
-Relay-From: CODEX
-Relay-To: CLAUDE
+Relay-From: CLAUDE
+Relay-To: CODEX
 Krum-Action: NONE
-Dispatch-State: RUNNING
+Dispatch-State: NONE
 Dispatch-Run: https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz
 Dispatch-Observed-At: 2026-10-03T08:23:35Z
 Task-ID: W0-06A
@@ -22,17 +22,17 @@ Cycle-ID: C01
 Base-branch: main
 Base-SHA: 79af297612f57c055bb7caef3f0c48493800d1b6
 Implementation-branch: codex/w0-06a-file-registry-foundation
-PR-URL: NONE (new Draft PR required)
-PR-Head: NONE
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/44 (Draft; independent review in progress)
+PR-Head: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/43
-HANDOFF-URL: NONE
-Review: NONE
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410
+Review: IN_PROGRESS — exact-head whole-package review and independent disposable real-Mongo gate; no verdict yet.
 Final-Verdict: NONE
 Predecessor-Task-ID: W0-03E-A2C/C02
 Predecessor-Integration: PR #42 merged into main at 79af297612f57c055bb7caef3f0c48493800d1b6; no deploy.
-Authorization: Krum approved proceeding to W0-06A after W0-03E integration and confirmed the one-time direct Claude Code Cloud Send. Claude start was observed in the selected repository/branch on the exact base; no HANDOFF or review yet. No deploy, production migration, live provider credential use or customer-file move is authorized.
+Authorization: Krum approved proceeding to W0-06A and confirmed the one-time direct Claude Code Cloud Send. Claude published a final HANDOFF in Issue #43 for exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b and the session ended; Codex observed stable branch/PR head and has started independent review. Claude's 15 real-Mongo tests were skipped, not PASS. No merge, deploy, production migration, live provider credential use or customer-file move is authorized.
 
 ## Canonical W0-06A/C01 — File Registry foundation and legacy file inventory
 
@@ -73,7 +73,7 @@ Expected Claude verdict at HANDOFF is implementation complete, not PASS. Codex i
 
 **Hard boundaries.** No merge, deploy, production migration, real BEG/NAS/Drive/S3 file move, live provider credentials, customer-original deletion, W0-07 implementation, unrelated FLOW/D changes, or automatic next task.
 
-**Dispatch protocol.** Krum confirmed one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`; the direct Code Cloud session above was observed starting and verifying the exact base. Dispatch is RUNNING/CLAUDE WORKING. Only final exact-head HANDOFF and ended session move Codex to REVIEWING. No second Send.
+**Dispatch protocol.** Krum confirmed one-time Computer Use Send for `W0-06A/C01` on `codex/w0-06a-file-registry-foundation`; the direct Code Cloud session above was observed starting and verifying the exact base. Final exact-head HANDOFF is published in Issue #43, the session ended, and PR #44 head matches the HANDOFF. Codex is REVIEWING independently; no PASS or second Send.
 
 ---
 
