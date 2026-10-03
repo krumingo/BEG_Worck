@@ -1,0 +1,10 @@
+{
+  "solution": {
+    "path": "BegWork.Dashboard.sln",
+    "projects": [
+      "src\\BegWork.Dashboard.Core\\BegWork.Dashboard.Core.csproj",
+      "src\\BegWork.Dashboard.Preview\\BegWork.Dashboard.Preview.csproj",
+      "tests\\BegWork.Dashboard.Core.Tests\\BegWork.Dashboard.Core.Tests.csproj"
+    ]
+  }
+}
