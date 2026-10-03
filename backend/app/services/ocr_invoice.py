@@ -7,12 +7,19 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 # ── Text extraction (v1: read uploaded file as text) ────────────────
 
-async def extract_invoice_text(media_id: str = None, file_path: str = None) -> dict:
-    """Extract raw text from an uploaded file. V1: basic text extraction."""
+async def extract_invoice_text(tenant: TenantData, media_id: str = None,
+                               file_path: str = None) -> dict:
+    """Extract raw text from an uploaded file. V1: basic text extraction.
+
+    W0-03E-A2C: the media row is resolved in the caller's tenant, so a media id
+    that belongs to another tenant resolves to nothing instead of handing this
+    tenant another tenant's uploaded document.
+    """
     raw_text = ""
     confidence = 0.0
     warnings = []
@@ -22,7 +29,7 @@ async def extract_invoice_text(media_id: str = None, file_path: str = None) -> d
     if file_path:
         target_path = file_path
     elif media_id:
-        media = await db.media_files.find_one({"id": media_id}, {"_id": 0, "stored_filename": 1})
+        media = await tenant.media_files.get(media_id, {"_id": 0, "stored_filename": 1})
         if media:
             target_path = f"/app/backend/uploads/{media['stored_filename']}"
 
@@ -136,6 +143,7 @@ async def create_ocr_intake(org_id: str, media_id: str, created_by: str,
                              project_id: str = None, supplier_id: str = None,
                              source_type: str = "upload", file_name: str = "") -> dict:
     """Create intake record and run extraction."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc).isoformat()
 
     # Extract text
@@ -171,5 +179,5 @@ async def create_ocr_intake(org_id: str, media_id: str, created_by: str,
         "created_at": now,
         "updated_at": now,
     }
-    await db.ocr_invoice_intake.insert_one(doc)
+    await tenant.ocr_invoice_intake.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}

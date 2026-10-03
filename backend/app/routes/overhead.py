@@ -17,6 +17,12 @@ from ..models.overhead import (
     OverheadAssetCreate, OverheadAssetUpdate,
     OverheadSnapshotCompute, OverheadAllocateRequest
 )
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Dashboard / Overhead"])
 
@@ -40,23 +46,24 @@ def check_overhead_access(user: dict, write: bool = False) -> bool:
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     status_counts = {}
-    async for doc in db.projects.aggregate([
+    async for doc in tenant.projects.aggregate([
         {"$match": {"org_id": org_id}},
         {"$group": {"_id": "$status", "count": {"$sum": 1}}}
     ]):
         status_counts[doc["_id"]] = doc["count"]
 
-    users_count = await db.users.count_documents({"org_id": org_id, "is_active": True})
+    users_count = await tenant.users.count_documents({"org_id": org_id, "is_active": True})
 
     # Attendance stats for today
     date = today_str()
-    today_marked = await db.attendance_entries.count_documents({"org_id": org_id, "date": date})
-    today_present = await db.attendance_entries.count_documents({"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}})
+    today_marked = await tenant.attendance_entries.count_documents({"org_id": org_id, "date": date})
+    today_present = await tenant.attendance_entries.count_documents({"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}})
 
     # Work report stats
-    pending_reports = await db.work_reports.count_documents({"org_id": org_id, "date": date, "status": "Submitted"})
+    pending_reports = await tenant.work_reports.count_documents({"org_id": org_id, "date": date, "status": "Submitted"})
 
     return {
         "active_projects": status_counts.get("Active", 0),
@@ -75,14 +82,16 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
 
 @router.get("/overhead/categories")
 async def list_overhead_categories(user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
-    cursor = db.overhead_categories.find({"org_id": user["org_id"]}, {"_id": 0})
+    cursor = tenant.overhead_categories.find({"org_id": user["org_id"]}, {"_id": 0})
     return await cursor.to_list(None)
 
 
 @router.post("/overhead/categories")
 async def create_overhead_category(data: OverheadCategoryCreate, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
     now = datetime.now(timezone.utc).isoformat()
@@ -94,31 +103,33 @@ async def create_overhead_category(data: OverheadCategoryCreate, user: dict = De
         "created_at": now,
         "updated_at": now,
     }
-    await db.overhead_categories.insert_one(doc)
+    await tenant.overhead_categories.insert_one(doc)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "overhead_category", doc["id"], {"name": data.name})
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
 @router.put("/overhead/categories/{cat_id}")
 async def update_overhead_category(cat_id: str, data: OverheadCategoryUpdate, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    existing = await db.overhead_categories.find_one({"id": cat_id, "org_id": user["org_id"]})
+    existing = await tenant.overhead_categories.find_one({"id": cat_id, "org_id": user["org_id"]})
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.overhead_categories.update_one({"id": cat_id}, {"$set": updates})
+    await tenant.overhead_categories.update_one({"id": cat_id}, {"$set": updates})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "overhead_category", cat_id, updates)
-    doc = await db.overhead_categories.find_one({"id": cat_id}, {"_id": 0})
+    doc = await tenant.overhead_categories.find_one({"id": cat_id}, {"_id": 0})
     return doc
 
 
 @router.delete("/overhead/categories/{cat_id}")
 async def delete_overhead_category(cat_id: str, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    result = await db.overhead_categories.delete_one({"id": cat_id, "org_id": user["org_id"]})
+    result = await tenant.overhead_categories.delete_one({"id": cat_id, "org_id": user["org_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "overhead_category", cat_id, {})
@@ -134,6 +145,7 @@ async def list_overhead_costs(
     category_id: Optional[str] = None,
     user: dict = Depends(require_m9)
 ):
+    tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
@@ -145,13 +157,13 @@ async def list_overhead_costs(
         query["date_incurred"] = {"$lte": date_to}
     if category_id:
         query["category_id"] = category_id
-    cursor = db.overhead_costs.find(query, {"_id": 0}).sort("date_incurred", -1)
+    cursor = tenant.overhead_costs.find(query, {"_id": 0}).sort("date_incurred", -1)
     costs = await cursor.to_list(None)
     # Enrich with category name
     cat_ids = list(set(c.get("category_id") for c in costs if c.get("category_id")))
     cats = {}
     if cat_ids:
-        cat_cursor = db.overhead_categories.find({"id": {"$in": cat_ids}}, {"_id": 0})
+        cat_cursor = tenant.overhead_categories.find({"id": {"$in": cat_ids}}, {"_id": 0})
         cat_list = await cat_cursor.to_list(None)
         cats = {c["id"]: c["name"] for c in cat_list}
     for c in costs:
@@ -161,6 +173,7 @@ async def list_overhead_costs(
 
 @router.post("/overhead/costs")
 async def create_overhead_cost(data: OverheadCostCreate, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
     if data.frequency not in OVERHEAD_FREQUENCIES:
@@ -183,16 +196,17 @@ async def create_overhead_cost(data: OverheadCostCreate, user: dict = Depends(re
         "created_at": now,
         "updated_at": now,
     }
-    await db.overhead_costs.insert_one(doc)
+    await tenant.overhead_costs.insert_one(doc)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "overhead_cost", doc["id"], {"name": data.name, "amount": data.amount})
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
 @router.put("/overhead/costs/{cost_id}")
 async def update_overhead_cost(cost_id: str, data: OverheadCostUpdate, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    existing = await db.overhead_costs.find_one({"id": cost_id, "org_id": user["org_id"]})
+    existing = await tenant.overhead_costs.find_one({"id": cost_id, "org_id": user["org_id"]})
     if not existing:
         raise HTTPException(status_code=404, detail="Cost not found")
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -201,17 +215,18 @@ async def update_overhead_cost(cost_id: str, data: OverheadCostUpdate, user: dic
     if "allocation_type" in updates and updates["allocation_type"] not in OVERHEAD_ALLOCATION_TYPES:
         raise HTTPException(status_code=400, detail="Invalid allocation type")
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.overhead_costs.update_one({"id": cost_id}, {"$set": updates})
+    await tenant.overhead_costs.update_one({"id": cost_id}, {"$set": updates})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "overhead_cost", cost_id, updates)
-    doc = await db.overhead_costs.find_one({"id": cost_id}, {"_id": 0})
+    doc = await tenant.overhead_costs.find_one({"id": cost_id}, {"_id": 0})
     return doc
 
 
 @router.delete("/overhead/costs/{cost_id}")
 async def delete_overhead_cost(cost_id: str, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    result = await db.overhead_costs.delete_one({"id": cost_id, "org_id": user["org_id"]})
+    result = await tenant.overhead_costs.delete_one({"id": cost_id, "org_id": user["org_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Cost not found")
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "overhead_cost", cost_id, {})
@@ -222,12 +237,13 @@ async def delete_overhead_cost(cost_id: str, user: dict = Depends(require_m9)):
 
 @router.get("/overhead/assets")
 async def list_overhead_assets(active_only: bool = True, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
     if active_only:
         query["active"] = True
-    cursor = db.overhead_assets.find(query, {"_id": 0}).sort("purchase_date", -1)
+    cursor = tenant.overhead_assets.find(query, {"_id": 0}).sort("purchase_date", -1)
     assets = await cursor.to_list(None)
     # Add computed daily amortization
     for asset in assets:
@@ -239,6 +255,7 @@ async def list_overhead_assets(active_only: bool = True, user: dict = Depends(re
 
 @router.post("/overhead/assets")
 async def create_overhead_asset(data: OverheadAssetCreate, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
     now = datetime.now(timezone.utc).isoformat()
@@ -256,7 +273,7 @@ async def create_overhead_asset(data: OverheadAssetCreate, user: dict = Depends(
         "created_at": now,
         "updated_at": now,
     }
-    await db.overhead_assets.insert_one(doc)
+    await tenant.overhead_assets.insert_one(doc)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "overhead_asset", doc["id"], {"name": data.name, "purchase_cost": data.purchase_cost})
     # Add computed daily amortization
     result = {k: v for k, v in doc.items() if k != "_id"}
@@ -267,24 +284,26 @@ async def create_overhead_asset(data: OverheadAssetCreate, user: dict = Depends(
 
 @router.put("/overhead/assets/{asset_id}")
 async def update_overhead_asset(asset_id: str, data: OverheadAssetUpdate, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    existing = await db.overhead_assets.find_one({"id": asset_id, "org_id": user["org_id"]})
+    existing = await tenant.overhead_assets.find_one({"id": asset_id, "org_id": user["org_id"]})
     if not existing:
         raise HTTPException(status_code=404, detail="Asset not found")
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.overhead_assets.update_one({"id": asset_id}, {"$set": updates})
+    await tenant.overhead_assets.update_one({"id": asset_id}, {"$set": updates})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "overhead_asset", asset_id, updates)
-    doc = await db.overhead_assets.find_one({"id": asset_id}, {"_id": 0})
+    doc = await tenant.overhead_assets.find_one({"id": asset_id}, {"_id": 0})
     return doc
 
 
 @router.delete("/overhead/assets/{asset_id}")
 async def delete_overhead_asset(asset_id: str, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    result = await db.overhead_assets.delete_one({"id": asset_id, "org_id": user["org_id"]})
+    result = await tenant.overhead_assets.delete_one({"id": asset_id, "org_id": user["org_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Asset not found")
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "overhead_asset", asset_id, {})
@@ -295,6 +314,7 @@ async def delete_overhead_asset(asset_id: str, user: dict = Depends(require_m9))
 
 @router.post("/overhead/snapshots/compute")
 async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
     if data.method not in OVERHEAD_METHODS:
@@ -310,7 +330,7 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
     num_days = (d_end - d_start).days + 1
     
     # 1. Sum overhead costs in period
-    costs_cursor = db.overhead_costs.find({
+    costs_cursor = tenant.overhead_costs.find({
         "org_id": org_id,
         "date_incurred": {"$gte": period_start, "$lte": period_end}
     }, {"_id": 0})
@@ -318,7 +338,7 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
     total_costs = sum(c.get("amount", 0) for c in costs)
     
     # 2. Calculate asset amortization for all active assets
-    assets_cursor = db.overhead_assets.find({"org_id": org_id, "active": True}, {"_id": 0})
+    assets_cursor = tenant.overhead_assets.find({"org_id": org_id, "active": True}, {"_id": 0})
     assets = await assets_cursor.to_list(None)
     total_amortization = 0
     for asset in assets:
@@ -339,7 +359,7 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
         {"$group": {"_id": {"user_id": "$user_id", "date": "$date"}}},
         {"$count": "total"}
     ]
-    att_result = await db.attendance_entries.aggregate(attendance_pipeline).to_list(None)
+    att_result = await tenant.attendance_entries.aggregate(attendance_pipeline).to_list(None)
     total_person_days = att_result[0]["total"] if att_result else 0
     
     # 4. Sum work report hours (Submitted/Approved)
@@ -351,7 +371,7 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
         }},
         {"$group": {"_id": None, "total_hours": {"$sum": "$total_hours"}}}
     ]
-    hours_result = await db.work_reports.aggregate(hours_pipeline).to_list(None)
+    hours_result = await tenant.work_reports.aggregate(hours_pipeline).to_list(None)
     total_hours = round(hours_result[0]["total_hours"], 2) if hours_result else 0
     
     # 5. Calculate rates
@@ -378,7 +398,7 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
         "computed_by_name": user.get("name", user.get("email", "")),
         "notes": data.notes,
     }
-    await db.overhead_snapshots.insert_one(snapshot)
+    await tenant.overhead_snapshots.insert_one(snapshot)
     await log_audit(user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot", snapshot["id"], {
         "period": f"{period_start} - {period_end}",
         "total_overhead": total_overhead,
@@ -393,25 +413,27 @@ async def list_overhead_snapshots(
     date_to: Optional[str] = None,
     user: dict = Depends(require_m9)
 ):
+    tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
     if date_from and date_to:
         query["period_start"] = {"$gte": date_from}
         query["period_end"] = {"$lte": date_to}
-    cursor = db.overhead_snapshots.find(query, {"_id": 0}).sort("computed_at", -1)
+    cursor = tenant.overhead_snapshots.find(query, {"_id": 0}).sort("computed_at", -1)
     return await cursor.to_list(None)
 
 
 @router.get("/overhead/snapshots/{snapshot_id}")
 async def get_overhead_snapshot(snapshot_id: str, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
-    snapshot = await db.overhead_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
+    snapshot = await tenant.overhead_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     # Get allocations
-    allocs = await db.project_overhead_allocations.find(
+    allocs = await tenant.project_overhead_allocations.find(
         {"overhead_snapshot_id": snapshot_id}, {"_id": 0}
     ).to_list(None)
     snapshot["allocations"] = allocs
@@ -420,10 +442,11 @@ async def get_overhead_snapshot(snapshot_id: str, user: dict = Depends(require_m
 
 @router.post("/overhead/snapshots/{snapshot_id}/allocate")
 async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocateRequest, user: dict = Depends(require_m9)):
+    tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
     
-    snapshot = await db.overhead_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
+    snapshot = await tenant.overhead_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
@@ -434,7 +457,7 @@ async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocate
     method = data.method
     
     # Delete existing allocations for this snapshot
-    await db.project_overhead_allocations.delete_many({"overhead_snapshot_id": snapshot_id})
+    await tenant.project_overhead_allocations.delete_many({"overhead_snapshot_id": snapshot_id})
     
     allocations = []
     now = datetime.now(timezone.utc).isoformat()
@@ -457,12 +480,12 @@ async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocate
             }},
             {"$project": {"project_id": "$_id", "count": {"$size": "$person_days"}}}
         ]
-        result = await db.attendance_entries.aggregate(pipeline).to_list(None)
+        result = await tenant.attendance_entries.aggregate(pipeline).to_list(None)
         
         project_ids = [r["project_id"] for r in result]
         projects = {}
         if project_ids:
-            proj_cursor = db.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "code": 1, "name": 1})
+            proj_cursor = tenant.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "code": 1, "name": 1})
             proj_list = await proj_cursor.to_list(None)
             projects = {p["id"]: p for p in proj_list}
         
@@ -500,12 +523,12 @@ async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocate
                 "total_hours": {"$sum": "$total_hours"}
             }}
         ]
-        result = await db.work_reports.aggregate(pipeline).to_list(None)
+        result = await tenant.work_reports.aggregate(pipeline).to_list(None)
         
         project_ids = [r["_id"] for r in result if r["_id"]]
         projects = {}
         if project_ids:
-            proj_cursor = db.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "code": 1, "name": 1})
+            proj_cursor = tenant.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "code": 1, "name": 1})
             proj_list = await proj_cursor.to_list(None)
             projects = {p["id"]: p for p in proj_list}
         
@@ -531,7 +554,7 @@ async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocate
             allocations.append(alloc)
     
     if allocations:
-        await db.project_overhead_allocations.insert_many(allocations)
+        await tenant.project_overhead_allocations.insert_many(allocations)
     
     await log_audit(user["org_id"], user["id"], user["email"], "allocated", "overhead_snapshot", snapshot_id, {
         "method": method,
@@ -548,6 +571,7 @@ async def list_overhead_allocations(
     project_id: Optional[str] = None,
     user: dict = Depends(require_m9)
 ):
+    tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
@@ -555,7 +579,7 @@ async def list_overhead_allocations(
         query["overhead_snapshot_id"] = snapshot_id
     if project_id:
         query["project_id"] = project_id
-    cursor = db.project_overhead_allocations.find(query, {"_id": 0})
+    cursor = tenant.project_overhead_allocations.find(query, {"_id": 0})
     return await cursor.to_list(None)
 
 

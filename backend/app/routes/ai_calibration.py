@@ -10,6 +10,12 @@ import logging
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +30,7 @@ OUTLIER_THRESHOLD_PERCENT = 200  # Ignore edits > 200% delta
 
 async def check_and_notify_calibration_ready(org_id: str, activity_type: str, activity_subtype: str, city: str, small_qty: bool):
     """Check if a calibration group just reached 'ready' threshold and notify admins"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     try:
         # Count samples for this group
         match = {
@@ -33,13 +40,13 @@ async def check_and_notify_calibration_ready(org_id: str, activity_type: str, ac
             "city": city,
             "small_qty_flag": small_qty,
         }
-        count = await db.ai_calibration_events.count_documents(match)
+        count = await tenant.ai_calibration_events.count_documents(match)
         
         if count < MIN_SAMPLES_FOR_CALIBRATION:
             return  # Not ready yet
         
         # Check if already approved
-        existing_cal = await db.ai_calibrations.find_one({
+        existing_cal = await tenant.ai_calibrations.find_one({
             "org_id": org_id, "activity_type": activity_type,
             "activity_subtype": activity_subtype, "city": city,
             "small_qty": small_qty, "status": "approved",
@@ -49,7 +56,7 @@ async def check_and_notify_calibration_ready(org_id: str, activity_type: str, ac
         
         # Anti-duplicate: check if we already sent a notification for this key
         notif_key = f"cal_ready|{activity_type}|{activity_subtype}|{city}|{small_qty}"
-        existing_notif = await db.notifications.find_one({
+        existing_notif = await tenant.notifications.find_one({
             "org_id": org_id,
             "type": "ai_calibration_ready",
             "data.calibration_key": notif_key,
@@ -69,7 +76,7 @@ async def check_and_notify_calibration_ready(org_id: str, activity_type: str, ac
         label = ", ".join(parts)
         
         # Get all Admin users in this org
-        admins = await db.users.find(
+        admins = await tenant.users.find(
             {"org_id": org_id, "role": {"$in": ["Admin", "Owner"]}, "active": {"$ne": False}},
             {"_id": 0, "id": 1}
         ).to_list(20)
@@ -95,7 +102,7 @@ async def check_and_notify_calibration_ready(org_id: str, activity_type: str, ac
                 "is_read": False,
                 "created_at": now,
             }
-            await db.notifications.insert_one(notif)
+            await tenant.notifications.insert_one(notif)
         
         logger.info(f"Calibration ready notification sent: {label} ({count} samples) to {len(admins)} admins")
     except Exception as e:
@@ -107,6 +114,7 @@ async def check_and_notify_calibration_ready(org_id: str, activity_type: str, ac
 @router.post("/ai-calibration/record-edit")
 async def record_ai_edit(data: dict, user: dict = Depends(require_m2)):
     """Record when a user accepts/edits an AI-proposed price"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     
     ai_total = float(data.get("ai_total_price_per_unit", 0))
@@ -146,7 +154,7 @@ async def record_ai_edit(data: dict, user: dict = Depends(require_m2)):
         "small_qty_flag": bool(data.get("small_qty_flag", False)),
     }
     
-    await db.ai_calibration_events.insert_one(event)
+    await tenant.ai_calibration_events.insert_one(event)
     
     # Check if any calibration group just became ready
     await check_and_notify_calibration_ready(
@@ -165,13 +173,14 @@ async def record_ai_edit(data: dict, user: dict = Depends(require_m2)):
 @router.get("/ai-calibration/overview")
 async def get_calibration_overview(user: dict = Depends(require_m2)):
     """Get overview stats for AI calibration"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
     org_id = user["org_id"]
     
-    total = await db.ai_calibration_events.count_documents({"org_id": org_id})
-    edited = await db.ai_calibration_events.count_documents({"org_id": org_id, "was_manually_edited": True})
+    total = await tenant.ai_calibration_events.count_documents({"org_id": org_id})
+    edited = await tenant.ai_calibration_events.count_documents({"org_id": org_id, "was_manually_edited": True})
     accepted = total - edited
     
     # Average delta
@@ -183,7 +192,7 @@ async def get_calibration_overview(user: dict = Depends(require_m2)):
             "median_values": {"$push": "$edit_delta_percent"},
         }}
     ]
-    agg = await db.ai_calibration_events.aggregate(pipeline).to_list(1)
+    agg = await tenant.ai_calibration_events.aggregate(pipeline).to_list(1)
     avg_delta = round(agg[0]["avg_delta"], 1) if agg else 0
     
     # Top corrected categories
@@ -197,7 +206,7 @@ async def get_calibration_overview(user: dict = Depends(require_m2)):
         {"$sort": {"count": -1}},
         {"$limit": 5},
     ]
-    top_cats = await db.ai_calibration_events.aggregate(cat_pipeline).to_list(5)
+    top_cats = await tenant.ai_calibration_events.aggregate(cat_pipeline).to_list(5)
     
     return {
         "total_proposals": total,
@@ -221,6 +230,7 @@ async def get_calibration_categories(
     user: dict = Depends(require_m2),
 ):
     """Get calibration data broken down by category"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
@@ -250,11 +260,11 @@ async def get_calibration_categories(
         {"$sort": {"sample_count": -1}},
     ]
     
-    results = await db.ai_calibration_events.aggregate(pipeline).to_list(100)
+    results = await tenant.ai_calibration_events.aggregate(pipeline).to_list(100)
     
     # Load approved calibrations
     approved_cals = {}
-    cals = await db.ai_calibrations.find({"org_id": org_id, "status": "approved"}, {"_id": 0}).to_list(100)
+    cals = await tenant.ai_calibrations.find({"org_id": org_id, "status": "approved"}, {"_id": 0}).to_list(100)
     for c in cals:
         key = f"{c.get('activity_type')}|{c.get('activity_subtype')}|{c.get('city')}|{c.get('small_qty')}"
         approved_cals[key] = c
@@ -314,6 +324,7 @@ async def get_calibration_categories(
 @router.post("/ai-calibration/approve")
 async def approve_calibration(data: dict, user: dict = Depends(require_m2)):
     """Approve a suggested calibration factor (Admin only)"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
@@ -336,7 +347,7 @@ async def approve_calibration(data: dict, user: dict = Depends(require_m2)):
     }
     
     # Upsert - replace existing calibration for same key
-    await db.ai_calibrations.update_one(
+    await tenant.ai_calibrations.update_one(
         {
             "org_id": user["org_id"],
             "activity_type": cal["activity_type"],
@@ -350,7 +361,7 @@ async def approve_calibration(data: dict, user: dict = Depends(require_m2)):
     
     # Resolve related notifications
     notif_key = f"cal_ready|{cal['activity_type']}|{cal['activity_subtype']}|{cal['city']}|{cal['small_qty']}"
-    await db.notifications.update_many(
+    await tenant.notifications.update_many(
         {"org_id": user["org_id"], "type": "ai_calibration_ready", "data.calibration_key": notif_key},
         {"$set": {"is_read": True, "data.resolved": True}}
     )
@@ -361,10 +372,11 @@ async def approve_calibration(data: dict, user: dict = Depends(require_m2)):
 @router.delete("/ai-calibration/{cal_id}")
 async def revoke_calibration(cal_id: str, user: dict = Depends(require_m2)):
     """Revoke an approved calibration"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
-    result = await db.ai_calibrations.delete_one({"id": cal_id, "org_id": user["org_id"]})
+    result = await tenant.ai_calibrations.delete_one({"id": cal_id, "org_id": user["org_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Calibration not found")
     return {"ok": True}
@@ -373,10 +385,11 @@ async def revoke_calibration(cal_id: str, user: dict = Depends(require_m2)):
 @router.get("/ai-calibration/approved")
 async def list_approved_calibrations(user: dict = Depends(require_m2)):
     """List all approved calibrations"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     
-    cals = await db.ai_calibrations.find(
+    cals = await tenant.ai_calibrations.find(
         {"org_id": user["org_id"], "status": "approved"},
         {"_id": 0}
     ).sort("approved_at", -1).to_list(100)
@@ -387,8 +400,9 @@ async def list_approved_calibrations(user: dict = Depends(require_m2)):
 
 async def get_calibration_factor(org_id: str, activity_type: str, activity_subtype: str, city: str = None, small_qty: bool = False) -> dict:
     """Look up approved calibration factor for a specific category"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     # Try exact match first
-    cal = await db.ai_calibrations.find_one({
+    cal = await tenant.ai_calibrations.find_one({
         "org_id": org_id,
         "activity_type": activity_type,
         "activity_subtype": activity_subtype,
@@ -401,7 +415,7 @@ async def get_calibration_factor(org_id: str, activity_type: str, activity_subty
         return {"factor": cal["factor"], "source": "exact_match", "sample_count": cal.get("sample_count", 0)}
     
     # Try without city
-    cal = await db.ai_calibrations.find_one({
+    cal = await tenant.ai_calibrations.find_one({
         "org_id": org_id,
         "activity_type": activity_type,
         "activity_subtype": activity_subtype,

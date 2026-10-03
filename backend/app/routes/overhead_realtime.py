@@ -11,6 +11,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.services.overhead_realtime import compute_realtime_overhead
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Overhead Realtime"])
 
@@ -43,24 +49,26 @@ async def get_worker_calendar(
     month: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if worker_id:
         query["worker_id"] = worker_id
     if month:
         query["date"] = {"$gte": f"{month}-01", "$lte": f"{month}-31"}
-    items = await db.worker_calendar.find(query, {"_id": 0}).sort("date", 1).to_list(2000)
+    items = await tenant.worker_calendar.find(query, {"_id": 0}).sort("date", 1).to_list(2000)
     return {"items": items, "total": len(items)}
 
 
 @router.post("/worker-calendar", status_code=201)
 async def create_calendar_entry(data: CalendarEntry, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if data.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {VALID_STATUSES}")
 
     now = datetime.now(timezone.utc).isoformat()
 
     # Upsert by worker_id + date
-    existing = await db.worker_calendar.find_one(
+    existing = await tenant.worker_calendar.find_one(
         {"org_id": user["org_id"], "worker_id": data.worker_id, "date": data.date}
     )
     doc = {
@@ -76,41 +84,43 @@ async def create_calendar_entry(data: CalendarEntry, user: dict = Depends(get_cu
         "updated_by": user["id"],
     }
     if existing:
-        await db.worker_calendar.update_one({"id": existing["id"]}, {"$set": doc})
-        return await db.worker_calendar.find_one({"id": existing["id"]}, {"_id": 0})
+        await tenant.worker_calendar.update_one({"id": existing["id"]}, {"$set": doc})
+        return await tenant.worker_calendar.find_one({"id": existing["id"]}, {"_id": 0})
     else:
         doc["id"] = str(uuid.uuid4())
         doc["created_at"] = now
         doc["created_by"] = user["id"]
-        await db.worker_calendar.insert_one(doc)
+        await tenant.worker_calendar.insert_one(doc)
         return {k: v for k, v in doc.items() if k != "_id"}
 
 
 @router.put("/worker-calendar/{entry_id}")
 async def update_calendar_entry(entry_id: str, data: CalendarEntry, user: dict = Depends(get_current_user)):
-    entry = await db.worker_calendar.find_one({"id": entry_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    entry = await tenant.worker_calendar.find_one({"id": entry_id, "org_id": user["org_id"]})
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     if data.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.worker_calendar.update_one({"id": entry_id}, {"$set": {
+    await tenant.worker_calendar.update_one({"id": entry_id}, {"$set": {
         "status": data.status, "site_id": data.site_id, "hours": data.hours or 8,
         "notes": data.notes, "updated_at": now, "updated_by": user["id"],
     }})
-    return await db.worker_calendar.find_one({"id": entry_id}, {"_id": 0})
+    return await tenant.worker_calendar.find_one({"id": entry_id}, {"_id": 0})
 
 
 @router.post("/worker-calendar/bulk", status_code=201)
 async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     created = 0
     updated = 0
     for e in data.entries:
         if e.status not in VALID_STATUSES:
             continue
-        existing = await db.worker_calendar.find_one(
+        existing = await tenant.worker_calendar.find_one(
             {"org_id": user["org_id"], "worker_id": e.worker_id, "date": e.date}
         )
         doc = {
@@ -119,13 +129,13 @@ async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_use
             "notes": e.notes, "source": "manual", "updated_at": now, "updated_by": user["id"],
         }
         if existing:
-            await db.worker_calendar.update_one({"id": existing["id"]}, {"$set": doc})
+            await tenant.worker_calendar.update_one({"id": existing["id"]}, {"$set": doc})
             updated += 1
         else:
             doc["id"] = str(uuid.uuid4())
             doc["created_at"] = now
             doc["created_by"] = user["id"]
-            await db.worker_calendar.insert_one(doc)
+            await tenant.worker_calendar.insert_one(doc)
             created += 1
     return {"ok": True, "created": created, "updated": updated}
 
@@ -133,11 +143,12 @@ async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_use
 @router.post("/worker-calendar/sync-from-sessions")
 async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Auto-sync calendar from work_sessions for a given date."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "ended_at": {"$ne": None},
          "started_at": {"$gte": f"{target_date}T00:00:00", "$lte": f"{target_date}T23:59:59"}},
         {"_id": 0, "worker_id": 1, "site_id": 1, "duration_hours": 1},
@@ -153,7 +164,7 @@ async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(ge
 
     synced = 0
     for wid, data in by_worker.items():
-        existing = await db.worker_calendar.find_one(
+        existing = await tenant.worker_calendar.find_one(
             {"org_id": org_id, "worker_id": wid, "date": target_date}
         )
         doc = {
@@ -164,13 +175,13 @@ async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(ge
         }
         if existing:
             if existing.get("source") != "manual":
-                await db.worker_calendar.update_one({"id": existing["id"]}, {"$set": doc})
+                await tenant.worker_calendar.update_one({"id": existing["id"]}, {"$set": doc})
                 synced += 1
         else:
             doc["id"] = str(uuid.uuid4())
             doc["created_at"] = now
             doc["created_by"] = "system"
-            await db.worker_calendar.insert_one(doc)
+            await tenant.worker_calendar.insert_one(doc)
             synced += 1
 
     return {"ok": True, "synced": synced, "date": target_date}
@@ -180,20 +191,22 @@ async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(ge
 
 @router.get("/fixed-expenses")
 async def get_fixed_expenses(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     m = month or datetime.now(timezone.utc).strftime("%Y-%m")
-    doc = await db.fixed_expenses.find_one({"org_id": user["org_id"], "month": m}, {"_id": 0})
+    doc = await tenant.fixed_expenses.find_one({"org_id": user["org_id"], "month": m}, {"_id": 0})
     return doc or {"month": m, "categories": [], "total": 0}
 
 
 @router.put("/fixed-expenses")
 async def update_fixed_expenses(data: FixedExpensesUpdate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "Accountant"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     total = sum(c.get("amount", 0) for c in data.categories)
     now = datetime.now(timezone.utc).isoformat()
 
-    await db.fixed_expenses.update_one(
+    await tenant.fixed_expenses.update_one(
         {"org_id": user["org_id"], "month": data.month},
         {"$set": {
             "categories": data.categories, "total": round(total, 2),
@@ -203,7 +216,7 @@ async def update_fixed_expenses(data: FixedExpensesUpdate, user: dict = Depends(
         }},
         upsert=True,
     )
-    return await db.fixed_expenses.find_one({"org_id": user["org_id"], "month": data.month}, {"_id": 0})
+    return await tenant.fixed_expenses.find_one({"org_id": user["org_id"], "month": data.month}, {"_id": 0})
 
 
 # ── Realtime Overhead ──────────────────────────────────────────────

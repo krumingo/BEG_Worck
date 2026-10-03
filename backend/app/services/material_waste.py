@@ -3,6 +3,7 @@ Service - Material Waste Summary.
 Aggregates planned/requested/delivered/issued/returned/waste per material per project.
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 def _status(issued, planned):
@@ -17,6 +18,7 @@ def _status(issued, planned):
 
 
 async def build_material_waste_summary(org_id: str, project_id: str, date_from: str = None, date_to: str = None) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     mats = {}  # keyed by material_name
 
     def _get(name):
@@ -26,7 +28,7 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
         return mats[n]
 
     # ── A. Planned (from smr_analyses materials) ────────────────
-    analyses = await db.smr_analyses.find(
+    analyses = await tenant.smr_analyses.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "lines": 1}
     ).to_list(50)
     for a in analyses:
@@ -42,7 +44,7 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                     e["unit"] = m["unit"]
 
     # ── B. Requested (from material_requests) ───────────────────
-    reqs = await db.material_requests.find(
+    reqs = await tenant.material_requests.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "lines": 1}
     ).to_list(200)
     for r in reqs:
@@ -53,7 +55,7 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                 e["unit"] = ln["unit"]
 
     # ── C. Delivered (warehouse receipts) ───────────────────────
-    receipts = await db.warehouse_transactions.find(
+    receipts = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "receipt"}, {"_id": 0, "lines": 1}
     ).to_list(200)
     for t in receipts:
@@ -62,7 +64,7 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
             e["delivered"] += float(ln.get("qty_received", 0) or ln.get("qty_issued", 0) or 0)
 
     # ── D. Issued (warehouse issues to project) ─────────────────
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0, "lines": 1}
     ).to_list(500)
     for t in issues:
@@ -73,7 +75,7 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                 e["unit"] = ln["unit"]
 
     # ── E. Returns ──────────────────────────────────────────────
-    returns = await db.warehouse_transactions.find(
+    returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"}, {"_id": 0, "lines": 1}
     ).to_list(100)
     for t in returns:
@@ -87,7 +89,7 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
         wq.setdefault("date", {})["$gte"] = date_from
     if date_to:
         wq.setdefault("date", {})["$lte"] = date_to
-    wastes = await db.material_waste_entries.find(wq, {"_id": 0}).to_list(500)
+    wastes = await tenant.material_waste_entries.find(wq, {"_id": 0}).to_list(500)
     for w in wastes:
         e = _get(w.get("material_name", ""))
         e["wasted"] += w.get("qty", 0) or 0

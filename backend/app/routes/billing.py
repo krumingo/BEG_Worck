@@ -20,6 +20,12 @@ from app.deps.modules import SUBSCRIPTION_PLANS, LIMIT_WARNING_THRESHOLD
 from app.utils.audit import log_audit
 from app.constants import MODULES
 from app.models.billing import OrgSignupRequest, CreateCheckoutRequest
+from app.tenancy.data_access import TenantData, resolve_owner_by_unique_key
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Billing"])
 
@@ -73,57 +79,35 @@ async def get_billing_config(user: dict = Depends(require_platform_admin)):
 @router.post("/billing/signup")
 async def signup_organization(data: OrgSignupRequest):
     """Public endpoint - create new organization with owner"""
-    # Check if email already exists
-    existing = await db.users.find_one({"email": data.owner_email.lower()})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
+    # W0-03E-A2B: the canonical tenant onboarding path. It generates the tenant
+    # id server-side, writes the organization and the owner stamped with it,
+    # and registers the tenant (registry + membership + owner assignment), so a
+    # new company is never invisible to the Tenant Guard and never mistaken for
+    # the legacy BEG installation by the one-time backfill rule.
+    from app.tenancy import registry as tenant_registry_mod
+    from app.tenancy.onboarding import OnboardingRefused, onboard_tenant
+
     now = datetime.now(timezone.utc).isoformat()
-    org_id = str(uuid.uuid4())
-    user_id = str(uuid.uuid4())
-    
+
     # Parse owner name into first_name and last_name
     name_parts = data.owner_name.strip().split(" ", 1)
     first_name = name_parts[0]
     last_name = name_parts[1] if len(name_parts) > 1 else ""
-    
-    # Create organization
-    org = {
-        "id": org_id,
-        "name": data.org_name,
-        "slug": data.org_name.lower().replace(" ", "-").replace("_", "-")[:50],
-        "email": data.owner_email.lower(),
-        "phone": "",
-        "address": "",
-        "logo_url": "",
-        "vat_percent": 20.0,
-        "attendance_start": "06:00",
-        "attendance_end": "10:00",
-        "work_report_deadline": "18:30",
-        "max_reminders_per_day": 2,
-        "escalation_after_days": 2,
-        "org_timezone": "Europe/Sofia",
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.organizations.insert_one(org)
-    
-    # Create owner user
-    user = {
-        "id": user_id,
-        "org_id": org_id,
-        "email": data.owner_email.lower(),
-        "password_hash": hash_password(data.password),
-        "first_name": first_name,
-        "last_name": last_name,
-        "role": "Owner",
-        "phone": "",
-        "is_active": True,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.users.insert_one(user)
-    
+
+    try:
+        created = await onboard_tenant(
+            db, tenant_registry_mod.system_db, org_name=data.org_name,
+            owner_email=data.owner_email, owner_password_hash=hash_password(data.password),
+            owner_first_name=first_name, owner_last_name=last_name, owner_role="Owner",
+            organization_extra={
+                "attendance_start": "06:00", "attendance_end": "10:00",
+                "work_report_deadline": "18:30", "max_reminders_per_day": 2,
+                "escalation_after_days": 2})
+    except OnboardingRefused as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    org_id = created["tenant"]["id"]
+    user_id = created["owner"]["id"]
+
     # Create subscription with free trial
     trial_ends = datetime.now(timezone.utc) + timedelta(days=SUBSCRIPTION_PLANS["free"]["trial_days"])
     subscription = {
@@ -193,6 +177,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
     
     Requires authenticated user to manage their organization's billing.
     """
+    tenant = _tenant(user)
     
     plan = SUBSCRIPTION_PLANS.get(data.plan_id)
     if not plan:
@@ -202,7 +187,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
         raise HTTPException(status_code=400, detail="Cannot checkout for free plan")
     
     org_id = user["org_id"]
-    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    sub = await tenant.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
     
     # MOCK MODE: Simulate successful checkout without real Stripe
     if STRIPE_MOCK_MODE:
@@ -211,7 +196,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
         
         # Update subscription directly in mock mode
         period_end = now + timedelta(days=30)
-        await db.subscriptions.update_one(
+        await tenant.subscriptions.update_one(
             {"org_id": org_id},
             {"$set": {
                 "plan_id": data.plan_id,
@@ -228,7 +213,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
         # Update feature flags based on new plan
         allowed_modules = plan.get("allowed_modules", [])
         for mod_code in MODULES.keys():
-            await db.feature_flags.update_one(
+            await tenant.feature_flags.update_one(
                 {"org_id": org_id, "module_code": mod_code},
                 {"$set": {"enabled": mod_code in allowed_modules}}
             )
@@ -249,7 +234,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
     # Get or create Stripe customer
     customer_id = sub.get("stripe_customer_id") if sub else None
     if not customer_id:
-        org = await db.organizations.find_one({"id": org_id}, {"_id": 0})
+        org = await tenant.own_organization({"_id": 0})
         try:
             customer = stripe.Customer.create(
                 email=user["email"],
@@ -257,7 +242,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
                 metadata={"org_id": org_id}
             )
             customer_id = customer.id
-            await db.subscriptions.update_one(
+            await tenant.subscriptions.update_one(
                 {"org_id": org_id},
                 {"$set": {"stripe_customer_id": customer_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
             )
@@ -303,8 +288,9 @@ async def create_portal_session(user: dict = Depends(get_current_user)):
     
     Requires authenticated user to manage their organization's billing.
     """
+    tenant = _tenant(user)
     
-    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     
     # MOCK MODE
     if STRIPE_MOCK_MODE:
@@ -398,7 +384,10 @@ async def stripe_webhook(request: Request):
         period_start = data.get("current_period_start")
         period_end = data.get("current_period_end")
         
-        sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+        # W0-03E-A2C: the Stripe id is an external key; it resolves exactly one
+        # owning row (or nothing), and every write below is that tenant's own.
+        sub_tenant, sub = await resolve_owner_by_unique_key(
+            db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
         if sub:
             update_data = {"status": status, "updated_at": now}
             if period_start:
@@ -406,16 +395,18 @@ async def stripe_webhook(request: Request):
             if period_end:
                 update_data["current_period_end"] = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
             
-            await db.subscriptions.update_one({"stripe_subscription_id": subscription_id}, {"$set": update_data})
+            await sub_tenant.subscriptions.update_one(
+                {"stripe_subscription_id": subscription_id}, {"$set": update_data})
             logger.info(f"Subscription {subscription_id} updated to status {status}")
     
     elif event_type == "customer.subscription.deleted":
         subscription_id = data.get("id")
-        sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+        sub_tenant, sub = await resolve_owner_by_unique_key(
+            db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
         if sub:
             # Downgrade to free plan
             free_modules = SUBSCRIPTION_PLANS["free"]["allowed_modules"]
-            await db.subscriptions.update_one(
+            await sub_tenant.subscriptions.update_one(
                 {"stripe_subscription_id": subscription_id},
                 {"$set": {
                     "plan_id": "free",
@@ -425,8 +416,8 @@ async def stripe_webhook(request: Request):
                 }}
             )
             for mod_code in MODULES.keys():
-                await db.feature_flags.update_one(
-                    {"org_id": sub["org_id"], "module_code": mod_code},
+                await sub_tenant.feature_flags.update_one(
+                    {"module_code": mod_code},
                     {"$set": {"enabled": mod_code in free_modules}}
                 )
             logger.info(f"Subscription {subscription_id} canceled, downgraded to free")
@@ -434,9 +425,10 @@ async def stripe_webhook(request: Request):
     elif event_type == "invoice.payment_succeeded":
         subscription_id = data.get("subscription")
         if subscription_id:
-            sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+            sub_tenant, sub = await resolve_owner_by_unique_key(
+                db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
             if sub and sub.get("status") == "past_due":
-                await db.subscriptions.update_one(
+                await sub_tenant.subscriptions.update_one(
                     {"stripe_subscription_id": subscription_id},
                     {"$set": {"status": "active", "updated_at": now}}
                 )
@@ -445,9 +437,10 @@ async def stripe_webhook(request: Request):
     elif event_type == "invoice.payment_failed":
         subscription_id = data.get("subscription")
         if subscription_id:
-            sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0})
+            sub_tenant, sub = await resolve_owner_by_unique_key(
+                db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
             if sub:
-                await db.subscriptions.update_one(
+                await sub_tenant.subscriptions.update_one(
                     {"stripe_subscription_id": subscription_id},
                     {"$set": {"status": "past_due", "updated_at": now}}
                 )
@@ -461,7 +454,8 @@ async def stripe_webhook(request: Request):
 @router.get("/billing/subscription")
 async def get_billing_subscription(user: dict = Depends(get_current_user)):
     """Get current subscription details with plan info and trial status"""
-    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     if not sub:
         return None
     
@@ -482,7 +476,7 @@ async def get_billing_subscription(user: dict = Depends(get_current_user)):
         else:
             trial_expired = True
             # Auto-update status to past_due if trial expired
-            await db.subscriptions.update_one(
+            await tenant.subscriptions.update_one(
                 {"org_id": user["org_id"]},
                 {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
             )
@@ -508,7 +502,8 @@ async def get_billing_subscription(user: dict = Depends(get_current_user)):
 @router.get("/billing/check-module/{module_code}")
 async def check_module_access(module_code: str, user: dict = Depends(get_current_user)):
     """Check if current subscription allows access to a module - SERVER-SIDE ENFORCEMENT"""
-    sub = await db.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     if not sub:
         return {"allowed": False, "reason": "No subscription"}
     
@@ -523,7 +518,7 @@ async def check_module_access(module_code: str, user: dict = Depends(get_current
         trial_end_dt = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
         if now >= trial_end_dt:
             # Trial expired - update status and restrict to free modules
-            await db.subscriptions.update_one(
+            await tenant.subscriptions.update_one(
                 {"org_id": user["org_id"]},
                 {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
             )
@@ -544,17 +539,18 @@ async def check_module_access(module_code: str, user: dict = Depends(get_current
 
 async def compute_org_usage(org_id: str) -> dict:
     """Compute current usage counts for an organization"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
     # Count users
-    users_count = await db.users.count_documents({"org_id": org_id, "is_active": True})
+    users_count = await tenant.users.count_documents({"org_id": org_id, "is_active": True})
     
     # Count projects (active only)
-    projects_count = await db.projects.count_documents({"org_id": org_id, "status": {"$ne": "Archived"}})
+    projects_count = await tenant.projects.count_documents({"org_id": org_id, "status": {"$ne": "Archived"}})
     
     # Count invoices created this month
-    invoices_count = await db.invoices.count_documents({
+    invoices_count = await tenant.invoices.count_documents({
         "org_id": org_id,
         "created_at": {"$gte": month_start.isoformat()}
     })
@@ -574,7 +570,8 @@ async def compute_org_usage(org_id: str) -> dict:
 
 async def check_limit(org_id: str, resource: str, increment: int = 1) -> dict:
     """Check if adding `increment` items would exceed the plan limit."""
-    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    sub = await tenant.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
     if not sub:
         return {"allowed": False, "error_code": "NO_SUBSCRIPTION", "current": 0, "limit": 0, "warning": False}
     
@@ -583,8 +580,8 @@ async def check_limit(org_id: str, resource: str, increment: int = 1) -> dict:
     
     # Map resource to limit key and count function
     resource_map = {
-        "users": ("users", lambda: db.users.count_documents({"org_id": org_id, "is_active": True})),
-        "projects": ("projects", lambda: db.projects.count_documents({"org_id": org_id, "status": {"$ne": "Archived"}})),
+        "users": ("users", lambda: tenant.users.count_documents({"org_id": org_id, "is_active": True})),
+        "projects": ("projects", lambda: tenant.projects.count_documents({"org_id": org_id, "status": {"$ne": "Archived"}})),
         "invoices": ("monthly_invoices", None),
     }
     
@@ -598,7 +595,7 @@ async def check_limit(org_id: str, resource: str, increment: int = 1) -> dict:
     if resource == "invoices":
         now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        current = await db.invoices.count_documents({
+        current = await tenant.invoices.count_documents({
             "org_id": org_id,
             "created_at": {"$gte": month_start.isoformat()}
         })
@@ -642,9 +639,10 @@ async def enforce_limit(org_id: str, resource: str, increment: int = 1):
 @router.get("/billing/usage")
 async def get_billing_usage(user: dict = Depends(get_current_user)):
     """Get current usage vs plan limits with percentages and warnings"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
-    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    sub = await tenant.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
     if not sub:
         raise HTTPException(status_code=404, detail="No subscription found")
     

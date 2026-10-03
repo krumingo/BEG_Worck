@@ -9,6 +9,7 @@ payroll_sync used to write into payslips:
     status: confirmed→Generated, paid→Paid, reopened→Reversed
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 _STATUS_V3_TO_V1 = {"confirmed": "Generated", "paid": "Paid", "reopened": "Reversed"}
 _STATUS_V1_TO_V3 = {
@@ -54,6 +55,7 @@ def _to_v1(s: dict) -> dict:
 async def legacy_payslips(org_id, *, employee_id=None, pay_run_id=None,
                           v1_statuses=None, limit=500):
     """Return v3 payment_slips reshaped to the legacy v1 'payslips' shape."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     q = {"org_id": org_id, "archived": {"$ne": True}}
     if employee_id:
         q["employee_id"] = employee_id
@@ -63,11 +65,12 @@ async def legacy_payslips(org_id, *, employee_id=None, pay_run_id=None,
     if v1_statuses:
         v3 = list({_STATUS_V1_TO_V3.get(s, s) for s in v1_statuses})
         q["status"] = {"$in": v3}
-    slips = await db.payment_slips.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    slips = await tenant.payment_slips.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return [_to_v1(s) for s in slips]
 
 
 async def legacy_payslip_one(org_id, payslip_id):
     """Single v3 payment_slip reshaped to v1 shape (or None)."""
-    s = await db.payment_slips.find_one({"id": payslip_id, "org_id": org_id}, {"_id": 0})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    s = await tenant.payment_slips.find_one({"id": payslip_id, "org_id": org_id}, {"_id": 0})
     return _to_v1(s) if s else None

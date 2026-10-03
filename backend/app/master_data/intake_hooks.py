@@ -161,6 +161,38 @@ async def observe_excel_historical_lines(user: Optional[Dict[str, Any]],
                               None, "historical import")
 
 
+async def observe_excel_offer_lines(user: Optional[Dict[str, Any]],
+                                    lines: Optional[Iterable[Dict[str, Any]]],
+                                    source_ref: Optional[str] = None
+                                    ) -> Optional[Dict[str, int]]:
+    """The same for an imported offer file (W0-03E): each line names a work as
+    free text (``description``) and a unit. Observed, never mapped — the offer
+    itself is imported by the existing path exactly as before."""
+    if _mode_or_none() is None:
+        return None
+
+    observed: List[Tuple[str, str]] = []
+    seen = set()
+    for line in (lines or []):
+        if not isinstance(line, dict):
+            continue
+        for entity_type, field in ((ENTITY_ACTIVITY, "description"), (ENTITY_UNIT, "unit")):
+            value = line.get(field)
+            if not value or not isinstance(value, str) or not value.strip():
+                continue
+            item = (entity_type, value.strip()[:MAX_OBSERVED])
+            if item in seen:
+                continue
+            seen.add(item)
+            observed.append(item)
+        if len(observed) >= MAX_PER_IMPORT:
+            break
+
+    from app.master_data.pending import SOURCE_EXCEL
+    return await _propose_all(user, observed[:MAX_PER_IMPORT], SOURCE_EXCEL, source_ref,
+                              None, "offer import")
+
+
 async def observe_ai_asset(user: Optional[Dict[str, Any]],
                            suggestion: Optional[Dict[str, Any]],
                            source_ref: Optional[str] = None,

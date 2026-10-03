@@ -12,6 +12,12 @@ from app.services.fifo_service import (
     add_batch, consume_fifo, get_current_stock, get_stock_value,
     InsufficientStockError,
 )
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Warehouse Batches"])
 
@@ -44,6 +50,7 @@ async def list_batches(
     page: int = 1, page_size: int = 50,
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     query = {"org_id": org_id}
     if item_id:
@@ -55,8 +62,8 @@ async def list_batches(
     else:
         query["status"] = {"$ne": "depleted"}
 
-    total = await db.warehouse_batches.count_documents(query)
-    batches = await db.warehouse_batches.find(query, {"_id": 0}).sort(
+    total = await tenant.warehouse_batches.count_documents(query)
+    batches = await tenant.warehouse_batches.find(query, {"_id": 0}).sort(
         "received_at", 1
     ).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
 
@@ -65,7 +72,8 @@ async def list_batches(
 
 @router.get("/warehouse/batches/{batch_id}")
 async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
-    batch = await db.warehouse_batches.find_one(
+    tenant = _tenant(user)
+    batch = await tenant.warehouse_batches.find_one(
         {"id": batch_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not batch:
@@ -82,7 +90,8 @@ async def item_stock_summary(item_id: str, warehouse_id: str = "", user: dict = 
 
 @router.get("/warehouse/items/{item_id}/batches")
 async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
-    batches = await db.warehouse_batches.find(
+    tenant = _tenant(user)
+    batches = await tenant.warehouse_batches.find(
         {"org_id": user["org_id"], "item_id": item_id, "status": {"$in": ["active", "blocked"]}},
         {"_id": 0},
     ).sort("received_at", 1).to_list(200)
@@ -118,12 +127,13 @@ async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)
 
 @router.post("/warehouse/consume")
 async def consume_stock(data: ConsumeRequest, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper", "SiteManager", "Technician"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     try:
         rows = await consume_fifo(user["org_id"], data.item_id, data.warehouse_id, data.qty)
         # Log consumption
-        await db.material_consumption_log.insert_one({
+        await tenant.material_consumption_log.insert_one({
             "id": str(__import__("uuid").uuid4()),
             "org_id": user["org_id"],
             "item_id": data.item_id,
@@ -143,15 +153,16 @@ async def consume_stock(data: ConsumeRequest, user: dict = Depends(get_current_u
 
 @router.put("/warehouse/batches/{batch_id}/block")
 async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    batch = await db.warehouse_batches.find_one({"id": batch_id, "org_id": user["org_id"]})
+    batch = await tenant.warehouse_batches.find_one({"id": batch_id, "org_id": user["org_id"]})
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
     new_status = "active" if batch["status"] == "blocked" else "blocked"
-    await db.warehouse_batches.update_one(
+    await tenant.warehouse_batches.update_one(
         {"id": batch_id},
         {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
@@ -162,9 +173,10 @@ async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
 
 @router.get("/warehouse/value")
 async def warehouse_value(warehouse_id: str = "", user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if not warehouse_id:
         # All warehouses
-        warehouses = await db.warehouses.find({"org_id": user["org_id"]}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        warehouses = await tenant.warehouses.find({"org_id": user["org_id"]}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
         results = []
         grand_total = 0
         for wh in warehouses:

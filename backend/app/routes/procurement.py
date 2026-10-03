@@ -15,6 +15,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Procurement"])
 
@@ -68,7 +74,8 @@ class InvoiceLineInput(BaseModel):
 # ── Material Requests CRUD ─────────────────────────────────────────
 
 async def get_next_request_number(org_id: str) -> str:
-    last = await db.material_requests.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.material_requests.find_one(
         {"org_id": org_id}, {"_id": 0, "request_number": 1},
         sort=[("created_at", -1)]
     )
@@ -81,13 +88,14 @@ async def get_next_request_number(org_id: str) -> str:
 
 @router.post("/material-requests", status_code=201)
 async def create_material_request(data: MaterialRequestCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     from app.services.project_guards import check_project_writable
     await check_project_writable(data.project_id, user["org_id"], "заявки за материали")
 
-    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -125,7 +133,7 @@ async def create_material_request(data: MaterialRequestCreate, user: dict = Depe
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.material_requests.insert_one(req)
+    await tenant.material_requests.insert_one(req)
     return {k: v for k, v in req.items() if k != "_id"}
 
 
@@ -135,13 +143,14 @@ async def list_material_requests(
     status: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id: query["project_id"] = project_id
     if status: query["status"] = status
     
-    reqs = await db.material_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    reqs = await tenant.material_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     for r in reqs:
-        p = await db.projects.find_one({"id": r["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+        p = await tenant.projects.find_one({"id": r["project_id"]}, {"_id": 0, "code": 1, "name": 1})
         r["project_code"] = p["code"] if p else ""
         r["project_name"] = p["name"] if p else ""
     return reqs
@@ -149,7 +158,8 @@ async def list_material_requests(
 
 @router.get("/material-requests/{req_id}")
 async def get_material_request(req_id: str, user: dict = Depends(require_m2)):
-    req = await db.material_requests.find_one({"id": req_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]}, {"_id": 0})
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
     return req
@@ -157,40 +167,43 @@ async def get_material_request(req_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/material-requests/{req_id}")
 async def update_material_request(req_id: str, data: dict, user: dict = Depends(require_m2)):
-    req = await db.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
     
     allowed = ["stage_name", "needed_date", "notes", "status", "lines"]
     update = {k: v for k, v in data.items() if k in allowed and v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.material_requests.update_one({"id": req_id}, {"$set": update})
-    return await db.material_requests.find_one({"id": req_id}, {"_id": 0})
+    await tenant.material_requests.update_one({"id": req_id}, {"$set": update})
+    return await tenant.material_requests.find_one({"id": req_id}, {"_id": 0})
 
 
 @router.post("/material-requests/{req_id}/submit")
 async def submit_material_request(req_id: str, user: dict = Depends(require_m2)):
-    req = await db.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
     if req["status"] != "draft":
         raise HTTPException(status_code=400, detail="Only draft requests can be submitted")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.material_requests.update_one({"id": req_id}, {"$set": {
+    await tenant.material_requests.update_one({"id": req_id}, {"$set": {
         "status": "submitted", "submitted_at": now, "updated_at": now,
     }})
-    return await db.material_requests.find_one({"id": req_id}, {"_id": 0})
+    return await tenant.material_requests.find_one({"id": req_id}, {"_id": 0})
 
 
 @router.delete("/material-requests/{req_id}")
 async def delete_material_request(req_id: str, user: dict = Depends(require_m2)):
-    req = await db.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
     if req["status"] != "draft":
         raise HTTPException(status_code=400, detail="Only draft requests can be deleted")
-    await db.material_requests.delete_one({"id": req_id})
+    await tenant.material_requests.delete_one({"id": req_id})
     return {"ok": True}
 
 
@@ -199,7 +212,8 @@ async def delete_material_request(req_id: str, user: dict = Depends(require_m2))
 @router.post("/material-requests/from-offer/{offer_id}", status_code=201)
 async def create_request_from_offer(offer_id: str, data: dict, user: dict = Depends(require_m2)):
     """Generate material request from offer's suggested materials"""
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
@@ -224,7 +238,7 @@ async def create_request_from_offer(offer_id: str, data: dict, user: dict = Depe
     
     # Also check for suggested materials from extra work drafts
     if offer.get("source_batch_id"):
-        drafts = await db.extra_work_drafts.find(
+        drafts = await tenant.extra_work_drafts.find(
             {"group_batch_id": offer["source_batch_id"]},
             {"_id": 0, "suggested_materials": 1, "title": 1}
         ).to_list(50)
@@ -259,7 +273,7 @@ async def create_request_from_offer(offer_id: str, data: dict, user: dict = Depe
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.material_requests.insert_one(req)
+    await tenant.material_requests.insert_one(req)
     return {k: v for k, v in req.items() if k != "_id"}
 
 
@@ -267,6 +281,7 @@ async def create_request_from_offer(offer_id: str, data: dict, user: dict = Depe
 
 @router.post("/supplier-invoices", status_code=201)
 async def create_supplier_invoice(data: SupplierInvoiceCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager", "Accountant"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -295,13 +310,14 @@ async def create_supplier_invoice(data: SupplierInvoiceCreate, user: dict = Depe
         "created_by": user["id"],
         "posted_to_warehouse": False,
     }
-    await db.supplier_invoices.insert_one(inv)
+    await tenant.supplier_invoices.insert_one(inv)
     return {k: v for k, v in inv.items() if k != "_id"}
 
 
 @router.post("/supplier-invoices/{inv_id}/upload-file")
 async def upload_invoice_file(inv_id: str, file: UploadFile = File(...), user: dict = Depends(require_m2)):
-    inv = await db.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -312,7 +328,7 @@ async def upload_invoice_file(inv_id: str, file: UploadFile = File(...), user: d
         shutil.copyfileobj(file.file, f)
     
     file_url = f"/api/media/{file_id}"
-    await db.supplier_invoices.update_one({"id": inv_id}, {"$set": {
+    await tenant.supplier_invoices.update_one({"id": inv_id}, {"$set": {
         "original_file_url": file_url,
         "original_file_name": file.filename,
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -326,21 +342,23 @@ async def list_supplier_invoices(
     status: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id: query["project_id"] = project_id
     if status: query["status"] = status
     
-    invs = await db.supplier_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    invs = await tenant.supplier_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     for inv in invs:
         if inv.get("project_id"):
-            p = await db.projects.find_one({"id": inv["project_id"]}, {"_id": 0, "code": 1})
+            p = await tenant.projects.find_one({"id": inv["project_id"]}, {"_id": 0, "code": 1})
             inv["project_code"] = p["code"] if p else ""
     return invs
 
 
 @router.get("/supplier-invoices/{inv_id}")
 async def get_supplier_invoice(inv_id: str, user: dict = Depends(require_m2)):
-    inv = await db.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return inv
@@ -349,7 +367,8 @@ async def get_supplier_invoice(inv_id: str, user: dict = Depends(require_m2)):
 @router.put("/supplier-invoices/{inv_id}")
 async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(require_m2)):
     """Update invoice header and lines (review/correction)"""
-    inv = await db.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -380,8 +399,8 @@ async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(
     if "lines" in update and inv["status"] == "uploaded":
         update["status"] = "reviewed"
     
-    await db.supplier_invoices.update_one({"id": inv_id}, {"$set": update})
-    return await db.supplier_invoices.find_one({"id": inv_id}, {"_id": 0})
+    await tenant.supplier_invoices.update_one({"id": inv_id}, {"$set": update})
+    return await tenant.supplier_invoices.find_one({"id": inv_id}, {"_id": 0})
 
 
 # ── Post to Warehouse ──────────────────────────────────────────────
@@ -389,10 +408,11 @@ async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(
 @router.post("/supplier-invoices/{inv_id}/post-to-warehouse", status_code=201)
 async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2)):
     """Post reviewed supplier invoice lines to Main Warehouse"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    inv = await db.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
+    inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if inv.get("posted_to_warehouse"):
@@ -401,7 +421,7 @@ async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2
         raise HTTPException(status_code=400, detail="No lines to post")
     
     # Find or create Main Warehouse
-    main_wh = await db.warehouses.find_one({"org_id": user["org_id"], "type": "main"})
+    main_wh = await tenant.warehouses.find_one({"org_id": user["org_id"], "type": "main"})
     if not main_wh:
         main_wh = {
             "id": str(uuid.uuid4()),
@@ -412,7 +432,7 @@ async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2
             "active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.warehouses.insert_one(main_wh)
+        await tenant.warehouses.insert_one(main_wh)
     
     now = datetime.now(timezone.utc).isoformat()
     
@@ -456,10 +476,10 @@ async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2
         "total": inv.get("total", 0),
         "created_at": now,
     }
-    await db.warehouse_transactions.insert_one(transaction)
+    await tenant.warehouse_transactions.insert_one(transaction)
     
     # Update invoice status
-    await db.supplier_invoices.update_one({"id": inv_id}, {"$set": {
+    await tenant.supplier_invoices.update_one({"id": inv_id}, {"$set": {
         "posted_to_warehouse": True,
         "posted_at": now,
         "posted_by": user["id"],
@@ -470,10 +490,10 @@ async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2
     
     # Update material request fulfillment if linked
     if inv.get("linked_request_id"):
-        req = await db.material_requests.find_one({"id": inv["linked_request_id"]})
+        req = await tenant.material_requests.find_one({"id": inv["linked_request_id"]})
         if req:
             # Simple: mark as fulfilled
-            await db.material_requests.update_one(
+            await tenant.material_requests.update_one(
                 {"id": req["id"]},
                 {"$set": {"status": "fulfilled", "updated_at": now}}
             )
@@ -492,11 +512,12 @@ async def list_warehouse_transactions(
     warehouse_id: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id: query["project_id"] = project_id
     if warehouse_id: query["warehouse_id"] = warehouse_id
     
-    txns = await db.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    txns = await tenant.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     return txns
 
 
@@ -505,13 +526,14 @@ async def list_warehouse_transactions(
 
 async def get_warehouse_stock(org_id: str, warehouse_id: str = None) -> dict:
     """Compute current stock by material from intake/issue/return transactions"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     if not warehouse_id:
-        wh = await db.warehouses.find_one({"org_id": org_id, "type": "main"})
+        wh = await tenant.warehouses.find_one({"org_id": org_id, "type": "main"})
         if not wh:
             return {}
         warehouse_id = wh["id"]
     
-    txns = await db.warehouse_transactions.find(
+    txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "warehouse_id": warehouse_id},
         {"_id": 0, "type": 1, "lines": 1}
     ).to_list(1000)
@@ -552,7 +574,8 @@ async def get_stock_balance(user: dict = Depends(require_m2)):
 # ── Warehouse Issue to Project ─────────────────────────────────────
 
 async def get_next_issue_number(org_id: str) -> str:
-    last = await db.warehouse_transactions.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    last = await tenant.warehouse_transactions.find_one(
         {"org_id": org_id, "type": "issue"}, {"_id": 0, "issue_number": 1},
         sort=[("created_at", -1)]
     )
@@ -566,6 +589,7 @@ async def get_next_issue_number(org_id: str) -> str:
 @router.post("/warehouse-issue", status_code=201)
 async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
     """Issue materials from Main Warehouse to a project"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -574,7 +598,7 @@ async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id required")
     
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -598,7 +622,7 @@ async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
     now = datetime.now(timezone.utc).isoformat()
     issue_no = await get_next_issue_number(org_id)
     
-    wh = await db.warehouses.find_one({"org_id": org_id, "type": "main"})
+    wh = await tenant.warehouses.find_one({"org_id": org_id, "type": "main"})
     
     issue_lines = []
     for line in lines_input:
@@ -634,7 +658,7 @@ async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
         "status": "posted",
         "created_at": now,
     }
-    await db.warehouse_transactions.insert_one(txn)
+    await tenant.warehouse_transactions.insert_one(txn)
     
     await log_audit(org_id, user["id"], user.get("email", ""), "warehouse_issue", "warehouse_transaction", txn["id"],
                     {"issue_number": issue_no, "project_id": project_id, "lines": len(issue_lines)})
@@ -647,6 +671,7 @@ async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
 @router.post("/project-consumption", status_code=201)
 async def record_consumption(data: dict, user: dict = Depends(require_m2)):
     """Record material consumption on a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     project_id = data.get("project_id")
     if not project_id:
@@ -695,7 +720,7 @@ async def record_consumption(data: dict, user: dict = Depends(require_m2)):
         "lines": consumption_lines,
         "created_at": now,
     }
-    await db.project_material_ops.insert_one(record)
+    await tenant.project_material_ops.insert_one(record)
     return {k: v for k, v in record.items() if k != "_id"}
 
 
@@ -704,6 +729,7 @@ async def record_consumption(data: dict, user: dict = Depends(require_m2)):
 @router.post("/warehouse-return", status_code=201)
 async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
     """Return unused materials from project to Main Warehouse"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     project_id = data.get("project_id")
     if not project_id:
@@ -728,7 +754,7 @@ async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
                 detail=f"Недостатъчно по обекта: {mat} — налично {remaining:.2f}, връщане {ret_qty:.2f}")
     
     now = datetime.now(timezone.utc).isoformat()
-    wh = await db.warehouses.find_one({"org_id": org_id, "type": "main"})
+    wh = await tenant.warehouses.find_one({"org_id": org_id, "type": "main"})
     
     return_lines = []
     for line in lines_input:
@@ -753,7 +779,7 @@ async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
         "status": "posted",
         "created_at": now,
     }
-    await db.warehouse_transactions.insert_one(txn)
+    await tenant.warehouse_transactions.insert_one(txn)
     
     return {k: v for k, v in txn.items() if k != "_id"}
 
@@ -762,10 +788,11 @@ async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
 
 async def compute_project_ledger(org_id: str, project_id: str) -> list:
     """Compute material ledger for a project across all operations"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     materials = {}  # key = material_name -> aggregated data
     
     # 1. Requested (from material_requests)
-    reqs = await db.material_requests.find(
+    reqs = await tenant.material_requests.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$ne": "cancelled"}},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -777,7 +804,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
             materials[key]["requested"] += float(line.get("qty_requested", 0))
     
     # 2. Purchased / received to warehouse (from warehouse intake transactions)
-    intakes = await db.warehouse_transactions.find(
+    intakes = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "intake"},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -791,7 +818,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
             materials[key]["received_to_warehouse"] += qty
     
     # 3. Issued to project (from warehouse issue transactions)
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -803,7 +830,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
             materials[key]["issued_to_project"] += float(line.get("qty_issued", 0))
     
     # 4. Consumed on project
-    consumptions = await db.project_material_ops.find(
+    consumptions = await tenant.project_material_ops.find(
         {"org_id": org_id, "project_id": project_id, "type": "consumption"},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -815,7 +842,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
             materials[key]["consumed"] += float(line.get("qty_consumed", 0))
     
     # 5. Returned to warehouse
-    returns = await db.warehouse_transactions.find(
+    returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -841,7 +868,8 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
 @router.get("/project-material-ledger/{project_id}")
 async def get_project_material_ledger(project_id: str, user: dict = Depends(require_m2)):
     """Get material ledger for a project with full flow tracking"""
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -869,6 +897,7 @@ DEFAULT_LOW_STOCK_THRESHOLD = 5
 @router.get("/inventory/dashboard")
 async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     """Comprehensive inventory dashboard with stock, alerts, movements, project remainders"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     # Current warehouse stock
@@ -879,7 +908,7 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     
     # Load thresholds
     thresholds = {}
-    th_docs = await db.stock_thresholds.find({"org_id": org_id}, {"_id": 0}).to_list(200)
+    th_docs = await tenant.stock_thresholds.find({"org_id": org_id}, {"_id": 0}).to_list(200)
     for t in th_docs:
         thresholds[t.get("material_key", "")] = t.get("threshold", DEFAULT_LOW_STOCK_THRESHOLD)
     
@@ -905,7 +934,7 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     # Movement stats (last 30 days)
     from datetime import timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    recent_txns = await db.warehouse_transactions.find(
+    recent_txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "created_at": {"$gte": cutoff}},
         {"_id": 0, "type": 1, "lines": 1, "created_at": 1}
     ).to_list(500)
@@ -936,7 +965,7 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
             m[k] = round(m[k], 2)
     
     # Project remainders (materials sitting on projects)
-    projects = await db.projects.find({"org_id": org_id}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
+    projects = await tenant.projects.find({"org_id": org_id}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
     project_remainders = []
     total_on_projects = 0
     
@@ -981,6 +1010,7 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
 @router.put("/inventory/threshold")
 async def update_stock_threshold(data: dict, user: dict = Depends(require_m2)):
     """Set low stock threshold for a material"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -988,7 +1018,7 @@ async def update_stock_threshold(data: dict, user: dict = Depends(require_m2)):
     threshold = float(data.get("threshold", DEFAULT_LOW_STOCK_THRESHOLD))
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.stock_thresholds.update_one(
+    await tenant.stock_thresholds.update_one(
         {"org_id": user["org_id"], "material_key": material_key},
         {"$set": {
             "org_id": user["org_id"],

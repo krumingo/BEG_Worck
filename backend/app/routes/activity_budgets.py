@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user, can_access_project, can_manage_project
 from app.utils.audit import log_audit
 from app.tenancy.guard import TenantContext
@@ -88,17 +89,18 @@ async def upsert_activity_budget(
     user: dict = Depends(get_current_user)
 ):
     """Create or update activity budget (upsert by type+subtype)."""
+    tenant = _tenant(user)
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
     now = datetime.now(timezone.utc).isoformat()
     
     # Check if exists (upsert key: org_id, project_id, type, subtype)
-    existing = await db.activity_budgets.find_one({
+    existing = await tenant.activity_budgets.find_one({
         "org_id": user["org_id"],
         "project_id": project_id,
         "type": data.type,
@@ -116,9 +118,9 @@ async def upsert_activity_budget(
             "notes": data.notes,
             "updated_at": now,
         }
-        await db.activity_budgets.update_one({"id": existing["id"]}, {"$set": update})
+        await tenant.activity_budgets.update_one({"id": existing["id"]}, {"$set": update})
         await log_audit(user["org_id"], user["id"], user["email"], "updated", "activity_budget", existing["id"], update)
-        return await db.activity_budgets.find_one({"id": existing["id"]}, {"_id": 0})
+        return await tenant.activity_budgets.find_one({"id": existing["id"]}, {"_id": 0})
     else:
         # Create
         budget = {
@@ -136,7 +138,7 @@ async def upsert_activity_budget(
             "created_at": now,
             "updated_at": now,
         }
-        await db.activity_budgets.insert_one(budget)
+        await tenant.activity_budgets.insert_one(budget)
         await log_audit(user["org_id"], user["id"], user["email"], "created", "activity_budget", budget["id"], {
             "type": data.type, "subtype": data.subtype
         })
@@ -146,10 +148,11 @@ async def upsert_activity_budget(
 @router.delete("/projects/{project_id}/activity-budgets/{budget_id}")
 async def delete_activity_budget(project_id: str, budget_id: str, user: dict = Depends(get_current_user)):
     """Delete an activity budget."""
+    tenant = _tenant(user)
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    budget = await db.activity_budgets.find_one({
+    budget = await tenant.activity_budgets.find_one({
         "id": budget_id,
         "org_id": user["org_id"],
         "project_id": project_id,
@@ -157,7 +160,7 @@ async def delete_activity_budget(project_id: str, budget_id: str, user: dict = D
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
     
-    await db.activity_budgets.delete_one({"id": budget_id})
+    await tenant.activity_budgets.delete_one({"id": budget_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "activity_budget", budget_id, {})
     return {"ok": True}
 
@@ -173,13 +176,14 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
     - laborRemaining, materialsRemaining
     - percentLaborUsed, percentMaterialsUsed
     """
+    tenant = _tenant(user)
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     
     org_id = user["org_id"]
     
     # 1. Get all budgets for project
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0}
     ).to_list(100)
@@ -196,7 +200,7 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
     
     # 2. Calculate spent from approved offer lines
     # Get all offers for this project
-    offers = await db.offers.find(
+    offers = await tenant.offers.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["Accepted", "Sent"]}},
         {"_id": 0, "lines": 1}
     ).to_list(100)
@@ -216,13 +220,13 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
             spent_map[key]["materials"] += line.get("line_material_cost", 0)
     
     # 3. Also get labor spent from daily work logs if they have activity type
-    daily_logs = await db.daily_work_logs.find(
+    daily_logs = await tenant.daily_work_logs.find(
         {"org_id": org_id, "site_id": project_id},
         {"_id": 0, "entries": 1, "work_type_id": 1}
     ).to_list(500)
     
     # Get work type -> activity type mapping if available
-    work_types = await db.work_types.find({"org_id": org_id}, {"_id": 0}).to_list(100)
+    work_types = await tenant.work_types.find({"org_id": org_id}, {"_id": 0}).to_list(100)
     work_type_map = {wt["id"]: wt for wt in work_types}
     
     for log in daily_logs:
@@ -300,6 +304,12 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
 
 
 import math
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -307,16 +317,17 @@ DEFAULT_DAILY_WAGE = 200  # BGN fallback
 
 async def compute_avg_daily_wage(org_id: str, project_id: str) -> float:
     """Compute average daily wage from project team's employee profiles."""
-    team = await db.project_team.find(
-        {"project_id": project_id, "org_id": org_id, "active": True},
-        {"_id": 0, "user_id": 1},
-    ).to_list(100)
+    tenant = TenantData.for_resolved_org(db, org_id)
+    # W0-03E-A2: one relation accessor; the tenant predicate is applied last.
+    team = await project_team.project_rows(
+        project_team.tenant_for_org(db, org_id), [project_id], {"_id": 0, "user_id": 1},
+        limit=100)
     if not team:
         return DEFAULT_DAILY_WAGE
 
     rates = []
     for m in team:
-        profile = await db.employee_profiles.find_one(
+        profile = await tenant.employee_profiles.find_one(
             {"org_id": org_id, "user_id": m["user_id"]}, {"_id": 0}
         )
         if not profile:
@@ -342,10 +353,11 @@ async def compute_avg_daily_wage(org_id: str, project_id: str) -> float:
 
 async def get_work_session_burn(org_id: str, project_id: str, activity_type: str = None) -> dict:
     """Get actual labor cost/hours from work_sessions for a project (and optional activity filter)."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
     if activity_type:
         query["smr_type_id"] = activity_type
-    sessions = await db.work_sessions.find(query, {"_id": 0, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
+    sessions = await tenant.work_sessions.find(query, {"_id": 0, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
     total_hours = sum(s.get("duration_hours", 0) for s in sessions)
     total_cost = sum(s.get("labor_cost", 0) for s in sessions)
     return {"actual_hours": round(total_hours, 2), "actual_cost": round(total_cost, 2)}
@@ -356,7 +368,8 @@ async def get_work_session_burn(org_id: str, project_id: str, activity_type: str
 @router.get("/activity-budgets/{budget_id}/forecast")
 async def get_forecast(budget_id: str, user: dict = Depends(get_current_user)):
     """Compute man_days, min_days, min_people, avg_daily_wage for an activity budget."""
-    budget = await db.activity_budgets.find_one(
+    tenant = _tenant(user)
+    budget = await tenant.activity_budgets.find_one(
         {"id": budget_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not budget:
@@ -394,7 +407,8 @@ async def get_forecast(budget_id: str, user: dict = Depends(get_current_user)):
 @router.post("/projects/{project_id}/activity-budgets/{budget_id}/calculate-snapshot")
 async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depends(get_current_user)):
     """Calculate and persist man-hours/man-days snapshot for a budget line."""
-    budget = await db.activity_budgets.find_one(
+    tenant = _tenant(user)
+    budget = await tenant.activity_budgets.find_one(
         {"id": budget_id, "org_id": user["org_id"], "project_id": project_id}, {"_id": 0}
     )
     if not budget:
@@ -419,16 +433,17 @@ async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depen
         "snapshot_calculated_at": now,
         "updated_at": now,
     }
-    await db.activity_budgets.update_one({"id": budget_id}, {"$set": snapshot})
-    return await db.activity_budgets.find_one({"id": budget_id}, {"_id": 0})
+    await tenant.activity_budgets.update_one({"id": budget_id}, {"$set": snapshot})
+    return await tenant.activity_budgets.find_one({"id": budget_id}, {"_id": 0})
 
 
 @router.post("/projects/{project_id}/activity-budgets/calculate-all-snapshots")
 async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_current_user)):
     """Calculate snapshots for ALL budget lines in a project."""
+    tenant = _tenant(user)
     from app.services.budget_formula import calculate_budget_formula_sync
     org_id = user["org_id"]
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
@@ -441,7 +456,7 @@ async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_curr
         r = calculate_budget_formula_sync(
             b.get("labor_budget", 0), b.get("coefficient", 1.0), avg_daily
         )
-        await db.activity_budgets.update_one({"id": b["id"]}, {"$set": {
+        await tenant.activity_budgets.update_one({"id": b["id"]}, {"$set": {
             "planned_man_hours": r["planned_man_hours"],
             "planned_man_days": r["planned_man_days"],
             "akord": r["akord"],
@@ -462,7 +477,8 @@ async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_curr
 @router.get("/activity-budgets/{budget_id}/burn")
 async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
     """Burn tracking: actual vs budget from work_sessions. Uses snapshot if available."""
-    budget = await db.activity_budgets.find_one(
+    tenant = _tenant(user)
+    budget = await tenant.activity_budgets.find_one(
         {"id": budget_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not budget:
@@ -507,11 +523,12 @@ async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
 @router.get("/projects/{project_id}/budget-health")
 async def get_budget_health(project_id: str, user: dict = Depends(get_current_user)):
     """Aggregated burn for entire project across all activity budgets."""
+    tenant = _tenant(user)
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     org_id = user["org_id"]
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
 
@@ -557,13 +574,14 @@ async def get_budget_health(project_id: str, user: dict = Depends(get_current_us
 @router.get("/projects/{project_id}/earned-value")
 async def get_earned_value(project_id: str, user: dict = Depends(get_current_user)):
     """Earned Value Analysis: BAC, EV, AC, PV, CPI, SPI, EAC, ETC, VAC."""
+    tenant = _tenant(user)
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     org_id = user["org_id"]
 
     # BAC = total labor_budget
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
     bac = sum(b.get("labor_budget", 0) for b in budgets)
@@ -573,7 +591,7 @@ async def get_earned_value(project_id: str, user: dict = Depends(get_current_use
     ac = burn["actual_cost"]
 
     # Progress from execution packages or budget_progress
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "progress_percent": 1}
     ).to_list(200)
     if pkgs:
@@ -585,7 +603,7 @@ async def get_earned_value(project_id: str, user: dict = Depends(get_current_use
     ev = round(bac * progress_pct, 2)
 
     # PV = BAC × (elapsed / planned) — linear
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "start_date": 1, "end_date": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "start_date": 1, "end_date": 1})
     now = datetime.now(timezone.utc)
     pv = 0
     if project and project.get("start_date") and project.get("end_date"):
@@ -641,6 +659,7 @@ async def get_earned_value(project_id: str, user: dict = Depends(get_current_use
 @router.get("/projects/{project_id}/activities-overview")
 async def get_activities_overview(project_id: str, user: dict = Depends(get_current_user)):
     """Full activities table: budget + actuals + extras + status."""
+    tenant = _tenant(user)
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -648,12 +667,12 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
     from app.services.budget_formula import calculate_budget_formula_sync
 
     # 1. Budget lines
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
     # 2. Actual hours/cost from work_sessions grouped by smr_type
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1},
     ).to_list(5000)
@@ -669,7 +688,7 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
         actuals_by_type[key]["cost"] += s.get("labor_cost", 0)
 
     # 3. Extra work (missing_smr + extra_work_drafts)
-    missing = await db.missing_smr.find(
+    missing = await tenant.missing_smr.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$nin": ["closed", "rejected_by_client"]}},
         {"_id": 0, "id": 1, "smr_type": 1, "activity_type": 1, "qty": 1, "unit": 1, "notes": 1},
     ).to_list(200)
@@ -795,6 +814,7 @@ async def get_activity_reports(
     user: dict = Depends(get_current_user),
 ):
     """Level 2 drill-down: list reports for a specific activity/smr_type."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Find work_sessions matching this project + smr_type
@@ -810,7 +830,7 @@ async def get_activity_reports(
     if date_to:
         ws_query.setdefault("started_at", {})["$lte"] = f"{date_to}T23:59:59"
 
-    sessions = await db.work_sessions.find(ws_query, {"_id": 0}).sort("started_at", -1).to_list(2000)
+    sessions = await tenant.work_sessions.find(ws_query, {"_id": 0}).sort("started_at", -1).to_list(2000)
 
     # Group by worker_id + date
     from collections import defaultdict
@@ -840,7 +860,7 @@ async def get_activity_reports(
         # Try to find the linked report
         rid = g.get("approved_report_id")
         if rid:
-            rep = await db.employee_daily_reports.find_one({"id": rid}, {"_id": 0, "approval_status": 1, "status": 1, "slip_number": 1, "submitted_by": 1, "approved_by": 1})
+            rep = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0, "approval_status": 1, "status": 1, "slip_number": 1, "submitted_by": 1, "approved_by": 1})
             if rep:
                 report_status = rep.get("status") or rep.get("approval_status", "Unknown")
                 slip = rep.get("slip_number")
@@ -894,7 +914,8 @@ async def get_activity_reports(
 @router.get("/work-sessions/{session_id}/detail")
 async def get_session_detail(session_id: str, user: dict = Depends(get_current_user)):
     """Level 3 drill-down: detailed view of a work session / worker-day."""
-    session = await db.work_sessions.find_one(
+    tenant = _tenant(user)
+    session = await tenant.work_sessions.find_one(
         {"id": session_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not session:
@@ -904,7 +925,7 @@ async def get_session_detail(session_id: str, user: dict = Depends(get_current_u
     wid = session.get("worker_id", "")
 
     # Worker profile
-    profile = await db.employee_profiles.find_one(
+    profile = await tenant.employee_profiles.find_one(
         {"org_id": org_id, "user_id": wid}, {"_id": 0, "pay_type": 1, "base_salary": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1}
     )
     pay_type_raw = (profile.get("pay_type", "Monthly") if profile else "Monthly").strip()
@@ -921,24 +942,24 @@ async def get_session_detail(session_id: str, user: dict = Depends(get_current_u
     is_paid = None
 
     if rid:
-        rep = await db.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
+        rep = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
         if rep:
             report_status = rep.get("status") or rep.get("approval_status", "Unknown")
             slip = rep.get("slip_number")
             approved_at = rep.get("approved_at")
             # Get approver name
             if rep.get("approved_by"):
-                approver = await db.users.find_one({"id": rep["approved_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+                approver = await tenant.users.find_one({"id": rep["approved_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
                 if approver:
                     approved_by_name = f"{approver.get('first_name', '')} {approver.get('last_name', '')}".strip()
             if rep.get("submitted_by"):
-                creator = await db.users.find_one({"id": rep["submitted_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+                creator = await tenant.users.find_one({"id": rep["submitted_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
                 if creator:
                     created_by_name = f"{creator.get('first_name', '')} {creator.get('last_name', '')}".strip()
             is_paid = rep.get("payroll_ready", False) and report_status == "APPROVED"
 
     # Project name
-    project = await db.projects.find_one({"id": session.get("site_id")}, {"_id": 0, "name": 1})
+    project = await tenant.projects.find_one({"id": session.get("site_id")}, {"_id": 0, "name": 1})
 
     return {
         "session_id": session_id,

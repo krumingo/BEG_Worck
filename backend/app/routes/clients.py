@@ -1,19 +1,26 @@
 """
 Routes - Clients (Private Persons) CRUD with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
 import re
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter(tags=["Clients"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view of the legacy database."""
+    return TenantData.for_user(db, user)
 
 
 def finance_permission(user: dict) -> bool:
@@ -101,6 +108,7 @@ async def list_clients(
     active_only: bool = True,
 ):
     """List clients with pagination, sorting, and filters"""
+    tenant = _tenant(user)
     base_query = {"org_id": user["org_id"]}
     
     if active_only:
@@ -124,26 +132,26 @@ async def list_clients(
         ]
     
     # Count total
-    total = await db.clients.count_documents(query)
+    total = await tenant.clients.count_documents(query)
     
     # Sort
     sort_direction = 1 if sort_dir == "asc" else -1
     
     # Paginate
     skip = (page - 1) * page_size
-    clients = await db.clients.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
+    clients = await tenant.clients.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Add invoice count for each client
     for client in clients:
         # Count invoices through linked counterparties
-        linked_counterparties = await db.counterparties.find(
+        linked_counterparties = await tenant.counterparties.find(
             {"org_id": user["org_id"], "client_id": client["id"]},
             {"_id": 0, "id": 1}
         ).to_list(100)
         
         cp_ids = [cp["id"] for cp in linked_counterparties]
         if cp_ids:
-            invoice_count = await db.invoices.count_documents({
+            invoice_count = await tenant.invoices.count_documents({
                 "org_id": user["org_id"],
                 "supplier_counterparty_id": {"$in": cp_ids}
             })
@@ -164,6 +172,7 @@ async def list_clients(
 @router.post("/clients", status_code=201)
 async def create_client(data: ClientCreate, user: dict = Depends(require_m5)):
     """Create a new client (private person)"""
+    tenant = _tenant(user)
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -174,7 +183,7 @@ async def create_client(data: ClientCreate, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Phone number is required")
     
     # Check phone uniqueness within org
-    existing = await db.clients.find_one({
+    existing = await tenant.clients.find_one({
         "org_id": user["org_id"],
         "phone_normalized": phone_normalized
     })
@@ -197,7 +206,7 @@ async def create_client(data: ClientCreate, user: dict = Depends(require_m5)):
         "updated_at": now,
     }
     
-    await db.clients.insert_one(client)
+    await tenant.clients.insert_one(client)
     
     await log_audit(user["org_id"], user["id"], user["email"], "client_created", "client", client["id"],
                     {"name": f"{data.first_name} {data.last_name}", "phone": data.phone})
@@ -208,7 +217,8 @@ async def create_client(data: ClientCreate, user: dict = Depends(require_m5)):
 @router.get("/clients/{client_id}")
 async def get_client(client_id: str, user: dict = Depends(require_m5)):
     """Get client details"""
-    client = await db.clients.find_one(
+    tenant = _tenant(user)
+    client = await tenant.clients.find_one(
         {"id": client_id, "org_id": user["org_id"]},
         {"_id": 0}
     )
@@ -216,7 +226,7 @@ async def get_client(client_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=404, detail="Client not found")
     
     # Get linked counterparties
-    linked_counterparties = await db.counterparties.find(
+    linked_counterparties = await tenant.counterparties.find(
         {"org_id": user["org_id"], "client_id": client_id},
         {"_id": 0, "id": 1, "name": 1, "type": 1}
     ).to_list(100)
@@ -232,7 +242,7 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    client = await db.clients.find_one({"id": client_id, "org_id": user["org_id"]})
+    client = await _tenant(user).clients.get(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
@@ -242,7 +252,7 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
     if data.phone is not None:
         phone_normalized = normalize_phone(data.phone)
         if phone_normalized != client.get("phone_normalized"):
-            existing = await db.clients.find_one({
+            existing = await _tenant(user).clients.find_one({
                 "org_id": user["org_id"],
                 "phone_normalized": phone_normalized,
                 "id": {"$ne": client_id}
@@ -260,36 +270,40 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
     
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.clients.update_one({"id": client_id}, {"$set": update})
+        await _tenant(user).clients.update_one({"id": client_id}, {"$set": update})
     
-    return await db.clients.find_one({"id": client_id}, {"_id": 0})
+    return await _tenant(user).clients.get(client_id, {"_id": 0})
 
 
 @router.delete("/clients/{client_id}")
-async def delete_client(client_id: str, user: dict = Depends(require_m5)):
+async def delete_client(client_id: str, request: Request, user: dict = Depends(require_m5)):
     """Delete client (soft delete if has linked counterparties)"""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    client = await db.clients.find_one({"id": client_id, "org_id": user["org_id"]})
+    client = await _tenant(user).clients.get(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
     # Check if has linked counterparties
-    linked_count = await db.counterparties.count_documents({
+    linked_count = await _tenant(user).counterparties.count({
         "org_id": user["org_id"],
         "client_id": client_id
     })
     
     if linked_count > 0:
         # Soft delete only
-        await db.clients.update_one(
-            {"id": client_id},
+        await _tenant(user).clients.update_one(
+            {"id": client_id, "org_id": user["org_id"]},
             {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
         return {"ok": True, "soft_deleted": True, "reason": "Has linked counterparties"}
     
-    await db.clients.delete_one({"id": client_id})
+    done = await guarded_identity_delete(user, request, db, collection="clients",
+                                         legacy_id=client_id)
+    if done is not None:
+        return done
+    await _tenant(user).clients.delete_one({"id": client_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -298,13 +312,14 @@ async def delete_client(client_id: str, user: dict = Depends(require_m5)):
 @router.post("/clients/find-or-create")
 async def find_or_create_client(data: ClientCreate, user: dict = Depends(require_m5)):
     """Find existing client by phone or create new one"""
+    tenant = _tenant(user)
     phone_normalized = normalize_phone(data.phone)
     
     if not phone_normalized:
         raise HTTPException(status_code=400, detail="Phone number is required")
     
     # Try to find existing client
-    existing = await db.clients.find_one({
+    existing = await tenant.clients.find_one({
         "org_id": user["org_id"],
         "phone_normalized": phone_normalized
     }, {"_id": 0})
@@ -329,7 +344,7 @@ async def find_or_create_client(data: ClientCreate, user: dict = Depends(require
         "updated_at": now,
     }
     
-    await db.clients.insert_one(client)
+    await tenant.clients.insert_one(client)
     
     return {"client": {k: v for k, v in client.items() if k != "_id"}, "created": True}
 
@@ -337,9 +352,10 @@ async def find_or_create_client(data: ClientCreate, user: dict = Depends(require
 @router.get("/clients/by-phone/{phone}")
 async def get_client_by_phone(phone: str, user: dict = Depends(require_m5)):
     """Find client by phone number"""
+    tenant = _tenant(user)
     phone_normalized = normalize_phone(phone)
     
-    client = await db.clients.find_one({
+    client = await tenant.clients.find_one({
         "org_id": user["org_id"],
         "phone_normalized": phone_normalized
     }, {"_id": 0})
@@ -398,6 +414,7 @@ async def unified_client_search(
     Unified client search across companies and persons.
     Search by name, EIK, EGN, or phone number.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     results = []
     
@@ -407,7 +424,7 @@ async def unified_client_search(
     
     # Search companies
     if not type or type == "company":
-        companies = await db.companies.find({"org_id": org_id}, {"_id": 0}).to_list(500)
+        companies = await tenant.companies.find({"org_id": org_id}, {"_id": 0}).to_list(500)
         
         for c in companies:
             if q:
@@ -436,7 +453,7 @@ async def unified_client_search(
     
     # Search persons
     if not type or type == "person":
-        persons = await db.persons.find({"org_id": org_id}, {"_id": 0}).to_list(500)
+        persons = await tenant.persons.find({"org_id": org_id}, {"_id": 0}).to_list(500)
         
         for p in persons:
             full_name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
@@ -492,13 +509,14 @@ async def create_company_client(
     user: dict = Depends(get_current_user),
 ):
     """Create a new company client with duplicate detection"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     eik = normalize_eik(data.eik)
     if not validate_eik(eik):
         raise HTTPException(status_code=400, detail="Невалиден ЕИК. Трябва да е 9 или 13 цифри.")
     
-    existing = await db.companies.find_one({"org_id": org_id, "eik": eik})
+    existing = await tenant.companies.find_one({"org_id": org_id, "eik": eik})
     if existing:
         raise HTTPException(
             status_code=409, 
@@ -522,7 +540,7 @@ async def create_company_client(
         "updated_at": now,
     }
     
-    await db.companies.insert_one(company)
+    await tenant.companies.insert_one(company)
     
     return {
         "id": company["id"],
@@ -551,6 +569,7 @@ async def create_person_client(
     user: dict = Depends(get_current_user),
 ):
     """Create a new person client with duplicate detection"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     egn = normalize_egn(data.egn) if data.egn else None
@@ -560,7 +579,7 @@ async def create_person_client(
         raise HTTPException(status_code=400, detail="Невалидно ЕГН. Трябва да е 10 цифри.")
     
     if egn:
-        existing = await db.persons.find_one({"org_id": org_id, "egn": egn})
+        existing = await tenant.persons.find_one({"org_id": org_id, "egn": egn})
         if existing:
             name = f"{existing.get('first_name', '')} {existing.get('last_name', '')}".strip()
             raise HTTPException(
@@ -569,7 +588,7 @@ async def create_person_client(
             )
     
     if phone and not egn:
-        existing = await db.persons.find_one({
+        existing = await tenant.persons.find_one({
             "org_id": org_id,
             "$or": [{"phone": data.phone}, {"phone_normalized": phone}]
         })
@@ -601,7 +620,7 @@ async def create_person_client(
         "updated_at": now,
     }
     
-    await db.persons.insert_one(person)
+    await tenant.persons.insert_one(person)
     
     return {
         "id": person["id"],
@@ -621,9 +640,10 @@ async def get_project_client_info(
     user: dict = Depends(get_current_user),
 ):
     """Get the client linked to a project with full details"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Проектът не е намерен")
     
@@ -634,7 +654,7 @@ async def get_project_client_info(
         return {"has_client": False, "client": None}
     
     if owner_type == "company":
-        company = await db.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+        company = await tenant.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
         if company:
             return {
                 "has_client": True,
@@ -652,7 +672,7 @@ async def get_project_client_info(
                 }
             }
     elif owner_type == "person":
-        person = await db.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+        person = await tenant.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
         if person:
             full_name = f"{person.get('first_name', '')} {person.get('last_name', '')}".strip()
             return {
@@ -679,9 +699,10 @@ async def update_project_client_link(
     user: dict = Depends(get_current_user),
 ):
     """Link or unlink a client to/from a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Проектът не е намерен")
     
@@ -689,7 +710,7 @@ async def update_project_client_link(
     client_type = data.get("client_type")
     
     if client_id is None:
-        await db.projects.update_one(
+        await tenant.projects.update_one(
             {"id": project_id},
             {"$set": {"owner_type": None, "owner_id": None, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
@@ -697,22 +718,22 @@ async def update_project_client_link(
     
     client = None
     if client_type == "company":
-        client = await db.companies.find_one({"id": client_id, "org_id": org_id})
+        client = await tenant.companies.find_one({"id": client_id, "org_id": org_id})
     elif client_type == "person":
-        client = await db.persons.find_one({"id": client_id, "org_id": org_id})
+        client = await tenant.persons.find_one({"id": client_id, "org_id": org_id})
     else:
-        client = await db.companies.find_one({"id": client_id, "org_id": org_id})
+        client = await tenant.companies.find_one({"id": client_id, "org_id": org_id})
         if client:
             client_type = "company"
         else:
-            client = await db.persons.find_one({"id": client_id, "org_id": org_id})
+            client = await tenant.persons.find_one({"id": client_id, "org_id": org_id})
             if client:
                 client_type = "person"
     
     if not client:
         raise HTTPException(status_code=404, detail="Клиентът не е намерен")
     
-    await db.projects.update_one(
+    await tenant.projects.update_one(
         {"id": project_id},
         {"$set": {
             "owner_type": client_type,
@@ -732,13 +753,14 @@ async def update_project_client_link(
 @router.get("/clients/{client_id}/summary")
 async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
     """Full client summary: projects, invoices, totals, activity."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    client = await db.clients.find_one({"id": client_id, "org_id": org_id}, {"_id": 0})
+    client = await tenant.clients.find_one({"id": client_id, "org_id": org_id}, {"_id": 0})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
     # Projects linked to this client
-    projects = await db.projects.find(
+    projects = await tenant.projects.find(
         {"org_id": org_id, "owner_id": client_id},
         {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1, "start_date": 1, "end_date": 1},
     ).to_list(100)
@@ -754,7 +776,7 @@ async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
 
     for p in projects:
         pid = p["id"]
-        invs = await db.invoices.find(
+        invs = await tenant.invoices.find(
             {"org_id": org_id, "project_id": pid},
             {"_id": 0, "total": 1, "paid_amount": 1, "status": 1},
         ).to_list(200)
@@ -789,7 +811,7 @@ async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
     all_pids = [p["id"] for p in projects]
     invoices = []
     if all_pids:
-        inv_docs = await db.invoices.find(
+        inv_docs = await tenant.invoices.find(
             {"org_id": org_id, "project_id": {"$in": all_pids}},
             {"_id": 0, "id": 1, "invoice_number": 1, "project_id": 1, "total": 1, "paid_amount": 1, "status": 1, "issue_date": 1},
         ).sort("issue_date", -1).to_list(10)
@@ -821,8 +843,9 @@ async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
 
 @router.get("/clients/{client_id}/projects")
 async def get_client_projects(client_id: str, user: dict = Depends(require_m5)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    projects = await db.projects.find(
+    projects = await tenant.projects.find(
         {"org_id": org_id, "owner_id": client_id},
         {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1, "start_date": 1, "end_date": 1},
     ).to_list(100)
@@ -831,14 +854,15 @@ async def get_client_projects(client_id: str, user: dict = Depends(require_m5)):
 
 @router.get("/clients/{client_id}/invoices")
 async def get_client_invoices(client_id: str, user: dict = Depends(require_m5)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    projects = await db.projects.find(
+    projects = await tenant.projects.find(
         {"org_id": org_id, "owner_id": client_id}, {"_id": 0, "id": 1}
     ).to_list(100)
     pids = [p["id"] for p in projects]
     if not pids:
         return {"items": [], "total": 0}
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": {"$in": pids}}, {"_id": 0}
     ).sort("issue_date", -1).to_list(200)
     return {"items": invoices, "total": len(invoices)}

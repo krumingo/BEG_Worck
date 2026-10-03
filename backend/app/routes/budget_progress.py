@@ -15,6 +15,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Budget Freeze / Progress"])
 
@@ -26,19 +32,20 @@ router = APIRouter(tags=["Budget Freeze / Progress"])
 @router.post("/budget-freezes/{project_id}", status_code=201)
 async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
     """Freeze current budget state for all execution packages in a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
     if not pkgs:
         raise HTTPException(status_code=400, detail="No execution packages to freeze")
 
     # Version check — increment from last freeze
-    last = await db.budget_freezes.find_one(
+    last = await tenant.budget_freezes.find_one(
         {"org_id": org_id, "project_id": project_id},
         sort=[("freeze_version", -1)]
     )
@@ -93,20 +100,22 @@ async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = De
         },
         "currency": "EUR",
     }
-    await db.budget_freezes.insert_one(freeze)
+    await tenant.budget_freezes.insert_one(freeze)
     return {k: v for k, v in freeze.items() if k != "_id"}
 
 
 @router.get("/budget-freezes/{project_id}")
 async def list_budget_freezes(project_id: str, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"], "project_id": project_id}
-    freezes = await db.budget_freezes.find(q, {"_id": 0}).sort("freeze_version", -1).to_list(50)
+    freezes = await tenant.budget_freezes.find(q, {"_id": 0}).sort("freeze_version", -1).to_list(50)
     return freezes
 
 
 @router.get("/budget-freezes/{project_id}/latest")
 async def get_latest_budget_freeze(project_id: str, user: dict = Depends(require_m2)):
-    freeze = await db.budget_freezes.find_one(
+    tenant = _tenant(user)
+    freeze = await tenant.budget_freezes.find_one(
         {"org_id": user["org_id"], "project_id": project_id},
         {"_id": 0}, sort=[("freeze_version", -1)]
     )
@@ -122,12 +131,13 @@ async def get_latest_budget_freeze(project_id: str, user: dict = Depends(require
 @router.post("/progress-updates", status_code=201)
 async def create_progress_update(data: dict, user: dict = Depends(require_m2)):
     """Record actual progress for an execution package"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("execution_package_id")
     if not pkg_id:
         raise HTTPException(status_code=400, detail="execution_package_id required")
 
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": org_id})
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
@@ -148,10 +158,10 @@ async def create_progress_update(data: dict, user: dict = Depends(require_m2)):
         "source": data.get("source", "manual"),
         "created_at": now,
     }
-    await db.progress_updates.insert_one(update)
+    await tenant.progress_updates.insert_one(update)
 
     # Update execution package with latest progress
-    await db.execution_packages.update_one({"id": pkg_id}, {"$set": {
+    await tenant.execution_packages.update_one({"id": pkg_id}, {"$set": {
         "progress_percent": progress,
         "progress_last_updated_at": now,
         "progress_source": update["source"],
@@ -167,10 +177,11 @@ async def list_progress_updates(
     execution_package_id: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
-    return await db.progress_updates.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await tenant.progress_updates.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -180,7 +191,8 @@ async def list_progress_updates(
 @router.get("/progress-updates/{pkg_id}/latest")
 async def get_latest_progress(pkg_id: str, user: dict = Depends(require_m2)):
     """Get latest progress update for an execution package"""
-    update = await db.progress_updates.find_one(
+    tenant = _tenant(user)
+    update = await tenant.progress_updates.find_one(
         {"org_id": user["org_id"], "execution_package_id": pkg_id},
         {"_id": 0}, sort=[("created_at", -1)]
     )
@@ -192,14 +204,15 @@ async def get_latest_progress(pkg_id: str, user: dict = Depends(require_m2)):
 @router.get("/progress-updates/{pkg_id}/history")
 async def get_progress_history(pkg_id: str, user: dict = Depends(require_m2)):
     """Get full progress history for an execution package"""
-    history = await db.progress_updates.find(
+    tenant = _tenant(user)
+    history = await tenant.progress_updates.find(
         {"org_id": user["org_id"], "execution_package_id": pkg_id},
         {"_id": 0}
     ).sort("created_at", 1).to_list(200)
 
     # Load user names
     user_ids = list(set(h.get("updated_by", "") for h in history if h.get("updated_by")))
-    users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
+    users = await tenant.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
 
     for h in history:
@@ -215,8 +228,9 @@ async def get_progress_history(pkg_id: str, user: dict = Depends(require_m2)):
 @router.get("/progress-comparison/{pkg_id}")
 async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
     """Compare physical progress vs cost usage for an execution package"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkg = await db.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
+    pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": org_id}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
 
@@ -234,7 +248,7 @@ async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
     material_usage_pct = round(mat_actual / mat_budget * 100, 1) if mat_budget > 0 else None
 
     # Subcontract progress proxy
-    sub_lines = await db.subcontractor_package_lines.find(
+    sub_lines = await tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "execution_package_id": pkg_id},
         {"_id": 0, "assigned_qty": 1, "certified_qty": 1}
     ).to_list(50)
@@ -286,8 +300,9 @@ async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
 @router.get("/progress-warnings/{project_id}")
 async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Progress deviation warnings for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
@@ -353,10 +368,10 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
         })
 
     # Budget burn warnings from work_sessions
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "labor_cost": 1},
     ).to_list(5000)
@@ -382,7 +397,8 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
 
 async def get_progress_risk(org_id: str, project_id: str) -> dict:
     """Get progress risk flags for integration into project risk"""
-    pkgs = await db.execution_packages.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
     if not pkgs:
@@ -417,8 +433,9 @@ async def get_progress_risk(org_id: str, project_id: str) -> dict:
 @router.get("/project-progress-summary/{project_id}")
 async def get_project_progress_summary(project_id: str, user: dict = Depends(require_m2)):
     """Project-level progress summary across all execution packages"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await db.execution_packages.find(
+    pkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
@@ -455,7 +472,7 @@ async def get_project_progress_summary(project_id: str, user: dict = Depends(req
         })
 
     # Latest freeze for comparison
-    freeze = await db.budget_freezes.find_one(
+    freeze = await tenant.budget_freezes.find_one(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "freeze_version": 1, "frozen_at": 1, "totals": 1},
         sort=[("freeze_version", -1)]

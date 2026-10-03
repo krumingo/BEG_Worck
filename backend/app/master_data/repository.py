@@ -213,7 +213,7 @@ class MasterDataRepository:
             query["$or"] = [{"source_channels": source_channel},
                             {"source_channel": source_channel}]
         handle = await self.db()
-        cursor = handle[PENDING_COLLECTION].find(query, {"_id": 0})
+        cursor = handle[PENDING_COLLECTION].find(self._scope(query), {"_id": 0})
         return await cursor.to_list(length=min(int(limit), 200))
 
     async def search_by_text(self, entity_type: str, query: str, limit: int = 10) -> list:

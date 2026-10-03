@@ -13,6 +13,12 @@ from app.services.excel_import_v2 import (
     detect_excel_structure, normalize_with_mapping,
     save_import_template, apply_template,
 )
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Excel Import V2"])
 
@@ -74,16 +80,18 @@ async def create_template(data: TemplateCreate, user: dict = Depends(get_current
 
 @router.get("/excel-import/templates")
 async def list_templates(import_type: Optional[str] = None, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if import_type:
         query["import_type"] = import_type
-    items = await db.excel_import_templates.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    items = await tenant.excel_import_templates.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {"items": items, "total": len(items)}
 
 
 @router.get("/excel-import/templates/{template_id}")
 async def get_template(template_id: str, user: dict = Depends(get_current_user)):
-    doc = await db.excel_import_templates.find_one({"id": template_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.excel_import_templates.find_one({"id": template_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Template not found")
     return doc
@@ -91,18 +99,20 @@ async def get_template(template_id: str, user: dict = Depends(get_current_user))
 
 @router.put("/excel-import/templates/{template_id}")
 async def update_template(template_id: str, data: TemplateUpdate, user: dict = Depends(get_current_user)):
-    doc = await db.excel_import_templates.find_one({"id": template_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.excel_import_templates.find_one({"id": template_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Template not found")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.excel_import_templates.update_one({"id": template_id}, {"$set": update})
-    return await db.excel_import_templates.find_one({"id": template_id}, {"_id": 0})
+    await tenant.excel_import_templates.update_one({"id": template_id}, {"$set": update})
+    return await tenant.excel_import_templates.find_one({"id": template_id}, {"_id": 0})
 
 
 @router.delete("/excel-import/templates/{template_id}")
 async def delete_template(template_id: str, user: dict = Depends(get_current_user)):
-    await db.excel_import_templates.delete_one({"id": template_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    await tenant.excel_import_templates.delete_one({"id": template_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -119,12 +129,13 @@ async def commit_import(
     user: dict = Depends(get_current_user),
 ):
     """Bridge: v2 preview/mapping → old import engine."""
+    tenant = _tenant(user)
     content = await file.read()
 
     # Get mapping from template or auto-detect
     mapping = None
     if template_id:
-        tpl = await db.excel_import_templates.find_one(
+        tpl = await tenant.excel_import_templates.find_one(
             {"id": template_id, "org_id": user["org_id"]}, {"_id": 0}
         )
         if tpl:
@@ -138,7 +149,7 @@ async def commit_import(
     import uuid as _uuid
     from datetime import datetime as _dt, timezone as _tz
 
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -154,7 +165,7 @@ async def commit_import(
         calc_line(ln)
 
     now = _dt.now(_tz.utc).isoformat()
-    last = await db.smr_analyses.find_one(
+    last = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": project_id},
         {"_id": 0, "version": 1}, sort=[("version", -1)],
     )
@@ -182,7 +193,7 @@ async def commit_import(
         "approved_by": None,
         "approved_at": None,
     }
-    await db.smr_analyses.insert_one(analysis)
+    await tenant.smr_analyses.insert_one(analysis)
 
     # W0-03: same as the v1 path — the identities the spreadsheet named are
     # offered for mapping, never written into Master Data here.
@@ -238,13 +249,14 @@ async def commit_budget_import(
     user: dict = Depends(get_current_user),
 ):
     """Import construction budget → creates activity_budgets with snapshot fields."""
+    tenant = _tenant(user)
     from app.services.excel_import_v2 import parse_construction_budget
     from app.routes.activity_budgets import compute_avg_daily_wage
 
     content = await file.read()
     org_id = user["org_id"]
 
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -280,7 +292,7 @@ async def commit_budget_import(
         budget_subtype = ln["activity_name"] if ln["category"] else ""
 
         # Upsert by type + subtype
-        existing = await db.activity_budgets.find_one({
+        existing = await tenant.activity_budgets.find_one({
             "org_id": org_id, "project_id": project_id,
             "type": budget_type, "subtype": budget_subtype,
         })
@@ -301,7 +313,7 @@ async def commit_budget_import(
         }
 
         if existing:
-            await db.activity_budgets.update_one({"id": existing["id"]}, {"$set": doc})
+            await tenant.activity_budgets.update_one({"id": existing["id"]}, {"$set": doc})
             updated += 1
         else:
             doc.update({
@@ -315,7 +327,7 @@ async def commit_budget_import(
                 "planned_target_days": None,
                 "created_at": now,
             })
-            await db.activity_budgets.insert_one(doc)
+            await tenant.activity_budgets.insert_one(doc)
             created += 1
 
     return {

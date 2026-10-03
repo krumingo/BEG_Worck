@@ -147,15 +147,16 @@ def calc_totals(lines: list) -> dict:
 
 @router.post("/smr-analyses", status_code=201)
 async def create_analysis(data: AnalysisCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Auto-increment version within project
-    last = await db.smr_analyses.find_one(
+    last = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": data.project_id},
         {"_id": 0, "version": 1},
         sort=[("version", -1)],
@@ -185,7 +186,7 @@ async def create_analysis(data: AnalysisCreate, user: dict = Depends(require_m2)
 
     # Pre-populate lines from source
     if data.created_from and data.created_from_type == "missing_smr":
-        src = await db.missing_smr.find_one({"id": data.created_from, "org_id": user["org_id"]}, {"_id": 0})
+        src = await tenant.missing_smr.find_one({"id": data.created_from, "org_id": user["org_id"]}, {"_id": 0})
         if src:
             line = {
                 "line_id": str(uuid.uuid4()),
@@ -206,7 +207,7 @@ async def create_analysis(data: AnalysisCreate, user: dict = Depends(require_m2)
             analysis["lines"] = [calc_line(line)]
             analysis["totals"] = calc_totals(analysis["lines"])
 
-    await db.smr_analyses.insert_one(analysis)
+    await tenant.smr_analyses.insert_one(analysis)
     return {k: v for k, v in analysis.items() if k != "_id"}
 
 
@@ -224,12 +225,14 @@ async def list_analyses(
         query["project_id"] = project_id
     if status:
         query["status"] = status
-    return await paginate_query(db.smr_analyses, query, page, page_size, "created_at", -1)
+    tenant = _tenant(user)
+    return await paginate_query(tenant.smr_analyses, query, page, page_size, "created_at", -1)
 
 
 @router.get("/smr-analyses/{analysis_id}")
 async def get_analysis(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     return doc
@@ -237,7 +240,8 @@ async def get_analysis(analysis_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/smr-analyses/{analysis_id}")
 async def update_analysis(analysis_id: str, data: AnalysisUpdate, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -246,15 +250,16 @@ async def update_analysis(analysis_id: str, data: AnalysisUpdate, user: dict = D
     if data.name is not None:
         update["name"] = data.name
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one({"id": analysis_id}, {"$set": update})
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    await tenant.smr_analyses.update_one({"id": analysis_id}, {"$set": update})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 # ── Line Management ────────────────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/lines")
 async def add_line(analysis_id: str, data: LineCreate, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -280,16 +285,17 @@ async def add_line(analysis_id: str, data: LineCreate, user: dict = Depends(requ
     lines = doc.get("lines", []) + [line]
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 @router.put("/smr-analyses/{analysis_id}/lines/{line_id}")
 async def update_line(analysis_id: str, line_id: str, data: LineUpdate, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -310,16 +316,17 @@ async def update_line(analysis_id: str, line_id: str, data: LineUpdate, user: di
 
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 @router.delete("/smr-analyses/{analysis_id}/lines/{line_id}")
 async def delete_line(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -331,18 +338,19 @@ async def delete_line(analysis_id: str, line_id: str, user: dict = Depends(requi
 
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 # ── Recalculate ────────────────────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/recalculate")
 async def recalculate(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
@@ -351,18 +359,19 @@ async def recalculate(analysis_id: str, user: dict = Depends(require_m2)):
         calc_line(ln)
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 # ── AI Suggest ─────────────────────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/ai-suggest")
 async def ai_suggest(analysis_id: str, data: AISuggestRequest, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -408,11 +417,11 @@ async def ai_suggest(analysis_id: str, data: AISuggestRequest, user: dict = Depe
     calc_line(target)
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    updated = await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    updated = await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
     return {"analysis": updated, "proposal": proposal}
 
 
@@ -420,14 +429,15 @@ async def ai_suggest(analysis_id: str, data: AISuggestRequest, user: dict = Depe
 
 @router.post("/smr-analyses/{analysis_id}/approve")
 async def approve_analysis(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] not in ["draft"]:
         raise HTTPException(status_code=400, detail="Only draft analyses can be approved")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {
             "status": "approved",
@@ -437,34 +447,36 @@ async def approve_analysis(analysis_id: str, user: dict = Depends(require_m2)):
             "updated_at": now,
         }},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 @router.post("/smr-analyses/{analysis_id}/lock")
 async def lock_analysis(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] not in ["draft", "approved"]:
         raise HTTPException(status_code=400, detail="Cannot lock from current status")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"status": "locked", "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 # ── Snapshot (version+1 copy) ──────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/snapshot")
 async def snapshot_analysis(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    last = await db.smr_analyses.find_one(
+    last = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": doc["project_id"]},
         {"_id": 0, "version": 1},
         sort=[("version", -1)],
@@ -474,6 +486,8 @@ async def snapshot_analysis(analysis_id: str, user: dict = Depends(require_m2)):
     now = datetime.now(timezone.utc).isoformat()
     new_doc = copy.deepcopy(doc)
     new_doc["id"] = str(uuid.uuid4())
+    # W0-03E-A2B: the copy's owner is the session tenant, stamped explicitly.
+    new_doc["org_id"] = user["org_id"]
     new_doc["version"] = new_version
     new_doc["status"] = "draft"
     new_doc["name"] = f"{doc['name']} (v{new_version})"
@@ -486,7 +500,7 @@ async def snapshot_analysis(analysis_id: str, user: dict = Depends(require_m2)):
     for ln in new_doc.get("lines", []):
         ln["line_id"] = str(uuid.uuid4())
 
-    await db.smr_analyses.insert_one(new_doc)
+    await tenant.smr_analyses.insert_one(new_doc)
     return {k: v for k, v in new_doc.items() if k != "_id"}
 
 
@@ -494,11 +508,12 @@ async def snapshot_analysis(analysis_id: str, user: dict = Depends(require_m2)):
 
 @router.get("/smr-analyses/{analysis_id}/compare/{version}")
 async def compare_versions(analysis_id: str, version: int, user: dict = Depends(require_m2)):
-    current = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    current = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not current:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    other = await db.smr_analyses.find_one(
+    other = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": current["project_id"], "version": version},
         {"_id": 0},
     )
@@ -523,15 +538,16 @@ async def compare_versions(analysis_id: str, version: int, user: dict = Depends(
 
 @router.post("/smr-analyses/{analysis_id}/to-offer")
 async def to_offer(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": doc["project_id"], "org_id": user["org_id"]},
         {"_id": 0, "code": 1, "name": 1},
     )
-    last_offer = await db.offers.find_one(
+    last_offer = await tenant.offers.find_one(
         {"org_id": user["org_id"]}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)]
     )
     num = 1
@@ -589,7 +605,7 @@ async def to_offer(analysis_id: str, user: dict = Depends(require_m2)):
         "accepted_at": None,
         "source_analysis_id": analysis_id,
     }
-    await db.offers.insert_one(offer)
+    await tenant.offers.insert_one(offer)
 
     return {"ok": True, "offer_id": offer["id"], "offer_no": offer_no}
 
@@ -601,6 +617,12 @@ async def to_offer(analysis_id: str, user: dict = Depends(require_m2)):
 from fastapi import UploadFile, File, Form
 from fastapi.responses import Response
 from app.services.excel_import import import_kss_from_excel, export_kss_to_excel
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 
 class BulkUpdateRequest(BaseModel):
@@ -619,10 +641,11 @@ async def import_excel(
     name: str = Form(""),
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -637,7 +660,7 @@ async def import_excel(
         calc_line(ln)
 
     now = datetime.now(timezone.utc).isoformat()
-    last = await db.smr_analyses.find_one(
+    last = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": project_id},
         {"_id": 0, "version": 1}, sort=[("version", -1)],
     )
@@ -666,7 +689,7 @@ async def import_excel(
         "approved_by": None,
         "approved_at": None,
     }
-    await db.smr_analyses.insert_one(analysis)
+    await tenant.smr_analyses.insert_one(analysis)
 
     # W0-03: the spreadsheet carried activity and unit names as free text.
     # Offer them for mapping; the import above is unaffected either way.
@@ -686,7 +709,8 @@ async def import_excel(
 
 @router.get("/smr-analyses/{analysis_id}/export-excel")
 async def export_excel(analysis_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
@@ -705,7 +729,8 @@ async def export_excel(analysis_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/smr-analyses/{analysis_id}/lines/{line_id}/toggle")
 async def toggle_line(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -723,18 +748,19 @@ async def toggle_line(analysis_id: str, line_id: str, user: dict = Depends(requi
 
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 # ── Bulk Update ────────────────────────────────────────────────────
 
 @router.put("/smr-analyses/{analysis_id}/bulk-update")
 async def bulk_update(analysis_id: str, data: BulkUpdateRequest, user: dict = Depends(require_m2)):
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -787,11 +813,11 @@ async def bulk_update(analysis_id: str, data: BulkUpdateRequest, user: dict = De
 
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    updated = await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    updated = await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
     return {"ok": True, "affected": affected, "analysis": updated}
 
 
@@ -799,11 +825,12 @@ async def bulk_update(analysis_id: str, data: BulkUpdateRequest, user: dict = De
 
 @router.get("/smr-analyses/{analysis_id}/diff/{version}")
 async def diff_versions(analysis_id: str, version: int, user: dict = Depends(require_m2)):
-    current = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    current = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not current:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    other = await db.smr_analyses.find_one(
+    other = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": current["project_id"], "version": version},
         {"_id": 0},
     )
@@ -858,15 +885,16 @@ async def diff_versions(analysis_id: str, version: int, user: dict = Depends(req
 
 @router.post("/smr-analyses/from-offer/{offer_id}", status_code=201)
 async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await db.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
     project_id = offer["project_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
 
     now = datetime.now(timezone.utc).isoformat()
-    last = await db.smr_analyses.find_one(
+    last = await tenant.smr_analyses.find_one(
         {"org_id": user["org_id"], "project_id": project_id},
         {"_id": 0, "version": 1}, sort=[("version", -1)],
     )
@@ -922,7 +950,7 @@ async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
         "approved_by": None,
         "approved_at": None,
     }
-    await db.smr_analyses.insert_one(analysis)
+    await tenant.smr_analyses.insert_one(analysis)
     return {k: v for k, v in analysis.items() if k != "_id"}
 
 
@@ -931,8 +959,9 @@ async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
 @router.post("/smr-analyses/{analysis_id}/ai-breakdown")
 async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user)):
     """AI breakdown of mixed-price lines into material + labor components."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    analysis = await db.smr_analyses.find_one({"id": analysis_id, "org_id": org_id}, {"_id": 0})
+    analysis = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": org_id}, {"_id": 0})
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
@@ -942,7 +971,9 @@ async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user))
 
     # Check for cached results
     cache_key = f"ai_breakdown_{analysis_id}"
-    cached = await db.ai_cache.find_one({"key": cache_key})
+    # W0-03E-A2B: the cache is tenant-owned. An analysis id is not unique across
+    # tenants, so a key-only lookup could return another tenant's AI results.
+    cached = await tenant.ai_cache.find_one({"key": cache_key, "org_id": org_id})
     if cached and cached.get("results"):
         # Apply cached results
         for result in cached["results"]:
@@ -953,7 +984,7 @@ async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user))
                     ln["ai_uverenost"] = result.get("uverenost", 0)
                     ln["ai_beleshka"] = result.get("beleshka", "")
                     ln["ai_processed_at"] = cached.get("created_at")
-        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines}})
+        await tenant.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines}})
         return {"processed": len(cached["results"]), "source": "cache"}
 
     # Build prompt for AI
@@ -1017,11 +1048,11 @@ material_cena + trud_cena трябва да = ed_cena.
                     ln["ai_processed_at"] = now
                     processed += 1
 
-        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
+        await tenant.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
 
         # Cache results
-        await db.ai_cache.update_one(
-            {"key": cache_key},
+        await tenant.ai_cache.update_one(
+            {"key": cache_key, "org_id": org_id},
             {"$set": {"results": results, "created_at": now}},
             upsert=True,
         )
@@ -1043,6 +1074,6 @@ material_cena + trud_cena трябва да = ed_cena.
                 ln["ai_processed_at"] = now
                 processed += 1
 
-        await db.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
+        await tenant.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
         return {"processed": processed, "source": "fallback", "error": str(e)}
 

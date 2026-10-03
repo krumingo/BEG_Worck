@@ -4,10 +4,12 @@ Service - Alarm Engine. Evaluates rules against live data.
 from datetime import datetime, timezone, timedelta
 from app.db import db
 import uuid
+from app.tenancy.data_access import TenantData
 
 
 async def evaluate_rule(rule: dict, org_id: str) -> list:
     """Evaluate a single alarm rule and return new AlarmEvents."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     events = []
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
@@ -23,7 +25,7 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
         q = {"org_id": org_id, "rule_id": rule_id, "status": {"$in": ["active", "acknowledged"]}, "triggered_at": {"$gte": cutoff}}
         if entity_id:
             q["context.entity_id"] = entity_id
-        return await db.alarm_events.find_one(q)
+        return await tenant.alarm_events.find_one(q)
 
     def _compare(value, op, thresh):
         if op == ">": return value > thresh
@@ -51,17 +53,17 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
     rtype = rule.get("type", "custom")
 
     if rtype == "budget":
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"org_id": org_id, "status": {"$in": ["Active", "Draft"]}},
             {"_id": 0, "id": 1, "name": 1},
         ).to_list(100)
         for p in projects:
             pid = p["id"]
-            budgets = await db.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
+            budgets = await tenant.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
             total_budget = sum(b.get("labor_budget", 0) for b in budgets)
             if total_budget <= 0:
                 continue
-            sessions = await db.work_sessions.find(
+            sessions = await tenant.work_sessions.find(
                 {"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}
             ).to_list(5000)
             spent = sum(s.get("labor_cost", 0) for s in sessions)
@@ -73,7 +75,7 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
             # Check secondary condition
             sec_metric = cond.get("secondary_metric")
             if sec_metric == "progress_pct":
-                pkgs = await db.execution_packages.find(
+                pkgs = await tenant.execution_packages.find(
                     {"org_id": org_id, "project_id": pid}, {"_id": 0, "progress_percent": 1}
                 ).to_list(100)
                 progress = sum(pk.get("progress_percent", 0) for pk in pkgs) / max(len(pkgs), 1) if pkgs else 0
@@ -97,7 +99,7 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
             {"$match": {"org_id": org_id, "ended_at": {"$ne": None}, "is_overtime": True, "started_at": {"$gte": week_ago}}},
             {"$group": {"_id": "$worker_id", "total_ot": {"$sum": "$duration_hours"}, "name": {"$first": "$worker_name"}}},
         ]
-        results = await db.work_sessions.aggregate(pipeline).to_list(500)
+        results = await tenant.work_sessions.aggregate(pipeline).to_list(500)
         for r in results:
             if _compare(r["total_ot"], op, threshold):
                 wid = r["_id"]
@@ -109,7 +111,7 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
                 ))
 
     elif rtype == "attendance":
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"org_id": org_id, "status": "Active"}, {"_id": 0, "id": 1, "name": 1}
         ).to_list(100)
         for p in projects:
@@ -117,7 +119,7 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
             found_workers = False
             for d in range(1, days_back + 1):
                 check_date = (now - timedelta(days=d)).strftime("%Y-%m-%d")
-                count = await db.work_sessions.count_documents(
+                count = await tenant.work_sessions.count_documents(
                     {"org_id": org_id, "site_id": p["id"], "started_at": {"$gte": f"{check_date}T00:00:00", "$lte": f"{check_date}T23:59:59"}}
                 )
                 if count > 0:
@@ -149,7 +151,7 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
                     ))
 
     elif rtype == "deadline":
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"org_id": org_id, "status": "Active", "end_date": {"$ne": None}},
             {"_id": 0, "id": 1, "name": 1, "end_date": 1},
         ).to_list(100)
@@ -172,21 +174,23 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
 
 async def evaluate_all_rules(org_id: str) -> dict:
     """Evaluate all active rules for an org."""
-    rules = await db.alarm_rules.find({"org_id": org_id, "is_active": True}, {"_id": 0}).to_list(100)
+    tenant = TenantData.for_resolved_org(db, org_id)
+    rules = await tenant.alarm_rules.find({"org_id": org_id, "is_active": True}, {"_id": 0}).to_list(100)
     all_new = []
     resolved = 0
 
     for rule in rules:
         new_events = await evaluate_rule(rule, org_id)
         for ev in new_events:
-            await db.alarm_events.insert_one(ev)
+            # W0-03E-A2B: stamped at the write with the tenant being evaluated.
+            await tenant.alarm_events.insert_one({**ev, "org_id": org_id})
         all_new.extend(new_events)
 
         # Auto-resolve
         if rule.get("auto_resolve"):
             if not new_events:
                 now_iso = datetime.now(timezone.utc).isoformat()
-                result = await db.alarm_events.update_many(
+                result = await tenant.alarm_events.update_many(
                     {"org_id": org_id, "rule_id": rule["id"], "status": "active"},
                     {"$set": {"status": "resolved", "resolved_at": now_iso, "resolved_by": "auto", "resolve_notes": "Auto-resolved"}},
                 )

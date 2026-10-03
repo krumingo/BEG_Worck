@@ -10,13 +10,15 @@ Mapping mirrors what payroll_sync used to write into payroll_payments:
 Only paid slips with a non-zero amount are returned (same as the old sync).
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 async def paid_labor_v3(org_id: str, date_from: str, date_to: str) -> list[dict]:
     # paid_at is a full ISO timestamp; extend the upper bound so payments made
     # on date_to (which carry a time component) are not dropped.
+    tenant = TenantData.for_resolved_org(db, org_id)
     upper = date_to if "T" in (date_to or "") else (date_to or "") + "T23:59:59.999999"
-    slips = await db.payment_slips.find(
+    slips = await tenant.payment_slips.find(
         {
             "org_id": org_id,
             "status": "paid",
@@ -47,7 +49,8 @@ async def _paid_alloc_rows(org_id: str) -> list[dict]:
         {project_id, allocated_gross_labor, allocated_hours, worker_id, worker_name}
     When no run is paid, returns [] (paid labor = 0), matching the old "active" filter.
     """
-    runs = await db.pay_runs.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    runs = await tenant.pay_runs.find(
         {"org_id": org_id, "status": "paid", "archived": {"$ne": True}},
         {"_id": 0, "employee_rows": 1},
     ).to_list(1000)
@@ -59,7 +62,7 @@ async def _paid_alloc_rows(org_id: str) -> list[dict]:
             return ""
         if name in proj_cache:
             return proj_cache[name]
-        p = await db.projects.find_one({"name": name, "org_id": org_id}, {"_id": 0, "id": 1})
+        p = await tenant.projects.find_one({"name": name, "org_id": org_id}, {"_id": 0, "id": 1})
         pid = (p or {}).get("id", "")
         proj_cache[name] = pid
         return pid

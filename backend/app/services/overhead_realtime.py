@@ -4,6 +4,7 @@ Formula: overhead/person/day = fixed_monthly / working_days / avg_working_people
 """
 from datetime import datetime, timezone, timedelta
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 WORKING_STATUSES = {"working"}
 PAID_NOT_WORKING = {"sick_paid", "vacation_paid"}
@@ -23,6 +24,7 @@ def get_working_days_in_month(year: int, month: int) -> int:
 
 
 async def compute_realtime_overhead(org_id: str, month: str = None) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc)
     if not month:
         month = now.strftime("%Y-%m")
@@ -31,22 +33,22 @@ async def compute_realtime_overhead(org_id: str, month: str = None) -> dict:
     working_days = get_working_days_in_month(year, mo)
 
     # a. Fixed expenses
-    fe = await db.fixed_expenses.find_one(
+    fe = await tenant.fixed_expenses.find_one(
         {"org_id": org_id, "month": month}, {"_id": 0}
     )
     fixed_total = fe.get("total", 0) if fe else 0
 
     # b. Total employees
-    total_employees = await db.employee_profiles.count_documents(
+    total_employees = await tenant.employee_profiles.count_documents(
         {"org_id": org_id, "active": True}
     )
     if total_employees == 0:
-        total_employees = await db.users.count_documents(
+        total_employees = await tenant.users.count_documents(
             {"org_id": org_id, "role": {"$nin": ["Admin"]}}
         )
 
     # c. Calendar data for the month
-    cal_entries = await db.worker_calendar.find(
+    cal_entries = await tenant.worker_calendar.find(
         {"org_id": org_id, "date": {"$gte": f"{month}-01", "$lte": f"{month}-31"}},
         {"_id": 0},
     ).to_list(5000)
@@ -81,7 +83,7 @@ async def compute_realtime_overhead(org_id: str, month: str = None) -> dict:
     avg_working = sum(working_counts) / len(working_counts) if working_counts else 0
 
     # f. Subcontractor offset
-    sub_acts = await db.subcontractor_acts.find(
+    sub_acts = await tenant.subcontractor_acts.find(
         {"org_id": org_id, "status": {"$in": ["confirmed", "approved"]},
          "created_at": {"$gte": f"{month}-01", "$lte": f"{month}-31T23:59:59"}},
         {"_id": 0, "total_amount": 1},
@@ -97,7 +99,7 @@ async def compute_realtime_overhead(org_id: str, month: str = None) -> dict:
     # h. By project
     projects_loaded = []
     for pid, worker_days in by_worker_project.items():
-        proj = await db.projects.find_one({"id": pid, "org_id": org_id}, {"_id": 0, "name": 1, "code": 1})
+        proj = await tenant.projects.find_one({"id": pid, "org_id": org_id}, {"_id": 0, "name": 1, "code": 1})
         projects_loaded.append({
             "project_id": pid,
             "name": (proj or {}).get("name", pid[:8]),

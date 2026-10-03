@@ -14,9 +14,11 @@ from app.services.resource_model import (
     DEFAULT_INSURANCE_RATE, DEFAULT_BURDEN_WEIGHTS,
 )
 from app.services.resolve_hourly_rate import resolve_worker_hourly_rate
+from app.tenancy.data_access import TenantData
 
 
 async def compute_financial_results(org_id: str, project_id: str) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     config = await get_resource_config(org_id)
     insurance_rate = config.get("insurance_rate", DEFAULT_INSURANCE_RATE)
     warnings = []
@@ -26,7 +28,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # ══════════════════════════════════════════════════════════════
 
     # Cash in: actual payments received
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(500)
@@ -46,7 +48,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Cash out: actual payments made (payroll paid + supplier paid + contract paid)
     # Payroll: sum labor_cost from approved work_sessions (reported/operational)
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}, "is_flagged": {"$ne": True}},
         {"_id": 0, "labor_cost": 1, "duration_hours": 1, "hourly_rate_at_date": 1, "worker_id": 1},
     ).to_list(5000)
@@ -72,7 +74,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     effective_cash_labor = paid_labor_expense
 
     # Supplier/material payments
-    issues = await db.warehouse_transactions.find(
+    issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1},
     ).to_list(500)
@@ -83,14 +85,14 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     paid_materials = round(paid_materials, 2)
 
     # Subcontractor payments
-    sub_payments = await db.subcontractor_payments.find(
+    sub_payments = await tenant.subcontractor_payments.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
         {"_id": 0, "amount": 1},
     ).to_list(200)
     paid_subcontractors = round(sum(p.get("amount", 0) for p in sub_payments), 2)
 
     # Contract payments (external workers)
-    contract_docs = await db.contract_payments.find(
+    contract_docs = await tenant.contract_payments.find(
         {"org_id": org_id, "site_id": project_id}, {"_id": 0, "tranches": 1}
     ).to_list(200)
     paid_contracts = 0
@@ -211,7 +213,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     insurance_burden = direct_labor_insurance
 
     # Overhead allocation from pools
-    allocs = await db.project_overhead_allocations.find(
+    allocs = await tenant.project_overhead_allocations.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "allocated_amount": 1, "pool": 1},
     ).to_list(50)

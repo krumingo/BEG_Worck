@@ -12,6 +12,7 @@ from statistics import median
 
 from app.db import db
 from app.services.ai_proposal import ACTIVITY_KNOWLEDGE, SYNONYMS
+from app.tenancy.data_access import TenantData
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,7 @@ async def fetch_price_agent_2(material_name: str) -> dict:
 
 async def fetch_price_agent_3(material_name: str, org_id: str) -> dict:
     """REAL agent — searches historical_offers, ACTIVITY_KNOWLEDGE, calibration."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     norm = _normalize_name(material_name)
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -172,7 +174,7 @@ async def fetch_price_agent_3(material_name: str, org_id: str) -> dict:
         {"$match": {"org_id": org_id}},
         {"$limit": 500},
     ]
-    rows = await db.historical_offer_rows.find(
+    rows = await tenant.historical_offer_rows.find(
         {"org_id": org_id, "material_price_per_unit": {"$gt": 0}},
         {"_id": 0, "normalized_activity_subtype": 1, "material_price_per_unit": 1, "raw_text": 1},
     ).to_list(200)
@@ -187,7 +189,7 @@ async def fetch_price_agent_3(material_name: str, org_id: str) -> dict:
 
     # 3. Search calibration events
     cal_prices = []
-    cal_events = await db.ai_calibration_events.find(
+    cal_events = await tenant.ai_calibration_events.find(
         {"org_id": org_id, "was_manually_edited": True},
         {"_id": 0, "original_material_price": 1, "final_material_price": 1, "activity_subtype": 1},
     ).to_list(100)
@@ -250,12 +252,13 @@ CACHE_TTL_DAYS = 7
 
 async def get_material_price(material_name: str, org_id: str, force_refresh: bool = False) -> dict:
     """Get material price from 3 agents with caching."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     norm = _normalize_name(material_name)
     now = datetime.now(timezone.utc)
 
     # Check cache
     if not force_refresh:
-        cached = await db.material_prices.find_one(
+        cached = await tenant.material_prices.find_one(
             {"org_id": org_id, "material_name_normalized": norm},
             {"_id": 0},
         )
@@ -326,7 +329,7 @@ async def get_material_price(material_name: str, org_id: str, force_refresh: boo
     }
 
     # Upsert cache
-    await db.material_prices.update_one(
+    await tenant.material_prices.update_one(
         {"org_id": org_id, "material_name_normalized": norm},
         {"$set": {**doc, "org_id": org_id, "updated_at": now.isoformat()},
          "$setOnInsert": {"created_at": now.isoformat()}},

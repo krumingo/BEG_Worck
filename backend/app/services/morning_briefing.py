@@ -4,22 +4,24 @@ Aggregates critical data from existing modules into a management summary.
 """
 from datetime import datetime, timezone, timedelta
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 
 async def build_morning_briefing(org_id: str, date: str = None) -> dict:
+    tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc)
     today = date or now.strftime("%Y-%m-%d")
 
     # ── A. Critical Alarms ──────────────────────────────────────
-    critical = await db.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical"})
-    warning = await db.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning"})
-    top_alarms = await db.alarm_events.find(
+    critical = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical"})
+    warning = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning"})
+    top_alarms = await tenant.alarm_events.find(
         {"org_id": org_id, "status": "active"},
         {"_id": 0, "id": 1, "message": 1, "severity": 1, "site_name": 1, "triggered_at": 1},
     ).sort([("severity", -1), ("triggered_at", -1)]).limit(3).to_list(3)
 
     # ── B. Risky Projects ───────────────────────────────────────
-    projects = await db.projects.find(
+    projects = await tenant.projects.find(
         {"org_id": org_id, "status": {"$in": ["Active", "Draft"]}},
         {"_id": 0, "id": 1, "name": 1},
     ).to_list(100)
@@ -31,11 +33,11 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
         severity = "info"
 
         # Budget burn
-        budgets = await db.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
+        budgets = await tenant.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
         total_budget = sum(b.get("labor_budget", 0) for b in budgets)
         if total_budget > 0:
             sessions_cost = 0
-            async for s in db.work_sessions.find({"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}):
+            async for s in tenant.work_sessions.find({"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}):
                 sessions_cost += s.get("labor_cost", 0)
             burn = sessions_cost / total_budget * 100
             if burn > 100:
@@ -46,7 +48,7 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
                 severity = "warning"
 
         # Pulse check (no workers, missing report)
-        pulse = await db.site_pulses.find_one(
+        pulse = await tenant.site_pulses.find_one(
             {"org_id": org_id, "site_id": pid, "date": today}, {"_id": 0, "total_workers": 1, "daily_report_submitted": 1}
         )
         if pulse:
@@ -57,7 +59,7 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
                 reasons.append("Липсва отчет")
 
         # Site alarms
-        site_critical = await db.alarm_events.count_documents({"org_id": org_id, "site_id": pid, "status": "active", "severity": "critical"})
+        site_critical = await tenant.alarm_events.count_documents({"org_id": org_id, "site_id": pid, "status": "active", "severity": "critical"})
         if site_critical > 0:
             reasons.append(f"{site_critical} критични аларми")
             severity = "critical"
@@ -72,7 +74,7 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
     today_dt = datetime.strptime(today, "%Y-%m-%d")
     soon = (today_dt + timedelta(days=3)).strftime("%Y-%m-%d")
 
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"org_id": org_id, "status": {"$in": ["Sent", "PartiallyPaid"]}},
         {"_id": 0, "id": 1, "invoice_number": 1, "counterparty_name": 1, "project_id": 1, "due_date": 1, "total": 1, "paid_amount": 1},
     ).to_list(200)
@@ -94,17 +96,17 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
     # ── D. Missing Reports / Approvals ──────────────────────────
     missing = []
     for p in projects[:10]:
-        pulse = await db.site_pulses.find_one(
+        pulse = await tenant.site_pulses.find_one(
             {"org_id": org_id, "site_id": p["id"], "date": today}, {"_id": 0, "daily_report_submitted": 1}
         )
         if pulse and not pulse.get("daily_report_submitted"):
             missing.append({"project": p["name"], "issue_type": "missing_report", "reason": "Липсва дневен отчет"})
 
-    pending_expenses = await db.pending_expenses.count_documents({"org_id": org_id, "status": "pending_approval"})
+    pending_expenses = await tenant.pending_expenses.count_documents({"org_id": org_id, "status": "pending_approval"})
     if pending_expenses > 0:
         missing.append({"project": "Фирма", "issue_type": "pending_approval", "reason": f"{pending_expenses} разхода чакат одобрение"})
 
-    pending_smr = await db.missing_smr.count_documents({"org_id": org_id, "client_approval.status": "pending"})
+    pending_smr = await tenant.missing_smr.count_documents({"org_id": org_id, "client_approval.status": "pending"})
     if pending_smr > 0:
         missing.append({"project": "Клиенти", "issue_type": "pending_approval", "reason": f"{pending_smr} СМР чакат одобрение от клиент"})
 
@@ -120,7 +122,7 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
         overhead["working_today"] = round(oh.get("avg_working_per_day", 0))
         overhead["total_employees"] = oh.get("total_employees", 0)
         # Count sick from calendar for today
-        sick = await db.worker_calendar.count_documents(
+        sick = await tenant.worker_calendar.count_documents(
             {"org_id": org_id, "date": today, "status": {"$in": ["sick_paid", "sick_unpaid"]}}
         )
         overhead["sick_today"] = sick
@@ -132,10 +134,10 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
     # ── F. Quick Totals ─────────────────────────────────────────
     active_projects = len(projects)
     workers_today = 0
-    today_sessions = await db.work_sessions.count_documents(
+    today_sessions = await tenant.work_sessions.count_documents(
         {"org_id": org_id, "started_at": {"$gte": f"{today}T00:00:00", "$lte": f"{today}T23:59:59"}}
     )
-    workers_today = await db.work_sessions.distinct(
+    workers_today = await tenant.work_sessions.distinct(
         "worker_id", {"org_id": org_id, "started_at": {"$gte": f"{today}T00:00:00", "$lte": f"{today}T23:59:59"}}
     )
 

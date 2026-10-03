@@ -14,6 +14,12 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["AssetRepairs"])
 
@@ -30,9 +36,10 @@ def _user_name(user: dict) -> str:
 
 async def _person_by_id(org_id: str, user_id: Optional[str]) -> dict:
     """Връща {name, avatar_url} за users.id; празно ако няма id или потребител."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     if not user_id:
         return {}
-    u = await db.users.find_one(
+    u = await tenant.users.find_one(
         {"id": user_id, "org_id": org_id},
         {"_id": 0, "name": 1, "first_name": 1, "last_name": 1, "email": 1, "avatar_url": 1},
     )
@@ -76,7 +83,8 @@ class RepairReturn(BaseModel):
 
 
 async def _unit_or_404(org_id: str, unit_id: str) -> dict:
-    unit = await db.asset_units.find_one({"id": unit_id, "org_id": org_id}, {"_id": 0})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    unit = await tenant.asset_units.find_one({"id": unit_id, "org_id": org_id}, {"_id": 0})
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
     return unit
@@ -85,11 +93,12 @@ async def _unit_or_404(org_id: str, unit_id: str) -> dict:
 @router.post("/assets/units/{unit_id}/repair/send")
 async def repair_send(unit_id: str, data: RepairSend, user: dict = Depends(get_current_user)):
     """Изпрати актив на ремонт → нов запис asset_repairs (in_repair) + unit.status = repair."""
+    tenant = _tenant(user)
     org = user["org_id"]
     unit = await _unit_or_404(org, unit_id)
 
     # ако вече има отворен ремонт — не дублираме
-    existing = await db.asset_repairs.find_one({"org_id": org, "unit_id": unit_id, "status": "in_repair"}, {"_id": 0})
+    existing = await tenant.asset_repairs.find_one({"org_id": org, "unit_id": unit_id, "status": "in_repair"}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Този актив вече е на ремонт")
 
@@ -119,8 +128,8 @@ async def repair_send(unit_id: str, data: RepairSend, user: dict = Depends(get_c
         "created_at": _now(),
         "created_by": user["id"],
     }
-    await db.asset_repairs.insert_one(rec)
-    await db.asset_units.update_one({"id": unit_id, "org_id": org}, {"$set": {"status": "repair"}})
+    await tenant.asset_repairs.insert_one(rec)
+    await tenant.asset_units.update_one({"id": unit_id, "org_id": org}, {"$set": {"status": "repair"}})
     rec.pop("_id", None)
     return rec
 
@@ -128,10 +137,11 @@ async def repair_send(unit_id: str, data: RepairSend, user: dict = Depends(get_c
 @router.post("/assets/units/{unit_id}/repair/return")
 async def repair_return(unit_id: str, data: RepairReturn, user: dict = Depends(get_current_user)):
     """Върни актив от ремонт → затваря записа (done) + unit.status = available."""
+    tenant = _tenant(user)
     org = user["org_id"]
     unit = await _unit_or_404(org, unit_id)
 
-    rec = await db.asset_repairs.find_one({"org_id": org, "unit_id": unit_id, "status": "in_repair"}, {"_id": 0})
+    rec = await tenant.asset_repairs.find_one({"org_id": org, "unit_id": unit_id, "status": "in_repair"}, {"_id": 0})
     if not rec:
         raise HTTPException(status_code=400, detail="Този актив не е на ремонт")
 
@@ -150,7 +160,7 @@ async def repair_return(unit_id: str, data: RepairReturn, user: dict = Depends(g
     ret_person = await _person_by_id(org, data.returned_by)
     ret_name = ret_person.get("name") or ((data.returned_by_name or "").strip() or None)
 
-    await db.asset_repairs.update_one(
+    await tenant.asset_repairs.update_one(
         {"id": rec["id"], "org_id": org},
         {"$set": {
             "status": "done",
@@ -162,20 +172,21 @@ async def repair_return(unit_id: str, data: RepairReturn, user: dict = Depends(g
             "is_warranty": bool(warranty),
         }},
     )
-    await db.asset_units.update_one(
+    await tenant.asset_units.update_one(
         {"id": unit_id, "org_id": org},
         {"$set": {"status": "available", "location_type": ret_loc_type, "location_id": ret_loc_id}},
     )
-    updated = await db.asset_repairs.find_one({"id": rec["id"], "org_id": org}, {"_id": 0})
+    updated = await tenant.asset_repairs.find_one({"id": rec["id"], "org_id": org}, {"_id": 0})
     return updated
 
 
 @router.get("/assets/units/{unit_id}/repairs")
 async def list_repairs(unit_id: str, user: dict = Depends(get_current_user)):
     """История на ремонтите на бройката + обща похарчена сума (само платените)."""
+    tenant = _tenant(user)
     org = user["org_id"]
     items = (
-        await db.asset_repairs.find({"org_id": org, "unit_id": unit_id}, {"_id": 0})
+        await tenant.asset_repairs.find({"org_id": org, "unit_id": unit_id}, {"_id": 0})
         .sort("sent_at", -1)
         .to_list(500)
     )
@@ -186,7 +197,7 @@ async def list_repairs(unit_id: str, user: dict = Depends(get_current_user)):
           {r.get("returned_by") for r in items if r.get("returned_by")}
     people = {}
     if ids:
-        async for u in db.users.find(
+        async for u in tenant.users.find(
             {"id": {"$in": list(ids)}, "org_id": org},
             {"_id": 0, "id": 1, "name": 1, "first_name": 1, "last_name": 1, "email": 1, "avatar_url": 1},
         ):

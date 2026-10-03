@@ -14,6 +14,7 @@ Two raw formats exist in employee_daily_reports:
 This normalizer reads both and returns a unified flat list.
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 NORMAL_DAY = 8
 
@@ -32,6 +33,7 @@ async def fetch_normalized_report_lines(
     Fetch and normalize all report lines from both old and new style.
     Returns flat list of unified report line dicts.
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     lines = []
 
     # ── A) New-style (flat with worker_id) ─────────────────────────
@@ -55,7 +57,7 @@ async def fetch_normalized_report_lines(
         else:
             q_new["payroll_status"] = {"$in": payroll_filter}
 
-    new_docs = await db.employee_daily_reports.find(q_new, {"_id": 0}).to_list(5000)
+    new_docs = await tenant.employee_daily_reports.find(q_new, {"_id": 0}).to_list(5000)
 
     for d in new_docs:
         reg = d.get("regular_hours")
@@ -97,7 +99,7 @@ async def fetch_normalized_report_lines(
         else:
             q_old["payroll_status"] = {"$in": payroll_filter}
 
-    old_docs = await db.employee_daily_reports.find(q_old, {"_id": 0}).to_list(5000)
+    old_docs = await tenant.employee_daily_reports.find(q_old, {"_id": 0}).to_list(5000)
 
     for d in old_docs:
         emp_id = d.get("employee_id", "")
@@ -316,6 +318,7 @@ async def fetch_worker_day_map(
     Used by weekly_matrix and payroll_batch eligible.
     Returns: {worker_id: {date: [{report_id, smr, hours, project_id, project_name, status}]}}
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     lines = await fetch_normalized_report_lines(
         org_id=org_id,
         date_from=date_from,
@@ -354,7 +357,7 @@ async def fetch_worker_day_map(
 
     # Enrich project names
     if project_ids:
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"id": {"$in": list(project_ids)}},
             {"_id": 0, "id": 1, "name": 1},
         ).to_list(200)

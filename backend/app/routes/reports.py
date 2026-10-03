@@ -8,11 +8,18 @@ from calendar import monthrange
 import re
 
 from app.db import db
+from app.tenancy.data_access import TenantData
+from app.master_data.legacy_adapter import annotate_refs, require_tenant_identity
 from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 
 router = APIRouter(tags=["Reports"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view — every record below is read through it."""
+    return TenantData.for_user(db, user)
 
 
 # ── Prices (Purchase History) ─────────────────────────────────────
@@ -36,10 +43,9 @@ async def get_price_history(
     Get purchase price history from invoice lines.
     Shows item prices from different suppliers over time.
     """
-    # Build pipeline
-    pipeline = [
-        {"$match": {"org_id": user["org_id"]}},
-    ]
+    # Build pipeline — TenantData.aggregate prepends the tenant $match (W0-03E-A1)
+    tenant = _tenant(user)
+    pipeline = []
     
     # Filter by allocation
     if project_id:
@@ -48,14 +54,11 @@ async def get_price_history(
         pipeline.append({"$match": {"allocations": {"$elemMatch": {"type": "warehouse", "ref_id": warehouse_id}}}})
     
     # Lookup invoice for supplier and date
-    pipeline.append({
-        "$lookup": {
-            "from": "invoices",
-            "localField": "invoice_id",
-            "foreignField": "id",
-            "as": "invoice"
-        }
-    })
+    # W0-03E/C03 → A1: the join keeps only invoices of THIS tenant (from the
+    # authenticated session) BEFORE anything is matched or projected from them;
+    # a line whose invoice is not this tenant's keeps its own fields and gets no
+    # invoice data (the existing preserveNullAndEmptyArrays contract).
+    pipeline.extend(tenant.lookup("invoices", local_field="invoice_id", as_field="invoice"))
     pipeline.append({"$unwind": {"path": "$invoice", "preserveNullAndEmptyArrays": True}})
     
     # Filter by supplier
@@ -98,7 +101,7 @@ async def get_price_history(
     # Count total (separate pipeline)
     count_pipeline = pipeline.copy()
     count_pipeline.append({"$count": "total"})
-    count_result = await db.invoice_lines.aggregate(count_pipeline).to_list(1)
+    count_result = await tenant.invoice_lines.aggregate(count_pipeline).to_list(1)
     total = count_result[0]["total"] if count_result else 0
     
     # Sort
@@ -110,22 +113,19 @@ async def get_price_history(
     pipeline.append({"$skip": skip})
     pipeline.append({"$limit": page_size})
     
-    items = await db.invoice_lines.aggregate(pipeline).to_list(page_size)
+    items = await tenant.invoice_lines.aggregate(pipeline).to_list(page_size)
     
     # Enrich with names
     for item in items:
         # Supplier name
         if item.get("supplier_id"):
-            supplier = await db.counterparties.find_one(
-                {"id": item["supplier_id"]}, {"_id": 0, "name": 1}
-            )
+            supplier = await tenant.counterparties.get(item["supplier_id"], {"_id": 0, "name": 1})
             item["supplier_name"] = supplier["name"] if supplier else ""
         
         # Purchaser name
         if item.get("purchased_by_user_id"):
-            purchaser = await db.users.find_one(
-                {"id": item["purchased_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1}
-            )
+            purchaser = await tenant.users.get(item["purchased_by_user_id"],
+                                               {"_id": 0, "first_name": 1, "last_name": 1})
             item["purchased_by_name"] = f"{purchaser['first_name']} {purchaser['last_name']}" if purchaser else ""
         
         # Allocations summary
@@ -133,13 +133,18 @@ async def get_price_history(
         alloc_summary = []
         for a in allocations[:3]:  # Limit to 3
             if a.get("type") == "project":
-                proj = await db.projects.find_one({"id": a.get("ref_id")}, {"_id": 0, "code": 1})
+                proj = await tenant.projects.get(a.get("ref_id"), {"_id": 0, "code": 1})
                 alloc_summary.append(f"P:{proj['code'] if proj else '?'}:{a.get('qty')}")
             elif a.get("type") == "warehouse":
-                wh = await db.warehouses.find_one({"id": a.get("ref_id")}, {"_id": 0, "code": 1})
+                wh = await tenant.warehouses.get(a.get("ref_id"), {"_id": 0, "code": 1})
                 alloc_summary.append(f"W:{wh['code'] if wh else '?'}:{a.get('qty')}")
         item["allocation_summary"] = ", ".join(alloc_summary)
-    
+
+    # W0-03E: in MASTER_DATA_MODE=enforce each identity id also names its Master
+    # record; the old ids stay. off/shadow: unchanged, nothing read.
+    await annotate_refs(user, items, {"supplier_id": "counterparties",
+                                      "purchased_by_user_id": "users"})
+
     return {
         "items": items,
         "total": total,
@@ -207,7 +212,7 @@ async def get_turnover_by_counterparty(
     # Count total (before pagination)
     count_pipeline = pipeline.copy()
     count_pipeline.append({"$count": "total"})
-    count_result = await db.invoices.aggregate(count_pipeline).to_list(1)
+    count_result = await _tenant(user).invoices.aggregate(count_pipeline).to_list(1)
     total = count_result[0]["total"] if count_result else 0
     
     # Sort
@@ -219,7 +224,7 @@ async def get_turnover_by_counterparty(
     pipeline.append({"$skip": skip})
     pipeline.append({"$limit": page_size})
     
-    results = await db.invoices.aggregate(pipeline).to_list(page_size)
+    results = await _tenant(user).invoices.aggregate(pipeline).to_list(page_size)
     
     # Enrich with counterparty names
     items = []
@@ -227,9 +232,7 @@ async def get_turnover_by_counterparty(
         counterparty_id = r["_id"]
         counterparty = None
         if counterparty_id:
-            counterparty = await db.counterparties.find_one(
-                {"id": counterparty_id}, {"_id": 0, "id": 1, "name": 1, "eik": 1, "type": 1}
-            )
+            counterparty = await _tenant(user).counterparties.get(counterparty_id, {"_id": 0, "id": 1, "name": 1, "eik": 1, "type": 1})
         
         items.append({
             "counterparty_id": counterparty_id,
@@ -245,7 +248,8 @@ async def get_turnover_by_counterparty(
             "first_invoice_date": r["first_invoice_date"],
             "last_invoice_date": r["last_invoice_date"],
         })
-    
+    await annotate_refs(user, items, {"counterparty_id": "counterparties"})
+
     # Calculate grand totals
     totals_pipeline = [
         {"$match": match_stage},
@@ -261,7 +265,7 @@ async def get_turnover_by_counterparty(
             }
         }
     ]
-    totals_result = await db.invoices.aggregate(totals_pipeline).to_list(1)
+    totals_result = await _tenant(user).invoices.aggregate(totals_pipeline).to_list(1)
     grand_totals = totals_result[0] if totals_result else {}
     
     return {
@@ -315,15 +319,15 @@ async def get_counterparty_invoices(
         query["issue_date"] = query.get("issue_date", {})
         query["issue_date"]["$lte"] = date_to
     
-    total = await db.invoices.count_documents(query)
+    total = await _tenant(user).invoices.count(query)
     
     skip = (page - 1) * page_size
-    invoices = await db.invoices.find(query, {"_id": 0}).sort("issue_date", -1).skip(skip).limit(page_size).to_list(page_size)
+    invoices = await _tenant(user).invoices.find(query, {"_id": 0}).sort("issue_date", -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Get counterparty name
-    counterparty = await db.counterparties.find_one({"id": counterparty_id}, {"_id": 0, "name": 1})
-    
-    return {
+    counterparty = await _tenant(user).counterparties.get(counterparty_id, {"_id": 0, "name": 1})
+    await annotate_refs(user, invoices, {"supplier_counterparty_id": "counterparties"})
+    result = {
         "counterparty_id": counterparty_id,
         "counterparty_name": counterparty["name"] if counterparty else "(Неизвестен)",
         "items": invoices,
@@ -332,6 +336,8 @@ async def get_counterparty_invoices(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
     }
+    await annotate_refs(user, [result], {"counterparty_id": "counterparties"})
+    return result
 
 
 
@@ -389,7 +395,7 @@ async def get_turnover_by_client(
     # Count total
     count_pipeline = pipeline.copy()
     count_pipeline.append({"$count": "total"})
-    count_result = await db.invoices.aggregate(count_pipeline).to_list(1)
+    count_result = await _tenant(user).invoices.aggregate(count_pipeline).to_list(1)
     total_count = count_result[0]["total"] if count_result else 0
     
     # Sort
@@ -401,7 +407,7 @@ async def get_turnover_by_client(
     pipeline.append({"$skip": skip})
     pipeline.append({"$limit": page_size})
     
-    results = await db.invoices.aggregate(pipeline).to_list(page_size)
+    results = await _tenant(user).invoices.aggregate(pipeline).to_list(page_size)
     
     # Enrich with client names (filter by type=client or person)
     items = []
@@ -409,7 +415,7 @@ async def get_turnover_by_client(
         client_id_val = r["_id"]
         client = None
         if client_id_val:
-            client = await db.counterparties.find_one(
+            client = await _tenant(user).counterparties.find_one(
                 {"id": client_id_val, "type": {"$in": ["client", "person", "both"]}},
                 {"_id": 0, "id": 1, "name": 1, "eik": 1, "type": 1, "phone": 1, "email": 1}
             )
@@ -431,7 +437,8 @@ async def get_turnover_by_client(
                 "first_invoice_date": r["first_invoice_date"],
                 "last_invoice_date": r["last_invoice_date"],
             })
-    
+    await annotate_refs(user, items, {"client_id": "counterparties"})
+
     # Calculate grand totals
     totals_pipeline = [
         {"$match": match_stage},
@@ -447,7 +454,7 @@ async def get_turnover_by_client(
             }
         }
     ]
-    totals_result = await db.invoices.aggregate(totals_pipeline).to_list(1)
+    totals_result = await _tenant(user).invoices.aggregate(totals_pipeline).to_list(1)
     grand_totals = totals_result[0] if totals_result else {}
     
     return {
@@ -535,6 +542,7 @@ async def get_company_finance_summary(
     - Bonus payments
     """
     org_id = user["org_id"]
+    tenant = _tenant(user)
     
     # Date range for the month
     _, days_in_month = monthrange(year, month)
@@ -561,8 +569,7 @@ async def get_company_finance_summary(
     } for w in weeks}
     
     # 1. Issued Invoices (Income)
-    issued_invoices = await db.invoices.find({
-        "org_id": org_id,
+    issued_invoices = await tenant.invoices.find({
         "direction": "Issued",
         "issue_date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
@@ -575,8 +582,7 @@ async def get_company_finance_summary(
             weekly_data[week_num]["income"] += _net
     
     # 2. Received Invoices (Expenses)
-    received_invoices = await db.invoices.find({
-        "org_id": org_id,
+    received_invoices = await tenant.invoices.find({
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
@@ -589,7 +595,7 @@ async def get_company_finance_summary(
             weekly_data[week_num]["expenses"] += _net
     
     # 3. Cash Transactions
-    cash_txns = await db.cash_transactions.find({
+    cash_txns = await tenant.cash_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "type": 1, "amount": 1}).to_list(1000)
@@ -605,7 +611,7 @@ async def get_company_finance_summary(
                 weekly_data[week_num]["expenses"] += txn.get("amount", 0)
     
     # 4. Overhead Transactions
-    overhead_txns = await db.overhead_transactions.find({
+    overhead_txns = await tenant.overhead_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -626,7 +632,7 @@ async def get_company_finance_summary(
             weekly_data[week_num]["expenses"] += pay.get("net_salary", 0)
     
     # 6. Bonus Payments
-    bonus_payments = await db.bonus_payments.find({
+    bonus_payments = await tenant.bonus_payments.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -701,11 +707,12 @@ MONTH_NAMES_BG = [
     "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"
 ]
 
-async def get_month_finance_totals(org_id: str, year: int, month: int) -> dict:
+async def get_month_finance_totals(tenant: TenantData, year: int, month: int) -> dict:
     """
     Get finance totals for a single month.
     Returns income/expense breakdown without weekly details.
     """
+    org_id = tenant.org_id
     _, days_in_month = monthrange(year, month)
     date_from = f"{year}-{month:02d}-01"
     date_to = f"{year}-{month:02d}-{days_in_month:02d}"
@@ -720,23 +727,21 @@ async def get_month_finance_totals(org_id: str, year: int, month: int) -> dict:
     expenses_bonus = 0
     
     # 1. Issued Invoices (Income)
-    issued_invoices = await db.invoices.find({
-        "org_id": org_id,
+    issued_invoices = await tenant.invoices.find({
         "direction": "Issued",
         "issue_date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "total": 1}).to_list(1000)
     income_invoices = sum(inv.get("total", 0) for inv in issued_invoices)
     
     # 2. Received Invoices (Expenses)
-    received_invoices = await db.invoices.find({
-        "org_id": org_id,
+    received_invoices = await tenant.invoices.find({
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "total": 1}).to_list(1000)
     expenses_invoices = sum(inv.get("total", 0) for inv in received_invoices)
     
     # 3. Cash Transactions
-    cash_txns = await db.cash_transactions.find({
+    cash_txns = await tenant.cash_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "type": 1, "amount": 1}).to_list(1000)
@@ -748,7 +753,7 @@ async def get_month_finance_totals(org_id: str, year: int, month: int) -> dict:
             expenses_cash += txn.get("amount", 0)
     
     # 4. Overhead Transactions
-    overhead_txns = await db.overhead_transactions.find({
+    overhead_txns = await tenant.overhead_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "amount": 1}).to_list(1000)
@@ -759,7 +764,7 @@ async def get_month_finance_totals(org_id: str, year: int, month: int) -> dict:
     expenses_payroll = sum(pay.get("net_salary", 0) for pay in payroll_payments)
     
     # 6. Bonus Payments
-    bonus_payments_list = await db.bonus_payments.find({
+    bonus_payments_list = await tenant.bonus_payments.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "amount": 1}).to_list(1000)
@@ -814,7 +819,7 @@ async def compare_company_finance(
     
     Returns aggregated data for each month for comparison charts.
     """
-    org_id = user["org_id"]
+    tenant = _tenant(user)
     
     # Determine which months to fetch
     months_to_fetch = []
@@ -858,7 +863,7 @@ async def compare_company_finance(
     # Fetch data for each month
     results = []
     for y, m in months_to_fetch:
-        month_data = await get_month_finance_totals(org_id, y, m)
+        month_data = await get_month_finance_totals(tenant, y, m)
         results.append(month_data)
     
     # Prepare chart data
@@ -920,9 +925,9 @@ async def list_cash_transactions(
         query["date"] = query.get("date", {})
         query["date"]["$lte"] = date_to
     
-    total = await db.cash_transactions.count_documents(query)
+    total = await _tenant(user).cash_transactions.count(query)
     skip = (page - 1) * page_size
-    items = await db.cash_transactions.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
+    items = await _tenant(user).cash_transactions.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
     
     return {
         "items": items,
@@ -938,6 +943,7 @@ async def create_cash_transaction(
     user: dict = Depends(require_m5),
 ):
     """Create a cash transaction (income or expense)"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     txn = {
         "id": str(__import__("uuid").uuid4()),
@@ -950,7 +956,7 @@ async def create_cash_transaction(
         "created_by": user["id"],
         "created_at": now,
     }
-    await db.cash_transactions.insert_one(txn)
+    await tenant.cash_transactions.insert_one(txn)
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -973,9 +979,9 @@ async def list_overhead_transactions(
         query["date"] = query.get("date", {})
         query["date"]["$lte"] = date_to
     
-    total = await db.overhead_transactions.count_documents(query)
+    total = await _tenant(user).overhead_transactions.count(query)
     skip = (page - 1) * page_size
-    items = await db.overhead_transactions.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
+    items = await _tenant(user).overhead_transactions.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
     
     return {
         "items": items,
@@ -991,6 +997,7 @@ async def create_overhead_transaction(
     user: dict = Depends(require_m5),
 ):
     """Create an overhead transaction"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     txn = {
         "id": str(__import__("uuid").uuid4()),
@@ -1002,7 +1009,7 @@ async def create_overhead_transaction(
         "created_by": user["id"],
         "created_at": now,
     }
-    await db.overhead_transactions.insert_one(txn)
+    await tenant.overhead_transactions.insert_one(txn)
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -1025,9 +1032,9 @@ async def list_bonus_payments(
         query["date"] = query.get("date", {})
         query["date"]["$lte"] = date_to
     
-    total = await db.bonus_payments.count_documents(query)
+    total = await _tenant(user).bonus_payments.count(query)
     skip = (page - 1) * page_size
-    items = await db.bonus_payments.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
+    items = await _tenant(user).bonus_payments.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
     
     return {
         "items": items,
@@ -1043,6 +1050,7 @@ async def create_bonus_payment(
     user: dict = Depends(require_m5),
 ):
     """Create a bonus payment"""
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     payment = {
         "id": str(__import__("uuid").uuid4()),
@@ -1054,7 +1062,7 @@ async def create_bonus_payment(
         "created_by": user["id"],
         "created_at": now,
     }
-    await db.bonus_payments.insert_one(payment)
+    await tenant.bonus_payments.insert_one(payment)
     return {k: v for k, v in payment.items() if k != "_id"}
 
 
@@ -1082,6 +1090,7 @@ async def export_company_finance(
     """
     # Get the finance summary data first
     org_id = user["org_id"]
+    tenant = _tenant(user)
     
     # Date range for the month
     _, days_in_month = monthrange(year, month)
@@ -1109,8 +1118,7 @@ async def export_company_finance(
     
     # Fetch data (same as company-finance-summary)
     # 1. Issued Invoices (Income)
-    issued_invoices = await db.invoices.find({
-        "org_id": org_id,
+    issued_invoices = await tenant.invoices.find({
         "direction": "Issued",
         "issue_date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
@@ -1123,8 +1131,7 @@ async def export_company_finance(
             weekly_data[week_num]["income"] += _net
     
     # 2. Received Invoices (Expenses)
-    received_invoices = await db.invoices.find({
-        "org_id": org_id,
+    received_invoices = await tenant.invoices.find({
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
@@ -1137,7 +1144,7 @@ async def export_company_finance(
             weekly_data[week_num]["expenses"] += _net
     
     # 3. Cash Transactions
-    cash_txns = await db.cash_transactions.find({
+    cash_txns = await tenant.cash_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "type": 1, "amount": 1}).to_list(1000)
@@ -1153,7 +1160,7 @@ async def export_company_finance(
                 weekly_data[week_num]["expenses"] += txn.get("amount", 0)
     
     # 4. Overhead Transactions
-    overhead_txns = await db.overhead_transactions.find({
+    overhead_txns = await tenant.overhead_transactions.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -1174,7 +1181,7 @@ async def export_company_finance(
             weekly_data[week_num]["expenses"] += pay.get("net_salary", 0)
     
     # 6. Bonus Payments
-    bonus_payments_data = await db.bonus_payments.find({
+    bonus_payments_data = await tenant.bonus_payments.find({
         "org_id": org_id,
         "date": {"$gte": date_from, "$lte": date_to}
     }, {"_id": 0, "date": 1, "amount": 1}).to_list(1000)
@@ -1209,7 +1216,7 @@ async def export_company_finance(
     }
     
     # Get org info
-    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "name": 1})
+    org = await tenant.own_organization({"_id": 0, "name": 1})
     org_name = org.get("name", "Unknown") if org else "Unknown"
     
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")

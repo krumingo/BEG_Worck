@@ -2,7 +2,7 @@
 Project routes - /api/projects/*, /api/project-enums, /api/persons/*, /api/companies/*
 Includes owner (person/company) management merged from Sites module.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -14,6 +14,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db import db
+from app.tenancy.data_access import TenantData
+from app.tenancy import project_team
 from app.services.paid_labor import paid_labor_for_projects_v3
 from app.deps.auth import (
     get_current_user, require_admin,
@@ -21,8 +23,24 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 
 router = APIRouter(tags=["projects"])
+
+
+
+def _team(user: dict) -> TenantData:
+    """The session user's tenant view for the project-team authorization relation.
+
+    W0-03E-A2: the tenant is the ``org_id`` of the session document
+    ``get_current_user`` loaded server-side by the verified JWT user id. A
+    tenant value from the path, query, form or body is never an input.
+    """
+    return project_team.tenant_for(db, user)
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view of the legacy database."""
+    return TenantData.for_user(db, user)
 
 # Constants
 PROJECT_STATUSES = ["Draft", "Active", "Paused", "Stopped", "Completed", "Cancelled", "Overhead", "Archived", "Finished"]
@@ -120,6 +138,7 @@ async def list_projects(
     type: Optional[str] = None,
     search: Optional[str] = None,
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     query = {"org_id": org_id}
     if status:
@@ -127,23 +146,25 @@ async def list_projects(
     if type:
         query["type"] = type
     if user["role"] not in ["Admin", "Owner", "Accountant"]:
-        assigned_ids = await get_user_project_ids(user["id"])
+        assigned_ids = await get_user_project_ids(user["id"], user)
         query["id"] = {"$in": assigned_ids}
-    projects = await db.projects.find(query, {"_id": 0}).sort("updated_at", -1).to_list(1000)
+    projects = await tenant.projects.find(query, {"_id": 0}).sort("updated_at", -1).to_list(1000)
     if search:
         s = search.lower()
         projects = [p for p in projects if s in p.get("code", "").lower() or s in p.get("name", "").lower()]
     for p in projects:
         if p.get("default_site_manager_id"):
-            mgr = await db.users.find_one({"id": p["default_site_manager_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            mgr = await tenant.users.find_one({"id": p["default_site_manager_id"], "org_id": user["org_id"]},
+                                          {"_id": 0, "first_name": 1, "last_name": 1})
             p["site_manager_name"] = f"{mgr['first_name']} {mgr['last_name']}" if mgr else ""
         else:
             p["site_manager_name"] = ""
-        p["team_count"] = await db.project_team.count_documents({"project_id": p["id"], "active": True})
+        p["team_count"] = await project_team.active_member_count(_team(user), p["id"])
     return projects
 
 @router.post("/projects", status_code=201)
 async def create_project(data: ProjectCreate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions to create projects")
     await enforce_limit(user["org_id"], "projects")
@@ -154,7 +175,7 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
     # Validate owner type if provided
     if data.owner_type and data.owner_type not in OWNER_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid owner type. Must be: {', '.join(OWNER_TYPES)}")
-    existing = await db.projects.find_one({"org_id": user["org_id"], "code": data.code})
+    existing = await tenant.projects.find_one({"org_id": user["org_id"], "code": data.code})
     if existing:
         raise HTTPException(status_code=400, detail="Project code already exists in this organization")
     now = datetime.now(timezone.utc).isoformat()
@@ -202,38 +223,37 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
         "created_at": now,
         "updated_at": now,
     }
-    await db.projects.insert_one(project)
+    await tenant.projects.insert_one(project)
     if data.default_site_manager_id:
-        await db.project_team.insert_one({
-            "id": str(uuid.uuid4()),
-            "project_id": project["id"],
-            "user_id": data.default_site_manager_id,
-            "role_in_project": "SiteManager",
-            "active": True,
-            "from_date": data.start_date,
-            "to_date": data.end_date,
-        })
+        # W0-03E-A2: the membership carries the server-resolved active tenant.
+        await project_team.add_member(
+            _team(user), member_id=str(uuid.uuid4()), project_id=project["id"],
+            user_id=data.default_site_manager_id, role_in_project="SiteManager",
+            active=True, from_date=data.start_date, to_date=data.end_date)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "project", project["id"], {"code": data.code, "name": data.name})
     return {k: v for k, v in project.items() if k != "_id"}
 
 @router.get("/projects/{project_id}")
 async def get_project(project_id: str, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     if project.get("default_site_manager_id"):
-        mgr = await db.users.find_one({"id": project["default_site_manager_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+        mgr = await tenant.users.find_one({"id": project["default_site_manager_id"], "org_id": user["org_id"]},
+                                      {"_id": 0, "first_name": 1, "last_name": 1})
         project["site_manager_name"] = f"{mgr['first_name']} {mgr['last_name']}" if mgr else ""
     else:
         project["site_manager_name"] = ""
-    project["team_count"] = await db.project_team.count_documents({"project_id": project_id, "active": True})
+    project["team_count"] = await project_team.active_member_count(_team(user), project_id)
     return project
 
 @router.put("/projects/{project_id}")
 async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
@@ -279,22 +299,29 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
         if parts:
             update["address_text"] = ", ".join(parts)
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.projects.update_one({"id": project_id}, {"$set": update})
+    # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
+    await tenant.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
-    return await db.projects.find_one({"id": project_id}, {"_id": 0})
+    return await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, user: dict = Depends(require_admin)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     # Guard: don't delete parent with children
-    child_count = await db.projects.count_documents({"parent_project_id": project_id, "org_id": user["org_id"]})
+    child_count = await tenant.projects.count_documents({"parent_project_id": project_id, "org_id": user["org_id"]})
     if child_count > 0:
         raise HTTPException(status_code=400, detail=f"Обектът има {child_count} под-обекта. Изтрийте или преместете ги първо.")
-    await db.projects.delete_one({"id": project_id})
-    await db.project_team.delete_many({"project_id": project_id})
-    await db.project_phases.delete_many({"project_id": project_id})
+    await tenant.projects.delete_one({"id": project_id})
+    # W0-03E-A2: scoped to this tenant — an unscoped delete_many would remove
+    # another tenant's memberships whenever the project ids collide. A row of
+    # UNRESOLVED provenance therefore survives this delete; that is deliberate:
+    # it authorizes nothing anyway, and hard-deleting a row whose owner is
+    # unknown would destroy the evidence a human still has to decide on.
+    await _team(user).collection("project_team").delete_many({"project_id": project_id})
+    await tenant.project_phases.delete_many({"project_id": project_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "project", project_id, {"code": project.get("code")})
     return {"ok": True}
 
@@ -302,7 +329,8 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin)):
 
 @router.get("/projects/{project_id}/invoice-details")
 async def get_invoice_details(project_id: str, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"project_id": project_id, "invoice_details": project.get("invoice_details") or {}}
@@ -311,7 +339,7 @@ async def get_invoice_details(project_id: str, user: dict = Depends(get_current_
 @router.post("/projects/{project_id}/import-client-invoice")
 async def import_client_invoice(project_id: str, user: dict = Depends(get_current_user)):
     """Copy invoice_details from the project's linked client/company record."""
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    project = await _tenant(user).projects.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
@@ -323,10 +351,13 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail="Project has no linked client")
 
     invoice = {}
+    source_collection = None
     if owner_type == "company":
-        company = await db.companies.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        source_collection = "companies"
+        company = await _tenant(user).companies.get(owner_id, {"_id": 0})
         if not company:
-            company = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+            source_collection = "clients"
+            company = await _tenant(user).clients.get(owner_id, {"_id": 0})
         if company:
             invoice = {
                 "company_name": company.get("name") or company.get("companyName") or "",
@@ -341,9 +372,11 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
                 "notes": "",
             }
     elif owner_type == "person":
-        person = await db.persons.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+        source_collection = "persons"
+        person = await _tenant(user).persons.get(owner_id, {"_id": 0})
         if not person:
-            person = await db.clients.find_one({"id": owner_id, "org_id": user["org_id"]}, {"_id": 0})
+            source_collection = "clients"
+            person = await _tenant(user).clients.get(owner_id, {"_id": 0})
         if person:
             invoice = {
                 "company_name": person.get("full_name") or person.get("fullName") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
@@ -356,21 +389,33 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Client data not found")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.projects.update_one({"id": project_id}, {"$set": {"invoice_details": invoice, "updated_at": now}})
-    return {"ok": True, "invoice_details": invoice}
+    await _tenant(user).projects.update_one({"id": project_id, "org_id": user["org_id"]},
+                                 {"$set": {"invoice_details": invoice, "updated_at": now}})
+    result = {"ok": True, "invoice_details": invoice}
+    # W0-03E: in enforce the imported owner identity also names its Master record.
+    from app.master_data.legacy_adapter import annotate_refs
+    owner = [{"owner_id": owner_id}]
+    await annotate_refs(user, owner, {"owner_id": source_collection})
+    if "owner_master_ref" in owner[0]:
+        result["owner_master_ref"] = owner[0]["owner_master_ref"]
+    return result
 
 
 # Team routes
 @router.get("/projects/{project_id}/team")
 async def list_project_team(project_id: str, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
-    members = await db.project_team.find({"project_id": project_id, "active": True}, {"_id": 0}).to_list(100)
+    members = await project_team.project_rows(_team(user), [project_id], {"_id": 0}, limit=100)
     for m in members:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
+        # W0-03E-A2B: the member's user in THIS tenant — a user id is not unique
+        # across tenants, so a bare-id lookup could name another tenant's person.
+        u = await tenant.users.find_one({"id": m["user_id"], "org_id": user["org_id"]},
+                                    {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "role": 1})
         if u:
             m["user_name"] = f"{u['first_name']} {u['last_name']}"
             m["user_email"] = u["email"]
@@ -383,29 +428,26 @@ async def list_project_team(project_id: str, user: dict = Depends(get_current_us
 
 @router.post("/projects/{project_id}/team", status_code=201)
 async def add_team_member(project_id: str, data: TeamMemberAdd, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     if data.role_in_project not in PROJECT_TEAM_ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be: {', '.join(PROJECT_TEAM_ROLES)}")
-    target_user = await db.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
+    target_user = await tenant.users.find_one({"id": data.user_id, "org_id": user["org_id"]})
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found in organization")
-    existing = await db.project_team.find_one({"project_id": project_id, "user_id": data.user_id, "active": True})
-    if existing:
+    team_tenant = _team(user)
+    if await project_team.is_member(team_tenant, data.user_id, project_id):
         raise HTTPException(status_code=400, detail="User already on team")
-    member = {
-        "id": str(uuid.uuid4()),
-        "project_id": project_id,
-        "user_id": data.user_id,
-        "role_in_project": data.role_in_project,
-        "active": True,
-        "from_date": data.from_date,
-        "to_date": data.to_date,
-    }
-    await db.project_team.insert_one(member)
+    # W0-03E-A2: stamped with the server-resolved active tenant; a tenant value
+    # from the body/path/query is never an input.
+    member = await project_team.add_member(
+        team_tenant, member_id=str(uuid.uuid4()), project_id=project_id,
+        user_id=data.user_id, role_in_project=data.role_in_project, active=True,
+        from_date=data.from_date, to_date=data.to_date)
     await log_audit(user["org_id"], user["id"], user["email"], "team_added", "project", project_id, {"member_id": data.user_id, "role": data.role_in_project})
     # W0-02: mirror the new membership into a project-scope RoleAssignment so the
     # Permission Service reflects it. Skipped while mode='off' (behavior unchanged).
@@ -431,13 +473,16 @@ async def add_team_member(project_id: str, data: TeamMemberAdd, user: dict = Dep
 
 @router.delete("/projects/{project_id}/team/{member_id}")
 async def remove_team_member(project_id: str, member_id: str, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    mem = await db.project_team.find_one({"id": member_id, "project_id": project_id})
-    result = await db.project_team.update_one({"id": member_id, "project_id": project_id}, {"$set": {"active": False}})
+    team_tenant = _team(user)
+    mem = await project_team.row_by_id(team_tenant, member_id, project_id)
+    result = await project_team.deactivate_member(team_tenant, member_id=member_id,
+                                                  project_id=project_id)
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Team member not found")
     await log_audit(user["org_id"], user["id"], user["email"], "team_removed", "project", project_id, {"member_id": member_id})
@@ -464,22 +509,26 @@ async def remove_team_member(project_id: str, member_id: str, user: dict = Depen
 # Phase routes
 @router.get("/projects/{project_id}/phases")
 async def list_phases(project_id: str, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
-    return await db.project_phases.find({"project_id": project_id}, {"_id": 0}).sort("order", 1).to_list(100)
+    return await tenant.project_phases.find({"project_id": project_id}, {"_id": 0}).sort("order", 1).to_list(100)
 
 @router.post("/projects/{project_id}/phases", status_code=201)
 async def create_phase(project_id: str, data: PhaseCreate, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     phase = {
         "id": str(uuid.uuid4()),
+        # W0-03E-A2B: a phase is tenant-owned; stamped from the session tenant.
+        "org_id": user["org_id"],
         "project_id": project_id,
         "name": data.name,
         "order": data.order,
@@ -487,31 +536,33 @@ async def create_phase(project_id: str, data: PhaseCreate, user: dict = Depends(
         "planned_start": data.planned_start,
         "planned_end": data.planned_end,
     }
-    await db.project_phases.insert_one(phase)
+    await tenant.project_phases.insert_one(phase)
     await log_audit(user["org_id"], user["id"], user["email"], "phase_created", "project", project_id, {"phase": data.name})
     return {k: v for k, v in phase.items() if k != "_id"}
 
 @router.put("/projects/{project_id}/phases/{phase_id}")
 async def update_phase(project_id: str, phase_id: str, data: PhaseUpdate, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
-    result = await db.project_phases.update_one({"id": phase_id, "project_id": project_id}, {"$set": update})
+    result = await tenant.project_phases.update_one({"id": phase_id, "project_id": project_id}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Phase not found")
-    return await db.project_phases.find_one({"id": phase_id}, {"_id": 0})
+    return await tenant.project_phases.find_one({"id": phase_id}, {"_id": 0})
 
 @router.delete("/projects/{project_id}/phases/{phase_id}")
 async def delete_phase(project_id: str, phase_id: str, user: dict = Depends(get_current_user)):
-    project = await db.projects.find_one({"id": project_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    result = await db.project_phases.delete_one({"id": phase_id, "project_id": project_id})
+    result = await tenant.project_phases.delete_one({"id": phase_id, "project_id": project_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Phase not found")
     return {"ok": True}
@@ -533,15 +584,16 @@ def normalize_eik(eik: str) -> str:
 
 async def get_owner_info(owner_type: str, owner_id: str, org_id: str) -> dict:
     """Get owner display info for a project"""
+    tenant = TenantData.for_resolved_org(db, org_id)
     if owner_type == "person":
-        person = await db.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+        person = await tenant.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
         if person:
             return {
                 "owner_name": f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
                 "owner_identifier": person.get("phone", ""),
             }
     elif owner_type == "company":
-        company = await db.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+        company = await tenant.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
         if company:
             return {
                 "owner_name": company.get("name", ""),
@@ -572,8 +624,9 @@ class PersonUpdate(BaseModel):
 @router.get("/persons")
 async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] = None):
     """List all persons in organization"""
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
-    persons = await db.persons.find(query, {"_id": 0}).sort("last_name", 1).to_list(500)
+    persons = await tenant.persons.find(query, {"_id": 0}).sort("last_name", 1).to_list(500)
     if q:
         q_lower = q.lower()
         persons = [p for p in persons if q_lower in p.get("first_name", "").lower()
@@ -585,11 +638,12 @@ async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] 
 @router.post("/persons", status_code=201)
 async def create_person(data: PersonCreate, user: dict = Depends(get_current_user)):
     """Create a new person"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     phone = normalize_phone(data.phone)
     if not phone:
         raise HTTPException(status_code=400, detail="Phone number is required")
-    existing = await db.persons.find_one({"org_id": org_id, "phone": phone})
+    existing = await tenant.persons.find_one({"org_id": org_id, "phone": phone})
     if existing:
         raise HTTPException(status_code=400, detail="Person with this phone already exists")
     now = datetime.now(timezone.utc).isoformat()
@@ -604,7 +658,7 @@ async def create_person(data: PersonCreate, user: dict = Depends(get_current_use
         "created_at": now,
         "updated_at": now,
     }
-    await db.persons.insert_one(person)
+    await tenant.persons.insert_one(person)
     await log_audit(org_id, user["id"], user["email"], "created", "person", person["id"], 
                     {"phone": phone, "name": f"{data.first_name} {data.last_name}"})
     return {k: v for k, v in person.items() if k != "_id"}
@@ -613,8 +667,9 @@ async def create_person(data: PersonCreate, user: dict = Depends(get_current_use
 @router.get("/persons/find-by-phone")
 async def find_person_by_phone(phone: str, user: dict = Depends(get_current_user)):
     """Find person by phone number"""
+    tenant = _tenant(user)
     normalized = normalize_phone(phone)
-    person = await db.persons.find_one({"org_id": user["org_id"], "phone": normalized}, {"_id": 0})
+    person = await tenant.persons.find_one({"org_id": user["org_id"], "phone": normalized}, {"_id": 0})
     if not person:
         return {"found": False, "person": None}
     return {"found": True, "person": person}
@@ -623,7 +678,8 @@ async def find_person_by_phone(phone: str, user: dict = Depends(get_current_user
 @router.get("/persons/{person_id}")
 async def get_person(person_id: str, user: dict = Depends(get_current_user)):
     """Get person by ID"""
-    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    person = await tenant.persons.find_one({"id": person_id, "org_id": user["org_id"]}, {"_id": 0})
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
     return person
@@ -632,25 +688,30 @@ async def get_person(person_id: str, user: dict = Depends(get_current_user)):
 @router.put("/persons/{person_id}")
 async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user)):
     """Update person"""
-    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
+    person = await _tenant(user).persons.get(person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
     update = {k: v.strip() if isinstance(v, str) else v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.persons.update_one({"id": person_id}, {"$set": update})
-    return await db.persons.find_one({"id": person_id}, {"_id": 0})
+    await _tenant(user).persons.update_one({"id": person_id}, {"$set": update})
+    return await _tenant(user).persons.get(person_id, {"_id": 0})
 
 
 @router.delete("/persons/{person_id}")
-async def delete_person(person_id: str, user: dict = Depends(require_admin)):
+async def delete_person(person_id: str, request: Request, user: dict = Depends(require_admin)):
     """Delete person (admin only)"""
-    person = await db.persons.find_one({"id": person_id, "org_id": user["org_id"]})
+    person = await _tenant(user).persons.get(person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    project_count = await db.projects.count_documents({"owner_type": "person", "owner_id": person_id})
+    project_count = await _tenant(user).projects.count({"owner_type": "person", "owner_id": person_id,
+                                                       "org_id": user["org_id"]})
     if project_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete: person is owner of {project_count} project(s)")
-    await db.persons.delete_one({"id": person_id})
+    done = await guarded_identity_delete(user, request, db, collection="persons",
+                                         legacy_id=person_id)
+    if done is not None:
+        return done
+    await _tenant(user).persons.delete_one({"id": person_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -682,8 +743,9 @@ class CompanyUpdate(BaseModel):
 @router.get("/companies")
 async def list_companies(user: dict = Depends(get_current_user), q: Optional[str] = None):
     """List all companies in organization"""
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
-    companies = await db.companies.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    companies = await tenant.companies.find(query, {"_id": 0}).sort("name", 1).to_list(500)
     if q:
         q_lower = q.lower()
         companies = [c for c in companies if q_lower in c.get("name", "").lower() or q_lower in c.get("eik", "").lower()]
@@ -693,11 +755,12 @@ async def list_companies(user: dict = Depends(get_current_user), q: Optional[str
 @router.post("/companies", status_code=201)
 async def create_company(data: CompanyCreate, user: dict = Depends(get_current_user)):
     """Create a new company"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     eik = normalize_eik(data.eik)
     if not eik:
         raise HTTPException(status_code=400, detail="EIK is required")
-    existing = await db.companies.find_one({"org_id": org_id, "eik": eik})
+    existing = await tenant.companies.find_one({"org_id": org_id, "eik": eik})
     if existing:
         raise HTTPException(status_code=400, detail="Company with this EIK already exists")
     now = datetime.now(timezone.utc).isoformat()
@@ -715,7 +778,7 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
         "created_at": now,
         "updated_at": now,
     }
-    await db.companies.insert_one(company)
+    await tenant.companies.insert_one(company)
     await log_audit(org_id, user["id"], user["email"], "created", "company", company["id"], 
                     {"eik": eik, "name": data.name})
     return {k: v for k, v in company.items() if k != "_id"}
@@ -724,8 +787,9 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
 @router.get("/companies/find-by-eik")
 async def find_company_by_eik(eik: str, user: dict = Depends(get_current_user)):
     """Find company by EIK"""
+    tenant = _tenant(user)
     normalized = normalize_eik(eik)
-    company = await db.companies.find_one({"org_id": user["org_id"], "eik": normalized}, {"_id": 0})
+    company = await tenant.companies.find_one({"org_id": user["org_id"], "eik": normalized}, {"_id": 0})
     if not company:
         return {"found": False, "company": None}
     return {"found": True, "company": company}
@@ -734,7 +798,8 @@ async def find_company_by_eik(eik: str, user: dict = Depends(get_current_user)):
 @router.get("/companies/{company_id}")
 async def get_company(company_id: str, user: dict = Depends(get_current_user)):
     """Get company by ID"""
-    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    company = await tenant.companies.find_one({"id": company_id, "org_id": user["org_id"]}, {"_id": 0})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return company
@@ -743,7 +808,7 @@ async def get_company(company_id: str, user: dict = Depends(get_current_user)):
 @router.put("/companies/{company_id}")
 async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user)):
     """Update company"""
-    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
+    company = await _tenant(user).companies.get(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     update = {}
@@ -756,20 +821,25 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
             else:
                 update[k] = v
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.companies.update_one({"id": company_id}, {"$set": update})
-    return await db.companies.find_one({"id": company_id}, {"_id": 0})
+    await _tenant(user).companies.update_one({"id": company_id}, {"$set": update})
+    return await _tenant(user).companies.get(company_id, {"_id": 0})
 
 
 @router.delete("/companies/{company_id}")
-async def delete_company(company_id: str, user: dict = Depends(require_admin)):
+async def delete_company(company_id: str, request: Request, user: dict = Depends(require_admin)):
     """Delete company (admin only)"""
-    company = await db.companies.find_one({"id": company_id, "org_id": user["org_id"]})
+    company = await _tenant(user).companies.get(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    project_count = await db.projects.count_documents({"owner_type": "company", "owner_id": company_id})
+    project_count = await _tenant(user).projects.count({"owner_type": "company", "owner_id": company_id,
+                                                       "org_id": user["org_id"]})
     if project_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete: company is owner of {project_count} project(s)")
-    await db.companies.delete_one({"id": company_id})
+    done = await guarded_identity_delete(user, request, db, collection="companies",
+                                         legacy_id=company_id)
+    if done is not None:
+        return done
+    await _tenant(user).companies.delete_one({"id": company_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -784,15 +854,17 @@ MAX_PHOTO_SIZE_MB = 10
 @router.get("/projects/{project_id}/photos")
 async def list_project_photos(project_id: str, user: dict = Depends(get_current_user)):
     """List all photos for a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    photos = await db.project_photos.find({"project_id": project_id, "org_id": org_id}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
+    photos = await tenant.project_photos.find({"project_id": project_id, "org_id": org_id}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
     user_ids = list(set(p.get("uploaded_by") for p in photos if p.get("uploaded_by")))
     users_map = {}
     if user_ids:
-        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
+        users = await tenant.users.find({"id": {"$in": user_ids}, "org_id": org_id},
+                                    {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
         users_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
     for photo in photos:
         photo["uploader_name"] = users_map.get(photo.get("uploaded_by"), "")
@@ -807,8 +879,9 @@ async def upload_project_photo(
     user: dict = Depends(get_current_user)
 ):
     """Upload a photo to a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if file.content_type not in ALLOWED_PHOTO_TYPES:
@@ -840,7 +913,7 @@ async def upload_project_photo(
         "uploaded_by": user["id"],
         "uploaded_at": now,
     }
-    await db.project_photos.insert_one(photo)
+    await tenant.project_photos.insert_one(photo)
     await log_audit(org_id, user["id"], user["email"], "photo_uploaded", "project", project_id, {"photo_id": photo_id})
     result = {k: v for k, v in photo.items() if k != "_id"}
     result["uploader_name"] = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
@@ -850,6 +923,7 @@ async def upload_project_photo(
 @router.get("/projects/photos/file/{filename}")
 async def serve_project_photo(filename: str, user: dict = Depends(get_current_user)):
     """Serve project photo file"""
+    tenant = _tenant(user)
     from fastapi.responses import FileResponse
     UPLOAD_DIR = Path("/app/backend/uploads/projects")
     if "/" in filename or "\\" in filename or ".." in filename:
@@ -859,7 +933,7 @@ async def serve_project_photo(filename: str, user: dict = Depends(get_current_us
         raise HTTPException(status_code=400, detail="Invalid filename")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    photo = await db.project_photos.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0, "content_type": 1})
+    photo = await tenant.project_photos.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0, "content_type": 1})
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found or access denied")
     return FileResponse(file_path, media_type=photo.get("content_type", "image/jpeg"))
@@ -868,8 +942,9 @@ async def serve_project_photo(filename: str, user: dict = Depends(get_current_us
 @router.delete("/projects/photos/{photo_id}")
 async def delete_project_photo(photo_id: str, user: dict = Depends(get_current_user)):
     """Delete a project photo (owner or admin only)"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    photo = await db.project_photos.find_one({"id": photo_id, "org_id": org_id}, {"_id": 0})
+    photo = await tenant.project_photos.find_one({"id": photo_id, "org_id": org_id}, {"_id": 0})
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
     if photo.get("uploaded_by") != user["id"] and user["role"] not in ["Admin", "Owner"]:
@@ -882,7 +957,7 @@ async def delete_project_photo(photo_id: str, user: dict = Depends(get_current_u
                 file_path.unlink()
             except OSError:
                 pass
-    await db.project_photos.delete_one({"id": photo_id})
+    await tenant.project_photos.delete_one({"id": photo_id})
     await log_audit(org_id, user["id"], user["email"], "photo_deleted", "project", photo.get("project_id"), {"photo_id": photo_id})
     return {"ok": True, "deleted": photo_id}
 
@@ -891,8 +966,9 @@ async def delete_project_photo(photo_id: str, user: dict = Depends(get_current_u
 @router.get("/projects/{project_id}/invoice-context")
 async def get_invoice_context(project_id: str, user: dict = Depends(get_current_user)):
     """Get pre-fill data for creating an invoice from a project context."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -902,7 +978,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
 
     if owner_id:
         if owner_type == "company":
-            c = await db.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+            c = await tenant.companies.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
             if c:
                 client_data = {
                     "id": c.get("id"),
@@ -915,7 +991,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
                     "phone": c.get("phone", ""),
                 }
         elif owner_type == "person":
-            p = await db.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+            p = await tenant.persons.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
             if p:
                 client_data = {
                     "id": p.get("id"),
@@ -929,7 +1005,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
                 }
         # Fallback: check unified clients collection
         if not client_data:
-            c = await db.clients.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
+            c = await tenant.clients.find_one({"id": owner_id, "org_id": org_id}, {"_id": 0})
             if c:
                 client_data = {
                     "id": c.get("id"),
@@ -960,10 +1036,11 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     Get all dashboard data for a project in one call.
     Returns structured data for all 8 cards.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     # ── Fetch project ───────────────────────────────────────────────────────
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -981,7 +1058,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
 
     # ── Sub-projects ────────────────────────────────────────────────────
-    children = await db.projects.find(
+    children = await tenant.projects.find(
         {"org_id": org_id, "parent_project_id": project_id},
         {"_id": 0, "id": 1, "code": 1, "name": 1, "status": 1, "type": 1},
     ).sort("code", 1).to_list(50)
@@ -989,7 +1066,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     # Parent info if this is a child
     parent_info = None
     if project.get("parent_project_id"):
-        parent = await db.projects.find_one(
+        parent = await tenant.projects.find_one(
             {"id": project["parent_project_id"], "org_id": org_id},
             {"_id": 0, "id": 1, "code": 1, "name": 1},
         )
@@ -999,7 +1076,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     # For child projects, inherit shared data from parent
     effective_project = project
     if project.get("parent_project_id"):
-        parent_full = await db.projects.find_one(
+        parent_full = await tenant.projects.find_one(
             {"id": project["parent_project_id"], "org_id": org_id},
             {"_id": 0, "owner_type": 1, "owner_id": 1, "address_text": 1,
              "structured_address": 1, "contacts": 1, "invoice_details": 1},
@@ -1017,7 +1094,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     if effective_project.get("owner_type") == "person" and effective_project.get("owner_id"):
-        person = await db.persons.find_one({"id": effective_project["owner_id"], "org_id": org_id}, {"_id": 0})
+        person = await tenant.persons.find_one({"id": effective_project["owner_id"], "org_id": org_id}, {"_id": 0})
         if person:
             card_client["owner_data"] = {
                 "type": "person",
@@ -1028,7 +1105,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 "notes": person.get("notes", ""),
             }
     elif effective_project.get("owner_type") == "company" and effective_project.get("owner_id"):
-        company = await db.companies.find_one({"id": effective_project["owner_id"], "org_id": org_id}, {"_id": 0})
+        company = await tenant.companies.find_one({"id": effective_project["owner_id"], "org_id": org_id}, {"_id": 0})
         if company:
             card_client["owner_data"] = {
                 "type": "company",
@@ -1078,15 +1155,13 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     # ── Card 4: Team/Personnel ──────────────────────────────────────────────
-    team_members = await db.project_team.find(
-        {"project_id": project_id, "active": True},
-        {"_id": 0}
-    ).to_list(100)
+    team_members = await project_team.project_rows(_team(user), [project_id], {"_id": 0},
+                                                   limit=100)
     
     user_ids = [m["user_id"] for m in team_members]
     users_map = {}
     if user_ids:
-        users = await db.users.find(
+        users = await tenant.users.find(
             {"id": {"$in": user_ids}},
             {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "role": 1}
         ).to_list(100)
@@ -1105,7 +1180,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     # Calculate total paid salaries for this project (from payroll if exists)
     total_salaries_paid = 0
     try:
-        payroll_entries = await db.payroll_entries.find(
+        payroll_entries = await tenant.payroll_entries.find(
             {"project_id": project_id, "org_id": org_id, "status": "Paid"},
             {"_id": 0, "net_pay": 1}
         ).to_list(1000)
@@ -1121,13 +1196,13 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
 
     # Reported/Approved today for this project (from employee_daily_reports)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    drafts_today = await db.employee_daily_reports.find(
+    drafts_today = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": {"$exists": True}},
         {"_id": 0, "worker_id": 1, "worker_name": 1, "hours": 1, "status": 1},
     ).to_list(200)
 
     # Also check new-style daily reports (day_entries with project_id)
-    new_style_reports = await db.employee_daily_reports.find(
+    new_style_reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "report_date": today, "day_entries.project_id": project_id},
         {"_id": 0, "employee_id": 1, "day_entries": 1, "approval_status": 1},
     ).to_list(200)
@@ -1159,7 +1234,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     card_team["reported_hours"] = round(total_hours, 1)
 
     # "На обекта днес" = attendance_entries for today (source of truth from Теренен портал → Хора)
-    attendance_today = await db.attendance_entries.find(
+    attendance_today = await tenant.attendance_entries.find(
         {"org_id": org_id, "project_id": project_id, "date": today,
          "status": {"$in": ["Present", "Late"]}},
         {"_id": 0, "user_id": 1},
@@ -1170,14 +1245,14 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     card_team["on_site_today"] = len(on_site_ids)
 
     # Pending approval count for this project
-    pending = await db.employee_daily_reports.count_documents(
+    pending = await tenant.employee_daily_reports.count_documents(
         {"org_id": org_id, "project_id": project_id, "status": "SUBMITTED"}
     )
     card_team["pending_approval"] = pending
     
     # ── Card 5: Invoices ────────────────────────────────────────────────────
     # Source of truth: invoice.paid_amount, invoice.remaining_amount, invoice.total
-    invoices = await db.invoices.find(
+    invoices = await tenant.invoices.find(
         {"project_id": project_id, "org_id": org_id},
         {"_id": 0}
     ).sort("created_at", -1).to_list(500)
@@ -1194,7 +1269,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_ids = [inv.get("id") for inv in invoices if inv.get("id")]
     all_allocations = []
     if invoice_ids:
-        all_allocations = await db.payment_allocations.find(
+        all_allocations = await tenant.payment_allocations.find(
             {"invoice_id": {"$in": invoice_ids}},
             {"_id": 0}
         ).sort("allocated_at", -1).to_list(2000)
@@ -1203,7 +1278,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     payment_ids = list(set(a.get("payment_id") for a in all_allocations if a.get("payment_id")))
     payments_map = {}
     if payment_ids:
-        fp_list = await db.finance_payments.find(
+        fp_list = await tenant.finance_payments.find(
             {"id": {"$in": payment_ids}},
             {"_id": 0, "id": 1, "date": 1, "method": 1, "reference": 1, "note": 1}
         ).to_list(2000)
@@ -1279,7 +1354,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     # ── Card 6: Offers ──────────────────────────────────────────────────────
-    offers = await db.offers.find(
+    offers = await tenant.offers.find(
         {"project_id": project_id, "org_id": org_id, "status": "Accepted"},
         {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
     ).to_list(500)
@@ -1289,7 +1364,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     offers_inc_vat = sum(o.get("total_inc_vat", 0) or 0 for o in offers)
     
     # Extra offers for this project
-    all_offers = await db.offers.find(
+    all_offers = await tenant.offers.find(
         {"project_id": project_id, "org_id": org_id},
         {"_id": 0, "id": 1, "offer_no": 1, "title": 1, "status": 1, "offer_type": 1,
          "version": 1, "total": 1, "subtotal": 1, "currency": 1,
@@ -1324,7 +1399,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     materials_inc_vat = 0
     
     try:
-        warehouse_txns = await db.warehouse_transactions.find(
+        warehouse_txns = await tenant.warehouse_transactions.find(
             {"project_id": project_id, "org_id": org_id},
             {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
         ).to_list(1000)
@@ -1346,7 +1421,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     
     # Check for project payments (additional income)
     try:
-        payments = await db.project_payments.find(
+        payments = await tenant.project_payments.find(
             {"project_id": project_id, "org_id": org_id, "type": "incoming"},
             {"_id": 0, "amount": 1}
         ).to_list(1000)
@@ -1384,8 +1459,9 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
 @router.get("/projects/{project_id}/pending-reports")
 async def get_project_pending_reports(project_id: str, user: dict = Depends(get_current_user)):
     """Reports submitted for this project, awaiting approval."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    reports = await db.employee_daily_reports.find(
+    reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id,
          "status": "SUBMITTED", "worker_id": {"$exists": True}},
         {"_id": 0, "id": 1, "worker_id": 1, "worker_name": 1, "date": 1,
@@ -1420,11 +1496,12 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
     First call: original → child А (migrates data), new empty child Б.
     Subsequent calls: new child В, Г, Д...
     """
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org_id = user["org_id"]
-    parent = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    parent = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
     if not parent:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -1433,7 +1510,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
         raise HTTPException(status_code=400, detail="Под-обект не може да има собствени под-обекти")
 
     now = datetime.now(timezone.utc).isoformat()
-    existing_children = await db.projects.find(
+    existing_children = await tenant.projects.find(
         {"org_id": org_id, "parent_project_id": project_id},
         {"_id": 0, "id": 1, "code": 1},
     ).sort("created_at", 1).to_list(50)
@@ -1447,7 +1524,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
         if last_part not in CYRILLIC_LETTERS:
             new_letter = CYRILLIC_LETTERS[idx] if idx < len(CYRILLIC_LETTERS) else f"_{idx+1}"
             new_code = f"{parent_code}-{new_letter}"
-            await db.projects.update_one(
+            await tenant.projects.update_one(
                 {"id": child["id"]},
                 {"$set": {"code": new_code, "updated_at": now}}
             )
@@ -1482,7 +1559,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             "created_at": now,
             "updated_at": now,
         }
-        await db.projects.insert_one(child_a)
+        await tenant.projects.insert_one(child_a)
 
         # --- Migrate operational data from parent → child А ---
         collections_to_migrate = [
@@ -1496,7 +1573,9 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
         ]
         migration_log = {}
         for coll_name, field in collections_to_migrate:
-            coll = db[coll_name]
+            # W0-03E-A2C: a scoped view, so the update_many below cannot be
+            # widened by forgetting the tenant in one of these collections.
+            coll = tenant.collection(coll_name)
             result = await coll.update_many(
                 {field: project_id, "org_id": org_id},
                 {"$set": {field: child_a_id, "updated_at": now}},
@@ -1505,7 +1584,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
                 migration_log[coll_name] = result.modified_count
 
         # Work sessions use site_id instead of project_id
-        ws_result = await db.work_sessions.update_many(
+        ws_result = await tenant.work_sessions.update_many(
             {"site_id": project_id, "org_id": org_id},
             {"$set": {"site_id": child_a_id, "updated_at": now}},
         )
@@ -1513,7 +1592,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             migration_log["work_sessions"] = ws_result.modified_count
 
         # Contract payments also use site_id
-        cp_result = await db.contract_payments.update_many(
+        cp_result = await tenant.contract_payments.update_many(
             {"site_id": project_id, "org_id": org_id},
             {"$set": {"site_id": child_a_id, "updated_at": now}},
         )
@@ -1521,17 +1600,17 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             migration_log["contract_payments"] = cp_result.modified_count
 
         # Project team: clone (not move) so parent can still display
-        team_members = await db.project_team.find(
-            {"project_id": project_id, "org_id": org_id},
-            {"_id": 0},
-        ).to_list(100)
+        team_tenant = _team(user)
+        team_members = await team_tenant.collection("project_team").find(
+            {"project_id": project_id}, {"_id": 0}).to_list(100)
         for tm in team_members:
-            await db.project_team.insert_one({
-                **tm,
-                "_id": None,
-                "id": str(uuid.uuid4()),
-                "project_id": child_a_id,
-            })
+            # W0-03E-A2: the clone is stamped from the active tenant, and the
+            # source rows were read inside it, so a foreign row is never cloned.
+            await project_team.add_member(
+                team_tenant, member_id=str(uuid.uuid4()), project_id=child_a_id,
+                user_id=tm.get("user_id"), role_in_project=tm.get("role_in_project"),
+                active=tm.get("active", True), from_date=tm.get("from_date"),
+                to_date=tm.get("to_date"))
         if team_members:
             migration_log["project_team_cloned"] = len(team_members)
 
@@ -1564,14 +1643,14 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             "created_at": now,
             "updated_at": now,
         }
-        await db.projects.insert_one(child_b)
+        await tenant.projects.insert_one(child_b)
         results["children_created"].append({
             "id": child_b_id, "code": child_b_code,
             "name": data.name, "letter": "Б",
         })
 
         # Mark parent as wrapper (clear operational budget, keep shared data)
-        await db.projects.update_one(
+        await tenant.projects.update_one(
             {"id": project_id},
             {"$set": {"updated_at": now, "is_parent": True}},
         )
@@ -1590,7 +1669,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
         new_child_code = f"{parent_code}-{letter}"
 
         # Check code uniqueness
-        if await db.projects.find_one({"org_id": org_id, "code": new_child_code}):
+        if await tenant.projects.find_one({"org_id": org_id, "code": new_child_code}):
             raise HTTPException(status_code=400, detail=f"Код {new_child_code} вече съществува")
 
         new_child = {
@@ -1613,7 +1692,7 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             "created_at": now,
             "updated_at": now,
         }
-        await db.projects.insert_one(new_child)
+        await tenant.projects.insert_one(new_child)
         results["children_created"].append({
             "id": new_child_id, "code": new_child_code,
             "name": data.name, "letter": letter,
@@ -1633,18 +1712,19 @@ async def wrap_in_group(project_id: str, data: WrapInGroupRequest, user: dict = 
     NO DATA MIGRATION — existing project keeps all its data, just gets a parent.
     Creates: new empty group (parent) + reassigns existing project as child + new empty sub-project.
     """
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org_id = user["org_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if project.get("parent_project_id"):
         raise HTTPException(status_code=400, detail="Този обект вече е под-обект на друг")
 
-    has_children = await db.projects.count_documents(
+    has_children = await tenant.projects.count_documents(
         {"parent_project_id": project_id, "org_id": org_id}
     )
     if has_children > 0:
@@ -1680,10 +1760,10 @@ async def wrap_in_group(project_id: str, data: WrapInGroupRequest, user: dict = 
         "updated_at": now,
         "created_by": user.get("id"),
     }
-    await db.projects.insert_one(group_doc)
+    await tenant.projects.insert_one(group_doc)
 
     # 2) Existing project става child под шапката — БЕЗ ДА ПИПАМЕ ДРУГИ ДАННИ
-    await db.projects.update_one(
+    await tenant.projects.update_one(
         {"id": project_id, "org_id": org_id},
         {"$set": {"parent_project_id": group_id, "updated_at": now}}
     )
@@ -1707,7 +1787,7 @@ async def wrap_in_group(project_id: str, data: WrapInGroupRequest, user: dict = 
         "updated_at": now,
         "created_by": user.get("id"),
     }
-    await db.projects.insert_one(new_sub_doc)
+    await tenant.projects.insert_one(new_sub_doc)
 
     return {
         "ok": True,
@@ -1728,11 +1808,12 @@ async def add_subproject_to_group(group_id: str, data: AddSubProjectRequest, use
     """
     Add a new empty sub-project to an existing group (parent project).
     """
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org_id = user["org_id"]
-    group = await db.projects.find_one({"id": group_id, "org_id": org_id}, {"_id": 0})
+    group = await tenant.projects.find_one({"id": group_id, "org_id": org_id}, {"_id": 0})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -1743,7 +1824,7 @@ async def add_subproject_to_group(group_id: str, data: AddSubProjectRequest, use
         raise HTTPException(status_code=400, detail="Името е задължително")
 
     now = datetime.now(timezone.utc).isoformat()
-    children_count = await db.projects.count_documents(
+    children_count = await tenant.projects.count_documents(
         {"parent_project_id": group_id, "org_id": org_id}
     )
 
@@ -1767,7 +1848,7 @@ async def add_subproject_to_group(group_id: str, data: AddSubProjectRequest, use
         "updated_at": now,
         "created_by": user.get("id"),
     }
-    await db.projects.insert_one(new_sub_doc)
+    await tenant.projects.insert_one(new_sub_doc)
 
     return {
         "ok": True,
@@ -1788,6 +1869,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
     Source: employee_daily_reports + attendance_entries + work_sessions.
     No new table — pure filtered extraction.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     from collections import defaultdict
 
@@ -1798,7 +1880,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
     })
 
     # A) From employee_daily_reports (new-style flat)
-    reports = await db.employee_daily_reports.find(
+    reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "worker_id": {"$exists": True}},
         {"_id": 0, "worker_id": 1, "worker_name": 1, "date": 1, "hours": 1},
     ).to_list(5000)
@@ -1821,7 +1903,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
             wd["name"] = r["worker_name"]
 
     # B) From old-style daily reports (day_entries with project_id)
-    old_reports = await db.employee_daily_reports.find(
+    old_reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "day_entries.project_id": project_id, "employee_id": {"$exists": True}},
         {"_id": 0, "employee_id": 1, "report_date": 1, "day_entries": 1},
     ).to_list(2000)
@@ -1843,7 +1925,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
                 wd["report_count"] += 1
 
     # C) From work_sessions (approved labor)
-    sessions = await db.work_sessions.find(
+    sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "worker_id": 1, "worker_name": 1, "started_at": 1,
          "duration_hours": 1, "labor_cost": 1},
@@ -1865,7 +1947,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
             wd["name"] = s["worker_name"]
 
     # D) From attendance_entries
-    att_entries = await db.attendance_entries.find(
+    att_entries = await tenant.attendance_entries.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "user_id": 1, "date": 1},
     ).to_list(5000)
@@ -1887,13 +1969,13 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
 
     # Enrich with user info + active status
     all_wids = list(worker_data.keys())
-    users = await db.users.find(
+    users = await tenant.users.find(
         {"id": {"$in": all_wids}},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1, "role": 1},
     ).to_list(300)
     user_map = {u["id"]: u for u in users}
 
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "user_id": {"$in": all_wids}},
         {"_id": 0, "user_id": 1, "position": 1, "active": 1},
     ).to_list(300)
@@ -1929,11 +2011,12 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
 @router.get("/projects/{project_id}/aggregate")
 async def get_project_aggregate(project_id: str, user: dict = Depends(get_current_user)):
     """Read-only aggregate: own data + all direct children data."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Get all project IDs (parent + children)
-    children = await db.projects.find(
+    children = await tenant.projects.find(
         {"org_id": org_id, "parent_project_id": project_id},
         {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1},
     ).to_list(50)
@@ -1944,10 +2027,11 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Team ──
     async def count_team(pid):
-        return await db.project_team.count_documents({"org_id": org_id, "project_id": pid})
+        # W0-03E-A2: one relation accessor; the tenant predicate is applied last.
+        return await _team(user).collection("project_team").count({"project_id": pid})
 
     async def count_reported(pid):
-        reps = await db.employee_daily_reports.find(
+        reps = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "project_id": pid, "date": today, "worker_id": {"$exists": True}},
             {"_id": 0, "worker_id": 1, "status": 1, "hours": 1},
         ).to_list(200)
@@ -1973,7 +2057,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Invoices ──
     async def count_invoices(pids):
-        invs = await db.invoices.find(
+        invs = await tenant.invoices.find(
             {"org_id": org_id, "project_id": {"$in": pids}},
             {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
         ).to_list(500)
@@ -2003,8 +2087,8 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Offers ──
     async def count_offers(pids):
-        count = await db.offers.count_documents({"org_id": org_id, "project_id": {"$in": pids}})
-        approved = await db.offers.count_documents({"org_id": org_id, "project_id": {"$in": pids}, "status": "Approved"})
+        count = await tenant.offers.count_documents({"org_id": org_id, "project_id": {"$in": pids}})
+        approved = await tenant.offers.count_documents({"org_id": org_id, "project_id": {"$in": pids}, "status": "Approved"})
         return {"count": count, "approved": approved}
 
     own_off = await count_offers([project_id])
@@ -2014,7 +2098,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Reports total (all time) ──
     async def count_report_hours(pids):
-        reps = await db.employee_daily_reports.find(
+        reps = await tenant.employee_daily_reports.find(
             {"org_id": org_id, "project_id": {"$in": pids}, "worker_id": {"$exists": True}},
             {"_id": 0, "hours": 1},
         ).to_list(5000)
@@ -2027,7 +2111,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Work Sessions (часове + labor cost) ──
     async def count_work(pids):
-        sessions = await db.work_sessions.find(
+        sessions = await tenant.work_sessions.find(
             {"org_id": org_id, "site_id": {"$in": pids}},
             {"_id": 0, "duration_hours": 1, "labor_cost": 1},
         ).to_list(5000)
@@ -2042,7 +2126,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Materials (от warehouse transactions) ──
     async def count_materials(pids):
-        txns = await db.warehouse_transactions.find(
+        txns = await tenant.warehouse_transactions.find(
             {"org_id": org_id, "project_id": {"$in": pids}},
             {"_id": 0, "total_ex_vat": 1, "total_inc_vat": 1},
         ).to_list(5000)

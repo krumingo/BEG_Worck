@@ -7,6 +7,7 @@ import os
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.tenancy.data_access import TenantData
 
 # Subscription Plans Configuration
 SUBSCRIPTION_PLANS = {
@@ -61,7 +62,8 @@ SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "incomple
 
 async def check_module_access_for_org(org_id: str, module_code: str) -> tuple:
     """Check if an organization has access to a module based on their subscription."""
-    sub = await db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    sub = await tenant.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
     if not sub:
         return False, "No subscription"
     
@@ -74,7 +76,7 @@ async def check_module_access_for_org(org_id: str, module_code: str) -> tuple:
         try:
             trial_end_dt = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
             if now >= trial_end_dt:
-                await db.subscriptions.update_one(
+                await tenant.subscriptions.update_one(
                     {"org_id": org_id},
                     {"$set": {"status": "past_due", "updated_at": now.isoformat()}}
                 )
@@ -112,7 +114,10 @@ async def require_m9(user: dict = Depends(get_current_user)):
 async def get_plan_limits(org_id: str, db_handle=None) -> dict:
     """Get the limits for an organization's current plan."""
     _db = db if db_handle is None else db_handle
-    sub = await _db.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
+    # W0-03E-A2C + W0-02 PR-04: the tenant view is bound to the handle this
+    # caller gave us, so the read and the write stay in the SAME tenant database.
+    tenant = TenantData.for_resolved_org(_db, org_id)
+    sub = await tenant.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
     if not sub:
         return SUBSCRIPTION_PLANS["free"]["limits"]
     plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
@@ -126,10 +131,13 @@ async def enforce_limit(org_id: str, resource_type: str, db_handle=None):
     database the write goes to. Default (None) is the legacy global handle.
     """
     _db = db if db_handle is None else db_handle
+    # W0-03E-A2C + W0-02 PR-04: the tenant view is bound to the handle this
+    # caller gave us, so the read and the write stay in the SAME tenant database.
+    tenant = TenantData.for_resolved_org(_db, org_id)
     limits = await get_plan_limits(org_id, db_handle=_db)
     
     if resource_type == "users":
-        count = await _db.users.count_documents({"org_id": org_id})
+        count = await tenant.users.count_documents({"org_id": org_id})
         limit = limits.get("users", 3)
         if count >= limit:
             raise HTTPException(
@@ -137,7 +145,7 @@ async def enforce_limit(org_id: str, resource_type: str, db_handle=None):
                 detail={"code": "LIMIT_USERS_EXCEEDED", "message": f"User limit ({limit}) reached. Please upgrade your plan.", "current": count, "limit": limit}
             )
     elif resource_type == "projects":
-        count = await _db.projects.count_documents({"org_id": org_id})
+        count = await tenant.projects.count_documents({"org_id": org_id})
         limit = limits.get("projects", 2)
         if count >= limit:
             raise HTTPException(
@@ -147,7 +155,7 @@ async def enforce_limit(org_id: str, resource_type: str, db_handle=None):
     elif resource_type == "invoices":
         now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-        count = await _db.invoices.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
+        count = await tenant.invoices.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
         limit = limits.get("monthly_invoices", 5)
         if count >= limit:
             raise HTTPException(

@@ -2,15 +2,22 @@
 Routes - Location Tree (Обектова йерархия).
 Hierarchical location structure: project → building → floor → room → zone → element.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Locations"])
 
@@ -54,13 +61,14 @@ def build_tree(nodes: list, parent_id: Optional[str] = None) -> list:
 @router.get("/projects/{project_id}/locations")
 async def get_location_tree(project_id: str, user: dict = Depends(require_m2)):
     """Get the full location tree for a project (nested JSON)."""
-    project = await db.projects.find_one(
+    tenant = _tenant(user)
+    project = await tenant.projects.find_one(
         {"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "id": 1}
     )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    nodes = await db.location_nodes.find(
+    nodes = await tenant.location_nodes.find(
         {"project_id": project_id, "org_id": user["org_id"]}, {"_id": 0}
     ).to_list(1000)
 
@@ -72,10 +80,11 @@ async def get_location_tree(project_id: str, user: dict = Depends(require_m2)):
 async def create_location(
     project_id: str, data: LocationCreate, user: dict = Depends(require_m2)
 ):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "id": 1, "name": 1}
     )
     if not project:
@@ -88,7 +97,7 @@ async def create_location(
 
     # Validate parent exists if provided
     if data.parent_id:
-        parent = await db.location_nodes.find_one(
+        parent = await tenant.location_nodes.find_one(
             {"id": data.parent_id, "project_id": project_id, "org_id": user["org_id"]}
         )
         if not parent:
@@ -113,13 +122,14 @@ async def create_location(
         "updated_at": now,
         "created_by": user["id"],
     }
-    await db.location_nodes.insert_one(node)
+    await tenant.location_nodes.insert_one(node)
     return {k: v for k, v in node.items() if k != "_id"}
 
 
 @router.get("/locations/{node_id}")
 async def get_location(node_id: str, user: dict = Depends(require_m2)):
-    node = await db.location_nodes.find_one(
+    tenant = _tenant(user)
+    node = await tenant.location_nodes.find_one(
         {"id": node_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not node:
@@ -131,7 +141,8 @@ async def get_location(node_id: str, user: dict = Depends(require_m2)):
 async def update_location(
     node_id: str, data: LocationUpdate, user: dict = Depends(require_m2)
 ):
-    node = await db.location_nodes.find_one(
+    tenant = _tenant(user)
+    node = await tenant.location_nodes.find_one(
         {"id": node_id, "org_id": user["org_id"]}
     )
     if not node:
@@ -150,23 +161,24 @@ async def update_location(
                 update[k] = v
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.location_nodes.update_one({"id": node_id}, {"$set": update})
-    return await db.location_nodes.find_one({"id": node_id}, {"_id": 0})
+    await tenant.location_nodes.update_one({"id": node_id, "org_id": user["org_id"]}, {"$set": update})
+    return await tenant.location_nodes.find_one({"id": node_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/locations/{node_id}")
-async def delete_location(node_id: str, user: dict = Depends(require_m2)):
+async def delete_location(node_id: str, request: Request, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    node = await db.location_nodes.find_one(
+    node = await tenant.location_nodes.find_one(
         {"id": node_id, "org_id": user["org_id"]}
     )
     if not node:
         raise HTTPException(status_code=404, detail="Location not found")
 
     # Block delete if has children
-    children_count = await db.location_nodes.count_documents(
+    children_count = await tenant.location_nodes.count_documents(
         {"parent_id": node_id, "org_id": user["org_id"]}
     )
     if children_count > 0:
@@ -176,10 +188,10 @@ async def delete_location(node_id: str, user: dict = Depends(require_m2)):
         )
 
     # Block delete if linked SMR exist
-    smr_count = await db.missing_smr.count_documents(
+    smr_count = await tenant.missing_smr.count_documents(
         {"org_id": user["org_id"], "location_id": node_id}
     )
-    ew_count = await db.extra_work_drafts.count_documents(
+    ew_count = await tenant.extra_work_drafts.count_documents(
         {"org_id": user["org_id"], "location_id": node_id}
     )
     if smr_count + ew_count > 0:
@@ -188,7 +200,11 @@ async def delete_location(node_id: str, user: dict = Depends(require_m2)):
             detail=f"Cannot delete: {smr_count + ew_count} linked SMR record(s) exist.",
         )
 
-    await db.location_nodes.delete_one({"id": node_id})
+    done = await guarded_identity_delete(user, request, db, collection="location_nodes",
+                                         legacy_id=node_id)
+    if done is not None:
+        return done
+    await tenant.location_nodes.delete_one({"id": node_id, "org_id": user["org_id"]})
     return {"ok": True}
 
 
@@ -196,8 +212,9 @@ async def delete_location(node_id: str, user: dict = Depends(require_m2)):
 
 @router.get("/locations/{node_id}/children")
 async def get_children(node_id: str, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     children = (
-        await db.location_nodes.find(
+        await tenant.location_nodes.find(
             {"parent_id": node_id, "org_id": user["org_id"]}, {"_id": 0}
         )
         .sort("sort_order", 1)
@@ -211,9 +228,10 @@ async def get_children(node_id: str, user: dict = Depends(require_m2)):
 @router.get("/locations/{node_id}/smr")
 async def get_location_smr(node_id: str, user: dict = Depends(require_m2)):
     """Get all SMR records linked to this location (missing_smr + extra_work_drafts)."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
-    node = await db.location_nodes.find_one(
+    node = await tenant.location_nodes.find_one(
         {"id": node_id, "org_id": org_id}, {"_id": 0}
     )
     if not node:
@@ -224,7 +242,7 @@ async def get_location_smr(node_id: str, user: dict = Depends(require_m2)):
     stack = [node_id]
     while stack:
         parent = stack.pop()
-        kids = await db.location_nodes.find(
+        kids = await tenant.location_nodes.find(
             {"parent_id": parent, "org_id": org_id}, {"_id": 0, "id": 1}
         ).to_list(500)
         for k in kids:
@@ -232,12 +250,12 @@ async def get_location_smr(node_id: str, user: dict = Depends(require_m2)):
             stack.append(k["id"])
 
     # Query missing_smr by location_id
-    missing = await db.missing_smr.find(
+    missing = await tenant.missing_smr.find(
         {"org_id": org_id, "location_id": {"$in": all_ids}}, {"_id": 0}
     ).to_list(500)
 
     # Query extra_work_drafts by location_id
-    extras = await db.extra_work_drafts.find(
+    extras = await tenant.extra_work_drafts.find(
         {"org_id": org_id, "location_id": {"$in": all_ids}}, {"_id": 0}
     ).to_list(500)
 
@@ -254,7 +272,7 @@ async def get_location_smr(node_id: str, user: dict = Depends(require_m2)):
             text_q["floor"] = floor_name
         if room_name:
             text_q["room"] = room_name
-        text_missing = await db.missing_smr.find(
+        text_missing = await tenant.missing_smr.find(
             {**text_q, "location_id": {"$exists": False}}, {"_id": 0}
         ).to_list(200)
         ew_text_q = {"org_id": org_id, "project_id": node["project_id"]}
@@ -262,7 +280,7 @@ async def get_location_smr(node_id: str, user: dict = Depends(require_m2)):
             ew_text_q["location_floor"] = floor_name
         if room_name:
             ew_text_q["location_room"] = room_name
-        text_extras = await db.extra_work_drafts.find(
+        text_extras = await tenant.extra_work_drafts.find(
             {**ew_text_q, "location_id": {"$exists": False}}, {"_id": 0}
         ).to_list(200)
 
@@ -298,9 +316,10 @@ async def smr_reverse_lookup(
     user: dict = Depends(require_m2),
 ):
     """Reverse lookup: find all locations where a given SMR type exists."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1}
     )
     if not project:
@@ -318,7 +337,7 @@ async def smr_reverse_lookup(
     if smr_type:
         ms_query["smr_type"] = {"$regex": smr_type, "$options": "i"}
 
-    missing_items = await db.missing_smr.find(ms_query, {"_id": 0}).to_list(500)
+    missing_items = await tenant.missing_smr.find(ms_query, {"_id": 0}).to_list(500)
 
     # Build query for extra_work_drafts
     ew_query = {"org_id": org_id, "project_id": project_id}
@@ -330,7 +349,7 @@ async def smr_reverse_lookup(
     if smr_type:
         ew_query["title"] = {"$regex": smr_type, "$options": "i"}
 
-    extra_items = await db.extra_work_drafts.find(ew_query, {"_id": 0}).to_list(500)
+    extra_items = await tenant.extra_work_drafts.find(ew_query, {"_id": 0}).to_list(500)
 
     # Collect location_ids from results
     location_ids = set()
@@ -342,7 +361,7 @@ async def smr_reverse_lookup(
     # Fetch location nodes
     locations = {}
     if location_ids:
-        nodes = await db.location_nodes.find(
+        nodes = await tenant.location_nodes.find(
             {"id": {"$in": list(location_ids)}, "org_id": org_id}, {"_id": 0}
         ).to_list(500)
         locations = {n["id"]: n for n in nodes}

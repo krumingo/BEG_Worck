@@ -10,6 +10,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.alarm_engine import evaluate_all_rules
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Alarms"])
 
@@ -62,22 +68,25 @@ async def list_alarms(
         query["type"] = type
     if site_id:
         query["site_id"] = site_id
-    return await paginate_query(db.alarm_events, query, page, page_size, "triggered_at", -1)
+    tenant = _tenant(user)
+    return await paginate_query(tenant.alarm_events, query, page, page_size, "triggered_at", -1)
 
 
 @router.get("/alarms/count")
 async def alarm_count(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    critical = await db.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical"})
-    warning = await db.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning"})
-    info = await db.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "info"})
+    critical = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical"})
+    warning = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning"})
+    info = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "info"})
     return {"critical": critical, "warning": warning, "info": info, "total": critical + warning + info}
 
 
 @router.get("/alarms/dashboard")
 async def alarm_dashboard(user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    active = await db.alarm_events.find({"org_id": org_id, "status": "active"}, {"_id": 0}).to_list(500)
+    active = await tenant.alarm_events.find({"org_id": org_id, "status": "active"}, {"_id": 0}).to_list(500)
 
     by_severity = {"critical": 0, "warning": 0, "info": 0}
     by_type = {}
@@ -92,7 +101,7 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
                 by_site[sid] = {"site_id": sid, "name": e.get("site_name", ""), "count": 0}
             by_site[sid]["count"] += 1
 
-    recent = await db.alarm_events.find(
+    recent = await tenant.alarm_events.find(
         {"org_id": org_id}, {"_id": 0}
     ).sort("triggered_at", -1).limit(10).to_list(10)
 
@@ -101,7 +110,7 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     for i in range(6, -1, -1):
         d = (now - timedelta(days=i)).strftime("%Y-%m-%d")
-        count = await db.alarm_events.count_documents(
+        count = await tenant.alarm_events.count_documents(
             {"org_id": org_id, "triggered_at": {"$gte": f"{d}T00:00:00", "$lte": f"{d}T23:59:59"}}
         )
         trend.append({"date": d, "count": count})
@@ -117,7 +126,8 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
 
 @router.get("/alarms/{event_id}")
 async def get_alarm(event_id: str, user: dict = Depends(get_current_user)):
-    ev = await db.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]}, {"_id": 0})
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
     return ev
@@ -125,26 +135,28 @@ async def get_alarm(event_id: str, user: dict = Depends(get_current_user)):
 
 @router.put("/alarms/{event_id}/acknowledge")
 async def acknowledge_alarm(event_id: str, data: AcknowledgeRequest, user: dict = Depends(get_current_user)):
-    ev = await db.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
     now = datetime.now(timezone.utc).isoformat()
-    await db.alarm_events.update_one({"id": event_id}, {"$set": {
+    await tenant.alarm_events.update_one({"id": event_id}, {"$set": {
         "status": "acknowledged", "acknowledged_by": user["id"], "acknowledged_at": now,
     }})
-    return await db.alarm_events.find_one({"id": event_id}, {"_id": 0})
+    return await tenant.alarm_events.find_one({"id": event_id}, {"_id": 0})
 
 
 @router.put("/alarms/{event_id}/resolve")
 async def resolve_alarm(event_id: str, data: AcknowledgeRequest, user: dict = Depends(get_current_user)):
-    ev = await db.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
     now = datetime.now(timezone.utc).isoformat()
-    await db.alarm_events.update_one({"id": event_id}, {"$set": {
+    await tenant.alarm_events.update_one({"id": event_id}, {"$set": {
         "status": "resolved", "resolved_by": user["id"], "resolved_at": now, "resolve_notes": data.notes,
     }})
-    return await db.alarm_events.find_one({"id": event_id}, {"_id": 0})
+    return await tenant.alarm_events.find_one({"id": event_id}, {"_id": 0})
 
 
 @router.post("/alarms/evaluate")
@@ -157,12 +169,14 @@ async def evaluate_alarms(user: dict = Depends(get_current_user)):
 
 @router.get("/alarm-rules")
 async def list_rules(user: dict = Depends(get_current_user)):
-    items = await db.alarm_rules.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
+    tenant = _tenant(user)
+    items = await tenant.alarm_rules.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
     return {"items": items, "total": len(items)}
 
 
 @router.post("/alarm-rules", status_code=201)
 async def create_rule(data: RuleCreate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     now = datetime.now(timezone.utc).isoformat()
@@ -174,37 +188,40 @@ async def create_rule(data: RuleCreate, user: dict = Depends(get_current_user)):
         "cooldown_hours": data.cooldown_hours, "auto_resolve": data.auto_resolve,
         "created_at": now, "updated_at": now,
     }
-    await db.alarm_rules.insert_one(rule)
+    await tenant.alarm_rules.insert_one(rule)
     return {k: v for k, v in rule.items() if k != "_id"}
 
 
 @router.put("/alarm-rules/{rule_id}")
 async def update_rule(rule_id: str, data: RuleUpdate, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
-    rule = await db.alarm_rules.find_one({"id": rule_id, "org_id": user["org_id"]})
+    rule = await tenant.alarm_rules.find_one({"id": rule_id, "org_id": user["org_id"]})
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.alarm_rules.update_one({"id": rule_id}, {"$set": update})
-    return await db.alarm_rules.find_one({"id": rule_id}, {"_id": 0})
+    await tenant.alarm_rules.update_one({"id": rule_id}, {"$set": update})
+    return await tenant.alarm_rules.find_one({"id": rule_id}, {"_id": 0})
 
 
 @router.put("/alarm-rules/{rule_id}/toggle")
 async def toggle_rule(rule_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
-    rule = await db.alarm_rules.find_one({"id": rule_id, "org_id": user["org_id"]})
+    rule = await tenant.alarm_rules.find_one({"id": rule_id, "org_id": user["org_id"]})
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
-    await db.alarm_rules.update_one({"id": rule_id}, {"$set": {"is_active": not rule.get("is_active", True)}})
-    return await db.alarm_rules.find_one({"id": rule_id}, {"_id": 0})
+    await tenant.alarm_rules.update_one({"id": rule_id}, {"$set": {"is_active": not rule.get("is_active", True)}})
+    return await tenant.alarm_rules.find_one({"id": rule_id}, {"_id": 0})
 
 
 @router.delete("/alarm-rules/{rule_id}")
 async def delete_rule(rule_id: str, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
-    await db.alarm_rules.delete_one({"id": rule_id, "org_id": user["org_id"]})
+    await tenant.alarm_rules.delete_one({"id": rule_id, "org_id": user["org_id"]})
     return {"ok": True}

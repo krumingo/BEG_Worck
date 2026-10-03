@@ -12,6 +12,12 @@ import logging
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.fifo_service import consume_fifo, get_current_stock, InsufficientStockError
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Sales"])
 logger = logging.getLogger(__name__)
@@ -23,7 +29,8 @@ DEFAULT_MARGINS = {"low": 20, "medium": 30, "high": 50, "minimum": 15}
 
 async def _fifo_preview_calc(org_id, item_id, warehouse_id, quantity):
     """Read-only FIFO simulation — does NOT modify DB."""
-    batches = await db.warehouse_batches.find(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    batches = await tenant.warehouse_batches.find(
         {"org_id": org_id, "item_id": item_id, "warehouse_id": warehouse_id,
          "status": "active", "remaining_qty": {"$gt": 0}},
         {"_id": 0},
@@ -76,7 +83,8 @@ async def _fifo_preview_calc(org_id, item_id, warehouse_id, quantity):
 
 
 async def _get_margins(org_id):
-    doc = await db.settings.find_one({"_id": f"sales_margins_{org_id}"})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    doc = await tenant.settings.find_one({"_id": f"sales_margins_{org_id}"})
     if doc:
         return doc.get("margins", DEFAULT_MARGINS)
     return DEFAULT_MARGINS
@@ -97,10 +105,11 @@ async def fifo_preview(data: PreviewRequest, user: dict = Depends(get_current_us
 
 @router.get("/sales/historical-context")
 async def historical_context(item_id: str, months: int = 12, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=months * 30)).isoformat()
 
-    sales = await db.sales.find(
+    sales = await tenant.sales.find(
         {"org_id": org_id, "item_id": item_id, "created_at": {"$gte": cutoff}},
         {"_id": 0, "unit_sale_price": 1, "quantity": 1, "created_at": 1},
     ).sort("created_at", 1).to_list(500)
@@ -155,6 +164,7 @@ async def get_sales_margins(user: dict = Depends(get_current_user)):
 
 @router.put("/settings/sales-margins")
 async def set_sales_margins(data: dict, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
     margins = {
@@ -163,9 +173,11 @@ async def set_sales_margins(data: dict, user: dict = Depends(get_current_user)):
         "high": data.get("high", 50),
         "minimum": data.get("minimum", 15),
     }
-    await db.settings.update_one(
+    await tenant.settings.update_one(
         {"_id": f"sales_margins_{user['org_id']}"},
-        {"$set": {"margins": margins, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        # W0-03E-A2B: the settings row carries its tenant, not only inside its _id.
+        {"$set": {"org_id": user["org_id"], "margins": margins,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True,
     )
     return margins
@@ -186,6 +198,7 @@ class CommitRequest(BaseModel):
 
 @router.post("/sales/commit", status_code=201)
 async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # 1. Re-check: preview again and compare snapshot
@@ -247,7 +260,7 @@ async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user
         "sold_by": user["id"],
         "created_at": now,
     }
-    await db.sales.insert_one(sale)
+    await tenant.sales.insert_one(sale)
 
     return {
         "sale_id": sale["id"],
@@ -269,6 +282,7 @@ async def sales_history(
     sort_by: str = "date", sort_dir: str = "desc",
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     query = {"org_id": org_id}
     if from_date:
@@ -290,8 +304,8 @@ async def sales_history(
     sort_field = sort_map.get(sort_by, "created_at")
     sort_direction = -1 if sort_dir == "desc" else 1
 
-    total_count = await db.sales.count_documents(query)
-    sales = await db.sales.find(query, {"_id": 0}).sort(
+    total_count = await tenant.sales.count_documents(query)
+    sales = await tenant.sales.find(query, {"_id": 0}).sort(
         sort_field, sort_direction
     ).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
 
@@ -305,13 +319,13 @@ async def sales_history(
     wh_ids = list(set(s.get("warehouse_id") for s in sales if s.get("warehouse_id")))
     wh_map = {}
     if wh_ids:
-        wh_list = await db.warehouses.find({"id": {"$in": wh_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        wh_list = await tenant.warehouses.find({"id": {"$in": wh_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
         wh_map = {w["id"]: w["name"] for w in wh_list}
 
     user_ids = list(set(s.get("sold_by") for s in sales if s.get("sold_by")))
     user_map = {}
     if user_ids:
-        users_list = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
+        users_list = await tenant.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
         user_map = {u["id"]: f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users_list}
 
     data = []
@@ -339,7 +353,7 @@ async def sales_history(
         })
 
     # Summary
-    all_sales = await db.sales.find(query, {"_id": 0, "total_sale_amount": 1, "cost_at_sale": 1, "profit_amount": 1, "margin_percent": 1, "warning_flag": 1}).to_list(5000)
+    all_sales = await tenant.sales.find(query, {"_id": 0, "total_sale_amount": 1, "cost_at_sale": 1, "profit_amount": 1, "margin_percent": 1, "warning_flag": 1}).to_list(5000)
     total_revenue = round(sum(s.get("total_sale_amount", 0) for s in all_sales), 2)
     total_cost_sum = round(sum(s.get("cost_at_sale", 0) for s in all_sales), 2)
     total_profit = round(sum(s.get("profit_amount", 0) for s in all_sales), 2)
@@ -364,7 +378,8 @@ async def sales_history(
 
 @router.get("/sales/{sale_id}/details")
 async def sale_details(sale_id: str, user: dict = Depends(get_current_user)):
-    sale = await db.sales.find_one({"id": sale_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    sale = await tenant.sales.find_one({"id": sale_id, "org_id": user["org_id"]}, {"_id": 0})
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     # Enrich item name

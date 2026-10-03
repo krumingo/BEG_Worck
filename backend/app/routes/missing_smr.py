@@ -99,10 +99,11 @@ class AttachmentAdd(BaseModel):
 
 @router.post("/missing-smr", status_code=201)
 async def create_missing_smr(data: MissingSMRCreate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    project = await db.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
+    project = await tenant.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -145,7 +146,7 @@ async def create_missing_smr(data: MissingSMRCreate, user: dict = Depends(requir
         "linked_offer_id": None,
         "linked_change_order_id": None,
     }
-    await db.missing_smr.insert_one(item)
+    await tenant.missing_smr.insert_one(item)
     return {k: v for k, v in item.items() if k != "_id"}
 
 
@@ -179,12 +180,14 @@ async def list_missing_smr(
     if date_to:
         query.setdefault("created_at", {})["$lte"] = date_to + "T23:59:59"
 
-    return await paginate_query(db.missing_smr, query, page, page_size, "created_at", -1)
+    tenant = _tenant(user)
+    return await paginate_query(tenant.missing_smr, query, page, page_size, "created_at", -1)
 
 
 @router.get("/missing-smr/pending-approval")
 async def pending_approval(user: dict = Depends(require_m2)):
-    items = await db.missing_smr.find(
+    tenant = _tenant(user)
+    items = await tenant.missing_smr.find(
         {"org_id": user["org_id"], "client_approval.status": "pending"}, {"_id": 0}
     ).sort("created_at", -1).to_list(200)
     return {"items": items, "total": len(items)}
@@ -192,7 +195,8 @@ async def pending_approval(user: dict = Depends(require_m2)):
 
 @router.get("/missing-smr/{item_id}")
 async def get_missing_smr(item_id: str, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one(
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one(
         {"id": item_id, "org_id": user["org_id"]}, {"_id": 0}
     )
     if not item:
@@ -204,7 +208,8 @@ async def get_missing_smr(item_id: str, user: dict = Depends(require_m2)):
 async def update_missing_smr(
     item_id: str, data: MissingSMRUpdate, user: dict = Depends(require_m2)
 ):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
     if item["status"] not in ["draft", "reported"]:
@@ -212,18 +217,19 @@ async def update_missing_smr(
 
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.missing_smr.update_one({"id": item_id}, {"$set": update})
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    await tenant.missing_smr.update_one({"id": item_id}, {"$set": update})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 @router.delete("/missing-smr/{item_id}")
 async def delete_missing_smr(item_id: str, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
     if item["status"] not in ["draft"]:
         raise HTTPException(status_code=400, detail="Can only delete draft items")
-    await db.missing_smr.delete_one({"id": item_id})
+    await tenant.missing_smr.delete_one({"id": item_id})
     return {"ok": True}
 
 
@@ -233,7 +239,8 @@ async def delete_missing_smr(item_id: str, user: dict = Depends(require_m2)):
 async def update_status(
     item_id: str, data: StatusUpdate, user: dict = Depends(require_m2)
 ):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
 
@@ -252,11 +259,11 @@ async def update_status(
         )
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.missing_smr.update_one(
+    await tenant.missing_smr.update_one(
         {"id": item_id},
         {"$set": {"status": target, "updated_at": now}},
     )
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 # ── Attachment Management ──────────────────────────────────────────
@@ -265,7 +272,8 @@ async def update_status(
 async def add_attachment(
     item_id: str, data: AttachmentAdd, user: dict = Depends(require_m2)
 ):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
 
@@ -276,39 +284,41 @@ async def add_attachment(
         "added_at": datetime.now(timezone.utc).isoformat(),
         "added_by": user["id"],
     }
-    await db.missing_smr.update_one(
+    await tenant.missing_smr.update_one(
         {"id": item_id},
         {
             "$push": {"attachments": attachment},
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
         },
     )
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 @router.delete("/missing-smr/{item_id}/attachments/{media_id}")
 async def remove_attachment(
     item_id: str, media_id: str, user: dict = Depends(require_m2)
 ):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
 
-    await db.missing_smr.update_one(
+    await tenant.missing_smr.update_one(
         {"id": item_id},
         {
             "$pull": {"attachments": {"media_id": media_id}},
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
         },
     )
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 # ── Bridge: To Analysis (creates extra_work_draft) ────────────────
 
 @router.post("/missing-smr/{item_id}/to-analysis")
 async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
     if item["status"] not in ["reported", "reviewed", "executed", "approved_by_client"]:
@@ -362,9 +372,9 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
         "group_batch_id": None,
         "source_missing_smr_id": item_id,
     }
-    await db.extra_work_drafts.insert_one(draft)
+    await tenant.extra_work_drafts.insert_one(draft)
 
-    await db.missing_smr.update_one(
+    await tenant.missing_smr.update_one(
         {"id": item_id},
         {"$set": {
             "status": "analyzed",
@@ -373,7 +383,7 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
         }},
     )
 
-    updated = await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    updated = await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
     return {
         "ok": True,
         "missing_smr": updated,
@@ -385,7 +395,8 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
 
 @router.post("/missing-smr/{item_id}/to-offer")
 async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Missing SMR item not found")
     if item["status"] not in ["reviewed", "analyzed", "executed", "approved_by_client"]:
@@ -395,12 +406,12 @@ async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
         )
 
     now = datetime.now(timezone.utc).isoformat()
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": item["project_id"], "org_id": user["org_id"]},
         {"_id": 0, "code": 1, "name": 1},
     )
 
-    last = await db.offers.find_one(
+    last = await tenant.offers.find_one(
         {"org_id": user["org_id"]}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)]
     )
     if last and last.get("offer_no"):
@@ -472,9 +483,9 @@ async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
         "accepted_at": None,
         "source_missing_smr_id": item_id,
     }
-    await db.offers.insert_one(offer)
+    await tenant.offers.insert_one(offer)
 
-    await db.missing_smr.update_one(
+    await tenant.missing_smr.update_one(
         {"id": item_id},
         {"$set": {
             "status": "offered",
@@ -483,7 +494,7 @@ async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
         }},
     )
 
-    updated = await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    updated = await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
     return {
         "ok": True,
         "missing_smr": updated,
@@ -498,6 +509,12 @@ async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
 
 from app.services.ai_proposal import get_ai_proposal as hybrid_ai_proposal
 from app.services.pricing_engine import batch_get_prices
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 
 class ExecuteRequest(BaseModel):
@@ -525,7 +542,8 @@ class BatchToOfferBody(BaseModel):
 
 @router.put("/missing-smr/{item_id}/execute")
 async def execute_emergency(item_id: str, data: ExecuteRequest, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     if item.get("urgency_type", "planned") != "emergency":
@@ -534,21 +552,22 @@ async def execute_emergency(item_id: str, data: ExecuteRequest, user: dict = Dep
         raise HTTPException(status_code=400, detail="Item must be in 'reported' status")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+    await tenant.missing_smr.update_one({"id": item_id}, {"$set": {
         "status": "executed",
         "executed_date": data.executed_date or now[:10],
         "executed_by": data.executed_by,
         "notes": data.notes or item.get("notes"),
         "updated_at": now,
     }})
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 # ── Request Approval (planned only) ───────────────────────────────
 
 @router.post("/missing-smr/{item_id}/request-approval")
 async def request_approval(item_id: str, data: RequestApprovalBody, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     if item.get("urgency_type", "planned") != "planned":
@@ -566,19 +585,20 @@ async def request_approval(item_id: str, data: RequestApprovalBody, user: dict =
         "client_notes": data.client_notes,
         "signature_media_id": None,
     }
-    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+    await tenant.missing_smr.update_one({"id": item_id}, {"$set": {
         "status": "reviewed",
         "client_approval": approval,
         "updated_at": now,
     }})
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 # ── Client Approve ─────────────────────────────────────────────────
 
 @router.put("/missing-smr/{item_id}/client-approve")
 async def client_approve(item_id: str, data: ClientDecisionBody, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     if item["status"] != "reviewed" or not item.get("client_approval"):
@@ -592,19 +612,20 @@ async def client_approve(item_id: str, data: ClientDecisionBody, user: dict = De
     approval["client_notes"] = data.client_notes or approval.get("client_notes")
     approval["signature_media_id"] = data.signature_media_id
 
-    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+    await tenant.missing_smr.update_one({"id": item_id}, {"$set": {
         "status": "approved_by_client",
         "client_approval": approval,
         "updated_at": now,
     }})
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 # ── Client Reject ──────────────────────────────────────────────────
 
 @router.put("/missing-smr/{item_id}/client-reject")
 async def client_reject(item_id: str, data: ClientDecisionBody, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     if item["status"] != "reviewed" or not item.get("client_approval"):
@@ -617,19 +638,20 @@ async def client_reject(item_id: str, data: ClientDecisionBody, user: dict = Dep
     approval["decided_by"] = user["id"]
     approval["client_notes"] = data.client_notes or approval.get("client_notes")
 
-    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+    await tenant.missing_smr.update_one({"id": item_id}, {"$set": {
         "status": "rejected_by_client",
         "client_approval": approval,
         "updated_at": now,
     }})
-    return await db.missing_smr.find_one({"id": item_id}, {"_id": 0})
+    return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
 # ── AI Estimate ────────────────────────────────────────────────────
 
 @router.post("/missing-smr/{item_id}/ai-estimate")
 async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
-    item = await db.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -668,7 +690,7 @@ async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
     }
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.missing_smr.update_one({"id": item_id}, {"$set": {
+    await tenant.missing_smr.update_one({"id": item_id}, {"$set": {
         "ai_estimated_price": estimated_price,
         "ai_price_breakdown": breakdown,
         "updated_at": now,
@@ -677,7 +699,7 @@ async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
     return {
         "estimated_price": estimated_price,
         "breakdown": breakdown,
-        "item": await db.missing_smr.find_one({"id": item_id}, {"_id": 0}),
+        "item": await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0}),
     }
 
 
@@ -685,11 +707,12 @@ async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
 
 @router.post("/missing-smr/batch-to-offer")
 async def batch_to_offer(data: BatchToOfferBody, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if not data.ids:
         raise HTTPException(status_code=400, detail="No items provided")
 
     org_id = user["org_id"]
-    items = await db.missing_smr.find(
+    items = await tenant.missing_smr.find(
         {"id": {"$in": data.ids}, "org_id": org_id}, {"_id": 0}
     ).to_list(100)
     if not items:
@@ -701,10 +724,10 @@ async def batch_to_offer(data: BatchToOfferBody, user: dict = Depends(require_m2
         raise HTTPException(status_code=400, detail="All items must belong to the same project")
 
     project_id = items[0]["project_id"]
-    project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "code": 1, "name": 1})
 
     # Generate offer number
-    last = await db.offers.find_one({"org_id": org_id}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)])
+    last = await tenant.offers.find_one({"org_id": org_id}, {"_id": 0, "offer_no": 1}, sort=[("created_at", -1)])
     num = 1
     if last and last.get("offer_no"):
         try:
@@ -763,12 +786,12 @@ async def batch_to_offer(data: BatchToOfferBody, user: dict = Depends(require_m2
         "sent_at": None,
         "accepted_at": None,
     }
-    await db.offers.insert_one(offer)
+    await tenant.offers.insert_one(offer)
 
     # Update items
     line_ids = [l["id"] for l in lines]
     for item in items:
-        await db.missing_smr.update_one({"id": item["id"]}, {"$set": {
+        await tenant.missing_smr.update_one({"id": item["id"]}, {"$set": {
             "status": "offered",
             "linked_offer_id": offer["id"],
             "offer_line_ids": line_ids,

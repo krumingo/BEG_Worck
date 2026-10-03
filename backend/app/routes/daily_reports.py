@@ -9,8 +9,15 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Employee Daily Reports"])
 
@@ -71,6 +78,7 @@ async def check_employee_hours(
 ):
     """Check total hours for employee on a given date across ALL reports/projects.
     Supports BOTH old schema (worker_id/date/hours) and new schema (employee_id/report_date/day_entries)."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     query = {
         "org_id": org_id,
         "$or": [
@@ -79,7 +87,7 @@ async def check_employee_hours(
         ],
         "approval_status": {"$nin": ["REJECTED"]},
     }
-    reports = await db.employee_daily_reports.find(query, {"_id": 0}).to_list(200)
+    reports = await tenant.employee_daily_reports.find(query, {"_id": 0}).to_list(200)
 
     total_hours = 0
     project_hours = {}  # pid -> hours
@@ -109,7 +117,7 @@ async def check_employee_hours(
     # Build projects_breakdown with names
     projects_breakdown = []
     if project_hours:
-        proj_docs = await db.projects.find(
+        proj_docs = await tenant.projects.find(
             {"id": {"$in": list(project_hours.keys())}, "org_id": org_id},
             {"_id": 0, "id": 1, "name": 1, "code": 1},
         ).to_list(50)
@@ -125,7 +133,7 @@ async def check_employee_hours(
         projects_breakdown.sort(key=lambda x: x["hours"], reverse=True)
 
     # Check attendance conflict
-    attendance = await db.attendance_entries.find_one(
+    attendance = await tenant.attendance_entries.find_one(
         {"org_id": org_id, "user_id": employee_id, "date": report_date},
         {"_id": 0, "status": 1},
     )
@@ -179,11 +187,12 @@ async def get_hours_check(
 
 @router.post("/daily-reports", status_code=201)
 async def create_daily_report(data: DailyReportCreate, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     validate_report(data)
 
     # Check no duplicate for same employee+date
-    existing = await db.employee_daily_reports.find_one({
+    existing = await tenant.employee_daily_reports.find_one({
         "org_id": org_id, "employee_id": data.employee_id, "report_date": data.report_date
     })
     if existing:
@@ -221,7 +230,7 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
         "created_at": now,
         "updated_at": now,
     }
-    await db.employee_daily_reports.insert_one(report)
+    await tenant.employee_daily_reports.insert_one(report)
     clean = {k: v for k, v in report.items() if k != "_id"}
 
     # Hours check — add warnings to response (non-blocking)
@@ -232,8 +241,9 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
 
 @router.put("/daily-reports/{report_id}")
 async def update_daily_report(report_id: str, data: dict, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if report["approval_status"] not in ["DRAFT", "REJECTED"]:
@@ -251,23 +261,24 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
-    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
+    return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
 @router.post("/daily-reports/{report_id}/submit")
 async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     if report["approval_status"] not in ["DRAFT", "REJECTED"]:
         raise HTTPException(status_code=400, detail="Only DRAFT/REJECTED can be submitted")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
         "approval_status": "SUBMITTED", "submitted_by": user["id"], "updated_at": now,
     }})
-    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+    return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
 # ── Single-source-of-truth actions (P1-0.5) ────────────────────────
@@ -286,6 +297,7 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
       - labor_cost = regular*rate + overtime*rate*coefficient
       - default overtime_coefficient = 1.0 (no auto-overpay), split always stored
     """
+    tenant = _tenant(actor)
     org_id = actor["org_id"]
     rid = report["id"]
     now = datetime.now(timezone.utc).isoformat()
@@ -310,7 +322,7 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
         day_total = await get_worker_hours_for_day(org_id, worker_id, report_date)
         proj_name = ""
         if project_id:
-            proj_doc = await db.projects.find_one({"id": project_id}, {"_id": 0, "name": 1})
+            proj_doc = await tenant.projects.find_one({"id": project_id}, {"_id": 0, "name": 1})
             if proj_doc:
                 proj_name = proj_doc.get("name", "")
         return {
@@ -347,7 +359,7 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     # A) Slip number — canonical counter_type sequence (shared by single + bulk)
     slip_number = report.get("slip_number")
     if not slip_number:
-        counter = await db.org_counters.find_one_and_update(
+        counter = await tenant.org_counters.find_one_and_update(
             {"org_id": org_id, "counter_type": "slip_number"},
             {"$inc": {"value": 1}}, upsert=True, return_document=True,
         )
@@ -359,14 +371,14 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     # B) work_session (source of truth for labor cost) — dedup like single path
     sessions_created = 0
     if worker_id and hours and hours > 0 and project_id:
-        existing_ws = await db.work_sessions.find_one({
+        existing_ws = await tenant.work_sessions.find_one({
             "org_id": org_id, "worker_id": worker_id, "site_id": project_id,
             "smr_type_id": smr_type,
             "started_at": {"$gte": f"{report_date}T00:00:00", "$lte": f"{report_date}T23:59:59"},
             "source_method": "APPROVED_REPORT",
         })
         if not existing_ws:
-            project = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
+            project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
             session = {
                 "id": str(uuid.uuid4()), "org_id": org_id,
                 "worker_id": worker_id, "worker_name": report.get("worker_name", ""),
@@ -393,25 +405,25 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
                 "submitted_by": report.get("submitted_by"),
                 "created_at": now, "updated_at": now,
             }
-            await db.work_sessions.insert_one(session)
+            await tenant.work_sessions.insert_one(session)
             sessions_created = 1
 
         # C2) activity_budget consumed
         if smr_type and project_id:
-            budget = await db.activity_budgets.find_one({
+            budget = await tenant.activity_budgets.find_one({
                 "org_id": org_id, "project_id": project_id, "smr_type_id": smr_type,
             })
             if budget:
                 new_consumed = round((budget.get("consumed_hours", 0) or 0) + hours, 2)
                 planned = budget.get("planned_hours", 0) or 1
                 burn_pct = round((new_consumed / planned) * 100, 1)
-                await db.activity_budgets.update_one(
+                await tenant.activity_budgets.update_one(
                     {"id": budget["id"]},
                     {"$set": {"consumed_hours": new_consumed, "burn_percent": burn_pct, "last_updated": now}},
                 )
 
         # C3) worker_calendar
-        cal_existing = await db.worker_calendar.find_one(
+        cal_existing = await tenant.worker_calendar.find_one(
             {"org_id": org_id, "worker_id": worker_id, "date": report_date}
         )
         cal_doc = {
@@ -420,12 +432,12 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
             "hours": round(hours, 2), "source": "approved_report", "updated_at": now,
         }
         if cal_existing:
-            await db.worker_calendar.update_one({"id": cal_existing["id"]}, {"$set": cal_doc})
+            await tenant.worker_calendar.update_one({"id": cal_existing["id"]}, {"$set": cal_doc})
         else:
             cal_doc["id"] = str(uuid.uuid4())
             cal_doc["created_at"] = now
             cal_doc["created_by"] = "system"
-            await db.worker_calendar.insert_one(cal_doc)
+            await tenant.worker_calendar.insert_one(cal_doc)
 
     # D) Update report status + frozen split
     update = {
@@ -438,8 +450,8 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
         "overtime_reason": reason_text if line_is_overtime else None,
         "labor_cost": labor_cost,
     }
-    await db.employee_daily_reports.update_one({"id": rid}, {"$set": update})
-    result = await db.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
+    await tenant.employee_daily_reports.update_one({"id": rid}, {"$set": update})
+    result = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
 
     # E) Hours warnings (informational)
     emp_id = report.get("employee_id") or worker_id
@@ -459,6 +471,7 @@ async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict
     Decision A: APPROVED cannot be rejected directly (failed); already REJECTED is an
     idempotent skip; always writes rejected_by + reject_reason + updated_at.
     """
+    tenant = _tenant(actor)
     rid = report["id"]
     now = datetime.now(timezone.utc).isoformat()
     status = report.get("approval_status") or report.get("status", "")
@@ -466,7 +479,7 @@ async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict
         return {"status": "failed", "report_id": rid, "reason": "cannot_reject_approved"}
     if status == "REJECTED":
         return {"status": "skipped", "report_id": rid, "reason": "already_rejected"}
-    await db.employee_daily_reports.update_one({"id": rid}, {"$set": {
+    await tenant.employee_daily_reports.update_one({"id": rid}, {"$set": {
         "approval_status": "REJECTED", "status": "REJECTED",
         "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
     }})
@@ -490,9 +503,10 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     Single path does NOT block >8h (B2): default split with coefficient 1.0.
     Optional body: {"override": {regular_hours, overtime_hours, overtime_coefficient, reason}}.
     """
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only SiteManager/Admin can approve")
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -511,24 +525,26 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
 @router.post("/daily-reports/{report_id}/reject")
 async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depends(require_m4)):
     """P1-0.5: delegates to reject_report_one (same logic as bulk)."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only SiteManager/Admin can reject")
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     res = await reject_report_one(report, user, (data or {}).get("reason", ""))
     if res["status"] == "failed":
         raise HTTPException(status_code=400, detail="Отчет със статус APPROVED не може да бъде отхвърлен.")
     # ok or skipped(already_rejected) → idempotent: return current report
-    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+    return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
 @router.post("/daily-reports/{report_id}/reset")
 async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     """Reset an APPROVED report back to SUBMITTED. Voids created work_sessions."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner can reset")
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     current_status = report.get("approval_status") or report.get("status", "")
@@ -538,7 +554,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     # Check payroll not finalized for this period
     report_date = report.get("date", "")
     if report_date:
-        finalized = await db.pay_runs.find_one({
+        finalized = await tenant.pay_runs.find_one({
             "org_id": user["org_id"],
             "status": "paid",
             "period_start": {"$lte": report_date},
@@ -550,7 +566,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     now = datetime.now(timezone.utc).isoformat()
 
     # Void work_sessions created by this report
-    await db.work_sessions.update_many(
+    await tenant.work_sessions.update_many(
         {"approved_report_id": report_id, "org_id": user["org_id"]},
         {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
     )
@@ -560,7 +576,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
         smr_type = report.get("smr_type") or report.get("activity_type", "")
         hours = report.get("hours") or report.get("hours_worked", 0)
         if smr_type and report.get("project_id") and hours:
-            budget = await db.activity_budgets.find_one({
+            budget = await tenant.activity_budgets.find_one({
                 "org_id": user["org_id"],
                 "project_id": report["project_id"],
                 "smr_type_id": smr_type,
@@ -569,7 +585,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
                 new_consumed = max(0, round((budget.get("consumed_hours", 0) or 0) - hours, 2))
                 planned = budget.get("planned_hours", 0) or 1
                 burn_pct = round((new_consumed / planned) * 100, 1)
-                await db.activity_budgets.update_one(
+                await tenant.activity_budgets.update_one(
                     {"id": budget["id"]},
                     {"$set": {
                         "consumed_hours": new_consumed,
@@ -579,13 +595,13 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
                 )
 
     # Reset report
-    await db.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
         "approval_status": "SUBMITTED", "status": "SUBMITTED",
         "approved_by": None, "approved_at": None,
         "payroll_ready": False, "sessions_created": 0,
         "updated_at": now,
     }})
-    return await db.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+    return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -600,6 +616,7 @@ async def get_reports_table(
     user: dict = Depends(require_m4),
 ):
     """Central reports table with cost estimate — supports BOTH old and new schema"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     q = {"org_id": org_id}
 
@@ -644,14 +661,14 @@ async def get_reports_table(
         else:
             q["day_status"] = day_status
 
-    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort([("report_date", -1), ("date", -1), ("created_at", -1)]).to_list(500)
+    reports = await tenant.employee_daily_reports.find(q, {"_id": 0}).sort([("report_date", -1), ("date", -1), ("created_at", -1)]).to_list(500)
 
     # Normalize: extract emp_id from either schema
     emp_ids = list(set(r.get("employee_id") or r.get("worker_id", "") for r in reports if r.get("employee_id") or r.get("worker_id")))
-    users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
+    users_data = await tenant.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
 
-    profiles = await db.employee_profiles.find({"user_id": {"$in": emp_ids}}, {"_id": 0, "user_id": 1, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
+    profiles = await tenant.employee_profiles.find({"user_id": {"$in": emp_ids}}, {"_id": 0, "user_id": 1, "pay_type": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
     profile_map = {p["user_id"]: p for p in profiles}
 
     # Load project codes from both schemas
@@ -662,7 +679,7 @@ async def get_reports_table(
                 proj_ids.add(e["project_id"])
         if r.get("project_id"):
             proj_ids.add(r["project_id"])
-    projects = await db.projects.find({"id": {"$in": list(proj_ids)}}, {"_id": 0, "id": 1, "code": 1}).to_list(100)
+    projects = await tenant.projects.find({"id": {"$in": list(proj_ids)}}, {"_id": 0, "id": 1, "code": 1}).to_list(100)
     proj_map = {p["id"]: p["code"] for p in projects}
 
     rows = []
@@ -724,6 +741,7 @@ async def get_reports_calendar(
     user: dict = Depends(require_m4),
 ):
     """Calendar view of daily reports for a month"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     if not month:
         month = datetime.now(timezone.utc).strftime("%Y-%m")
@@ -739,11 +757,11 @@ async def get_reports_calendar(
     if project_id: q["day_entries.project_id"] = project_id
     if employee_id: q["employee_id"] = employee_id
 
-    reports = await db.employee_daily_reports.find(q, {"_id": 0}).to_list(1000)
+    reports = await tenant.employee_daily_reports.find(q, {"_id": 0}).to_list(1000)
 
     # Load names
     emp_ids = list(set(r["employee_id"] for r in reports))
-    users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
+    users_data = await tenant.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
 
     # Group by date
@@ -769,7 +787,8 @@ async def get_reports_calendar(
 
 @router.get("/daily-reports/{report_id}")
 async def get_daily_report(report_id: str, user: dict = Depends(require_m4)):
-    report = await db.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
@@ -784,6 +803,7 @@ async def list_daily_reports(
     report_date: Optional[str] = None,
     user: dict = Depends(require_m4),
 ):
+    tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if employee_id: q["employee_id"] = employee_id
     if report_date: q["report_date"] = report_date
@@ -794,7 +814,7 @@ async def list_daily_reports(
     if project_id:
         q["day_entries.project_id"] = project_id
 
-    reports = await db.employee_daily_reports.find(q, {"_id": 0}).sort("report_date", -1).to_list(500)
+    reports = await tenant.employee_daily_reports.find(q, {"_id": 0}).sort("report_date", -1).to_list(500)
     return reports
 
 
@@ -803,15 +823,16 @@ async def list_daily_reports(
 @router.get("/daily-reports/project-day-status/{project_id}")
 async def get_project_day_status(project_id: str, date: Optional[str] = None, user: dict = Depends(require_m4)):
     """Get today's report status for all employees linked to a project"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Get team members
-    team = await db.project_team.find({"project_id": project_id}, {"_id": 0, "user_id": 1}).to_list(100)
-    team_ids = [t["user_id"] for t in team]
+    team_ids = await project_team.project_member_ids(
+        project_team.tenant_for_org(db, org_id), project_id, active_only=False, limit=100)
 
     # Also get employees who have reported on this project today
-    reports_today = await db.employee_daily_reports.find(
+    reports_today = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "report_date": target_date, "day_entries.project_id": project_id},
         {"_id": 0}
     ).to_list(200)
@@ -822,14 +843,14 @@ async def get_project_day_status(project_id: str, date: Optional[str] = None, us
         return {"project_id": project_id, "date": target_date, "employees": []}
 
     # Load employee info
-    users = await db.users.find(
+    users = await tenant.users.find(
         {"id": {"$in": all_ids}, "org_id": org_id},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1, "role": 1}
     ).to_list(100)
     user_map = {u["id"]: u for u in users}
 
     # Load all reports for these employees today
-    all_reports = await db.employee_daily_reports.find(
+    all_reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "employee_id": {"$in": all_ids}, "report_date": target_date},
         {"_id": 0}
     ).to_list(200)
@@ -866,16 +887,17 @@ async def get_project_day_status(project_id: str, date: Optional[str] = None, us
 @router.get("/daily-reports/available-smr/{project_id}")
 async def get_available_smr(project_id: str, user: dict = Depends(require_m4)):
     """Get available SMR/activities for a project for time reporting"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
 
     # Execution packages
-    epkgs = await db.execution_packages.find(
+    epkgs = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "id": 1, "activity_name": 1, "unit": 1, "qty": 1, "status": 1}
     ).to_list(200)
 
     # Extra work drafts that are active
-    extras = await db.extra_work_drafts.find(
+    extras = await tenant.extra_work_drafts.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["draft", "converted"]}},
         {"_id": 0, "id": 1, "title": 1, "unit": 1, "qty": 1}
     ).to_list(200)
@@ -904,6 +926,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
     Input: { project_id, report_date, entries: [{ employee_id, smr_id, work_description, hours_worked, note }] }
     Groups by employee, creates/updates one report per employee.
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     project_id = data.get("project_id")
     report_date = data.get("report_date")
@@ -937,7 +960,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
         total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
 
         # Check for existing report
-        existing = await db.employee_daily_reports.find_one({
+        existing = await tenant.employee_daily_reports.find_one({
             "org_id": org_id, "employee_id": emp_id, "report_date": report_date
         })
 
@@ -948,7 +971,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             kept = [e for e in old_entries if e.get("project_id") != project_id]
             merged = kept + emp_entries
             merged_total = round(sum(e["hours_worked"] for e in merged), 2)
-            await db.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
+            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
                 "day_entries": merged, "total_hours": merged_total, "updated_at": now,
             }})
         else:
@@ -967,7 +990,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
                 "submitted_by": None, "approved_by": None, "approved_at": None,
                 "created_at": now, "updated_at": now,
             }
-            await db.employee_daily_reports.insert_one(report)
+            await tenant.employee_daily_reports.insert_one(report)
         saved += 1
 
     return {"ok": True, "employees_saved": saved, "total_entries": len(entries)}
@@ -976,17 +999,18 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
 @router.get("/daily-reports/project-entries/{project_id}")
 async def get_project_daily_entries(project_id: str, date: Optional[str] = None, user: dict = Depends(require_m4)):
     """Get all daily entries for a project on a date, grouped by employee and by SMR"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    reports = await db.employee_daily_reports.find(
+    reports = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "report_date": target_date, "day_entries.project_id": project_id},
         {"_id": 0}
     ).to_list(200)
 
     # Load names
     emp_ids = list(set(r["employee_id"] for r in reports))
-    users_data = await db.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
+    users_data = await tenant.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(100)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users_data}
 
     # Flatten by employee
@@ -1043,6 +1067,7 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
     so single and bulk produce identical data. >8h lines are blocked for override
     (block_overtime_without_override=True) unless an override is supplied.
     """
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner/SiteManager")
 
@@ -1052,7 +1077,7 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
 
     succeeded, blocked, failed = [], [], []
     for rid in report_ids:
-        report = await db.employee_daily_reports.find_one({"id": rid, "org_id": org_id}, {"_id": 0})
+        report = await tenant.employee_daily_reports.find_one({"id": rid, "org_id": org_id}, {"_id": 0})
         if not report:
             failed.append({"id": rid, "reason": "not_found"})
             continue
@@ -1083,6 +1108,7 @@ async def bulk_approve(data: dict, user: dict = Depends(require_m4)):
 @router.post("/daily-reports/bulk-reject")
 async def bulk_reject(data: dict, user: dict = Depends(require_m4)):
     """Bulk reject = UI convenience. Backend runs reject_report_one per report."""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner/SiteManager")
 
@@ -1092,7 +1118,7 @@ async def bulk_reject(data: dict, user: dict = Depends(require_m4)):
 
     succeeded, failed = [], []
     for rid in report_ids:
-        report = await db.employee_daily_reports.find_one({"id": rid, "org_id": org_id})
+        report = await tenant.employee_daily_reports.find_one({"id": rid, "org_id": org_id})
         if not report:
             failed.append({"id": rid, "reason": "not_found"})
             continue

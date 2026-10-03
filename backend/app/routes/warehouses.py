@@ -1,21 +1,28 @@
 """
 Routes - Warehouses (Inventory locations) with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
 import re
 
 from app.db import db
+from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from ..models.warehouse import (
     WAREHOUSE_TYPES,
     WarehouseCreate, WarehouseUpdate
 )
 
 router = APIRouter(tags=["Warehouses"])
+
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view of the legacy database."""
+    return TenantData.for_user(db, user)
 
 
 def warehouse_permission(user: dict) -> bool:
@@ -73,6 +80,7 @@ async def list_warehouses(
     active_only: bool = True,
 ):
     """List warehouses with pagination, sorting, and filters"""
+    tenant = _tenant(user)
     base_query = {"org_id": user["org_id"]}
     
     if type:
@@ -94,23 +102,25 @@ async def list_warehouses(
         ]
     
     # Count total
-    total = await db.warehouses.count_documents(query)
+    total = await tenant.warehouses.count_documents(query)
     
     # Sort
     sort_direction = 1 if sort_dir == "asc" else -1
     
     # Paginate
     skip = (page - 1) * page_size
-    warehouses = await db.warehouses.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
+    warehouses = await tenant.warehouses.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with reference names
     for wh in warehouses:
         if wh.get("project_id"):
-            proj = await db.projects.find_one({"id": wh["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+            proj = await tenant.projects.find_one({"id": wh["project_id"], "org_id": user["org_id"]},
+                                              {"_id": 0, "code": 1, "name": 1})
             wh["project_code"] = proj["code"] if proj else ""
             wh["project_name"] = proj["name"] if proj else ""
         if wh.get("person_id"):
-            person = await db.persons.find_one({"id": wh["person_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            person = await tenant.persons.find_one({"id": wh["person_id"], "org_id": user["org_id"]},
+                                               {"_id": 0, "first_name": 1, "last_name": 1})
             wh["person_name"] = f"{person['first_name']} {person['last_name']}" if person else ""
         if wh.get("vehicle_id"):
             wh["vehicle_name"] = wh.get("vehicle_id", "")
@@ -127,6 +137,7 @@ async def list_warehouses(
 @router.post("/warehouses", status_code=201)
 async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_current_user)):
     """Create a new warehouse"""
+    tenant = _tenant(user)
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -139,7 +150,7 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail="person_id required for person warehouse")
     
     # Check code uniqueness
-    existing = await db.warehouses.find_one({
+    existing = await tenant.warehouses.find_one({
         "org_id": user["org_id"],
         "code": data.code.upper()
     })
@@ -163,7 +174,7 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
         "updated_at": now,
     }
     
-    await db.warehouses.insert_one(warehouse)
+    await tenant.warehouses.insert_one(warehouse)
     await log_audit(user["org_id"], user["id"], user["email"], "warehouse_created", "warehouse", warehouse["id"],
                     {"code": data.code, "type": data.type})
     
@@ -174,13 +185,16 @@ async def create_warehouse(data: WarehouseCreate, user: dict = Depends(get_curre
 async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
     """За всеки склад: брой машини/инструменти + обща стойност на активите в него.
     Една агрегация — без N+1."""
+    tenant = _tenant(user)
     org = user["org_id"]
     # units по локация-склад, обединени с типа/цената на артикула
+    # W0-03E-A2C: the join was `$lookup` on item_id ALONE, so a colliding asset
+    # item id in another tenant was joined into this tenant's summary and changed
+    # its machine/tool counts and asset value. TenantData.lookup filters the
+    # joined array on the tenant before any later stage can read it.
     pipeline = [
         {"$match": {"org_id": org, "location_type": "warehouse", "status": {"$ne": "written_off"}}},
-        {"$lookup": {
-            "from": "asset_items", "localField": "item_id", "foreignField": "id", "as": "item",
-        }},
+        *tenant.lookup("asset_items", "item_id", "item"),
         {"$unwind": {"path": "$item", "preserveNullAndEmptyArrays": True}},
         {"$group": {
             "_id": "$location_id",
@@ -189,7 +203,7 @@ async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
             "value": {"$sum": {"$ifNull": ["$item.purchase_price", 0]}},
         }},
     ]
-    rows = await db.asset_units.aggregate(pipeline).to_list(1000)
+    rows = await tenant.asset_units.aggregate(pipeline).to_list(1000)
     summary = {r["_id"]: {"machines": r["machines"], "tools": r["tools"], "value": round(r["value"], 2)} for r in rows}
     return {"summary": summary}
 
@@ -197,7 +211,8 @@ async def warehouses_asset_summary(user: dict = Depends(get_current_user)):
 @router.get("/warehouses/{warehouse_id}")
 async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user)):
     """Get warehouse details"""
-    warehouse = await db.warehouses.find_one(
+    tenant = _tenant(user)
+    warehouse = await tenant.warehouses.find_one(
         {"id": warehouse_id, "org_id": user["org_id"]},
         {"_id": 0}
     )
@@ -206,7 +221,8 @@ async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user
     
     # Enrich with reference names
     if warehouse.get("project_id"):
-        proj = await db.projects.find_one({"id": warehouse["project_id"]}, {"_id": 0, "code": 1, "name": 1})
+        proj = await tenant.projects.find_one({"id": warehouse["project_id"], "org_id": user["org_id"]},
+                                          {"_id": 0, "code": 1, "name": 1})
         warehouse["project_code"] = proj["code"] if proj else ""
         warehouse["project_name"] = proj["name"] if proj else ""
     
@@ -216,10 +232,11 @@ async def get_warehouse(warehouse_id: str, user: dict = Depends(get_current_user
 @router.put("/warehouses/{warehouse_id}")
 async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict = Depends(get_current_user)):
     """Update warehouse"""
+    tenant = _tenant(user)
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    warehouse = await db.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]})
+    warehouse = await tenant.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]})
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     
@@ -236,8 +253,9 @@ async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict 
     
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.warehouses.update_one({"id": warehouse_id}, {"$set": update})
-    return await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+    # W0-03E-A2B: this tenant's warehouse only (ids collide across tenants).
+    await tenant.warehouses.update_one({"id": warehouse_id, "org_id": user["org_id"]}, {"$set": update})
+    return await tenant.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 @router.delete("/warehouses/{warehouse_id}")
@@ -246,14 +264,14 @@ async def delete_warehouse(warehouse_id: str, user: dict = Depends(get_current_u
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    warehouse = await db.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]})
+    warehouse = await _tenant(user).warehouses.get(warehouse_id)
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     
     # Check if warehouse has inventory
     # TODO: Add inventory check when inventory module is implemented
     
-    await db.warehouses.update_one(
+    await _tenant(user).warehouses.update_one(
         {"id": warehouse_id},
         {"$set": {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -270,7 +288,7 @@ async def get_warehouse_types():
 # ── DEV-ONLY Endpoints ─────────────────────────────────────────────
 
 @router.post("/dev/reset-warehouses")
-async def dev_reset_warehouses(user: dict = Depends(get_current_user)):
+async def dev_reset_warehouses(request: Request, user: dict = Depends(get_current_user)):
     """
     DEV ONLY: Delete all warehouses for the current organization.
     Used for testing the "first warehouse" flow.
@@ -286,14 +304,30 @@ async def dev_reset_warehouses(user: dict = Depends(get_current_user)):
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    # Delete all warehouses for this org
-    result = await db.warehouses.delete_many({"org_id": user["org_id"]})
-    
-    # Also clear any invoice line allocations pointing to warehouses
-    # (optional: keep allocations but they will reference non-existent warehouses)
-    
-    return {
+    # W0-03E: no org-wide delete_many. Each warehouse is deleted by its own id,
+    # scoped to this org, through the identity delete guard: in
+    # MASTER_DATA_MODE=enforce a used or migrated warehouse is archived instead
+    # and reported; off/shadow keep the previous outcome.
+    org = user["org_id"]
+    ids = [w["id"] for w in await _tenant(user).warehouses.find({"org_id": org}, {"_id": 0, "id": 1}).to_list(None)
+           if w.get("id")]
+    deleted, kept = 0, []
+    for wid in sorted(ids):
+        done = await guarded_identity_delete(user, request, db, collection="warehouses",
+                                             legacy_id=wid, deleted_response={"ok": True})
+        if done is None:
+            res = await _tenant(user).warehouses.delete_one({"id": wid, "org_id": org})
+            deleted += res.deleted_count
+        elif done.get("archived"):
+            kept.append({"id": wid, "reason": done.get("reason")})
+        else:
+            deleted += 1
+
+    result = {
         "ok": True,
-        "deleted_count": result.deleted_count,
-        "message": f"Deleted {result.deleted_count} warehouses for org {user['org_id']}"
+        "deleted_count": deleted,
+        "message": f"Deleted {deleted} warehouses for org {org}"
     }
+    if kept:
+        result["kept"] = kept
+    return result

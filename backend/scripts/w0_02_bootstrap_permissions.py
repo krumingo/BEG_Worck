@@ -20,7 +20,13 @@ invented canonical role).
 
 Idempotent: running twice changes nothing (conditional upgrade of not-yet-
 authoritative mirrors only; create-only backfill). Exit codes: 0 ok,
-1 verify mismatch, 2 unique-key conflict detected (nothing written), 3 guard.
+1 verify mismatch, 2 unique-key conflict detected (nothing written), 3 guard,
+4 ownerless project_team rows remain (W0-03E-A2B; nothing written).
+
+W0-03E-A2B: the project-scope backfill is tenant-bound. It reads memberships
+only per Tenant Registry tenant of this database, through the tenant-scoped
+access layer, pairs them only with that tenant's own users, stamps the
+registry tenant id, and refuses outright while any membership is ownerless.
 
 Usage:
     python scripts/w0_02_bootstrap_permissions.py            # dry run
@@ -80,6 +86,8 @@ W0_02_INDEXES = ["uniq_assignment", "lookup_active", "by_role", "by_scope"]
 UNIQUE_KEY = ("user_id", "tenant_id", "role_id", "scope_type", "scope_id", "module")
 
 EXIT_OK, EXIT_VERIFY_FAILED, EXIT_CONFLICT = 0, 1, 2
+#: W0-03E-A2B: ownerless project_team rows remain — nothing derived, nothing written.
+EXIT_OWNERLESS = 4
 
 
 def now() -> str:
@@ -129,6 +137,53 @@ def is_upgrade_candidate(doc: dict) -> bool:
     return doc.get("migrated_from") == "users.role" and "role_id" not in doc
 
 
+class OwnerlessMembership(RuntimeError):
+    """``project_team`` still holds rows with no tenant: nothing may be derived."""
+
+
+async def _source_tenants() -> list:
+    """The Tenant Registry records whose operational database IS ``op_db``.
+
+    W0-03E-A2B: the tenant of a derived permission comes from this trusted
+    server-side registry state only — never from a user record or a bare
+    project/user id.
+    """
+    return await sys_db.tenant_registry.find(
+        {"database_name": op_db.name}, {"_id": 0}).to_list(1000)
+
+
+async def _refuse_ownerless() -> None:
+    from app.tenancy import project_team
+    n = await project_team.ownerless_row_count(op_db)
+    if n:
+        raise OwnerlessMembership(
+            f"{n} project_team row(s) carry no tenant; run the W0-03E-A2B legacy backfill "
+            "first. No permission is derived from an ownerless membership.")
+
+
+async def _tenant_memberships():
+    """``[(registry tenant, tenant view, active rows, users by id)]`` per tenant.
+
+    Every read goes through the tenant view (``TenantData``): the membership
+    rows and the users they name are both restricted to that tenant's
+    ``org_id``, so a row or a user of another tenant can never pair up with
+    this tenant's — even when the ids collide.
+    """
+    from app.tenancy import project_team
+    from app.tenancy.data_access import TenantData
+    out = []
+    for t in sorted(await _source_tenants(), key=lambda r: str(r.get("id"))):
+        org = t.get("legacy_org_id") or t.get("id")
+        if not t.get("id") or not org:
+            continue
+        tenant = TenantData.for_resolved_org(op_db, org)
+        rows = await project_team.tenant_active_rows(tenant, {"_id": 0}, 100000)
+        users = await tenant.users.get_many([r.get("user_id") for r in rows],
+                                            {"_id": 0, "id": 1, "role": 1, "org_id": 1})
+        out.append((t, tenant, rows, users))
+    return out
+
+
 async def build_backfill() -> list:
     """Project-scope assignments from active project_team memberships.
 
@@ -136,33 +191,38 @@ async def build_backfill() -> list:
     budget.read; a member whose role_in_project is SiteManager also gets
     budget.write (matches can_access_project / can_manage_project). Admin/Owner
     are skipped — they already have company-wide access.
+
+    W0-03E-A2B: tenant-bound end to end. Refuses (OwnerlessMembership) while any
+    membership row is ownerless; reads each registry tenant's own rows and its
+    own users only; the assignment's ``tenant_id`` is the registry tenant, never
+    a value inferred from a user or project id.
     """
     from app.permissions.catalog import (
         LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
     )
-    users = {u["id"]: u for u in await op_db.users.find({}, {"_id": 0}).to_list(100000)}
-    members = await op_db.project_team.find({"active": True}, {"_id": 0}).to_list(100000)
+    await _refuse_ownerless()
     out = []
-    for m in members:
-        u = users.get(m.get("user_id"))
-        if not u or u.get("role") in ("Admin", "Owner"):
-            continue
-        tid = u.get("org_id")
-        if not tid or not m.get("project_id"):
-            continue
-        is_mgr = m.get("role_in_project") == "SiteManager"
-        role_id = LEGACY_ROLE_MAP.get(u.get("role", ""), "LEGACY_" + str(u.get("role", "")).upper())
-        out.append({
-            "id": f"ra_{m['user_id']}_{tid}_proj_{m['project_id']}",
-            "user_id": m["user_id"], "tenant_id": tid,
-            "role_id": role_id,
-            "scope_type": "project", "scope_id": m["project_id"], "module": None,
-            "permissions": list(PROJECT_MANAGER_ACTIONS if is_mgr else PROJECT_MEMBER_ACTIONS),
-            "max_amount": None, "valid_from": now(), "valid_to": None,
-            "status": "active", "created_by": "system:migration", "approved_by": None,
-            "migrated_from": "project_team",
-            "note": "W0-02 project-scope backfill from project_team membership.",
-        })
+    for t, _tenant, members, users in await _tenant_memberships():
+        tid = t["id"]
+        for m in members:
+            u = users.get(m.get("user_id"))
+            if not u or u.get("role") in ("Admin", "Owner"):
+                continue
+            if not m.get("project_id"):
+                continue
+            is_mgr = m.get("role_in_project") == "SiteManager"
+            role_id = LEGACY_ROLE_MAP.get(u.get("role", ""), "LEGACY_" + str(u.get("role", "")).upper())
+            out.append({
+                "id": f"ra_{m['user_id']}_{tid}_proj_{m['project_id']}",
+                "user_id": m["user_id"], "tenant_id": tid,
+                "role_id": role_id,
+                "scope_type": "project", "scope_id": m["project_id"], "module": None,
+                "permissions": list(PROJECT_MANAGER_ACTIONS if is_mgr else PROJECT_MEMBER_ACTIONS),
+                "max_amount": None, "valid_from": now(), "valid_to": None,
+                "status": "active", "created_by": "system:migration", "approved_by": None,
+                "migrated_from": "project_team",
+                "note": "W0-02 project-scope backfill from project_team membership.",
+            })
     return out
 
 
@@ -330,16 +390,21 @@ async def _verify() -> int:
             problems.append(f"duplicate unique key: {seen[k]} and {d['id']}")
         seen[k] = d["id"]
     # 3. every active non-admin membership has a project mirror (any status)
-    users = {u["id"]: u for u in await op_db.users.find({}, {"_id": 0}).to_list(100000)}
-    members = await op_db.project_team.find({"active": True}, {"_id": 0}).to_list(100000)
+    # W0-03E-A2B: tenant-bound — ownerless memberships are a violation, and each
+    # registry tenant's rows are checked against its own users and its own id.
+    from app.tenancy import project_team
+    ownerless = await project_team.ownerless_row_count(op_db)
+    if ownerless:
+        problems.append(f"{ownerless} ownerless project_team row(s) (run the W0-03E-A2B backfill)")
     mirrors = {(d.get("user_id"), d.get("tenant_id"), d.get("scope_id"))
                for d in docs if d.get("scope_type") == "project"}
-    for m in members:
-        u = users.get(m.get("user_id"))
-        if not u or u.get("role") in ("Admin", "Owner") or not u.get("org_id") or not m.get("project_id"):
-            continue
-        if (m["user_id"], u["org_id"], m["project_id"]) not in mirrors:
-            problems.append(f"missing project mirror for user={m['user_id']} project={m['project_id']}")
+    for t, _tenant, members, users in await _tenant_memberships():
+        for m in members:
+            u = users.get(m.get("user_id"))
+            if not u or u.get("role") in ("Admin", "Owner") or not m.get("project_id"):
+                continue
+            if (m["user_id"], t["id"], m["project_id"]) not in mirrors:
+                problems.append(f"missing project mirror for user={m['user_id']} project={m['project_id']}")
     # 4. journal integrity: every non-reverted 'created' entry still exists
     async for e in sys_db[JOURNAL].find({"migration_id": MIGRATION_ID, "reverted_at": None, "kind": "created"}):
         if await coll.find_one({"id": e["assignment_id"]}) is None:
@@ -380,7 +445,11 @@ async def run(apply: bool, verify_only: bool, revert: bool) -> int:
         return await _revert(apply)
 
     plan = [upgrade_assignment(o) for o in olds]
-    backfill = await build_backfill()
+    try:
+        backfill = await build_backfill()
+    except OwnerlessMembership as exc:
+        print(f"\nREFUSED: {exc}")
+        return EXIT_OWNERLESS
     print("Planned upgrades (role -> role_id):")
     seen = {}
     for o in plan:

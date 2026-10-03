@@ -12,7 +12,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db import db
-from app.deps.auth import get_current_user, get_user_project_ids
+from app.deps.auth import get_current_user
+from app.tenancy.data_access import TenantData, assigned_project_ids
 from app.deps.modules import require_m5, enforce_limit
 from app.utils.audit import log_audit
 from ..models.finance import (
@@ -26,6 +27,11 @@ from ..models.finance import (
 router = APIRouter(tags=["Finance"])
 
 # ── Helpers ────────────────────────────────────────────────────────
+
+def _tenant(user: dict) -> TenantData:
+    """W0-03E-A1: the session user's tenant view — every record below is read through it."""
+    return TenantData.for_user(db, user)
+
 
 def finance_permission(user: dict) -> bool:
     """Check if user has finance access"""
@@ -57,7 +63,7 @@ def _is_cash_method(method: str) -> bool:
     return str(method or "").strip().lower() in ("cash", "в брой", "вброй", "каса")
 
 
-async def _resolve_payment_account(org_id: str, method: str, account_id: Optional[str]) -> str:
+async def _resolve_payment_account(tenant: TenantData, method: str, account_id: Optional[str]) -> str:
     """Return the account a payment should hit, creating it if needed.
     Cash-method payments are routed to a Cash (Каса) account so the Cash KPI is correct;
     any other method uses the chosen account, otherwise the default Bank account."""
@@ -65,14 +71,14 @@ async def _resolve_payment_account(org_id: str, method: str, account_id: Optiona
     if _is_cash_method(method):
         # honour an explicitly chosen cash account
         if account_id:
-            acc = await db.financial_accounts.find_one({"id": account_id, "org_id": org_id})
+            acc = await tenant.financial_accounts.get(account_id)
             if acc and acc.get("type") == "Cash":
                 return account_id
-        cash = await db.financial_accounts.find_one({"org_id": org_id, "type": "Cash"})
+        cash = await tenant.financial_accounts.find_one({"type": "Cash"})
         if not cash:
             cash = {
                 "id": str(uuid.uuid4()),
-                "org_id": org_id,
+                "org_id": tenant.org_id,
                 "name": "Каса",
                 "type": "Cash",
                 "currency": "EUR",
@@ -82,18 +88,18 @@ async def _resolve_payment_account(org_id: str, method: str, account_id: Optiona
                 "created_at": now_iso,
                 "updated_at": now_iso,
             }
-            await db.financial_accounts.insert_one(cash)
+            await tenant.financial_accounts.insert_one(cash)
         return cash["id"]
     # non-cash: chosen account, else the default Bank account (create one if missing)
     if account_id:
         return account_id
-    default = await db.financial_accounts.find_one({"org_id": org_id, "is_default": True})
+    default = await tenant.financial_accounts.find_one({"is_default": True})
     if not default:
-        default = await db.financial_accounts.find_one({"org_id": org_id, "type": "Bank"})
+        default = await tenant.financial_accounts.find_one({"type": "Bank"})
     if not default:
         default = {
             "id": str(uuid.uuid4()),
-            "org_id": org_id,
+            "org_id": tenant.org_id,
             "name": "Основна сметка",
             "type": "Bank",
             "currency": "EUR",
@@ -103,18 +109,18 @@ async def _resolve_payment_account(org_id: str, method: str, account_id: Optiona
             "created_at": now_iso,
             "updated_at": now_iso,
         }
-        await db.financial_accounts.insert_one(default)
+        await tenant.financial_accounts.insert_one(default)
     return default["id"]
 
 
-async def update_invoice_status(invoice_id: str, org_id: str):
+async def update_invoice_status(tenant: TenantData, invoice_id: str):
     """Auto-update invoice status based on allocations and due date"""
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": org_id})
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice or invoice["status"] == "Cancelled":
         return
     
     # Calculate paid amount from allocations
-    allocations = await db.payment_allocations.find({"invoice_id": invoice_id}).to_list(100)
+    allocations = await tenant.payment_allocations.find({"invoice_id": invoice_id}).to_list(100)
     paid_amount = sum(a.get("amount_allocated", 0) for a in allocations)
     remaining = round(invoice["total"] - paid_amount, 2)
     
@@ -133,7 +139,7 @@ async def update_invoice_status(invoice_id: str, org_id: str):
     else:
         new_status = invoice["status"]
     
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "paid_amount": round(paid_amount, 2),
         "remaining_amount": max(0, remaining),
         "status": new_status,
@@ -147,7 +153,8 @@ async def update_invoice_status(invoice_id: str, org_id: str):
 
 async def get_invoice_settings(org_id: str) -> dict:
     """Get or create invoice numbering settings for organization"""
-    settings = await db.invoice_settings.find_one({"org_id": org_id})
+    tenant = TenantData.for_resolved_org(db, org_id)
+    settings = await tenant.invoice_settings.find_one({"org_id": org_id})
     if not settings:
         # Create default settings
         settings = {
@@ -163,16 +170,16 @@ async def get_invoice_settings(org_id: str) -> dict:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.invoice_settings.insert_one(settings)
+        await tenant.invoice_settings.insert_one(settings)
     # Remove _id before returning
     if "_id" in settings:
         del settings["_id"]
     return settings
 
 
-async def get_next_invoice_no(org_id: str, direction: str) -> str:
+async def get_next_invoice_no(tenant: TenantData, direction: str) -> str:
     """Generate next unique invoice number by finding max existing + 1."""
-    settings = await get_invoice_settings(org_id)
+    settings = await get_invoice_settings(tenant.org_id)
 
     if direction == "Issued":
         if not settings.get("issued_auto_numbering", True):
@@ -186,8 +193,8 @@ async def get_next_invoice_no(org_id: str, direction: str) -> str:
     # Find highest existing number with this prefix
     pattern = f"^{prefix}-"
     max_num = 0
-    cursor = db.invoices.find(
-        {"org_id": org_id, "invoice_no": {"$regex": pattern}},
+    cursor = tenant.invoices.find(
+        {"invoice_no": {"$regex": pattern}},
         {"_id": 0, "invoice_no": 1},
     ).sort("invoice_no", -1).limit(50)
     async for inv in cursor:
@@ -203,31 +210,31 @@ async def get_next_invoice_no(org_id: str, direction: str) -> str:
     candidate = f"{prefix}-{next_num:04d}"
 
     # Double-check uniqueness (edge case)
-    existing = await db.invoices.find_one({"org_id": org_id, "invoice_no": candidate})
+    existing = await tenant.invoices.find_one({"invoice_no": candidate})
     while existing:
         next_num += 1
         candidate = f"{prefix}-{next_num:04d}"
-        existing = await db.invoices.find_one({"org_id": org_id, "invoice_no": candidate})
+        existing = await tenant.invoices.find_one({"invoice_no": candidate})
 
     return candidate
 
 
-async def validate_invoice_no_unique(org_id: str, invoice_no: str, exclude_id: str = None) -> bool:
+async def validate_invoice_no_unique(tenant: TenantData, invoice_no: str, exclude_id: str = None) -> bool:
     """Check if invoice number is unique within organization"""
-    query = {"org_id": org_id, "invoice_no": invoice_no}
+    query = {"invoice_no": invoice_no}
     if exclude_id:
         query["id"] = {"$ne": exclude_id}
-    existing = await db.invoices.find_one(query)
+    existing = await tenant.invoices.find_one(query)
     return existing is None
 
 
-async def get_safe_starting_number(org_id: str, direction: str, requested_start: int) -> int:
+async def get_safe_starting_number(tenant: TenantData, direction: str, requested_start: int) -> int:
     """Get safe starting number that won't conflict with existing invoices"""
     prefix = "INV" if direction == "Issued" else "BILL"
     
     # Find the highest existing number
-    highest = await db.invoices.find_one(
-        {"org_id": org_id, "direction": direction, "invoice_no": {"$regex": f"^{prefix}-"}},
+    highest = await tenant.invoices.find_one(
+        {"direction": direction, "invoice_no": {"$regex": f"^{prefix}-"}},
         {"_id": 0, "invoice_no": 1},
         sort=[("invoice_no", -1)]
     )
@@ -254,13 +261,14 @@ async def get_settings(user: dict = Depends(require_m5)):
     settings = await get_invoice_settings(user["org_id"])
     
     # Also return current highest invoice numbers for reference
-    issued_highest = await db.invoices.find_one(
-        {"org_id": user["org_id"], "direction": "Issued"},
+    tenant = _tenant(user)
+    issued_highest = await tenant.invoices.find_one(
+        {"direction": "Issued"},
         {"_id": 0, "invoice_no": 1},
         sort=[("created_at", -1)]
     )
-    received_highest = await db.invoices.find_one(
-        {"org_id": user["org_id"], "direction": "Received"},
+    received_highest = await tenant.invoices.find_one(
+        {"direction": "Received"},
         {"_id": 0, "invoice_no": 1},
         sort=[("created_at", -1)]
     )
@@ -275,6 +283,7 @@ async def get_settings(user: dict = Depends(require_m5)):
 @router.put("/finance/invoice-settings")
 async def update_settings(data: dict, user: dict = Depends(require_m5)):
     """Update invoice numbering settings (Admin only)"""
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Само администратори могат да променят настройките")
     
@@ -293,7 +302,7 @@ async def update_settings(data: dict, user: dict = Depends(require_m5)):
     
     if "issued_next_number" in data:
         requested = int(data["issued_next_number"])
-        safe_number = await get_safe_starting_number(org_id, "Issued", requested)
+        safe_number = await get_safe_starting_number(_tenant(user), "Issued", requested)
         update["issued_next_number"] = safe_number
         if safe_number != requested:
             # Return warning in response
@@ -312,10 +321,10 @@ async def update_settings(data: dict, user: dict = Depends(require_m5)):
     
     if "received_next_number" in data:
         requested = int(data["received_next_number"])
-        safe_number = await get_safe_starting_number(org_id, "Received", requested)
+        safe_number = await get_safe_starting_number(_tenant(user), "Received", requested)
         update["received_next_number"] = safe_number
     
-    await db.invoice_settings.update_one(
+    await tenant.invoice_settings.update_one(
         {"org_id": org_id},
         {"$set": update},
         upsert=True
@@ -333,7 +342,7 @@ async def get_next_number(
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    next_number = await get_next_invoice_no(user["org_id"], direction)
+    next_number = await get_next_invoice_no(_tenant(user), direction)
     if not next_number:
         return {"auto_numbering": False, "next_number": None}
 
@@ -360,19 +369,17 @@ async def list_accounts(user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    accounts = await db.financial_accounts.find(
-        {"org_id": user["org_id"]},
-        {"_id": 0}
-    ).sort("name", 1).to_list(100)
+    tenant = _tenant(user)
+    accounts = await tenant.financial_accounts.find({}, {"_id": 0}).sort("name", 1).to_list(100)
     
     # Calculate current balance for each account
     for acc in accounts:
-        inflows = await db.finance_payments.aggregate([
-            {"$match": {"org_id": user["org_id"], "account_id": acc["id"], "direction": "Inflow"}},
+        inflows = await tenant.finance_payments.aggregate([
+            {"$match": {"account_id": acc["id"], "direction": "Inflow"}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
-        outflows = await db.finance_payments.aggregate([
-            {"$match": {"org_id": user["org_id"], "account_id": acc["id"], "direction": "Outflow"}},
+        outflows = await tenant.finance_payments.aggregate([
+            {"$match": {"account_id": acc["id"], "direction": "Outflow"}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
         inflow_total = inflows[0]["total"] if inflows else 0
@@ -403,8 +410,9 @@ async def create_transfer(data: dict, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Изберете две различни сметки")
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    src = await db.financial_accounts.find_one({"id": from_id, "org_id": org})
-    dst = await db.financial_accounts.find_one({"id": to_id, "org_id": org})
+    tenant = _tenant(user)
+    src = await tenant.financial_accounts.get(from_id)
+    dst = await tenant.financial_accounts.get(to_id)
     if not src or not dst:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -425,7 +433,7 @@ async def create_transfer(data: dict, user: dict = Depends(require_m5)):
         "reference": transfer_id, "note": note, "transfer_id": transfer_id,
         "created_at": now, "updated_at": now,
     }
-    await db.finance_payments.insert_many([out_entry, in_entry])
+    await tenant.finance_payments.insert_many([out_entry, in_entry])
     await log_audit(org, user["id"], user["email"], "transfer_created", "transfer", transfer_id,
                     {"amount": amount, "from": from_id, "to": to_id})
     return {"transfer_id": transfer_id, "amount": amount, "from_account_id": from_id, "to_account_id": to_id}
@@ -447,7 +455,8 @@ async def fund_account(data: dict, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Изберете сметка")
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    dst = await db.financial_accounts.find_one({"id": to_id, "org_id": org})
+    tenant = _tenant(user)
+    dst = await tenant.financial_accounts.get(to_id)
     if not dst:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -459,7 +468,7 @@ async def fund_account(data: dict, user: dict = Depends(require_m5)):
         "reference": "", "note": data.get("note", ""), "is_funding": True,
         "created_at": now, "updated_at": now,
     }
-    await db.finance_payments.insert_one(payment)
+    await tenant.finance_payments.insert_one(payment)
     await log_audit(org, user["id"], user["email"], "account_funded", "payment", payment["id"],
                     {"amount": amount, "account_id": to_id})
     return {"id": payment["id"], "amount": amount, "account_id": to_id}
@@ -483,8 +492,9 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5)):
     if not project_id:
         raise HTTPException(status_code=400, detail="Изберете обект")
     method = data.get("method") or "Cash"
-    account_id = await _resolve_payment_account(org, method, data.get("account_id"))
-    account = await db.financial_accounts.find_one({"id": account_id, "org_id": org})
+    tenant = _tenant(user)
+    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+    account = await tenant.financial_accounts.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -497,7 +507,7 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5)):
         "project_id": project_id, "category": "Други", "is_expense": True,
         "created_at": now, "updated_at": now,
     }
-    await db.finance_payments.insert_one(payment)
+    await tenant.finance_payments.insert_one(payment)
     await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
                     {"amount": amount, "project_id": project_id})
     return {"id": payment["id"], "amount": amount, "project_id": project_id}
@@ -519,8 +529,9 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5)):
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
     method = data.get("method") or "Cash"
-    account_id = await _resolve_payment_account(org, method, data.get("account_id"))
-    account = await db.financial_accounts.find_one({"id": account_id, "org_id": org})
+    tenant = _tenant(user)
+    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+    account = await tenant.financial_accounts.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -533,7 +544,7 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5)):
         "project_id": project_id, "category": "Други приход", "is_revenue": False,
         "created_at": now, "updated_at": now,
     }
-    await db.finance_payments.insert_one(payment)
+    await tenant.finance_payments.insert_one(payment)
     await log_audit(org, user["id"], user["email"], "other_income_created", "payment", payment["id"],
                     {"amount": amount, "project_id": project_id})
     return {"id": payment["id"], "amount": amount, "project_id": project_id}
@@ -556,7 +567,7 @@ async def create_account(data: FinancialAccountCreate, user: dict = Depends(requ
         "created_at": now,
         "updated_at": now,
     }
-    await db.financial_accounts.insert_one(account)
+    await _tenant(user).financial_accounts.insert_one(account)
     await log_audit(user["org_id"], user["id"], user["email"], "account_created", "account", account["id"],
                     {"name": data.name, "type": data.type})
     return {k: v for k, v in account.items() if k != "_id"}
@@ -567,15 +578,16 @@ async def update_account(account_id: str, data: FinancialAccountUpdate, user: di
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    account = await db.financial_accounts.find_one({"id": account_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    account = await tenant.financial_accounts.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.financial_accounts.update_one({"id": account_id}, {"$set": update})
-    return await db.financial_accounts.find_one({"id": account_id}, {"_id": 0})
+    await tenant.financial_accounts.update_one({"id": account_id}, {"$set": update})
+    return await tenant.financial_accounts.get(account_id, {"_id": 0})
 
 
 @router.delete("/finance/accounts/{account_id}")
@@ -584,11 +596,12 @@ async def delete_account(account_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     # Check if any payments use this account
-    payment_count = await db.finance_payments.count_documents({"account_id": account_id})
+    tenant = _tenant(user)
+    payment_count = await tenant.finance_payments.count({"account_id": account_id})
     if payment_count > 0:
         raise HTTPException(status_code=400, detail="Cannot delete account with existing payments")
     
-    await db.financial_accounts.delete_one({"id": account_id, "org_id": user["org_id"]})
+    await tenant.financial_accounts.delete_one({"id": account_id})
     return {"ok": True}
 
 
@@ -603,17 +616,18 @@ async def list_invoices(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
 ):
+    tenant = _tenant(user)
     if not finance_permission(user):
         # SiteManager can see project-linked invoices only
         if user["role"] == "SiteManager":
-            assigned = await get_user_project_ids(user["id"])
+            assigned = await assigned_project_ids(tenant, user)
             if not assigned:
                 return []
             project_id = project_id or {"$in": assigned}
         else:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    query = {"org_id": user["org_id"]}
+    query = {}
     if direction:
         query["direction"] = direction
     if status:
@@ -628,7 +642,11 @@ async def list_invoices(
     if to_date:
         query.setdefault("issue_date", {})["$lte"] = to_date
     
-    invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    invoices = await tenant.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # W0-03E-A1: the related projects come from the caller's tenant only, in one
+    # read; a project id that does not resolve here enriches to empty strings.
+    projects_by_id = await tenant.projects.get_many(
+        (inv.get("project_id") for inv in invoices), {"_id": 0, "code": 1, "name": 1})
     
     # Check for overdue
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -639,9 +657,9 @@ async def list_invoices(
             inv["is_overdue"] = False
         # Enrich with project code
         if inv.get("project_id"):
-            p = await db.projects.find_one({"id": inv["project_id"]}, {"_id": 0, "code": 1, "name": 1})
-            inv["project_code"] = p["code"] if p else ""
-            inv["project_name"] = p["name"] if p else ""
+            p = projects_by_id.get(inv["project_id"])
+            inv["project_code"] = p.get("code", "") if p else ""
+            inv["project_name"] = p.get("name", "") if p else ""
     
     return invoices
 
@@ -659,9 +677,10 @@ async def list_subcontractor_documents(
     documents list. This is DISPLAY ONLY — the expense is still counted once via
     subcontractor packages/payments. Nothing here feeds P&L or cash flow aggregators,
     so there is no double counting."""
+    tenant = _tenant(user)
     if not finance_permission(user):
         if user["role"] == "SiteManager":
-            assigned = await get_user_project_ids(user["id"])
+            assigned = await assigned_project_ids(tenant, user)
             if not assigned:
                 return []
             if project_id and project_id not in assigned:
@@ -673,18 +692,18 @@ async def list_subcontractor_documents(
     if status and status != "Paid":
         return []
 
-    query = {"org_id": user["org_id"], "status": "completed"}
+    query = {"status": "completed"}
     if project_id:
         query["project_id"] = project_id
     elif user["role"] == "SiteManager":
-        assigned = await get_user_project_ids(user["id"])
+        assigned = await assigned_project_ids(tenant, user)
         query["project_id"] = {"$in": assigned}
     if from_date:
         query["payment_date"] = {"$gte": from_date}
     if to_date:
         query.setdefault("payment_date", {})["$lte"] = to_date
 
-    payments = await db.subcontractor_payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    payments = await tenant.subcontractor_payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
 
     # Resolve names without an N+1 storm
     sub_names: dict = {}
@@ -693,11 +712,11 @@ async def list_subcontractor_documents(
     for p in payments:
         sub_id = p.get("subcontractor_id")
         if sub_id and sub_id not in sub_names:
-            s = await db.subcontractors.find_one({"id": sub_id, "org_id": user["org_id"]}, {"_id": 0, "name": 1})
+            s = await tenant.subcontractors.get(sub_id, {"_id": 0, "name": 1})
             sub_names[sub_id] = s["name"] if s else None
         proj_id = p.get("project_id")
         if proj_id and proj_id not in proj_cache:
-            pr = await db.projects.find_one({"id": proj_id}, {"_id": 0, "code": 1, "name": 1})
+            pr = await tenant.projects.get(proj_id, {"_id": 0, "code": 1, "name": 1})
             proj_cache[proj_id] = pr or {}
 
         amount = round(float(p.get("amount", 0) or 0), 2)
@@ -734,7 +753,6 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     # Enforce invoice limit (monthly)
     await enforce_limit(user["org_id"], "invoices")
     
-    org_id = user["org_id"]
     
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
@@ -749,12 +767,12 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     invoice_no = data.invoice_no
     if not invoice_no or invoice_no.strip() == "":
         # Auto-generate number
-        invoice_no = await get_next_invoice_no(org_id, data.direction)
+        invoice_no = await get_next_invoice_no(_tenant(user), data.direction)
         if not invoice_no:
             raise HTTPException(status_code=400, detail="Номерът на фактурата е задължителен")
     else:
         # Check uniqueness for provided number
-        if not await validate_invoice_no_unique(org_id, invoice_no):
+        if not await validate_invoice_no_unique(_tenant(user), invoice_no):
             raise HTTPException(status_code=400, detail=f"Фактура с номер {invoice_no} вече съществува")
     
     now = datetime.now(timezone.utc).isoformat()
@@ -801,7 +819,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     invoice = compute_invoice_totals(invoice)
     invoice["remaining_amount"] = invoice["total"]
     
-    await db.invoices.insert_one(invoice)
+    await _tenant(user).invoices.insert_one(invoice)
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
                     {"invoice_no": data.invoice_no, "direction": data.direction})
     
@@ -810,14 +828,15 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
 
 @router.get("/finance/invoices/{invoice_id}")
 async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     # Permission check
     if not finance_permission(user):
         if user["role"] == "SiteManager":
-            assigned = await get_user_project_ids(user["id"])
+            assigned = await assigned_project_ids(tenant, user)
             if invoice.get("project_id") not in assigned:
                 raise HTTPException(status_code=403, detail="Access denied")
         else:
@@ -825,17 +844,17 @@ async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     
     # Enrich with project
     if invoice.get("project_id"):
-        p = await db.projects.find_one({"id": invoice["project_id"]}, {"_id": 0, "code": 1, "name": 1})
-        invoice["project_code"] = p["code"] if p else ""
-        invoice["project_name"] = p["name"] if p else ""
+        p = await tenant.projects.get(invoice["project_id"], {"_id": 0, "code": 1, "name": 1})
+        invoice["project_code"] = p.get("code", "") if p else ""
+        invoice["project_name"] = p.get("name", "") if p else ""
     
     # Get allocations
-    allocations = await db.payment_allocations.find(
+    allocations = await tenant.payment_allocations.find(
         {"invoice_id": invoice_id},
         {"_id": 0}
     ).to_list(100)
     for alloc in allocations:
-        payment = await db.finance_payments.find_one({"id": alloc["payment_id"]}, {"_id": 0, "date": 1, "reference": 1, "method": 1})
+        payment = await tenant.finance_payments.get(alloc.get("payment_id"), {"_id": 0, "date": 1, "reference": 1, "method": 1})
         if payment:
             alloc["payment_date"] = payment.get("date")
             alloc["payment_reference"] = payment.get("reference")
@@ -850,8 +869,8 @@ async def list_invoice_versions(invoice_id: str, user: dict = Depends(require_m5
     """Edit history (snapshots) of an invoice, newest first."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    versions = await db.invoice_versions.find(
-        {"invoice_id": invoice_id, "org_id": user["org_id"]},
+    versions = await _tenant(user).invoice_versions.find(
+        {"invoice_id": invoice_id},
         {"_id": 0},
     ).sort("version_no", -1).to_list(100)
     return versions
@@ -862,7 +881,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -883,8 +903,7 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
 
     # Check invoice_no uniqueness if changed
     if data.invoice_no and data.invoice_no != invoice["invoice_no"]:
-        existing = await db.invoices.find_one({
-            "org_id": user["org_id"],
+        existing = await tenant.invoices.find_one({
             "direction": invoice["direction"],
             "invoice_no": data.invoice_no,
             "id": {"$ne": invoice_id},
@@ -898,31 +917,31 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     # Keep a snapshot (version copy) before editing an already-issued document
     if invoice.get("status") != "Draft":
         prior = {k: v for k, v in invoice.items() if k != "_id"}
-        vcount = await db.invoice_versions.count_documents({"invoice_id": invoice_id})
-        await db.invoice_versions.insert_one({
+        vcount = await tenant.invoice_versions.count({"invoice_id": invoice_id})
+        await tenant.invoice_versions.insert_one({
             "id": str(uuid.uuid4()), "org_id": user["org_id"], "invoice_id": invoice_id,
             "version_no": vcount + 1, "snapshot": prior,
             "edited_by": user.get("id"), "edited_by_name": user.get("name") or user.get("email"),
             "edited_at": update["updated_at"],
         })
 
-    await db.invoices.update_one({"id": invoice_id}, {"$set": update})
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": update})
     
     # Recompute if vat changed
     if "vat_percent" in update:
-        updated = await db.invoices.find_one({"id": invoice_id})
+        updated = await tenant.invoices.get(invoice_id)
         updated = compute_invoice_totals({k: v for k, v in updated.items() if k != "_id"})
         paid = updated.get("paid_amount", 0) or 0
-        await db.invoices.update_one({"id": invoice_id}, {"$set": {
+        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
             "subtotal": updated["subtotal"],
             "vat_amount": updated["vat_amount"],
             "total": updated["total"],
             "remaining_amount": max(0, updated["total"] - paid),
         }})
         # Recalculate status
-        await update_invoice_status(invoice_id, user["org_id"])
+        await update_invoice_status(tenant, invoice_id)
     
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
 @router.put("/finance/invoices/{invoice_id}/lines")
@@ -930,7 +949,8 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -961,7 +981,7 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     paid = invoice.get("paid_amount", 0) or 0
     new_remaining = max(0, invoice["total"] - paid)
     
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "lines": lines,
         "subtotal": invoice["subtotal"],
         "vat_amount": invoice["vat_amount"],
@@ -971,9 +991,9 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     }})
     
     # Recalculate status after total changes
-    await update_invoice_status(invoice_id, user["org_id"])
+    await update_invoice_status(tenant, invoice_id)
     
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
 @router.post("/finance/invoices/{invoice_id}/send")
@@ -981,7 +1001,8 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice["status"] != "Draft":
@@ -995,7 +1016,7 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     new_status = "Overdue" if invoice.get("due_date", "") < today else "Sent"
     
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "status": new_status,
         "sent_at": now,
         "updated_at": now,
@@ -1004,7 +1025,7 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_sent", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
 @router.post("/finance/invoices/{invoice_id}/cancel")
@@ -1012,19 +1033,20 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice["status"] == "Paid":
         raise HTTPException(status_code=400, detail="Cannot cancel paid invoices")
     
     # Check for allocations
-    alloc_count = await db.payment_allocations.count_documents({"invoice_id": invoice_id})
+    alloc_count = await tenant.payment_allocations.count({"invoice_id": invoice_id})
     if alloc_count > 0:
         raise HTTPException(status_code=400, detail="Cannot cancel invoice with payment allocations")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "status": "Cancelled",
         "updated_at": now,
     }})
@@ -1032,7 +1054,7 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
 @router.delete("/finance/invoices/{invoice_id}")
@@ -1040,13 +1062,14 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice["status"] != "Draft":
         raise HTTPException(status_code=400, detail="Can only delete Draft invoices")
     
-    await db.invoices.delete_one({"id": invoice_id})
+    await tenant.invoices.delete_one({"id": invoice_id})
     return {"ok": True}
 
 
@@ -1058,26 +1081,21 @@ async def list_invoice_payments(invoice_id: str, user: dict = Depends(require_m5
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    allocations = await db.payment_allocations.find(
+    allocations = await tenant.payment_allocations.find(
         {"invoice_id": invoice_id},
         {"_id": 0}
     ).sort("allocated_at", -1).to_list(100)
     
     result = []
     for alloc in allocations:
-        payment = await db.finance_payments.find_one(
-            {"id": alloc["payment_id"]},
-            {"_id": 0}
-        )
+        payment = await tenant.finance_payments.get(alloc.get("payment_id"), {"_id": 0})
         if payment:
-            acc = await db.financial_accounts.find_one(
-                {"id": payment.get("account_id")},
-                {"_id": 0, "name": 1, "type": 1}
-            )
+            acc = await tenant.financial_accounts.get(payment.get("account_id"), {"_id": 0, "name": 1, "type": 1})
             result.append({
                 "id": alloc["id"],
                 "payment_id": payment["id"],
@@ -1101,7 +1119,8 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     org_id = user["org_id"]
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": org_id})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -1118,8 +1137,8 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     
     method = data.get("method") or data.get("payment_method", "BankTransfer")
     # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
-    account_id = await _resolve_payment_account(org_id, method, data.get("account_id"))
-    account = await db.financial_accounts.find_one({"id": account_id, "org_id": org_id})
+    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+    account = await tenant.financial_accounts.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
     
@@ -1146,7 +1165,7 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         "created_at": now,
         "updated_at": now,
     }
-    await db.finance_payments.insert_one(payment)
+    await tenant.finance_payments.insert_one(payment)
     
     # Create allocation
     allocation = {
@@ -1157,16 +1176,16 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         "amount_allocated": amount,
         "allocated_at": now,
     }
-    await db.payment_allocations.insert_one(allocation)
+    await tenant.payment_allocations.insert_one(allocation)
     
     # Update invoice status
-    await update_invoice_status(invoice_id, org_id)
+    await update_invoice_status(tenant, invoice_id)
     
     await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
                     {"amount": amount, "payment_id": payment["id"]})
     
     # Return updated invoice
-    updated_invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
     return {
         "ok": True,
         "payment_id": payment["id"],
@@ -1183,27 +1202,28 @@ async def remove_invoice_payment(invoice_id: str, allocation_id: str, user: dict
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     org_id = user["org_id"]
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": org_id})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     if invoice["status"] == "Cancelled":
         raise HTTPException(status_code=400, detail="Не може да се премахне плащане от анулирана фактура")
     
-    alloc = await db.payment_allocations.find_one({"id": allocation_id, "invoice_id": invoice_id})
+    alloc = await tenant.payment_allocations.find_one({"id": allocation_id, "invoice_id": invoice_id})
     if not alloc:
         raise HTTPException(status_code=404, detail="Разпределението не е намерено")
     
     # Delete the allocation
-    await db.payment_allocations.delete_one({"id": allocation_id})
+    await tenant.payment_allocations.delete_one({"id": allocation_id})
     
     # Check if the payment has any remaining allocations, if not delete it too
-    remaining_allocs = await db.payment_allocations.count_documents({"payment_id": alloc["payment_id"]})
+    remaining_allocs = await tenant.payment_allocations.count({"payment_id": alloc["payment_id"]})
     if remaining_allocs == 0:
-        await db.finance_payments.delete_one({"id": alloc["payment_id"]})
+        await tenant.finance_payments.delete_one({"id": alloc["payment_id"]})
     
     # Update invoice status
-    await update_invoice_status(invoice_id, org_id)
+    await update_invoice_status(tenant, invoice_id)
     
     await log_audit(org_id, user["id"], user["email"], "invoice_payment_removed", "invoice", invoice_id,
                     {"allocation_id": allocation_id})
@@ -1224,7 +1244,8 @@ async def list_payments(
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    query = {"org_id": user["org_id"]}
+    tenant = _tenant(user)
+    query = {}
     if account_id:
         query["account_id"] = account_id
     if direction:
@@ -1234,16 +1255,16 @@ async def list_payments(
     if to_date:
         query.setdefault("date", {})["$lte"] = to_date
     
-    payments = await db.finance_payments.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    payments = await tenant.finance_payments.find(query, {"_id": 0}).sort("date", -1).to_list(500)
     
     # Enrich with account name and allocation info
     for pay in payments:
-        acc = await db.financial_accounts.find_one({"id": pay["account_id"]}, {"_id": 0, "name": 1, "type": 1})
+        acc = await tenant.financial_accounts.get(pay.get("account_id"), {"_id": 0, "name": 1, "type": 1})
         pay["account_name"] = acc["name"] if acc else "Unknown"
         pay["account_type"] = acc["type"] if acc else ""
         
         # Get allocations
-        allocations = await db.payment_allocations.find({"payment_id": pay["id"]}, {"_id": 0}).to_list(100)
+        allocations = await tenant.payment_allocations.find({"payment_id": pay["id"]}, {"_id": 0}).to_list(100)
         allocated = sum(a.get("amount_allocated", 0) for a in allocations)
         pay["allocated_amount"] = round(allocated, 2)
         pay["unallocated_amount"] = round(pay["amount"] - allocated, 2)
@@ -1252,10 +1273,7 @@ async def list_payments(
         # Linked invoices (so the list can show "За какво" + open the document)
         linked = []
         for a in allocations:
-            inv = await db.invoices.find_one(
-                {"id": a.get("invoice_id"), "org_id": user["org_id"]},
-                {"_id": 0, "invoice_no": 1, "counterparty_name": 1},
-            )
+            inv = await tenant.invoices.get(a.get("invoice_id"), {"_id": 0, "invoice_no": 1, "counterparty_name": 1})
             if inv:
                 linked.append({
                     "id": a.get("invoice_id"),
@@ -1273,8 +1291,9 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     # Route to the correct account: cash → Каса, otherwise the chosen account.
-    account_id = await _resolve_payment_account(user["org_id"], data.method, data.account_id)
-    account = await db.financial_accounts.find_one({"id": account_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
+    account = await tenant.financial_accounts.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
@@ -1294,7 +1313,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
         "created_at": now,
         "updated_at": now,
     }
-    await db.finance_payments.insert_one(payment)
+    await tenant.finance_payments.insert_one(payment)
     
     await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
                     {"amount": data.amount, "direction": data.direction, "account_id": account_id})
@@ -1307,18 +1326,19 @@ async def get_payment(payment_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    payment = await db.finance_payments.find_one({"id": payment_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    payment = await tenant.finance_payments.get(payment_id, {"_id": 0})
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     
     # Enrich
-    acc = await db.financial_accounts.find_one({"id": payment["account_id"]}, {"_id": 0, "name": 1, "type": 1})
+    acc = await tenant.financial_accounts.get(payment.get("account_id"), {"_id": 0, "name": 1, "type": 1})
     payment["account_name"] = acc["name"] if acc else "Unknown"
     
     # Get allocations
-    allocations = await db.payment_allocations.find({"payment_id": payment_id}, {"_id": 0}).to_list(100)
+    allocations = await tenant.payment_allocations.find({"payment_id": payment_id}, {"_id": 0}).to_list(100)
     for alloc in allocations:
-        inv = await db.invoices.find_one({"id": alloc["invoice_id"]}, {"_id": 0, "invoice_no": 1, "direction": 1, "total": 1})
+        inv = await tenant.invoices.get(alloc.get("invoice_id"), {"_id": 0, "invoice_no": 1, "direction": 1, "total": 1})
         if inv:
             alloc["invoice_no"] = inv["invoice_no"]
             alloc["invoice_direction"] = inv["direction"]
@@ -1337,12 +1357,13 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    payment = await db.finance_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    payment = await tenant.finance_payments.get(payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     
     # Get current allocations
-    existing_allocs = await db.payment_allocations.find({"payment_id": payment_id}).to_list(100)
+    existing_allocs = await tenant.payment_allocations.find({"payment_id": payment_id}).to_list(100)
     current_allocated = sum(a.get("amount_allocated", 0) for a in existing_allocs)
     available = payment["amount"] - current_allocated
     
@@ -1358,7 +1379,7 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
             raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({available})")
         
         # Check invoice exists and has remaining
-        invoice = await db.invoices.find_one({"id": alloc.invoice_id, "org_id": user["org_id"]})
+        invoice = await tenant.invoices.get(alloc.invoice_id)
         if not invoice:
             raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
         if invoice["status"] == "Cancelled":
@@ -1382,13 +1403,13 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
             "amount_allocated": alloc.amount,
             "allocated_at": now,
         }
-        await db.payment_allocations.insert_one(allocation)
+        await tenant.payment_allocations.insert_one(allocation)
         results.append({k: v for k, v in allocation.items() if k != "_id"})
         
         available -= alloc.amount
         
         # Update invoice status
-        await update_invoice_status(alloc.invoice_id, user["org_id"])
+        await update_invoice_status(tenant, alloc.invoice_id)
     
     await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
                     {"allocations": len(results)})
@@ -1401,16 +1422,17 @@ async def delete_payment(payment_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    payment = await db.finance_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    payment = await tenant.finance_payments.get(payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     
     # Check for allocations
-    alloc_count = await db.payment_allocations.count_documents({"payment_id": payment_id})
+    alloc_count = await tenant.payment_allocations.count({"payment_id": payment_id})
     if alloc_count > 0:
         raise HTTPException(status_code=400, detail="Cannot delete payment with allocations")
     
-    await db.finance_payments.delete_one({"id": payment_id})
+    await tenant.finance_payments.delete_one({"id": payment_id})
     return {"ok": True}
 
 
@@ -1421,38 +1443,38 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    org_id = user["org_id"]
+    tenant = _tenant(user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     # Receivables (Issued invoices not fully paid)
-    receivables = await db.invoices.aggregate([
-        {"$match": {"org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}}},
+    receivables = await tenant.invoices.aggregate([
+        {"$match": {"direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}}},
         {"$group": {"_id": None, "total": {"$sum": "$remaining_amount"}, "count": {"$sum": 1}}}
     ]).to_list(1)
     
     # Overdue receivables
-    overdue_recv = await db.invoices.aggregate([
-        {"$match": {"org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}, "due_date": {"$lt": today}}},
+    overdue_recv = await tenant.invoices.aggregate([
+        {"$match": {"direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}, "due_date": {"$lt": today}}},
         {"$group": {"_id": None, "total": {"$sum": "$remaining_amount"}, "count": {"$sum": 1}}}
     ]).to_list(1)
     
     # Payables (Received invoices not fully paid)
-    payables = await db.invoices.aggregate([
-        {"$match": {"org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}}},
+    payables = await tenant.invoices.aggregate([
+        {"$match": {"direction": "Received", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}}},
         {"$group": {"_id": None, "total": {"$sum": "$remaining_amount"}, "count": {"$sum": 1}}}
     ]).to_list(1)
     
     # Overdue payables
-    overdue_pay = await db.invoices.aggregate([
-        {"$match": {"org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}, "due_date": {"$lt": today}}},
+    overdue_pay = await tenant.invoices.aggregate([
+        {"$match": {"direction": "Received", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}, "due_date": {"$lt": today}}},
         {"$group": {"_id": None, "total": {"$sum": "$remaining_amount"}, "count": {"$sum": 1}}}
     ]).to_list(1)
     
     # Net (без ДДС) / VAT split of outstanding receivables & payables — proportional on the
     # remaining amount of each open invoice (exact for a single VAT rate, correct for mixed rates).
     async def _outstanding_net(direction: str) -> float:
-        rows = await db.invoices.find(
-            {"org_id": org_id, "direction": direction, "status": {"$nin": ["Draft", "Cancelled", "Paid"]}},
+        rows = await tenant.invoices.find(
+            {"direction": direction, "status": {"$nin": ["Draft", "Cancelled", "Paid"]}},
             {"_id": 0, "subtotal": 1, "total": 1, "remaining_amount": 1},
         ).to_list(2000)
         net = 0.0
@@ -1471,16 +1493,16 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
     # Account balances — count ALL accounts so the KPI cards match the accounts list
     # (legacy/auto-created accounts may lack the "active" flag; excluding them made
     # Cash/Bank show 0 while the list showed the real balance).
-    accounts = await db.financial_accounts.find({"org_id": org_id}, {"_id": 0}).to_list(100)
+    accounts = await tenant.financial_accounts.find({}, {"_id": 0}).to_list(100)
     cash_balance = 0
     bank_balance = 0
     for acc in accounts:
-        inflows = await db.finance_payments.aggregate([
-            {"$match": {"org_id": org_id, "account_id": acc["id"], "direction": "Inflow"}},
+        inflows = await tenant.finance_payments.aggregate([
+            {"$match": {"account_id": acc["id"], "direction": "Inflow"}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
-        outflows = await db.finance_payments.aggregate([
-            {"$match": {"org_id": org_id, "account_id": acc["id"], "direction": "Outflow"}},
+        outflows = await tenant.finance_payments.aggregate([
+            {"$match": {"account_id": acc["id"], "direction": "Outflow"}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
         opening = acc.get("opening_balance", acc.get("balance", 0)) or 0
@@ -1514,12 +1536,13 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     # Get org info
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    org = await tenant.own_organization({"_id": 0})
     org_name = org.get("name", "") if org else ""
     org_address = org.get("address", "") if org else ""
     org_email = org.get("email", "") if org else ""
@@ -1529,7 +1552,8 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     project_name = ""
     project_code = ""
     if invoice.get("project_id"):
-        project = await db.projects.find_one({"id": invoice["project_id"]}, {"_id": 0, "name": 1, "code": 1})
+        # W0-03E-R1: only the caller's own project; a foreign one prints nothing.
+        project = await tenant.projects.get(invoice["project_id"], {"_id": 0, "name": 1, "code": 1})
         if project:
             project_name = project.get("name", "")
             project_code = project.get("code", "")
@@ -1709,11 +1733,10 @@ async def aging_report(user: dict = Depends(require_m5)):
     """Aging breakdown of unpaid receivables in 4 buckets."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    invoices = await db.invoices.find(
-        {"org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}},
+    invoices = await _tenant(user).invoices.find(
+        {"direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]}},
         {"_id": 0, "id": 1, "invoice_no": 1, "counterparty_name": 1, "total": 1,
          "remaining_amount": 1, "due_date": 1, "status": 1, "project_id": 1},
     ).to_list(1000)
@@ -1775,18 +1798,18 @@ async def upcoming_payments(days: int = 5, user: dict = Depends(require_m5)):
     """Invoices with due dates in the next N days."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     future = (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d")
 
-    receivables = await db.invoices.find(
-        {"org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]},
+    tenant = _tenant(user)
+    receivables = await tenant.invoices.find(
+        {"direction": "Issued", "status": {"$nin": ["Draft", "Cancelled", "Paid"]},
          "due_date": {"$gte": today, "$lte": future}},
         {"_id": 0, "invoice_no": 1, "counterparty_name": 1, "remaining_amount": 1, "total": 1, "due_date": 1, "project_id": 1},
     ).sort("due_date", 1).to_list(50)
 
-    payables = await db.invoices.find(
-        {"org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled", "Paid"]},
+    payables = await tenant.invoices.find(
+        {"direction": "Received", "status": {"$nin": ["Draft", "Cancelled", "Paid"]},
          "due_date": {"$gte": today, "$lte": future}},
         {"_id": 0, "invoice_no": 1, "counterparty_name": 1, "remaining_amount": 1, "total": 1, "due_date": 1, "project_id": 1},
     ).sort("due_date", 1).to_list(50)

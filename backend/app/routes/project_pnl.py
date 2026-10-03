@@ -7,6 +7,12 @@ from typing import Optional
 from app.db import db
 from app.deps.auth import get_current_user, can_access_project
 from app.services.project_pnl import compute_project_pnl, compute_pnl_trend
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Project P&L"])
 
@@ -58,8 +64,9 @@ async def get_pnl_trend(project_id: str, months: int = 6, user: dict = Depends(g
 @router.get("/org/pnl-overview")
 async def get_org_pnl_overview(user: dict = Depends(get_current_user)):
     """P&L overview for all projects in the organization."""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    projects = await db.projects.find(
+    projects = await tenant.projects.find(
         {"org_id": org_id, "status": {"$in": ["Active", "Draft", "Paused"]}},
         {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1},
     ).to_list(100)

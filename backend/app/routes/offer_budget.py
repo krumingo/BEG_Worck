@@ -10,6 +10,12 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Offer Execution Budget"])
 
@@ -17,12 +23,13 @@ router = APIRouter(tags=["Offer Execution Budget"])
 @router.get("/offer-budgets/{offer_id}")
 async def get_offer_budgets(offer_id: str, user: dict = Depends(require_m2)):
     """Get execution budget data for all lines of an offer"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id}, {"_id": 0})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
-    budgets = await db.offer_line_budgets.find(
+    budgets = await tenant.offer_line_budgets.find(
         {"org_id": org_id, "offer_id": offer_id}, {"_id": 0}
     ).to_list(200)
     budget_map = {b["line_id"]: b for b in budgets}
@@ -87,8 +94,9 @@ async def get_offer_budgets(offer_id: str, user: dict = Depends(require_m2)):
 @router.put("/offer-budgets/{offer_id}")
 async def save_offer_budgets(offer_id: str, data: dict, user: dict = Depends(require_m2)):
     """Save execution budget data for offer lines"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
@@ -113,7 +121,7 @@ async def save_offer_budgets(offer_id: str, data: dict, user: dict = Depends(req
             "updated_at": now,
             "updated_by": user["id"],
         }
-        await db.offer_line_budgets.update_one(
+        await tenant.offer_line_budgets.update_one(
             {"org_id": org_id, "offer_id": offer_id, "line_id": lid},
             {"$set": budget_doc},
             upsert=True,
@@ -126,13 +134,14 @@ async def save_offer_budgets(offer_id: str, data: dict, user: dict = Depends(req
 @router.get("/offer-materials/{offer_id}")
 async def get_offer_planned_materials(offer_id: str, user: dict = Depends(require_m2)):
     """Get planned material breakdown for an offer (from AI suggestions + planned_materials)"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await db.offers.find_one({"id": offer_id, "org_id": org_id}, {"_id": 0})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
     # From planned_materials collection
-    planned = await db.planned_materials.find(
+    planned = await tenant.planned_materials.find(
         {"org_id": org_id, "source_offer_id": offer_id, "status": "active"},
         {"_id": 0}
     ).to_list(500)
@@ -140,7 +149,7 @@ async def get_offer_planned_materials(offer_id: str, user: dict = Depends(requir
     # From extra work drafts linked to this offer
     ai_materials = []
     if offer.get("source_batch_id"):
-        drafts = await db.extra_work_drafts.find(
+        drafts = await tenant.extra_work_drafts.find(
             {"group_batch_id": offer["source_batch_id"]},
             {"_id": 0, "title": 1, "suggested_materials": 1}
         ).to_list(50)

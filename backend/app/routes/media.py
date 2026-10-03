@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from app.db import db
+from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.media_acl import enforce_media_access, enforce_context_access, MEDIA_CONTEXT_TYPES, check_media_access
 
@@ -23,6 +24,12 @@ MAX_MEDIA_SIZE_MB = 10
 # ── Pydantic Models ────────────────────────────────────────────────
 
 from pydantic import BaseModel
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 class MediaLinkRequest(BaseModel):
     media_id: str
@@ -40,6 +47,7 @@ async def upload_media(
     user: dict = Depends(get_current_user)
 ):
     """Upload a media file (photo)"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     # ── Validate context access BEFORE processing file ─────────────────
@@ -112,7 +120,7 @@ async def upload_media(
         "created_at": now,
     }
     
-    await db.media_files.insert_one(media)
+    await tenant.media_files.insert_one(media)
     
     return {
         "id": media_id,
@@ -127,6 +135,7 @@ async def upload_media(
 @router.post("/media/link")
 async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_user)):
     """Link an existing media file to a context"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     # Validate context type
@@ -137,7 +146,7 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
         })
     
     # Find media file
-    media = await db.media_files.find_one({"id": data.media_id, "org_id": org_id}, {"_id": 0})
+    media = await tenant.media_files.find_one({"id": data.media_id, "org_id": org_id}, {"_id": 0})
     if not media:
         raise HTTPException(status_code=404, detail="Media file not found")
     
@@ -157,7 +166,7 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
     
     # Update media with context
     now = datetime.now(timezone.utc).isoformat()
-    await db.media_files.update_one(
+    await tenant.media_files.update_one(
         {"id": data.media_id},
         {"$set": {
             "context_type": data.context_type,
@@ -177,9 +186,10 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
 @router.get("/media/{media_id}")
 async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     """Get media file metadata"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
-    media = await db.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
+    media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
     if not media:
         raise HTTPException(status_code=404, detail="Media file not found")
     
@@ -189,7 +199,7 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     # Enrich with owner name (handle legacy records with missing owner_user_id)
     owner_user_id = media.get("owner_user_id")
     if owner_user_id:
-        owner = await db.users.find_one({"id": owner_user_id}, {"_id": 0, "first_name": 1, "last_name": 1})
+        owner = await tenant.users.find_one({"id": owner_user_id}, {"_id": 0, "first_name": 1, "last_name": 1})
         media["owner_user_name"] = f"{owner.get('first_name', '')} {owner.get('last_name', '')}".strip() if owner else ""
     else:
         media["owner_user_name"] = "(unknown)"
@@ -215,6 +225,7 @@ async def serve_avatar(filename: str):
 @router.get("/media/file/{filename}")
 async def serve_media_file(filename: str, user: dict = Depends(get_current_user)):
     """Serve media file content"""
+    tenant = _tenant(user)
     # ── Path traversal protection ──────────────────────────────────────
     # Sanitize filename: only allow alphanumeric, dash, underscore, dot
     # Reject any path separators or suspicious patterns
@@ -235,7 +246,7 @@ async def serve_media_file(filename: str, user: dict = Depends(get_current_user)
     
     # ── ACL check ──────────────────────────────────────────────────────
     # Get media metadata to verify access
-    media = await db.media_files.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0})
+    media = await tenant.media_files.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found or access denied")
     
@@ -252,6 +263,7 @@ async def list_media(
     user: dict = Depends(get_current_user)
 ):
     """List media files for the organization, optionally filtered by context"""
+    tenant = _tenant(user)
     org_id = user["org_id"]
     user_id = user["id"]
     user_role = user["role"]
@@ -285,7 +297,7 @@ async def list_media(
             query["owner_user_id"] = user_id
     
     # ── Fetch candidates ───────────────────────────────────────────────
-    media_list = await db.media_files.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    media_list = await tenant.media_files.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     
     # ── Post-filter for ACL compliance ─────────────────────────────────
     # Admin/Owner already have full access, skip filtering
@@ -311,17 +323,17 @@ async def list_media(
     
     # Prefetch projects the user can access (via project_team)
     user_project_ids = set()
-    team_memberships = await db.project_team.find(
-        {"user_id": user_id, "org_id": org_id},
-        {"_id": 0, "project_id": 1}
-    ).to_list(500)
+    # W0-03E-A2: one relation accessor; the tenant predicate is applied last.
+    team_memberships = await project_team.user_rows(
+        project_team.tenant_for_org(db, org_id), user_id, {"_id": 0, "project_id": 1},
+        active_only=False, limit=500)
     for tm in team_memberships:
         user_project_ids.add(tm.get("project_id"))
     prefetched["user_project_ids"] = user_project_ids
     
     # Prefetch work reports (author + project_id)
     if "workReport" in context_ids_by_type:
-        reports = await db.work_reports.find(
+        reports = await tenant.work_reports.find(
             {"id": {"$in": list(context_ids_by_type["workReport"])}, "org_id": org_id},
             {"_id": 0, "id": 1, "user_id": 1, "project_id": 1}
         ).to_list(500)
@@ -329,7 +341,7 @@ async def list_media(
     
     # Prefetch deliveries (driver + project_id)
     if "delivery" in context_ids_by_type:
-        deliveries = await db.deliveries.find(
+        deliveries = await tenant.deliveries.find(
             {"id": {"$in": list(context_ids_by_type["delivery"])}, "org_id": org_id},
             {"_id": 0, "id": 1, "driver_user_id": 1, "project_id": 1}
         ).to_list(500)
@@ -337,7 +349,7 @@ async def list_media(
     
     # Prefetch attendance (user + project_id)
     if "attendance" in context_ids_by_type:
-        entries = await db.attendance_entries.find(
+        entries = await tenant.attendance_entries.find(
             {"id": {"$in": list(context_ids_by_type["attendance"])}, "org_id": org_id},
             {"_id": 0, "id": 1, "user_id": 1, "project_id": 1}
         ).to_list(500)
@@ -345,7 +357,7 @@ async def list_media(
     
     # Prefetch machines (project_id)
     if "machine" in context_ids_by_type:
-        machines = await db.machines.find(
+        machines = await tenant.machines.find(
             {"id": {"$in": list(context_ids_by_type["machine"])}, "org_id": org_id},
             {"_id": 0, "id": 1, "project_id": 1}
         ).to_list(500)
@@ -440,10 +452,11 @@ async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
     - Must be in same org
     - Only owner or Admin/Owner can delete
     """
+    tenant = _tenant(user)
     org_id = user["org_id"]
     
     # Find media with org_id check (prevents cross-org access)
-    media = await db.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
+    media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
     if not media:
         raise HTTPException(status_code=404, detail="Media file not found")
     
@@ -461,6 +474,6 @@ async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
                 pass  # File may have been deleted externally
     
     # Delete from database
-    await db.media_files.delete_one({"id": media_id})
+    await tenant.media_files.delete_one({"id": media_id})
     
     return {"ok": True, "deleted": media_id}

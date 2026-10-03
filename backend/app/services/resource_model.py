@@ -6,6 +6,7 @@ Overhead Pools, Allocation Rules, Insurance treatment.
 See /app/memory/RESOURCE_MODEL.md for business documentation.
 """
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 # ── Constants ──────────────────────────────────────────────────────
 
@@ -36,7 +37,8 @@ DEFAULT_INSURANCE_RATE = 0.328  # ~32.8% employer social contributions (BG typic
 
 async def get_resource_config(org_id: str) -> dict:
     """Get org-level resource & cost model config."""
-    doc = await db.resource_model_config.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    doc = await tenant.resource_model_config.find_one(
         {"org_id": org_id}, {"_id": 0}
     )
     if doc:
@@ -54,6 +56,7 @@ async def get_resource_config(org_id: str) -> dict:
 
 async def save_resource_config(org_id: str, updates: dict, user_id: str) -> dict:
     """Save org-level resource config (upsert)."""
+    tenant = TenantData.for_resolved_org(db, org_id)
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
     updates["org_id"] = org_id
@@ -61,15 +64,15 @@ async def save_resource_config(org_id: str, updates: dict, user_id: str) -> dict
     updates["updated_by"] = user_id
     updates.pop("is_default", None)
 
-    existing = await db.resource_model_config.find_one({"org_id": org_id})
+    existing = await tenant.resource_model_config.find_one({"org_id": org_id})
     if existing:
-        await db.resource_model_config.update_one({"org_id": org_id}, {"$set": updates})
+        await tenant.resource_model_config.update_one({"org_id": org_id}, {"$set": updates})
     else:
         import uuid
         updates["id"] = str(uuid.uuid4())
         updates["created_at"] = now
-        await db.resource_model_config.insert_one(updates)
-    return await db.resource_model_config.find_one({"org_id": org_id}, {"_id": 0})
+        await tenant.resource_model_config.insert_one(updates)
+    return await tenant.resource_model_config.find_one({"org_id": org_id}, {"_id": 0})
 
 
 # ── Resource Classification ────────────────────────────────────────
@@ -79,7 +82,8 @@ async def classify_worker(org_id: str, worker_id: str) -> dict:
     Classify a worker as direct/overhead/hybrid based on profile config.
     Returns: {resource_type, overhead_pool, insurance_mode, allocation_rule}
     """
-    profile = await db.employee_profiles.find_one(
+    tenant = TenantData.for_resolved_org(db, org_id)
+    profile = await tenant.employee_profiles.find_one(
         {"org_id": org_id, "user_id": worker_id},
         {"_id": 0, "resource_type": 1, "default_overhead_pool": 1,
          "allocation_rule": 1, "insurance_mode": 1, "utilization_target_pct": 1,

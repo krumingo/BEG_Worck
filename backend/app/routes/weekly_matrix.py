@@ -9,6 +9,12 @@ from datetime import datetime, timezone, timedelta
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_worker_day_map, NORMAL_DAY
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Weekly Matrix"])
 
@@ -45,6 +51,7 @@ async def get_weekly_matrix(
     user: dict = Depends(get_current_user),
     week_of: Optional[str] = None,
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     ref = week_of or today
@@ -52,7 +59,7 @@ async def get_weekly_matrix(
     dates = _week_dates(sat)
 
     # Active employees (filter test accounts)
-    employees = await db.users.find(
+    employees = await tenant.users.find(
         {"org_id": org_id, "is_active": True},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "avatar_url": 1, "email": 1, "role": 1},
     ).to_list(200)
@@ -64,7 +71,7 @@ async def get_weekly_matrix(
     emp_ids = [e["id"] for e in employees]
 
     # Profiles
-    profiles = await db.employee_profiles.find(
+    profiles = await tenant.employee_profiles.find(
         {"org_id": org_id, "user_id": {"$in": emp_ids}},
         {"_id": 0, "user_id": 1, "position": 1, "pay_type": 1,
          "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1,

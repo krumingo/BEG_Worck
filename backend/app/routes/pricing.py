@@ -11,6 +11,12 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.services.pricing_engine import get_material_price, batch_get_prices
 from app.routes.smr_analysis import calc_line, calc_totals
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Pricing Engine"])
 
@@ -43,8 +49,9 @@ async def refresh_price(name: str, user: dict = Depends(require_m2)):
 
 @router.get("/pricing/history")
 async def get_price_history(name: str, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     norm = name.lower().strip()
-    doc = await db.material_prices.find_one(
+    doc = await tenant.material_prices.find_one(
         {"org_id": user["org_id"], "material_name_normalized": norm},
         {"_id": 0},
     )
@@ -63,10 +70,11 @@ async def get_catalog(
     category: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if category:
         query["material_category"] = {"$regex": category, "$options": "i"}
-    items = await db.material_prices.find(query, {"_id": 0}).sort("material_name", 1).to_list(500)
+    items = await tenant.material_prices.find(query, {"_id": 0}).sort("material_name", 1).to_list(500)
     return {"items": items, "total": len(items)}
 
 
@@ -75,7 +83,8 @@ async def get_catalog(
 @router.post("/smr-analyses/{analysis_id}/lines/{line_id}/fetch-prices")
 async def fetch_prices_for_line(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
     """Fetch live prices for all materials in a line and update unit_prices."""
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if doc["status"] == "locked":
@@ -129,12 +138,12 @@ async def fetch_prices_for_line(analysis_id: str, line_id: str, user: dict = Dep
 
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
 
-    updated = await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    updated = await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
     return {
         "analysis": updated,
         "pricing_details": pricing_details,

@@ -31,6 +31,12 @@ import logging
 
 from app.db import db
 from app.deps.auth import can_access_project, can_manage_project
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 # Media context types
 MEDIA_CONTEXT_TYPES = ["workReport", "delivery", "machine", "attendance", "profile", "message", "project", "site", "missingSMR"]
@@ -70,12 +76,13 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
     Returns:
         (allowed: bool, reason: str or None)
     """
+    tenant = _tenant(user)
     user_id = user.get("id")
     user_role = user.get("role")
     org_id = user.get("org_id")
     
     if context_type == "workReport":
-        report = await db.work_reports.find_one(
+        report = await tenant.work_reports.find_one(
             {"id": context_id, "org_id": org_id},
             {"_id": 0, "user_id": 1, "project_id": 1}
         )
@@ -89,7 +96,7 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         return False, "No access to this work report"
     
     elif context_type == "delivery":
-        delivery = await db.deliveries.find_one(
+        delivery = await tenant.deliveries.find_one(
             {"id": context_id, "org_id": org_id},
             {"_id": 0, "driver_user_id": 1, "project_id": 1}
         )
@@ -103,7 +110,7 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         return False, "No access to this delivery"
     
     elif context_type == "attendance":
-        entry = await db.attendance_entries.find_one(
+        entry = await tenant.attendance_entries.find_one(
             {"id": context_id, "org_id": org_id},
             {"_id": 0, "user_id": 1, "project_id": 1}
         )
@@ -128,7 +135,7 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         return False, "Cannot access another user's profile media"
     
     elif context_type == "machine":
-        machine = await db.machines.find_one(
+        machine = await tenant.machines.find_one(
             {"id": context_id, "org_id": org_id},
             {"_id": 0, "project_id": 1}
         )
@@ -146,7 +153,7 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
     
     elif context_type == "site":
         # Site photos: any user in the org can view
-        site = await db.sites.find_one(
+        site = await tenant.sites.find_one(
             {"id": context_id, "org_id": org_id},
             {"_id": 0, "id": 1}
         )
@@ -155,7 +162,7 @@ async def check_context_access(user: dict, context_type: str, context_id: str) -
         return True, None
     
     elif context_type == "missingSMR":
-        item = await db.missing_smr.find_one(
+        item = await tenant.missing_smr.find_one(
             {"id": context_id, "org_id": org_id},
             {"_id": 0, "project_id": 1, "created_by": 1}
         )

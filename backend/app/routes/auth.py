@@ -1,7 +1,7 @@
 """
 Authentication routes - /api/auth/*
 """
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
@@ -14,13 +14,20 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
+from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
+from app.tenancy.data_access import TenantData
 from app.permissions.deps import require_permission, MODE_SHADOW, MODE_ENFORCE
 from app.permissions.sync import grant_company_role, shadow_sync
 from app.permissions.workflow import (
     RecoverableWrite, fingerprint_without, ERROR_SYNC_FAILED, ERROR_WRITE_INCOMPLETE,
 )
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["auth"])
 
@@ -127,8 +134,10 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     
     Returns: { ok: true }
     """
+    tenant = _tenant(user)
     # Fetch fresh user data with password hash
-    db_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    # W0-03E-A2B: the session's own record — (id, tenant), never the id alone.
+    db_user = await tenant.users.find_one({"id": user["id"], "org_id": user["org_id"]}, {"_id": 0})
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -150,8 +159,8 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     
     # Update password
     new_hash = hash_password(data.new_password)
-    await db.users.update_one(
-        {"id": user["id"]},
+    await tenant.users.update_one(
+        {"id": user["id"], "org_id": user["org_id"]},
         {"$set": {
             "password_hash": new_hash,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -168,7 +177,7 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
 # Organization routes
 @router.get("/organization")
 async def get_organization(user: dict = Depends(get_current_user)):
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    org = await _tenant(user).own_organization({"_id": 0})
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
     return org
@@ -177,14 +186,16 @@ async def get_organization(user: dict = Depends(get_current_user)):
 async def update_organization(data: OrgUpdate, user: dict = Depends(require_admin)):
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.organizations.update_one({"id": user["org_id"]}, {"$set": update})
+    tenant = _tenant(user)
+    await tenant.update_own_organization({"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "organization", user["org_id"], update)
-    return await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0})
+    return await tenant.own_organization({"_id": 0})
 
 # User routes
 @router.get("/users")
 async def list_users(user: dict = Depends(get_current_user)):
-    return await db.users.find({"org_id": user["org_id"]}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    tenant = _tenant(user)
+    return await tenant.users.find({"org_id": user["org_id"]}, {"_id": 0, "password_hash": 0}).to_list(1000)
 
 @router.post("/users", status_code=201)
 async def create_user(
@@ -302,7 +313,8 @@ async def update_user(
     user = ctx.user
     org_id = ctx.org_id
     tdb = await ctx.db()
-    target = await tdb.users.find_one({"id": user_id, **ctx.owner_filter()})
+    tenant = TenantData.for_context(tdb, ctx)       # W0-03E-A1: every users read below
+    target = await tenant.users.get(user_id)
     if not ctx.owns(target):
         raise HTTPException(status_code=404, detail="User not found")   # foreign == missing
     update = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -311,7 +323,7 @@ async def update_user(
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     async def _business():
-        await tdb.users.update_one({"id": user_id, **ctx.owner_filter()}, {"$set": update})
+        await tenant.users.update_one({"id": user_id}, {"$set": update})
         return user_id
 
     if ctx.mode != MODE_ENFORCE or "role" not in update:
@@ -322,7 +334,7 @@ async def update_user(
         if ctx.mode == MODE_SHADOW and "role" in update:
             await shadow_sync(ctx, tdb, "user.update", user_id,
                               lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
-        return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        return await tenant.users.get(user_id, {"_id": 0, "password_hash": 0})
 
     # ---- enforce + role change: authoritative assignment FIRST (PR-05) -------
     # If the business write then fails, users.role is stale but the
@@ -342,7 +354,7 @@ async def update_user(
         key=f"user.update:{user_id}:{op_id}",
         fingerprint=fingerprint_without(update, "updated_at")).begin()
     if wf.already_completed:
-        return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        return await tenant.users.get(user_id, {"_id": 0, "password_hash": 0})
     try:
         await wf.step("sync", lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
         await wf.step("business", _business, reference=lambda r: r)
@@ -355,23 +367,30 @@ async def update_user(
         await wf.fail(code)
         raise wf.failure_response(code, exc)
     await wf.complete(user_id)
-    return await tdb.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return await tenant.users.get(user_id, {"_id": 0, "password_hash": 0})
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str, user: dict = Depends(require_admin)):
+async def delete_user(user_id: str, request: Request, user: dict = Depends(require_admin)):
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-    target = await db.users.find_one({"id": user_id, "org_id": user["org_id"]})
+    tenant = TenantData.for_user(db, user)
+    target = await tenant.users.get(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    await db.users.delete_one({"id": user_id})
+    # W0-03E: the delete is scoped by the org it was checked against; in
+    # MASTER_DATA_MODE=enforce a used or migrated identity is archived, not deleted.
+    done = await guarded_identity_delete(user, request, db, collection="users", legacy_id=user_id)
+    if done is not None:
+        return done
+    await tenant.users.delete_one({"id": user_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "user", user_id)
     return {"ok": True}
 
 # Feature flags routes (read = any user, write = platform admin)
 @router.get("/feature-flags")
 async def list_feature_flags(user: dict = Depends(get_current_user)):
-    return await db.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
+    tenant = _tenant(user)
+    return await tenant.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
 
 @router.put("/feature-flags")
 async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_platform_admin)):
@@ -381,16 +400,17 @@ async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_p
     SECURITY: This endpoint is restricted to platform administrators only.
     Module configuration affects billing and feature access.
     """
+    tenant = _tenant(user)
     if data.module_code == "M0":
         raise HTTPException(status_code=400, detail="Core module cannot be disabled")
-    result = await db.feature_flags.update_one(
+    result = await tenant.feature_flags.update_one(
         {"org_id": user["org_id"], "module_code": data.module_code},
         {"$set": {"enabled": data.enabled, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Module not found")
     await log_audit(user["org_id"], user["id"], user["email"], "toggled", "feature_flag", data.module_code, {"enabled": data.enabled})
-    return await db.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
+    return await tenant.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Admin Set Password (for forgotten passwords)
@@ -422,11 +442,9 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin:
             detail="Cannot use admin reset for your own password. Use the change-password feature instead."
         )
     
-    # Find target user in same organization
-    target_user = await db.users.find_one(
-        {"id": user_id, "org_id": admin["org_id"]},
-        {"_id": 0}
-    )
+    # Find target user in the ADMIN's own tenant
+    tenant = _tenant(admin)
+    target_user = await tenant.users.get(user_id, {"_id": 0})
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found in your organization")
     
@@ -438,7 +456,10 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin:
     # Update password
     new_hash = hash_password(data.new_password)
     now = datetime.now(timezone.utc).isoformat()
-    await db.users.update_one(
+    # W0-03E-A2C: the tenant predicate is in the WRITE filter. Proving the target
+    # exists in the admin's tenant above said nothing about which tenant's user
+    # `{"id": user_id}` alone would have reset once ids collide.
+    await tenant.users.update_one(
         {"id": user_id},
         {"$set": {
             "password_hash": new_hash,
@@ -475,8 +496,9 @@ async def list_audit_logs(user: dict = Depends(require_platform_admin), limit: i
     Regular org admins cannot access audit logs as they contain sensitive 
     system-wide information.
     """
-    logs = await db.audit_logs.find(
+    tenant = _tenant(user)
+    logs = await tenant.audit_logs.find(
         {"org_id": user["org_id"]}, {"_id": 0}
     ).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
-    total = await db.audit_logs.count_documents({"org_id": user["org_id"]})
+    total = await tenant.audit_logs.count_documents({"org_id": user["org_id"]})
     return {"logs": logs, "total": total}

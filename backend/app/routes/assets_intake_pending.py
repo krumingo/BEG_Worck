@@ -19,6 +19,12 @@ from app.routes.asset_item_types import all_type_keys, BUILTIN_TYPES
 from app.routes.assets_qr import _make_qr
 from app.tenancy.guard import TenantContext
 from app.permissions.deps import require_permission
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["AssetIntakePending"])
 
@@ -42,7 +48,7 @@ async def _can_submit(user: dict) -> bool:
     """Админ/Owner винаги. Техник/SiteManager — само ако е включено във фирмените настройки."""
     if user["role"] in ["Admin", "Owner"]:
         return True
-    org = await db.organizations.find_one({"id": user["org_id"]}, {"_id": 0, "asset_intake_roles": 1}) or {}
+    org = await _tenant(user).own_organization({"_id": 0, "asset_intake_roles": 1}) or {}
     intake = org.get("asset_intake_roles", {})
     if user["role"] == "SiteManager":
         return bool(intake.get("site_manager"))
@@ -58,6 +64,7 @@ async def can_submit(user: dict = Depends(get_current_user)):
 
 @router.post("/assets/intake/submit", status_code=201)
 async def submit_intake(data: IntakeSubmit, user: dict = Depends(get_current_user)):
+    tenant = _tenant(user)
     if not await _can_submit(user):
         raise HTTPException(status_code=403, detail="Нямате право да заскладявате")
     rec = {
@@ -76,13 +83,14 @@ async def submit_intake(data: IntakeSubmit, user: dict = Depends(get_current_use
         "reviewed_by": None,
         "reviewed_at": None,
     }
-    await db.asset_intake_pending.insert_one(rec)
+    await tenant.asset_intake_pending.insert_one(rec)
     return {"id": rec["id"], "status": "pending"}
 
 
 @router.get("/assets/intake/pending")
 async def list_pending(user: dict = Depends(require_admin)):
-    recs = await db.asset_intake_pending.find(
+    tenant = _tenant(user)
+    recs = await tenant.asset_intake_pending.find(
         {"org_id": user["org_id"], "status": "pending"}, {"_id": 0}
     ).sort("submitted_at", 1).to_list(500)
     return {"items": recs, "count": len(recs)}
@@ -191,15 +199,16 @@ class BulkApprove(BaseModel):
 
 @router.post("/assets/intake/approve-bulk")
 async def approve_bulk(data: BulkApprove, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     org = user["org_id"]
     done, failed = [], []
     for iid in data.ids:
-        rec = await db.asset_intake_pending.find_one({"id": iid, "org_id": org, "status": "pending"}, {"_id": 0})
+        rec = await tenant.asset_intake_pending.find_one({"id": iid, "org_id": org, "status": "pending"}, {"_id": 0})
         if not rec:
             failed.append(iid); continue
         try:
             created = await _materialize(org, rec, user)
-            await db.asset_intake_pending.update_one(
+            await tenant.asset_intake_pending.update_one(
                 {"id": iid, "org_id": org},
                 {"$set": {"status": "approved", "reviewed_by": user["id"], "reviewed_at": _now(), "created_refs": created}},
             )
@@ -213,20 +222,21 @@ async def approve_bulk(data: BulkApprove, user: dict = Depends(require_admin)):
 async def intake_locations(type: str, user: dict = Depends(get_current_user)):
     """Леки списъци за избор на локация при заскладяване. Достъпно за всеки с право да заскладява.
     type: warehouse | project | employee"""
+    tenant = _tenant(user)
     if not await _can_submit(user):
         raise HTTPException(status_code=403, detail="Нямате право да заскладявате")
     org = user["org_id"]
     if type == "warehouse":
-        rows = await db.warehouses.find({"org_id": org}, {"_id": 0, "id": 1, "name": 1}).to_list(300)
+        rows = await tenant.warehouses.find({"org_id": org}, {"_id": 0, "id": 1, "name": 1}).to_list(300)
         return {"items": [{"id": w["id"], "name": w.get("name") or w["id"]} for w in rows]}
     if type == "project":
-        rows = await db.projects.find(
+        rows = await tenant.projects.find(
             {"org_id": org, "status": {"$in": ["Active", "Draft"]}},
             {"_id": 0, "id": 1, "name": 1, "code": 1},
         ).to_list(500)
         return {"items": [{"id": p["id"], "name": p.get("name") or p.get("code") or p["id"]} for p in rows]}
     if type == "employee":
-        rows = await db.users.find(
+        rows = await tenant.users.find(
             {"org_id": org}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "name": 1, "email": 1, "role": 1, "avatar_url": 1}
         ).to_list(500)
         items = []
@@ -239,11 +249,12 @@ async def intake_locations(type: str, user: dict = Depends(get_current_user)):
 
 @router.post("/assets/intake/{intake_id}/reject")
 async def reject_intake(intake_id: str, user: dict = Depends(require_admin)):
+    tenant = _tenant(user)
     org = user["org_id"]
-    rec = await db.asset_intake_pending.find_one({"id": intake_id, "org_id": org, "status": "pending"}, {"_id": 0})
+    rec = await tenant.asset_intake_pending.find_one({"id": intake_id, "org_id": org, "status": "pending"}, {"_id": 0})
     if not rec:
         raise HTTPException(status_code=404, detail="Not found")
-    await db.asset_intake_pending.update_one(
+    await tenant.asset_intake_pending.update_one(
         {"id": intake_id, "org_id": org},
         {"$set": {"status": "rejected", "reviewed_by": user["id"], "reviewed_at": _now()}},
     )

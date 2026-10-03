@@ -5,6 +5,7 @@ Compares planned (budgets/analyses) vs real (work_sessions) by activity, group, 
 from app.db import db
 from app.routes.activity_budgets import compute_avg_daily_wage, DEFAULT_DAILY_WAGE
 from app.services.budget_formula import calculate_budget_formula_sync
+from app.tenancy.data_access import TenantData
 
 
 def _status(actual, planned):
@@ -26,11 +27,12 @@ def _variance_pct(actual, planned):
 
 async def build_expected_actual(org_id: str, project_id: str, date_from: str = None, date_to: str = None) -> dict:
     # ── Compute real hourly rate for this project ────────────────
+    tenant = TenantData.for_resolved_org(db, org_id)
     avg_daily = await compute_avg_daily_wage(org_id, project_id)
     hourly_rate = round(avg_daily / 8, 2) if avg_daily > 0 else round(DEFAULT_DAILY_WAGE / 8, 2)
 
     # ── Planned data ────────────────────────────────────────────
-    budgets = await db.activity_budgets.find(
+    budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
@@ -57,7 +59,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
     if date_to:
         ws_query.setdefault("started_at", {})["$lte"] = f"{date_to}T23:59:59"
 
-    sessions = await db.work_sessions.find(ws_query, {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
+    sessions = await tenant.work_sessions.find(ws_query, {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
 
     actual_by_type = {}
     for s in sessions:
@@ -86,14 +88,14 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         })
 
     # ── B. By Group ─────────────────────────────────────────────
-    groups_data = await db.smr_groups.find(
+    groups_data = await tenant.smr_groups.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "name": 1}
     ).to_list(100)
 
     groups = []
     for g in groups_data:
         # Get lines in group from analyses
-        analyses = await db.smr_analyses.find(
+        analyses = await tenant.smr_analyses.find(
             {"org_id": org_id, "project_id": project_id, "lines.group_id": g["id"]}, {"_id": 0, "lines": 1}
         ).to_list(50)
         planned_h = 0
@@ -130,7 +132,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         })
 
     # ── C. By Location ──────────────────────────────────────────
-    locations_data = await db.location_nodes.find(
+    locations_data = await tenant.location_nodes.find(
         {"org_id": org_id, "project_id": project_id, "type": {"$in": ["room", "floor"]}},
         {"_id": 0, "id": 1, "name": 1, "type": 1},
     ).to_list(100)
@@ -138,7 +140,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
     locations = []
     for loc in locations_data:
         # Count analyses lines with this location
-        loc_analyses = await db.smr_analyses.find(
+        loc_analyses = await tenant.smr_analyses.find(
             {"org_id": org_id, "project_id": project_id, "lines.location_id": loc["id"]}, {"_id": 0, "lines": 1}
         ).to_list(50)
         planned_c = 0
@@ -148,7 +150,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
                     planned_c += ln.get("final_total", 0)
 
         # Missing SMR at this location
-        ms_count = await db.missing_smr.count_documents(
+        ms_count = await tenant.missing_smr.count_documents(
             {"org_id": org_id, "project_id": project_id, "location_id": loc["id"]}
         )
 

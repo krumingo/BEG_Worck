@@ -9,10 +9,17 @@ from pydantic import BaseModel
 import uuid
 
 from app.db import db
+from app.master_data.legacy_adapter import annotate_refs, require_tenant_identity
 from app.deps.auth import get_current_user
 from app.services.ocr_invoice import create_ocr_intake
 from app.master_data.intake_hooks import observe_ocr_supplier
 from pathlib import Path
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["OCR Invoice"])
 
@@ -49,8 +56,13 @@ async def upload_invoice(
     supplier_id: str = Form(None),
     user: dict = Depends(get_current_user),
 ):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
+    # W0-03E: in MASTER_DATA_MODE=enforce a supplier id handed to the AI/OCR path
+    # must be a counterparty of the server-resolved tenant — checked before the
+    # file, the media record or the intake is written.
+    await require_tenant_identity(user, db, collection="counterparties", legacy_id=supplier_id)
 
     # Save file
     content = await file.read()
@@ -69,7 +81,7 @@ async def upload_invoice(
         "file_size": len(content), "context_type": "ocr_invoice",
         "context_id": media_id, "created_at": now,
     }
-    await db.media_files.insert_one(media)
+    await tenant.media_files.insert_one(media)
 
     intake = await create_ocr_intake(
         org_id, media_id, user["id"],
@@ -80,14 +92,16 @@ async def upload_invoice(
     # MASTER_DATA_MODE=off, and unable to raise - the intake already succeeded.
     await observe_ocr_supplier(user, intake.get("detected_data"),
                                source_ref="ocr-intake:%s" % intake.get("id"))
-    return intake
+    return (await annotate_refs(user, [intake], {"supplier_id": "counterparties"}))[0]
 
 
 @router.post("/ocr-invoice/from-media", status_code=201)
 async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
-    media = await db.media_files.find_one({"id": data.media_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    media = await tenant.media_files.find_one({"id": data.media_id, "org_id": user["org_id"]})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
+    await require_tenant_identity(user, db, collection="counterparties", legacy_id=data.supplier_id)
 
     intake = await create_ocr_intake(
         user["org_id"], data.media_id, user["id"],
@@ -98,7 +112,7 @@ async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
     # MASTER_DATA_MODE=off, and unable to raise - the intake already succeeded.
     await observe_ocr_supplier(user, intake.get("detected_data"),
                                source_ref="ocr-intake:%s" % intake.get("id"))
-    return intake
+    return (await annotate_refs(user, [intake], {"supplier_id": "counterparties"}))[0]
 
 
 # ── List / Detail ──────────────────────────────────────────────────
@@ -109,18 +123,20 @@ async def list_intakes(
     project_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
-    query = {"org_id": user["org_id"]}
+    tenant = _tenant(user)
+    query = {}
     if status:
         query["status"] = status
     if project_id:
         query["project_id"] = project_id
-    items = await db.ocr_invoice_intake.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    items = await tenant.ocr_invoice_intake.find({**query, "org_id": user["org_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"items": items, "total": len(items)}
 
 
 @router.get("/ocr-invoice/{intake_id}")
 async def get_intake(intake_id: str, user: dict = Depends(get_current_user)):
-    doc = await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Intake not found")
     return doc
@@ -128,7 +144,8 @@ async def get_intake(intake_id: str, user: dict = Depends(get_current_user)):
 
 @router.get("/ocr-invoice/{intake_id}/raw-text")
 async def get_raw_text(intake_id: str, user: dict = Depends(get_current_user)):
-    doc = await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Intake not found")
     return {"raw_text": (doc.get("detected_data") or {}).get("raw_text", "")}
@@ -138,7 +155,8 @@ async def get_raw_text(intake_id: str, user: dict = Depends(get_current_user)):
 
 @router.put("/ocr-invoice/{intake_id}/review")
 async def review_intake(intake_id: str, data: ReviewData, user: dict = Depends(get_current_user)):
-    doc = await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Intake not found")
     if doc["status"] in ("approved", "rejected"):
@@ -146,21 +164,22 @@ async def review_intake(intake_id: str, data: ReviewData, user: dict = Depends(g
 
     now = datetime.now(timezone.utc).isoformat()
     reviewed = {k: v for k, v in data.model_dump().items() if v is not None}
-    await db.ocr_invoice_intake.update_one({"id": intake_id}, {"$set": {
+    await tenant.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "reviewed_data": reviewed,
         "status": "reviewed",
         "reviewed_by": user["id"],
         "reviewed_at": now,
         "updated_at": now,
     }})
-    return await db.ocr_invoice_intake.find_one({"id": intake_id}, {"_id": 0})
+    return await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 # ── Approve ────────────────────────────────────────────────────────
 
 @router.put("/ocr-invoice/{intake_id}/approve")
 async def approve_intake(intake_id: str, user: dict = Depends(get_current_user)):
-    doc = await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Intake not found")
     if doc["status"] != "reviewed":
@@ -189,23 +208,24 @@ async def approve_intake(intake_id: str, user: dict = Depends(get_current_user))
         "expense_id": None,
         "created_at": now,
     }
-    await db.pending_expenses.insert_one(expense)
+    await tenant.pending_expenses.insert_one(expense)
 
-    await db.ocr_invoice_intake.update_one({"id": intake_id}, {"$set": {
+    await tenant.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "status": "approved",
         "approved_by": user["id"],
         "approved_at": now,
         "linked_expense_id": expense["id"],
         "updated_at": now,
     }})
-    return await db.ocr_invoice_intake.find_one({"id": intake_id}, {"_id": 0})
+    return await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
 # ── Reject ─────────────────────────────────────────────────────────
 
 @router.put("/ocr-invoice/{intake_id}/reject")
 async def reject_intake(intake_id: str, data: RejectBody, user: dict = Depends(get_current_user)):
-    doc = await db.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    doc = await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Intake not found")
 
@@ -213,7 +233,7 @@ async def reject_intake(intake_id: str, data: RejectBody, user: dict = Depends(g
     warnings = doc.get("warnings", [])
     if data.reason:
         warnings.append(f"Отказано: {data.reason}")
-    await db.ocr_invoice_intake.update_one({"id": intake_id}, {"$set": {
+    await tenant.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "status": "rejected", "warnings": warnings, "updated_at": now,
     }})
-    return await db.ocr_invoice_intake.find_one({"id": intake_id}, {"_id": 0})
+    return await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]}, {"_id": 0})

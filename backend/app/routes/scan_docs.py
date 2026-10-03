@@ -14,6 +14,12 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
 from ..models.scan_docs import ScanDocCreate, ScanDocUpdate
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["ScanDocs"])
 
@@ -33,6 +39,7 @@ async def list_scan_docs(
     uploaded_by: Optional[str] = None,
 ):
     """List scan documents"""
+    tenant = _tenant(user)
     if not scan_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -45,15 +52,15 @@ async def list_scan_docs(
     if uploaded_by:
         query["uploaded_by_user_id"] = uploaded_by
     
-    docs = await db.scan_docs.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = await tenant.scan_docs.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
     # Enrich with uploader name
     for doc in docs:
         if doc.get("uploaded_by_user_id"):
-            uploader = await db.users.find_one({"id": doc["uploaded_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            uploader = await tenant.users.find_one({"id": doc["uploaded_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             doc["uploaded_by_name"] = f"{uploader['first_name']} {uploader['last_name']}" if uploader else ""
         if doc.get("linked_invoice_id"):
-            invoice = await db.invoices.find_one({"id": doc["linked_invoice_id"]}, {"_id": 0, "invoice_no": 1})
+            invoice = await tenant.invoices.find_one({"id": doc["linked_invoice_id"]}, {"_id": 0, "invoice_no": 1})
             doc["linked_invoice_no"] = invoice["invoice_no"] if invoice else ""
     
     return docs
@@ -62,6 +69,7 @@ async def list_scan_docs(
 @router.post("/scan-docs", status_code=201)
 async def create_scan_doc(data: ScanDocCreate, user: dict = Depends(get_current_user)):
     """Create scan document record (after file is uploaded via media API)"""
+    tenant = _tenant(user)
     if not scan_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -80,7 +88,7 @@ async def create_scan_doc(data: ScanDocCreate, user: dict = Depends(get_current_
         "updated_at": now,
     }
     
-    await db.scan_docs.insert_one(doc)
+    await tenant.scan_docs.insert_one(doc)
     await log_audit(user["org_id"], user["id"], user["email"], "scan_doc_created", "scan_doc", doc["id"],
                     {"filename": data.original_filename})
     
@@ -90,16 +98,17 @@ async def create_scan_doc(data: ScanDocCreate, user: dict = Depends(get_current_
 @router.get("/scan-docs/{doc_id}")
 async def get_scan_doc(doc_id: str, user: dict = Depends(get_current_user)):
     """Get scan document details"""
-    doc = await db.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Scan document not found")
     
     # Enrich
     if doc.get("uploaded_by_user_id"):
-        uploader = await db.users.find_one({"id": doc["uploaded_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+        uploader = await tenant.users.find_one({"id": doc["uploaded_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
         doc["uploaded_by_name"] = f"{uploader['first_name']} {uploader['last_name']}" if uploader else ""
     if doc.get("linked_invoice_id"):
-        invoice = await db.invoices.find_one({"id": doc["linked_invoice_id"]}, {"_id": 0, "invoice_no": 1, "direction": 1, "total": 1})
+        invoice = await tenant.invoices.find_one({"id": doc["linked_invoice_id"]}, {"_id": 0, "invoice_no": 1, "direction": 1, "total": 1})
         doc["linked_invoice"] = invoice if invoice else None
     
     return doc
@@ -108,44 +117,46 @@ async def get_scan_doc(doc_id: str, user: dict = Depends(get_current_user)):
 @router.put("/scan-docs/{doc_id}")
 async def update_scan_doc(doc_id: str, data: ScanDocUpdate, user: dict = Depends(get_current_user)):
     """Update scan document"""
+    tenant = _tenant(user)
     if not scan_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    doc = await db.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
+    doc = await tenant.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Scan document not found")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.scan_docs.update_one({"id": doc_id}, {"$set": update})
-    return await db.scan_docs.find_one({"id": doc_id}, {"_id": 0})
+    await tenant.scan_docs.update_one({"id": doc_id}, {"$set": update})
+    return await tenant.scan_docs.find_one({"id": doc_id}, {"_id": 0})
 
 
 @router.post("/scan-docs/{doc_id}/link/{invoice_id}")
 async def link_scan_to_invoice(doc_id: str, invoice_id: str, user: dict = Depends(get_current_user)):
     """Link a scan document to an invoice"""
+    tenant = _tenant(user)
     if not scan_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    doc = await db.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
+    doc = await tenant.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Scan document not found")
     
-    invoice = await db.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
+    invoice = await tenant.invoices.find_one({"id": invoice_id, "org_id": user["org_id"]})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     now = datetime.now(timezone.utc).isoformat()
     
     # Update scan doc
-    await db.scan_docs.update_one({"id": doc_id}, {"$set": {
+    await tenant.scan_docs.update_one({"id": doc_id}, {"$set": {
         "linked_invoice_id": invoice_id,
         "updated_at": now
     }})
     
     # Update invoice
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "scan_doc_id": doc_id,
         "updated_at": now
     }})
@@ -159,10 +170,11 @@ async def link_scan_to_invoice(doc_id: str, invoice_id: str, user: dict = Depend
 @router.post("/scan-docs/{doc_id}/unlink")
 async def unlink_scan_from_invoice(doc_id: str, user: dict = Depends(get_current_user)):
     """Unlink a scan document from its invoice"""
+    tenant = _tenant(user)
     if not scan_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    doc = await db.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
+    doc = await tenant.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Scan document not found")
     
@@ -173,13 +185,13 @@ async def unlink_scan_from_invoice(doc_id: str, user: dict = Depends(get_current
     now = datetime.now(timezone.utc).isoformat()
     
     # Update scan doc
-    await db.scan_docs.update_one({"id": doc_id}, {"$set": {
+    await tenant.scan_docs.update_one({"id": doc_id}, {"$set": {
         "linked_invoice_id": None,
         "updated_at": now
     }})
     
     # Update invoice
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
         "scan_doc_id": None,
         "updated_at": now
     }})
@@ -190,21 +202,22 @@ async def unlink_scan_from_invoice(doc_id: str, user: dict = Depends(get_current
 @router.delete("/scan-docs/{doc_id}")
 async def delete_scan_doc(doc_id: str, user: dict = Depends(get_current_user)):
     """Delete scan document"""
+    tenant = _tenant(user)
     if not scan_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
-    doc = await db.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
+    doc = await tenant.scan_docs.find_one({"id": doc_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Scan document not found")
     
     # Unlink from invoice if linked
     if doc.get("linked_invoice_id"):
-        await db.invoices.update_one(
+        await tenant.invoices.update_one(
             {"id": doc["linked_invoice_id"]},
             {"$set": {"scan_doc_id": None, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
     
-    await db.scan_docs.delete_one({"id": doc_id})
+    await tenant.scan_docs.delete_one({"id": doc_id})
     
     # Delete the physical file from storage
     file_path = doc.get("file_path") or doc.get("url") or doc.get("storage_path")

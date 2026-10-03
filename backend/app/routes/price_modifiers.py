@@ -15,6 +15,12 @@ from app.services.price_modifiers import (
     get_effective_modifiers, apply_modifiers_to_price,
     DEFAULT_MODIFIERS, DEFAULT_AUTO_RULES, MODIFIER_KEYS,
 )
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Price Modifiers"])
 
@@ -33,7 +39,8 @@ class CalculateRequest(BaseModel):
 
 @router.get("/price-modifiers/org")
 async def get_org_modifiers(user: dict = Depends(require_m2)):
-    doc = await db.price_modifiers_config.find_one(
+    tenant = _tenant(user)
+    doc = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0}
     )
     if not doc:
@@ -43,6 +50,7 @@ async def get_org_modifiers(user: dict = Depends(require_m2)):
 
 @router.put("/price-modifiers/org")
 async def update_org_modifiers(data: ModifiersUpdate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
 
@@ -57,7 +65,7 @@ async def update_org_modifiers(data: ModifiersUpdate, user: dict = Depends(requi
             if k in data.auto_rules:
                 update[f"auto_rules.{k}"] = data.auto_rules[k]
 
-    await db.price_modifiers_config.update_one(
+    await tenant.price_modifiers_config.update_one(
         {"org_id": user["org_id"], "scope": "org_default"},
         {"$set": update, "$setOnInsert": {
             "id": str(uuid.uuid4()), "org_id": user["org_id"], "scope": "org_default",
@@ -65,7 +73,7 @@ async def update_org_modifiers(data: ModifiersUpdate, user: dict = Depends(requi
         }},
         upsert=True,
     )
-    return await db.price_modifiers_config.find_one(
+    return await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0}
     )
 
@@ -74,7 +82,8 @@ async def update_org_modifiers(data: ModifiersUpdate, user: dict = Depends(requi
 
 @router.get("/price-modifiers/project/{project_id}")
 async def get_project_modifiers(project_id: str, user: dict = Depends(require_m2)):
-    doc = await db.price_modifiers_config.find_one(
+    tenant = _tenant(user)
+    doc = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0}
     )
     return doc or {"scope": "project", "project_id": project_id, "modifiers": {}, "auto_rules": {}, "has_override": False}
@@ -82,6 +91,7 @@ async def get_project_modifiers(project_id: str, user: dict = Depends(require_m2
 
 @router.put("/price-modifiers/project/{project_id}")
 async def update_project_modifiers(project_id: str, data: ModifiersUpdate, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     update = {"updated_at": now, "updated_by": user["id"]}
     if data.modifiers:
@@ -93,7 +103,7 @@ async def update_project_modifiers(project_id: str, data: ModifiersUpdate, user:
             if k in data.auto_rules:
                 update[f"auto_rules.{k}"] = data.auto_rules[k]
 
-    await db.price_modifiers_config.update_one(
+    await tenant.price_modifiers_config.update_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id},
         {"$set": update, "$setOnInsert": {
             "id": str(uuid.uuid4()), "org_id": user["org_id"], "scope": "project",
@@ -101,14 +111,15 @@ async def update_project_modifiers(project_id: str, data: ModifiersUpdate, user:
         }},
         upsert=True,
     )
-    return await db.price_modifiers_config.find_one(
+    return await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0}
     )
 
 
 @router.delete("/price-modifiers/project/{project_id}")
 async def delete_project_modifiers(project_id: str, user: dict = Depends(require_m2)):
-    await db.price_modifiers_config.delete_one(
+    tenant = _tenant(user)
+    await tenant.price_modifiers_config.delete_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id}
     )
     return {"ok": True}
@@ -136,9 +147,10 @@ async def calculate_price(data: CalculateRequest, user: dict = Depends(require_m
 @router.post("/smr-analyses/{analysis_id}/recalculate-with-modifiers")
 async def recalculate_with_modifiers(analysis_id: str, user: dict = Depends(require_m2)):
     """Recalculate all lines using project-level price modifiers."""
+    tenant = _tenant(user)
     from app.routes.smr_analysis import calc_line, calc_totals
 
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
@@ -173,17 +185,18 @@ async def recalculate_with_modifiers(analysis_id: str, user: dict = Depends(requ
 
     totals = calc_totals(lines)
     now = datetime.now(timezone.utc).isoformat()
-    await db.smr_analyses.update_one(
+    await tenant.smr_analyses.update_one(
         {"id": analysis_id},
         {"$set": {"lines": lines, "totals": totals, "updated_at": now}},
     )
-    return await db.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
+    return await tenant.smr_analyses.find_one({"id": analysis_id}, {"_id": 0})
 
 
 @router.get("/smr-analyses/{analysis_id}/lines/{line_id}/modifier-breakdown")
 async def get_line_modifier_breakdown(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
     """Show step-by-step modifier breakdown for a specific line."""
-    doc = await db.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Analysis not found")
 

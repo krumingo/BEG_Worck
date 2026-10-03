@@ -4,6 +4,7 @@ Call check_project_writable() before any write that adds new operational/cost da
 """
 from fastapi import HTTPException
 from app.db import db
+from app.tenancy.data_access import TenantData
 
 BLOCKED_STATUSES = {"Completed", "Cancelled", "Archived"}
 
@@ -19,9 +20,10 @@ async def check_project_writable(project_id: str, org_id: str, action: str = "з
     Raises 400 if project is Completed/Cancelled/Archived.
     Call before any write that adds new operational data to a project.
     """
+    tenant = TenantData.for_resolved_org(db, org_id)
     if not project_id:
         return  # No project linked — allow
-    project = await db.projects.find_one(
+    project = await tenant.projects.find_one(
         {"id": project_id, "org_id": org_id},
         {"_id": 0, "status": 1, "name": 1},
     )

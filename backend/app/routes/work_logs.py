@@ -10,7 +10,19 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user, require_admin, can_access_project, get_user_project_ids
+from app.tenancy import project_team
+
+
+def _team(user: dict):
+    """W0-03E-A2 — the session user's tenant view of the authorization relation."""
+    return project_team.tenant_for(db, user)
 from app.utils.audit import log_audit
+from app.tenancy.data_access import TenantData
+
+
+def _tenant(user: dict) -> TenantData:
+    """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
+    return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["work-logs"])
 
@@ -38,18 +50,20 @@ async def list_work_types(
     user: dict = Depends(get_current_user)
 ):
     """List all work types for the organization."""
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if not include_inactive:
         query["is_active"] = True
     
-    items = await db.work_types.find(query, {"_id": 0}).sort("name", 1).to_list(100)
+    items = await tenant.work_types.find(query, {"_id": 0}).sort("name", 1).to_list(100)
     return {"items": items, "total": len(items)}
 
 @router.post("/work-types", status_code=201)
 async def create_work_type(data: WorkTypeCreate, user: dict = Depends(require_admin)):
     """Create a new work type (admin only)."""
+    tenant = _tenant(user)
     # Check for duplicates
-    existing = await db.work_types.find_one({
+    existing = await tenant.work_types.find_one({
         "org_id": user["org_id"],
         "name": {"$regex": f"^{data.name}$", "$options": "i"}
     })
@@ -65,14 +79,15 @@ async def create_work_type(data: WorkTypeCreate, user: dict = Depends(require_ad
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"],
     }
-    await db.work_types.insert_one(work_type)
+    await tenant.work_types.insert_one(work_type)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "work_type", work_type["id"], {"name": data.name})
     return {k: v for k, v in work_type.items() if k != "_id"}
 
 @router.patch("/work-types/{work_type_id}")
 async def update_work_type(work_type_id: str, data: WorkTypeUpdate, user: dict = Depends(require_admin)):
     """Update a work type (admin only)."""
-    work_type = await db.work_types.find_one({"id": work_type_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    work_type = await tenant.work_types.find_one({"id": work_type_id, "org_id": user["org_id"]})
     if not work_type:
         raise HTTPException(status_code=404, detail="Work type not found")
     
@@ -81,20 +96,21 @@ async def update_work_type(work_type_id: str, data: WorkTypeUpdate, user: dict =
         return {k: v for k, v in work_type.items() if k != "_id"}
     
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.work_types.update_one({"id": work_type_id}, {"$set": update})
+    await tenant.work_types.update_one({"id": work_type_id}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "work_type", work_type_id, update)
     
-    updated = await db.work_types.find_one({"id": work_type_id}, {"_id": 0})
+    updated = await tenant.work_types.find_one({"id": work_type_id}, {"_id": 0})
     return updated
 
 @router.delete("/work-types/{work_type_id}")
 async def delete_work_type(work_type_id: str, user: dict = Depends(require_admin)):
     """Soft delete a work type (admin only)."""
-    work_type = await db.work_types.find_one({"id": work_type_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    work_type = await tenant.work_types.find_one({"id": work_type_id, "org_id": user["org_id"]})
     if not work_type:
         raise HTTPException(status_code=404, detail="Work type not found")
     
-    await db.work_types.update_one({"id": work_type_id}, {"$set": {"is_active": False}})
+    await tenant.work_types.update_one({"id": work_type_id}, {"$set": {"is_active": False}})
     await log_audit(user["org_id"], user["id"], user["email"], "deactivated", "work_type", work_type_id, {})
     return {"ok": True}
 
@@ -123,22 +139,19 @@ class DailyLogUpdate(BaseModel):
 
 async def check_site_access(user: dict, site_id: str) -> bool:
     """Check if user has access to site (project)."""
+    tenant = _tenant(user)
     # Admin has access to all
     if user["role"] == "Admin":
-        project = await db.projects.find_one({"id": site_id, "org_id": user["org_id"]})
+        project = await tenant.projects.find_one({"id": site_id, "org_id": user["org_id"]})
         return project is not None
     
     # Check team membership
-    member = await db.project_team.find_one({
-        "project_id": site_id,
-        "user_id": user["id"],
-        "active": True
-    })
+    member = await project_team.member_row(_team(user), user["id"], site_id)
     if member:
         return True
     
     # Check if user is default site manager
-    project = await db.projects.find_one({
+    project = await tenant.projects.find_one({
         "id": site_id,
         "org_id": user["org_id"],
         "default_site_manager_id": user["id"]
@@ -147,21 +160,18 @@ async def check_site_access(user: dict, site_id: str) -> bool:
 
 async def can_approve_site(user: dict, site_id: str) -> bool:
     """Check if user can approve change orders for site."""
+    tenant = _tenant(user)
     if user["role"] == "Admin":
         return True
     
     # Check if SiteManager on this project
-    member = await db.project_team.find_one({
-        "project_id": site_id,
-        "user_id": user["id"],
-        "role_in_project": "SiteManager",
-        "active": True
-    })
+    member = await project_team.member_row(_team(user), user["id"], site_id,
+                                           project_team.ROLE_SITE_MANAGER)
     if member:
         return True
     
     # Check if default site manager
-    project = await db.projects.find_one({
+    project = await tenant.projects.find_one({
         "id": site_id,
         "org_id": user["org_id"],
         "default_site_manager_id": user["id"]
@@ -178,6 +188,7 @@ async def list_daily_logs(
     user: dict = Depends(get_current_user)
 ):
     """List daily work logs. Non-admins see only their accessible sites."""
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     
     # Filter by site
@@ -196,23 +207,23 @@ async def list_daily_logs(
     if date_to:
         query.setdefault("date", {})["$lte"] = date_to
     
-    total = await db.daily_work_logs.count_documents(query)
+    total = await tenant.daily_work_logs.count_documents(query)
     skip = (page - 1) * page_size
     
-    items = await db.daily_work_logs.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
+    items = await tenant.daily_work_logs.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with site/work_type names
     for item in items:
-        project = await db.projects.find_one({"id": item["site_id"]}, {"_id": 0, "name": 1, "code": 1})
+        project = await tenant.projects.find_one({"id": item["site_id"]}, {"_id": 0, "name": 1, "code": 1})
         item["site_name"] = project["name"] if project else "Unknown"
         item["site_code"] = project["code"] if project else ""
         
-        wt = await db.work_types.find_one({"id": item["work_type_id"]}, {"_id": 0, "name": 1})
+        wt = await tenant.work_types.find_one({"id": item["work_type_id"]}, {"_id": 0, "name": 1})
         item["work_type_name"] = wt["name"] if wt else "Unknown"
         
         # Get user names for entries
         for entry in item.get("entries", []):
-            u = await db.users.find_one({"id": entry["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            u = await tenant.users.find_one({"id": entry["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             entry["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
     
     return {
@@ -226,17 +237,18 @@ async def list_daily_logs(
 @router.post("/daily-logs", status_code=201)
 async def create_daily_log(data: DailyLogCreate, user: dict = Depends(get_current_user)):
     """Create a new daily work log."""
+    tenant = _tenant(user)
     # Check site access
     if not await check_site_access(user, data.site_id):
         raise HTTPException(status_code=403, detail="Access denied to this site")
     
     # Validate work type
-    work_type = await db.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"], "is_active": True})
+    work_type = await tenant.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"], "is_active": True})
     if not work_type:
         raise HTTPException(status_code=400, detail="Invalid or inactive work type")
     
     # Check for duplicate (same site + date + work_type)
-    existing = await db.daily_work_logs.find_one({
+    existing = await tenant.daily_work_logs.find_one({
         "org_id": user["org_id"],
         "site_id": data.site_id,
         "date": data.date,
@@ -261,7 +273,7 @@ async def create_daily_log(data: DailyLogCreate, user: dict = Depends(get_curren
         "created_by": user["id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.daily_work_logs.insert_one(log)
+    await tenant.daily_work_logs.insert_one(log)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "daily_work_log", log["id"], {
         "site_id": data.site_id,
         "date": data.date,
@@ -273,7 +285,8 @@ async def create_daily_log(data: DailyLogCreate, user: dict = Depends(get_curren
 @router.get("/daily-logs/{log_id}")
 async def get_daily_log(log_id: str, user: dict = Depends(get_current_user)):
     """Get a single daily log."""
-    log = await db.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    log = await tenant.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]}, {"_id": 0})
     if not log:
         raise HTTPException(status_code=404, detail="Daily log not found")
     
@@ -285,7 +298,8 @@ async def get_daily_log(log_id: str, user: dict = Depends(get_current_user)):
 @router.patch("/daily-logs/{log_id}")
 async def update_daily_log(log_id: str, data: DailyLogUpdate, user: dict = Depends(get_current_user)):
     """Update a daily log."""
-    log = await db.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    log = await tenant.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]})
     if not log:
         raise HTTPException(status_code=404, detail="Daily log not found")
     
@@ -294,7 +308,7 @@ async def update_daily_log(log_id: str, data: DailyLogUpdate, user: dict = Depen
     
     update = {}
     if data.work_type_id:
-        work_type = await db.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"], "is_active": True})
+        work_type = await tenant.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"], "is_active": True})
         if not work_type:
             raise HTTPException(status_code=400, detail="Invalid work type")
         update["work_type_id"] = data.work_type_id
@@ -311,22 +325,23 @@ async def update_daily_log(log_id: str, data: DailyLogUpdate, user: dict = Depen
     
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.daily_work_logs.update_one({"id": log_id}, {"$set": update})
+        await tenant.daily_work_logs.update_one({"id": log_id}, {"$set": update})
         await log_audit(user["org_id"], user["id"], user["email"], "updated", "daily_work_log", log_id, update)
     
-    return await db.daily_work_logs.find_one({"id": log_id}, {"_id": 0})
+    return await tenant.daily_work_logs.find_one({"id": log_id}, {"_id": 0})
 
 @router.delete("/daily-logs/{log_id}")
 async def delete_daily_log(log_id: str, user: dict = Depends(get_current_user)):
     """Delete a daily log."""
-    log = await db.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    log = await tenant.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]})
     if not log:
         raise HTTPException(status_code=404, detail="Daily log not found")
     
     if not await check_site_access(user, log["site_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
     
-    await db.daily_work_logs.delete_one({"id": log_id})
+    await tenant.daily_work_logs.delete_one({"id": log_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "daily_work_log", log_id, {})
     return {"ok": True}
 
@@ -369,6 +384,7 @@ async def list_change_orders(
     user: dict = Depends(get_current_user)
 ):
     """List change orders. Non-admins see only their accessible sites."""
+    tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     
     # Filter by site
@@ -390,26 +406,26 @@ async def list_change_orders(
     if date_to:
         query.setdefault("requested_at", {})["$lte"] = date_to
     
-    total = await db.change_orders.count_documents(query)
+    total = await tenant.change_orders.count_documents(query)
     skip = (page - 1) * page_size
     
-    items = await db.change_orders.find(query, {"_id": 0}).sort("requested_at", -1).skip(skip).limit(page_size).to_list(page_size)
+    items = await tenant.change_orders.find(query, {"_id": 0}).sort("requested_at", -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich
     for item in items:
-        project = await db.projects.find_one({"id": item["site_id"]}, {"_id": 0, "name": 1, "code": 1})
+        project = await tenant.projects.find_one({"id": item["site_id"]}, {"_id": 0, "name": 1, "code": 1})
         item["site_name"] = project["name"] if project else "Unknown"
         item["site_code"] = project["code"] if project else ""
         
         if item.get("work_type_id"):
-            wt = await db.work_types.find_one({"id": item["work_type_id"]}, {"_id": 0, "name": 1})
+            wt = await tenant.work_types.find_one({"id": item["work_type_id"]}, {"_id": 0, "name": 1})
             item["work_type_name"] = wt["name"] if wt else ""
         
-        creator = await db.users.find_one({"id": item["created_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+        creator = await tenant.users.find_one({"id": item["created_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
         item["created_by_name"] = f"{creator['first_name']} {creator['last_name']}" if creator else "Unknown"
         
         if item.get("approved_by"):
-            approver = await db.users.find_one({"id": item["approved_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+            approver = await tenant.users.find_one({"id": item["approved_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             item["approved_by_name"] = f"{approver['first_name']} {approver['last_name']}" if approver else ""
     
     return {
@@ -423,6 +439,7 @@ async def list_change_orders(
 @router.post("/change-orders", status_code=201)
 async def create_change_order(data: ChangeOrderCreate, user: dict = Depends(get_current_user)):
     """Create a new change order (starts as draft)."""
+    tenant = _tenant(user)
     # Check site access
     if not await check_site_access(user, data.site_id):
         raise HTTPException(status_code=403, detail="Access denied to this site")
@@ -432,7 +449,7 @@ async def create_change_order(data: ChangeOrderCreate, user: dict = Depends(get_
     
     # Validate work type if provided
     if data.work_type_id:
-        work_type = await db.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"]})
+        work_type = await tenant.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"]})
         if not work_type:
             raise HTTPException(status_code=400, detail="Invalid work type")
     
@@ -460,7 +477,7 @@ async def create_change_order(data: ChangeOrderCreate, user: dict = Depends(get_
             "at": datetime.now(timezone.utc).isoformat(),
         }],
     }
-    await db.change_orders.insert_one(order)
+    await tenant.change_orders.insert_one(order)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "change_order", order["id"], {
         "site_id": data.site_id,
         "kind": data.kind,
@@ -472,7 +489,8 @@ async def create_change_order(data: ChangeOrderCreate, user: dict = Depends(get_
 @router.get("/change-orders/{order_id}")
 async def get_change_order(order_id: str, user: dict = Depends(get_current_user)):
     """Get a single change order."""
-    order = await db.change_orders.find_one({"id": order_id, "org_id": user["org_id"]}, {"_id": 0})
+    tenant = _tenant(user)
+    order = await tenant.change_orders.find_one({"id": order_id, "org_id": user["org_id"]}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Change order not found")
     
@@ -484,7 +502,8 @@ async def get_change_order(order_id: str, user: dict = Depends(get_current_user)
 @router.patch("/change-orders/{order_id}")
 async def update_change_order(order_id: str, data: ChangeOrderUpdate, user: dict = Depends(get_current_user)):
     """Update a change order (only if in draft status)."""
-    order = await db.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    order = await tenant.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
     if not order:
         raise HTTPException(status_code=404, detail="Change order not found")
     
@@ -511,7 +530,7 @@ async def update_change_order(order_id: str, data: ChangeOrderUpdate, user: dict
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     # Add audit trail
-    await db.change_orders.update_one(
+    await tenant.change_orders.update_one(
         {"id": order_id},
         {
             "$set": update,
@@ -520,12 +539,13 @@ async def update_change_order(order_id: str, data: ChangeOrderUpdate, user: dict
     )
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "change_order", order_id, update)
     
-    return await db.change_orders.find_one({"id": order_id}, {"_id": 0})
+    return await tenant.change_orders.find_one({"id": order_id}, {"_id": 0})
 
 @router.post("/change-orders/{order_id}/submit")
 async def submit_change_order(order_id: str, user: dict = Depends(get_current_user)):
     """Submit a draft change order for approval."""
-    order = await db.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    order = await tenant.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
     if not order:
         raise HTTPException(status_code=404, detail="Change order not found")
     
@@ -536,7 +556,7 @@ async def submit_change_order(order_id: str, user: dict = Depends(get_current_us
         raise HTTPException(status_code=400, detail="Only draft orders can be submitted")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.change_orders.update_one(
+    await tenant.change_orders.update_one(
         {"id": order_id},
         {
             "$set": {"status": "pending_approval", "submitted_at": now},
@@ -545,12 +565,13 @@ async def submit_change_order(order_id: str, user: dict = Depends(get_current_us
     )
     await log_audit(user["org_id"], user["id"], user["email"], "submitted", "change_order", order_id, {})
     
-    return await db.change_orders.find_one({"id": order_id}, {"_id": 0})
+    return await tenant.change_orders.find_one({"id": order_id}, {"_id": 0})
 
 @router.post("/change-orders/{order_id}/approve")
 async def approve_change_order(order_id: str, user: dict = Depends(get_current_user)):
     """Approve a pending change order (admin or site manager only)."""
-    order = await db.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    order = await tenant.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
     if not order:
         raise HTTPException(status_code=404, detail="Change order not found")
     
@@ -561,7 +582,7 @@ async def approve_change_order(order_id: str, user: dict = Depends(get_current_u
         raise HTTPException(status_code=400, detail="Only pending orders can be approved")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.change_orders.update_one(
+    await tenant.change_orders.update_one(
         {"id": order_id},
         {
             "$set": {"status": "approved", "approved_by": user["id"], "approved_at": now},
@@ -570,7 +591,7 @@ async def approve_change_order(order_id: str, user: dict = Depends(get_current_u
     )
     await log_audit(user["org_id"], user["id"], user["email"], "approved", "change_order", order_id, {})
     
-    return await db.change_orders.find_one({"id": order_id}, {"_id": 0})
+    return await tenant.change_orders.find_one({"id": order_id}, {"_id": 0})
 
 @router.post("/change-orders/{order_id}/reject")
 async def reject_change_order(
@@ -579,7 +600,8 @@ async def reject_change_order(
     user: dict = Depends(get_current_user)
 ):
     """Reject a pending change order (admin or site manager only)."""
-    order = await db.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
+    tenant = _tenant(user)
+    order = await tenant.change_orders.find_one({"id": order_id, "org_id": user["org_id"]})
     if not order:
         raise HTTPException(status_code=404, detail="Change order not found")
     
@@ -590,7 +612,7 @@ async def reject_change_order(
         raise HTTPException(status_code=400, detail="Only pending orders can be rejected")
     
     now = datetime.now(timezone.utc).isoformat()
-    await db.change_orders.update_one(
+    await tenant.change_orders.update_one(
         {"id": order_id},
         {
             "$set": {"status": "rejected", "rejected_by": user["id"], "rejected_at": now, "rejection_reason": reason},
@@ -599,7 +621,7 @@ async def reject_change_order(
     )
     await log_audit(user["org_id"], user["id"], user["email"], "rejected", "change_order", order_id, {"reason": reason})
     
-    return await db.change_orders.find_one({"id": order_id}, {"_id": 0})
+    return await tenant.change_orders.find_one({"id": order_id}, {"_id": 0})
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MY SITES (for mobile dropdown)
@@ -608,29 +630,27 @@ async def reject_change_order(
 @router.get("/my-sites")
 async def get_my_sites(user: dict = Depends(get_current_user)):
     """Get sites/projects the current user has access to."""
+    tenant = _tenant(user)
     if user["role"] == "Admin":
         # Admin sees all active projects
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"org_id": user["org_id"], "status": {"$in": ["Active", "Draft"]}},
             {"_id": 0, "id": 1, "code": 1, "name": 1, "status": 1}
         ).sort("code", 1).to_list(100)
     else:
         # Get projects where user is team member
-        memberships = await db.project_team.find(
-            {"user_id": user["id"], "active": True},
-            {"_id": 0, "project_id": 1}
-        ).to_list(100)
-        project_ids = [m["project_id"] for m in memberships]
+        project_ids = await project_team.assigned_project_ids(_team(user), user["id"],
+                                                               limit=100)
         
         # Also include projects where user is default manager
-        manager_projects = await db.projects.find(
+        manager_projects = await tenant.projects.find(
             {"org_id": user["org_id"], "default_site_manager_id": user["id"]},
             {"_id": 0, "id": 1}
         ).to_list(100)
         project_ids.extend([p["id"] for p in manager_projects])
         project_ids = list(set(project_ids))
         
-        projects = await db.projects.find(
+        projects = await tenant.projects.find(
             {"id": {"$in": project_ids}, "status": {"$in": ["Active", "Draft"]}},
             {"_id": 0, "id": 1, "code": 1, "name": 1, "status": 1}
         ).sort("code", 1).to_list(100)
@@ -640,18 +660,17 @@ async def get_my_sites(user: dict = Depends(get_current_user)):
 @router.get("/my-team/{site_id}")
 async def get_site_team(site_id: str, user: dict = Depends(get_current_user)):
     """Get team members for a site (for multi-select in daily logs)."""
+    tenant = _tenant(user)
     if not await check_site_access(user, site_id):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Get team members
-    members = await db.project_team.find(
-        {"project_id": site_id, "active": True},
-        {"_id": 0, "user_id": 1, "role_in_project": 1}
-    ).to_list(100)
+    members = await project_team.project_rows(
+        _team(user), [site_id], {"_id": 0, "user_id": 1, "role_in_project": 1}, limit=100)
     
     result = []
     for m in members:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "role": 1})
+        u = await tenant.users.find_one({"id": m["user_id"]}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "role": 1})
         if u:
             result.append({
                 "id": u["id"],
