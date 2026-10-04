@@ -168,6 +168,10 @@ class FakeStorageProvider(StorageProviderAdapter):
         permission and an outage are all legitimate OUTCOMES of a check, and
         swallowing them into an exception would make the scheduler that runs
         these checks lose the distinction FLOW-016 requires.
+
+        The W0-06B identity/size keywords are accepted for signature
+        compatibility and ignored: this W0-06A double predates them. The four
+        real adapters use the shared ``StorageProviderAdapter.verify``.
         """
         self.calls.append(("verify", ref.object_key))
         checked = _now_iso()
