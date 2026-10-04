@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-04T21:57:24Z",
+  "validated_at": "2026-10-04T22:01:04Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "9ea75e09e25cdb2f52da10145c17123193acfc6f",
-  "control_state_commit_sha": "b1f09a43a59648454e187fd10f7eb816f5bda901",
-  "now": "Крум одобри W0-06B/C01 от точния head 9040fc1d4b40d5376cc8912ba316a206c02d207b. Branch, Issue #45 и Draft PR #46 са създадени; Codex подготвя еднократния Claude Code Cloud Send. Няма наблюдаван Claude start и няма W0-06A PASS.",
+  "active_source_commit_sha": "e6295f7082a9cb74fa9ab19be883071cfbc93df4",
+  "control_state_commit_sha": "b1c49658f6b711d91779523959b3f6d689b80673",
+  "now": "Еднократният W0-06B/C01 Send стартира Claude Code Cloud сесията върху точния B branch и Draft PR #46. Claude първо затваря четирите W0-06A дефекта с изисквания real-Mongo gate; Codex изчаква финален exact-head HANDOFF. Няма W0-06A PASS или FLOW-016 Gate PASS.",
   "transition": {
-    "event": "ASSIGNMENT",
-    "phase": "INTENT",
-    "evidence_url": null,
+    "event": "CLAUDE_START",
+    "phase": "OBSERVED",
+    "evidence_url": "https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG",
     "verdict_publication": "NONE"
   },
   "generated_from": [
@@ -23,66 +23,66 @@
   "task_id": "W0-06B",
   "cycle_id": "C01",
   "cycle_origin": "NATIVE",
-  "current_agent": "CODEX",
-  "current_role": "TECH_LEAD_QA",
+  "current_agent": "CLAUDE",
+  "current_role": "IMPLEMENTER",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06B/C01/GPT",
-      "waiting_for": "Claude W0-06B execution and independent Codex verdict",
-      "updated_at": "2026-10-04T21:57:24Z"
+      "waiting_for": "Claude W0-06B final HANDOFF and independent Codex verdict",
+      "updated_at": "2026-10-04T22:01:04Z"
     },
     "CODEX": {
-      "state": "WORKING",
+      "state": "WAITING",
       "work_id": "W0-06B/C01/CX",
-      "waiting_for": "One-time authorized Claude Code Cloud Send after PENDING publication",
-      "updated_at": "2026-10-04T21:57:24Z"
+      "waiting_for": "Final exact-head HANDOFF, stable PR head and completed Claude session",
+      "updated_at": "2026-10-04T22:01:04Z"
     },
     "CLAUDE": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-06B/C01/CL",
-      "waiting_for": "One-time W0-06B assignment Send; no session start observed",
-      "updated_at": "2026-10-04T21:57:24Z"
+      "waiting_for": "Four-defect entry gate first, then canonical W0-06B implementation and final HANDOFF",
+      "updated_at": "2026-10-04T22:01:04Z"
     }
   },
-  "current_work_id": "W0-06B/C01/CX",
+  "current_work_id": "W0-06B/C01/CL",
   "state": "WORKING",
-  "pipeline_step": "ASSIGNMENT",
-  "next_agent": "CLAUDE",
-  "waiting_for": "One-time authorized Claude Code Cloud Send after PENDING publication",
+  "pipeline_step": "IMPLEMENTATION",
+  "next_agent": "CODEX",
+  "waiting_for": "Four-defect entry gate first, then canonical W0-06B implementation and final HANDOFF",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 46,
   "pr_head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
   "pr_draft": true,
-  "dispatch_state": "PENDING",
-  "dispatch_run_url": null,
+  "dispatch_state": "RUNNING",
+  "dispatch_run_url": "https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG",
   "last_handoff": null,
   "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-06B/C01 approved and dashboard-first PENDING",
-    "last_result": "PENDING_NOT_SENT",
+    "last_event": "W0-06B/C01 Claude Code Cloud session started after one Send",
+    "last_result": "RUNNING",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Krum approved exact base and one-time Send. Branch, Issue #45 and Draft PR #46 exist. Send only once after PENDING publication; no Claude start is yet observed.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/blob/9ea75e09e25cdb2f52da10145c17123193acfc6f/coordination/ACTIVE.md",
-    "updated_at": "2026-10-04T21:57:24Z"
+    "instruction": "One Send already started the Claude Code Cloud session. Never resend or run a Routine. Codex waits for final exact-head HANDOFF, completed session and stable PR head before review.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/e6295f7082a9cb74fa9ab19be883071cfbc93df4/coordination/ACTIVE.md",
+    "updated_at": "2026-10-04T22:01:04Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "ASSIGNMENT",
+    "stage": "IMPLEMENTATION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "9bc8303169e598d8f9e38619f7f5ffe6f87ecf8d",
+    "active_blob_sha": "762f00c076cc14944d0d7c301fbce82e683732fa",
     "review_path": "coordination/REVIEWS/W0-06A.md",
     "review_blob_sha": "94ce4b2943ecfcec2d23e2cf8361c2dd40439183",
     "canonical_docs": [
@@ -116,7 +116,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-04T21:57:24Z",
+  "updated_at": "2026-10-04T22:01:04Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
@@ -145,6 +145,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/blob/9ea75e09e25cdb2f52da10145c17123193acfc6f/coordination/ACTIVE.md",
       "source_commit_sha": "9ea75e09e25cdb2f52da10145c17123193acfc6f",
       "summary": "Krum approved W0-06B/C01 exact technical integration base at W0-06A PR #44 head. Created new implementation branch, Issue #45 and Draft PR #46 to main after live recheck. Published PENDING intent before one-time Claude Send. W0-06A remains CHANGES_REQUESTED; no Claude start or B verdict yet."
+    },
+    {
+      "event_id": "w0-06b-c01-claude-start-observed",
+      "occurred_at": "2026-10-04T22:01:04Z",
+      "task_id": "W0-06B",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CLAUDE",
+      "kind": "DISPATCH",
+      "state_after": "WORKING",
+      "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+      "source_url": "https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG",
+      "source_commit_sha": "e6295f7082a9cb74fa9ab19be883071cfbc93df4",
+      "summary": "One authorized Send after published PENDING initialized a new Claude Code Cloud session on the exact W0-06B implementation branch and Draft PR #46. Dispatch is RUNNING; no second Send or Routine. Four inherited defects are the entry gate before provider implementation."
     }
   ]
 }
