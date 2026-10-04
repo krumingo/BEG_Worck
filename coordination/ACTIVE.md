@@ -1,40 +1,63 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06A/C01 CHANGES_REQUESTED — INDEPENDENT REAL-MONGO GATE FAILED
-Human-Summary-BG: Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се разхвърлят по модулите, а ще сочат към един стабилен file_id.
+Status: W0-06A/C02 PENDING — BOUNDED CORRECTION PREPARED; SEND NOT CONFIRMED
+Human-Summary-BG: Поправяме само четирите доказани проблема от независимия преглед на File Registry, после повтаряме същите тестове. Не започваме нова задача и не местим реални файлове.
 Current-Agent: CODEX
-Current-State: CHANGES_REQUESTED
+Current-State: WORKING
 Claude-State: WAITING
-Codex-State: CHANGES_REQUESTED
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex публикува CHANGES_REQUESTED на exact PR #44 head: real-Mongo gate 14 passed / 1 failed / 0 skipped, плюс bounded File Registry safety findings. GPT/Крум решават дали да разрешат correction; няма нов dispatch.
-Next-Agent: GPT
-Relay-State: NOT_SENT
-Relay-From: CODEX
-Relay-To: GPT
-Krum-Action: RELAY W0-06A REVIEW TO GPT
-Dispatch-State: NONE
-Dispatch-Run: https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz
-Dispatch-Observed-At: 2026-10-03T08:23:35Z
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex подготви W0-06A/C02 само за четирите доказани дефекта. Dispatch е PENDING, но няма C02 Send или Claude start; очаква се изрично потвърждение от Крум.
+Next-Agent: CLAUDE
+Relay-State: NO_RELAY_NEEDED
+Relay-From: NONE
+Relay-To: NONE
+Krum-Action: CONFIRM ONE-TIME W0-06A/C02 SEND TO CLAUDE
+Dispatch-State: PENDING (preparation only; no Send until explicit Krum confirmation)
+Dispatch-Run: NONE (C02; C01 session is archived below)
+Dispatch-Observed-At: NONE (C02)
 Task-ID: W0-06A
-Cycle-ID: C01
+Cycle-ID: C02
 Base-branch: main
 Base-SHA: 79af297612f57c055bb7caef3f0c48493800d1b6
 Implementation-branch: codex/w0-06a-file-registry-foundation
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/44 (Draft; independent CHANGES_REQUESTED published; unmerged)
 PR-Head: 9040fc1d4b40d5376cc8912ba316a206c02d207b
+Correction-Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/43
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410
-Review: coordination/REVIEWS/W0-06A.md — independent CHANGES_REQUESTED on exact head, published https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829.
-Final-Verdict: W0-06A CHANGES_REQUESTED — concurrent AuditEvent chain and bounded File Registry safety defects; no correction dispatched.
+Review: coordination/REVIEWS/W0-06A.md — C01 independent CHANGES_REQUESTED on exact head, published https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829; C02 review not started.
+Final-Verdict: C01 W0-06A CHANGES_REQUESTED; C02 has no HANDOFF or verdict.
 Predecessor-Task-ID: W0-03E-A2C/C02
 Predecessor-Integration: PR #42 merged into main at 79af297612f57c055bb7caef3f0c48493800d1b6; no deploy.
-Authorization: Krum approved proceeding to W0-06A and confirmed the one-time direct Claude Code Cloud Send. Claude published a final HANDOFF in Issue #43 for exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b and the session ended. Codex independently completed review at the same stable head; the committed real-Mongo gate ran 15 tests with 14 passed, 1 failed, 0 skipped. CHANGES_REQUESTED was published in PR #44 and no correction/next task has been dispatched. PR #44 remains Draft; no merge, deploy, production migration, live provider credential use or customer-file move is authorized.
+Authorization: Krum supplied the bounded C02 preparation instruction only. C01's final HANDOFF and independent CHANGES_REQUESTED remain published at exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b. Codex verified that PR #44 remains open/Draft on the same branch/head and main remains at the specified base; no C02 assignment, HANDOFF or dispatch was found. A separate explicit Krum confirmation is required before the one-time C02 Send. No correction has started; no merge, deploy, production migration, live provider credential use or customer-file move is authorized.
 
-## Canonical W0-06A/C01 — File Registry foundation and legacy file inventory
+## Canonical W0-06A/C02 — bounded correction (PENDING; NOT SENT)
+
+**На човешки:** Поправяме само четирите доказани проблема от независимия преглед на File Registry, после повтаряме същите тестове. Не започваме нова задача и не местим реални файлове.
+
+**Identity and preflight.** Repository `krumingo/BEG_Worck`; same Task-ID `W0-06A`; Cycle-ID `C02`; same implementation branch `codex/w0-06a-file-registry-foundation`; same open Draft PR #44; exact correction start head `9040fc1d4b40d5376cc8912ba316a206c02d207b`; unchanged base `main@79af297612f57c055bb7caef3f0c48493800d1b6`. Before any Send, recheck PR head, `coordination/REVIEWS/W0-06A.md`, the published C01 `CHANGES_REQUESTED`, and absence of an existing C02 session/dispatch. STOP on drift. Do not create a new Task-ID, branch, PR or Claude Routine.
+
+**Only allowed corrections and proof.**
+1. Make concurrent AuditEvent sequence allocation atomic and tenant-safe: same-tenant simultaneous writes yield unique increasing `[1, 2, 3, 4]`, two tenants stay independent, the audit chain remains intact, and idempotent retry cannot duplicate sequence numbers. Do not weaken the real-Mongo test.
+2. Remove the caller-controlled relation-target verification bypass from public/business registry writes: missing and foreign-tenant targets must be rejected, including when the caller supplies a bypass flag. Any indispensable internal/test-only escape hatch must be explicit, isolated from the normal API and fail-closed.
+3. Scope confirmed physical-delete results to the requested version/location. Deleting version N must leave unrelated historical/current versions and valid locations available; whole-file deletion requires an explicit whole-file action; AuditEvent records the exact scope.
+4. Make duplicate-checksum candidate selection and its acceptance test deterministic under equal timestamps with an immutable stable tie-breaker. Repeated runs must choose/order the same candidate without weakening the duplicate semantics.
+
+Small cleanup: fix the two `git diff --check` EOF whitespace findings in the new W0-06A docs, with no unrelated formatting churn.
+
+**Execution and HANDOFF.** Do not Send until Krum explicitly confirms the single C02 Send. Then use the existing Claude Code workflow on the same branch/PR from the exact correction head. Only an observed session start changes `Dispatch-State` to `RUNNING`, Claude to `WORKING` and Codex to `WAITING`. Claude must publish one final exact-new-head HANDOFF with the C01→C02 delta, focused results, real-Mongo result if available, and confirmation of no unrelated changes; no self-declared PASS.
+
+**Independent re-review after final HANDOFF.** Codex inspects both the whole `main→corrected head` package and C01→C02 delta, reruns focused W0-06A, adjacent W0, all static guards and unsafe-mutation tests, fake provider and disposable real-Mongo gate on `127.0.0.1` with fresh dbpath and proven cleanup. Specifically rerun `test_two_tenants_writing_at_once_keep_separate_intact_audit_chains` and all `test_w0_06a_real_mongo.py`. Require **0 failed / 0 required skipped** before considering `W0-06A PASS — FILE REGISTRY FOUNDATION CLOSED`; otherwise publish one exact remaining `CHANGES_REQUESTED` or `BLOCKED` finding. Update this assignment, control state, board and `coordination/REVIEWS/W0-06A.md` dashboard-first. W0-06A PASS is not FLOW-016 Gate PASS.
+
+**Out of scope and hard boundaries.** Do not fix `/api/media/avatar/{filename}` or the other five legacy file defects in C02. No provider onboarding/activation, HTTP File Registry routes, DQ/Approval runtime, migration runner, full FLOW-016 gate, W0-07, unrelated FLOW/D work, merge, deploy, production migration, customer-original move/delete, or NAS/Drive/S3 credentials. No automatic next task.
+
+---
+
+## Archived W0-06A/C01 — File Registry foundation and legacy file inventory
 
 **На човешки / Какво правим.** Ще направим едно общо място, което знае кой е всеки файл, къде се пази, към какво е свързан и коя е текущата му версия. Така снимки, договори, фактури и други документи няма да се копират и разхвърлят по модулите, а всички ще сочат към един стабилен `file_id`.
 
