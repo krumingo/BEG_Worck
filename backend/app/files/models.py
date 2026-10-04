@@ -272,17 +272,23 @@ AVAILABILITY_MISSING = "missing"
 AVAILABILITY_CHECKSUM_MISMATCH = "checksum_mismatch"
 AVAILABILITY_PERMISSION_DENIED = "permission_denied"
 AVAILABILITY_PROVIDER_UNREACHABLE = "provider_unreachable"
+#: W0-06B. The location now holds a DIFFERENT provider object (another file id
+#: or version) than the one BEG_Work recorded, while its bytes could not be
+#: shown to differ: somebody replaced the file outside BEG_Work. Distinct from
+#: ``checksum_mismatch`` (bytes proven different) and never a new version.
+AVAILABILITY_EXTERNALLY_CHANGED = "externally_changed"
 
 AVAILABILITY_STATES: FrozenSet[str] = frozenset({
     AVAILABILITY_UNVERIFIED, AVAILABILITY_AVAILABLE, AVAILABILITY_MISSING,
     AVAILABILITY_CHECKSUM_MISMATCH, AVAILABILITY_PERMISSION_DENIED,
-    AVAILABILITY_PROVIDER_UNREACHABLE,
+    AVAILABILITY_PROVIDER_UNREACHABLE, AVAILABILITY_EXTERNALLY_CHANGED,
 })
 #: States in which the canonical original cannot be served. A cached derivative
 #: never substitutes for one of these (FLOW-016 §"Снимки и технически производни").
 UNUSABLE_AVAILABILITY: FrozenSet[str] = frozenset({
     AVAILABILITY_MISSING, AVAILABILITY_CHECKSUM_MISMATCH,
     AVAILABILITY_PERMISSION_DENIED, AVAILABILITY_PROVIDER_UNREACHABLE,
+    AVAILABILITY_EXTERNALLY_CHANGED,
 })
 
 # ---------------------------------------------------------------- derivatives
@@ -590,6 +596,8 @@ def build_provider_location(
     role: str = LOCATION_ROLE_PRIMARY,
     availability: str = AVAILABILITY_UNVERIFIED,
     created_at: Optional[str] = None,
+    provider_version_id: Optional[str] = None,
+    size_bytes: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Where ONE version physically sits, in the tenant's own provider.
 
@@ -616,6 +624,13 @@ def build_provider_location(
         "container": _require_text(container, "container"),
         "object_key": _require_text(object_key, "object_key"),
         "provider_file_id": (str(provider_file_id).strip() or None) if provider_file_id else None,
+        # W0-06B: the provider's version of the object when it was recorded,
+        # and its size — what an integrity check compares to tell "replaced"
+        # and "changed" apart from "fine".
+        "provider_version_id": ((str(provider_version_id).strip() or None)
+                                if provider_version_id else None),
+        "expected_size_bytes": size_bytes if isinstance(size_bytes, int)
+        and not isinstance(size_bytes, bool) and size_bytes >= 0 else None,
         "role": _require_choice(role, LOCATION_ROLES, "role"),
         "expected_checksum": (checksum(expected_checksum.get("value"),
                                        expected_checksum.get("algorithm", CHECKSUM_SHA256))
@@ -774,7 +789,8 @@ def severity_of(availability: str, relation_count: int) -> str:
         return "info"
     if relation_count == 0:
         return "low"
-    if availability in (AVAILABILITY_MISSING, AVAILABILITY_CHECKSUM_MISMATCH):
+    if availability in (AVAILABILITY_MISSING, AVAILABILITY_CHECKSUM_MISMATCH,
+                        AVAILABILITY_EXTERNALLY_CHANGED):
         return "critical" if relation_count > 1 else "high"
     return "high" if relation_count > 1 else "medium"
 

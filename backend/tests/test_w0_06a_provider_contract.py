@@ -35,7 +35,7 @@ from app.files.providers import base
 from app.files.providers.base import (
     ACCESS_PREVIEW,
     ACCESS_READ,
-    DECLARED_ADAPTERS,
+    ADAPTER_CLASSES,
     MAX_TEMPORARY_ACCESS_SECONDS,
     ProviderBinding,
     ProviderError,
@@ -82,9 +82,10 @@ class TestBinding:
         for field in b.__dataclass_fields__:
             assert "secret_value" not in field
         # the reference is a locator, and the object carries nothing else secret
+        # W0-06B added the provider address and account identity — neither secret.
         assert set(b.__dataclass_fields__) == {
             "binding_id", "org_id", "provider_kind", "container", "secret_reference",
-            "root_prefix"}
+            "root_prefix", "endpoint", "account"}
 
     def test_a_binding_requires_an_owner_a_container_and_a_known_provider(self):
         for kwargs in ({"org_id": ""}, {"container": ""}, {"binding_id": ""}):
@@ -245,28 +246,25 @@ class TestContract:
         run(body())
 
 
-# ══════════════════════════════════════════════ declared, not activated
+# ═══════════════════════ W0-06B: implemented, but never without credentials
 class TestDeclaredAdaptersAreNotActivated:
+    """W0-06A declared the four adapters and made every call raise. W0-06B
+    implements them (``tests/test_w0_06b_provider_adapters.py``); what stays
+    true is that none can be reached without server-resolved credentials, and
+    that configuration can never select the fake."""
+
     def test_every_customer_managed_provider_has_an_adapter_class(self):
-        assert set(DECLARED_ADAPTERS) == set(m.CUSTOMER_MANAGED_PROVIDER_KINDS)
-        assert set(DECLARED_ADAPTERS) == {m.PROVIDER_GOOGLE_DRIVE, m.PROVIDER_SYNOLOGY_NAS,
-                                          m.PROVIDER_S3_COMPATIBLE, m.PROVIDER_ON_PREM_SERVER}
+        assert set(ADAPTER_CLASSES) == set(m.CUSTOMER_MANAGED_PROVIDER_KINDS)
+        assert set(ADAPTER_CLASSES) == {m.PROVIDER_GOOGLE_DRIVE, m.PROVIDER_SYNOLOGY_NAS,
+                                        m.PROVIDER_S3_COMPATIBLE, m.PROVIDER_ON_PREM_SERVER}
 
     @pytest.mark.parametrize("kind", sorted(m.CUSTOMER_MANAGED_PROVIDER_KINDS))
     def test_a_declared_adapter_refuses_every_operation(self, kind):
-        async def body():
-            adapter = adapter_for(ProviderBinding(binding_id="b", org_id=ORG,
-                                                  provider_kind=kind, container="c"))
-            ref = ProviderObjectRef(container="c", object_key="k")
-            for call in (adapter.put(object_key="k", data=b"x", mime_type="text/plain"),
-                         adapter.read(ref), adapter.stat(ref), adapter.verify(ref),
-                         adapter.request_delete(ref, reason="r"),
-                         adapter.temporary_access(ref, purpose=ACCESS_READ)):
-                with pytest.raises(ProviderNotActivated):
-                    await call
-            caps = adapter.capabilities()
-            assert caps.can_put is False and caps.can_read is False
-        run(body())
+        from app.files.providers.base import ProviderCredentialsInvalid
+        with pytest.raises(ProviderCredentialsInvalid):
+            adapter_for(ProviderBinding(binding_id="b", org_id=ORG, provider_kind=kind,
+                                        container="c", endpoint="https://x.invalid",
+                                        account="a"))
 
     def test_the_fake_provider_cannot_be_reached_by_configuration(self):
         with pytest.raises(ProviderNotActivated):

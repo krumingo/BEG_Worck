@@ -8,13 +8,16 @@ the checksums and a technical cache. This module is the one interface those
 adapters implement, so that no module above it ever learns which provider a
 tenant uses.
 
-W0-06A implements the CONTRACT ONLY. No adapter here opens a network
-connection, reads a credential or touches a customer file; the four
-customer-managed kinds are declared and deliberately unimplemented, and the
-only concrete adapter in the tree is the in-memory double
-(:mod:`app.files.providers.fake`) the contract tests run against. Provider
-onboarding, credential storage and the live integrity scheduler are later
-slices of FLOW-016, not this one.
+W0-06A shipped the CONTRACT; W0-06B implements it for the four
+customer-managed kinds — :mod:`.s3` (S3-compatible), :mod:`.google_drive`
+(Google Drive / Shared Drive), :mod:`.synology` (Synology / NAS, File Station
+API) and :mod:`.on_prem` (a generic customer server over WebDAV). Every adapter
+speaks to its provider through an injected HTTP transport, so this task runs
+them only against disposable in-process fakes (``tests/w0_06b_fake_backends.py``)
+with fake credentials: no live NAS, Drive or bucket is touched. An adapter is
+built only from a binding plus the credentials the server-side vault resolved
+for it (:func:`adapter_for`); whether a tenant may USE it for real files is the
+onboarding gate's decision (:mod:`app.files.storage`), not the adapter's.
 
 What the contract has to guarantee
 ----------------------------------
@@ -51,6 +54,7 @@ Stdlib-only: no database, no FastAPI, no network client.
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
@@ -58,6 +62,7 @@ from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
 from app.files.models import (
     AVAILABILITY_AVAILABLE,
     AVAILABILITY_CHECKSUM_MISMATCH,
+    AVAILABILITY_EXTERNALLY_CHANGED,
     AVAILABILITY_MISSING,
     AVAILABILITY_PERMISSION_DENIED,
     AVAILABILITY_PROVIDER_UNREACHABLE,
@@ -146,6 +151,11 @@ class ProviderBinding:
     container: str
     secret_reference: Optional[str] = None
     root_prefix: str = ""
+    #: W0-06B. The provider's address (S3 endpoint, NAS / server base URL) and
+    #: the account the credentials belong to. Neither is secret; both are part
+    #: of the provider/account identity FLOW-016 asks BEG_Work to keep.
+    endpoint: str = ""
+    account: str = ""
 
     def __post_init__(self):
         if self.provider_kind not in PROVIDER_KINDS:
@@ -153,6 +163,50 @@ class ProviderBinding:
         for name in ("binding_id", "org_id", "container"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
                 raise ValueError("%s is required on a provider binding" % name)
+        normalize_root(self.root_prefix)
+
+    @property
+    def root(self) -> str:
+        """The tenant-specific root inside the container, normalized (no slashes at the ends)."""
+        return normalize_root(self.root_prefix)
+
+    def object_path(self, object_key: str) -> str:
+        """``root/object_key`` — the provider-side path of one object. Validated."""
+        key = safe_object_key(object_key)
+        return "%s/%s" % (self.root, key) if self.root else key
+
+
+def _bad_segment(segment: str) -> bool:
+    return (segment in ("", ".", "..") or "\\" in segment
+            or any(ord(c) < 32 or ord(c) == 127 for c in segment))
+
+
+def normalize_root(root: str) -> str:
+    """A root prefix with no traversal, no backslash and no control character."""
+    if root is None:
+        return ""
+    if not isinstance(root, str):
+        raise ValueError("root_prefix must be text")
+    stripped = root.strip().strip("/")
+    if not stripped:
+        return ""
+    if any(_bad_segment(part) for part in stripped.split("/")):
+        raise ValueError("unsafe root_prefix %r" % root)
+    return stripped
+
+
+def safe_object_key(object_key: str) -> str:
+    """An object key that cannot escape the tenant root.
+
+    Refuses an absolute key, ``..``/``.`` segments, empty segments, backslashes
+    and control characters — the shapes a key would need to reach another
+    tenant's root on a shared NAS or server.
+    """
+    if not isinstance(object_key, str) or not object_key or object_key.startswith("/"):
+        raise ValueError("unsafe object key %r" % (object_key,))
+    if any(_bad_segment(part) for part in object_key.split("/")):
+        raise ValueError("unsafe object key %r" % (object_key,))
+    return object_key
 
 
 @dataclass(frozen=True)
@@ -201,6 +255,9 @@ class ProviderObjectStat:
     checksum: Optional[Dict[str, str]] = None
     modified_at: Optional[str] = None
     provider_version_id: Optional[str] = None
+    #: W0-06B. The provider's own id of the object found at the location, when
+    #: it has one (Drive file id, NAS/WebDAV etag-less paths have none).
+    provider_file_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -217,6 +274,14 @@ class IntegrityVerdict:
     observed_size_bytes: Optional[int] = None
     checked_at: str = ""
     error: Optional[str] = None
+    #: W0-06B. How the content was judged — ``server_checksum`` (the provider
+    #: reported a sha256), ``read_and_hash`` (BEG_Work read the bytes and hashed
+    #: them) or ``none`` (nothing could be compared) — and what the provider
+    #: says the object IS now, so an object replaced behind BEG_Work's back is
+    #: told apart from one whose bytes changed.
+    method: str = "none"
+    observed_provider_file_id: Optional[str] = None
+    observed_provider_version_id: Optional[str] = None
 
     @property
     def ok(self) -> bool:
@@ -276,6 +341,61 @@ def expiry_for(seconds: int) -> str:
     return (_utc_now() + timedelta(seconds=seconds)).isoformat()
 
 
+VERIFY_SERVER_CHECKSUM = "server_checksum"
+VERIFY_READ_AND_HASH = "read_and_hash"
+VERIFY_SIZE_ONLY = "size_only"
+VERIFY_NONE = "none"
+
+
+def sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_checksum(data: bytes) -> Dict[str, str]:
+    """The checksum form the registry stores, for bytes in hand."""
+    return {"algorithm": "sha256", "value": sha256_hex(data)}
+
+
+class _Credentials:
+    """Server-side credential values. Never printed, never serialized.
+
+    ``repr``/``str`` are masked so an exception, a log line or a debugger dump
+    of an adapter cannot reveal a secret (CLAUDE.md §16).
+    """
+
+    __slots__ = ("_values",)
+
+    def __init__(self, values: Optional[Mapping[str, Any]]):
+        self._values = dict(values or {})
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._values.get(key, default)
+
+    def require(self, *keys: str) -> Tuple[Any, ...]:
+        missing = [k for k in keys if not self._values.get(k)]
+        if missing:
+            raise ProviderCredentialsInvalid("credentials incomplete: missing %s" % missing)
+        return tuple(self._values[k] for k in keys)
+
+    def __bool__(self) -> bool:
+        return bool(self._values)
+
+    def __repr__(self) -> str:
+        return "<credentials ***MASKED***>"
+
+    __str__ = __repr__
+
+    def __reduce__(self):
+        raise TypeError("credentials cannot be serialized")
+
+
+class ProviderCredentialsInvalid(ProviderPermissionDenied):
+    """The provider rejected the credentials (or they are incomplete)."""
+
+    def __init__(self, message: str, *, code: Optional[str] = "INVALID_CREDENTIALS"):
+        super().__init__(message, code=code)
+
+
 class StorageProviderAdapter:
     """The interface every storage provider adapter implements.
 
@@ -283,21 +403,47 @@ class StorageProviderAdapter:
     :class:`NotImplementedError` so a half-written adapter fails loudly instead
     of appearing to work. Every method is async because every real provider is
     a network call.
+
+    W0-06B additions. An adapter is built from a binding, the credentials the
+    server-side vault resolved for THAT binding, and an HTTP transport (tests
+    inject an in-process fake; nothing in this task reaches a real provider).
+    :meth:`validate_credentials` and :meth:`check_root` are the first two
+    onboarding steps; :meth:`verify` is shared, so every adapter tells the five
+    FLOW-016 failure states apart the same way.
     """
 
     provider_kind: str = ""
 
-    def __init__(self, binding: ProviderBinding):
+    def __init__(self, binding: ProviderBinding, *, credentials: Optional[Mapping[str, Any]] = None,
+                 transport: Any = None):
         if not isinstance(binding, ProviderBinding):
             raise TypeError("an adapter is constructed from a ProviderBinding")
         if self.provider_kind and binding.provider_kind != self.provider_kind:
             raise ValueError("binding is for %r, adapter is %r"
                              % (binding.provider_kind, self.provider_kind))
         self.binding = binding
+        self._credentials = _Credentials(credentials)
+        self._transport = transport
+
+    def __repr__(self) -> str:
+        return "<%s binding=%s>" % (type(self).__name__, self.binding.binding_id)
 
     # ------------------------------------------------------------ capability
     def capabilities(self) -> ProviderCapabilities:
         raise NotImplementedError
+
+    # ------------------------------------------------------------ onboarding
+    async def validate_credentials(self) -> None:
+        """Prove the credentials work. Raises :class:`ProviderCredentialsInvalid`."""
+        raise NotImplementedError
+
+    async def check_root(self) -> None:
+        """Prove the tenant root exists and is writable for this account."""
+        raise NotImplementedError
+
+    async def aclose(self) -> None:
+        """Release a provider session (logout), if the provider has one."""
+        return None
 
     # ---------------------------------------------------------------- object
     async def put(self, *, object_key: str, data: bytes,
@@ -315,14 +461,72 @@ class StorageProviderAdapter:
         raise NotImplementedError
 
     async def verify(self, ref: ProviderObjectRef,
-                     expected: Optional[Mapping[str, str]] = None) -> IntegrityVerdict:
+                     expected: Optional[Mapping[str, str]] = None, *,
+                     expected_size: Optional[int] = None,
+                     expected_provider_file_id: Optional[str] = None,
+                     expected_provider_version_id: Optional[str] = None) -> IntegrityVerdict:
         """Compare what is stored with what BEG_Work expects.
 
-        Reports, never heals: a mismatch comes back as
-        ``AVAILABILITY_CHECKSUM_MISMATCH`` for the registry to raise as an
-        integrity problem.
+        Reports, never heals. The order is what keeps the states distinct:
+
+        1. ``stat`` — a permission failure, an outage and an absent object are
+           three different answers, never one;
+        2. content — the provider's own sha256 when it has one, otherwise the
+           bytes are READ and hashed (a weaker but still exact check), and a
+           size difference alone already proves the content changed;
+        3. identity — the same bytes under another provider id / version is an
+           object replaced outside BEG_Work (``externally_changed``).
+
+        A business-visible failure is a returned verdict, never an exception:
+        the caller that runs checks must not lose the distinction.
         """
-        raise NotImplementedError
+        checked = _utc_now().isoformat()
+        exp = dict(expected) if expected else None
+
+        def verdict(availability, **kw):
+            return IntegrityVerdict(availability=availability, expected_checksum=exp,
+                                    checked_at=checked, **kw)
+        try:
+            stat = await self.stat(ref)
+        except ProviderPermissionDenied as exc:
+            return verdict(AVAILABILITY_PERMISSION_DENIED, error=_safe_error(exc))
+        except ProviderError as exc:
+            return verdict(exc.availability, error=_safe_error(exc))
+        if not stat.exists:
+            return verdict(AVAILABILITY_MISSING, error="object not found")
+        ids = dict(observed_provider_file_id=stat.provider_file_id,
+                   observed_provider_version_id=stat.provider_version_id)
+        if expected_size is not None and stat.size_bytes is not None \
+                and stat.size_bytes != expected_size:
+            return verdict(AVAILABILITY_CHECKSUM_MISMATCH, observed_size_bytes=stat.size_bytes,
+                           method=VERIFY_SIZE_ONLY, error="size mismatch", **ids)
+        observed, method = None, VERIFY_NONE
+        if stat.checksum and (not exp or stat.checksum.get("algorithm") == exp.get("algorithm")):
+            observed, method = stat.checksum, VERIFY_SERVER_CHECKSUM
+        elif exp and self.capabilities().can_read:
+            try:
+                data = await self.read(ref)
+            except ProviderPermissionDenied as exc:
+                return verdict(AVAILABILITY_PERMISSION_DENIED, error=_safe_error(exc), **ids)
+            except ProviderObjectMissing as exc:
+                return verdict(AVAILABILITY_MISSING, error=_safe_error(exc), **ids)
+            except ProviderError as exc:
+                return verdict(exc.availability, error=_safe_error(exc), **ids)
+            observed, method = sha256_checksum(data), VERIFY_READ_AND_HASH
+        if exp and observed and observed.get("value") != exp.get("value"):
+            return verdict(AVAILABILITY_CHECKSUM_MISMATCH, observed_checksum=observed,
+                           observed_size_bytes=stat.size_bytes, method=method,
+                           error="checksum mismatch", **ids)
+        replaced = ((expected_provider_file_id and stat.provider_file_id
+                     and stat.provider_file_id != expected_provider_file_id)
+                    or (expected_provider_version_id and stat.provider_version_id
+                        and stat.provider_version_id != expected_provider_version_id))
+        if replaced:
+            return verdict(AVAILABILITY_EXTERNALLY_CHANGED, observed_checksum=observed,
+                           observed_size_bytes=stat.size_bytes, method=method,
+                           error="object replaced outside BEG_Work", **ids)
+        return verdict(AVAILABILITY_AVAILABLE, observed_checksum=observed,
+                       observed_size_bytes=stat.size_bytes, method=method, **ids)
 
     async def request_delete(self, ref: ProviderObjectRef, *, reason: str) -> DeleteReceipt:
         """Ask the provider to destroy the object and report what it answered."""
@@ -330,86 +534,72 @@ class StorageProviderAdapter:
 
     async def temporary_access(self, ref: ProviderObjectRef, *, purpose: str,
                                seconds: int = 300) -> TemporaryAccessGrant:
-        """A short-lived grant for one purpose. Never a permanent URL."""
+        """A short-lived grant for one purpose. Never a permanent URL.
+
+        An adapter whose provider cannot issue a time-limited link reports
+        ``temporary_links=False`` and raises :class:`ProviderError`; access is
+        then served through a BEG_Work grant (:mod:`app.files.access`).
+        """
         raise NotImplementedError
 
-
-class DeclaredAdapter(StorageProviderAdapter):
-    """A customer-managed provider that W0-06A declares but does NOT activate.
-
-    It exists so the contract names the four providers FLOW-016 requires, and
-    so the registry, the tests and the Health Dashboard can already speak about
-    them — while every operation raises :class:`ProviderNotActivated`. That is
-    the difference between "the contract covers Google Drive" and "we move
-    customer files to Google Drive", and W0-06A is only the first.
-    """
-
-    def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(provider_kind=self.provider_kind, can_put=False,
-                                    can_read=False, can_stat=False)
-
-    async def put(self, **kwargs):           # noqa: D102
-        raise ProviderNotActivated(self.provider_kind)
-
-    async def read(self, ref):               # noqa: D102
-        raise ProviderNotActivated(self.provider_kind)
-
-    async def stat(self, ref):               # noqa: D102
-        raise ProviderNotActivated(self.provider_kind)
-
-    async def verify(self, ref, expected=None):   # noqa: D102
-        raise ProviderNotActivated(self.provider_kind)
-
-    async def request_delete(self, ref, *, reason):  # noqa: D102
-        raise ProviderNotActivated(self.provider_kind)
-
-    async def temporary_access(self, ref, *, purpose, seconds=300):  # noqa: D102
-        raise ProviderNotActivated(self.provider_kind)
+    # --------------------------------------------------------- shared helpers
+    async def _confirm_gone(self, ref: ProviderObjectRef, reason: str) -> DeleteReceipt:
+        """CONFIRMED only when a fresh ``stat`` says the object is absent."""
+        try:
+            after = await self.stat(ref)
+        except ProviderError as exc:
+            return DeleteReceipt(state=DELETE_PROVIDER_FAILED, provider_kind=self.provider_kind,
+                                 response_code=exc.code or "UNVERIFIED",
+                                 message="delete sent but absence could not be verified")
+        if after.exists:
+            return DeleteReceipt(state=DELETE_PROVIDER_FAILED, provider_kind=self.provider_kind,
+                                 response_code="STILL_PRESENT",
+                                 message="provider accepted the delete but the object remains")
+        return DeleteReceipt(state=DELETE_PROVIDER_CONFIRMED, provider_kind=self.provider_kind,
+                             response_code="OK", message=reason,
+                             confirmed_at=_utc_now().isoformat())
 
 
-class GoogleDriveAdapter(DeclaredAdapter):
-    """Google Drive / Shared Drive. Declared; activated in a later slice."""
-    provider_kind = PROVIDER_GOOGLE_DRIVE
+def _safe_error(exc: BaseException) -> str:
+    """An error text safe to store: the class and code, never a URL or a header."""
+    code = getattr(exc, "code", None)
+    return "%s%s" % (type(exc).__name__, (" [%s]" % code) if code else "")
 
 
-class SynologyNasAdapter(DeclaredAdapter):
-    """Synology / NAS. Declared; activated in a later slice."""
-    provider_kind = PROVIDER_SYNOLOGY_NAS
-
-
-class S3CompatibleAdapter(DeclaredAdapter):
-    """S3-compatible object storage. Declared; activated in a later slice."""
-    provider_kind = PROVIDER_S3_COMPATIBLE
-
-
-class OnPremServerAdapter(DeclaredAdapter):
-    """A customer's own on-premise server. Declared; activated in a later slice."""
-    provider_kind = PROVIDER_ON_PREM_SERVER
-
-
-#: Every customer-managed provider kind FLOW-016 names, mapped to its adapter.
-#: The test suite proves this covers :data:`CUSTOMER_MANAGED_PROVIDER_KINDS`
-#: exactly, so a provider cannot be named in the model vocabulary without an
-#: adapter class existing for it.
-DECLARED_ADAPTERS: Dict[str, type] = {
-    PROVIDER_GOOGLE_DRIVE: GoogleDriveAdapter,
-    PROVIDER_SYNOLOGY_NAS: SynologyNasAdapter,
-    PROVIDER_S3_COMPATIBLE: S3CompatibleAdapter,
-    PROVIDER_ON_PREM_SERVER: OnPremServerAdapter,
+#: provider kind -> "module:Class" of its adapter. Resolved lazily so this
+#: contract module stays stdlib-only and importable by the static guard.
+ADAPTER_CLASSES: Dict[str, str] = {
+    PROVIDER_GOOGLE_DRIVE: "app.files.providers.google_drive:GoogleDriveAdapter",
+    PROVIDER_SYNOLOGY_NAS: "app.files.providers.synology:SynologyNasAdapter",
+    PROVIDER_S3_COMPATIBLE: "app.files.providers.s3:S3CompatibleAdapter",
+    PROVIDER_ON_PREM_SERVER: "app.files.providers.on_prem:OnPremServerAdapter",
 }
 
-assert set(DECLARED_ADAPTERS) == set(CUSTOMER_MANAGED_PROVIDER_KINDS)
+assert set(ADAPTER_CLASSES) == set(CUSTOMER_MANAGED_PROVIDER_KINDS)
 
 
-def adapter_for(binding: ProviderBinding) -> StorageProviderAdapter:
-    """The adapter for a binding.
-
-    Only the declared customer-managed kinds resolve here. The in-memory double
-    is constructed directly by the tests that need it, so no production path can
-    reach a fake provider by configuration.
-    """
+def adapter_class(provider_kind: str) -> type:
+    """The adapter class of a customer-managed provider kind."""
     try:
-        cls = DECLARED_ADAPTERS[binding.provider_kind]
+        target = ADAPTER_CLASSES[provider_kind]
     except KeyError:
-        raise ProviderNotActivated(binding.provider_kind) from None
-    return cls(binding)
+        raise ProviderNotActivated(provider_kind) from None
+    module_name, _, cls_name = target.partition(":")
+    import importlib
+    return getattr(importlib.import_module(module_name), cls_name)
+
+
+def adapter_for(binding: ProviderBinding, *, credentials: Optional[Mapping[str, Any]] = None,
+                transport: Any = None) -> StorageProviderAdapter:
+    """The adapter for a binding, with its server-resolved credentials.
+
+    Only the customer-managed kinds resolve here. The in-memory double is
+    constructed directly by the tests that need it, so no production path can
+    reach a fake provider by configuration. Without credentials there is no
+    adapter at all: a provider is never contacted anonymously.
+    """
+    cls = adapter_class(binding.provider_kind)
+    if not credentials:
+        raise ProviderCredentialsInvalid("no credentials resolved for binding %s"
+                                         % binding.binding_id, code="NO_CREDENTIALS")
+    return cls(binding, credentials=credentials, transport=transport)
