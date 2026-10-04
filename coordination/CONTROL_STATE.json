@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-03T09:56:01Z",
+  "validated_at": "2026-10-04T16:20:24Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "8013c8fede38321fe8acd805df9cf1ac92270199",
-  "control_state_commit_sha": "8013c8fede38321fe8acd805df9cf1ac92270199",
-  "now": "Codex публикува CHANGES_REQUESTED за W0-06A/C01 на exact PR #44 head. Real-Mongo gate: 14 passed / 1 failed / 0 skipped. GPT/Крум решават за bounded correction; няма нов dispatch, merge или deploy.",
+  "active_source_commit_sha": "dc7c8034556aa87b8bbdca185a19e53dafa3305a",
+  "control_state_commit_sha": "530b42938ba0b3de3265afb10af35ee5a8b00a21",
+  "now": "Codex подготви W0-06A/C02 само за четирите доказани дефекта. Dispatch е PENDING, но няма C02 Send или Claude start; очаква се изрично потвърждение от Крум.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
@@ -21,42 +21,42 @@
     "REVIEW"
   ],
   "task_id": "W0-06A",
-  "cycle_id": "C01",
+  "cycle_id": "C02",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-06A/C01/GPT",
-      "waiting_for": "Krum relay of the published W0-06A CHANGES_REQUESTED review",
-      "updated_at": "2026-10-03T09:56:01Z"
+      "work_id": "W0-06A/C02/GPT",
+      "waiting_for": "Krum confirmation before the one-time C02 Send; no C02 execution yet",
+      "updated_at": "2026-10-04T16:20:24Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-06A/C01/CX",
-      "waiting_for": "GPT/Krum decision on whether to authorize a bounded correction",
-      "updated_at": "2026-10-03T09:56:01Z"
+      "state": "WORKING",
+      "work_id": "W0-06A/C02/CX",
+      "waiting_for": "Krum explicit confirmation for the one-time C02 Send",
+      "updated_at": "2026-10-04T16:20:24Z"
     },
     "CLAUDE": {
       "state": "WAITING",
-      "work_id": "W0-06A/C01/CL",
-      "waiting_for": "Authorized bounded correction assignment, if any",
-      "updated_at": "2026-10-03T09:56:01Z"
+      "work_id": "W0-06A/C02/CL",
+      "waiting_for": "Krum-confirmed C02 Send on the existing branch and Draft PR #44",
+      "updated_at": "2026-10-04T16:20:24Z"
     }
   },
-  "current_work_id": "W0-06A/C01/CX",
-  "state": "CHANGES_REQUESTED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT/Krum decision on whether to authorize a bounded correction",
+  "current_work_id": "W0-06A/C02/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "Krum explicit confirmation for the one-time C02 Send",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 44,
   "pr_head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
   "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/epitaxy/session_01XJdutPzjzqnkyQWrz4Z2cz",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/issues/43#issuecomment-5967741410",
     "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
@@ -72,26 +72,26 @@
     "last_agent": "CODEX",
     "last_event": "W0-06A/C01 independent exact-head review published in PR #44",
     "last_result": "CHANGES_REQUESTED",
-    "required_by_krum": true,
-    "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Relay the published W0-06A review to GPT for an owner/architect decision. No correction is dispatched by the review alone.",
+    "required_by_krum": false,
+    "from": null,
+    "to": null,
+    "status": "NO_RELAY_NEEDED",
+    "instruction": "Krum provided the bounded C02 preparation instruction in this task; no relay or Send is implied. Await explicit Krum confirmation for the one-time C02 Send.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829",
-    "updated_at": "2026-10-03T09:56:01Z"
+    "updated_at": "2026-10-04T16:20:24Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "RELAY W0-06A REVIEW TO GPT",
+  "requires_krum_reason": "CONFIRM ONE-TIME W0-06A/C02 SEND TO CLAUDE",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "CORRECTION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "e6edc82c37254cf328b4669c210df126b6a135a1",
+    "active_blob_sha": "6c5f1d29e9118b22e9d4bb5d270f47fb7121649c",
     "review_path": "coordination/REVIEWS/W0-06A.md",
     "review_blob_sha": "94ce4b2943ecfcec2d23e2cf8361c2dd40439183",
     "canonical_docs": [
@@ -117,7 +117,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-03T09:56:01Z",
+  "updated_at": "2026-10-04T16:20:24Z",
   "history": [
     {
       "event_id": "w0-06a-c01-assignment-intent",
@@ -174,6 +174,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829",
       "source_commit_sha": "8013c8fede38321fe8acd805df9cf1ac92270199",
       "summary": "Independent whole-package review published CHANGES_REQUESTED on exact Draft PR #44 head. Required disposable real-Mongo gate: 14 passed, 1 failed, 0 skipped; concurrent AuditEvent sequence duplicated. Relation-target bypass, version-specific delete overstatement and checksum test flake also documented. No correction dispatch, merge, deploy or FLOW-016 Gate PASS."
+    },
+    {
+      "event_id": "w0-06a-c02-bounded-correction-intent",
+      "occurred_at": "2026-10-04T16:20:24Z",
+      "task_id": "W0-06A",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/dc7c8034556aa87b8bbdca185a19e53dafa3305a/coordination/ACTIVE.md",
+      "source_commit_sha": "dc7c8034556aa87b8bbdca185a19e53dafa3305a",
+      "summary": "Krum supplied a bounded C02 preparation instruction for the four C01 review findings. Codex verified unchanged main and Draft PR #44 exact head, published CHANGES_REQUESTED and absence of any C02 dispatch, then prepared PENDING control intent. No C02 Send, Claude start, merge, deploy, production migration or customer-file operation is authorized before separate explicit Krum confirmation."
     }
   ]
 }
