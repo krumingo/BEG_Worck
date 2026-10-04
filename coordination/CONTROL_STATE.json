@@ -1,14 +1,14 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-04T19:34:56Z",
+  "validated_at": "2026-10-04T21:57:24Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "2e4800dc9c80e9ba5180376cf54e37d451b98bb5",
-  "control_state_commit_sha": "a03451ff41834841bab89ba37216c00f09a96bbe",
-  "now": "Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени. Това е само подготвен W0-06B assignment: няма Send, Claude start, branch, Issue или PR; изчаква се изрично одобрение от Крум за старта и точната интеграционна основа. W0-06A остава CHANGES_REQUESTED.",
+  "active_source_commit_sha": "9ea75e09e25cdb2f52da10145c17123193acfc6f",
+  "control_state_commit_sha": "b1f09a43a59648454e187fd10f7eb816f5bda901",
+  "now": "Крум одобри W0-06B/C01 от точния head 9040fc1d4b40d5376cc8912ba316a206c02d207b. Branch, Issue #45 и Draft PR #46 са създадени; Codex подготвя еднократния Claude Code Cloud Send. Няма наблюдаван Claude start и няма W0-06A PASS.",
   "transition": {
     "event": "ASSIGNMENT",
     "phase": "INTENT",
@@ -29,50 +29,50 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06B/C01/GPT",
-      "waiting_for": "Krum approval of W0-06B start and exact integration base; no implementation yet",
-      "updated_at": "2026-10-04T19:34:56Z"
+      "waiting_for": "Claude W0-06B execution and independent Codex verdict",
+      "updated_at": "2026-10-04T21:57:24Z"
     },
     "CODEX": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-06B/C01/CX",
-      "waiting_for": "Krum explicit approval of W0-06B start and exact integration base before any Send",
-      "updated_at": "2026-10-04T19:34:56Z"
+      "waiting_for": "One-time authorized Claude Code Cloud Send after PENDING publication",
+      "updated_at": "2026-10-04T21:57:24Z"
     },
     "CLAUDE": {
       "state": "WAITING",
       "work_id": "W0-06B/C01/CL",
-      "waiting_for": "Approved W0-06B assignment and one authorized Send; no branch or session exists",
-      "updated_at": "2026-10-04T19:34:56Z"
+      "waiting_for": "One-time W0-06B assignment Send; no session start observed",
+      "updated_at": "2026-10-04T21:57:24Z"
     }
   },
   "current_work_id": "W0-06B/C01/CX",
-  "state": "WAITING",
+  "state": "WORKING",
   "pipeline_step": "ASSIGNMENT",
   "next_agent": "CLAUDE",
-  "waiting_for": "Krum explicit approval of W0-06B start and exact integration base before any Send",
+  "waiting_for": "One-time authorized Claude Code Cloud Send after PENDING publication",
   "wave": "W0",
   "flow": "FLOW-016",
-  "pr_number": null,
-  "pr_head_sha": null,
-  "pr_draft": null,
-  "dispatch_state": "NONE",
+  "pr_number": 46,
+  "pr_head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+  "pr_draft": true,
+  "dispatch_state": "PENDING",
   "dispatch_run_url": null,
   "last_handoff": null,
   "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-06B/C01 assignment prepared; W0-06A/C02 unsent intent superseded",
-    "last_result": "PREPARED_NOT_DISPATCHED",
+    "last_event": "W0-06B/C01 approved and dashboard-first PENDING",
+    "last_result": "PENDING_NOT_SENT",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Preparation only. Krum must explicitly approve W0-06B start and exact integration base; no Claude Send, branch, Issue or PR is authorized yet.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/blob/2e4800dc9c80e9ba5180376cf54e37d451b98bb5/coordination/ACTIVE.md",
-    "updated_at": "2026-10-04T19:34:56Z"
+    "instruction": "Krum approved exact base and one-time Send. Branch, Issue #45 and Draft PR #46 exist. Send only once after PENDING publication; no Claude start is yet observed.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/9ea75e09e25cdb2f52da10145c17123193acfc6f/coordination/ACTIVE.md",
+    "updated_at": "2026-10-04T21:57:24Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "APPROVE W0-06B START AND EXACT INTEGRATION BASE BEFORE ANY SEND",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "ASSIGNMENT",
@@ -82,7 +82,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "fa4d1695ee4dce22010dabb675bf2ff18fcdb07b",
+    "active_blob_sha": "9bc8303169e598d8f9e38619f7f5ffe6f87ecf8d",
     "review_path": "coordination/REVIEWS/W0-06A.md",
     "review_blob_sha": "94ce4b2943ecfcec2d23e2cf8361c2dd40439183",
     "canonical_docs": [
@@ -116,7 +116,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-04T19:34:56Z",
+  "updated_at": "2026-10-04T21:57:24Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
@@ -131,6 +131,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/blob/2e4800dc9c80e9ba5180376cf54e37d451b98bb5/coordination/ACTIVE.md",
       "source_commit_sha": "2e4800dc9c80e9ba5180376cf54e37d451b98bb5",
       "summary": "Krum requested preparation only of W0-06B with four W0-06A CHANGES_REQUESTED defects as the entry gate, superseding the never-sent W0-06A/C02 microcorrection. No W0-06B integration base, branch, Issue, PR or Claude dispatch exists. Start and exact base require explicit Krum approval. W0-06A and FLOW-016 remain open."
+    },
+    {
+      "event_id": "w0-06b-c01-approved-pending",
+      "occurred_at": "2026-10-04T21:57:24Z",
+      "task_id": "W0-06B",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "9040fc1d4b40d5376cc8912ba316a206c02d207b",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/9ea75e09e25cdb2f52da10145c17123193acfc6f/coordination/ACTIVE.md",
+      "source_commit_sha": "9ea75e09e25cdb2f52da10145c17123193acfc6f",
+      "summary": "Krum approved W0-06B/C01 exact technical integration base at W0-06A PR #44 head. Created new implementation branch, Issue #45 and Draft PR #46 to main after live recheck. Published PENDING intent before one-time Claude Send. W0-06A remains CHANGES_REQUESTED; no Claude start or B verdict yet."
     }
   ]
 }
