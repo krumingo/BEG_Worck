@@ -1,22 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C01 PENDING — APPROVED; ONE-TIME SEND NOT YET OBSERVED
+Status: W0-06B/C01 RUNNING — ONE-TIME CLAUDE CODE CLOUD SEND OBSERVED
 Human-Summary-BG: Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Крум одобри W0-06B/C01 от точния head 9040fc1d4b40d5376cc8912ba316a206c02d207b. Branch, Issue #45 и Draft PR #46 са създадени; Codex подготвя еднократния Claude Code Cloud Send. Няма наблюдаван Claude start и няма W0-06A PASS.
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Еднократният W0-06B/C01 Send стартира Claude Code Cloud сесията върху точния B branch и Draft PR #46. Claude първо затваря четирите W0-06A дефекта с изисквания real-Mongo gate; Codex изчаква финален exact-head HANDOFF. Няма W0-06A PASS или FLOW-016 Gate PASS.
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
 Krum-Action: NONE (W0-06B start and exact base approved)
-Dispatch-State: PENDING (one-time Send authorized; not yet observed)
-Dispatch-Run: NONE
-Dispatch-Observed-At: NONE
+Dispatch-State: RUNNING (one-time Send observed; never resend)
+Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG
+Dispatch-Observed-At: 2026-10-04T22:01:04Z
 Task-ID: W0-06B
 Cycle-ID: C01
 Base-branch: codex/w0-06a-file-registry-foundation (technical integration base only; PR #44 remains Draft/CHANGES_REQUESTED)
@@ -33,13 +33,13 @@ Final-Verdict: NONE for W0-06B. W0-06A remains CHANGES_REQUESTED; FLOW-016 Imple
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
-Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. One Claude Code Cloud Send is authorized after this dashboard-first PENDING publication. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
+Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
 
-## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (PENDING; NOT SENT)
+## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (RUNNING; ONE SEND OBSERVED)
 
 **На човешки:** Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
 
-**Identity and start gate.** Repository `krumingo/BEG_Worck`; Task-ID `W0-06B`, Cycle-ID `C01`; implementation branch `codex/w0-06b-storage-provider-foundation` starts exactly at `9040fc1d4b40d5376cc8912ba316a206c02d207b`, the current W0-06A Draft PR #44 head. Krum approved this technical integration base explicitly; it is **not W0-06A PASS**. New Issue #45 and Draft PR #46 to `main` exist. Whole-package review will inspect `main → final W0-06B head`, containing A foundation, four defect fixes and B implementation. PR #44 remains Draft/CHANGES_REQUESTED, unmerged separately. Source of truth: `CLAUDE.md`, `coordination/README.md`, `docs/flows/FLOW-016.md`, `FLOW-002.md`, `FLOW-040.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `TENANCY_MODEL.md`, W0-06A Issue #43 / Draft PR #44 and `coordination/REVIEWS/W0-06A.md`. Live refs and duplicate absence were checked before branch/Issue/PR creation. This is the dashboard-first PENDING intent before one authorized Claude Code Cloud Send; only an observed session start changes Dispatch to RUNNING.
+**Identity and start gate.** Repository `krumingo/BEG_Worck`; Task-ID `W0-06B`, Cycle-ID `C01`; implementation branch `codex/w0-06b-storage-provider-foundation` starts exactly at `9040fc1d4b40d5376cc8912ba316a206c02d207b`, the current W0-06A Draft PR #44 head. Krum approved this technical integration base explicitly; it is **not W0-06A PASS**. New Issue #45 and Draft PR #46 to `main` exist. Whole-package review will inspect `main → final W0-06B head`, containing A foundation, four defect fixes and B implementation. PR #44 remains Draft/CHANGES_REQUESTED, unmerged separately. Source of truth: `CLAUDE.md`, `coordination/README.md`, `docs/flows/FLOW-016.md`, `FLOW-002.md`, `FLOW-040.md`, `docs/architecture/IMPLEMENTATION_WAVES.md`, `IMPLEMENTATION_GATE_MATRIX.md`, `TENANCY_MODEL.md`, W0-06A Issue #43 / Draft PR #44 and `coordination/REVIEWS/W0-06A.md`. Live refs and duplicate absence were checked before branch/Issue/PR creation. Dashboard-first PENDING was published before one authorized Claude Code Cloud Send. The observed session is https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG; Dispatch is RUNNING and must never be sent twice.
 
 **Entry gate — inherited W0-06A defects, not a separate product task.** Before provider work advances beyond foundation integration, close and independently prove all four findings from `coordination/REVIEWS/W0-06A.md`: (1) atomic tenant-safe concurrent AuditEvent sequence/chain; (2) no caller-controlled relation-target verification bypass; (3) version/location-scoped physical-delete result without over-deleting other versions or whole-file state; (4) deterministic duplicate-checksum selection and equal-timestamp acceptance test. Include focused positive/forbidden tests, static guards and unsafe-mutation checks, and disposable loopback real-Mongo with **0 failed / 0 required skipped**. This gate is not W0-06A PASS by assertion, and no code from PR #44 is treated as verified merely because it is a predecessor.
 
