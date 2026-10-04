@@ -81,12 +81,17 @@ RELATIONS_COLLECTION = "file_relations"
 LOCATIONS_COLLECTION = "file_provider_locations"
 DERIVED_COLLECTION = "file_derived_cache"
 DELETE_REQUESTS_COLLECTION = "file_delete_requests"
+#: Per-tenant monotonic counters of the registry (W0-06B). Today one: the
+#: registration order of files, which is what makes "the oldest file with this
+#: checksum" a fact rather than a guess about two equal timestamps.
+SEQUENCES_COLLECTION = "file_registry_sequences"
 
 #: Every collection this foundation owns. The static guard reads this set, so a
 #: collection added here is in scope from the moment it exists.
 REGISTRY_COLLECTIONS: FrozenSet[str] = frozenset({
     FILES_COLLECTION, VERSIONS_COLLECTION, RELATIONS_COLLECTION,
     LOCATIONS_COLLECTION, DERIVED_COLLECTION, DELETE_REQUESTS_COLLECTION,
+    SEQUENCES_COLLECTION,
 })
 
 #: FLOW-016 source flow id for every AuditEvent this foundation writes.
@@ -301,6 +306,14 @@ DELETE_STATES: FrozenSet[str] = frozenset({
     DELETE_PROVIDER_FAILED,
 })
 
+#: What ONE delete request is about (W0-06A review finding 3). A request names
+#: exactly one scope, and its provider answer applies to exactly the locations
+#: frozen into the request when it was opened — never to "every location of the
+#: file". Destroying the whole family is a different, explicit action.
+DELETE_SCOPE_VERSION = "version"
+DELETE_SCOPE_FILE = "file"
+DELETE_SCOPES: FrozenSet[str] = frozenset({DELETE_SCOPE_VERSION, DELETE_SCOPE_FILE})
+
 # ------------------------------------------------------------------- checksum
 CHECKSUM_SHA256 = "sha256"
 CHECKSUM_ALGORITHMS: FrozenSet[str] = frozenset({CHECKSUM_SHA256})
@@ -383,6 +396,7 @@ def build_file(
     file_id: Optional[str] = None,
     status: str = FILE_ACTIVE,
     uploaded_at: Optional[str] = None,
+    registration_seq: Optional[int] = None,
 ) -> Dict[str, Any]:
     """The family head: a stable identity plus its classification.
 
@@ -390,7 +404,16 @@ def build_file(
     :func:`build_version` moves it to 1 — a File with no version has no content
     yet, and saying so explicitly is better than implying a version 1 that was
     never written.
+
+    ``registration_seq`` is the tenant's monotonic registration counter,
+    allocated atomically by the service. It is immutable and is the first key
+    of :func:`file_order_key`, so the order of two files never depends on a
+    clock that can return the same instant twice (W0-06A review finding 4).
     """
+    if registration_seq is not None and (not isinstance(registration_seq, int)
+                                         or isinstance(registration_seq, bool)
+                                         or registration_seq < 1):
+        raise FileRecordInvalid("registration_seq must be an integer >= 1")
     now = _now_iso()
     return {
         "id": file_id or new_file_id(),
@@ -404,6 +427,7 @@ def build_file(
         # Only the pointer to the current member of the family lives here.
         "current_version_no": 0,
         "version_count": 0,
+        "registration_seq": registration_seq,
         "uploaded_by": _require_text(uploaded_by, "uploaded_by"),
         "uploaded_at": uploaded_at or now,
         "created_at": now,
@@ -606,6 +630,10 @@ def build_provider_location(
         # exists so "the current location" is a filter rather than a guess
         # about a missing key.
         "superseded_at": None,
+        # Set only by a CONFIRMED provider receipt of a delete request that
+        # named this exact location. Never inferred.
+        "destroyed_at_provider": None,
+        "destroyed_by_request_id": None,
         "created_at": now,
         "updated_at": now,
     }
@@ -657,6 +685,8 @@ def build_delete_request(
     file_id: str,
     requested_by: str,
     reason: str,
+    scope: str,
+    location_ids: Tuple[str, ...],
     version_no: Optional[int] = None,
     approval_id: Optional[str] = None,
     requested_at: Optional[str] = None,
@@ -666,17 +696,34 @@ def build_delete_request(
     Separate from anything the registry does on its own: FLOW-016 forbids
     presenting removal from the File Registry as a guaranteed physical delete.
     The request is answered only by a recorded PROVIDER response.
+
+    ``scope`` is :data:`DELETE_SCOPE_VERSION` (one version, ``version_no``
+    required) or :data:`DELETE_SCOPE_FILE` (the whole family, ``version_no``
+    forbidden). ``location_ids`` are the exact provider locations the request
+    covers, frozen at request time: the provider's answer is applied to these
+    rows and to no other, so a receipt for version 1 can never make version 2
+    look destroyed.
     """
     owner = _require_owner(org_id)
-    if version_no is not None and (not isinstance(version_no, int)
-                                   or isinstance(version_no, bool) or version_no < 1):
-        raise FileRecordInvalid("version_no must be an integer >= 1 or None")
+    _require_choice(scope, DELETE_SCOPES, "delete scope")
+    if scope == DELETE_SCOPE_VERSION:
+        if not isinstance(version_no, int) or isinstance(version_no, bool) or version_no < 1:
+            raise FileRecordInvalid("a version-scoped delete names one version_no >= 1")
+    elif version_no is not None:
+        raise FileRecordInvalid("a whole-file delete must not name a version_no")
+    ids = tuple(location_ids or ())
+    if not ids or any(not isinstance(i, str) or not i.strip() for i in ids):
+        raise FileRecordInvalid("a delete request must name the exact locations it covers")
+    if len(set(ids)) != len(ids):
+        raise FileRecordInvalid("a delete request names a location twice")
     now = requested_at or _now_iso()
     return {
         "id": ID_PREFIX_DELETE + uuid.uuid4().hex,
         ORG_KEY: owner,
         "file_id": _require_text(file_id, "file_id"),
+        "scope": scope,
         "version_no": version_no,
+        "location_ids": sorted(ids),
         "state": DELETE_REQUESTED,
         "requested_by": _require_text(requested_by, "requested_by"),
         "requested_at": now,
@@ -741,3 +788,24 @@ def sort_key(record: Mapping[str, Any]) -> Tuple[str, str]:
     W0-03E removed from the identity lookups.
     """
     return (str(record.get("created_at") or ""), str(record.get("id") or ""))
+
+
+def file_order_key(record: Mapping[str, Any]) -> Tuple[int, int, str, str]:
+    """The TOTAL registration order of File records of one tenant.
+
+    W0-06A review finding 4. :func:`sort_key` orders by ``(created_at, id)``;
+    two files registered within one clock tick share ``created_at`` and the
+    RANDOM ``id`` then decides, so "the oldest duplicate" silently became "the
+    one with the smaller uuid". The order is now led by ``registration_seq`` —
+    allocated atomically per tenant, never reused, never rewritten — so the
+    first file registered is first on every run, on every server, whatever
+    order the database returns rows in and however coarse the clock is.
+
+    A record without a sequence (none exists today: the field was introduced
+    before any registry row was written in production) sorts after every
+    sequenced one, by the old total order, so the key stays total either way.
+    """
+    seq = record.get("registration_seq")
+    if isinstance(seq, int) and not isinstance(seq, bool):
+        return (0, seq, "", str(record.get("id") or ""))
+    return (1, 0, str(record.get("created_at") or ""), str(record.get("id") or ""))

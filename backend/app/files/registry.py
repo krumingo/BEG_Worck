@@ -168,6 +168,33 @@ class FileRegistry:
     def delete_requests(self):
         return self._tenant.collection(m.DELETE_REQUESTS_COLLECTION)
 
+    @property
+    def sequences(self):
+        return self._tenant.collection(m.SEQUENCES_COLLECTION)
+
+    async def _next_registration_seq(self) -> int:
+        """The tenant's next file registration number — atomic, never reused.
+
+        ``$inc`` on one document is atomic on the server, so concurrent
+        registrations get distinct numbers. The counter document's ``_id`` is
+        deterministic per tenant: two first-ever upserts racing each other
+        cannot create two counters (the loser hits the built-in ``_id`` index
+        and simply retries onto the winner's document).
+        """
+        counter_id = "file_registration:%d:%s" % (len(self.org_id), self.org_id)
+        for _ in range(8):
+            try:
+                doc = await self.sequences.find_one_and_update(
+                    {"_id": counter_id, "counter": "file_registration"},
+                    {"$inc": {"value": 1}}, upsert=True, return_document=True,
+                    projection={"_id": 0, "value": 1})
+            except Exception as exc:                                # noqa: BLE001
+                if type(exc).__name__ == "DuplicateKeyError" or getattr(exc, "code", None) == 11000:
+                    continue
+                raise
+            return int(doc["value"])
+        raise FileRegistryError("could not allocate a registration number")
+
     # -------------------------------------------------------------- audit
     async def _audit(self, *, action: str, actor_id: str, entity_id: str,
                      entity_type: str = "file", result: str = RESULT_SUCCESS,
@@ -272,7 +299,7 @@ class FileRegistry:
         if not file_ids:
             return []
         docs = await self.files.find({"id": {"$in": file_ids}}, {"_id": 0}).to_list(None)
-        return sorted(docs, key=m.sort_key)
+        return sorted(docs, key=m.file_order_key)
 
     async def current_location(self, file_id: str, version_no: int,
                                role: str = m.LOCATION_ROLE_PRIMARY) -> Optional[Dict[str, Any]]:
@@ -299,8 +326,10 @@ class FileRegistry:
                                ) -> List[Dict[str, Any]]:
         """Files of this tenant whose CURRENT version has this checksum.
 
-        Deterministically ordered (:func:`app.files.models.sort_key`) so the
-        duplicate decision is the same on every run and on every server.
+        Ordered by :func:`app.files.models.file_order_key` — the atomic
+        registration sequence first — so the duplicate decision names the FIRST
+        registered file on every run and every server, even when two files
+        share a timestamp.
         """
         key = m.checksum_key(checksum_value)
         if not key:
@@ -311,7 +340,7 @@ class FileRegistry:
         if not file_ids:
             return []
         docs = await self.files.find({"id": {"$in": file_ids}}, {"_id": 0}).to_list(None)
-        return sorted(docs, key=m.sort_key)
+        return sorted(docs, key=m.file_order_key)
 
     async def canonical_original(self, file_id: str) -> Dict[str, Any]:
         """Can the canonical original be served, and from where?
@@ -364,7 +393,6 @@ class FileRegistry:
         provider_location: Optional[Mapping[str, Any]] = None,
         on_duplicate: str = ON_DUPLICATE_REPORT,
         idempotency_key: Optional[str] = None,
-        verify_relation_targets: bool = True,
         legacy_reference: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Register one physical file and give it its stable business identity.
@@ -390,7 +418,8 @@ class FileRegistry:
         try:
             existing = await self.find_by_checksum(checksum_value)
             if existing and on_duplicate == ON_DUPLICATE_REPORT:
-                # Deterministic: the oldest matching file, by a total order.
+                # Deterministic: the first REGISTERED matching file
+                # (registration_seq), never "the smaller random id".
                 duplicate_of = existing[0]["id"]
                 await self._audit(
                     action=ACTION_REGISTER, actor_id=actor_id, entity_id=duplicate_of,
@@ -404,14 +433,19 @@ class FileRegistry:
                         "version_no": None, "duplicate_of": duplicate_of,
                         "candidates": [d["id"] for d in existing]}
 
-            if verify_relation_targets:
-                for relation in relations:
-                    await self._assert_relation_target(relation["relation_type"],
-                                                       relation["record_id"])
+            # Every relation target is verified IN THIS TENANT, always. There is
+            # no caller switch to skip it (W0-06A review finding 2): a flag a
+            # caller can set is a flag a caller can set wrongly, and the link it
+            # would let through is exactly the cross-tenant or dangling
+            # relation the boundary exists to refuse.
+            for relation in relations:
+                await self._assert_relation_target(relation["relation_type"],
+                                                   relation["record_id"])
 
             file_doc = m.build_file(
                 org_id=self.org_id, display_name=display_name, original_name=original_name,
-                category=category, sensitivity=sensitivity, uploaded_by=actor_id)
+                category=category, sensitivity=sensitivity, uploaded_by=actor_id,
+                registration_seq=await self._next_registration_seq())
             if legacy_reference:
                 # Provenance of a migrated row: where it CAME from. Deliberately
                 # not an identity — nothing resolves a file by this value.
@@ -593,7 +627,6 @@ class FileRegistry:
 
     async def add_relation(self, *, actor_id: str, file_id: str, relation_type: str,
                            record_id: str, role: Optional[str] = None,
-                           verify_target: bool = True,
                            idempotency_key: Optional[str] = None) -> Dict[str, Any]:
         """Attach an existing file to one more business record.
 
@@ -608,8 +641,9 @@ class FileRegistry:
             return {"status": STATUS_REPLAYED, "relation_id": prior}
         try:
             await self.require_file(file_id)
-            if verify_target:
-                await self._assert_relation_target(relation_type, record_id)
+            # Unconditional — see register_file. A missing or foreign target is
+            # refused before anything is written.
+            await self._assert_relation_target(relation_type, record_id)
             existing = await self.relations.find_one(
                 {"file_id": file_id, "relation_type": relation_type,
                  "record_id": record_id, "active": True}, {"_id": 0})
@@ -866,42 +900,90 @@ class FileRegistry:
     # =================================================================== delete
     async def request_physical_delete(self, *, actor_id: str, file_id: str, reason: str,
                                       version_no: Optional[int] = None,
+                                      whole_file: bool = False,
+                                      location_id: Optional[str] = None,
                                       approval_id: Optional[str] = None,
                                       idempotency_key: Optional[str] = None) -> Dict[str, Any]:
         """Open an explicit request to destroy the customer's original.
 
         This method deletes NOTHING. It records that a destruction was asked
-        for, by whom and why, and leaves the file in ``delete_requested``. Only
-        :meth:`record_delete_result`, carrying a provider's own answer, can
-        close it — FLOW-016 forbids BEG_Work from presenting a File Registry
-        removal as a guaranteed physical deletion at the customer.
+        for, by whom and why. Only :meth:`record_delete_result`, carrying a
+        provider's own answer, can close it — FLOW-016 forbids BEG_Work from
+        presenting a File Registry removal as a guaranteed physical deletion at
+        the customer.
+
+        Scope (W0-06A review finding 3). Exactly one of:
+
+        * ``version_no=N`` — the live locations of version N only (optionally
+          narrowed to one ``location_id``). Every other version, and the file
+          itself, stays as it is.
+        * ``whole_file=True`` — every live location of every version, and the
+          file moves to ``delete_requested``. Destroying a whole family is a
+          separate, explicit choice; it is never what an absent argument means.
+
+        The exact location ids are frozen into the request, so the provider's
+        answer can only ever be applied to what was asked for.
         """
+        if whole_file and version_no is not None:
+            raise FileRegistryError("a delete is either one version or the whole file, not both")
+        if not whole_file and version_no is None:
+            raise FileRegistryError(
+                "name the version to delete, or pass whole_file=True explicitly")
+        if whole_file and location_id is not None:
+            raise FileRegistryError("a whole-file delete covers every location; "
+                                    "narrow it with version_no instead")
+        scope = m.DELETE_SCOPE_FILE if whole_file else m.DELETE_SCOPE_VERSION
         replay, prior = await self._begin(
             ACTION_DELETE_REQUESTED, idempotency_key,
-            {"file_id": file_id, "version_no": version_no, "reason": reason})
+            {"file_id": file_id, "scope": scope, "version_no": version_no,
+             "location_id": location_id, "reason": reason})
         if replay:
             return {"status": STATUS_REPLAYED, "request_id": prior}
         try:
             await self.require_file(file_id)
+            flt: Dict[str, Any] = {"file_id": file_id}
+            if scope == m.DELETE_SCOPE_VERSION:
+                version = await self.versions.find_one(
+                    {"file_id": file_id, "version_no": version_no}, {"_id": 0, "id": 1})
+                if not version:
+                    raise FileNotFound("no version %s of %r in this tenant" % (version_no, file_id))
+                flt["version_no"] = version_no
+            rows = await self.locations.find(flt, {"_id": 0}).to_list(None)
+            live = [r for r in rows if r.get("superseded_at") is None
+                    and r.get("destroyed_at_provider") is None]
+            if location_id is not None:
+                live = [r for r in live if r["id"] == location_id]
+                if not live:
+                    raise FileNotFound("no live location %r for version %s of %r"
+                                       % (location_id, version_no, file_id))
+            if not live:
+                raise FileRegistryError("nothing to delete: no live provider location in scope")
+            location_ids = tuple(sorted(r["id"] for r in live))
             row = m.build_delete_request(org_id=self.org_id, file_id=file_id,
-                                         requested_by=actor_id, reason=reason,
-                                         version_no=version_no, approval_id=approval_id)
+                                         requested_by=actor_id, reason=reason, scope=scope,
+                                         location_ids=location_ids, version_no=version_no,
+                                         approval_id=approval_id)
             await self.delete_requests.insert_one(dict(row))
-            await self.files.update_one({"id": file_id},
-                                        {"$set": {"status": m.FILE_DELETE_REQUESTED,
-                                                  "updated_at": _now_iso()}})
+            if scope == m.DELETE_SCOPE_FILE:
+                await self.files.update_one({"id": file_id},
+                                            {"$set": {"status": m.FILE_DELETE_REQUESTED,
+                                                      "updated_at": _now_iso()}})
             affected = await self.list_relations(file_id)
             await self._audit(
                 action=ACTION_DELETE_REQUESTED, actor_id=actor_id, entity_id=file_id,
+                entity_version=str(version_no) if version_no is not None else None,
                 reason=reason, idempotency_key=idempotency_key,
-                structured_diff={"request_id": row["id"], "version_no": version_no,
+                structured_diff={"request_id": row["id"], "scope": scope,
+                                 "version_no": version_no,
+                                 "location_ids": list(location_ids),
                                  "approval_id": approval_id,
                                  "affected_records": [{"relation_type": r["relation_type"],
                                                        "record_id": r["record_id"]}
                                                       for r in affected],
                                  "original_destroyed": False})
             await self._complete(ACTION_DELETE_REQUESTED, idempotency_key, row["id"])
-            return {"status": STATUS_REGISTERED, "request_id": row["id"],
+            return {"status": STATUS_REGISTERED, "request_id": row["id"], "scope": scope,
+                    "version_no": version_no, "location_ids": list(location_ids),
                     "affected_records": len(affected)}
         except Exception as exc:                                    # noqa: BLE001
             await self._fail(ACTION_DELETE_REQUESTED, idempotency_key, type(exc).__name__)
@@ -912,11 +994,15 @@ class FileRegistry:
                                    ) -> Dict[str, Any]:
         """Close a delete request with the PROVIDER's own answer.
 
-        Only a confirmed destruction moves the file to ``deleted_at_provider``;
-        a refusal or a failure returns it to ``active``, because an original
-        that still exists must not be shown as gone. The registry record itself
-        is kept either way: the history of what the file was attached to is not
-        erased with the bytes.
+        The answer applies to the request's frozen ``location_ids`` and to
+        nothing else. A confirmed version-scoped delete marks exactly those
+        locations destroyed; the other versions, their locations and the
+        file's own status are untouched. Only a confirmed WHOLE-FILE request
+        moves the file to ``deleted_at_provider``; a refusal or a failure of a
+        whole-file request returns it to ``active``, because an original that
+        still exists must not be shown as gone. The registry record is kept
+        either way. A request is answered once: a second receipt is refused
+        rather than allowed to flip a recorded outcome.
         """
         replay, prior = await self._begin(
             ACTION_DELETE_RESULT, idempotency_key,
@@ -927,35 +1013,58 @@ class FileRegistry:
             request = await self.delete_requests.find_one({"id": request_id}, {"_id": 0})
             if not request:
                 raise FileNotFound("no delete request %r in this tenant" % request_id)
+            if request.get("state") != m.DELETE_REQUESTED:
+                raise FileRegistryError("delete request %r was already answered (%s)"
+                                        % (request_id, request.get("state")))
+            scope = request.get("scope")
+            location_ids = list(request.get("location_ids") or [])
+            if scope not in m.DELETE_SCOPES or not location_ids:
+                # A request without a recorded scope cannot be applied safely:
+                # refusing is the only answer that cannot over-delete.
+                raise FileRegistryError("delete request %r has no recorded scope" % request_id)
             result = m.build_provider_result(
                 provider_kind=receipt.provider_kind, state=receipt.state,
                 response_code=receipt.response_code, message=receipt.message,
                 confirmed_at=receipt.confirmed_at)
-            await self.delete_requests.update_one(
-                {"id": request_id},
+            claimed = await self.delete_requests.update_one(
+                {"id": request_id, "state": m.DELETE_REQUESTED},
                 {"$set": {"state": receipt.state, "provider_result": result,
                           "resolved_at": _now_iso()}})
+            if getattr(claimed, "modified_count", 1) != 1:
+                raise FileRegistryError("delete request %r was answered concurrently" % request_id)
             confirmed = receipt.state == m.DELETE_PROVIDER_CONFIRMED
-            await self.files.update_one(
-                {"id": request["file_id"]},
-                {"$set": {"status": m.FILE_DELETED_AT_PROVIDER if confirmed else m.FILE_ACTIVE,
-                          "updated_at": _now_iso()}})
-            if confirmed:
-                await self.locations.update_many(
-                    {"file_id": request["file_id"]},
-                    {"$set": {"availability": m.AVAILABILITY_MISSING,
-                              "last_check_error": "destroyed at provider on request",
+            file_id = request["file_id"]
+            if scope == m.DELETE_SCOPE_FILE:
+                await self.files.update_one(
+                    {"id": file_id},
+                    {"$set": {"status": m.FILE_DELETED_AT_PROVIDER if confirmed else m.FILE_ACTIVE,
                               "updated_at": _now_iso()}})
+            if confirmed:
+                now = _now_iso()
+                await self.locations.update_many(
+                    {"file_id": file_id, "id": {"$in": location_ids}},
+                    {"$set": {"availability": m.AVAILABILITY_MISSING,
+                              "destroyed_at_provider": now,
+                              "destroyed_by_request_id": request_id,
+                              "last_check_error": "destroyed at provider on request",
+                              "updated_at": now}})
             await self._audit(
-                action=ACTION_DELETE_RESULT, actor_id=actor_id, entity_id=request["file_id"],
+                action=ACTION_DELETE_RESULT, actor_id=actor_id, entity_id=file_id,
+                entity_version=(str(request["version_no"])
+                                if request.get("version_no") is not None else None),
                 result=RESULT_SUCCESS if confirmed else RESULT_FAILURE,
                 reason="provider answered %s" % receipt.state,
                 idempotency_key=idempotency_key,
                 structured_diff={"request_id": request_id, "provider_result": result,
-                                 "original_destroyed": confirmed})
+                                 "scope": scope, "version_no": request.get("version_no"),
+                                 "location_ids": location_ids,
+                                 "original_destroyed": confirmed,
+                                 "file_status_changed": scope == m.DELETE_SCOPE_FILE})
             await self._complete(ACTION_DELETE_RESULT, idempotency_key, request_id)
             return {"status": STATUS_REGISTERED, "request_id": request_id,
-                    "state": receipt.state, "original_destroyed": confirmed}
+                    "state": receipt.state, "original_destroyed": confirmed,
+                    "scope": scope, "version_no": request.get("version_no"),
+                    "location_ids": location_ids}
         except Exception as exc:                                    # noqa: BLE001
             await self._fail(ACTION_DELETE_RESULT, idempotency_key, type(exc).__name__)
             raise

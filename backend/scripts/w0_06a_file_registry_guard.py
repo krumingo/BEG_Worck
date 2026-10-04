@@ -108,6 +108,20 @@ Rules
 ``W06A-STALE``
     A declared legacy site whose function no longer exists.
 
+``W06B-RELBYPASS`` (W0-06A review finding 2)
+    A way to link a file to a business record WITHOUT verifying that the record
+    exists in this tenant: a ``register_file`` / ``add_relation`` definition
+    that takes a verify/skip/bypass/trust switch, a call that passes one, or a
+    ``_assert_relation_target`` call that sits under a condition in the
+    registry service. The check is unconditional by construction; a switch is
+    how a missing or foreign target gets linked.
+
+``W06B-DELSCOPE`` (W0-06A review finding 3)
+    A write to provider locations in the registry service whose filter does not
+    name the exact location ``id`` (a value or an ``$in`` list). A delete
+    receipt for one version applied to "every location of the file" is how
+    version 2 came to look destroyed when only version 1 was.
+
 Pure AST. The guard never imports the application; ``app.files.models`` and
 ``app.files.migration_map`` are stdlib-only and are loaded BY FILE PATH (like
 the A1 guard loads ``ownership.py``), so no database client is constructed and
@@ -647,6 +661,83 @@ def _stale_declarations() -> List[Violation]:
     return out
 
 
+#: Parameter / keyword names that switch off relation-target verification.
+_BYPASS_MARKERS: Tuple[str, ...] = ("verify", "skip", "bypass", "trust", "unchecked",
+                                    "no_check", "nocheck", "unsafe")
+_RELATION_WRITERS: FrozenSet[str] = frozenset({"register_file", "add_relation"})
+
+
+def _is_bypass_name(name: Optional[str]) -> bool:
+    lowered = (name or "").lower()
+    return any(marker in lowered for marker in _BYPASS_MARKERS)
+
+
+def _relation_bypass_violations(rel: str, tree: ast.Module) -> List[Violation]:
+    """W06B-RELBYPASS — see the module docstring."""
+    out: List[Violation] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                and node.name in _RELATION_WRITERS:
+            args = node.args
+            for arg in list(args.args) + list(args.kwonlyargs) + list(args.posonlyargs):
+                if _is_bypass_name(arg.arg):
+                    out.append((rel, arg.lineno if hasattr(arg, "lineno") else node.lineno,
+                                "W06B-RELBYPASS",
+                                "%s() takes %r: relation targets are verified in this tenant "
+                                "unconditionally, a caller switch to skip it is the bypass the "
+                                "W0-06A review found" % (node.name, arg.arg)))
+        if isinstance(node, ast.Call):
+            name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                    else getattr(node.func, "id", ""))
+            if name in _RELATION_WRITERS:
+                for kw in node.keywords:
+                    if _is_bypass_name(kw.arg):
+                        out.append((rel, node.lineno, "W06B-RELBYPASS",
+                                    "%s(%s=...) asks the registry to skip relation-target "
+                                    "verification" % (name, kw.arg)))
+    if rel == REGISTRY_SERVICE:
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.If, ast.IfExp, ast.While)):
+                continue
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute) \
+                        and inner.func.attr == "_assert_relation_target":
+                    out.append((rel, inner.lineno, "W06B-RELBYPASS",
+                                "_assert_relation_target() under a condition: relation-target "
+                                "verification must not be skippable"))
+    return out
+
+
+def _is_locations_handle(node: ast.AST) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == "locations"
+
+
+def _filter_names_exact_id(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Dict):
+        return False
+    return any(_const_str(k) == "id" for k in node.keys if k is not None)
+
+
+def _delete_scope_violations(rel: str, tree: ast.Module) -> List[Violation]:
+    """W06B-DELSCOPE — see the module docstring."""
+    if rel != REGISTRY_SERVICE:
+        return []
+    out: List[Violation] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("update_one", "update_many", "replace_one",
+                                       "find_one_and_update", "delete_one", "delete_many")
+                and _is_locations_handle(node.func.value)):
+            continue
+        flt = node.args[0] if node.args else None
+        if not _filter_names_exact_id(flt):
+            out.append((rel, node.lineno, "W06B-DELSCOPE",
+                        "provider-location %s() without the exact location id in its filter: a "
+                        "result for one location/version must never reach the others"
+                        % node.func.attr))
+    return out
+
+
 def check_module(rel: str) -> List[Violation]:
     full = BACKEND / rel
     if not full.is_file():
@@ -657,6 +748,8 @@ def check_module(rel: str) -> List[Violation]:
     found = list(checker.violations)
     found.extend(_ownerless_builder_violations(rel, tree))
     found.extend(_relation_literal_violations(rel, tree))
+    found.extend(_relation_bypass_violations(rel, tree))
+    found.extend(_delete_scope_violations(rel, tree))
     return found
 
 

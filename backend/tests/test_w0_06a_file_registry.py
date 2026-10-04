@@ -126,7 +126,8 @@ class TestRecordLayer:
                                              object_key="k")),
             (m.build_derived, dict(file_id="file_x", source_version_no=1,
                                    kind=m.DERIVED_THUMBNAIL, cache_reference="c")),
-            (m.build_delete_request, dict(file_id="file_x", requested_by=ACTOR, reason="r")),
+            (m.build_delete_request, dict(file_id="file_x", requested_by=ACTOR, reason="r",
+                                          scope=m.DELETE_SCOPE_FILE, location_ids=("fl_x",))),
         ):
             for bad in ("", "   ", None):
                 with pytest.raises(m.FileRecordInvalid):
@@ -354,9 +355,13 @@ class TestDuplicateChecksum:
                        for _ in range(3)}
             assert answers == {a["file_id"]}
             candidates = await reg.find_by_checksum(digest("same"))
-            assert [c["id"] for c in candidates] == sorted(
-                (c["id"] for c in candidates),
-                key=lambda i: next(m.sort_key(c) for c in candidates if c["id"] == i))
+            # W0-06B: the candidate order is the REGISTRATION order
+            # (file_order_key, led by the atomic registration_seq), not
+            # (created_at, random id) — see tests/test_w0_06b_entry_gate.py for
+            # the equal-timestamp proof.
+            assert [c["id"] for c in candidates] == [a["file_id"], b["file_id"]]
+            assert [c["id"] for c in candidates] == [
+                c["id"] for c in sorted(candidates, key=m.file_order_key)]
         run(body())
 
     def test_an_explicit_caller_may_register_a_second_file_anyway(self):
@@ -488,8 +493,13 @@ class TestPhysicalDelete:
             reg, db = await _registry()
             file_id = (await _register(reg, relations=[
                 {"relation_type": m.RELATION_INVOICE, "record_id": INVOICE}]))["file_id"]
+            await reg.set_provider_location(
+                actor_id=ACTOR, file_id=file_id, version_no=1,
+                provider_kind=m.PROVIDER_FAKE_MEMORY, provider_binding_id="b",
+                container="c", object_key="k")
             out = await reg.request_physical_delete(actor_id=ACTOR, file_id=file_id,
-                                                    reason="client asked for erasure")
+                                                    reason="client asked for erasure",
+                                                    whole_file=True)
             head = await db[m.FILES_COLLECTION].find_one({"id": file_id}, {"_id": 0})
             assert head["status"] == m.FILE_DELETE_REQUESTED
             assert out["affected_records"] == 1
@@ -505,8 +515,12 @@ class TestPhysicalDelete:
         async def body():
             reg, db = await _registry()
             file_id = (await _register(reg))["file_id"]
+            await reg.set_provider_location(
+                actor_id=ACTOR, file_id=file_id, version_no=1,
+                provider_kind=m.PROVIDER_FAKE_MEMORY, provider_binding_id="b",
+                container="c", object_key="k")
             request = await reg.request_physical_delete(actor_id=ACTOR, file_id=file_id,
-                                                        reason="erasure")
+                                                        reason="erasure", whole_file=True)
             refused = DeleteReceipt(state=m.DELETE_PROVIDER_REFUSED,
                                     provider_kind=m.PROVIDER_FAKE_MEMORY,
                                     response_code="FORBIDDEN", message="no rights")
@@ -528,7 +542,7 @@ class TestPhysicalDelete:
                 provider_kind=m.PROVIDER_FAKE_MEMORY, provider_binding_id="b",
                 container="c", object_key="k")
             request = await reg.request_physical_delete(actor_id=ACTOR, file_id=file_id,
-                                                        reason="erasure")
+                                                        reason="erasure", whole_file=True)
             out = await reg.record_delete_result(
                 actor_id=ACTOR, request_id=request["request_id"],
                 receipt=DeleteReceipt(state=m.DELETE_PROVIDER_CONFIRMED,

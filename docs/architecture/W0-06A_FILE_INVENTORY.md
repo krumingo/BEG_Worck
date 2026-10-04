@@ -135,4 +135,3 @@ source or by the frozen legacy list, and every declaration still matches real co
 | frozen pointer sites (guard) | 13 |
 | frozen physical-delete sites (guard) | 3 |
 | reconciliation problems | 0 |
-

@@ -219,7 +219,7 @@ def render() -> str:
     add("- `%s` — a media row with no context. A human must say what it belongs to."
         % mm.BLOCKER_NO_RELATION)
     add("")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines).rstrip("\n") + "\n"
 
 
 def main(argv: Sequence[str]) -> int:

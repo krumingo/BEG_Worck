@@ -125,11 +125,13 @@ ORG_KEYED: Dict[str, str] = {
               # at ``org_id``-keyed business records: splitting the two keys
               # would put half of each relation on each side of the boundary.
               # The one list in ``app.files.models.REGISTRY_COLLECTIONS`` must
-              # equal the six names here; ``tests/test_w0_06a_file_registry.py``
-              # proves it, so a seventh collection cannot appear unclassified.
+              # equal the names here; ``tests/test_w0_06a_file_registry.py``
+              # proves it, so a new collection cannot appear unclassified.
               "file_registry", "file_versions", "file_relations",
               "file_provider_locations", "file_derived_cache",
-              "file_delete_requests"),
+              "file_delete_requests",
+              # W0-06B: the registry's per-tenant registration counter.
+              "file_registry_sequences"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,

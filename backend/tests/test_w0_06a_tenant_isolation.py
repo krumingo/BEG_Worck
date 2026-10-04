@@ -207,7 +207,7 @@ class TestCollidingIdsDoNotLeak:
                                           relation_type=m.RELATION_INVOICE,
                                           record_id=SHARED_INVOICE, reason="A unlinks")
             await regs[A].request_physical_delete(actor_id=ACTOR_A, file_id=SHARED_FILE_ID,
-                                                   reason="A asks for erasure")
+                                                   reason="A asks for erasure", whole_file=True)
             # B's half of the collision is byte-identical to before
             assert await snapshot(B) == before_b
             assert (await regs[B].require_file(SHARED_FILE_ID))["status"] == m.FILE_ACTIVE

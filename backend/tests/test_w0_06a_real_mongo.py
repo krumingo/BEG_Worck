@@ -341,7 +341,12 @@ def test_a_write_by_one_tenant_leaves_the_others_documents_byte_equal():
         await regs[A].add_version(actor_id=ACTOR, file_id=ids[A], checksum_value=digest("a2"),
                                   size_bytes=2, mime_type="image/jpeg",
                                   original_name="site.jpg", reason="retake")
-        await regs[A].request_physical_delete(actor_id=ACTOR, file_id=ids[A], reason="erasure")
+        await regs[A].set_provider_location(
+            actor_id=ACTOR, file_id=ids[A], version_no=2,
+            provider_kind=m.PROVIDER_S3_COMPATIBLE, provider_binding_id="s3-%s" % A,
+            container="bucket", object_key="a/v2.jpg")
+        await regs[A].request_physical_delete(actor_id=ACTOR, file_id=ids[A], reason="erasure",
+                                              whole_file=True)
         for method, kwargs in (
             ("get_file", {"file_id": ids[B]}),
             ("list_versions", {"file_id": ids[B]}),

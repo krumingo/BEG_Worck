@@ -399,7 +399,7 @@ def render(sites: Sequence[Site]) -> str:
               str(len(guard.LEGACY_PHYSICAL_DELETE_SITES))]))
     add(_row(["reconciliation problems", str(sum(len(v) for v in problems.values()))]))
     add("")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines).rstrip("\n") + "\n"
 
 
 def main(argv: Sequence[str]) -> int:
