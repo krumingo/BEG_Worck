@@ -45,6 +45,22 @@ class _Base:
         self.offline = False
         self.denied: Set[str] = set()
         self.requests: List[httpx.Request] = []
+        #: Generic failure hooks (independent of the protocol): refuse every
+        #: write, refuse every delete, or flip a byte of every downloaded body.
+        self.refuse_puts = False
+        self.refuse_deletes = False
+        self.corrupt_reads = False
+
+    @staticmethod
+    def _is_write(request: httpx.Request) -> bool:
+        params = dict(request.url.params)
+        return (request.method == "PUT" or "/upload/" in request.url.path
+                or params.get("api") == "SYNO.FileStation.Upload")
+
+    @staticmethod
+    def _is_delete(request: httpx.Request) -> bool:
+        return request.method == "DELETE" or \
+            dict(request.url.params).get("api") == "SYNO.FileStation.Delete"
 
     @property
     def transport(self) -> httpx.MockTransport:
@@ -54,7 +70,18 @@ class _Base:
         self.requests.append(request)
         if self.offline:
             raise httpx.ConnectError("fake provider offline", request=request)
-        return self.handle(request)
+        if (self.refuse_puts and self._is_write(request)) or \
+                (self.refuse_deletes and self._is_delete(request)):
+            return httpx.Response(403)
+        response = self.handle(request)
+        if self.corrupt_reads and request.method == "GET" and response.status_code == 200 \
+                and "json" not in (response.headers.get("content-type") or "") \
+                and response.content and not request.url.path.endswith("tenant-root.json") \
+                and "tenant-root.json" not in str(request.url):
+            body = bytearray(response.content)
+            body[0] ^= 0xFF
+            return httpx.Response(200, content=bytes(body), headers=response.headers)
+        return response
 
     def deny(self, key: str) -> None:
         self.denied.add(key)

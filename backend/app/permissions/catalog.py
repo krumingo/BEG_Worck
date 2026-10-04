@@ -66,6 +66,22 @@ ACTIONS: Set[str] = {
     # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
     # adapter write and needs this action; default deny for every other role.
     "master_data.legacy.delete",
+    # W0-06B File Registry / storage providers (FLOW-016 "Права и сигурност").
+    # Granted to no role below except through Owner/Admin's full set; any other
+    # role needs an explicit assignment. Connecting a provider and activating
+    # it are security/credential actions; opening, downloading and sharing a
+    # file are checked on every call, and a restricted / confidential file
+    # additionally needs its sensitivity action ("the narrower right wins").
+    "storage.provider.configure",
+    "storage.provider.activate",
+    "storage.provider.read",
+    "file.upload",
+    "file.open",
+    "file.download",
+    "file.share",
+    "file.integrity.check",
+    "file.sensitivity.restricted",
+    "file.sensitivity.confidential",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited

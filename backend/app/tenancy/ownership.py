@@ -131,7 +131,12 @@ ORG_KEYED: Dict[str, str] = {
               "file_provider_locations", "file_derived_cache",
               "file_delete_requests",
               # W0-06B: the registry's per-tenant registration counter.
-              "file_registry_sequences"),
+              "file_registry_sequences",
+              # W0-06B storage providers (FLOW-016 onboarding): the tenant's
+              # provider bindings, its sealed credentials, the evidence of each
+              # activation attempt and the short-lived BEG_Work access grants.
+              "storage_provider_bindings", "storage_credentials",
+              "storage_activation_runs", "storage_access_grants"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,
