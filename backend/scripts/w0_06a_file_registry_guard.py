@@ -170,11 +170,23 @@ def _load(name: str, relative: str):
 
 _models = _load("_w0_06a_models", "app/files/models.py")
 # ``migration_map`` imports ``app.files.models``; give it the copy just loaded
-# rather than letting it import the package.
-sys.modules.setdefault("app", type(sys)("app"))
-sys.modules.setdefault("app.files", type(sys)("app.files"))
-sys.modules["app.files.models"] = _models
-_migration = _load("_w0_06a_migration", "app/files/migration_map.py")
+# rather than letting it import the package. The stand-in package modules are
+# TEMPORARY (W0-06B): left in ``sys.modules`` they shadowed the real ``app`` /
+# ``app.files`` packages for every later import in the same process, so a test
+# run that collected this guard first could no longer import ``app.files.*``.
+_STUBBED = ("app", "app.files", "app.files.models")
+_saved = {name: sys.modules.get(name) for name in _STUBBED}
+try:
+    sys.modules.setdefault("app", type(sys)("app"))
+    sys.modules.setdefault("app.files", type(sys)("app.files"))
+    sys.modules["app.files.models"] = _models
+    _migration = _load("_w0_06a_migration", "app/files/migration_map.py")
+finally:
+    for _name, _module in _saved.items():
+        if _module is None:
+            sys.modules.pop(_name, None)
+        else:
+            sys.modules[_name] = _module
 
 REGISTRY_COLLECTIONS: FrozenSet[str] = frozenset(_models.REGISTRY_COLLECTIONS)
 VERSIONS_COLLECTION: str = _models.VERSIONS_COLLECTION

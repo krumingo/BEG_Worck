@@ -44,7 +44,7 @@ def _scan(value: Any, path: str = "structured_diff") -> None:
             _scan(item, "%s[%d]" % (path, i))
 
 
-async def record(tenant, *, action: str, actor_id: str, retention_class: str,
+async def record(view, *, action: str, actor_id: str, retention_class: str,
                  entity_type: str, entity_id: str, result: str = RESULT_SUCCESS,
                  reason: Optional[str] = None, structured_diff: Optional[Dict[str, Any]] = None,
                  related_file_ids: Optional[List[str]] = None, entity_version: Optional[str] = None,
@@ -52,9 +52,9 @@ async def record(tenant, *, action: str, actor_id: str, retention_class: str,
                  actor_type: str = ACTOR_HUMAN) -> Dict[str, Any]:
     _scan(structured_diff or {})
     event = build_event(
-        tenant_id=tenant.org_id, actor_type=actor_type, actor_id=actor_id, action=action,
+        tenant_id=view.org_id, actor_type=actor_type, actor_id=actor_id, action=action,
         source_flow=m.SOURCE_FLOW, retention_class=retention_class, result=result,
         entity_type=entity_type, entity_id=entity_id, entity_version=entity_version,
         reason=reason, structured_diff=structured_diff, related_file_ids=related_file_ids or [],
         idempotency_key=idempotency_key, error_code=error_code)
-    return await record_event(tenant.audit_store_db(), event)
+    return await record_event(view.audit_store_db(), event)
