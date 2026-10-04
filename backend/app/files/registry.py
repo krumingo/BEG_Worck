@@ -77,6 +77,21 @@ ACTION_RELATION_REMOVED = "file.relation.removed"
 ACTION_LOCATION_SET = "file.provider_location.set"
 ACTION_INTEGRITY_CHECKED = "file.integrity.checked"
 ACTION_DERIVED_CACHED = "file.derived.cached"
+#: W0-06B: a failing check appends, after ``file.integrity.checked``, one event
+#: named for WHAT failed, so the trail (and any consumer of it) never has to
+#: parse a diff to tell a missing original from a permission failure.
+ACTION_INTEGRITY_MISSING = "file.integrity.missing"
+ACTION_INTEGRITY_CHECKSUM_MISMATCH = "file.integrity.checksum_mismatch"
+ACTION_INTEGRITY_PERMISSION_DENIED = "file.integrity.permission_denied"
+ACTION_INTEGRITY_UNREACHABLE = "file.integrity.provider_unreachable"
+ACTION_INTEGRITY_EXTERNALLY_CHANGED = "file.integrity.externally_changed"
+INTEGRITY_OUTCOME_ACTIONS = {
+    m.AVAILABILITY_MISSING: ACTION_INTEGRITY_MISSING,
+    m.AVAILABILITY_CHECKSUM_MISMATCH: ACTION_INTEGRITY_CHECKSUM_MISMATCH,
+    m.AVAILABILITY_PERMISSION_DENIED: ACTION_INTEGRITY_PERMISSION_DENIED,
+    m.AVAILABILITY_PROVIDER_UNREACHABLE: ACTION_INTEGRITY_UNREACHABLE,
+    m.AVAILABILITY_EXTERNALLY_CHANGED: ACTION_INTEGRITY_EXTERNALLY_CHANGED,
+}
 ACTION_DELETE_REQUESTED = "file.physical_delete.requested"
 ACTION_DELETE_RESULT = "file.physical_delete.result"
 
@@ -91,6 +106,11 @@ _RETENTION = {
     ACTION_RELATION_REMOVED: RETENTION_R2_PROJECT_OPERATIONAL,
     ACTION_LOCATION_SET: RETENTION_R1_CRITICAL_BUSINESS,
     ACTION_INTEGRITY_CHECKED: RETENTION_R2_PROJECT_OPERATIONAL,
+    ACTION_INTEGRITY_MISSING: RETENTION_R2_PROJECT_OPERATIONAL,
+    ACTION_INTEGRITY_CHECKSUM_MISMATCH: RETENTION_R2_PROJECT_OPERATIONAL,
+    ACTION_INTEGRITY_PERMISSION_DENIED: RETENTION_R2_PROJECT_OPERATIONAL,
+    ACTION_INTEGRITY_UNREACHABLE: RETENTION_R2_PROJECT_OPERATIONAL,
+    ACTION_INTEGRITY_EXTERNALLY_CHANGED: RETENTION_R2_PROJECT_OPERATIONAL,
     ACTION_DERIVED_CACHED: RETENTION_R5_TECHNICAL_DIAGNOSTIC,
     ACTION_DELETE_REQUESTED: RETENTION_R1_CRITICAL_BUSINESS,
     ACTION_DELETE_RESULT: RETENTION_R1_CRITICAL_BUSINESS,
@@ -723,6 +743,8 @@ class FileRegistry:
             provider_binding_id=spec["provider_binding_id"],
             container=spec["container"], object_key=spec["object_key"],
             provider_file_id=spec.get("provider_file_id"),
+            provider_version_id=spec.get("provider_version_id"),
+            size_bytes=spec.get("size_bytes"),
             role=spec.get("role", m.LOCATION_ROLE_PRIMARY),
             expected_checksum=spec.get("expected_checksum") or expected_checksum,
             availability=spec.get("availability", m.AVAILABILITY_UNVERIFIED))
@@ -811,29 +833,49 @@ class FileRegistry:
                 {"$set": {"availability": verdict.availability,
                           "observed_checksum": verdict.observed_checksum,
                           "observed_size_bytes": verdict.observed_size_bytes,
+                          "observed_provider_file_id": getattr(
+                              verdict, "observed_provider_file_id", None),
+                          "observed_provider_version_id": getattr(
+                              verdict, "observed_provider_version_id", None),
+                          "last_check_method": getattr(verdict, "method", None),
                           "last_verified_at": verdict.checked_at or _now_iso(),
                           "last_check_error": verdict.error,
                           "updated_at": _now_iso()}})
             affected = await self.list_relations(file_id)
             severity = m.severity_of(verdict.availability, len(affected))
-            await self._audit(
+            diff = {
+                "availability": verdict.availability, "severity": severity,
+                "location_id": location["id"], "role": role,
+                "provider_kind": location.get("provider_kind"),
+                "provider_binding_id": location.get("provider_binding_id"),
+                "expected_checksum": verdict.expected_checksum,
+                "observed_checksum": verdict.observed_checksum,
+                "method": getattr(verdict, "method", None),
+                "error": verdict.error,
+                # The list FLOW-016 requires: what is affected, by name.
+                "affected_records": [{"relation_type": r["relation_type"],
+                                      "record_id": r["record_id"]} for r in affected],
+                "treated_as_new_version": False}
+            checked = await self._audit(
                 action=ACTION_INTEGRITY_CHECKED, actor_id=actor_id, entity_id=file_id,
                 entity_version=str(version_no),
                 result=RESULT_SUCCESS if verdict.ok else RESULT_FAILURE,
                 reason="integrity check: %s" % verdict.availability,
-                idempotency_key=idempotency_key,
-                structured_diff={
-                    "availability": verdict.availability, "severity": severity,
-                    "expected_checksum": verdict.expected_checksum,
-                    "observed_checksum": verdict.observed_checksum,
-                    "error": verdict.error,
-                    # The list FLOW-016 requires: what is affected, by name.
-                    "affected_records": [{"relation_type": r["relation_type"],
-                                          "record_id": r["record_id"]} for r in affected],
-                    "treated_as_new_version": False})
+                idempotency_key=idempotency_key, structured_diff=diff)
+            event_ids = [checked["event_id"]]
+            outcome_action = INTEGRITY_OUTCOME_ACTIONS.get(verdict.availability)
+            if outcome_action:
+                outcome = await self._audit(
+                    action=outcome_action, actor_id=actor_id, entity_id=file_id,
+                    entity_version=str(version_no), result=RESULT_FAILURE,
+                    reason="integrity problem: %s" % verdict.availability,
+                    idempotency_key=idempotency_key,
+                    correlation_id=checked["event_id"], structured_diff=diff)
+                event_ids.append(outcome["event_id"])
             await self._complete(ACTION_INTEGRITY_CHECKED, idempotency_key, location["id"])
             return {"status": STATUS_REGISTERED, "location_id": location["id"],
                     "availability": verdict.availability, "severity": severity,
+                    "audit_event_ids": event_ids,
                     "affected_records": [{"relation_type": r["relation_type"],
                                           "record_id": r["record_id"]} for r in affected]}
         except Exception as exc:                                    # noqa: BLE001
@@ -856,7 +898,11 @@ class FileRegistry:
         ref = ProviderObjectRef(container=location["container"],
                                 object_key=location["object_key"],
                                 provider_file_id=location.get("provider_file_id"))
-        verdict = await adapter.verify(ref, location.get("expected_checksum"))
+        verdict = await adapter.verify(
+            ref, location.get("expected_checksum"),
+            expected_size=location.get("expected_size_bytes"),
+            expected_provider_file_id=location.get("provider_file_id"),
+            expected_provider_version_id=location.get("provider_version_id"))
         return await self.record_integrity_check(
             actor_id=actor_id, file_id=file_id, version_no=version_no, verdict=verdict,
             role=role, idempotency_key=idempotency_key)

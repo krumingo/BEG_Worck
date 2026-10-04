@@ -74,7 +74,7 @@ from app.audit.idempotency import (
 from app.files import audit_trail
 from app.files import models as m
 from app.files.authorization import authorize
-from app.files.credentials import CredentialVault, validate_secret
+from app.files.credentials import CREDENTIALS_COLLECTION, CredentialVault, validate_secret
 from app.files.providers.base import (
     ProviderBinding,
     ProviderCredentialsInvalid,
@@ -91,7 +91,7 @@ from app.files.providers.base import (
 BINDINGS_COLLECTION = "storage_provider_bindings"
 ACTIVATION_RUNS_COLLECTION = "storage_activation_runs"
 STORAGE_COLLECTIONS = frozenset({BINDINGS_COLLECTION, ACTIVATION_RUNS_COLLECTION,
-                                 "storage_credentials"})
+                                 CREDENTIALS_COLLECTION})
 
 ROLE_PRIMARY = m.LOCATION_ROLE_PRIMARY
 ROLE_BACKUP = m.LOCATION_ROLE_BACKUP

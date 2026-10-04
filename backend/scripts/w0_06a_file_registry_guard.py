@@ -116,6 +116,18 @@ Rules
     registry service. The check is unconditional by construction; a switch is
     how a missing or foreign target gets linked.
 
+``W06B-CREDSTORE``
+    Any module except :data:`CREDENTIAL_VAULT` naming the sealed-credential
+    collection ``storage_credentials``. Credentials are read and written ONLY
+    by the vault, which is where they are encrypted and bound to their tenant
+    and binding; a second reader is a second place a secret can leak from.
+
+``W06B-ADAPTERBUILD``
+    ``adapter_for(...)`` called in the runtime surface outside
+    :data:`STORAGE_SERVICE`. An operational adapter is built only from an
+    ACTIVE binding with vault-resolved credentials; building one elsewhere is
+    how a file could reach an unverified provider or a hand-supplied secret.
+
 ``W06B-DELSCOPE`` (W0-06A review finding 3)
     A write to provider locations in the registry service whose filter does not
     name the exact location ``id`` (a value or an ``$in`` list). A delete
@@ -169,6 +181,13 @@ VERSIONS_COLLECTION: str = _models.VERSIONS_COLLECTION
 RELATIONS_COLLECTION: str = _models.RELATIONS_COLLECTION
 ORG_KEY: str = _models.ORG_KEY
 
+#: W0-06B: the only module that may name the sealed credential collection, and
+#: the only runtime module that may build an operational provider adapter.
+CREDENTIAL_VAULT = "app/files/credentials.py"
+CREDENTIALS_COLLECTION = "storage_credentials"
+STORAGE_SERVICE = "app/files/storage.py"
+ADAPTER_FACTORY = "app/files/providers/base.py"
+
 #: The one module allowed to write File Registry collections.
 REGISTRY_SERVICE = "app/files/registry.py"
 #: The one module allowed to BUILD registry records (it is the builder).
@@ -182,6 +201,12 @@ FOUNDATION_MODULES: FrozenSet[str] = frozenset({
     "app/files/__init__.py", REGISTRY_MODELS, REGISTRY_SERVICE, REGISTRY_MIGRATION,
     "app/files/providers/__init__.py", "app/files/providers/base.py",
     "app/files/providers/fake.py",
+    # W0-06B storage providers, onboarding, integrity and access.
+    "app/files/providers/http.py", "app/files/providers/s3.py",
+    "app/files/providers/google_drive.py", "app/files/providers/synology.py",
+    "app/files/providers/on_prem.py", "app/files/credentials.py", "app/files/storage.py",
+    "app/files/authorization.py", "app/files/audit_trail.py", "app/files/integrity.py",
+    "app/files/access.py",
 })
 
 #: Field names that hold a provider path, URL or stored object name today.
@@ -738,6 +763,25 @@ def _delete_scope_violations(rel: str, tree: ast.Module) -> List[Violation]:
     return out
 
 
+def _w06b_boundary_violations(rel: str, tree: ast.Module) -> List[Violation]:
+    """W06B-CREDSTORE and W06B-ADAPTERBUILD — see the module docstring."""
+    out: List[Violation] = []
+    for node in ast.walk(tree):
+        if rel not in (CREDENTIAL_VAULT, *REGISTRY_NAME_ALLOWED) \
+                and _const_str(node) == CREDENTIALS_COLLECTION:
+            out.append((rel, node.lineno, "W06B-CREDSTORE",
+                        "only app/files/credentials.py may name %r: sealed credentials are read "
+                        "and written by the vault alone" % CREDENTIALS_COLLECTION))
+        if isinstance(node, ast.Call) and rel not in (STORAGE_SERVICE, ADAPTER_FACTORY):
+            name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                    else getattr(node.func, "id", ""))
+            if name == "adapter_for":
+                out.append((rel, node.lineno, "W06B-ADAPTERBUILD",
+                            "adapter_for() outside app/files/storage.py: an operational adapter "
+                            "comes only from an ACTIVE binding with vault-resolved credentials"))
+    return out
+
+
 def check_module(rel: str) -> List[Violation]:
     full = BACKEND / rel
     if not full.is_file():
@@ -750,6 +794,7 @@ def check_module(rel: str) -> List[Violation]:
     found.extend(_relation_literal_violations(rel, tree))
     found.extend(_relation_bypass_violations(rel, tree))
     found.extend(_delete_scope_violations(rel, tree))
+    found.extend(_w06b_boundary_violations(rel, tree))
     return found
 
 

@@ -24,7 +24,7 @@ MAX_MEDIA_SIZE_MB = 10
 # ── Pydantic Models ────────────────────────────────────────────────
 
 from pydantic import BaseModel
-from app.tenancy.data_access import TenantData
+from app.tenancy.data_access import TenantData, resolve_owner_by_unique_key
 
 
 def _tenant(user: dict) -> TenantData:
@@ -207,18 +207,59 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     return media
 
 
+#: Where the legacy upload routes write (``upload_media`` above). A module
+#: constant so the avatar route and its tests name one directory.
+AVATAR_UPLOAD_DIR = Path("/app/backend/uploads")
+AVATAR_URL_PREFIX = "/api/media/avatar/"
+
+
 @router.get("/media/avatar/{filename}")
 async def serve_avatar(filename: str):
-    """Serve avatar/profile image without auth (public)"""
-    from pathlib import Path
-    UPLOAD_DIR = Path("/app/backend/uploads")
-    if "/" in filename or "\\" in filename or ".." in filename:
+    """Serve a user's CURRENT profile photo — and nothing else.
+
+    W0-06B security fix. The route stays unauthenticated because the frontend
+    renders avatars with a plain ``<img src>`` (no Authorization header), but it
+    no longer serves "any file in the uploads root": that directory holds every
+    tenant's media (invoice photos, OCR scans, delivery and defect evidence),
+    and before this fix knowing a stored name was enough to fetch any of them,
+    bypassing the ACL ``/media/file/{filename}`` enforces.
+
+    A file is served only when ALL of these hold, otherwise the answer is the
+    same 404 (no oracle for which condition failed):
+
+    * exactly one ``media_files`` row names this stored file, and it has an
+      owner (``resolve_owner_by_unique_key`` fails closed on 0 or 2 rows);
+    * that row was uploaded as a ``profile`` photo of a user (``context_id``);
+    * that user exists IN THE SAME TENANT and their ``avatar_url`` is this very
+      file — so pointing one's own avatar_url at someone else's invoice photo
+      does not make it public, because that photo is not a profile upload;
+    * the stored content type is an allowed image type;
+    * the path stays inside the uploads directory and the file exists.
+    """
+    not_found = HTTPException(status_code=404, detail="File not found")
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
-    file_path = UPLOAD_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    from fastapi.responses import FileResponse
-    return FileResponse(file_path, media_type="image/jpeg")
+    media_tenant, media = await resolve_owner_by_unique_key(
+        db, "media_files", "stored_filename", filename,
+        {"_id": 0, "org_id": 1, "stored_filename": 1, "context_type": 1, "context_id": 1,
+         "content_type": 1})
+    if media_tenant is None or media.get("context_type") != "profile" \
+            or not media.get("context_id"):
+        raise not_found
+    owner = await media_tenant.users.find_one({"id": media["context_id"]},
+                                              {"_id": 0, "id": 1, "avatar_url": 1})
+    if not owner or owner.get("avatar_url") != AVATAR_URL_PREFIX + filename:
+        raise not_found
+    content_type = media.get("content_type")
+    if content_type not in ALLOWED_MEDIA_TYPES:
+        raise not_found
+    root = AVATAR_UPLOAD_DIR.resolve()
+    file_path = (AVATAR_UPLOAD_DIR / filename).resolve()
+    if root not in file_path.parents or not file_path.is_file():
+        raise not_found
+    return FileResponse(file_path, media_type=content_type,
+                        headers={"X-Content-Type-Options": "nosniff",
+                                 "Cache-Control": "private, max-age=300"})
 
 
 

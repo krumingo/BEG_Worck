@@ -266,6 +266,98 @@ def test_concurrent_registrations_get_distinct_registration_numbers_on_a_server(
     scratch(t)
 
 
+# ═════════════════════════ provider onboarding / integrity / access, on a server
+def _perms(monkeypatch):
+    from tests.w0_06b_support import install_permissions
+    install_permissions(monkeypatch)
+
+
+async def _registered(sysdb):
+    for org in (A, B):
+        await sysdb["tenant_registry"].insert_one(
+            {"id": org, "status": "active", "storage_status": "not_configured"})
+
+
+@pytest.mark.parametrize("kind", sorted(m.CUSTOMER_MANAGED_PROVIDER_KINDS))
+def test_activation_upload_integrity_and_access_on_a_server(kind, monkeypatch):
+    _perms(monkeypatch)
+
+    async def t(db, sysdb):
+        from app.files.access import FileAccessService, GrantInvalid
+        from app.files.integrity import FileIntegrityService
+        from tests.w0_06b_support import OWNER_A, accepted, configure, ctx, service_for
+        await _registered(sysdb)
+        backends = {}
+        svc = service_for(db, sysdb, A, backends)
+        binding_id, backend = await configure(svc, OWNER_A, kind)
+        backends[binding_id] = backend
+        out = await svc.activate(ctx(OWNER_A, A), binding_id=binding_id,
+                                 responsibility=accepted(OWNER_A))
+        assert out["activated"], out
+        reg_row = await sysdb["tenant_registry"].find_one({"id": A}, {"_id": 0})
+        assert reg_row["storage_status"] == "active"
+        assert reg_row["primary_storage_provider_reference"] == binding_id
+        assert (await sysdb["tenant_registry"].find_one({"id": B}, {"_id": 0}))[
+            "storage_status"] == "not_configured"
+
+        reg = registry(db, A)
+        access = FileAccessService(reg, svc)
+        up = await access.upload(ctx(OWNER_A, A), data=b"real-mongo original",
+                                 display_name="r", original_name="r.pdf",
+                                 category=m.CATEGORY_ACTS, mime_type="application/pdf",
+                                 relations=[{"relation_type": m.RELATION_PROJECT,
+                                             "record_id": PROJECT}])
+        assert up["availability"] == m.AVAILABILITY_AVAILABLE
+
+        # ten concurrent redeems of one single-use grant: exactly one wins
+        grant = await access.issue_access(ctx(OWNER_A, A), file_id=up["file_id"],
+                                          purpose="open")
+        results = await asyncio.gather(*[access.redeem(ctx(OWNER_A, A), token=grant["token"])
+                                         for _ in range(10)], return_exceptions=True)
+        wins = [r for r in results if not isinstance(r, Exception)]
+        assert len(wins) == 1 and wins[0][0] == b"real-mongo original"
+        assert all(isinstance(r, GrantInvalid) for r in results if isinstance(r, Exception))
+
+        # an external change is caught and named with its affected record
+        key = (await reg.primary_location(up["file_id"], 1))["object_key"]
+        backend.mutate(key, b"real-mongo ORIGINAL")
+        finding = await FileIntegrityService(reg, svc).check(ctx(OWNER_A, A),
+                                                             file_id=up["file_id"])
+        assert finding["finding_type"] == "checksum_mismatch"
+        assert [r["record_id"] for r in finding["affected_records"]] == [PROJECT]
+        assert await db["audit_events"].count_documents(
+            {"tenant_id": A, "action": "file.integrity.checksum_mismatch"}) == 1
+        assert await store.verify_tenant_chain(db, A) == (True, None)
+        assert await db[m.VERSIONS_COLLECTION].count_documents({"file_id": up["file_id"]}) == 1
+    scratch(t)
+
+
+def test_two_tenants_cannot_share_a_provider_root_on_a_server(monkeypatch):
+    _perms(monkeypatch)
+
+    async def t(db, sysdb):
+        from tests import w0_06b_fake_backends as fb
+        from tests.w0_06b_support import OWNER_A, OWNER_B, accepted, ctx, service_for
+        await _registered(sysdb)
+        backend, binding, creds = fb.build(m.PROVIDER_S3_COMPATIBLE)
+        backends = {m.PROVIDER_S3_COMPATIBLE: backend}
+        outs = {}
+        for org, owner in ((A, OWNER_A), (B, OWNER_B)):
+            svc = service_for(db, sysdb, org, backends)
+            cfg = await svc.configure_binding(
+                ctx(owner, org), role="primary", provider_kind=binding.provider_kind,
+                container=binding.container, root_prefix=binding.root_prefix,
+                endpoint=binding.endpoint, account=binding.account, credentials=creds)
+            outs[org] = await svc.activate(ctx(owner, org), binding_id=cfg["binding_id"],
+                                           responsibility=accepted(owner))
+        assert outs[A]["activated"] is True
+        assert outs[B]["activated"] is False
+        assert outs[B]["code"] == "ROOT_CLAIMED_BY_ANOTHER_TENANT"
+        for org in (A, B):
+            assert await store.verify_tenant_chain(db, org) == (True, None)
+    scratch(t)
+
+
 def test_the_gate_leaves_no_database_behind():
     async def t(db, sysdb):
         await db["probe"].insert_one({"x": 1})

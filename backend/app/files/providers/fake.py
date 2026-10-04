@@ -158,7 +158,10 @@ class FakeStorageProvider(StorageProviderAdapter):
             modified_at=obj["modified_at"], provider_version_id=obj["provider_file_id"])
 
     async def verify(self, ref: ProviderObjectRef,
-                     expected: Optional[Mapping[str, str]] = None) -> IntegrityVerdict:
+                     expected: Optional[Mapping[str, str]] = None, *,
+                     expected_size: Optional[int] = None,
+                     expected_provider_file_id: Optional[str] = None,
+                     expected_provider_version_id: Optional[str] = None) -> IntegrityVerdict:
         """Report what is there now against what BEG_Work expected.
 
         Never raises for a business-visible failure: a missing object, a lost
