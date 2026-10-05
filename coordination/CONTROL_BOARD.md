@@ -1,14 +1,14 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-05T05:25:42Z · CONTROL STATE: **VALID** as of 2026-10-05T05:25:42Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-05T05:40:01Z · CONTROL STATE: **VALID** as of 2026-10-05T05:40:01Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-06B / C01 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-06B/C01 exact-head final HANDOFF published in Draft PR #46 / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Claude публикува финален HANDOFF за W0-06B/C01 на 888d32e2abf029c5740bc6d7d9484a0cf037809c и сесията приключи. Draft PR #46 head съвпада и е стабилен; Codex започва независим whole-package review и real-Mongo gate. Verdict още няма.
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex завърши независимия whole-package review на 888d32e2abf029c5740bc6d7d9484a0cf037809c. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. CHANGES_REQUESTED е готов, публикацията предстои.
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
 WAITING FOR: —
@@ -38,15 +38,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06B/C01/GPT | Independent W0-06B exact-head Codex review verdict | 2026-10-05T05:25:42Z |
-| CODEX | REVIEWING | W0-06B/C01/CX | — | 2026-10-05T05:25:42Z |
+| GPT | WAITING | W0-06B/C01/GPT | Independent W0-06B exact-head Codex review verdict | 2026-10-05T05:40:01Z |
+| CODEX | REVIEWING | W0-06B/C01/CX | — | 2026-10-05T05:40:01Z |
 | CLAUDE | HANDOFF_READY | W0-06B/C01/CL | — | 2026-10-05T05:25:42Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `1fa20f9c3450ac950b9c5a7743eb166079a297ec` · blob `0ee6f9b55db77293f151d0a131383ce7ffc380d3`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `33d51af982227e2b6eb7bd1e5ee61571d0742b5e` · blob `c313941d1a92dff4cd1b1252032fd95bc6e49566`
 - Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `888d32e2abf029c5740bc6d7d9484a0cf037809c`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082) · head `888d32e2abf029c5740bc6d7d9484a0cf037809c`
 - Dispatch session: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG · dispatch state **NONE**
