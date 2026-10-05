@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C01 REVIEW — CODEX VERDICT READY / PUBLICATION PENDING
+Status: W0-06B/C01 CHANGES_REQUESTED — INDEPENDENT EXACT-HEAD REVIEW PUBLISHED
 Human-Summary-BG: Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
 Current-Agent: CODEX
-Current-State: REVIEW
-Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Current-State: CHANGES_REQUESTED
+Claude-State: WAITING
+Codex-State: WAITING
 Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Codex завърши независимия whole-package review на 888d32e2abf029c5740bc6d7d9484a0cf037809c. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. CHANGES_REQUESTED е готов, публикацията предстои.
+Now: Codex публикува W0-06B/C01 CHANGES_REQUESTED на exact PR #46 head. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. PR #46 остава Draft; Крум решава дали да разреши bounded correction. Няма нов dispatch, merge или deploy.
 Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE (W0-06B start and exact base approved)
+Krum-Action: DECIDE WHETHER TO AUTHORIZE BOUNDED W0-06B AVATAR SECURITY CORRECTION; NO SEND YET
 Dispatch-State: NONE (Claude final HANDOFF observed; never resend)
 Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG
 Dispatch-Observed-At: 2026-10-04T22:01:04Z
@@ -22,22 +22,22 @@ Cycle-ID: C01
 Base-branch: codex/w0-06a-file-registry-foundation (technical integration base only; PR #44 remains Draft/CHANGES_REQUESTED)
 Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Implementation-branch: codex/w0-06b-storage-provider-foundation (created at exact Base-SHA)
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, base main; currently base-only/incomplete)
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, base main; CHANGES_REQUESTED, unmerged)
 PR-Head: 888d32e2abf029c5740bc6d7d9484a0cf037809c
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082
-Review: coordination/REVIEWS/W0-06B.md — independent exact-head whole-package review written; CHANGES_REQUESTED ready, publication pending. W0-06A predecessor review remains coordination/REVIEWS/W0-06A.md.
-Final-Verdict: NONE for W0-06B until PR #46 publication. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+Review: coordination/REVIEWS/W0-06B.md — independent exact-head whole-package CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571. W0-06A predecessor review remains coordination/REVIEWS/W0-06A.md.
+Final-Verdict: W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
 
-## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (REVIEW COMPLETE; VERDICT PUBLICATION PENDING)
+## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (CHANGES_REQUESTED PUBLISHED)
 
-Claude published a final exact-head HANDOFF in Draft PR #46 at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082 on `888d32e2abf029c5740bc6d7d9484a0cf037809c`. The Claude session finished; the live Draft PR head matched this SHA before and after Codex's independent whole-package review. Evidence is in `coordination/REVIEWS/W0-06B.md`: focused 434/434 and disposable real-Mongo 33/33 passed, but unauthenticated cross-tenant current-avatar reads remain; broad adjacent W0 had 16 failures (isolated suspect files passed 85/85). CHANGES_REQUESTED is ready but **not yet published** as a verdict. No merge or deploy is authorized.
+Claude published a final exact-head HANDOFF in Draft PR #46 at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082 on `888d32e2abf029c5740bc6d7d9484a0cf037809c`. The Claude session finished; the live Draft PR head matched this SHA before and after Codex's independent whole-package review. Evidence is in `coordination/REVIEWS/W0-06B.md`: focused 434/434 and disposable real-Mongo 33/33 passed, but unauthenticated cross-tenant current-avatar reads remain; broad adjacent W0 had 16 failures (isolated suspect files passed 85/85). Codex published **W0-06B CHANGES_REQUESTED** at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571. No correction dispatch, merge or deploy is authorized.
 
 **На човешки:** Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
 
