@@ -1,6 +1,6 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C01 REVIEWING — FINAL EXACT-HEAD HANDOFF OBSERVED
+Status: W0-06B/C01 REVIEW — CODEX VERDICT READY / PUBLICATION PENDING
 Human-Summary-BG: Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
 Current-Agent: CODEX
 Current-State: REVIEW
@@ -8,7 +8,7 @@ Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Claude публикува финален HANDOFF за W0-06B/C01 на 888d32e2abf029c5740bc6d7d9484a0cf037809c и сесията приключи. Draft PR #46 head съвпада и е стабилен; Codex започва независим whole-package review и real-Mongo gate. Verdict още няма.
+Now: Codex завърши независимия whole-package review на 888d32e2abf029c5740bc6d7d9484a0cf037809c. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. CHANGES_REQUESTED е готов, публикацията предстои.
 Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
@@ -28,16 +28,16 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082
-Review: coordination/REVIEWS/W0-06A.md — predecessor C01 independent CHANGES_REQUESTED on exact PR #44 head 9040fc1d4b40d5376cc8912ba316a206c02d207b; no W0-06B review.
-Final-Verdict: NONE for W0-06B; independent review in progress. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+Review: coordination/REVIEWS/W0-06B.md — independent exact-head whole-package review written; CHANGES_REQUESTED ready, publication pending. W0-06A predecessor review remains coordination/REVIEWS/W0-06A.md.
+Final-Verdict: NONE for W0-06B until PR #46 publication. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
 
-## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (FINAL HANDOFF; CODEX REVIEWING)
+## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (REVIEW COMPLETE; VERDICT PUBLICATION PENDING)
 
-Claude published a final exact-head HANDOFF in Draft PR #46 at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082 on `888d32e2abf029c5740bc6d7d9484a0cf037809c`. The Claude session reports completion; live PR and remote branch heads match this SHA on repeated checks. Codex independently reviews the whole `main@79af297612f57c055bb7caef3f0c48493800d1b6 → final W0-06B head` package. The HANDOFF claims 434/434 focused and 33/33 real-Mongo passes, but also reports 15 adjacent W0 failures and residual avatar reachability without authentication; none of these claims is yet an independent Codex verdict. No merge or deploy is authorized.
+Claude published a final exact-head HANDOFF in Draft PR #46 at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082 on `888d32e2abf029c5740bc6d7d9484a0cf037809c`. The Claude session finished; the live Draft PR head matched this SHA before and after Codex's independent whole-package review. Evidence is in `coordination/REVIEWS/W0-06B.md`: focused 434/434 and disposable real-Mongo 33/33 passed, but unauthenticated cross-tenant current-avatar reads remain; broad adjacent W0 had 16 failures (isolated suspect files passed 85/85). CHANGES_REQUESTED is ready but **not yet published** as a verdict. No merge or deploy is authorized.
 
 **На човешки:** Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
 
