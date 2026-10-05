@@ -31,3 +31,19 @@ Canonical field in ACTIVE/TASK template: `Human-Summary-BG`.
 
 Every new assignment message to Codex or Claude **begins** with `На човешки:` and that exact 1–2 line text before its technical banner. The same words go into `Human-Summary-BG` and, during the active assignment/review, into the dashboard's “Какво правим”/NOW projection. After a lifecycle transition, NOW must be updated to the newly observed reality; it must not keep saying a completed action is still pending. Dashboard labels and management-facing task text are Bulgarian by default. Technical identifiers (Task-ID, Cycle-ID, SHA, PR, FLOW/Wave IDs) remain unchanged.
 
+## No-polling rule for Codex / Work monitors
+
+Periodic polling of GitHub for an active BEG_WORK implementation task is **forbidden by default**. Do not create or keep a 5-minute/hourly monitor whose only action is to re-read ACTIVE/CONTROL_STATE/PR state and report unchanged status.
+
+Allowed triggers for Codex review or owner notification are event-driven only:
+- a newly published final exact-head HANDOFF;
+- a published PASS / CHANGES_REQUESTED / BLOCKED review result;
+- an explicit Krum instruction;
+- a real blocker that requires Krum's decision.
+
+After any final review verdict, every task-specific monitor must be disabled. A CHANGES_REQUESTED verdict leaves the task in WAITING_FOR_OWNER/ARCHITECT_DECISION; it does **not** authorize repeated polling, a new Send, or another review loop.
+
+If a scheduled task wakes while no qualifying event exists, it must exit without GitHub writes, without ChatGPT notification, and without starting Codex/Claude work.
+
+Control-board management text should explicitly show `MONITORING: OFF` once a task is waiting on Krum after a verdict.
+
