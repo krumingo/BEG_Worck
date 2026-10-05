@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-05T05:42:52Z",
+  "validated_at": "2026-10-05T17:36:04Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "f5787f4bb94398c78cb2a23e2264cb6b05bcc244",
-  "control_state_commit_sha": "0367a269dbd67b6dbb12f6a5176d5939049a273e",
-  "now": "Codex публикува W0-06B/C01 CHANGES_REQUESTED на exact PR #46 head. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. PR #46 остава Draft; Крум решава дали да разреши bounded correction. Няма нов dispatch, merge или deploy.",
+  "active_source_commit_sha": "18d2619461661b85e3e50ea14f9e116fdc4a7932",
+  "control_state_commit_sha": "d36a487a9e5a22a0b4889e2783aa1c403dd9e710",
+  "now": "Крум разреши bounded W0-06B/C02 avatar security correction на exact PR #46 head. Codex подготви еднократното задание; Claude не е изпратен или започнал. Очаква се action-time потвърждение за Send. Няма периодичен monitor.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
@@ -21,42 +21,42 @@
     "REVIEW"
   ],
   "task_id": "W0-06B",
-  "cycle_id": "C01",
+  "cycle_id": "C02",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-06B/C01/GPT",
-      "waiting_for": "Krum relay of the published W0-06B CHANGES_REQUESTED review",
-      "updated_at": "2026-10-05T05:42:52Z"
+      "work_id": "W0-06B/C02/GPT",
+      "waiting_for": "Bounded correction HANDOFF and independent Codex verdict",
+      "updated_at": "2026-10-05T17:36:04Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-06B/C01/CX",
-      "waiting_for": "GPT/Krum decision on whether to authorize a bounded avatar security correction",
-      "updated_at": "2026-10-05T05:42:52Z"
+      "state": "WORKING",
+      "work_id": "W0-06B/C02/CX",
+      "waiting_for": "Action-time confirmation for one Claude C02 Send",
+      "updated_at": "2026-10-05T17:36:04Z"
     },
     "CLAUDE": {
       "state": "WAITING",
-      "work_id": "W0-06B/C01/CL",
-      "waiting_for": "Authorized bounded correction assignment, if any",
-      "updated_at": "2026-10-05T05:42:52Z"
+      "work_id": "W0-06B/C02/CL",
+      "waiting_for": "Confirmed one-time C02 Send; not yet dispatched",
+      "updated_at": "2026-10-05T17:36:04Z"
     }
   },
-  "current_work_id": "W0-06B/C01/CX",
-  "state": "CHANGES_REQUESTED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "GPT/Krum decision on whether to authorize a bounded avatar security correction",
+  "current_work_id": "W0-06B/C02/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "Action-time confirmation for one Claude C02 Send",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 46,
   "pr_head_sha": "888d32e2abf029c5740bc6d7d9484a0cf037809c",
   "pr_draft": true,
-  "dispatch_state": "NONE",
-  "dispatch_run_url": "https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082",
     "head_sha": "888d32e2abf029c5740bc6d7d9484a0cf037809c",
@@ -72,26 +72,26 @@
     "last_agent": "CODEX",
     "last_event": "W0-06B/C01 independent exact-head review published in Draft PR #46",
     "last_result": "CHANGES_REQUESTED",
-    "required_by_krum": true,
-    "from": "CODEX",
-    "to": "GPT",
-    "status": "NOT_SENT",
-    "instruction": "Krum decides whether to authorize a bounded W0-06B avatar security correction. No automatic Send, merge or deploy.",
+    "required_by_krum": false,
+    "from": null,
+    "to": null,
+    "status": "NO_RELAY_NEEDED",
+    "instruction": "Krum authorized the bounded C02 correction; Computer Use still requires action-time confirmation before one Send. No monitor, merge or deploy.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571",
-    "updated_at": "2026-10-05T05:42:52Z"
+    "updated_at": "2026-10-05T17:36:04Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "Decide whether to authorize a bounded W0-06B avatar security correction; no dispatch without approval.",
+  "requires_krum_reason": "Confirm one-time W0-06B/C02 Send to Claude at action time; no Send yet.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "CORRECTION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "5c8604139dc5db1246ecff9a153650043fb9b317",
+    "active_blob_sha": "20d40879b8ad7c540981a66162e374ee206966c7",
     "review_path": "coordination/REVIEWS/W0-06B.md",
     "review_blob_sha": "0e80113fc68ae23888f43669caa8c6b838dd9080",
     "canonical_docs": [
@@ -125,7 +125,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-05T05:42:52Z",
+  "updated_at": "2026-10-05T17:36:04Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
@@ -196,6 +196,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571",
       "source_commit_sha": "f5787f4bb94398c78cb2a23e2264cb6b05bcc244",
       "summary": "Independent whole-package review: 434 focused and 33 disposable real-Mongo tests passed with no skips; unauthenticated cross-tenant current-avatar read remains. Published one CHANGES_REQUESTED verdict on exact Draft PR #46 head. No correction dispatch, merge or deploy."
+    },
+    {
+      "event_id": "w0-06b-c02-avatar-correction-prepared-not-dispatched",
+      "occurred_at": "2026-10-05T17:36:04Z",
+      "task_id": "W0-06B",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "888d32e2abf029c5740bc6d7d9484a0cf037809c",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/18d2619461661b85e3e50ea14f9e116fdc4a7932/coordination/ACTIVE.md",
+      "source_commit_sha": "18d2619461661b85e3e50ea14f9e116fdc4a7932",
+      "summary": "Krum authorized only the bounded avatar route security correction on the existing Draft PR #46 exact head. C02 assignment intent is prepared; no Claude Send/session, new PR, monitor, merge or deploy."
     }
   ]
 }

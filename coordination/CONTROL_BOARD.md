@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-05T05:42:52Z · CONTROL STATE: **VALID** as of 2026-10-05T05:42:52Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-05T17:36:04Z · CONTROL STATE: **VALID** as of 2026-10-05T17:36:04Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06B / C01 / CODEX / **CHANGES_REQUESTED**
+CURRENT: W0-06B / C02 / CODEX / **WORKING**
 LAST: CODEX — W0-06B/C01 independent exact-head review published in Draft PR #46 / CHANGES_REQUESTED
-RELAY: NOT_SENT · CODEX → GPT
-NOW: Codex публикува W0-06B/C01 CHANGES_REQUESTED на exact PR #46 head. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. PR #46 остава Draft; Крум решава дали да разреши bounded correction. Няма нов dispatch, merge или deploy.
-TRANSITION: CODEX_VERDICT / OBSERVED · verdict PUBLISHED
-NEXT: GPT
-KRUM ACTION: REQUIRED — Decide whether to authorize a bounded W0-06B avatar security correction; no dispatch without approval.
-WAITING FOR: GPT/Krum decision on whether to authorize a bounded avatar security correction
+RELAY: NO_RELAY_NEEDED · — → —
+NOW: Крум разреши bounded W0-06B/C02 avatar security correction на exact PR #46 head. Codex подготви еднократното задание; Claude не е изпратен или започнал. Очаква се action-time потвърждение за Send. Няма периодичен monitor.
+TRANSITION: ASSIGNMENT / INTENT · verdict NONE
+NEXT: CLAUDE
+KRUM ACTION: REQUIRED — Confirm one-time W0-06B/C02 Send to Claude at action time; no Send yet.
+WAITING FOR: Action-time confirmation for one Claude C02 Send
 
 ## Required agent banner
 
@@ -20,17 +20,17 @@ All three agents must read the control state and recheck live evidence before co
 ```text
 BEG_WORK
 TASK: W0-06B
-CYCLE: C01
+CYCLE: C02
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: CHANGES_REQUESTED
-NEXT: GPT
-WAITING_FOR: GPT/Krum decision on whether to authorize a bounded avatar security correction
+STATE: WORKING
+NEXT: CLAUDE
+WAITING_FOR: Action-time confirmation for one Claude C02 Send
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06B | C01 | WAITING | WAITING | WAITING | CODEX | GPT/Krum decision on whether to authorize a bounded avatar security correction | CHANGES_REQUESTED |
+| W0-06B | C02 | WAITING | WORKING | WAITING | CODEX | Action-time confirmation for one Claude C02 Send | WORKING |
 
 ## Agent cards
 
@@ -38,22 +38,22 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06B/C01/GPT | Krum relay of the published W0-06B CHANGES_REQUESTED review | 2026-10-05T05:42:52Z |
-| CODEX | WAITING | W0-06B/C01/CX | GPT/Krum decision on whether to authorize a bounded avatar security correction | 2026-10-05T05:42:52Z |
-| CLAUDE | WAITING | W0-06B/C01/CL | Authorized bounded correction assignment, if any | 2026-10-05T05:42:52Z |
+| GPT | WAITING | W0-06B/C02/GPT | Bounded correction HANDOFF and independent Codex verdict | 2026-10-05T17:36:04Z |
+| CODEX | WORKING | W0-06B/C02/CX | Action-time confirmation for one Claude C02 Send | 2026-10-05T17:36:04Z |
+| CLAUDE | WAITING | W0-06B/C02/CL | Confirmed one-time C02 Send; not yet dispatched | 2026-10-05T17:36:04Z |
 
-GPT → Codex → Claude → **Codex (CHANGES_REQUESTED)** → GPT
+GPT → **Codex (WORKING)** → Claude → Codex → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `f5787f4bb94398c78cb2a23e2264cb6b05bcc244` · blob `5c8604139dc5db1246ecff9a153650043fb9b317`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `18d2619461661b85e3e50ea14f9e116fdc4a7932` · blob `20d40879b8ad7c540981a66162e374ee206966c7`
 - Review: `coordination/REVIEWS/W0-06B.md` · blob `0e80113fc68ae23888f43669caa8c6b838dd9080` · verdict **CHANGES_REQUESTED** on `888d32e2abf029c5740bc6d7d9484a0cf037809c`
 - Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `888d32e2abf029c5740bc6d7d9484a0cf037809c`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082) · head `888d32e2abf029c5740bc6d7d9484a0cf037809c`
-- Dispatch session: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG · dispatch state **NONE**
+- Dispatch session: — · dispatch state **PENDING**
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `e91d3230`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `3ad2670d`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `3e43105b`, `docs/architecture/TENANCY_MODEL.md` @ `93997df2`, `docs/flows/FLOW-002.md` @ `5594ffa4`, `docs/flows/FLOW-016.md` @ `af092bbd`, `docs/flows/FLOW-040.md` @ `3d2ce96e`
-- Wave/Flow: `W0` / `FLOW-016` · progress: **REVIEW / STAGE_ONLY** (no proven percentage)
+- Wave/Flow: `W0` / `FLOW-016` · progress: **CORRECTION / STAGE_ONLY** (no proven percentage)
 - `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
@@ -67,5 +67,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-04T22:01:04Z | C01 | — | DISPATCH | CLAUDE | WORKING | `9040fc1d` | [evidence](https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG) |
 | 2026-10-05T05:25:42Z | C01 | — | HANDOFF | CLAUDE | REVIEW | `888d32e2` | [evidence](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082) |
 | 2026-10-05T05:42:52Z | C01 | — | REVIEW | CODEX | CHANGES_REQUESTED | `888d32e2` | [evidence](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571) |
+| 2026-10-05T17:36:04Z | C02 | — | ASSIGNMENT | CODEX | WORKING | `888d32e2` | [evidence](https://github.com/krumingo/BEG_Worck/blob/18d2619461661b85e3e50ea14f9e116fdc4a7932/coordination/ACTIVE.md) |
 
-**Gate:** W0-06B is CHANGES_REQUESTED. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-06B is WORKING. Progression requires independent evidence and the relevant owner approval; this board grants none.
