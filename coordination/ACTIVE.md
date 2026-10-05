@@ -1,41 +1,57 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C01 CHANGES_REQUESTED — INDEPENDENT EXACT-HEAD REVIEW PUBLISHED
-Human-Summary-BG: Продължаваме File Registry към реалните storage providers. Първо затваряме четирите доказани дефекта от основата; после изграждаме безопасно свързване, тест за активиране и проверки дали оригиналите са налични и непроменени.
+Status: W0-06B/C02 PENDING — BOUNDED AVATAR SECURITY CORRECTION PREPARED; SEND NOT CONFIRMED
+Human-Summary-BG: Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
 Current-Agent: CODEX
-Current-State: CHANGES_REQUESTED
+Current-State: WORKING
 Claude-State: WAITING
-Codex-State: WAITING
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex публикува W0-06B/C01 CHANGES_REQUESTED на exact PR #46 head. Focused 434/434 и real-Mongo 33/33 минаха, но публичният avatar URL още дава текуща снимка от друг tenant без сесия. PR #46 остава Draft; Крум решава дали да разреши bounded correction. Няма нов dispatch, merge или deploy.
-Next-Agent: GPT
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Крум разреши bounded W0-06B/C02 avatar security correction на exact PR #46 head. Codex подготви еднократното задание; Claude не е изпратен или започнал. Очаква се action-time потвърждение за Send. Няма периодичен monitor.
+Next-Agent: CLAUDE
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: DECIDE WHETHER TO AUTHORIZE BOUNDED W0-06B AVATAR SECURITY CORRECTION; NO SEND YET
-Dispatch-State: NONE (Claude final HANDOFF observed; never resend)
-Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG
-Dispatch-Observed-At: 2026-10-04T22:01:04Z
+Krum-Action: CONFIRM ONE-TIME W0-06B/C02 SEND TO CLAUDE; NO SEND YET
+Dispatch-State: PENDING (preparation only; no Send until action-time confirmation)
+Dispatch-Run: NONE (C02; C01 session finished)
+Dispatch-Observed-At: NONE (C02)
 Task-ID: W0-06B
-Cycle-ID: C01
+Cycle-ID: C02
 Base-branch: codex/w0-06a-file-registry-foundation (technical integration base only; PR #44 remains Draft/CHANGES_REQUESTED)
 Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Implementation-branch: codex/w0-06b-storage-provider-foundation (created at exact Base-SHA)
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, base main; CHANGES_REQUESTED, unmerged)
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (existing Draft, base main; C01 CHANGES_REQUESTED, unmerged)
 PR-Head: 888d32e2abf029c5740bc6d7d9484a0cf037809c
+Correction-Base-SHA: 888d32e2abf029c5740bc6d7d9484a0cf037809c
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082
-Review: coordination/REVIEWS/W0-06B.md — independent exact-head whole-package CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571. W0-06A predecessor review remains coordination/REVIEWS/W0-06A.md.
-Final-Verdict: W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+HANDOFF-URL: NONE (C02; C01 HANDOFF https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082)
+Review: coordination/REVIEWS/W0-06B.md — C01 independent exact-head CHANGES_REQUESTED at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571; C02 review not started.
+Final-Verdict: C01 W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c; C02 has no HANDOFF or verdict. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
+Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. C02 Send remains subject to Computer Use action-time confirmation; preparation is not dispatch.
 
-## Canonical W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (CHANGES_REQUESTED PUBLISHED)
+## Canonical W0-06B/C02 — bounded avatar security correction (PENDING; NOT SENT)
+
+**На човешки:** Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
+
+**Identity and preflight.** Same Task-ID `W0-06B`, Cycle-ID `C02`, repository `krumingo/BEG_Worck`, existing branch `codex/w0-06b-storage-provider-foundation`, existing Draft PR #46 to `main`, exact correction base `888d32e2abf029c5740bc6d7d9484a0cf037809c`. The C01 independent review is `coordination/REVIEWS/W0-06B.md` and its published CHANGES_REQUESTED is https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571. The PR is still open/Draft at the exact base and no C02 dispatch/HANDOFF was found. Recheck exact PR head, queue state and duplicate absence immediately before Send; STOP on drift. Do not create another Task-ID, branch, Issue, PR, Routine or monitor.
+
+**Only allowed correction.** Secure `GET /api/media/avatar/{filename}` under FLOW-002. No session returns `401/403`; tenant A cannot fetch tenant B's avatar even with a known filename/URL; an authorized same-tenant user can fetch; invoice and all other media stay blocked from the avatar route. If ordinary `<img src>` needs protected access, use only short-lived tenant-scoped grants, with no permanent public URL bypass. Add positive and negative tests for these exact cases. Do not change provider adapters, onboarding, integrity, File/FileVersion/FileRelation models, unrelated routes, W0-07, or production behavior beyond this avatar path.
+
+**Verification and HANDOFF.** Before final HANDOFF run focused avatar security tests, the existing W0-06B focused suite, relevant FLOW-002/media ACL tests, static guards, and disposable loopback real-Mongo only if touched code requires it. Report commands and collected/passed/failed/skipped counts honestly. Publish one final exact-new-head HANDOFF in existing PR #46 with exact changed files, proof unauthenticated and cross-tenant reads fail, same-tenant succeeds, and no unrelated changes; then STOP. Codex does exactly one independent C01→C02 delta and whole `main→new head` review after the final HANDOFF, ended session, stable PR head and SHA match. PASS target is `W0-06B PASS — STORAGE PROVIDER ONBOARDING AND INTEGRITY FOUNDATION CLOSED`, never FLOW-016 Gate PASS. No merge/deploy without separate approval.
+
+**Dispatch and boundary.** This is assignment preparation only. Computer Use Send requires action-time Krum confirmation; no C02 Send or session has occurred. After observed start, set Claude WORKING, Codex WAITING and Dispatch RUNNING with exact session URL. Event-driven only; no five-minute or hourly monitor, GitHub polling loop, automatic W0-07, merge, deploy, production migration, live credentials or customer-original move/delete.
+
+---
+
+## Archived W0-06B/C01 — Storage Provider onboarding, adapters and activation/integrity foundation (CHANGES_REQUESTED PUBLISHED)
 
 Claude published a final exact-head HANDOFF in Draft PR #46 at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082 on `888d32e2abf029c5740bc6d7d9484a0cf037809c`. The Claude session finished; the live Draft PR head matched this SHA before and after Codex's independent whole-package review. Evidence is in `coordination/REVIEWS/W0-06B.md`: focused 434/434 and disposable real-Mongo 33/33 passed, but unauthenticated cross-tenant current-avatar reads remain; broad adjacent W0 had 16 failures (isolated suspect files passed 85/85). Codex published **W0-06B CHANGES_REQUESTED** at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571. No correction dispatch, merge or deploy is authorized.
 
