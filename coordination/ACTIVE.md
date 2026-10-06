@@ -1,14 +1,14 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C03 CODEX REVIEWING — FINAL EXACT-HEAD HANDOFF RECEIVED
+Status: W0-06B/C03 CHANGES_REQUESTED — THREE REPORT AVATAR CONSUMERS NEED AUTH FETCH
 Human-Summary-BG: Сървърният avatar route вече е защитен. Поправяме само browser cache, за да не показва снимка от предишен tenant след смяна на акаунт в същия tab.
 Current-Agent: CODEX
-Current-State: REVIEW
+Current-State: CHANGES_REQUESTED
 Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
+Codex-State: WAITING
 Pipeline-Step: REVIEW
-Transition-Phase: INTENT
-Now: Codex завърши независимия C03 audit и подготвя CHANGES_REQUESTED за три отчетни avatar renderers без authenticated fetch. Verdict още не е публикуван; Claude не е dispatch-нат за нов cycle. Няма merge/deploy или ISSUE-26 implementation.
+Transition-Phase: OBSERVED
+Now: Codex публикува C03 CHANGES_REQUESTED на точния PR head 6af100e65690f51328fff1fb98f8bf9b9d902c8e: три отчетни avatar renderers още ползват plain img без Bearer. Подготвя се само bounded C04 correction; Claude не е dispatch-нат. Няма merge/deploy или ISSUE-26 implementation.
 Next-Agent: CLAUDE
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
@@ -29,8 +29,8 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918 (C03 exact head)
-Review: coordination/REVIEWS/W0-06B.md — C03 independent evidence prepared for exact-head verdict publication.
-Final-Verdict: C03 CHANGES_REQUESTED PENDING publication; W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+Review: coordination/REVIEWS/W0-06B.md — C03 independent exact-head CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104.
+Final-Verdict: C03 W0-06B CHANGES_REQUESTED on 6af100e65690f51328fff1fb98f8bf9b9d902c8e; W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
