@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C02 RUNNING — BOUNDED AVATAR SECURITY CORRECTION SENT; CLAUDE WORKING
+Status: W0-06B/C02 REVIEWING — FINAL EXACT-HEAD HANDOFF OBSERVED; CODEX INDEPENDENT REVIEW
 Human-Summary-BG: Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
+Current-Agent: CODEX
+Current-State: REVIEWING
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: Еднократното W0-06B/C02 задание е изпратено в съществуващата Claude Code Cloud сесия на exact PR #46 head. Claude работи по bounded avatar security поправката; Codex чака финален exact-head HANDOFF. Няма периодичен monitor.
-Next-Agent: CODEX
+Now: Claude публикува финален W0-06B/C02 HANDOFF на d69145e795445ca3ca18df9a6e9818b1dfb8001e; Draft PR #46 head съвпада. Codex започва независим C01→C02 и whole-package review. ISSUE-26/C03 е само за подготовка, без dispatch.
+Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE (one-time C02 Send explicitly confirmed and observed)
-Dispatch-State: RUNNING (one C02 Send; never resend)
+Krum-Action: NONE (Codex independent review in progress)
+Dispatch-State: RUNNING (one C02 Send completed; HANDOFF published; never resend)
 Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG (existing session resumed for C02)
 Dispatch-Observed-At: 2026-10-06T15:25:01Z
 Task-ID: W0-06B
@@ -23,21 +23,21 @@ Base-branch: codex/w0-06a-file-registry-foundation (technical integration base o
 Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Implementation-branch: codex/w0-06b-storage-provider-foundation (created at exact Base-SHA)
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (existing Draft, base main; C01 CHANGES_REQUESTED, unmerged)
-PR-Head: 888d32e2abf029c5740bc6d7d9484a0cf037809c
+PR-Head: d69145e795445ca3ca18df9a6e9818b1dfb8001e
 Correction-Base-SHA: 888d32e2abf029c5740bc6d7d9484a0cf037809c
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
-HANDOFF-URL: NONE (C02; C01 HANDOFF https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5985467082)
-Review: coordination/REVIEWS/W0-06B.md — C01 independent exact-head CHANGES_REQUESTED at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571; C02 review not started.
-Final-Verdict: C01 W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c; C02 has no HANDOFF or verdict. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421 (C02 exact head d69145e795445ca3ca18df9a6e9818b1dfb8001e)
+Review: coordination/REVIEWS/W0-06B.md — C01 independent exact-head CHANGES_REQUESTED at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571; C02 review in progress, no verdict.
+Final-Verdict: C01 W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c; C02 HANDOFF received, independent verdict pending. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
 Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent exactly once and observed Claude working in the existing W0-06B session. No duplicate Send.
 
-## Canonical W0-06B/C02 — bounded avatar security correction (RUNNING; SENT ONCE)
+## Canonical W0-06B/C02 — bounded avatar security correction (HANDOFF; INDEPENDENT REVIEW)
 
 **На човешки:** Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
 
@@ -47,7 +47,7 @@ Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avata
 
 **Verification and HANDOFF.** Before final HANDOFF run focused avatar security tests, the existing W0-06B focused suite, relevant FLOW-002/media ACL tests, static guards, and disposable loopback real-Mongo only if touched code requires it. Report commands and collected/passed/failed/skipped counts honestly. Publish one final exact-new-head HANDOFF in existing PR #46 with exact changed files, proof unauthenticated and cross-tenant reads fail, same-tenant succeeds, and no unrelated changes; then STOP. Codex does exactly one independent C01→C02 delta and whole `main→new head` review after the final HANDOFF, ended session, stable PR head and SHA match. PASS target is `W0-06B PASS — STORAGE PROVIDER ONBOARDING AND INTEGRITY FOUNDATION CLOSED`, never FLOW-016 Gate PASS. No merge/deploy without separate approval.
 
-**Dispatch and boundary.** Krum confirmed the one-time Computer Use Send. Codex resumed the existing W0-06B Claude Code Cloud session at https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG, observed the C02 message and Claude's preflight/code-inspection progress. Claude is WORKING; Codex is WAITING. Never resend. Event-driven only; no five-minute or hourly monitor, GitHub polling loop, automatic W0-07, merge, deploy, production migration, live credentials or customer-original move/delete.
+**Dispatch and boundary.** Krum confirmed the one-time Computer Use Send. Codex resumed the existing W0-06B Claude Code Cloud session at https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG and observed C02 work. Claude published final exact-head HANDOFF at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421 and stopped. Codex detected the matching PR head and is REVIEWING independently. Never resend. Event-driven only; no five-minute or hourly monitor, GitHub polling loop, automatic W0-07, merge, deploy, production migration, live credentials or customer-original move/delete.
 
 ---
 
