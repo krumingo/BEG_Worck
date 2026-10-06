@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-06T17:01:06Z",
+  "validated_at": "2026-10-06T17:06:13Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "3c80c69da14702746bf12c6885b74c29a67f10af",
-  "control_state_commit_sha": "3e1eb790cf541f15a981072a234a7827026cfe90",
-  "now": "Codex публикува независим W0-06B/C02 CHANGES_REQUESTED на exact head d69145e795445ca3ca18df9a6e9818b1dfb8001e: AuthImage cache допуска повторно използване на blob от предишен tenant в същия tab. Следва само bounded correction в същия Task-ID; ISSUE-26/C03 остава само за подготовка, без dispatch.",
+  "active_source_commit_sha": "90141d782f5aa51b8f1d96d8526ecdedbbb5d05c",
+  "control_state_commit_sha": "983169eb9eb114b8df4e1bc23ef00446965cc375",
+  "now": "Codex подготви W0-06B/C03 само за principal-scoped protected-avatar cache върху exact PR head d69145e795445ca3ca18df9a6e9818b1dfb8001e. Крум потвърди еднократен Computer Use Send; Claude още не е получил C03. ISSUE-26/C03 остава само за анализ, без dispatch.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
@@ -21,42 +21,42 @@
     "PR/HANDOFF"
   ],
   "task_id": "W0-06B",
-  "cycle_id": "C02",
+  "cycle_id": "C03",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-06B/C02/GPT",
-      "waiting_for": "Bounded W0-06B correction cycle, no ISSUE-26 dispatch",
-      "updated_at": "2026-10-06T17:01:06Z"
+      "work_id": "W0-06B/C03/GPT",
+      "waiting_for": "One confirmed bounded W0-06B/C03 Send; no ISSUE-26 dispatch",
+      "updated_at": "2026-10-06T17:06:13Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-06B/C02/CX",
-      "waiting_for": "Prepare same-scope protected-avatar cache correction",
-      "updated_at": "2026-10-06T17:01:06Z"
+      "state": "WORKING",
+      "work_id": "W0-06B/C03/CX",
+      "waiting_for": "One confirmed exact-head C03 Send after preflight",
+      "updated_at": "2026-10-06T17:06:13Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-06B/C02/CL",
-      "waiting_for": "Bounded C03 correction dispatch after preflight",
-      "updated_at": "2026-10-06T17:01:06Z"
+      "state": "WAITING",
+      "work_id": "W0-06B/C03/CL",
+      "waiting_for": "One bounded AuthImage cache correction assignment",
+      "updated_at": "2026-10-06T17:06:13Z"
     }
   },
-  "current_work_id": "W0-06B/C02/CX",
-  "state": "CHANGES_REQUESTED",
-  "pipeline_step": "REVIEW",
-  "next_agent": "CODEX",
-  "waiting_for": "Prepare same-scope protected-avatar cache correction",
+  "current_work_id": "W0-06B/C03/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
+  "next_agent": "CLAUDE",
+  "waiting_for": "One confirmed exact-head C03 Send after preflight",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 46,
   "pr_head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
   "pr_draft": true,
-  "dispatch_state": "RUNNING",
-  "dispatch_run_url": "https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421",
     "head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
@@ -91,7 +91,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "53b58383e844d1aedcf7fd7113369d87a6d67016",
+    "active_blob_sha": "07271edc905566720a8a8b59591539e3e7e7bd7d",
     "review_path": "coordination/REVIEWS/W0-06B.md",
     "review_blob_sha": "6281a061983bc17d9fd6ee77a09a4ef309ab5dd4",
     "canonical_docs": [
@@ -125,7 +125,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-06T17:01:06Z",
+  "updated_at": "2026-10-06T17:06:13Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
