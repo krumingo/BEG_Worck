@@ -1,43 +1,55 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C02 CHANGES_REQUESTED — BOUNDED AVATAR CACHE SECURITY DEFECT
-Human-Summary-BG: Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
+Status: W0-06B/C03 PENDING — BOUNDED PROTECTED-AVATAR CACHE CORRECTION; ONE SEND CONFIRMED
+Human-Summary-BG: Сървърният avatar route вече е защитен. Поправяме само browser cache, за да не показва снимка от предишен tenant след смяна на акаунт в същия tab.
 Current-Agent: CODEX
-Current-State: WAITING
-Claude-State: HANDOFF_READY
-Codex-State: WAITING
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex публикува независим W0-06B/C02 CHANGES_REQUESTED на exact head d69145e795445ca3ca18df9a6e9818b1dfb8001e: AuthImage cache допуска повторно използване на blob от предишен tenant в същия tab. Следва само bounded correction в същия Task-ID; ISSUE-26/C03 остава само за подготовка, без dispatch.
-Next-Agent: CODEX
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: Codex подготви W0-06B/C03 само за principal-scoped protected-avatar cache върху exact PR head d69145e795445ca3ca18df9a6e9818b1dfb8001e. Крум потвърди еднократен Computer Use Send; Claude още не е получил C03. ISSUE-26/C03 остава само за анализ, без dispatch.
+Next-Agent: CLAUDE
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE (Codex prepares same-scope correction; any Computer Use Send still follows action-time safeguards)
-Dispatch-State: RUNNING (one C02 Send completed; HANDOFF published; never resend)
-Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG (existing session resumed for C02)
-Dispatch-Observed-At: 2026-10-06T15:25:01Z
+Krum-Action: NONE (one W0-06B/C03 Computer Use Send explicitly confirmed; no ISSUE-26 Send)
+Dispatch-State: PENDING (C03 Send confirmed but not yet performed; exactly once)
+Dispatch-Run: NONE (C03; existing C01/C02 session will be reused only if preflight matches)
+Dispatch-Observed-At: NONE (C03)
 Task-ID: W0-06B
-Cycle-ID: C02
+Cycle-ID: C03
 Base-branch: codex/w0-06a-file-registry-foundation (technical integration base only; PR #44 remains Draft/CHANGES_REQUESTED)
 Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Implementation-branch: codex/w0-06b-storage-provider-foundation (created at exact Base-SHA)
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (existing Draft, base main; C01 CHANGES_REQUESTED, unmerged)
 PR-Head: d69145e795445ca3ca18df9a6e9818b1dfb8001e
-Correction-Base-SHA: 888d32e2abf029c5740bc6d7d9484a0cf037809c
+Correction-Base-SHA: d69145e795445ca3ca18df9a6e9818b1dfb8001e
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421 (C02 exact head d69145e795445ca3ca18df9a6e9818b1dfb8001e)
-Review: coordination/REVIEWS/W0-06B.md — C01 independent exact-head CHANGES_REQUESTED at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571; C02 independent exact-head CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706.
-Final-Verdict: C02 W0-06B CHANGES_REQUESTED on d69145e795445ca3ca18df9a6e9818b1dfb8001e — principal-agnostic protected-avatar cache reuse; W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+HANDOFF-URL: NONE (C03; predecessor C02 HANDOFF: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421)
+Review: coordination/REVIEWS/W0-06B.md — C02 independent exact-head CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706.
+Final-Verdict: C02 W0-06B CHANGES_REQUESTED on d69145e795445ca3ca18df9a6e9818b1dfb8001e; C03 has no HANDOFF/verdict. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
-Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent exactly once and observed Claude working in the existing W0-06B session. No duplicate Send.
+Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent C02 exactly once and observed Claude working in the existing W0-06B session. After independent C02 CHANGES_REQUESTED, Krum explicitly confirmed one W0-06B/C03 Computer Use Send for the bounded AuthImage cache correction; C03 has not yet been sent at this INTENT snapshot.
 
-## Canonical W0-06B/C02 — bounded avatar security correction (HANDOFF; INDEPENDENT REVIEW)
+## Canonical W0-06B/C03 — bounded protected-avatar cache correction (PENDING SEND)
+
+**На човешки:** Backend avatar route вече проверява login и tenant. Поправяме единствено client-side повторното използване на защитената снимка след смяна на tenant/акаунт в същия tab; това не е нов модул.
+
+**Exact identity.** Same Task-ID `W0-06B`, correction Cycle-ID `C03`, existing branch `codex/w0-06b-storage-provider-foundation`, existing Draft PR #46 to `main@79af297612f57c055bb7caef3f0c48493800d1b6`, exact correction base/head `d69145e795445ca3ca18df9a6e9818b1dfb8001e`. C02 independent verdict and evidence: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706 and `coordination/REVIEWS/W0-06B.md`. Krum confirmed one Computer Use Send for this exact same-scope C03 correction. Before Send recheck live PR head/branch, C02 verdict, duplicate dispatch absence and existing Claude session; STOP on drift. Do not create a new Task-ID, branch, Issue, PR, Routine or monitor.
+
+**Only allowed correction.** In `frontend/src/components/AuthImage.js` and directly necessary avatar-auth integration/tests, prevent the module-global avatar-path cache from returning a previous principal's blob URL after same-tab logout/login or tenant/account switch. Bind/revalidate entries to current authenticated principal/tenant or clear and revoke on session changes; never retain a usable old-tenant blob across the switch. Enforce a genuine short lifetime/revocation, not just lazy expiry on a later same-path read. Preserve authorized same-tenant reuse and existing `GET /api/media/avatar/{filename}` authentication/tenant ACL. No permanent public URL or FLOW-002 bypass. Add deterministic frontend positive/negative regressions for same-tab tenant switch with identical path, logout, expiry and same-tenant access; retain backend unauthenticated/cross-tenant/non-avatar negatives.
+
+**Verification before HANDOFF.** Run focused frontend avatar security tests with collected/passed/failed/skipped counts, backend avatar 30-case suite, existing focused W0-06A/B suite, relevant FLOW-002/media ACL tests, static guards, `git diff --check`, and disposable loopback real-Mongo only if touched code requires it; report required gates honestly (NOT RUN is not PASS) and cleanup proof. Do not alter provider adapters, onboarding, integrity, File/FileVersion/FileRelation models, unrelated routes, W0-07 or ISSUE-26 dashboard. No live credentials, customer originals, production migration, merge or deploy.
+
+**Final HANDOFF.** Claude publishes one final exact-new-head HANDOFF in existing Draft PR #46, names exact files changed/test counts and proves prior-tenant blob denial plus same-tenant authorized display; then STOP. Codex independently reviews C02→C03 and whole `main→final head`, reruns critical tests, checks stable exact PR SHA and scope, then publishes PASS or a precise bounded correction/blocker. ISSUE-26/C03 is analysis-only until W0-06B independent PASS **and a new Krum signal**.
+
+## Archived W0-06B/C02 — bounded avatar security correction (CHANGES_REQUESTED)
 
 **На човешки:** Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
 
