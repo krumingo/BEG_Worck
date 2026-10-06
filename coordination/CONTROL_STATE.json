@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-06T16:56:39Z",
+  "validated_at": "2026-10-06T17:01:06Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "6be58ba5c7c17db67a70ce1473cff6180dfb672c",
-  "control_state_commit_sha": "bb2a7000abf80b9ba123d3665145f8345ee404e0",
-  "now": "Codex завърши независимия C02 audit на exact PR head d69145e795445ca3ca18df9a6e9818b1dfb8001e и подготви CHANGES_REQUESTED за principal-agnostic avatar cache. Verdict още не е публикуван; ISSUE-26/C03 остава само за подготовка, без dispatch.",
+  "active_source_commit_sha": "3c80c69da14702746bf12c6885b74c29a67f10af",
+  "control_state_commit_sha": "3e1eb790cf541f15a981072a234a7827026cfe90",
+  "now": "Codex публикува независим W0-06B/C02 CHANGES_REQUESTED на exact head d69145e795445ca3ca18df9a6e9818b1dfb8001e: AuthImage cache допуска повторно използване на blob от предишен tenant в същия tab. Следва само bounded correction в същия Task-ID; ISSUE-26/C03 остава само за подготовка, без dispatch.",
   "transition": {
     "event": "CODEX_VERDICT",
-    "phase": "INTENT",
-    "evidence_url": null,
-    "verdict_publication": "READY"
+    "phase": "OBSERVED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706",
+    "verdict_publication": "PUBLISHED"
   },
   "generated_from": [
     "ACTIVE",
@@ -29,27 +29,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06B/C02/GPT",
-      "waiting_for": "Published independent Codex C02 verdict",
-      "updated_at": "2026-10-06T16:56:39Z"
+      "waiting_for": "Bounded W0-06B correction cycle, no ISSUE-26 dispatch",
+      "updated_at": "2026-10-06T17:01:06Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "WAITING",
       "work_id": "W0-06B/C02/CX",
-      "waiting_for": "Publish prepared exact-head C02 verdict",
-      "updated_at": "2026-10-06T16:56:39Z"
+      "waiting_for": "Prepare same-scope protected-avatar cache correction",
+      "updated_at": "2026-10-06T17:01:06Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
       "work_id": "W0-06B/C02/CL",
-      "waiting_for": "Published independent Codex C02 verdict",
-      "updated_at": "2026-10-06T16:56:39Z"
+      "waiting_for": "Bounded C03 correction dispatch after preflight",
+      "updated_at": "2026-10-06T17:01:06Z"
     }
   },
   "current_work_id": "W0-06B/C02/CX",
-  "state": "REVIEW",
+  "state": "CHANGES_REQUESTED",
   "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "Publish prepared exact-head C02 verdict",
+  "next_agent": "CODEX",
+  "waiting_for": "Prepare same-scope protected-avatar cache correction",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 46,
@@ -62,31 +62,38 @@
     "head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
     "at": "2026-10-06T15:33:48Z"
   },
-  "last_review": null,
+  "last_review": {
+    "path": "coordination/REVIEWS/W0-06B.md",
+    "blob_sha": "6281a061983bc17d9fd6ee77a09a4ef309ab5dd4",
+    "reviewed_head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
+    "verdict": "CHANGES_REQUESTED"
+  },
   "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "W0-06B/C02 final exact-head HANDOFF published in Draft PR #46",
-    "last_result": "HANDOFF",
+    "last_agent": "CODEX",
+    "last_event": "W0-06B/C02 independent exact-head CHANGES_REQUESTED published in Draft PR #46",
+    "last_result": "CHANGES_REQUESTED",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex performs independent exact-head review; no Krum relay, new implementation dispatch, monitor, merge or deploy.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421",
-    "updated_at": "2026-10-06T16:42:53Z"
+    "instruction": "Codex prepares only a bounded same-Task-ID avatar cache correction; ISSUE-26/C03 remains analysis-only. No monitor, merge or deploy.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706",
+    "updated_at": "2026-10-06T17:01:06Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "CORRECTION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "37bbdbb6b2cf5d898e0b2581cdbb11f65baf4304",
+    "active_blob_sha": "53b58383e844d1aedcf7fd7113369d87a6d67016",
+    "review_path": "coordination/REVIEWS/W0-06B.md",
+    "review_blob_sha": "6281a061983bc17d9fd6ee77a09a4ef309ab5dd4",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -118,7 +125,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-06T16:56:39Z",
+  "updated_at": "2026-10-06T17:01:06Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
@@ -231,6 +238,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421",
       "source_commit_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
       "summary": "Claude published final bounded C02 avatar correction HANDOFF. Draft PR #46 head matched twice; Codex detected the event and begins independent C01-to-C02 and whole-package review. No C02 verdict or ISSUE-26 dispatch."
+    },
+    {
+      "event_id": "w0-06b-c02-independent-changes-requested",
+      "occurred_at": "2026-10-06T16:59:15Z",
+      "task_id": "W0-06B",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021258706",
+      "source_commit_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
+      "summary": "Independent C02 review published CHANGES_REQUESTED: AuthImage cache reuses a prior tenant's avatar blob across a same-tab principal switch. Focused 451/451, avatar 30/30, FLOW-002/tenant 125/125, local real-Mongo 33/33 and static guards passed; the bounded frontend defect prevents PASS. No merge, deploy or ISSUE-26 implementation."
     }
   ]
 }
