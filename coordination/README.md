@@ -1,5 +1,7 @@
 # Claude–Codex implementation loop
 
+**Mandatory document-resolution policy:** begin each new assignment or review with [DECISIONS_INDEX.md](DECISIONS_INDEX.md), then follow [docs/MD_USAGE_POLICY.md](../docs/MD_USAGE_POLICY.md) before using ACTIVE/control state, relevant FLOW/architecture, prior review and actual code. Historical documents and prompts do not override canonical decisions. Do not read every `.md` mechanically.
+
 This branch is a coordination mailbox, separate from runtime code. `coordination/ACTIVE.md` is the only dispatch pointer; `coordination/REVIEWS/` holds independent Codex verdicts. The default state is IDLE.
 
 Dispatch protocol: Codex writes Dispatch-State: PENDING only after validating one ACTIVE task. Claude executes only PENDING. After Codex observes the run start, Codex changes it to RUNNING and records Dispatch-Run. A scheduled Claude run seeing RUNNING must stop as IDLE, not repeat work. Codex alone returns it to PENDING for a new bounded correction or next Task-ID, or to NONE after review. The state field prevents duplicate delivery; a run status alone does not prove code completion.

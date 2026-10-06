@@ -10,6 +10,8 @@
 
 ## 1. Основни source-of-truth документи
 
+Правилото за избор и ред на четене е [docs/MD_USAGE_POLICY.md](../docs/MD_USAGE_POLICY.md). Този индекс остава само навигация.
+
 | Тема | Каноничен източник | Какво решава |
 |---|---|---|
 | FLOW каталог | [docs/flows/README.md](https://github.com/krumingo/BEG_Worck/blob/main/docs/flows/README.md) | Индекс на бизнес FLOW-овете |
