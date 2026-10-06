@@ -69,6 +69,7 @@
 
 - [coordination/README.md](README.md) — protocol и правила за работа;
 - [coordination/AGENT_EXECUTION_LOOP.md](AGENT_EXECUTION_LOOP.md) — заключен GPT → Codex → Claude → Codex execution/review loop и standing PC/Computer Use authorization;
+- [coordination/AGENT_EVENT_PROTOCOL.md](AGENT_EVENT_PROTOCOL.md) — задължителен append-only GitHub event stream за всяка смислена стъпка на Codex/Claude;
 - [coordination/ACTIVE.md](ACTIVE.md) — само текущото активно задание;
 - [coordination/CONTROL_STATE.json](CONTROL_STATE.json) — machine-readable статус;
 - [coordination/CONTROL_BOARD.md](CONTROL_BOARD.md) — management dashboard projection;
@@ -94,6 +95,7 @@
 15. Two-phase protocol: INTENT/PENDING преди действие; OBSERVED/CONFIRMED след реално доказано действие.
 16. **Standing PC/Computer Use:** Codex и Claude имат постоянно разрешение от Крум да използват наличния PC/Computer Use канал за assignment/correction dispatch, HANDOFF обратно към Codex и final PASS/result към GPT, в рамките на одобрения Task-ID. Merge/deploy/production/credentials/destructive/security-exception действия остават извън това разрешение.
 17. След PASS Codex не стартира следващ Task-ID; GPT проверява резултата, актуализира управленската картина и подготвя следващата по графика задача.
+18. **GitHub event stream:** Codex и Claude публикуват структурирани append-only events в текущия Task Issue при приемане, четене, preflight, dispatch attempt/success/failure, implementation, tests, HANDOFF, review, findings, corrections, PASS/BLOCKED и финално връщане на резултата. Silent failure е забранен; event stream с exact evidence има предимство пред изостанал dashboard projection.
 
 Каноничните формулировки на тези правила са в [coordination/README.md](README.md).
 
