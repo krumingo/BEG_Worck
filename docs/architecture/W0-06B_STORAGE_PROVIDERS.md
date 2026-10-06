@@ -91,7 +91,17 @@ Steps run in this order. Any failure leaves the binding `verification_failed`, t
 
 **Audience.** Any authenticated, active member of the same tenant may see a colleague's current photo: the same audience that already receives `avatar_url` from the tenant's own list and roster routes. Narrowing it by role would be a FLOW-002 business decision and is not part of this correction.
 
-**Frontend.** The ~19 avatar renderers now use `components/AuthImage.js`. It fetches `/api/media/avatar/…` with the session's Bearer token and shows the bytes through an in-memory object URL that lives in that browser tab for at most 5 minutes. Other images are unchanged plain `<img>`. No public or permanent avatar URL exists.
+**Frontend.** The ~19 avatar renderers use `components/AuthImage.js`. It fetches `/api/media/avatar/…` with the session's Bearer token and shows the bytes through an in-memory object URL. Other images are unchanged plain `<img>`. No public or permanent avatar URL exists.
+
+**Client cache (C03).** Codex's C02 review found that the C02 object-URL cache was keyed by path only. In the same tab, tenant A's image came back for tenant B, and its five-minute lifetime was only checked lazily. `lib/protectedImageCache.js` now enforces:
+
+- the cache holds entries of exactly one principal (the session token), and a different principal clears and revokes everything first;
+- with no token, nothing is fetched and everything is revoked;
+- a response that arrives after a switch or logout is discarded before it becomes an object URL;
+- each entry is revoked by a timer after 5 minutes;
+- `AuthContext` login and logout, and a token change in another tab (`storage` event), clear and revoke the cache, and mounted images reload under the current session.
+
+Deterministic regressions: `node --test frontend/tests/protected_image_cache.test.mjs`.
 
 ## 6. Test and verification map
 
