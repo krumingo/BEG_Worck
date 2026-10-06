@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Camera, Sparkles, Loader2, Check, MapPin, ArrowLeft, X, Package, Printer, Warehouse, Building2, User, AlertCircle, Tag, Coins, CameraIcon } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 const LOC_TYPES = [
   { key: "warehouse", label: "Склад", icon: Warehouse },
@@ -171,7 +172,7 @@ export default function AssetsBatchIntakePage() {
             <div className="mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-border divide-y divide-border" data-testid="batch-people-list">
               {locOptions.map((o) => (
                 <button key={o.id} onClick={() => { setLocId(o.id); setLocName(o.name); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${locId === o.id ? "bg-primary/10" : "hover:bg-muted/40"}`}>
-                  {o.avatar ? <img src={o.avatar} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" /> : <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">{o.name.slice(0, 2).toUpperCase()}</div>}
+                  {o.avatar ? <AuthImage src={o.avatar} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" /> : <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">{o.name.slice(0, 2).toUpperCase()}</div>}
                   <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{o.name}</p>{o.role && <p className="text-[11px] text-muted-foreground">{o.role}</p>}</div>
                   {locId === o.id && <Check className="w-4 h-4 text-primary shrink-0" />}
                 </button>

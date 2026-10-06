@@ -12,6 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Users, Loader2, Eye } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 export default function SiteWorkersPanel({ projectId }) {
   const [data, setData] = useState(null);
@@ -62,7 +63,7 @@ export default function SiteWorkersPanel({ projectId }) {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     {w.avatar_url ? (
-                      <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" />
+                      <AuthImage src={w.avatar_url} className="w-7 h-7 rounded-full object-cover" alt="" />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
                         {(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}

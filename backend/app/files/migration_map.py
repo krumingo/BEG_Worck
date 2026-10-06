@@ -416,14 +416,13 @@ LEGACY_SOURCES: Tuple[LegacySource, ...] = (
                    "by eleven report and dossier routes. read: returned to the client as a URL. "
                    "serve: GET /api/media/avatar/{filename} — before W0-06B it served any file "
                    "in the uploads root without authentication or a media row (another tenant's "
-                   "bytes by name alone); since W0-06B it serves only a profile-context upload "
-                   "that is the CURRENT avatar_url of that same user in the same tenant, and "
-                   "404s everything else"),
+                   "bytes by name alone); since W0-06B/C02 it requires a signed-in session and "
+                   "serves only a profile-context upload that is the CURRENT avatar_url of a user "
+                   "of the CALLER's tenant, and 404s everything else"),
         migration_action=("register a File per existing avatar, add a user_profile FileRelation "
-                          "and replace avatar_url with the file_id. The route stays "
-                          "unauthenticated only because the frontend loads avatars with <img src>; "
-                          "authenticated avatar loading is the remaining proposal recorded in "
-                          "docs/architecture/W0-06B_STORAGE_PROVIDERS.md"),
+                          "and replace avatar_url with the file_id. The frontend loads avatars "
+                          "with an authenticated request (components/AuthImage.js); there is no "
+                          "public avatar URL"),
         standing_blockers=(BLOCKER_NO_BYTES,),
         writers=(),
     ),

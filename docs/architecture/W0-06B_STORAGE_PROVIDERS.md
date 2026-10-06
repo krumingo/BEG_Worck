@@ -81,17 +81,17 @@ Steps run in this order. Any failure leaves the binding `verification_failed`, t
 
 **Evidence.** The pre-fix handler (reproduced verbatim in `tests/test_w0_06b_avatar_route.py::test_the_pre_fix_route_exposed_another_tenants_file_unauthenticated`) needed no session and checked no media row. It served **any** file in `/app/backend/uploads`, the directory that `media/upload`, `ocr_invoice`, `technician` and `procurement` all write tenant files into. Knowing one stored name was enough to fetch another tenant's invoice photo, bypassing the ACL that `/media/file/{filename}` enforces.
 
-**Fix.** The route stays unauthenticated, because about 15 frontend components render avatars with a plain `<img src>`. It now serves a file only when all of the following hold:
+**C01 fix (not sufficient).** C01 kept the route public and narrowed it to a user's *current* profile photo. Codex's C01 review (`coordination/REVIEWS/W0-06B.md`) showed that this still returned another tenant's current avatar to a client without any session.
 
-- exactly one owned `media_files` row has that name;
-- the row is a `profile` upload of a user;
-- that user exists **in the same tenant**, and their `avatar_url` is this exact file;
-- the content type is an allowed image type;
-- the path stays inside the uploads directory.
+**C02 fix (FLOW-002).** The route now requires an authenticated, active session (`get_current_user`: the signed `(user_id, org_id)` pair, verified against the database) and resolves the photo **only inside the caller's own tenant view**:
 
-Everything else gets the same 404. Covered cases: another tenant's non-profile media, a previous avatar, an orphan file, an `avatar_url` pointed at a non-profile upload, a name shared by two tenants, a cross-tenant user borrow, a non-image type and traversal.
+- no session, an invalid token, a token naming another tenant for the user, or a disabled account → `401`/`403` before anything is read;
+- a filename of another tenant → `404` (the caller's tenant view cannot see it), even when the URL is known;
+- inside the tenant, a file is served only when exactly one `media_files` row of the tenant names it, the row is a `profile` upload of a user, that user is in the tenant with `avatar_url` equal to this file, the content type is an allowed image type, and the path stays inside the uploads directory. Invoice photos, stale avatars, orphans and an `avatar_url` pointed at a non-profile upload all get the same `404`.
 
-**Remaining proposal (needs Krum's decision; it touches the UI).** A current profile photo is still reachable without a session by anyone who holds its random URL. Closing that fully means authenticated avatar loading in the frontend: an authenticated fetch to a blob or object URL, or short-lived signed avatar URLs issued per response. Both change about 15 frontend components and are outside this backend slice.
+**Audience.** Any authenticated, active member of the same tenant may see a colleague's current photo: the same audience that already receives `avatar_url` from the tenant's own list and roster routes. Narrowing it by role would be a FLOW-002 business decision and is not part of this correction.
+
+**Frontend.** The ~19 avatar renderers now use `components/AuthImage.js`. It fetches `/api/media/avatar/…` with the session's Bearer token and shows the bytes through an in-memory object URL that lives in that browser tab for at most 5 minutes. Other images are unchanged plain `<img>`. No public or permanent avatar URL exists.
 
 ## 6. Test and verification map
 
@@ -115,5 +115,5 @@ Fake backends: `tests/w0_06b_fake_backends.py` (S3 with independent SigV4 verifi
 - No key rotation or credential replacement UI. `CredentialVault.supersede` exists, but no rotation flow does. The master key must be provisioned in the environment (`BEG_STORAGE_CREDENTIAL_KEY`) before any binding can be configured.
 - No index migration for the new collections. The real-Mongo gate creates its own indexes.
 - A failed activation can leave its root marker at the provider. This is fail-closed: the root stays claimed by the tenant that tried it.
-- Avatar: see §5. The remaining proposal needs Krum's decision.
+- Avatar (C02): closed under FLOW-002 (§5). The frontend change has been syntax-checked and unit-checked, but not exercised in a browser in this container.
 - Legacy upload routes still write to the app disk. Migrating them into the registry is the later FLOW-016 migration slice.

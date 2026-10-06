@@ -35,6 +35,7 @@ import {
   Loader2,
   Filter,
 } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 const ADVANCE_TYPES = ["Advance", "Loan"];
 
@@ -43,7 +44,7 @@ function EmpAvatar({ name, url, size = 22 }) {
   const [imgErr, setImgErr] = useState(false);
   const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   if (fullUrl && !imgErr) {
-    return <img src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
+    return <AuthImage src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
   }
   return (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0" style={{ width: size, height: size, fontSize: size * 0.4 }}>

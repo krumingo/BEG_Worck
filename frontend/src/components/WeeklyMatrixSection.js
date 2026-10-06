@@ -13,6 +13,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Clock, MapPin, FileText, AlertTriangle,
 } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 const NORMAL_DAY = 8;
 const BG_DAY_NAMES = ["Съб", "Нед", "Пон", "Вт", "Ср", "Чет", "Пет"];
@@ -133,7 +134,7 @@ export default function WeeklyMatrixPage() {
                     <TableCell className="sticky left-0 bg-card z-10">
                       <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${row.worker_id}?tab=calendar`)}>
                         {row.avatar_url ? (
-                          <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt="" />
+                          <AuthImage src={row.avatar_url} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt="" />
                         ) : (
                           <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary flex-shrink-0">
                             {(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}
