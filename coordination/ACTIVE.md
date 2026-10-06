@@ -1,22 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C03 PENDING — BOUNDED PROTECTED-AVATAR CACHE CORRECTION; ONE SEND CONFIRMED
+Status: W0-06B/C03 RUNNING — BOUNDED PROTECTED-AVATAR CACHE CORRECTION SENT ONCE
 Human-Summary-BG: Сървърният avatar route вече е защитен. Поправяме само browser cache, за да не показва снимка от предишен tenant след смяна на акаунт в същия tab.
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Codex подготви W0-06B/C03 само за principal-scoped protected-avatar cache върху exact PR head d69145e795445ca3ca18df9a6e9818b1dfb8001e. Крум потвърди еднократен Computer Use Send; Claude още не е получил C03. ISSUE-26/C03 остава само за анализ, без dispatch.
-Next-Agent: CLAUDE
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Codex изпрати точно веднъж W0-06B/C03 към съществуващата Claude Code Cloud сесия; UI показва новото C03 съобщение и Claude responding. Работата остава само по protected-avatar cache. Codex чака финален exact-head HANDOFF без polling; ISSUE-26/C03 остава само за анализ.
+Next-Agent: CODEX
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE (one W0-06B/C03 Computer Use Send explicitly confirmed; no ISSUE-26 Send)
-Dispatch-State: PENDING (C03 Send confirmed but not yet performed; exactly once)
-Dispatch-Run: NONE (C03; existing C01/C02 session will be reused only if preflight matches)
-Dispatch-Observed-At: NONE (C03)
+Krum-Action: NONE (C03 Send completed exactly once; no ISSUE-26 Send)
+Dispatch-State: RUNNING (C03 sent once; never resend)
+Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG (existing session resumed for C03)
+Dispatch-Observed-At: 2026-10-06T17:11:42Z (CORRECTION_DISPATCH_OK event publication)
 Task-ID: W0-06B
 Cycle-ID: C03
 Base-branch: codex/w0-06a-file-registry-foundation (technical integration base only; PR #44 remains Draft/CHANGES_REQUESTED)
@@ -35,9 +35,9 @@ Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
-Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent C02 exactly once and observed Claude working in the existing W0-06B session. After independent C02 CHANGES_REQUESTED, Krum explicitly confirmed one W0-06B/C03 Computer Use Send for the bounded AuthImage cache correction; C03 has not yet been sent at this INTENT snapshot.
+Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent C02 exactly once and observed Claude working in the existing W0-06B session. After independent C02 CHANGES_REQUESTED, Krum explicitly confirmed one W0-06B/C03 Computer Use Send for the bounded AuthImage cache correction; Codex sent it exactly once to the existing session and observed the new C03 user message and Claude responding.
 
-## Canonical W0-06B/C03 — bounded protected-avatar cache correction (PENDING SEND)
+## Canonical W0-06B/C03 — bounded protected-avatar cache correction (RUNNING; ONE SEND COMPLETED)
 
 **На човешки:** Backend avatar route вече проверява login и tenant. Поправяме единствено client-side повторното използване на защитената снимка след смяна на tenant/акаунт в същия tab; това не е нов модул.
 
