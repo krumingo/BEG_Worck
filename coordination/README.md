@@ -16,7 +16,7 @@ Protocol v1 snapshots remain readable as historical data. New lifecycle transiti
 
 Direct dispatch channel (22 Sep 2026): Claude Routines are paused and MUST NOT be used. Codex sends one ACTIVE Task-ID through a regular Claude Desktop Code Cloud session connected to krumingo/BEG_Worck, observes the resulting session, and records its URL/ID in Dispatch-Run. A read-only direct-channel check fetched the coordination branch successfully without edits. Each implementation session receives only one bounded task; a second task waits for independent review. Claude Code CLI is installed locally but not logged in, so it is not the active channel. Do not silently switch to a paid API key.
 
-Cycle: Codex selects one bounded task from the canonical FLOW and Implementation Waves documents, checks predecessors and exact base SHA, writes READY with a unique Task-ID. Claude works only that assignment, publishes an exact-SHA Draft PR and HANDOFF, then stops. Codex checks the real diff, runs relevant tests independently in an isolated checkout, distinguishes code evidence from external data evidence, and records PASS, CHANGES_REQUESTED or BLOCKED. A failed review gets one bounded correction assignment to the same Task-ID; repeated or unsafe failure stops for Krum. A verified task may lead to another task only if its prerequisites are proven. Never dispatch two READY tasks concurrently.
+Cycle: Codex selects one bounded task from the canonical FLOW and Implementation Waves documents, checks predecessors and exact base SHA, writes READY with a unique Task-ID. Claude works only that assignment, publishes an exact-SHA Draft PR and HANDOFF, then stops. Codex checks the real diff, runs relevant tests independently in an isolated checkout, distinguishes code evidence from external data evidence, and records PASS, CHANGES_REQUESTED or BLOCKED. A failed review gets a bounded correction assignment to the same Task-ID. When the defect is technical and remains inside the already-approved business scope, Codex dispatches that correction directly to Claude and independently reviews the new HANDOFF; Krum is not used as a relay. The correction loop may repeat until PASS or until a real business/security/production blocker requires Krum. A verified task may lead to another task only after GPT/Krum start the next task; never dispatch two READY tasks concurrently.
 
 A Draft PR is not merged code. A successor may be stacked on a verified exact head only when its assignment explicitly names that head and the dependency; it must remain a separate Draft PR. Do not call a stack integration into main, release, deployment, or Implementation Gate PASS. Codex must not update progress percentages from PR self-reports alone.
 
@@ -24,6 +24,18 @@ Krum is asked only for a new or changed business rule, an unresolved choice that
 
 Automations and routine runs consume usage. If the Claude trigger cannot be reached or evidence cannot be verified, stop with BLOCKED; never infer success from a green run status.
 
+
+## Locked agent execution loop — 06.10.2026
+
+The mandatory handoff/review process is [AGENT_EXECUTION_LOOP.md](AGENT_EXECUTION_LOOP.md).
+
+**Canonical route:** GPT prepares and tracks the plan → Krum hands the task once to Codex → Codex dispatches Claude directly → Claude implements and returns HANDOFF directly to Codex → Codex independently audits → if the same approved Task-ID needs technical corrections, Codex dispatches the correction directly to Claude and repeats the independent review → after PASS Codex returns the verified result to GPT → GPT verifies status, reports to Krum, visualizes the schedule and prepares the next task.
+
+Krum is **not** a manual relay between Codex and Claude. Started tasks keep their already-approved scope and gates. New tasks should be larger functional packages, but remain independently reviewable.
+
+Krum grants standing PC/Computer Use authorization for the coordination actions defined in AGENT_EXECUTION_LOOP.md. This does not authorize merge, deploy, production/NAS/Atlas writes, destructive migration/customer-data actions, new live credentials, business-rule changes, or security exceptions.
+
+This section supersedes older coordination wording that required owner relay or owner approval for every bounded correction inside the same already-approved Task-ID. Real business/security/production blockers still stop for Krum.
 
 ## Mandatory Bulgarian human summary
 
@@ -43,7 +55,7 @@ Allowed triggers for Codex review or owner notification are event-driven only:
 - an explicit Krum instruction;
 - a real blocker that requires Krum's decision.
 
-After any final review verdict, every task-specific monitor must be disabled. A CHANGES_REQUESTED verdict leaves the task in WAITING_FOR_OWNER/ARCHITECT_DECISION; it does **not** authorize repeated polling, a new Send, or another review loop.
+After any final review verdict, every task-specific monitor must be disabled. A CHANGES_REQUESTED verdict does **not** authorize polling, but when its fixes are technical and stay inside the same already-approved Task-ID/business scope, Codex may immediately create and directly dispatch the bounded correction cycle to Claude under `AGENT_EXECUTION_LOOP.md`. Only a real business/security/production blocker waits for Krum.
 
 If a scheduled task wakes while no qualifying event exists, it must exit without GitHub writes, without ChatGPT notification, and without starting Codex/Claude work.
 
