@@ -1,9 +1,11 @@
-# BEG_Work — CLAUDE.md v15
+# BEG_Work — CLAUDE.md v16
 
-> Версия: 15  
-> Дата: 05.08.2026  
+> Версия: 16  
+> Дата: 06.10.2026  
 > Статус: канонични инструкции за разработка след Business Lock на FLOW-001–050  
-> Канон: `docs/flows/FLOW-001.md` … `FLOW-050.md`, FLOW-043, Master Flow Register и архитектурните решения в `docs/architecture/`
+> Канон: `docs/flows/FLOW-001.md` … `FLOW-050.md`, FLOW-043, Master Flow Register и архитектурните решения в `docs/architecture/`  
+> Задължително: `docs/MD_USAGE_POLICY.md` — как се използват всички `.md` файлове (ред на четене, канон срещу история, йерархия при противоречие)  
+> v16 спрямо v15: добавено е задължителното позоваване на `docs/MD_USAGE_POLICY.md` в §14, §17 и §18; остарелият ред „CLAUDE.md → Gate Matrix → FLOW“ в §18 е заменен с каноничния document resolution path. Нито едно бизнес правило не е променено.
 
 ## 1. Мисия
 
@@ -235,6 +237,11 @@ Client Portal и отделния Marketplace продукт.
 
 ## 14. Coding protocol
 
+**Преди всичко друго:** прочети `docs/MD_USAGE_POLICY.md` и следвай задължителния ред
+на четене от него (`DECISIONS_INDEX → current task → relevant FLOW → relevant
+architecture → previous review → actual code`). Не четем всички `.md` файлове
+механично; не вземаме стар `.md` за актуална истина.
+
 Преди промяна:
 
 1. Посочи засегнатите FLOW-ове и D-решения.
@@ -286,6 +293,13 @@ Client Portal и отделния Marketplace продукт.
 
 ## 17. Основни индекси
 
+**Задължително първо:** `docs/MD_USAGE_POLICY.md` — правила за използване на всички
+`.md` файлове: кои са канонични, кои се четат според задачата, кои са само
+история/доказателство, и йерархията при противоречие. Всеки агент (GPT, Codex,
+Claude) и всеки човек започва оттам.
+
+- `coordination/DECISIONS_INDEX.md` (branch `codex/claude-queue`) — първата
+  навигационна точка: кое решение в кой документ живее
 - `docs/flows/README.md`
 - `docs/project-recovery/2026-07-20/03_MASTER_FLOW_REGISTER_SEED.md`
 - `docs/project-recovery/2026-07-20/04_DECISION_REGISTER_SEED.md`
@@ -309,4 +323,15 @@ Client Portal и отделния Marketplace продукт.
 6. Claude сравнява байтово (cmp/diff) срещу очакваното. Самоотчет на агент никога не се приема без байтова проверка.
 7. Крум тества на живо; доказателство (скрийншот/видео) преди статус "Готово".
 
-Правила: технически аномалии в кода се записват като дълг, не се поправят без Крум да потвърди "боли ме в реални данни"; заключен FLOW не се променя без изрично решение на Крум, записано в канона; при конфликт между документи важи docs/flows/ + FLOW-043; сесиите започват с четене на CLAUDE.md → Gate Matrix → релевантните FLOW файлове.
+Правила: технически аномалии в кода се записват като дълг, не се поправят без Крум да потвърди "боли ме в реални данни"; заключен FLOW не се променя без изрично решение на Крум, записано в канона.
+
+Ред на четене и приоритет при противоречие: виж `docs/MD_USAGE_POLICY.md` (§2 ред на
+четене, §3 йерархия). Сесиите започват с `coordination/DECISIONS_INDEX.md` → `CLAUDE.md`
+→ `coordination/README.md` → `ACTIVE.md`/`CONTROL_STATE.json` → релевантния FLOW →
+релевантните architecture документи → предишния review → реалния код. При конфликт
+важи редът от §3 на policy-то: ново изрично решение на Крум → каноничен
+FLOW/architecture decision → Waves/Gate Matrix/Tenancy → ACTIVE/CONTROL_STATE →
+independent review → README/ops → history/memory. Неразрешим конфликт → `BLOCKED`.
+
+Важно решение, което съществува само в chat, не се счита за предадено към останалите
+агенти — записва се в правилния `.md` или в coordination state.
