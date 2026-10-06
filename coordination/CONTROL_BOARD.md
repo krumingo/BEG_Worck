@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-06T20:37:26Z · CONTROL STATE: **VALID** as of 2026-10-06T20:37:26Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-06T20:39:30Z · CONTROL STATE: **VALID** as of 2026-10-06T20:39:30Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06B / C03 / CODEX / **REVIEW**
-LAST: CLAUDE — W0-06B/C03 final exact-head HANDOFF published / HANDOFF
+CURRENT: W0-06B / C03 / CODEX / **CHANGES_REQUESTED**
+LAST: CODEX — W0-06B/C03 independent CHANGES_REQUESTED published / CHANGES_REQUESTED
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Codex завърши независимия C03 audit и подготвя CHANGES_REQUESTED за три отчетни avatar renderers без authenticated fetch. Verdict още не е публикуван; Claude не е dispatch-нат за нов cycle. Няма merge/deploy или ISSUE-26 implementation.
-TRANSITION: CODEX_VERDICT / INTENT · verdict PENDING
+NOW: Codex публикува C03 CHANGES_REQUESTED на точния PR head 6af100e65690f51328fff1fb98f8bf9b9d902c8e: три отчетни avatar renderers още ползват plain img без Bearer. Подготвя се само bounded C04 correction; Claude не е dispatch-нат. Няма merge/deploy или ISSUE-26 implementation.
+TRANSITION: CODEX_VERDICT / OBSERVED · verdict PUBLISHED
 NEXT: CLAUDE
 KRUM ACTION: NONE
-WAITING FOR: Independent C03 code, security and test gates
+WAITING FOR: Bounded same-Task-ID C04 correction preparation
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-06B
 CYCLE: C03
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: REVIEW
+STATE: CHANGES_REQUESTED
 NEXT: CLAUDE
-WAITING_FOR: Independent C03 code, security and test gates
+WAITING_FOR: Bounded same-Task-ID C04 correction preparation
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06B | C03 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent C03 code, security and test gates | REVIEW |
+| W0-06B | C03 | WAITING | WAITING | HANDOFF_READY | CODEX | Bounded same-Task-ID C04 correction preparation | CHANGES_REQUESTED |
 
 ## Agent cards
 
@@ -38,15 +38,16 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06B/C03/GPT | Codex independent C03 review verdict | 2026-10-06T20:37:26Z |
-| CODEX | REVIEWING | W0-06B/C03/CX | Independent C03 code, security and test gates | 2026-10-06T20:37:26Z |
-| CLAUDE | HANDOFF_READY | W0-06B/C03/CL | Codex independent C03 review verdict | 2026-10-06T20:37:26Z |
+| GPT | WAITING | W0-06B/C03/GPT | Codex independent C03 review verdict | 2026-10-06T20:39:30Z |
+| CODEX | WAITING | W0-06B/C03/CX | Bounded same-Task-ID C04 correction preparation | 2026-10-06T20:39:30Z |
+| CLAUDE | HANDOFF_READY | W0-06B/C03/CL | Codex independent C03 review verdict | 2026-10-06T20:39:30Z |
 
-GPT → Codex → Claude → **Codex (REVIEW)** → GPT
+GPT → Codex → Claude → **Codex (CHANGES_REQUESTED)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `9f6c6654eb0df1f95278153d28066e84633b3264` · blob `c721e8c9bd49d9050af10e5601074af42f1a7128`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `f0e02549e1a8468343d48b0857a4da4cc54098dc` · blob `96f8458640c630ee89e47b6ad77c4b366cf706a2`
+- Review: `coordination/REVIEWS/W0-06B.md` · blob `f6b394a51bf90d6c66c8e58630ccbd261ddd4464` · verdict **CHANGES_REQUESTED** on `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
 - Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918) · head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
 - Dispatch session: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG · dispatch state **RUNNING**
@@ -73,5 +74,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-06T17:05:57Z | C03 | — | ASSIGNMENT | CODEX | WORKING | `d69145e7` | [evidence](https://github.com/krumingo/BEG_Worck/blob/90141d782f5aa51b8f1d96d8526ecdedbbb5d05c/coordination/ACTIVE.md) |
 | 2026-10-06T17:11:42Z | C03 | — | DISPATCH | CODEX | WORKING | `d69145e7` | [evidence](https://github.com/krumingo/BEG_Worck/issues/45#issuecomment-6021477274) |
 | 2026-10-06T20:27:27Z | C03 | — | HANDOFF | CODEX | REVIEW | `6af100e6` | [evidence](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918) |
+| 2026-10-06T20:39:30Z | C03 | — | REVIEW | CODEX | CHANGES_REQUESTED | `6af100e6` | [evidence](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104) |
 
-**Gate:** W0-06B is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-06B is CHANGES_REQUESTED. Progression requires independent evidence and the relevant owner approval; this board grants none.
