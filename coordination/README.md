@@ -37,6 +37,16 @@ Krum grants standing PC/Computer Use authorization for the coordination actions 
 
 This section supersedes older coordination wording that required owner relay or owner approval for every bounded correction inside the same already-approved Task-ID. Real business/security/production blockers still stop for Krum.
 
+## Mandatory GitHub event stream — 06.10.2026
+
+Every active BEG_WORK task must use [AGENT_EVENT_PROTOCOL.md](AGENT_EVENT_PROTOCOL.md).
+
+The current Task Issue is the append-only event stream. Codex and Claude publish structured events for task acceptance, canonical reading, preflight, dispatch attempt/success/failure, assignment receipt, implementation milestones, test start/result, HANDOFF, independent review, findings, correction dispatch, PASS/BLOCKED and final result relay.
+
+A failed action must be published explicitly; silent failure is forbidden. This is push-based and does **not** authorize periodic polling.
+
+If ACTIVE/CONTROL_STATE/CONTROL_BOARD lag behind a newer event with exact evidence, treat the projection as STALE, reconcile it to the event stream, and continue from the real latest event.
+
 ## Mandatory Bulgarian human summary
 
 Every ACTIVE implementation task must contain a **1–2 line plain-Bulgarian human summary** explaining what will actually be changed and why it matters to Krum. This is not a technical restatement of the Task-ID.
