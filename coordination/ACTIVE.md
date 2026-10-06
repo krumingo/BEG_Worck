@@ -1,19 +1,19 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C02 REVIEWING — FINAL EXACT-HEAD HANDOFF OBSERVED; CODEX INDEPENDENT REVIEW
+Status: W0-06B/C02 REVIEWING — CHANGES_REQUESTED INTENT; EXACT-HEAD VERDICT PENDING PUBLICATION
 Human-Summary-BG: Затваряме само публичния avatar URL, който сега позволява снимка от друг tenant да се отвори без вход. Останалата File Registry основа не се променя.
 Current-Agent: CODEX
 Current-State: REVIEWING
 Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Claude публикува финален W0-06B/C02 HANDOFF на d69145e795445ca3ca18df9a6e9818b1dfb8001e; Draft PR #46 head съвпада. Codex започва независим C01→C02 и whole-package review. ISSUE-26/C03 е само за подготовка, без dispatch.
+Transition-Phase: INTENT
+Now: Codex завърши независимия C02 audit на exact PR head d69145e795445ca3ca18df9a6e9818b1dfb8001e и подготви CHANGES_REQUESTED за principal-agnostic avatar cache. Verdict още не е публикуван; ISSUE-26/C03 остава само за подготовка, без dispatch.
 Next-Agent: GPT
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE (Codex independent review in progress)
+Krum-Action: NONE (Codex publishes exact-head verdict; no dashboard dispatch)
 Dispatch-State: RUNNING (one C02 Send completed; HANDOFF published; never resend)
 Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG (existing session resumed for C02)
 Dispatch-Observed-At: 2026-10-06T15:25:01Z
@@ -29,8 +29,8 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421 (C02 exact head d69145e795445ca3ca18df9a6e9818b1dfb8001e)
-Review: coordination/REVIEWS/W0-06B.md — C01 independent exact-head CHANGES_REQUESTED at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571; C02 review in progress, no verdict.
-Final-Verdict: C01 W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c; C02 HANDOFF received, independent verdict pending. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+Review: coordination/REVIEWS/W0-06B.md — C01 independent exact-head CHANGES_REQUESTED at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-5988800571; C02 independent evidence and CHANGES_REQUESTED intent recorded; publication pending.
+Final-Verdict: C01 W0-06B CHANGES_REQUESTED on 888d32e2abf029c5740bc6d7d9484a0cf037809c; C02 CHANGES_REQUESTED prepared on d69145e795445ca3ca18df9a6e9818b1dfb8001e but NOT YET PUBLISHED. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
