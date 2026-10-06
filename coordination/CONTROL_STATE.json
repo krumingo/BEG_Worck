@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-06T20:39:30Z",
+  "validated_at": "2026-10-06T20:42:17Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "f0e02549e1a8468343d48b0857a4da4cc54098dc",
-  "control_state_commit_sha": "ea1fe4200f7d08aa5e14d636f0c183bf5cc2f472",
-  "now": "Codex публикува C03 CHANGES_REQUESTED на точния PR head 6af100e65690f51328fff1fb98f8bf9b9d902c8e: три отчетни avatar renderers още ползват plain img без Bearer. Подготвя се само bounded C04 correction; Claude не е dispatch-нат. Няма merge/deploy или ISSUE-26 implementation.",
+  "active_source_commit_sha": "d5fc205e478fb8dc24af94eb0a7b284c2c292eee",
+  "control_state_commit_sha": "430275c77f186bab657306be17b21bc2cc8f03ee",
+  "now": "Codex подготви само bounded W0-06B/C04 correction на трите отчетни avatar renderers върху точния C03 head 6af100e65690f51328fff1fb98f8bf9b9d902c8e. PENDING не значи изпратено; изисква се action-time потвърждение преди един PC/UI Send към съществуващата Claude сесия.",
   "transition": {
-    "event": "CODEX_VERDICT",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104",
-    "verdict_publication": "PUBLISHED"
+    "event": "ASSIGNMENT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "NONE"
   },
   "generated_from": [
     "ACTIVE",
@@ -21,42 +21,42 @@
     "PR/HANDOFF"
   ],
   "task_id": "W0-06B",
-  "cycle_id": "C03",
+  "cycle_id": "C04",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
   "agent_states": {
     "GPT": {
       "state": "WAITING",
-      "work_id": "W0-06B/C03/GPT",
-      "waiting_for": "Codex independent C03 review verdict",
-      "updated_at": "2026-10-06T20:39:30Z"
+      "work_id": "W0-06B/C04/GPT",
+      "waiting_for": "Bounded C04 correction and independent review",
+      "updated_at": "2026-10-06T20:42:17Z"
     },
     "CODEX": {
-      "state": "WAITING",
-      "work_id": "W0-06B/C03/CX",
-      "waiting_for": "Bounded same-Task-ID C04 correction preparation",
-      "updated_at": "2026-10-06T20:39:30Z"
+      "state": "WORKING",
+      "work_id": "W0-06B/C04/CX",
+      "waiting_for": "Action-time confirmation and one C04 UI Send",
+      "updated_at": "2026-10-06T20:42:17Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-06B/C03/CL",
-      "waiting_for": "Codex independent C03 review verdict",
-      "updated_at": "2026-10-06T20:39:30Z"
+      "state": "WAITING",
+      "work_id": "W0-06B/C04/CL",
+      "waiting_for": "One bounded C04 correction dispatch",
+      "updated_at": "2026-10-06T20:42:17Z"
     }
   },
-  "current_work_id": "W0-06B/C03/CX",
-  "state": "CHANGES_REQUESTED",
-  "pipeline_step": "REVIEW",
+  "current_work_id": "W0-06B/C04/CX",
+  "state": "WORKING",
+  "pipeline_step": "ASSIGNMENT",
   "next_agent": "CLAUDE",
-  "waiting_for": "Bounded same-Task-ID C04 correction preparation",
+  "waiting_for": "Action-time confirmation and one C04 UI Send",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 46,
   "pr_head_sha": "6af100e65690f51328fff1fb98f8bf9b9d902c8e",
   "pr_draft": true,
-  "dispatch_state": "RUNNING",
-  "dispatch_run_url": "https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG",
+  "dispatch_state": "PENDING",
+  "dispatch_run_url": null,
   "last_handoff": {
     "url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918",
     "head_sha": "6af100e65690f51328fff1fb98f8bf9b9d902c8e",
@@ -76,22 +76,22 @@
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Prepare only same-Task-ID C04 report-avatar renderer correction; no UI Send before action-time confirmation. No merge/deploy/ISSUE-26 implementation.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104",
-    "updated_at": "2026-10-06T20:39:30Z"
+    "instruction": "Send only the prepared same-Task-ID C04 report-avatar renderer correction after action-time confirmation; no merge/deploy/ISSUE-26 implementation.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/d5fc205e478fb8dc24af94eb0a7b284c2c292eee/coordination/ACTIVE.md",
+    "updated_at": "2026-10-06T20:42:17Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "Computer Use action-time confirmation for one C04 Send",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "CORRECTION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "96f8458640c630ee89e47b6ad77c4b366cf706a2",
+    "active_blob_sha": "7adabf946b055241548b3e1dac7b6df577655940",
     "review_path": "coordination/REVIEWS/W0-06B.md",
     "review_blob_sha": "f6b394a51bf90d6c66c8e58630ccbd261ddd4464",
     "canonical_docs": [
@@ -125,7 +125,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-06T20:39:30Z",
+  "updated_at": "2026-10-06T20:42:17Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
@@ -308,6 +308,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104",
       "source_commit_sha": "6af100e65690f51328fff1fb98f8bf9b9d902c8e",
       "summary": "Independent C03 cache/security tests pass, but three report avatar consumers use unauthenticated plain img requests to the protected route. Published bounded CHANGES_REQUESTED; no PASS, merge or deploy."
+    },
+    {
+      "event_id": "w0-06b-c04-report-avatar-correction-prepared-not-dispatched",
+      "occurred_at": "2026-10-06T20:42:17Z",
+      "task_id": "W0-06B",
+      "cycle_id": "C04",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "ASSIGNMENT",
+      "state_after": "WORKING",
+      "head_sha": "6af100e65690f51328fff1fb98f8bf9b9d902c8e",
+      "source_url": "https://github.com/krumingo/BEG_Worck/blob/d5fc205e478fb8dc24af94eb0a7b284c2c292eee/coordination/ACTIVE.md",
+      "source_commit_sha": "d5fc205e478fb8dc24af94eb0a7b284c2c292eee",
+      "summary": "Codex prepared only a bounded C04 correction for three report-avatar renderers on the exact C03 reviewed head. No Claude Send yet; action-time Computer Use confirmation pending."
     }
   ]
 }
