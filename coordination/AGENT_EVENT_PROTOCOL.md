@@ -196,3 +196,45 @@ Codex и Claude нямат право:
 - да променят този protocol без решение на Крум.
 
 Промяна изисква ново изрично решение на Крум.
+
+
+## 11. 100% event coverage
+
+За активен Task-ID целта е **100% покритие на задължителните event transitions**.
+
+Това означава:
+- нито една задължителна lifecycle стъпка от §2 не може да се случи само в Codex/Claude UI;
+- всеки STARTED event трябва да завърши с OK / FAILED / BLOCKED event;
+- всеки dispatch има ATTEMPT + OK/FAILED;
+- всеки значим test gate има TEST_STARTED + TEST_RESULT;
+- всеки HANDOFF има HANDOFF_PREPARING + HANDOFF_PUBLISHED + HANDOFF_SENT_TO_CODEX/FAILED;
+- всеки review има HANDOFF_DETECTED + REVIEW_STARTED + поне един REVIEW_PROGRESS + PASS/CHANGES_REQUESTED/BLOCKED;
+- всеки correction има PREPARED + DISPATCH_ATTEMPT + DISPATCH_OK/FAILED;
+- всеки финален PASS има RESULT_SENT_TO_GPT/FAILED.
+
+Codex носи отговорност преди PASS да провери event completeness за текущия cycle. Липсващ задължителен event е protocol defect и се публикува като `EVENT_GAP`; не се скрива чрез backdating. При пропуск се добавя нов event, който описва кое е било пропуснато и с какво evidence се възстановява историята.
+
+## 12. GPT live dashboard contract
+
+GPT изгражда управленския dashboard от:
+1. Task Issue event stream;
+2. exact PR/HANDOFF/review evidence;
+3. `CONTROL_STATE.json` / `CONTROL_BOARD.md` като projection;
+4. `IMPLEMENTATION_WAVES.md` за общия roadmap.
+
+При конфликт по-новият валидиран event с exact evidence има предимство пред stale projection.
+
+Dashboard показва:
+- текущ Task-ID / Cycle-ID;
+- current agent;
+- last confirmed event;
+- next expected event;
+- branch / PR / exact head;
+- test statistics;
+- findings;
+- event coverage;
+- blockers;
+- whole Wave-0 roadmap;
+- next task after PASS.
+
+GPT не измисля процент progress, освен ако има доказан numerator/denominator. За текуща работа използва stage/status.
