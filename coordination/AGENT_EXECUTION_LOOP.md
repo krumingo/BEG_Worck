@@ -211,3 +211,13 @@ Loop-ът е **event-driven**:
 Едва **след визуалния график** GPT дава текста на новата задача за Codex.
 
 Това е задължителна част от цикъла и не се пропуска дори когато задачата е продължение/correction на започната работа.
+
+
+## 12. Задължителен GitHub event stream
+
+Всички действия по този execution loop се публикуват по
+[`AGENT_EVENT_PROTOCOL.md`](AGENT_EVENT_PROTOCOL.md).
+
+Codex и Claude нямат право да оставят съществена стъпка само в своя UI. Task Issue е append-only event stream за приемане, четене, preflight, dispatch attempt/success/failure, implementation, tests, HANDOFF, review, findings, corrections, PASS/BLOCKED и връщане на резултата към GPT.
+
+Ако dashboard/state изостава спрямо по-нов event с exact evidence, event stream-ът се проверява първо, state се маркира STALE и projection-ът се поправя.
