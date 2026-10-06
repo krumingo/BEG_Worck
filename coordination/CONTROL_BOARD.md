@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-06T16:42:53Z · CONTROL STATE: **VALID** as of 2026-10-06T16:42:53Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-06T16:56:39Z · CONTROL STATE: **VALID** as of 2026-10-06T16:56:39Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-06B / C02 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-06B/C02 final exact-head HANDOFF published in Draft PR #46 / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Claude публикува финален W0-06B/C02 HANDOFF на d69145e795445ca3ca18df9a6e9818b1dfb8001e; Draft PR #46 head съвпада. Codex започва независим C01→C02 и whole-package review. ISSUE-26/C03 е само за подготовка, без dispatch.
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NOW: Codex завърши независимия C02 audit на exact PR head d69145e795445ca3ca18df9a6e9818b1dfb8001e и подготви CHANGES_REQUESTED за principal-agnostic avatar cache. Verdict още не е публикуван; ISSUE-26/C03 остава само за подготовка, без dispatch.
+TRANSITION: CODEX_VERDICT / INTENT · verdict READY
 NEXT: GPT
 KRUM ACTION: NONE
-WAITING FOR: Independent C01-to-C02 delta and whole-package review
+WAITING FOR: Publish prepared exact-head C02 verdict
 
 ## Required agent banner
 
@@ -25,12 +25,12 @@ AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
 STATE: REVIEW
 NEXT: GPT
-WAITING_FOR: Independent C01-to-C02 delta and whole-package review
+WAITING_FOR: Publish prepared exact-head C02 verdict
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06B | C02 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent C01-to-C02 delta and whole-package review | REVIEW |
+| W0-06B | C02 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Publish prepared exact-head C02 verdict | REVIEW |
 
 ## Agent cards
 
@@ -38,15 +38,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06B/C02/GPT | Independent Codex C02 verdict | 2026-10-06T16:42:53Z |
-| CODEX | REVIEWING | W0-06B/C02/CX | Independent C01-to-C02 delta and whole-package review | 2026-10-06T16:42:53Z |
-| CLAUDE | HANDOFF_READY | W0-06B/C02/CL | Independent Codex C02 verdict | 2026-10-06T16:42:53Z |
+| GPT | WAITING | W0-06B/C02/GPT | Published independent Codex C02 verdict | 2026-10-06T16:56:39Z |
+| CODEX | REVIEWING | W0-06B/C02/CX | Publish prepared exact-head C02 verdict | 2026-10-06T16:56:39Z |
+| CLAUDE | HANDOFF_READY | W0-06B/C02/CL | Published independent Codex C02 verdict | 2026-10-06T16:56:39Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `f36672cd57d0f5b60a77da3f60544c9dcdf7ffdb` · blob `665eef6834c4477c0a22556143ebd7bb5b7e93ac`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `6be58ba5c7c17db67a70ce1473cff6180dfb672c` · blob `37bbdbb6b2cf5d898e0b2581cdbb11f65baf4304`
 - Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `d69145e795445ca3ca18df9a6e9818b1dfb8001e`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6019731421) · head `d69145e795445ca3ca18df9a6e9818b1dfb8001e`
 - Dispatch session: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG · dispatch state **RUNNING**
