@@ -83,3 +83,13 @@ GitHub е общата памет на проекта. `.md` файловете 
 Стандартен resolution path: `DECISIONS_INDEX → current task → relevant FLOW → relevant architecture → previous review → actual code`.
 
 **Критично:** ако важна информация е само в ChatGPT/Claude/Codex разговор, тя не е надеждно предадена на другите агенти. Запиши я в правилния `.md` или coordination state.
+
+
+## 8. Задължителен execution loop между агентите
+
+Каноничният процес за предаване, implementation, correction и independent review е в
+[`coordination/AGENT_EXECUTION_LOOP.md`](../coordination/AGENT_EXECUTION_LOOP.md).
+
+Той е задължителен за GPT, Codex и Claude и има приоритет пред по-стари coordination формулировки за ръчно relay-ване. Започнатите задачи се довършват по вече одобрения им план; новите задачи се планират като по-големи, но качествено проверими функционални пакети.
+
+Промяна на execution loop-а или standing PC/Computer Use authorization изисква ново изрично решение на Крум.
