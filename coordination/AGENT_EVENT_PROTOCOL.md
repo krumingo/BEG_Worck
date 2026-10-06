@@ -238,3 +238,40 @@ Dashboard показва:
 - next task after PASS.
 
 GPT не измисля процент progress, освен ако има доказан numerator/denominator. За текуща работа използва stage/status.
+
+
+## 13. Direct handoff event semantics
+
+`HANDOFF_SENT_TO_CODEX`, `DISPATCH_OK` и `RESULT_SENT_TO_GPT` означават **реално наблюдаван direct UI/PC handoff**, не само GitHub comment.
+
+Преди такъв OK event агентът трябва:
+- да направи реален PC/Computer Use опит към целевия агент;
+- да потвърди, че правилната целева сесия/интерфейс е отворена;
+- да изпрати минималния canonical payload;
+- да наблюдава успешното предаване.
+
+Ако това не е възможно:
+- publish `*_SEND_FAILED` / `DISPATCH_FAILED`;
+- посочи дали capability липсва, target UI не е достъпен, window/session не е намерена, или platform safeguard блокира действието;
+- GitHub event/HANDOFF остава наличен като evidence, но не се маркира като direct-send success.
+
+Минимален payload за Claude → Codex:
+- Task-ID;
+- Cycle-ID;
+- final HANDOFF URL;
+- exact head SHA;
+- кратко „готово за independent review“.
+
+Минимален payload за Codex → Claude:
+- Task-ID;
+- Cycle-ID;
+- canonical assignment/correction URL;
+- exact base/head;
+- кратко „изпълни и върни HANDOFF“.
+
+Минимален payload за Codex → GPT:
+- Task-ID;
+- Cycle-ID;
+- final verdict;
+- review/evidence URL;
+- exact reviewed head.
