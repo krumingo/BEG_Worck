@@ -1,15 +1,15 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-06T20:27:27Z · CONTROL STATE: **VALID** as of 2026-10-06T20:27:27Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-06T20:37:26Z · CONTROL STATE: **VALID** as of 2026-10-06T20:37:26Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
 CURRENT: W0-06B / C03 / CODEX / **REVIEW**
 LAST: CLAUDE — W0-06B/C03 final exact-head HANDOFF published / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Claude публикува финален C03 HANDOFF на точния PR #46 head 6af100e65690f51328fff1fb98f8bf9b9d902c8e и спря. Codex прави независим review на C02→C03 и целия main→head пакет; няма verdict, merge/deploy или ISSUE-26 implementation.
-TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
-NEXT: GPT
+NOW: Codex завърши независимия C03 audit и подготвя CHANGES_REQUESTED за три отчетни avatar renderers без authenticated fetch. Verdict още не е публикуван; Claude не е dispatch-нат за нов cycle. Няма merge/deploy или ISSUE-26 implementation.
+TRANSITION: CODEX_VERDICT / INTENT · verdict PENDING
+NEXT: CLAUDE
 KRUM ACTION: NONE
 WAITING FOR: Independent C03 code, security and test gates
 
@@ -24,7 +24,7 @@ CYCLE: C03
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
 STATE: REVIEW
-NEXT: GPT
+NEXT: CLAUDE
 WAITING_FOR: Independent C03 code, security and test gates
 ```
 
@@ -38,15 +38,15 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06B/C03/GPT | Codex independent C03 review verdict | 2026-10-06T20:27:27Z |
-| CODEX | REVIEWING | W0-06B/C03/CX | Independent C03 code, security and test gates | 2026-10-06T20:27:27Z |
-| CLAUDE | HANDOFF_READY | W0-06B/C03/CL | Codex independent C03 review verdict | 2026-10-06T20:27:27Z |
+| GPT | WAITING | W0-06B/C03/GPT | Codex independent C03 review verdict | 2026-10-06T20:37:26Z |
+| CODEX | REVIEWING | W0-06B/C03/CX | Independent C03 code, security and test gates | 2026-10-06T20:37:26Z |
+| CLAUDE | HANDOFF_READY | W0-06B/C03/CL | Codex independent C03 review verdict | 2026-10-06T20:37:26Z |
 
 GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `545d831c5ac93d586758827e490b2e7719614256` · blob `8d7c253afa47e14bb115e61f3e245f34d752d82b`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `9f6c6654eb0df1f95278153d28066e84633b3264` · blob `c721e8c9bd49d9050af10e5601074af42f1a7128`
 - Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918) · head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
 - Dispatch session: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG · dispatch state **RUNNING**
