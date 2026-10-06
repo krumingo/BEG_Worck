@@ -221,3 +221,20 @@ Loop-ът е **event-driven**:
 Codex и Claude нямат право да оставят съществена стъпка само в своя UI. Task Issue е append-only event stream за приемане, четене, preflight, dispatch attempt/success/failure, implementation, tests, HANDOFF, review, findings, corrections, PASS/BLOCKED и връщане на резултата към GPT.
 
 Ако dashboard/state изостава спрямо по-нов event с exact evidence, event stream-ът се проверява първо, state се маркира STALE и projection-ът се поправя.
+
+
+## 13. Direct PC handoff is mandatory
+
+За agent-to-agent предаване GitHub event stream **не е достатъчен сам по себе си**.
+
+След като Claude приключи и публикува final HANDOFF:
+1. Claude **задължително прави реален опит** да използва наличното си PC/Computer Use умение, за да отвори активния Codex интерфейс/сесия и да предаде: Task-ID, Cycle-ID, HANDOFF URL и exact head.
+2. Само ако този реален UI handoff е наблюдаван като успешен, Claude публикува `HANDOFF_SENT_TO_CODEX status: OK`.
+3. Ако PC/Computer Use capability действително липсва или UI handoff се провали, Claude публикува `HANDOFF_SEND_FAILED` с точната техническа причина и evidence. Не се допуска твърдение „нямам PC достъп“ без да е проверено спрямо наличните инструменти на текущата сесия.
+4. GitHub HANDOFF/event остава задължителното доказателство и fallback канал, но не заменя direct PC handoff, когато capability е налична.
+
+Същото правило важи огледално:
+- Codex → Claude assignment/correction;
+- Codex → GPT final PASS/result.
+
+Standing authorization на Крум разрешава тези PC/Computer Use handoff действия в рамките на текущия Task-ID.
