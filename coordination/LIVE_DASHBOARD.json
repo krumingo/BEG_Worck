@@ -1,0 +1,102 @@
+{
+  "schema": "beg.live-dashboard/v1",
+  "generated_at": "2026-10-06T16:13:58Z",
+  "source_priority": [
+    "task_issue_events",
+    "pr_review_evidence",
+    "control_state",
+    "implementation_waves"
+  ],
+  "agents": {
+    "GPT": {
+      "state": "ACTIVE_COORDINATION",
+      "current_action": "roadmap/task/dashboard",
+      "waiting_for": "Codex review events"
+    },
+    "CODEX": {
+      "state": "EXPECTED_NEXT",
+      "current_action": "W0-06B/C02 independent review",
+      "waiting_for": "publish HANDOFF_DETECTED then REVIEW_STARTED"
+    },
+    "CLAUDE": {
+      "state": "WAITING",
+      "current_action": "C02 handoff complete",
+      "waiting_for": "bounded correction only if Codex dispatches"
+    }
+  },
+  "current_task": {
+    "wave": "W0",
+    "item": "W0-06",
+    "task_id": "W0-06B",
+    "cycle_id": "C02",
+    "pr": 46,
+    "head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
+    "stage": "AWAITING_CODEX_REVIEW_PICKUP",
+    "merge": false,
+    "deploy": false
+  },
+  "timing": {
+    "c02_claude_implementation": {
+      "start": "2026-10-06T15:25:01Z",
+      "finish": "2026-10-06T15:33:48Z",
+      "seconds": 527
+    },
+    "c01_claude_implementation": {
+      "start": "2026-10-04T22:01:04Z",
+      "finish": "2026-10-04T23:11:35Z",
+      "seconds": 4231
+    },
+    "c01_review_wall_interval": {
+      "start": "2026-10-04T23:11:35Z",
+      "finish": "2026-10-05T05:41:36Z",
+      "seconds": 23401,
+      "note": "wall interval, not active-work claim"
+    }
+  },
+  "claude_handoff_tests": {
+    "avatar_security": {
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0
+    },
+    "w006_focused": {
+      "passed": 451,
+      "failed": 0,
+      "skipped": 0
+    },
+    "flow002_tenancy": {
+      "passed": 125,
+      "failed": 0,
+      "skipped": 0
+    },
+    "real_mongo": {
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0
+    },
+    "broad_w0": {
+      "passed": 1619,
+      "failed": 15,
+      "skipped": 0
+    },
+    "static_guard_violations": 0,
+    "live_media_acl": "NOT_RUN",
+    "browser_jest": "NOT_RUN"
+  },
+  "event_coverage": {
+    "PROTOCOL_UPDATED": "DONE",
+    "CODEX_TASK_ASSIGNED": "DONE",
+    "CLAUDE_STANDING_TASK_ASSIGNED": "DONE",
+    "HANDOFF_DETECTED": "PENDING",
+    "REVIEW_STARTED": "PENDING",
+    "REVIEW_PROGRESS": "PENDING",
+    "FINAL_VERDICT": "PENDING",
+    "RESULT_SENT_TO_GPT": "PENDING"
+  },
+  "forecasts": {
+    "current_review": "UNSET_UNTIL_REVIEW_STARTED",
+    "w006c": "UNSET_UNTIL_ASSIGNMENT_SCOPED",
+    "wave0_remaining": "TBD_BASELINE_REQUIRED",
+    "whole_program": "TBD_HISTORICAL_BASELINE_REQUIRED"
+  }
+}
