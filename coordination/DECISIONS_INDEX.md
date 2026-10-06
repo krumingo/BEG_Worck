@@ -68,6 +68,7 @@
 Каноничният coordination source of truth е branch `codex/claude-queue`.
 
 - [coordination/README.md](README.md) — protocol и правила за работа;
+- [coordination/AGENT_EXECUTION_LOOP.md](AGENT_EXECUTION_LOOP.md) — заключен GPT → Codex → Claude → Codex execution/review loop и standing PC/Computer Use authorization;
 - [coordination/ACTIVE.md](ACTIVE.md) — само текущото активно задание;
 - [coordination/CONTROL_STATE.json](CONTROL_STATE.json) — machine-readable статус;
 - [coordination/CONTROL_BOARD.md](CONTROL_BOARD.md) — management dashboard projection;
@@ -80,17 +81,19 @@
 2. **Codex = technical lead / независим QA / coordinator.**
 3. **Claude = implementation worker.**
 4. **GitHub = shared source of truth.**
-5. Една implementation задача наведнъж: assignment → Claude → exact-head HANDOFF → един Codex review → verdict → STOP.
+5. Една implementation задача наведнъж: GPT подготвя → Крум предава веднъж на Codex → Codex dispatch-ва Claude → exact-head HANDOFF → независим Codex review → при технически дефект в същия Task-ID Codex сам dispatch-ва correction към Claude → review loop до PASS или истински blocker → Codex връща PASS към GPT.
 6. `PASS`, `CHANGES_REQUESTED` и `BLOCKED` са review verdict-и, не agent activity states.
 7. Междинен push не е HANDOFF.
 8. Merge, deploy, production migration, credentials и необратими production действия искат отделно изрично решение.
 9. Всеки task започва с **„На човешки:“** и същият текст се проектира в dashboard.
 10. Dashboard management текстът е на български.
 11. Периодичен polling/monitor за активна BEG_WORK implementation задача е **забранен по подразбиране**.
-12. След `CHANGES_REQUESTED` няма автоматичен resend/review loop; чака се bounded correction decision.
+12. След `CHANGES_REQUESTED`, ако поправката е техническа и остава в вече одобрения Task-ID/business scope, Codex сам създава и dispatch-ва bounded correction към Claude; Крум не е ръчен relay. Само business/security/production blocker спира за Крум.
 13. Нов review се прави само след нов final exact-head HANDOFF.
-14. Krum не е execution `next_agent`; human approval/relay се държи отделно от agent routing.
+14. Krum не е execution `next_agent` и не е ръчен посредник между Codex и Claude; human decisions са отделни от agent routing.
 15. Two-phase protocol: INTENT/PENDING преди действие; OBSERVED/CONFIRMED след реално доказано действие.
+16. **Standing PC/Computer Use:** Codex и Claude имат постоянно разрешение от Крум да използват наличния PC/Computer Use канал за assignment/correction dispatch, HANDOFF обратно към Codex и final PASS/result към GPT, в рамките на одобрения Task-ID. Merge/deploy/production/credentials/destructive/security-exception действия остават извън това разрешение.
+17. След PASS Codex не стартира следващ Task-ID; GPT проверява резултата, актуализира управленската картина и подготвя следващата по графика задача.
 
 Каноничните формулировки на тези правила са в [coordination/README.md](README.md).
 
