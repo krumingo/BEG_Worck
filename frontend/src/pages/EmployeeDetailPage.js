@@ -27,6 +27,7 @@ import ImageCropDialog from "@/components/ImageCropDialog";
 import PayslipDialog from "@/components/PayslipDialog";
 import AdminResetPasswordModal from "@/components/AdminResetPasswordModal";
 import { toast } from "sonner";
+import AuthImage from "@/components/AuthImage";
 
 // P1-0.3: single source of truth for report status buckets.
 // Header, footer (Reports tab) and summary cards all derive from THIS — no drift.
@@ -51,7 +52,7 @@ function Avatar({ name, url, size = 48 }) {
   const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   
   if (fullUrl && !imgError) {
-    return <img src={fullUrl} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} onError={() => setImgError(true)} />;
+    return <AuthImage src={fullUrl} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} onError={() => setImgError(true)} />;
   }
   return (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: size * 0.35 }}>

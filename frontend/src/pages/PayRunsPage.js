@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { openGroupPrint, openIndividualPrint, openSelectedPrint } from "@/components/PayRunPrintView";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS_CFG = {
   draft:     { label: "Чернова",   cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -785,7 +786,7 @@ export default function PayRunsPage() {
                             <TableCell className="text-center"><input type="checkbox" checked={isSelected} disabled={isFullyPaid} onChange={() => toggleEmp(eid)} className="rounded" /></TableCell>
                             <TableCell className="sticky left-0 bg-card z-10">
                               <div className="flex items-center gap-2">
-                                {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
+                                {row.avatar_url ? <AuthImage src={row.avatar_url} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-xs font-medium truncate max-w-[100px]">{row.first_name} {row.last_name}</p>
@@ -981,7 +982,7 @@ export default function PayRunsPage() {
                           <TableRow key={eid}>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" /> : <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
+                                {row.avatar_url ? <AuthImage src={row.avatar_url} className="w-7 h-7 rounded-full object-cover" alt="" /> : <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
                                 <div><p className="text-xs font-medium">{row.first_name} {row.last_name}</p><p className="text-[8px] text-muted-foreground">{row.position || "—"}</p></div>
                               </div>
                             </TableCell>
@@ -1049,7 +1050,7 @@ export default function PayRunsPage() {
                           <TableCell><input type="checkbox" checked={isPay} onChange={() => { const s = new Set(paySelected); if (s.has(eid)) s.delete(eid); else s.add(eid); setPaySelected(s); }} className="rounded" /></TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              {row.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${row.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
+                              {row.avatar_url ? <AuthImage src={row.avatar_url} className="w-8 h-8 rounded-full object-cover" alt="" /> : <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{(row.first_name?.[0] || "")}{(row.last_name?.[0] || "")}</div>}
                               <div><p className="text-xs font-medium">{row.first_name} {row.last_name}</p><p className="text-[8px] text-muted-foreground">{row.position || "—"}</p></div>
                             </div>
                           </TableCell>

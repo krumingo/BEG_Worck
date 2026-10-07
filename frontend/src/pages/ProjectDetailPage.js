@@ -54,6 +54,7 @@ import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
 import { ProjectPersonnelCard } from "@/components/DailyReportDialog";
 import ObjectDailyReportTab from "@/components/ObjectDailyReportTab";
 import ProjectAssetsTab from "@/components/ProjectAssetsTab";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
@@ -902,7 +903,7 @@ function PersonnelUnified({ projectId, team }) {
             return (
               <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/10 text-sm cursor-pointer hover:bg-muted/20" onClick={() => navigate(`/employees/${p.employee_id}`)}>
                 <div className="flex items-center gap-2">
-                  {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-7 h-7 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{initials}</div>}
+                  {p.avatar_url ? <AuthImage src={p.avatar_url} className="w-7 h-7 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{initials}</div>}
                   <span className="text-white">{name || "—"}</span>
                 </div>
                 <div className="flex items-center gap-2">
