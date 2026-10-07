@@ -238,3 +238,27 @@ Codex и Claude нямат право да оставят съществена �
 - Codex → GPT final PASS/result.
 
 Standing authorization на Крум разрешава тези PC/Computer Use handoff действия в рамките на текущия Task-ID.
+
+
+## 14. Mandatory task wording for PC/Computer Use
+
+Във **всяка нова задача, correction assignment, review handoff и PASS/result handoff** GPT/Codex трябва изрично да включват следното правило:
+
+> **Standing authorization:** Крум предварително разрешава на CODEX и CLAUDE да използват наличните им PC/Computer Use способности за директно предаване на задачи, corrections, HANDOFF-и и финални резултати между агентите в рамките на текущия Task-ID. **Не искай Крум за ново потвърждение за тези agent-to-agent handoff действия.** Използвай PC/Computer Use директно и публикувай success/failure event в GitHub.
+
+Това standing разрешение важи за:
+- CODEX → CLAUDE assignment/correction;
+- CLAUDE → CODEX HANDOFF;
+- CODEX → GPT final PASS/result.
+
+Не важи за:
+- merge;
+- deploy;
+- production/NAS/Atlas write;
+- destructive migration/customer-data action;
+- нови live credentials;
+- business-rule промяна;
+- security exception;
+- нов Task-ID.
+
+Ако самата платформа наложи задължително action-time confirmation, агентът не може да го заобикаля. В такъв случай се публикува `*_SEND_FAILED` / `BLOCKED_BY_PLATFORM_CONFIRMATION` с точна причина. Агентът **не трябва сам да иска повторно Крум за потвърждение**, освен ако платформата реално не го изисква като неизбежна UI стъпка.
