@@ -1,15 +1,15 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 FINAL HANDOFF — CODEX REVIEWING
+Status: W0-06C/C01 independent review complete — CHANGES_REQUESTED publication prepared
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 Current-Agent: CODEX
 Current-State: REVIEW
 Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Claude публикува final exact-head HANDOFF в Draft PR #49 за 1b7d10a73e66b0a0680d5702019e73c7c57aa527 и STOP event в Issue #48. Live PR head съвпада точно; Codex започва независим B→C и whole main→final review. Direct Claude→Codex UI handoff липсва по техническа capability, но GitHub HANDOFF е наличен. Няма Codex verdict още.
-Next-Agent: CODEX (independent review)
+Transition-Phase: PREPARED
+Now: Codex independently reviewed final exact head 1b7d10a73e66b0a0680d5702019e73c7c57aa527 against the W0-06C contract, reran focused/adjacent/loopback-Mongo gates and prepared bounded CHANGES_REQUESTED evidence for lease fencing, resolution proof and projection scope. Verdict publication in PR #49 and Issue #48 is pending; no Claude C02 Send yet.
+Next-Agent: CODEX (publish verdict, prepare same-Task-ID C02 correction)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
@@ -30,14 +30,16 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567
-Review: NONE for W0-06C; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: NONE for W0-06C. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Review: coordination/REVIEWS/W0-06C.md (independent C01 findings, publication pending); predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
+Final-Verdict: W0-06C/C01 CHANGES_REQUESTED prepared, not yet published; no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (CODEX REVIEWING)
+## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (independent review complete)
+
+**Independent C01 result prepared:** `coordination/REVIEWS/W0-06C.md` records three bounded same-scope defects at exact head `1b7d10a73e66b0a0680d5702019e73c7c57aa527`: post-takeover finding/audit side effects before fenced checkpoint, incomplete type-specific resolution proof, and incomplete project/module authorization for the alarm projection. Focused W0-06C 124/124, W0-06A/B 451/451, real Mongo 44/44, FLOW-002/tenant 85/85 and static guards 182/182 passed independently; green tests do not cover these counterexamples. Publish exact verdict before any new Claude Send. No merge/deploy/production scheduler or next Task-ID.
 
 **На човешки:** BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 
