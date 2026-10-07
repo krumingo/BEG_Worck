@@ -127,12 +127,14 @@
 
 - [W0-06A review](REVIEWS/W0-06A.md)
 - [W0-06B review](REVIEWS/W0-06B.md)
+- [W0-06C monitoring contract](https://github.com/krumingo/BEG_Worck/blob/codex/w0-06c-integrity-monitoring/docs/architecture/W0-06C_INTEGRITY_MONITORING.md) — implementation scope for periodic checks, technical alarms and affected records; FLOW-016 remains the business source of truth.
 
 Current implementation references:
 - Issue #43 — W0-06A
 - Draft PR #44 — W0-06A predecessor, unmerged
 - Issue #45 — W0-06B
-- Draft PR #46 — W0-06B current package
+- Draft PR #46 — W0-06B independent PASS, unmerged technical predecessor
+- Issue #48 / Draft PR #49 — W0-06C current package, stacked on accepted W0-06B exact head
 
 Текущият active cycle и exact SHA не се поддържат ръчно тук. Винаги се четат от:
 - [ACTIVE.md](ACTIVE.md)

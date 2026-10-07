@@ -1,41 +1,56 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C04 INDEPENDENT PASS PUBLISHED — NO MERGE OR DEPLOY
-Human-Summary-BG: Поправяме само трите отчетни avatar изображения, които още ползват обикновен URL без login header; защитата на сървъра и cache-ът остават непроменени.
+Status: W0-06C/C01 ASSIGNMENT PREPARED — DIRECT DISPATCH PENDING
+Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 Current-Agent: CODEX
-Current-State: PASS
-Claude-State: HANDOFF_READY
-Codex-State: WAITING
-Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Codex публикува независим W0-06B/C04 PASS на exact Draft PR #46 head 203a61fe91fe20c955ffed9ec81b1d506725d151 след 27/27 frontend, 30/30 avatar backend, 451/451 focused A/B, 125/125 FLOW-002/tenant и чисти static guards. test_media_acl.py и C04 real-Mongo не са изпълнени и не се броят за PASS; предишният независим real-Mongo 33/33 остава доказателство. Директният Codex→GPT PC/UI relay е недостъпен по Computer Use policy и е записан като RESULT_SEND_FAILED; резултатът е публикуван в PR, Issue и текущия Codex task.
-Next-Agent: GPT (only after independent verdict)
-Relay-State: NO_RELAY_NEEDED (direct Codex→GPT PC/UI relay unavailable; RESULT_SEND_FAILED recorded)
+Current-State: WORKING
+Claude-State: WAITING
+Codex-State: WORKING
+Pipeline-Step: ASSIGNMENT
+Transition-Phase: INTENT
+Now: W0-06C/C01 contract е формализиран от FLOW-016 и приетия W0-06B contract. Issue #48 и Draft PR #49 са създадени след exact preflight; PR е contract-only на 6f6b1dfa56802b36abca7eb9388c68840d55b2bb, stacked върху W0-06B PASS head 203a61fe91fe20c955ffed9ec81b1d506725d151. Codex подготвя точно един direct Claude Send; няма изпратена задача, Claude работа или HANDOFF. Ако platform safeguard изисква action-time confirmation, не го заобикаляй и запиши точния dispatch failure.
+Next-Agent: CLAUDE (only after observed direct Send)
+Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE for completed C04; separate approval required for merge/deploy/next Task-ID
-Dispatch-State: NONE (C04 sent once and completed; never resend)
-Dispatch-Run: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG
-Dispatch-Observed-At: 2026-10-07T05:28:15Z
-Task-ID: W0-06B
-Cycle-ID: C04
-Base-branch: codex/w0-06a-file-registry-foundation (technical integration base only; PR #44 remains Draft/CHANGES_REQUESTED)
-Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
-Implementation-branch: codex/w0-06b-storage-provider-foundation (created at exact Base-SHA)
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (existing Draft, base main; C01 CHANGES_REQUESTED, unmerged)
-PR-Head: 203a61fe91fe20c955ffed9ec81b1d506725d151
-Correction-Base-SHA: 6af100e65690f51328fff1fb98f8bf9b9d902c8e
+Krum-Action: NONE unless an unavoidable platform confirmation is presented; no merge/deploy/production approval
+Dispatch-State: PENDING (intent only; never infer Claude start)
+Dispatch-Run: NONE
+Dispatch-Observed-At: NONE
+Task-ID: W0-06C
+Cycle-ID: C01
+Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted technical base, PR #46 unmerged)
+Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
+Implementation-branch: codex/w0-06c-integrity-monitoring
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
+PR-Head: 6f6b1dfa56802b36abca7eb9388c68840d55b2bb
+Correction-Base-SHA: NONE
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
-Issue: https://github.com/krumingo/BEG_Worck/issues/45
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366 (C04 exact head)
-Review: coordination/REVIEWS/W0-06B.md — C04 independent exact-head PASS published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: W0-06B PASS — STORAGE PROVIDER ONBOARDING AND INTEGRITY FOUNDATION CLOSED on 203a61fe91fe20c955ffed9ec81b1d506725d151. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
-Predecessor-Task-ID: W0-06A/C01
-Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
-Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
-Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
-Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent C02 exactly once and observed Claude working in the existing W0-06B session. After independent C02 CHANGES_REQUESTED, Krum explicitly confirmed one W0-06B/C03 Computer Use Send for the bounded AuthImage cache correction; Codex sent it exactly once to the existing session and observed the new C03 user message and Claude responding.
+Issue: https://github.com/krumingo/BEG_Worck/issues/48
+HANDOFF-URL: NONE
+Review: NONE for W0-06C; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
+Final-Verdict: NONE for W0-06C. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Predecessor-Task-ID: W0-06B/C04
+Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
+Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
+Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
+
+## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (ASSIGNMENT; DISPATCH PENDING)
+
+**На човешки:** BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
+
+**Exact identity and contract.** Task-ID `W0-06C`, Cycle-ID `C01`, Issue #48, implementation branch `codex/w0-06c-integrity-monitoring`, Draft PR #49 to `main@79af297612f57c055bb7caef3f0c48493800d1b6`. Technical base is the independently accepted but unmerged W0-06B PR #46 head `203a61fe91fe20c955ffed9ec81b1d506725d151`. Current PR #49 head `6f6b1dfa56802b36abca7eb9388c68840d55b2bb` adds only `docs/architecture/W0-06C_INTEGRITY_MONITORING.md`. That document is the exact implementation contract derived from FLOW-016, FLOW-002, FLOW-040, TENANCY_MODEL, IMPLEMENTATION_WAVES and the W0-06B service/result contract. No separate business rules, production cadence, SLA or recipients may be invented.
+
+**Claude assignment.** Implement the contract's bounded tenant-resolved scheduler, atomic concurrent-run exclusion/fencing, durable checkpoints and safe resume, retry/backoff and provider-outage distinction, open/observed/resolved/reopened finding history, informational/warning/critical technical alarm projection, current affected FileRelation groups, FLOW-002 service-principal authorization and FLOW-040 AuditEvent. Reuse `app/files/integrity.py`, `AffectedRecordResolver` and `beg.w0-06b.file_integrity_finding/v1` as the sole verification/result source; no parallel checker, provider adapter rewrite, customer-original repair/delete or W0-07 DQ/Approval runtime. No production cron or provider activation. Keep the `dq_handoff` interface intact.
+
+**Required tests and HANDOFF.** Focused scheduler idempotency/concurrency/tenant/batches/resume/retry/backoff, every finding type, transient vs persistent outage under explicit test policy, lifecycle and type-specific resolution, affected-record grouping, permission denied and secret redaction, audit and no duplicate alarms; rerun W0-06A/B, FLOW-002/tenant and static guards; `git diff --check`; disposable fresh real MongoDB on `127.0.0.1` with 0 failed/0 required skipped and proven cleanup. Report exact collected/passed/failed/skipped. Publish final exact-head HANDOFF in PR #49 with changed files, tests and limitations; attempt direct PC/UI HANDOFF to Codex if capability permits, record success/failure, then STOP. Codex independently reviews B→C and whole main→final stack and repeats bounded same-Task-ID correction cycles until PASS or a genuine blocker.
+
+**Standing authorization:** Крум предварително разрешава на CODEX и CLAUDE да използват наличните им PC/Computer Use способности за директно предаване на задачи, corrections, HANDOFF-и и финални резултати между агентите в рамките на текущия Task-ID. **Не искай Крум за ново потвърждение за тези agent-to-agent handoff действия.** Използвай PC/Computer Use директно и публикувай success/failure event в GitHub. Ако платформата изисква задължителен action-time confirmation, не го заобикаляй; публикувай точната причина за блокирания Send.
+
+**Hard boundaries.** No merge, deploy, production scheduler activation, live provider credentials, production/NAS/Atlas writes, destructive migration, customer-original move/delete, W0-06D/E, W0-07 runtime, DQ/Approval business logic, ISSUE-26 dashboard changes, unrelated FLOW/D changes or automatic next Task-ID. FLOW-016 Gate remains OPEN.
+
+---
 
 ## Canonical W0-06B/C04 — three report-avatar consumers (INDEPENDENT PASS)
 
