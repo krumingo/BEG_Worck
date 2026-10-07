@@ -1,14 +1,14 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C04 CODEX REVIEWING — FINAL EXACT-HEAD HANDOFF
+Status: W0-06B/C04 CODEX REVIEWING — PASS VERDICT PREPARED (NOT PUBLISHED)
 Human-Summary-BG: Поправяме само трите отчетни avatar изображения, които още ползват обикновен URL без login header; защитата на сървъра и cache-ът остават непроменени.
 Current-Agent: CODEX
 Current-State: REVIEW
 Claude-State: HANDOFF_READY
 Codex-State: REVIEWING
 Pipeline-Step: REVIEW
-Transition-Phase: OBSERVED
-Now: Claude публикува финален C04 HANDOFF на PR #46 head 203a61fe91fe20c955ffed9ec81b1d506725d151 и приключи. Директният cloud→Codex UI handoff се провали по capability, но GitHub HANDOFF е exact-head; Codex проверява независимо C03→C04 и целия main→head пакет. Няма PASS преди review.
+Transition-Phase: INTENT
+Now: Codex завърши независимия C04 review на exact head 203a61fe91fe20c955ffed9ec81b1d506725d151; PASS verdict е подготвен с доказателства в REVIEWS/W0-06B.md, но още не е публикуван. Dashboard-first INTENT предхожда PR verdict; до публикацията Codex остава REVIEWING и няма завършен C04 резултат.
 Next-Agent: GPT (only after independent verdict)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
@@ -29,8 +29,8 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366 (C04 exact head)
-Review: coordination/REVIEWS/W0-06B.md — C03 independent exact-head CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104.
-Final-Verdict: C03 W0-06B CHANGES_REQUESTED on 6af100e65690f51328fff1fb98f8bf9b9d902c8e; C04 final HANDOFF is under independent review, no C04 verdict yet. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+Review: coordination/REVIEWS/W0-06B.md — C04 independent exact-head PASS evidence prepared, verdict publication pending.
+Final-Verdict: C03 W0-06B CHANGES_REQUESTED on 6af100e65690f51328fff1fb98f8bf9b9d902c8e; C04 PASS is prepared but NOT YET PUBLISHED. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
