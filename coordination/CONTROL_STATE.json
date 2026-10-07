@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-07T09:16:10Z",
+  "validated_at": "2026-10-07T09:21:40Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "9d7de4ae8b083af9b532c6c205067b667848649d",
-  "control_state_commit_sha": "430275c77f186bab657306be17b21bc2cc8f03ee",
-  "now": "Claude публикува финален C04 HANDOFF на PR #46 head 203a61fe91fe20c955ffed9ec81b1d506725d151 и приключи. Директният cloud→Codex UI handoff се провали по capability, но GitHub HANDOFF е exact-head; Codex проверява независимо C03→C04 и целия main→head пакет. Няма PASS преди review.",
+  "active_source_commit_sha": "b360b9fcb6d15c7c607968fcda6a78a36738a60d",
+  "control_state_commit_sha": "e543bf37f403054954477f3879a50fa3d4df3435",
+  "now": "Codex завърши независимия C04 review на exact head 203a61fe91fe20c955ffed9ec81b1d506725d151; PASS verdict е подготвен с доказателства, но още не е публикуван. Dashboard-first INTENT предхожда PR verdict; до публикацията Codex остава REVIEWING.",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366",
-    "verdict_publication": "NONE"
+    "event": "CODEX_VERDICT",
+    "phase": "INTENT",
+    "evidence_url": null,
+    "verdict_publication": "READY"
   },
   "generated_from": [
     "ACTIVE",
@@ -29,27 +29,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06B/C04/GPT",
-      "waiting_for": "Bounded C04 correction and independent review",
-      "updated_at": "2026-10-07T09:16:10Z"
+      "waiting_for": "Published independent C04 verdict",
+      "updated_at": "2026-10-07T09:21:40Z"
     },
     "CODEX": {
       "state": "REVIEWING",
       "work_id": "W0-06B/C04/CX",
-      "waiting_for": "Independent C04 delta and whole-package audit",
-      "updated_at": "2026-10-07T09:16:10Z"
+      "waiting_for": "Dashboard-first verdict publication and exact-head recheck",
+      "updated_at": "2026-10-07T09:21:40Z"
     },
     "CLAUDE": {
       "state": "HANDOFF_READY",
       "work_id": "W0-06B/C04/CL",
       "waiting_for": "Codex independent verdict",
-      "updated_at": "2026-10-07T09:16:10Z"
+      "updated_at": "2026-10-07T09:21:40Z"
     }
   },
   "current_work_id": "W0-06B/C04/CX",
   "state": "REVIEW",
   "pipeline_step": "REVIEW",
   "next_agent": "GPT",
-  "waiting_for": "Independent C04 delta and whole-package audit",
+  "waiting_for": "Dashboard-first verdict publication and exact-head recheck",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 46,
@@ -73,7 +73,7 @@
     "status": "NO_RELAY_NEEDED",
     "instruction": "Codex independently reviews C03→C04 and whole main→203a61f; publish evidence and verdict. No merge, deploy or next Task-ID.",
     "source_url": "https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366",
-    "updated_at": "2026-10-07T09:16:10Z"
+    "updated_at": "2026-10-07T09:21:40Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
@@ -86,9 +86,9 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "8de10f324197421d402e3dadd33ddd3f81cf8ad5",
+    "active_blob_sha": "b71a9100e2ee52eb87b8edeaff6caa7847928fb1",
     "review_path": "coordination/REVIEWS/W0-06B.md",
-    "review_blob_sha": "f6b394a51bf90d6c66c8e58630ccbd261ddd4464",
+    "review_blob_sha": "064fffa7a9f5f6990393a993dee537b0ba0a9be2",
     "canonical_docs": [
       {
         "path": "CLAUDE.md",
@@ -120,7 +120,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-07T09:16:10Z",
+  "updated_at": "2026-10-07T09:21:40Z",
   "history": [
     {
       "event_id": "w0-06b-c01-assignment-prepared-not-dispatched",
