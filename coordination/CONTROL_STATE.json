@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-07T14:27:23Z",
+  "validated_at": "2026-10-07T14:38:15Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "b58e556",
-  "control_state_commit_sha": "89e0586",
-  "now": "Claude published final C03 exact-head HANDOFF at 04b237a61f787b57c6dc175d86bab0c616f086c8 and stopped. Live Draft PR #49 head matches. Codex independently reviews C02-to-C03 and whole main-to-head; no C03 verdict yet.",
+  "active_source_commit_sha": "4662c59",
+  "control_state_commit_sha": "eedd31f",
+  "now": "Independent C03 review reproduced stale finding, transition and AuditEvent after the lease expires between _commit_item and the first separate finding write. Focused suite is non-green. Strict no-stale-write guarantee requires Krum's architecture decision. W0-06C BLOCKED; no C04 Send or PASS.",
   "transition": {
-    "event": "HANDOFF_DETECTED",
+    "event": "BLOCKED",
     "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6040010582",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md",
     "verdict_publication": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
@@ -25,27 +25,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06C/C01/GPT",
-      "waiting_for": "Independent Codex C03 verdict",
-      "updated_at": "2026-10-07T14:27:23Z"
+      "waiting_for": "Krum architecture decision for strict no-stale-write guarantee",
+      "updated_at": "2026-10-07T14:38:15Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "BLOCKED",
       "work_id": "W0-06C/C03/CX",
-      "waiting_for": "Independent C03 code and test gates",
-      "updated_at": "2026-10-07T14:27:23Z"
+      "waiting_for": "Krum architecture decision; no C04 dispatch",
+      "updated_at": "2026-10-07T14:38:15Z"
     },
     "CLAUDE": {
       "state": "STOPPED",
       "work_id": "W0-06C/C03/CL",
       "waiting_for": "Codex independent verdict",
-      "updated_at": "2026-10-07T14:27:23Z"
+      "updated_at": "2026-10-07T14:38:15Z"
     }
   },
   "current_work_id": "W0-06C/C03/CX",
-  "state": "REVIEWING",
-  "pipeline_step": "INDEPENDENT_REVIEW",
-  "next_agent": "CODEX",
-  "waiting_for": "Independent C03 verdict",
+  "state": "BLOCKED",
+  "pipeline_step": "DECISION_REQUIRED",
+  "next_agent": "KRUM",
+  "waiting_for": "Architecture decision for strict no-stale-write guarantee",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 49,
@@ -54,31 +54,31 @@
   "dispatch_state": "C03_SENT_ONCE_HANDOFF_PUBLISHED",
   "dispatch_run_url": null,
   "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6040010582", "head_sha": "04b237a61f787b57c6dc175d86bab0c616f086c8", "at": "2026-10-07T14:23:12Z"},
-  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md", "head_sha": "1a20a12dbc83538f752f248bc0fc41c91a5e697a", "verdict": "CHANGES_REQUESTED", "cycle_id": "C02"},
+  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md", "head_sha": "04b237a61f787b57c6dc175d86bab0c616f086c8", "verdict": "BLOCKED", "cycle_id": "C03"},
   "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "Final C03 exact-head HANDOFF published; direct cloud-to-Codex handoff unavailable",
-    "last_result": "HANDOFF_SEND_FAILED",
+    "last_agent": "CODEX",
+    "last_event": "Independent C03 review reproduced stale finding/history/audit after full-TTL lease expiry and takeover",
+    "last_result": "BLOCKED",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex independently reviews exact C03 head. No duplicate Send, Routine, monitor, merge, deploy or next Task-ID.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6040027369",
-    "updated_at": "2026-10-07T14:27:23Z"
+    "instruction": "Wait for Krum's architecture decision; no C04 dispatch, Routine, monitor, merge, deploy or next Task-ID.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md",
+    "updated_at": "2026-10-07T14:38:15Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "Architecture choice: replica-set multi-document transactions, co-located atomic redesign, or explicit relaxation of strict no-stale-write guarantee",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "INDEPENDENT_REVIEW",
+    "stage": "DECISION_REQUIRED",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "63a0688eaf3e09972c94632a7e5a8898eb73c415",
+    "active_blob_sha": "868f4091a364038543f219f975680fcbafa6300b",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-07T14:27:23Z",
+  "updated_at": "2026-10-07T14:38:15Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
