@@ -136,7 +136,15 @@ ORG_KEYED: Dict[str, str] = {
               # provider bindings, its sealed credentials, the evidence of each
               # activation attempt and the short-lived BEG_Work access grants.
               "storage_provider_bindings", "storage_credentials",
-              "storage_activation_runs", "storage_access_grants"),
+              "storage_activation_runs", "storage_access_grants",
+              # W0-06C periodic integrity monitoring (FLOW-016): the tenant's
+              # monitor control row (its lease, fence token and last/next/result
+              # metadata), one record per bounded run with its cursor and
+              # checkpoint, and the finding/alarm history. ``org_id``-keyed like
+              # the rest of the family: a finding names this tenant's business
+              # records, so it belongs on this tenant's side of the boundary.
+              "storage_integrity_monitor_state", "storage_integrity_runs",
+              "storage_integrity_findings"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,

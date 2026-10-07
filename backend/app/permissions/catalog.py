@@ -80,6 +80,13 @@ ACTIONS: Set[str] = {
     "file.download",
     "file.share",
     "file.integrity.check",
+    # W0-06C periodic integrity monitoring (FLOW-016 "Периодична проверка").
+    # Granted to no role below except through Owner/Admin's full set. The
+    # periodic runner's tenant-scoped service principal needs an EXPLICIT
+    # assignment carrying "file.integrity.monitor"; the runner never grants
+    # itself anything and fails closed before any provider access.
+    "file.integrity.monitor",
+    "file.integrity.monitor.read",
     "file.sensitivity.restricted",
     "file.sensitivity.confidential",
 }

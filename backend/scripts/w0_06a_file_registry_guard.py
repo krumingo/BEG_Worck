@@ -219,6 +219,10 @@ FOUNDATION_MODULES: FrozenSet[str] = frozenset({
     "app/files/providers/on_prem.py", "app/files/credentials.py", "app/files/storage.py",
     "app/files/authorization.py", "app/files/audit_trail.py", "app/files/integrity.py",
     "app/files/access.py",
+    # W0-06C: the periodic integrity runner and the finding/alarm history. It
+    # READS the registry's locations through the tenant view and writes only
+    # its own monitor collections; it never writes a File Registry collection.
+    "app/files/monitoring.py",
 })
 
 #: Field names that hold a provider path, URL or stored object name today.

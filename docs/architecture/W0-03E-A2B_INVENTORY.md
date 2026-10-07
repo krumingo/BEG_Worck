@@ -127,6 +127,9 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `storage_access_grants` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `storage_activation_runs` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `storage_credentials` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `storage_integrity_findings` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `storage_integrity_monitor_state` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `storage_integrity_runs` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `storage_provider_bindings` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `subcontractor_acts` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `subcontractor_package_lines` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
