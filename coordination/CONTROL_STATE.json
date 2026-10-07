@@ -1,84 +1,84 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-07T18:12:25Z",
+  "validated_at": "2026-10-07T18:18:42Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "a9d1b8ac844670e1064928ecf93af8cd738a6bc2",
-  "control_state_commit_sha": "db9b8c2",
-  "now": "C04 independent CHANGES_REQUESTED and bounded C05 assignment are published. Existing Claude session was identified, but Computer Use action-time confirmation remains pending; C05 has NOT been sent. No W0-06C PASS.",
+  "active_source_commit_sha": "15a40336ba3f396bdfd501e86c9df981b85b59ba",
+  "control_state_commit_sha": "efe67f9",
+  "now": "Krum confirmed action-time UI Send. C05 bounded correction was sent once to the existing Claude Code session; new message and Claude live git preflight were observed. Await final exact-head C05 HANDOFF; no PASS.",
   "transition": {
-    "event": "BLOCKED_BY_PLATFORM_CONFIRMATION",
+    "event": "CORRECTION_DISPATCH_OK",
     "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6043972019",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6044075485",
     "verdict_publication": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6043902587"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
   "task_id": "W0-06C",
   "cycle_id": "C05",
   "cycle_origin": "NATIVE",
-  "current_agent": "CODEX",
-  "current_role": "TECH_LEAD_QA",
+  "current_agent": "CLAUDE",
+  "current_role": "IMPLEMENTER",
   "agent_states": {
     "GPT": {
       "state": "COORDINATING",
       "work_id": "W0-06C/C01/GPT",
-      "waiting_for": "action-time confirmation then one C05 dispatch and independent review",
-      "updated_at": "2026-10-07T18:12:25Z"
+      "waiting_for": "Claude C05 exact-head HANDOFF and Codex independent review",
+      "updated_at": "2026-10-07T18:18:42Z"
     },
     "CODEX": {
-      "state": "BLOCKED_BY_PLATFORM_CONFIRMATION",
+      "state": "WAITING_FOR_HANDOFF",
       "work_id": "W0-06C/C05/CX",
-      "waiting_for": "Krum action-time confirmation before one UI Send",
-      "updated_at": "2026-10-07T18:12:25Z"
+      "waiting_for": "final exact-head C05 HANDOFF",
+      "updated_at": "2026-10-07T18:18:42Z"
     },
     "CLAUDE": {
-      "state": "WAITING",
+      "state": "WORKING",
       "work_id": "W0-06C/C05/CL",
-      "waiting_for": "bounded C05 correction assignment, not yet sent",
-      "updated_at": "2026-10-07T18:12:25Z"
+      "waiting_for": "bounded lifecycle correction implementation and tests",
+      "updated_at": "2026-10-07T18:18:42Z"
     }
   },
-  "current_work_id": "W0-06C/C05/CX",
-  "state": "BLOCKED_BY_PLATFORM_CONFIRMATION",
-  "pipeline_step": "WAITING_FOR_ACTION_TIME_CONFIRMATION",
-  "next_agent": "KRUM",
-  "waiting_for": "action-time Computer Use confirmation, then one exact-head C05 Send",
+  "current_work_id": "W0-06C/C05/CL",
+  "state": "WORKING",
+  "pipeline_step": "IMPLEMENTATION",
+  "next_agent": "CLAUDE",
+  "waiting_for": "final exact-head C05 HANDOFF; no interim push accepted",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 49,
   "pr_head_sha": "cf0a90f15e62a11ced5f6e60a20bce97150ee921",
   "pr_draft": true,
-  "dispatch_state": "C04_SENT_ONCE_HANDOFF_REVIEWED; C05_NOT_SENT",
+  "dispatch_state": "C04_SENT_ONCE_HANDOFF_REVIEWED; C05_SENT_ONCE_CLAUDE_STARTED",
   "dispatch_run_url": null,
   "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6042306922", "head_sha": "cf0a90f15e62a11ced5f6e60a20bce97150ee921", "at": null},
   "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6043902587", "head_sha": "cf0a90f15e62a11ced5f6e60a20bce97150ee921", "verdict": "CHANGES_REQUESTED", "cycle_id": "C04"},
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "C05 bounded correction prepared; direct UI Send paused before action-time confirmation",
-    "last_result": "BLOCKED_BY_PLATFORM_CONFIRMATION",
+    "last_event": "C05 correction sent once to existing Claude UI after Krum action-time confirmation",
+    "last_result": "CORRECTION_DISPATCH_OK",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Wait for action-time confirmation; then recheck exact head and duplicate absence and send C05 once. No merge, deploy or next Task-ID.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6043972019",
-    "updated_at": "2026-10-07T18:12:25Z"
+    "instruction": "Wait event-driven for final exact-head C05 HANDOFF; do not resend or poll periodically. No merge, deploy or next Task-ID.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6044075485",
+    "updated_at": "2026-10-07T18:18:42Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "Computer Use representational-communication action-time confirmation is required before the one C05 Claude Send.",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "WAITING_FOR_ACTION_TIME_CONFIRMATION",
+    "stage": "IMPLEMENTATION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "80b43fd1418234c438faa084e1a5894a9d2fc60a",
+    "active_blob_sha": "f7b442e1e48b92fdf230e8325a3365d763ac706b",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-07T18:12:25Z",
+  "updated_at": "2026-10-07T18:18:42Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
