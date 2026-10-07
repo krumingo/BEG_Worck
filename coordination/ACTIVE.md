@@ -1,15 +1,15 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06B/C04 RUNNING — BOUNDED REPORT AVATAR CONSUMER CORRECTION SENT ONCE
+Status: W0-06B/C04 CODEX REVIEWING — FINAL EXACT-HEAD HANDOFF
 Human-Summary-BG: Поправяме само трите отчетни avatar изображения, които още ползват обикновен URL без login header; защитата на сървъра и cache-ът остават непроменени.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: C04 беше изпратена точно веднъж към съществуващата W0-06B Claude Code сесия след action-time потвърждение; новото съобщение и Claude responding са наблюдавани. Claude работи само по трите отчетни avatar renderers. Codex чака финален exact-head HANDOFF без периодичен polling.
-Next-Agent: CODEX
+Now: Claude публикува финален C04 HANDOFF на PR #46 head 203a61fe91fe20c955ffed9ec81b1d506725d151 и приключи. Директният cloud→Codex UI handoff се провали по capability, но GitHub HANDOFF е exact-head; Codex проверява независимо C03→C04 и целия main→head пакет. Няма PASS преди review.
+Next-Agent: GPT (only after independent verdict)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
@@ -23,25 +23,25 @@ Base-branch: codex/w0-06a-file-registry-foundation (technical integration base o
 Base-SHA: 9040fc1d4b40d5376cc8912ba316a206c02d207b
 Implementation-branch: codex/w0-06b-storage-provider-foundation (created at exact Base-SHA)
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/46 (existing Draft, base main; C01 CHANGES_REQUESTED, unmerged)
-PR-Head: 6af100e65690f51328fff1fb98f8bf9b9d902c8e
+PR-Head: 203a61fe91fe20c955ffed9ec81b1d506725d151
 Correction-Base-SHA: 6af100e65690f51328fff1fb98f8bf9b9d902c8e
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/45
-HANDOFF-URL: NONE (C04; predecessor C03 HANDOFF: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918)
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366 (C04 exact head)
 Review: coordination/REVIEWS/W0-06B.md — C03 independent exact-head CHANGES_REQUESTED published at https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104.
-Final-Verdict: C03 W0-06B CHANGES_REQUESTED on 6af100e65690f51328fff1fb98f8bf9b9d902c8e; C04 sent once and has no HANDOFF/verdict yet. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
+Final-Verdict: C03 W0-06B CHANGES_REQUESTED on 6af100e65690f51328fff1fb98f8bf9b9d902c8e; C04 final HANDOFF is under independent review, no C04 verdict yet. W0-06A remains CHANGES_REQUESTED; FLOW-016 Implementation Gate remains OPEN.
 Predecessor-Task-ID: W0-06A/C01
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/44 (Draft, unmerged, head 9040fc1d4b40d5376cc8912ba316a206c02d207b)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/44#issuecomment-5967976829
 Authorization: Krum explicitly approved W0-06B/C01 start and exact technical integration base 9040fc1d4b40d5376cc8912ba316a206c02d207b, with the four W0-06A defects as the entry gate. W0-06A/C02 was never sent or started. The new branch, Issue #45 and Draft PR #46 were created after live recheck. Dashboard-first PENDING was published at b1c49658f6b711d91779523959b3f6d689b80673 before exactly one Claude Code Cloud Send; session https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG then initialized on the B branch. Never resend or start a Routine. No merge, deploy, live provider access, production migration or customer-original operation is authorized.
 Correction-Authorization: On 2026-10-05 Krum authorized W0-06B/C02 bounded avatar security correction on the exact existing PR #46 head, retaining the same branch/PR and prohibiting unrelated code, merge and deploy. On 2026-10-06 Krum gave Computer Use action-time confirmation; Codex sent C02 exactly once and observed Claude working in the existing W0-06B session. After independent C02 CHANGES_REQUESTED, Krum explicitly confirmed one W0-06B/C03 Computer Use Send for the bounded AuthImage cache correction; Codex sent it exactly once to the existing session and observed the new C03 user message and Claude responding.
 
-## Canonical W0-06B/C04 — three report-avatar consumers (RUNNING; SENT ONCE)
+## Canonical W0-06B/C04 — three report-avatar consumers (HANDOFF; CODEX REVIEWING)
 
 **На човешки:** Поправяме само трите отчетни avatar изображения, които още ползват обикновен URL без login header; защитата на сървъра и cache-ът остават непроменени.
 
-**Exact identity.** Same Task-ID `W0-06B`, correction Cycle-ID `C04`, existing branch `codex/w0-06b-storage-provider-foundation`, existing Draft PR #46 to `main@79af297612f57c055bb7caef3f0c48493800d1b6`, exact correction base/head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`. C03 independent verdict: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104 and `coordination/REVIEWS/W0-06B.md`. After live exact-head/duplicate preflight and Krum's action-time confirmation, Codex sent C04 once to the existing Claude session and observed the new message plus Claude responding; evidence: https://github.com/krumingo/BEG_Worck/issues/45#issuecomment-6031612407. No resend. Await final exact-head HANDOFF before independent review.
+**Exact identity.** Same Task-ID `W0-06B`, correction Cycle-ID `C04`, existing branch `codex/w0-06b-storage-provider-foundation`, existing Draft PR #46 to `main@79af297612f57c055bb7caef3f0c48493800d1b6`, correction base `6af100e65690f51328fff1fb98f8bf9b9d902c8e`, final C04 head `203a61fe91fe20c955ffed9ec81b1d506725d151`. C03 independent verdict: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104 and `coordination/REVIEWS/W0-06B.md`. Codex sent C04 once and observed Claude responding: https://github.com/krumingo/BEG_Worck/issues/45#issuecomment-6031612407. Claude published final exact-head HANDOFF: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366 and stopped; direct UI handoff failed, documented at https://github.com/krumingo/BEG_Worck/issues/45#issuecomment-6031684753. Codex begins independent review only now; no resend or PASS assertion.
 
 **Only allowed correction.** `backend/app/routes/all_reports.py` returns `worker_avatar` from user `avatar_url`. Replace exactly the two plain protected-avatar `<img>` renderers at `frontend/src/pages/AllReportsPage.js:367,446` and the one at `frontend/src/components/GroupedReportsTable.js:89` with the existing authenticated `AuthImage` (or strictly equivalent reuse of that component). Keep layout/classes, alt text, non-avatar behavior and the report business logic. Add deterministic regression coverage that those three protected avatar consumers use an authenticated fetch and no permanent public fallback; include positive same-tenant display and negative no-session/cross-tenant behavior through existing avatar route tests. Do not change the backend avatar ACL, principal-bound cache, provider adapters, onboarding, integrity, File models, W0-07, ISSUE-26, unrelated routes or screens.
 
