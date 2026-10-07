@@ -1,22 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 DIRECT DISPATCH PENDING — ACTION-TIME CONFIRMED
+Status: W0-06C/C01 DISPATCHED — CLAUDE WORKING
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
-Current-Agent: CODEX
+Current-Agent: CLAUDE
 Current-State: WORKING
-Claude-State: WAITING
-Codex-State: WORKING
-Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: Крум даде action-time confirmation с „Ок давам“ за еднократния direct W0-06C/C01 Claude Send. Live PR #49 остава Draft на contract-only 6f6b1dfa56802b36abca7eb9388c68840d55b2bb, queue и Issue нямат DISPATCH_OK. Codex избра точния codex/w0-06c-integrity-monitoring branch в Claude UI, но още няма Send, Claude receive или HANDOFF.
-Next-Agent: CLAUDE (само след observed direct Send)
+Claude-State: WORKING
+Codex-State: WAITING
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: След action-time confirmation Codex изпрати W0-06C/C01 точно веднъж през Claude desktop UI на codex/w0-06c-integrity-monitoring. UI показва публикуваното съобщение и Claude четящ канона; DISPATCH_OK е в Issue #48. Частният session URL не е публикуван в GitHub поради security safeguard; публичното dispatch evidence е Issue comment. Няма HANDOFF или Codex review.
+Next-Agent: CODEX (само след final exact-head HANDOFF)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE — action-time confirmation получена за един W0-06C/C01 Send
-Dispatch-State: PENDING (intent only; no Send yet)
-Dispatch-Run: NONE
-Dispatch-Observed-At: NONE
+Krum-Action: NONE
+Dispatch-State: RUNNING (observed Claude desktop UI)
+Dispatch-Run: private Claude session URL withheld; public evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035548982
+Dispatch-Observed-At: see DISPATCH_OK Issue #48 event (UI session start was directly observed)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
 Task-ID: W0-06C
 Cycle-ID: C01
@@ -37,7 +37,7 @@ Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, 
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (ASSIGNMENT PREPARED; DISPATCH FAILED)
+## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (CLAUDE WORKING)
 
 **На човешки:** BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 
