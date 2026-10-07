@@ -1,23 +1,23 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-07T11:18:19Z",
+  "validated_at": "2026-10-07T11:38:00Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "798a1a6a5c196de6231c564ae5c1d838ca8ab42f",
-  "control_state_commit_sha": "328a3bfb11f2bbde73d662295e584381dc310016",
-  "now": "Claude публикува final exact-head HANDOFF в Draft PR #49 за 1b7d10a73e66b0a0680d5702019e73c7c57aa527 и STOP event в Issue #48. Live PR head съвпада точно; Codex започва независим B→C и whole main→final review. Direct Claude→Codex UI handoff липсва по техническа capability, но GitHub HANDOFF е наличен. Няма Codex verdict още.",
+  "active_source_commit_sha": "702b582b1ab27efe93a8fdafd05120296ce440f9",
+  "control_state_commit_sha": "f1c44423cf4e39a0eb724086900f783d3833fac4",
+  "now": "Codex independently published W0-06C/C01 CHANGES_REQUESTED at exact head 1b7d10a73e66b0a0680d5702019e73c7c57aa527. Same-Task-ID C02 correction is prepared in ACTIVE; no Claude C02 Send has occurred. Platform action-time confirmation is required immediately before Computer Use Send.",
   "transition": {
-    "event": "CLAUDE_HANDOFF",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567",
-    "verdict_publication": "NONE"
+    "event": "CHANGES_REQUESTED",
+    "phase": "PREPARED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286",
+    "verdict_publication": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
   "task_id": "W0-06C",
-  "cycle_id": "C01",
+  "cycle_id": "C02",
   "cycle_origin": "NATIVE",
   "current_agent": "CODEX",
   "current_role": "TECH_LEAD_QA",
@@ -25,27 +25,27 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06C/C01/GPT",
-      "waiting_for": "Claude implementation and independent Codex review",
-      "updated_at": "2026-10-07T11:18:19Z"
+      "waiting_for": "Bounded W0-06C/C02 correction and independent Codex re-review",
+      "updated_at": "2026-10-07T11:38:00Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
-      "work_id": "W0-06C/C01/CX",
-      "waiting_for": "Independent whole-package review and critical gates",
-      "updated_at": "2026-10-07T11:18:19Z"
+      "state": "PREPARING",
+      "work_id": "W0-06C/C02/CX",
+      "waiting_for": "Action-time confirmation and one direct C02 Claude UI Send",
+      "updated_at": "2026-10-07T11:38:00Z"
     },
     "CLAUDE": {
-      "state": "HANDOFF_READY",
-      "work_id": "W0-06C/C01/CL",
-      "waiting_for": "Codex independent verdict",
-      "updated_at": "2026-10-07T11:18:19Z"
+      "state": "WAITING",
+      "work_id": "W0-06C/C02/CL",
+      "waiting_for": "One bounded C02 correction dispatch from Codex",
+      "updated_at": "2026-10-07T11:38:00Z"
     }
   },
-  "current_work_id": "W0-06C/C01/CX",
-  "state": "REVIEW",
-  "pipeline_step": "REVIEW",
-  "next_agent": "GPT",
-  "waiting_for": "Independent whole-package review and critical gates",
+  "current_work_id": "W0-06C/C02/CX",
+  "state": "CORRECTION_PREPARING",
+  "pipeline_step": "CORRECTION",
+  "next_agent": "CODEX",
+  "waiting_for": "Action-time confirmation and one direct C02 Claude UI Send",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 49,
@@ -54,31 +54,31 @@
   "dispatch_state": "NONE",
   "dispatch_run_url": null,
   "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567", "head_sha": "1b7d10a73e66b0a0680d5702019e73c7c57aa527", "at": "2026-10-07T11:11:55Z"},
-  "last_review": null,
+  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286", "head_sha": "1b7d10a73e66b0a0680d5702019e73c7c57aa527", "verdict": "CHANGES_REQUESTED", "cycle_id": "C01"},
   "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "Final exact-head W0-06C/C01 HANDOFF published in PR #49; Claude stopped",
-    "last_result": "HANDOFF",
+    "last_agent": "CODEX",
+    "last_event": "Independent W0-06C/C01 CHANGES_REQUESTED; bounded C02 correction prepared, not sent",
+    "last_result": "CHANGES_REQUESTED",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex independently review B-to-C and main-to-final code and tests. No duplicate Send, Routine, monitor, merge, deploy or next Task-ID.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567",
-    "updated_at": "2026-10-07T11:18:19Z"
+    "instruction": "Codex may send one bounded C02 correction only after exact-head preflight and mandatory action-time Computer Use confirmation. No duplicate Send, Routine, monitor, merge, deploy or next Task-ID.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286",
+    "updated_at": "2026-10-07T11:38:00Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "Platform requires action-time confirmation before representational Computer Use Send to Claude; standing task authorization does not bypass it.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "CORRECTION_PREPARING",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "7686b27f25a73a3781b20a3b6c5ce1f7efff25a2",
+    "active_blob_sha": "f910039abe87cb829749307a0d19389e531f538a",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-07T11:18:19Z",
+  "updated_at": "2026-10-07T11:38:00Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
@@ -146,6 +146,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567",
       "source_commit_sha": "1b7d10a73e66b0a0680d5702019e73c7c57aa527",
       "summary": "Final exact-head HANDOFF published and matched live Draft PR #49; Codex independent review begins."
+    },
+    {
+      "event_id": "w0-06c-c01-changes-requested-20261007t113747z",
+      "occurred_at": "2026-10-07T11:37:47Z",
+      "task_id": "W0-06C",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CORRECTION_PREPARING",
+      "head_sha": "1b7d10a73e66b0a0680d5702019e73c7c57aa527",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286",
+      "source_commit_sha": "9ab32498865a3059d796c6ff4de4cf96f695b0e8",
+      "summary": "Independent C01 CHANGES_REQUESTED on stale-worker side effects, incomplete type-specific resolution proof and scoped alarm projection; same-Task-ID C02 correction prepared but not sent."
     }
   ]
 }
