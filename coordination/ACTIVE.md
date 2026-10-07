@@ -1,15 +1,15 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 DISPATCHED — CLAUDE WORKING
+Status: W0-06C/C01 FINAL HANDOFF — CODEX REVIEWING
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
 Transition-Phase: OBSERVED
-Now: След action-time confirmation Codex изпрати W0-06C/C01 точно веднъж през Claude desktop UI на codex/w0-06c-integrity-monitoring. UI показва публикуваното съобщение и Claude четящ канона; DISPATCH_OK е в Issue #48. Частният session URL не е публикуван в GitHub поради security safeguard; публичното dispatch evidence е Issue comment. Няма HANDOFF или Codex review.
-Next-Agent: CODEX (само след final exact-head HANDOFF)
+Now: Claude публикува final exact-head HANDOFF в Draft PR #49 за 1b7d10a73e66b0a0680d5702019e73c7c57aa527 и STOP event в Issue #48. Live PR head съвпада точно; Codex започва независим B→C и whole main→final review. Direct Claude→Codex UI handoff липсва по техническа capability, но GitHub HANDOFF е наличен. Няма Codex verdict още.
+Next-Agent: CODEX (independent review)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
@@ -24,12 +24,12 @@ Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted te
 Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
 Implementation-branch: codex/w0-06c-integrity-monitoring
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
-PR-Head: 6f6b1dfa56802b36abca7eb9388c68840d55b2bb
+PR-Head: 1b7d10a73e66b0a0680d5702019e73c7c57aa527
 Correction-Base-SHA: NONE
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
-HANDOFF-URL: NONE
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567
 Review: NONE for W0-06C; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
 Final-Verdict: NONE for W0-06C. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
@@ -37,7 +37,7 @@ Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, 
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (CLAUDE WORKING)
+## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (CODEX REVIEWING)
 
 **На човешки:** BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 
