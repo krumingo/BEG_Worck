@@ -1,43 +1,47 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C03 BLOCKED — architecture decision required for strict lease guarantee
+Status: W0-06C/C04 DISPATCHED — Claude implementing approved transactional correction
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
-Current-Agent: CODEX
-Current-State: BLOCKED
-Claude-State: HANDOFF_PUBLISHED / STOPPED
-Codex-State: BLOCKED
-Pipeline-Step: DECISION_REQUIRED
+Current-Agent: CLAUDE
+Current-State: WORKING
+Claude-State: C04 DISPATCHED / RESPONDING
+Codex-State: WAITING_FOR_HANDOFF
+Pipeline-Step: IMPLEMENTATION
 Transition-Phase: OBSERVED
-Now: Codex независимо провери C03 на exact head 04b237a61f787b57c6dc175d86bab0c616f086c8. Реална MongoDB възпроизведе stale finding/history/audit след изтичане на lease между _commit_item и първия запис; focused suite също не е стабилно зелена. Строгата гаранция изисква архитектурно решение от Крум. W0-06C BLOCKED; няма PASS или C04 dispatch.
-Next-Agent: KRUM (architecture decision; then bounded correction/review if authorized)
+Now: Крум одобри multi-document transactions и strict no-stale-write гаранцията в Issue #48. Codex потвърди PR #49 exact base 04b237a61f787b57c6dc175d86bab0c616f086c8 и липса на C04 dispatch, след което изпрати bounded C04 точно веднъж през съществуващата Claude desktop сесия; видя новото съобщение и Claude is responding. Няма C04 HANDOFF или PASS.
+Next-Agent: CLAUDE (final exact-head HANDOFF)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: Choose approved architecture for strict no-stale-write guarantee (or explicitly revise the guarantee); no production action implied
-Dispatch-State: C03 SENT ONCE / HANDOFF PUBLISHED
-Dispatch-Run: private Claude session URL withheld; public C02 evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733
-Dispatch-Observed-At: 2026-10-07T11:49:31Z (C02 message visible in Claude UI; Claude is responding)
+Krum-Action: NONE; architecture decision recorded https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6040375540
+Dispatch-State: C04 SENT ONCE / CLAUDE RESPONDING
+Dispatch-Run: private Claude session URL withheld; C04 dispatch evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6041076532
+Dispatch-Observed-At: 2026-10-07T15:26:52Z (C04 message visible in Claude UI; Claude is responding)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
 Task-ID: W0-06C
-Cycle-ID: C03
+Cycle-ID: C04
 Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted technical base, PR #46 unmerged)
 Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
 Implementation-branch: codex/w0-06c-integrity-monitoring
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
 PR-Head: 04b237a61f787b57c6dc175d86bab0c616f086c8
-Correction-Base-SHA: 1a20a12dbc83538f752f248bc0fc41c91a5e697a
+Correction-Base-SHA: 04b237a61f787b57c6dc175d86bab0c616f086c8
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6040010582
 Review: coordination/REVIEWS/W0-06C.md; C01 CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: W0-06C/C03 BLOCKED — strict no-stale-write guarantee needs architecture decision; focused gate non-green. No W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: C03 BLOCKED; C04 IN PROGRESS — no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## W0-06C/C03 — independent BLOCKED; no further dispatch
+## W0-06C/C04 — approved transactional correction SENT ONCE
+
+Krum approved MongoDB multi-document transactions for the per-item commit, strict zero-stale-side-effects semantics, replica-set/mongos readiness, safe unique-index validation and deterministic repeated focused/real-Mongo gates: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6040375540. Codex rechecked Draft PR #49 at exact base `04b237a61f787b57c6dc175d86bab0c616f086c8`, found no prior C04 dispatch, and sent the bounded correction once in the existing Claude desktop session after required platform action-time confirmation. Direct Send observed; event: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6041076532. Claude is working; no C04 HANDOFF, Codex review or PASS yet. No polling, merge, deploy or production activation.
+
+## W0-06C/C03 — independent BLOCKED; superseded by owner-approved C04
 
 Exact C03 HANDOFF `04b237a61f787b57c6dc175d86bab0c616f086c8` was independently reviewed. The conditional lease-row write closes C02's immediate post-verification interleaving, but a lease expiry/takeover between that gate and the first separate finding write still allows stale finding, transition and AuditEvent commits; disposable real Mongo reproduced 1/1/1 instead of 0/0/0. Standard real-Mongo 54/54 passed, but independent focused runs were non-green (164/165, then 163/165). The unique finding index is only installed in tests, not wired into application readiness. Full evidence and cleanup proof: `coordination/REVIEWS/W0-06C.md` C03 section. Strict no-stale-write semantics require Krum's architecture decision before another bounded correction. No C04 dispatch, merge, deploy, production activation, W0-07, Routine or monitor.
 
