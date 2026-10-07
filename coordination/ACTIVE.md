@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 DISPATCH FAILED — BLOCKED_BY_PLATFORM_CONFIRMATION
+Status: W0-06C/C01 DIRECT DISPATCH PENDING — ACTION-TIME CONFIRMED
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 Current-Agent: CODEX
-Current-State: BLOCKED
+Current-State: WORKING
 Claude-State: WAITING
-Codex-State: BLOCKED
+Codex-State: WORKING
 Pipeline-Step: ASSIGNMENT
-Transition-Phase: OBSERVED
-Now: W0-06C/C01 contract, Issue #48 и Draft PR #49 са публикувани, но direct Claude Send е спрян преди изпращане: Computer Use policy изисква action-time confirmation за representational communication дори при standing authorization. DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION е записан в Issue #48. Няма Claude receive, HANDOFF, implementation или review; PR #49 остава contract-only на 6f6b1dfa56802b36abca7eb9388c68840d55b2bb.
-Next-Agent: GPT (за решение по platform confirmation; Claude не е активиран)
+Transition-Phase: INTENT
+Now: Крум даде action-time confirmation с „Ок давам“ за еднократния direct W0-06C/C01 Claude Send. Live PR #49 остава Draft на contract-only 6f6b1dfa56802b36abca7eb9388c68840d55b2bb, queue и Issue нямат DISPATCH_OK. Codex избра точния codex/w0-06c-integrity-monitoring branch в Claude UI, но още няма Send, Claude receive или HANDOFF.
+Next-Agent: CLAUDE (само след observed direct Send)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: REQUIRED — action-time confirmation е задължителна за direct Computer Use Send; не е получена в този turn
-Dispatch-State: FAILED (BLOCKED_BY_PLATFORM_CONFIRMATION; no Send)
+Krum-Action: NONE — action-time confirmation получена за един W0-06C/C01 Send
+Dispatch-State: PENDING (intent only; no Send yet)
 Dispatch-Run: NONE
 Dispatch-Observed-At: NONE
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
