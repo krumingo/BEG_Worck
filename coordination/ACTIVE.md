@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 CHANGES_REQUESTED — W0-06C/C02 correction dispatched once to Claude
+Status: W0-06C/C01 CHANGES_REQUESTED — W0-06C/C02 exact-head HANDOFF accepted for independent review
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING
-Codex-State: WAITING_FOR_HANDOFF
-Pipeline-Step: IMPLEMENTATION
+Current-Agent: CODEX
+Current-State: REVIEWING
+Claude-State: HANDOFF_PUBLISHED / STOPPED
+Codex-State: REVIEWING
+Pipeline-Step: INDEPENDENT_REVIEW
 Transition-Phase: OBSERVED
-Now: Крум потвърди action-time еднократния C02 Send. Codex изпрати bounded correction в съществуващата Claude Code desktop сесия; UI показа C02 message и „Claude is responding“. Public CORRECTION_DISPATCH_OK evidence е в Issue #48. Claude работи; няма нов final C02 HANDOFF и Codex review не започва преди него.
-Next-Agent: CLAUDE (implement, test, publish final exact-head HANDOFF, STOP)
+Now: Claude публикува final C02 HANDOFF на 1a20a12dbc83538f752f248bc0fc41c91a5e697a и спря. Live Draft PR #49 head съвпада. Codex започва независим review на C01→C02 и whole main→head; още няма C02 verdict.
+Next-Agent: CODEX (independent review and verdict)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE during Claude C02 implementation; wait for event-driven HANDOFF
-Dispatch-State: C02 SENT ONCE / CLAUDE RESPONDING
+Krum-Action: NONE during independent C02 review
+Dispatch-State: C02 SENT ONCE / HANDOFF PUBLISHED
 Dispatch-Run: private Claude session URL withheld; public C02 evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733
 Dispatch-Observed-At: 2026-10-07T11:49:31Z (C02 message visible in Claude UI; Claude is responding)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
@@ -24,14 +24,14 @@ Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted te
 Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
 Implementation-branch: codex/w0-06c-integrity-monitoring
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
-PR-Head: 1b7d10a73e66b0a0680d5702019e73c7c57aa527
+PR-Head: 1a20a12dbc83538f752f248bc0fc41c91a5e697a
 Correction-Base-SHA: 1b7d10a73e66b0a0680d5702019e73c7c57aa527
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037849389
 Review: coordination/REVIEWS/W0-06C.md; C01 CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: W0-06C/C01 CHANGES_REQUESTED; C02 pending, no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: W0-06C/C01 CHANGES_REQUESTED; C02 independent review in progress, no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
