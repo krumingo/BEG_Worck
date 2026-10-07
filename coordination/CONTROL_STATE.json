@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-07T09:44:02Z",
+  "validated_at": "2026-10-07T09:54:21Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "403cad5f4273a68df2fd797943b822eaada4fb35",
-  "control_state_commit_sha": "e4f136ed08b95cb952ccfe9c4368c0e443d9878c",
-  "now": "W0-06C/C01 exact contract, Issue #48 и Draft PR #49 са публикувани, но direct Claude Send е спрян на задължителната Computer Use action-time confirmation. DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION е публикуван в Issue #48. Няма Send, Claude receive, HANDOFF, implementation или review; PR #49 остава contract-only на 6f6b1dfa56802b36abca7eb9388c68840d55b2bb.",
+  "active_source_commit_sha": "77c8bc9f658433cf9ecfe5fce8ab5ea4ce481017",
+  "control_state_commit_sha": "f5748313b79cc6cfe1572d1b8869bae80e66222f",
+  "now": "Крум даде action-time confirmation с „Ок давам“ за еднократния direct W0-06C/C01 Claude Send. Live PR #49 остава Draft на contract-only 6f6b1dfa56802b36abca7eb9388c68840d55b2bb; няма DISPATCH_OK. Codex избра точния codex/w0-06c-integrity-monitoring branch в Claude UI, но още няма Send, Claude receive или HANDOFF.",
   "transition": {
     "event": "DISPATCH",
-    "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508",
+    "phase": "INTENT",
+    "evidence_url": null,
     "verdict_publication": "NONE"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
@@ -25,50 +25,50 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06C/C01/GPT",
-      "waiting_for": "Platform action-time confirmation decision; Claude has not been dispatched",
-      "updated_at": "2026-10-07T09:44:02Z"
+      "waiting_for": "Claude implementation and independent Codex review",
+      "updated_at": "2026-10-07T09:54:21Z"
     },
     "CODEX": {
-      "state": "BLOCKED",
+      "state": "WORKING",
       "work_id": "W0-06C/C01/CX",
-      "waiting_for": "Mandatory action-time confirmation for direct Computer Use Send",
-      "updated_at": "2026-10-07T09:44:02Z"
+      "waiting_for": "One confirmed direct Claude Send",
+      "updated_at": "2026-10-07T09:54:21Z"
     },
     "CLAUDE": {
       "state": "WAITING",
       "work_id": "W0-06C/C01/CL",
       "waiting_for": "W0-06C exact assignment dispatch",
-      "updated_at": "2026-10-07T09:44:02Z"
+      "updated_at": "2026-10-07T09:54:21Z"
     }
   },
   "current_work_id": "W0-06C/C01/CX",
-  "state": "BLOCKED",
+  "state": "WORKING",
   "pipeline_step": "ASSIGNMENT",
-  "next_agent": "GPT",
-  "waiting_for": "Mandatory action-time confirmation for direct Computer Use Send",
+  "next_agent": "CLAUDE",
+  "waiting_for": "One confirmed direct Claude Send",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 49,
   "pr_head_sha": "6f6b1dfa56802b36abca7eb9388c68840d55b2bb",
   "pr_draft": true,
-  "dispatch_state": "BLOCKED",
+  "dispatch_state": "PENDING",
   "dispatch_run_url": null,
   "last_handoff": null,
   "last_review": null,
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-06C/C01 direct Send stopped at mandatory platform confirmation gate; Claude not dispatched",
-    "last_result": "DISPATCH_FAILED",
+    "last_event": "Krum gave action-time confirmation; W0-06C/C01 direct Send staged but not sent",
+    "last_result": "DISPATCH_READY",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "STOP. No Claude Send occurred. Do not bypass mandatory action-time confirmation or substitute a GitHub-only dispatch; no Routine/monitor, merge, deploy or next Task-ID.",
+    "instruction": "Send W0-06C/C01 once through the selected Claude UI branch; observe session start before claiming DISPATCH_OK. No Routine/monitor, merge, deploy or next Task-ID.",
     "source_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508",
-    "updated_at": "2026-10-07T09:44:02Z"
+    "updated_at": "2026-10-07T09:54:21Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "Computer Use policy requires fresh action-time confirmation for direct Claude message despite standing authorization",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
     "stage": "ASSIGNMENT",
@@ -78,7 +78,7 @@
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "b011ca23173f54cf5e421be73766bf52cc105ea3",
+    "active_blob_sha": "77ac0b560f9e40fd9183f4af1b2198492c2f5702",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-07T09:44:02Z",
+  "updated_at": "2026-10-07T09:54:21Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
