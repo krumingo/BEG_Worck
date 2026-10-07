@@ -1,22 +1,22 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 CHANGES_REQUESTED — same-Task-ID C02 correction prepared, not sent
+Status: W0-06C/C01 CHANGES_REQUESTED — W0-06C/C02 correction dispatched once to Claude
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
-Current-Agent: CODEX
-Current-State: CORRECTION_PREPARING
-Claude-State: WAITING
-Codex-State: PREPARING
-Pipeline-Step: CORRECTION
-Transition-Phase: PREPARED
-Now: Codex published the independent C01 CHANGES_REQUESTED verdict on Draft PR #49 at exact head 1b7d10a73e66b0a0680d5702019e73c7c57aa527. C02 is a bounded same-Task-ID correction of lease fencing, type-specific resolution proof and alarm projection scope; no Claude C02 Send yet. Platform action-time confirmation is required immediately before Computer Use Send.
-Next-Agent: CODEX (one confirmed C02 UI dispatch)
+Current-Agent: CLAUDE
+Current-State: WORKING
+Claude-State: WORKING
+Codex-State: WAITING_FOR_HANDOFF
+Pipeline-Step: IMPLEMENTATION
+Transition-Phase: OBSERVED
+Now: Крум потвърди action-time еднократния C02 Send. Codex изпрати bounded correction в съществуващата Claude Code desktop сесия; UI показа C02 message и „Claude is responding“. Public CORRECTION_DISPATCH_OK evidence е в Issue #48. Claude работи; няма нов final C02 HANDOFF и Codex review не започва преди него.
+Next-Agent: CLAUDE (implement, test, publish final exact-head HANDOFF, STOP)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: platform-required action-time confirmation for one W0-06C/C02 Computer Use Send; standing task authorization otherwise unchanged
-Dispatch-State: C01 COMPLETE; C02 NOT SENT
-Dispatch-Run: private Claude session URL withheld; public evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035548982
-Dispatch-Observed-At: see DISPATCH_OK Issue #48 event (UI session start was directly observed)
+Krum-Action: NONE during Claude C02 implementation; wait for event-driven HANDOFF
+Dispatch-State: C02 SENT ONCE / CLAUDE RESPONDING
+Dispatch-Run: private Claude session URL withheld; public C02 evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733
+Dispatch-Observed-At: 2026-10-07T11:49:31Z (C02 message visible in Claude UI; Claude is responding)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
 Task-ID: W0-06C
 Cycle-ID: C02
@@ -37,9 +37,9 @@ Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, 
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## W0-06C/C02 — bounded correction prepared, not dispatched
+## W0-06C/C02 — bounded correction dispatched once; Claude working
 
-**Exact base and identity.** Same Task-ID `W0-06C`, new correction Cycle-ID `C02`, same Issue #48, branch `codex/w0-06c-integrity-monitoring` and Draft PR #49. Exact correction base `1b7d10a73e66b0a0680d5702019e73c7c57aa527`; C01 independent verdict https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286. Before any Send recheck live PR head, branch, C01 verdict and absence of prior C02 dispatch. Do not create a new Task-ID, branch, Issue, PR, Routine or monitor.
+**Exact base and identity.** Same Task-ID `W0-06C`, new correction Cycle-ID `C02`, same Issue #48, branch `codex/w0-06c-integrity-monitoring` and Draft PR #49. Exact correction base `1b7d10a73e66b0a0680d5702019e73c7c57aa527`; C01 independent verdict https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286. The live PR head, branch, verdict and absence of prior C02 dispatch were checked immediately before one confirmed desktop UI Send. CORRECTION_DISPATCH_OK: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733. Do not send again or create a new Task-ID, branch, Issue, PR, Routine or monitor.
 
 **Allowed correction only.** (1) Ensure a worker that loses its tenant lease during an awaited provider check cannot subsequently open, resolve, reobserve or update findings or append monitor lifecycle AuditEvents; deterministic mid-check takeover regression and real-Mongo concurrency/fencing proof. (2) Fail closed in `resolution_proof`: permission failure requires actual authorized content read; provider outage requires a genuinely complete verification, not `ok`/stat-only; checksum mismatch requires observed canonical checksum **and** size where expected; preserve external-change identity/decision semantics. Add direct negative and positive regressions. (3) Make `list_findings` and related projection reads honor FLOW-002 project/module scope in addition to tenant and sensitivity; no cross-project/module affected-record or provider metadata leakage. Add negative scoped-principal tests. No provider adapter, onboarding, File-model, W0-07, unrelated route or business-rule rewrite.
 
