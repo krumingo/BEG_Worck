@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C04 DISPATCHED — Claude implementing approved transactional correction
+Status: W0-06C/C04 CHANGES_REQUESTED — stale non-transactional lease paths
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: C04 DISPATCHED / RESPONDING
-Codex-State: WAITING_FOR_HANDOFF
-Pipeline-Step: IMPLEMENTATION
+Current-Agent: CODEX
+Current-State: CORRECTION_PREPARING
+Claude-State: C04 HANDOFF_PUBLISHED / STOPPED
+Codex-State: CHANGES_REQUESTED
+Pipeline-Step: CORRECTION_PREPARING
 Transition-Phase: OBSERVED
-Now: Крум одобри multi-document transactions и strict no-stale-write гаранцията в Issue #48. Codex потвърди PR #49 exact base 04b237a61f787b57c6dc175d86bab0c616f086c8 и липса на C04 dispatch, след което изпрати bounded C04 точно веднъж през съществуващата Claude desktop сесия; видя новото съобщение и Claude is responding. Няма C04 HANDOFF или PASS.
-Next-Agent: CLAUDE (final exact-head HANDOFF)
+Now: C04 final HANDOFF cf0a90f15e62a11ced5f6e60a20bce97150ee921 съвпада с live Draft PR #49. Независимият Codex review потвърди три незащитени lease пътя: skipped-item checkpoint и finish-run записват след B takeover, а _renew съживява изтекъл lease. Три детерминистични review-only регресии падат. C04 CHANGES_REQUESTED; bounded C05 се подготвя, не е изпратена.
+Next-Agent: CODEX (publish verdict and bounded C05 correction; action-time UI confirmation required)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
 Krum-Action: NONE; architecture decision recorded https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6040375540
-Dispatch-State: C04 SENT ONCE / CLAUDE RESPONDING
+Dispatch-State: C04 SENT ONCE / HANDOFF PUBLISHED; C05 NOT SENT
 Dispatch-Run: private Claude session URL withheld; C04 dispatch evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6041076532
 Dispatch-Observed-At: 2026-10-07T15:26:52Z (C04 message visible in Claude UI; Claude is responding)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
@@ -24,22 +24,22 @@ Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted te
 Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
 Implementation-branch: codex/w0-06c-integrity-monitoring
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
-PR-Head: 04b237a61f787b57c6dc175d86bab0c616f086c8
-Correction-Base-SHA: 04b237a61f787b57c6dc175d86bab0c616f086c8
+PR-Head: cf0a90f15e62a11ced5f6e60a20bce97150ee921
+Correction-Base-SHA: cf0a90f15e62a11ced5f6e60a20bce97150ee921
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6040010582
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6042306922
 Review: coordination/REVIEWS/W0-06C.md; C01 CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: C03 BLOCKED; C04 IN PROGRESS — no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: C04 CHANGES_REQUESTED — no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## W0-06C/C04 — approved transactional correction SENT ONCE
+## W0-06C/C04 — independent CHANGES_REQUESTED; C05 not sent
 
-Krum approved MongoDB multi-document transactions for the per-item commit, strict zero-stale-side-effects semantics, replica-set/mongos readiness, safe unique-index validation and deterministic repeated focused/real-Mongo gates: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6040375540. Codex rechecked Draft PR #49 at exact base `04b237a61f787b57c6dc175d86bab0c616f086c8`, found no prior C04 dispatch, and sent the bounded correction once in the existing Claude desktop session after required platform action-time confirmation. Direct Send observed; event: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6041076532. Claude is working; no C04 HANDOFF, Codex review or PASS yet. No polling, merge, deploy or production activation.
+Krum approved MongoDB multi-document transactions and the strict guarantee: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6040375540. C04 was sent once: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6041076532. Claude published final exact-head HANDOFF: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6042306922. Independent review evidence in `coordination/REVIEWS/W0-06C.md` proves three bounded remaining stale-lease defects. C05 must address only non-transactional skipped-item checkpoint, run finish/result and expired-lease renewal while preserving checked-item transaction and readiness. No C05 Send yet; no polling, merge, deploy or production activation.
 
 ## W0-06C/C03 — independent BLOCKED; superseded by owner-approved C04
 
