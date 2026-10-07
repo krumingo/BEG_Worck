@@ -91,7 +91,7 @@ Steps run in this order. Any failure leaves the binding `verification_failed`, t
 
 **Audience.** Any authenticated, active member of the same tenant may see a colleague's current photo: the same audience that already receives `avatar_url` from the tenant's own list and roster routes. Narrowing it by role would be a FLOW-002 business decision and is not part of this correction.
 
-**Frontend.** The ~19 avatar renderers use `components/AuthImage.js`. It fetches `/api/media/avatar/…` with the session's Bearer token and shows the bytes through an in-memory object URL. Other images are unchanged plain `<img>`. No public or permanent avatar URL exists.
+**Frontend.** All 22 protected-avatar renderers use `components/AuthImage.js`: the 19 migrated in C02 and the 3 report renderers (`AllReportsPage` ×2, `GroupedReportsTable`) migrated in C04. `frontend/tests/protected_avatar_consumers.test.mjs` fails on any plain `<img>` built from the backend URL or an avatar field. It fetches `/api/media/avatar/…` with the session's Bearer token and shows the bytes through an in-memory object URL. Other images are unchanged plain `<img>`. No public or permanent avatar URL exists.
 
 **Client cache (C03).** Codex's C02 review found that the C02 object-URL cache was keyed by path only. In the same tab, tenant A's image came back for tenant B, and its five-minute lifetime was only checked lazily. `lib/protectedImageCache.js` now enforces:
 

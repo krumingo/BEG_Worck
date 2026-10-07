@@ -26,6 +26,7 @@ import useBulkSelection from "@/hooks/useBulkSelection";
 import { toast } from "sonner";
 import OvertimeOverrideModal from "@/components/OvertimeOverrideModal";
 import GroupedReportsTable from "@/components/GroupedReportsTable";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -364,7 +365,7 @@ export default function AllReportsPage() {
                     <TableCell>
                       <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/employees/${r.worker_id}?tab=reports`)}>
                         {r.worker_avatar ? (
-                          <img src={`${process.env.REACT_APP_BACKEND_URL}${r.worker_avatar}`} className="w-6 h-6 rounded-full object-cover" alt="" />
+                          <AuthImage src={r.worker_avatar} className="w-6 h-6 rounded-full object-cover" alt="" />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">
                             {(r.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}
@@ -443,7 +444,7 @@ export default function AllReportsPage() {
               {/* Worker */}
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                 {detail.worker_avatar ? (
-                  <img src={`${process.env.REACT_APP_BACKEND_URL}${detail.worker_avatar}`} className="w-10 h-10 rounded-full object-cover" alt="" />
+                  <AuthImage src={detail.worker_avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
                     {(detail.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}

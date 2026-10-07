@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import API from "@/lib/api";
 import { createProtectedImageCache } from "@/lib/protectedImageCache";
+import { protectedAvatarPath } from "@/lib/protectedAvatarPath";
 
 /*
  * W0-06B — an <img> for protected avatar files.
@@ -21,7 +22,6 @@ import { createProtectedImageCache } from "@/lib/protectedImageCache";
  * is rendered exactly as a normal <img>.
  */
 
-const AVATAR_PREFIX = "/api/media/avatar/";
 const TOKEN_KEY = "bw_token";
 const PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
@@ -56,16 +56,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
   });
 }
 
-export function protectedAvatarPath(src) {
-  if (typeof src !== "string" || !src) return null;
-  let path = src;
-  const backend = process.env.REACT_APP_BACKEND_URL || "";
-  if (backend && path.startsWith(backend)) path = path.slice(backend.length);
-  if (!path.startsWith(AVATAR_PREFIX)) return null;
-  const name = path.slice(AVATAR_PREFIX.length);
-  if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) return null;
-  return "/media/avatar/" + encodeURIComponent(name); // relative to API baseURL (…/api)
-}
+export { protectedAvatarPath };
 
 export default function AuthImage({ src, onError, alt = "", ...rest }) {
   const path = protectedAvatarPath(src);
