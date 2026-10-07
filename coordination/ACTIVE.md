@@ -13,7 +13,7 @@ Next-Agent: CODEX (one confirmed C02 UI dispatch)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE
+Krum-Action: platform-required action-time confirmation for one W0-06C/C02 Computer Use Send; standing task authorization otherwise unchanged
 Dispatch-State: C01 COMPLETE; C02 NOT SENT
 Dispatch-Run: private Claude session URL withheld; public evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035548982
 Dispatch-Observed-At: see DISPATCH_OK Issue #48 event (UI session start was directly observed)
