@@ -1,22 +1,23 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 ASSIGNMENT PREPARED — DIRECT DISPATCH PENDING
+Status: W0-06C/C01 DISPATCH FAILED — BLOCKED_BY_PLATFORM_CONFIRMATION
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 Current-Agent: CODEX
-Current-State: WORKING
+Current-State: BLOCKED
 Claude-State: WAITING
-Codex-State: WORKING
+Codex-State: BLOCKED
 Pipeline-Step: ASSIGNMENT
-Transition-Phase: INTENT
-Now: W0-06C/C01 contract е формализиран от FLOW-016 и приетия W0-06B contract. Issue #48 и Draft PR #49 са създадени след exact preflight; PR е contract-only на 6f6b1dfa56802b36abca7eb9388c68840d55b2bb, stacked върху W0-06B PASS head 203a61fe91fe20c955ffed9ec81b1d506725d151. Codex подготвя точно един direct Claude Send; няма изпратена задача, Claude работа или HANDOFF. Ако platform safeguard изисква action-time confirmation, не го заобикаляй и запиши точния dispatch failure.
-Next-Agent: CLAUDE (only after observed direct Send)
+Transition-Phase: OBSERVED
+Now: W0-06C/C01 contract, Issue #48 и Draft PR #49 са публикувани, но direct Claude Send е спрян преди изпращане: Computer Use policy изисква action-time confirmation за representational communication дори при standing authorization. DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION е записан в Issue #48. Няма Claude receive, HANDOFF, implementation или review; PR #49 остава contract-only на 6f6b1dfa56802b36abca7eb9388c68840d55b2bb.
+Next-Agent: GPT (за решение по platform confirmation; Claude не е активиран)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE unless an unavoidable platform confirmation is presented; no merge/deploy/production approval
-Dispatch-State: PENDING (intent only; never infer Claude start)
+Krum-Action: REQUIRED — action-time confirmation е задължителна за direct Computer Use Send; не е получена в този turn
+Dispatch-State: FAILED (BLOCKED_BY_PLATFORM_CONFIRMATION; no Send)
 Dispatch-Run: NONE
 Dispatch-Observed-At: NONE
+Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
 Task-ID: W0-06C
 Cycle-ID: C01
 Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted technical base, PR #46 unmerged)
@@ -36,7 +37,7 @@ Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, 
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (ASSIGNMENT; DISPATCH PENDING)
+## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (ASSIGNMENT PREPARED; DISPATCH FAILED)
 
 **На човешки:** BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 
