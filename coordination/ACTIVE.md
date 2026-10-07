@@ -1,43 +1,51 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 independent review complete — CHANGES_REQUESTED publication prepared
+Status: W0-06C/C01 CHANGES_REQUESTED — same-Task-ID C02 correction prepared, not sent
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 Current-Agent: CODEX
-Current-State: REVIEW
-Claude-State: HANDOFF_READY
-Codex-State: REVIEWING
-Pipeline-Step: REVIEW
+Current-State: CORRECTION_PREPARING
+Claude-State: WAITING
+Codex-State: PREPARING
+Pipeline-Step: CORRECTION
 Transition-Phase: PREPARED
-Now: Codex independently reviewed final exact head 1b7d10a73e66b0a0680d5702019e73c7c57aa527 against the W0-06C contract, reran focused/adjacent/loopback-Mongo gates and prepared bounded CHANGES_REQUESTED evidence for lease fencing, resolution proof and projection scope. Verdict publication in PR #49 and Issue #48 is pending; no Claude C02 Send yet.
-Next-Agent: CODEX (publish verdict, prepare same-Task-ID C02 correction)
+Now: Codex published the independent C01 CHANGES_REQUESTED verdict on Draft PR #49 at exact head 1b7d10a73e66b0a0680d5702019e73c7c57aa527. C02 is a bounded same-Task-ID correction of lease fencing, type-specific resolution proof and alarm projection scope; no Claude C02 Send yet. Platform action-time confirmation is required immediately before Computer Use Send.
+Next-Agent: CODEX (one confirmed C02 UI dispatch)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
 Krum-Action: NONE
-Dispatch-State: RUNNING (observed Claude desktop UI)
+Dispatch-State: C01 COMPLETE; C02 NOT SENT
 Dispatch-Run: private Claude session URL withheld; public evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035548982
 Dispatch-Observed-At: see DISPATCH_OK Issue #48 event (UI session start was directly observed)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
 Task-ID: W0-06C
-Cycle-ID: C01
+Cycle-ID: C02
 Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted technical base, PR #46 unmerged)
 Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
 Implementation-branch: codex/w0-06c-integrity-monitoring
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
 PR-Head: 1b7d10a73e66b0a0680d5702019e73c7c57aa527
-Correction-Base-SHA: NONE
+Correction-Base-SHA: 1b7d10a73e66b0a0680d5702019e73c7c57aa527
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567
-Review: coordination/REVIEWS/W0-06C.md (independent C01 findings, publication pending); predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: W0-06C/C01 CHANGES_REQUESTED prepared, not yet published; no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Review: coordination/REVIEWS/W0-06C.md; C01 CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
+Final-Verdict: W0-06C/C01 CHANGES_REQUESTED; C02 pending, no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (independent review complete)
+## W0-06C/C02 — bounded correction prepared, not dispatched
+
+**Exact base and identity.** Same Task-ID `W0-06C`, new correction Cycle-ID `C02`, same Issue #48, branch `codex/w0-06c-integrity-monitoring` and Draft PR #49. Exact correction base `1b7d10a73e66b0a0680d5702019e73c7c57aa527`; C01 independent verdict https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286. Before any Send recheck live PR head, branch, C01 verdict and absence of prior C02 dispatch. Do not create a new Task-ID, branch, Issue, PR, Routine or monitor.
+
+**Allowed correction only.** (1) Ensure a worker that loses its tenant lease during an awaited provider check cannot subsequently open, resolve, reobserve or update findings or append monitor lifecycle AuditEvents; deterministic mid-check takeover regression and real-Mongo concurrency/fencing proof. (2) Fail closed in `resolution_proof`: permission failure requires actual authorized content read; provider outage requires a genuinely complete verification, not `ok`/stat-only; checksum mismatch requires observed canonical checksum **and** size where expected; preserve external-change identity/decision semantics. Add direct negative and positive regressions. (3) Make `list_findings` and related projection reads honor FLOW-002 project/module scope in addition to tenant and sensitivity; no cross-project/module affected-record or provider metadata leakage. Add negative scoped-principal tests. No provider adapter, onboarding, File-model, W0-07, unrelated route or business-rule rewrite.
+
+**Before HANDOFF:** focused C02 regressions and W0-06C suite, W0-06A/B, FLOW-002/tenant, static guards, `git diff --check`, fresh disposable loopback real-Mongo for changed concurrency/persistence paths, exact collected/passed/failed/skipped and cleanup proof. Final HANDOFF must name exact new SHA/files changed and show no unrelated changes. Claude STOPs after HANDOFF. Codex then independently reviews C01→C02 and whole main→new head. No merge, deploy or production activation.
+
+## Canonical W0-06C/C01 — File Registry periodic integrity monitoring (CHANGES_REQUESTED)
 
 **Independent C01 result prepared:** `coordination/REVIEWS/W0-06C.md` records three bounded same-scope defects at exact head `1b7d10a73e66b0a0680d5702019e73c7c57aa527`: post-takeover finding/audit side effects before fenced checkpoint, incomplete type-specific resolution proof, and incomplete project/module authorization for the alarm projection. Focused W0-06C 124/124, W0-06A/B 451/451, real Mongo 44/44, FLOW-002/tenant 85/85 and static guards 182/182 passed independently; green tests do not cover these counterexamples. Publish exact verdict before any new Claude Send. No merge/deploy/production scheduler or next Task-ID.
 
