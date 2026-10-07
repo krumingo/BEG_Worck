@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-07T05:30:10Z · CONTROL STATE: **VALID** as of 2026-10-07T05:30:10Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-07T09:16:10Z · CONTROL STATE: **VALID** as of 2026-10-07T09:16:10Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06B / C04 / CLAUDE / **WORKING**
-LAST: CODEX — W0-06B/C04 correction sent once and Claude responding observed / DISPATCH_OK
+CURRENT: W0-06B / C04 / CODEX / **REVIEW**
+LAST: CLAUDE — W0-06B/C04 final exact-head HANDOFF published; direct PC/UI send failed by cloud capability / HANDOFF
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: C04 беше изпратена точно веднъж към съществуващата W0-06B Claude Code сесия след action-time потвърждение; новото съобщение и Claude responding са наблюдавани. Claude работи само по трите отчетни avatar renderers. Codex чака финален exact-head HANDOFF без периодичен polling.
-TRANSITION: CLAUDE_START / OBSERVED · verdict NONE
-NEXT: CODEX
+NOW: Claude публикува финален C04 HANDOFF на PR #46 head 203a61fe91fe20c955ffed9ec81b1d506725d151 и приключи. Директният cloud→Codex UI handoff се провали по capability, но GitHub HANDOFF е exact-head; Codex проверява независимо C03→C04 и целия main→head пакет. Няма PASS преди review.
+TRANSITION: CLAUDE_HANDOFF / OBSERVED · verdict NONE
+NEXT: GPT
 KRUM ACTION: NONE
-WAITING FOR: Implement and verify the three report-avatar consumers
+WAITING FOR: Independent C04 delta and whole-package audit
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-06B
 CYCLE: C04
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: WORKING
-NEXT: CODEX
-WAITING_FOR: Implement and verify the three report-avatar consumers
+STATE: REVIEW
+NEXT: GPT
+WAITING_FOR: Independent C04 delta and whole-package audit
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06B | C04 | WAITING | WAITING | WORKING | CLAUDE | Implement and verify the three report-avatar consumers | WORKING |
+| W0-06B | C04 | WAITING | REVIEWING | HANDOFF_READY | CODEX | Independent C04 delta and whole-package audit | REVIEW |
 
 ## Agent cards
 
@@ -38,18 +38,17 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06B/C04/GPT | Bounded C04 correction and independent review | 2026-10-07T05:30:10Z |
-| CODEX | WAITING | W0-06B/C04/CX | Final C04 exact-head HANDOFF | 2026-10-07T05:30:10Z |
-| CLAUDE | WORKING | W0-06B/C04/CL | Implement and verify the three report-avatar consumers | 2026-10-07T05:30:10Z |
+| GPT | WAITING | W0-06B/C04/GPT | Bounded C04 correction and independent review | 2026-10-07T09:16:10Z |
+| CODEX | REVIEWING | W0-06B/C04/CX | Independent C04 delta and whole-package audit | 2026-10-07T09:16:10Z |
+| CLAUDE | HANDOFF_READY | W0-06B/C04/CL | Codex independent verdict | 2026-10-07T09:16:10Z |
 
-GPT → Codex → **Claude (WORKING)** → Codex → GPT
+GPT → Codex → Claude → **Codex (REVIEW)** → GPT
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `daa9cba2249a3c454fbe208a3f58f7163c9a8e59` · blob `87e4e215d8e302e434438dbd9e3a36d6d719ea69`
-- Review: `coordination/REVIEWS/W0-06B.md` · blob `f6b394a51bf90d6c66c8e58630ccbd261ddd4464` · verdict **CHANGES_REQUESTED** on `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
-- Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
-- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6021583918) · head `6af100e65690f51328fff1fb98f8bf9b9d902c8e`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `9d7de4ae8b083af9b532c6c205067b667848649d` · blob `8de10f324197421d402e3dadd33ddd3f81cf8ad5`
+- Draft PR: [#46](https://github.com/krumingo/BEG_Worck/pull/46) · exact head `203a61fe91fe20c955ffed9ec81b1d506725d151`
+- HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366) · head `203a61fe91fe20c955ffed9ec81b1d506725d151`
 - Dispatch session: https://claude.ai/code/session_01CC1BoxYWrVaLdT85riupTG · dispatch state **RUNNING**
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `7488b4c8`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `3ad2670d`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `3e43105b`, `docs/architecture/TENANCY_MODEL.md` @ `93997df2`, `docs/flows/FLOW-002.md` @ `5594ffa4`, `docs/flows/FLOW-016.md` @ `af092bbd`, `docs/flows/FLOW-040.md` @ `3d2ce96e`
@@ -77,5 +76,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-06T20:39:30Z | C03 | — | REVIEW | CODEX | CHANGES_REQUESTED | `6af100e6` | [evidence](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6025013104) |
 | 2026-10-06T20:42:17Z | C04 | — | ASSIGNMENT | CODEX | WORKING | `6af100e6` | [evidence](https://github.com/krumingo/BEG_Worck/blob/d5fc205e478fb8dc24af94eb0a7b284c2c292eee/coordination/ACTIVE.md) |
 | 2026-10-07T05:28:15Z | C04 | — | DISPATCH | CODEX | WORKING | `6af100e6` | [evidence](https://github.com/krumingo/BEG_Worck/issues/45#issuecomment-6031612407) |
+| 2026-10-07T09:14:47Z | C04 | — | HANDOFF | CLAUDE | REVIEW | `203a61fe` | [evidence](https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6031682366) |
 
-**Gate:** W0-06B is WORKING. Progression requires independent evidence and the relevant owner approval; this board grants none.
+**Gate:** W0-06B is REVIEW. Progression requires independent evidence and the relevant owner approval; this board grants none.
