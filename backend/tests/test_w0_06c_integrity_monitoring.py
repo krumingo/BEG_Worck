@@ -103,6 +103,7 @@ from app.files.monitoring import (
     transactions_unsupported,
     _transition_key,
 )
+from app.files import monitoring as mo
 from app.files.monitor_bootstrap import bootstrap_integrity_monitor
 from app.files.registry import FileRegistry
 from app.tenancy.data_access import TenantData
@@ -273,11 +274,15 @@ class _SequentialTransactions:
     kind = "focused_test_double_not_atomic"
 
     def __init__(self, *, topology="test_double", transactions=True,
-                 fail_times=0, fail_with=None, max_attempts=8):
+                 fail_times=0, fail_with=None, fail_what=None, max_attempts=8):
         self._topology = topology
         self._transactions = transactions
         self._fail_times = int(fail_times)
         self._fail_with = fail_with
+        #: Since C05 every lifecycle write path opens a transaction, so a test
+        #: that drives the replay contract has to say WHICH one it means. A
+        #: substring of the runner's ``what``; ``None`` means the next one.
+        self._fail_what = fail_what
         self.max_attempts = max_attempts
         #: ``True`` only while a body is executing — what the "no provider call
         #: inside the transaction" regression asserts against.
@@ -286,6 +291,15 @@ class _SequentialTransactions:
         self.bodies = 0
         self.retries = 0
         self.aborted = 0
+        #: ``what`` → how many bodies ran for it, so a test can count the
+        #: item's transaction without counting the run's.
+        self.by_what = {}
+
+    def item_bodies(self):
+        return sum(n for what, n in self.by_what.items() if "integrity check of" in what)
+
+    def _targeted(self, what):
+        return self._fail_what is None or self._fail_what in what
 
     async def capability(self, *, refresh=False):
         return {"runner": self.kind, "transactions": self._transactions,
@@ -301,7 +315,8 @@ class _SequentialTransactions:
         while True:
             attempt += 1
             self.bodies += 1
-            if self._fail_times > 0:
+            self.by_what[what] = self.by_what.get(what, 0) + 1
+            if self._fail_times > 0 and self._targeted(what):
                 self._fail_times -= 1
                 self.aborted += 1
                 self.retries += 1
@@ -634,8 +649,12 @@ class TestExclusion:
             await w["db"][MONITOR_STATE_COLLECTION].update_one(
                 {"holder": "w-1"}, {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
             fresh = await two._claim()
-            await one._release(stale, run_id="fir_stale", status="completed",
-                               result={"counts": {"checked": 999}}, next_due_at=None)
+            # C05: publishing a run result is a lifecycle write like any other,
+            # so a stale worker does not merely fail to overwrite it — it is
+            # refused outright and told why.
+            with pytest.raises(MonitorLeaseLost):
+                await one._release(stale, run_id="fir_stale", status="completed",
+                                   result={"counts": {"checked": 999}}, next_due_at=None)
             state = await w["db"][MONITOR_STATE_COLLECTION].find_one({})
             assert state["holder"] == "w-2" and state["fence"] == fresh.fence
             assert state["last_run_id"] is None and state["runs_total"] == 0
@@ -3129,9 +3148,10 @@ class _SentinelTransactions(_SequentialTransactions):
             raise MonitorTransactionUnavailable("no transactions; refusing to %s" % what)
         self.calls += 1
         self.bodies += 1
+        self.by_what[what] = self.by_what.get(what, 0) + 1
         self.inside = True
         try:
-            if self._fail_times > 0:
+            if self._fail_times > 0 and self._targeted(what):
                 self._fail_times -= 1
                 self.aborted += 1
                 raise self._fail_with or RuntimeError("injected transaction failure")
@@ -3226,11 +3246,20 @@ class TestPerItemTransaction:
             lifecycle = [a for a in spies.audits
                          if a[0].startswith("file.integrity.finding")]
             assert lifecycle and all(a[1] is runner.session for a in lifecycle)
-            # and the RUN-level events are deliberately NOT: they describe the
-            # pass, not an item, and must survive an item's abort
+            # the RUN-level events belong to the RUN's own transactions, not to
+            # the item's: C05 puts run.started inside the open-run transaction
+            # and run.finished inside the finish transaction, so each is atomic
+            # with the run write it describes — and neither is inside the item's
+            # transaction, so an item's abort cannot erase the fact that the
+            # pass happened.
             run_level = [a for a in spies.audits
                          if a[0].startswith("file.integrity.monitor.")]
-            assert run_level and all(a[1] is None for a in run_level)
+            assert [a[0] for a in run_level] == ["file.integrity.monitor.started",
+                                                 "file.integrity.monitor.finished"]
+            assert all(a[1] is runner.session for a in run_level)
+            item_writes = [row for row in inside
+                           if row[0] == MONITOR_FINDINGS_COLLECTION]
+            assert item_writes, "the finding write must be in a transaction"
             # the finding read that decides open-vs-observe is in the transaction too
             finding_reads = [r for r in spies.reads
                              if r[0] == MONITOR_FINDINGS_COLLECTION]
@@ -3277,7 +3306,7 @@ class TestPerItemTransaction:
             out = await mon.run_once(principal())
             assert out["counts"]["checked"] == 2
             assert seen == [False, False]
-            assert runner.calls == 2
+            assert runner.item_bodies() == 2
         run(body())
 
     def test_an_aborted_item_does_not_advance_the_walk_or_the_counters(self):
@@ -3286,7 +3315,12 @@ class TestPerItemTransaction:
             w = await _world(files=2)
             await _inject(w, w["file_ids"][0], "remove")
             boom = RuntimeError("the transaction failed")
-            runner = _SentinelTransactions(fail_times=1, fail_with=boom)
+            # a plain double here: ``_SentinelTransactions`` hands out a marker
+            # session, which only works under ``_Spies`` (mongomock itself has
+            # no sessions at all).
+            runner = _SequentialTransactions(fail_times=1, fail_with=boom,
+                                             fail_what="integrity check of",
+                                             max_attempts=1)
             mon = monitor(w, transactions=runner)
             with pytest.raises(RuntimeError):
                 await mon.run_once(principal())
@@ -3304,11 +3338,12 @@ class TestPerItemTransaction:
         async def body():
             w = await _world(files=1)
             await _inject(w, w["file_ids"][0], "remove")
-            runner = _SequentialTransactions(fail_times=2,
-                                             fail_with=_transient(), max_attempts=8)
+            runner = _SequentialTransactions(fail_times=2, fail_with=_transient(),
+                                             fail_what="integrity check of",
+                                             max_attempts=8)
             mon = monitor(w, transactions=runner)
             out = await mon.run_once(principal())
-            assert runner.bodies == 3 and runner.retries == 2   # it really replayed
+            assert runner.item_bodies() == 3 and runner.retries == 2   # really replayed
             assert out["counts"]["checked"] == 1                # counted ONCE
             assert out["counts"]["findings_opened"] == 1
             found, = await _findings(w)
@@ -3357,8 +3392,10 @@ class TestPerItemTransaction:
         async def body():
             w = await _world(files=1)
             await _inject(w, w["file_ids"][0], "remove")
-            runner = _SentinelTransactions(fail_times=1,
-                                           fail_with=RuntimeError("boom"))
+            runner = _SequentialTransactions(fail_times=1,
+                                             fail_with=RuntimeError("boom"),
+                                             fail_what="integrity check of",
+                                             max_attempts=1)
             mon = monitor(w, transactions=runner)
             with pytest.raises(RuntimeError):
                 await mon.run_once(principal())
@@ -3462,3 +3499,419 @@ class TestDeterministicLifecycleHistory:
 
 def _iso_frozen():
     return FROZEN.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+
+# ═════════════════ C05 — every lifecycle write needs a LIVE claim
+#
+# C04 put the checked item's whole write set behind a conditional claim write
+# inside one transaction. The C04 review then proved what the OTHER lifecycle
+# paths still allowed, because they were conditioned on the run document's
+# holder/fence (which a takeover does not touch) or on holder/fence alone
+# (which an expiry does not change):
+#
+#   1. a skipped-item / phase-change checkpoint after a real takeover;
+#   2. a stale run finish after a real takeover;
+#   3. a worker renewing its OWN already-expired lease, with no takeover at all.
+#
+# `_claim()` raises the fence on the CLAIM row and touches no run, so "B has
+# taken over" and "the run document says so" are two different moments. Each
+# test below puts the worker in the exact gap between them.
+
+EXPIRED = "2000-01-01T00:00:00.000000+00:00"
+
+
+async def _expire(w, holder, org=A):
+    """Make ``holder``'s claim expired in the database, without a takeover."""
+    await w["db"][MONITOR_STATE_COLLECTION].update_one(
+        {"holder": holder, "org_id": org}, {"$set": {"expires_at": EXPIRED}})
+
+
+async def _state(w):
+    return await w["db"][MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+
+
+async def _run_row(w, run_id=None):
+    flt = {"id": run_id} if run_id else {}
+    return await w["db"][MONITOR_RUNS_COLLECTION].find_one(flt, {"_id": 0})
+
+
+class TestStaleLeaseLifecycleWrites:
+    """The three C04 counterexamples, each now refused with zero stale state."""
+
+    @staticmethod
+    async def _a_holds_a_run(w, *, policy=None):
+        """Worker A with a claim and an open run — the starting point of all three."""
+        a = monitor(w, worker_id="w-A", policy=policy)
+        lease = await a._claim()
+        assert lease is not None
+        run_row = await a._open_run(principal(), lease, run_id=None)
+        return a, lease, run_row
+
+    @staticmethod
+    async def _b_takes_over(w):
+        """B legitimately claims the tenant at a strictly higher fence."""
+        b = monitor(w, worker_id="w-B")
+        await _expire(w, "w-A")
+        lease = await b._claim()
+        assert lease is not None
+        return b, lease
+
+    # ── defect 1 ────────────────────────────────────────────────────────────
+    def test_a_skipped_item_checkpoint_after_a_takeover_writes_nothing(self):
+        """C04 review finding 1, reproduced and now refused.
+
+        The run document still names A as its holder at A's fence — B has
+        claimed the tenant but has not touched the run yet — so the OLD
+        condition matched and A wrote `counts`, `cursor` and
+        `processed_location_ids`. The required answer is `MonitorLeaseLost`
+        and a byte-identical run document.
+        """
+        async def body():
+            w = await _world(files=2)
+            a, lease, run_row = await self._a_holds_a_run(w)
+            before = await _run_row(w, run_row["id"])
+            b, b_lease = await self._b_takes_over(w)
+            # the gap the review exploited: B owns the claim, the RUN row does not know
+            assert before["lease_holder"] == "w-A" and before["fence"] == lease.fence
+            assert (await _state(w))["holder"] == "w-B"
+            assert (await _run_row(w, run_row["id"]))["lease_holder"] == "w-A"
+
+            counts = _Counts(scanned=1, skipped_not_due=1)
+            cursor = _Cursor(phase="unverified", last_id="fl_whatever")
+            with pytest.raises(MonitorLeaseLost):
+                await a._checkpoint(run_row, lease, counts, cursor, None)
+            after = await _run_row(w, run_row["id"])
+            assert after == before, "a stale worker must not change the run document"
+            assert after["counts"]["scanned"] == 0
+            assert after["cursor"]["last_id"] is None
+            assert after["processed_location_ids"] == []
+            # and a checkpoint that NAMES an item is refused the same way
+            with pytest.raises(MonitorLeaseLost):
+                await a._checkpoint(run_row, lease, counts, cursor, "fl_whatever")
+            assert await _run_row(w, run_row["id"]) == before
+        run(body())
+
+    def test_a_skipped_item_checkpoint_is_refused_on_a_merely_expired_claim(self):
+        """No takeover at all: an expired claim is already lost."""
+        async def body():
+            w = await _world(files=2)
+            a, lease, run_row = await self._a_holds_a_run(w)
+            before = await _run_row(w, run_row["id"])
+            await _expire(w, "w-A")
+            with pytest.raises(MonitorLeaseLost):
+                await a._checkpoint(run_row, lease, _Counts(scanned=5), _Cursor(), None)
+            assert await _run_row(w, run_row["id"]) == before
+            assert (await _state(w))["holder"] == "w-A"   # nobody else took it
+        run(body())
+
+    def test_the_whole_walk_stops_at_a_skipped_item_after_a_takeover(self):
+        """End to end through `run_once`: the skip path really is the one hit."""
+        async def body():
+            # every original is out of scope, so EVERY item is a skip and the
+            # only writes the walk makes are skipped-item checkpoints
+            w = await _world(files=3)
+            # the world uploads `acts_protocols`, so scoping the pass to
+            # `offers` makes EVERY item an out-of-scope skip and the only
+            # writes the walk makes are skipped-item checkpoints
+            policy = MonitorPolicy(max_attempts=1, batch_size=1,
+                                   categories=(m.CATEGORY_OFFERS,))
+            a = monitor(w, worker_id="w-A", policy=policy)
+            b = monitor(w, worker_id="w-B")
+            taken = {}
+            real_checkpoint = a._checkpoint
+
+            async def steal_then_checkpoint(*args, **kw):
+                if not taken:
+                    await _expire(w, "w-A")
+                    taken["lease"] = await b._claim()
+                    assert taken["lease"] is not None
+                return await real_checkpoint(*args, **kw)
+            a._checkpoint = steal_then_checkpoint
+            with pytest.raises(MonitorLeaseLost):
+                await a.run_once(principal())
+            row = await _run_row(w)
+            assert row["status"] == "running"            # not closed by A
+            assert row["counts"]["scanned"] == 0         # nothing committed
+            assert row["processed_location_ids"] == []
+            assert row["cursor"]["last_id"] is None
+            assert (await _state(w))["holder"] == "w-B"
+            assert await _findings(w) == []
+        run(body())
+
+    # ── defect 2 ────────────────────────────────────────────────────────────
+    def test_a_stale_worker_cannot_finish_the_run_after_a_takeover(self):
+        """C04 review finding 2: A flipped `running` → `completed` after B won."""
+        async def body():
+            w = await _world(files=1)
+            a, lease, run_row = await self._a_holds_a_run(w)
+            before = await _run_row(w, run_row["id"])
+            b, b_lease = await self._b_takes_over(w)
+            with pytest.raises(MonitorLeaseLost):
+                await a._finish_run(run_row, lease, _Counts(checked=7), _Cursor(),
+                                    status="completed", exhausted=True)
+            after = await _run_row(w, run_row["id"])
+            assert after == before
+            assert after["status"] == "running"      # still resumable by B
+            assert after["finished_at"] is None
+            assert (await _state(w))["holder"] == "w-B"
+            # and no run-finished AuditEvent was appended either: the event is
+            # in the SAME transaction as the closure, so it cannot survive it
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"}) == 0
+            # B can still resume and close it properly
+            await b._abandon_claim(b_lease)
+            out = await b.run_once(principal(), run_id=run_row["id"])
+            assert out["status"] == "completed"
+            assert (await _run_row(w, run_row["id"]))["status"] == "completed"
+        run(body())
+
+    def test_a_stale_worker_cannot_publish_a_run_result_after_a_takeover(self):
+        async def body():
+            w = await _world(files=1)
+            a, lease, run_row = await self._a_holds_a_run(w)
+            b, b_lease = await self._b_takes_over(w)
+            with pytest.raises(MonitorLeaseLost):
+                await a._release(lease, run_id=run_row["id"], status="completed",
+                                 result={"counts": {"checked": 999}}, next_due_at="2030")
+            state = await _state(w)
+            assert state["holder"] == "w-B" and state["fence"] == b_lease.fence
+            assert state["last_run_id"] is None
+            assert state["last_status"] is None
+            assert state["last_result"] is None
+            assert state["runs_total"] == 0
+        run(body())
+
+    def test_a_merely_expired_claim_cannot_finish_or_publish_either(self):
+        async def body():
+            w = await _world(files=1)
+            a, lease, run_row = await self._a_holds_a_run(w)
+            before = await _run_row(w, run_row["id"])
+            await _expire(w, "w-A")
+            with pytest.raises(MonitorLeaseLost):
+                await a._finish_run(run_row, lease, _Counts(), _Cursor(),
+                                    status="completed", exhausted=True)
+            with pytest.raises(MonitorLeaseLost):
+                await a._release(lease, run_id=run_row["id"], status="completed",
+                                 result={"counts": {}}, next_due_at=None)
+            assert await _run_row(w, run_row["id"]) == before
+            state = await _state(w)
+            assert state["last_run_id"] is None and state["runs_total"] == 0
+        run(body())
+
+    # ── defect 3 ────────────────────────────────────────────────────────────
+    def test_an_expired_lease_cannot_be_renewed_even_with_no_takeover(self):
+        """C04 review finding 3: A resurrected its own dead claim."""
+        async def body():
+            w = await _world(files=1)
+            a, lease, _run = await self._a_holds_a_run(w)
+            await _expire(w, "w-A")
+            before = await _state(w)
+            with pytest.raises(MonitorLeaseLost):
+                await a._renew(lease)
+            after = await _state(w)
+            assert after["expires_at"] == EXPIRED, "the dead claim was resurrected"
+            assert after == before
+            # and the tenant is genuinely free: another worker can claim it
+            b = monitor(w, worker_id="w-B")
+            b_lease = await b._claim()
+            assert b_lease is not None and b_lease.fence > lease.fence
+        run(body())
+
+    def test_a_live_claim_is_still_renewed_normally(self):
+        """The guard must not block the worker that legitimately holds it."""
+        async def body():
+            w = await _world(files=1)
+            a, lease, _run = await self._a_holds_a_run(w)
+            before = await _state(w)
+            renewed = await a._renew(lease)
+            after = await _state(w)
+            assert renewed.fence == lease.fence and renewed.holder == "w-A"
+            assert after["expires_at"] >= before["expires_at"]
+            assert after["renewed_at"]
+            assert renewed.expires_at == after["expires_at"]
+        run(body())
+
+    def test_a_renewal_after_a_takeover_is_refused(self):
+        async def body():
+            w = await _world(files=1)
+            a, lease, _run = await self._a_holds_a_run(w)
+            b, b_lease = await self._b_takes_over(w)
+            with pytest.raises(MonitorLeaseLost):
+                await a._renew(lease)
+            assert (await _state(w))["fence"] == b_lease.fence
+        run(body())
+
+    # ── the remaining lifecycle paths ───────────────────────────────────────
+    def test_a_stale_worker_cannot_open_or_resume_a_run(self):
+        async def body():
+            w = await _world(files=1)
+            a, lease, run_row = await self._a_holds_a_run(w)
+            b, b_lease = await self._b_takes_over(w)
+            with pytest.raises(MonitorLeaseLost):
+                await a._open_run(principal(), lease, run_id=run_row["id"])
+            # no second run document, no extra run-started event
+            assert await w["db"][MONITOR_RUNS_COLLECTION].count_documents({}) == 1
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.started"}) == 1
+            assert (await _run_row(w, run_row["id"]))["lease_holder"] == "w-A"
+        run(body())
+
+    def test_abandoning_a_claim_someone_else_holds_writes_nothing_and_is_quiet(self):
+        """Abandoning is the one path where 0 match is not an error."""
+        async def body():
+            w = await _world(files=1)
+            a = monitor(w, worker_id="w-A")
+            lease = await a._claim()
+            b, b_lease = await self._b_takes_over(w)
+            before = await _state(w)
+            assert await a._abandon_claim(lease) is False      # nothing to give back
+            assert await _state(w) == before                   # and nothing written
+            # the rightful owner can still abandon its own live claim
+            assert await b._abandon_claim(b_lease) is True
+            assert (await _state(w))["holder"] is None
+        run(body())
+
+    def test_abandoning_an_already_expired_claim_writes_nothing(self):
+        async def body():
+            w = await _world(files=1)
+            a = monitor(w, worker_id="w-A")
+            lease = await a._claim()
+            await _expire(w, "w-A")
+            before = await _state(w)
+            assert await a._abandon_claim(lease) is False
+            assert await _state(w) == before
+        run(body())
+
+    def test_a_failed_run_that_also_lost_its_claim_reports_the_lease_loss(self):
+        """The failure path is gated too, and the real error is not swallowed."""
+        async def body():
+            w = await _world(files=1)
+            a = monitor(w, worker_id="w-A")
+            b = monitor(w, worker_id="w-B")
+            boom = RuntimeError("the provider exploded")
+            real_walk = a._walk
+
+            async def explode(*args, **kw):
+                await _expire(w, "w-A")
+                assert await b._claim() is not None
+                raise boom
+            a._walk = explode
+            with pytest.raises(MonitorLeaseLost) as refused:
+                await a.run_once(principal())
+            assert refused.value.__cause__ is boom      # the real failure travels
+            row = await _run_row(w)
+            assert row["status"] == "running"           # left for the new owner
+            assert row["error"] is None
+            state = await _state(w)
+            assert state["holder"] == "w-B"
+            assert state["last_status"] is None and state["runs_total"] == 0
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"}) == 0
+        run(body())
+
+
+class TestLifecycleWriteAudit:
+    """A MECHANICAL audit: no write to the claim or run rows escapes the gate.
+
+    The C05 assignment asks for a table covering every lifecycle write. A table
+    in a document rots; this reads the real module with `ast` and fails if a new
+    write appears anywhere outside the helpers that are proven gated, or if one
+    of those helpers stops carrying the condition. It is the regression that
+    keeps the table honest.
+    """
+
+    #: Every method allowed to write the claim row or the run document, and how
+    #: each one is gated. ``claim`` = holds the live claim itself;
+    #: ``acquire`` = the acquisition, which IS how a claim is taken.
+    WRITERS = {
+        "_claim": "acquire",
+        "_hold_claim": "live_claim",
+        "_release": "live_claim",
+        "_abandon_claim": "live_claim",
+        "_run_write": "hold_claim_by_caller",
+        "_write_run_open": "hold_claim_by_caller",
+    }
+
+    WRITE_METHODS = ("insert_one", "insert_many", "update_one", "update_many",
+                     "replace_one", "find_one_and_update", "find_one_and_replace",
+                     "find_one_and_delete", "delete_one", "delete_many")
+
+    @staticmethod
+    def _module():
+        import ast
+        import pathlib
+        source = pathlib.Path(mo.__file__.replace(".pyc", ".py")).read_text(
+            encoding="utf-8")
+        return ast, ast.parse(source)
+
+    def _writes(self):
+        """``[(enclosing function, collection attr, write method)]``."""
+        ast, tree = self._module()
+        found = []
+        for func in [n for n in ast.walk(tree)
+                     if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            for node in ast.walk(func):
+                if not isinstance(node, ast.Call) or not isinstance(node.func,
+                                                                   ast.Attribute):
+                    continue
+                target = node.func.value
+                if not (isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                        and target.attr in ("state", "runs")):
+                    continue
+                if node.func.attr in self.WRITE_METHODS:
+                    found.append((func.name, target.attr, node.func.attr))
+        return found
+
+    def test_every_claim_or_run_write_lives_in_a_gated_helper(self):
+        writes = self._writes()
+        assert writes, "the audit found no writes at all — it stopped working"
+        offenders = sorted({name for name, _c, _m in writes} - set(self.WRITERS))
+        assert offenders == [], (
+            "these methods write the claim or run row without a declared gate: %s"
+            % offenders)
+
+    def test_the_declared_writers_really_carry_the_condition(self):
+        """`_hold_claim`, `_release` and `_abandon_claim` must use `_live_claim`."""
+        import inspect
+        for name in ("_hold_claim", "_release", "_abandon_claim"):
+            source = inspect.getsource(getattr(mo.FileIntegrityMonitor, name))
+            assert "self._live_claim(" in source, name
+        # and `_live_claim` is the only definition of the three clauses
+        live = inspect.getsource(mo.FileIntegrityMonitor._live_claim)
+        assert '"holder": lease.holder' in live
+        assert '"fence": lease.fence' in live
+        assert '"expires_at": {"$gt"' in live
+
+    def test_the_run_document_writers_are_only_reached_through_the_gate(self):
+        """`_run_write` / `_write_run_open` are called only beside `_hold_claim`."""
+        import inspect
+        for name in ("_checkpoint", "_finish_run", "_open_run"):
+            source = inspect.getsource(getattr(mo.FileIntegrityMonitor, name))
+            assert "_hold_claim" in source or "session is not None" in source, name
+        # the checked-item path holds the claim as its own first write
+        persist = inspect.getsource(mo.FileIntegrityMonitor._persist_item)
+        assert "_claim_gate" in persist
+        gate = inspect.getsource(mo.FileIntegrityMonitor._claim_gate)
+        assert "_hold_claim" in gate
+
+    def test_the_finding_writes_are_all_inside_the_item_transaction(self):
+        """Unchanged from C04, re-asserted so C05 cannot have loosened it."""
+        import inspect
+        for name in ("_observe", "_transition", "_try_resolve"):
+            source = inspect.getsource(getattr(mo.FileIntegrityMonitor, name))
+            assert "session=session" in source, name
+
+    def test_the_audit_table_matches_the_declared_writers(self):
+        """The HANDOFF's table is this dict; drift fails here, not in review."""
+        assert set(self.WRITERS) == {
+            "_claim", "_hold_claim", "_release", "_abandon_claim",
+            "_run_write", "_write_run_open"}
+        writes = {(name, collection) for name, collection, _m in self._writes()}
+        assert ("_claim", "state") in writes
+        assert ("_hold_claim", "state") in writes
+        assert ("_release", "state") in writes
+        assert ("_abandon_claim", "state") in writes
+        assert ("_run_write", "runs") in writes
+        assert ("_write_run_open", "runs") in writes

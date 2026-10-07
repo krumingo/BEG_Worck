@@ -1221,22 +1221,73 @@ class FileIntegrityMonitor:
             raise
         return _Lease(holder=self.worker_id, fence=1, expires_at=expires)
 
-    async def _renew(self, lease: _Lease) -> _Lease:
-        """Extend the claim, proving it is still ours. Raises when it is not.
+    def _live_claim(self, lease: _Lease, now: datetime) -> Dict[str, Any]:
+        """THE condition. One definition, used by every lifecycle write.
 
-        The filter carries the fence token, so a worker that was taken over
-        matches nothing: it learns it lost BEFORE it touches a provider or
-        commits a checkpoint.
+        Three clauses, and all three are necessary:
+
+        * ``holder`` — this worker, not another one;
+        * ``fence`` — this worker's own generation of the claim. A takeover
+          ``$inc``s the fence on this row, so a stale generation matches
+          nothing;
+        * ``expires_at > now`` — the claim is still LIVE. An expired claim is
+          lost even when nobody has taken over yet, because at that moment any
+          other worker is entitled to claim the tenant. C04 had this clause on
+          the checked-item gate only; the C04 review proved what the other
+          paths then allowed — a worker renewing its own expired lease, and a
+          worker writing a checkpoint and closing a run after a real takeover.
+
+        It is matched by a conditional WRITE, never by a read: a read says what
+        WAS true, and the C02/C03 reviews each reproduced a takeover landing
+        between such a read and the write that followed it.
+        """
+        return {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence,
+                "expires_at": {"$gt": _iso(now)}}
+
+    async def _hold_claim(self, lease: _Lease, *, what: str, session=None,
+                          extra: Optional[Mapping[str, Any]] = None) -> str:
+        """Take the RIGHT to perform one lifecycle write. Raises if it is gone.
+
+        The single gate of this module. It is a conditional write on the
+        per-tenant claim row under :meth:`_live_claim`, and the same update
+        RENEWS the claim, so a worker that is making progress keeps the tenant.
+        0 match means the claim moved or expired: :class:`MonitorLeaseLost`,
+        and the caller must write nothing.
+
+        Writes that land in ANOTHER document — the run document, a finding, the
+        audit chain — call this as the FIRST write of a multi-document
+        transaction and do their own writes in the same transaction, so they
+        are durable exactly when this gate matched and the commit succeeded.
+        Writes that touch only the claim row need no transaction: one document
+        is atomic on every MongoDB.
+
+        Returns the new ``expires_at``, so a caller can carry a refreshed lease.
         """
         now = self.now()
         expires = _iso(now + timedelta(seconds=self.policy.lease_ttl_seconds))
-        result = await self.state.update_one(
-            {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence},
-            {"$set": {"expires_at": expires, "renewed_at": _iso(now)}})
-        if getattr(result, "matched_count", 0) != 1:
+        update: Dict[str, Any] = {"expires_at": expires, "renewed_at": _iso(now)}
+        if extra:
+            update.update(extra)
+        applied = await self.state.update_one(
+            self._live_claim(lease, now), {"$set": update}, session=session)
+        if getattr(applied, "matched_count", 0) != 1:
             raise MonitorLeaseLost(
-                "the monitor claim of %s (fence %d) is no longer held"
-                % (lease.holder, lease.fence))
+                "the monitor claim of %s (fence %d) is not live; refusing to %s"
+                % (lease.holder, lease.fence, what))
+        return expires
+
+    async def _renew(self, lease: _Lease) -> _Lease:
+        """Extend the claim, proving it is still LIVE. Raises when it is not.
+
+        C04 review finding 3: this used to filter on ``_id``, holder and fence
+        only. After the lease expired — and before anyone else claimed it — the
+        filter still matched, so a worker could resurrect its own dead claim and
+        carry on working under it. ``expires_at > now`` is part of the condition
+        now, which is what "lost on expiry" has to mean: a claim that has run
+        out cannot be renewed, only re-claimed through :meth:`_claim`, which
+        mints a new fence.
+        """
+        expires = await self._hold_claim(lease, what="renew the claim")
         return _Lease(holder=lease.holder, fence=lease.fence, expires_at=expires)
 
     async def _verify_lease(self, lease: _Lease, *, what: str) -> None:
@@ -1303,23 +1354,15 @@ class FileIntegrityMonitor:
         conditional, which is why a transaction is now a deployment
         prerequisite instead of a probability argument about the lease TTL.
         """
-        now = self.now()
-        expires = _iso(now + timedelta(seconds=self.policy.lease_ttl_seconds))
-        applied = await self.state.update_one(
-            {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence,
-             "expires_at": {"$gt": _iso(now)}},
-            {"$set": {"expires_at": expires, "renewed_at": _iso(now),
-                      "last_commit": {"run_id": run_id, "fence": lease.fence,
-                                      "location_id": location.get("id"),
-                                      "version_no": location.get("version_no"),
-                                      "availability": result.get("availability"),
-                                      "at": _iso(now)}}},
-            session=session)
-        if getattr(applied, "matched_count", 0) != 1:
-            raise MonitorLeaseLost(
-                "the monitor claim of %s (fence %d) is not live; refusing to write any "
-                "finding, history, alarm or audit event for location %s"
-                % (lease.holder, lease.fence, location.get("id")))
+        await self._hold_claim(
+            lease, session=session,
+            what="write any finding, history, alarm or audit event for location %s"
+                 % location.get("id"),
+            extra={"last_commit": {"run_id": run_id, "fence": lease.fence,
+                                   "location_id": location.get("id"),
+                                   "version_no": location.get("version_no"),
+                                   "availability": result.get("availability"),
+                                   "at": _iso(self.now())}})
 
     async def _persist_item(self, principal, run: Mapping[str, Any], lease: _Lease,
                             counts: _Counts, cursor: _Cursor,
@@ -1384,25 +1427,46 @@ class FileIntegrityMonitor:
 
     async def _release(self, lease: _Lease, *, run_id: str, status: str,
                        result: Mapping[str, Any], next_due_at: Optional[str]) -> None:
-        """Free the claim and publish the last/next/result metadata.
+        """Free the claim and publish the last/next/result metadata. Raises if stale.
 
-        Fenced: a worker that has been taken over cannot overwrite the new
-        owner's claim or its result with its own stale one.
+        This is a RESULT: ``last_run_id``, ``last_status``, ``last_result`` and
+        ``next_due_at`` are what the tenant's dashboard and the next pass read.
+        A worker that has lost the tenant must not publish one, so the write
+        carries the full :meth:`_live_claim` condition — the same three clauses
+        as every other lifecycle write — and 0 match is
+        :class:`MonitorLeaseLost`, not a shrug. It touches only the claim row,
+        so one atomic update is the whole guarantee; no transaction is needed.
         """
-        await self.state.update_one(
-            {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence},
-            {"$set": {"holder": None, "expires_at": None, "released_at": _iso(self.now()),
-                      "last_run_id": run_id, "last_run_at": _iso(self.now()),
+        now = self.now()
+        applied = await self.state.update_one(
+            self._live_claim(lease, now),
+            {"$set": {"holder": None, "expires_at": None, "released_at": _iso(now),
+                      "last_run_id": run_id, "last_run_at": _iso(now),
                       "last_status": status, "last_result": dict(result),
                       "next_due_at": next_due_at},
              "$inc": {"runs_total": 1}})
+        if getattr(applied, "matched_count", 0) != 1:
+            raise MonitorLeaseLost(
+                "the monitor claim of %s (fence %d) is not live; refusing to publish a "
+                "run result for %s" % (lease.holder, lease.fence, run_id))
 
-    async def _abandon_claim(self, lease: _Lease) -> None:
-        """Give the claim back without publishing a result: no run happened."""
-        await self.state.update_one(
-            {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence},
+    async def _abandon_claim(self, lease: _Lease) -> bool:
+        """Give the claim back without publishing a result: no run happened.
+
+        Conditional on the LIVE claim like everything else, but a 0 match is
+        NOT an error here and raises nothing. Abandoning is the one lifecycle
+        operation whose whole purpose is to stop holding the tenant, so
+        "someone already took it" and "it already expired" both mean there is
+        nothing left to give back — and a worker that cannot abandon must not
+        then clear a claim that is no longer its own. It is called from an error
+        path, where raising would replace the real failure with this one.
+        Returns whether the claim was actually released.
+        """
+        applied = await self.state.update_one(
+            self._live_claim(lease, self.now()),
             {"$set": {"holder": None, "expires_at": None,
                       "released_at": _iso(self.now())}})
+        return getattr(applied, "matched_count", 0) == 1
 
     async def monitor_state(self, ctx) -> Optional[Dict[str, Any]]:
         """The tenant's last/next/result metadata. FLOW-002 checked.
@@ -1516,20 +1580,45 @@ class FileIntegrityMonitor:
             raise
         except Exception as exc:                                      # noqa: BLE001
             status = RUN_FAILED
-            await self._finish_run(run, lease, counts, cursor, status=status,
-                                   exhausted=False, error=type(exc).__name__)
+            # Recording the failure is itself a lifecycle write, so it is gated
+            # like every other one. A worker that has ALSO lost the claim may
+            # not close the run or publish its result, and the honest answer is
+            # then the lease loss: the run is left `running` for the rightful
+            # owner to resume, and the original failure travels as the cause so
+            # nothing is swallowed.
+            async def audit_failure(session):
+                await self._audit(
+                    action=ACTION_RUN_FINISHED, actor_id=principal.user_id,
+                    entity_type="file_integrity_run", entity_id=run["id"],
+                    result=RESULT_FAILURE,
+                    reason="integrity monitor run failed", correlation_id=run["id"],
+                    error_code=type(exc).__name__,
+                    structured_diff={"counts": counts.as_record(),
+                                     "error": type(exc).__name__},
+                    session=session)
+            try:
+                await self._finish_run(run, lease, counts, cursor, status=status,
+                                       exhausted=False, error=type(exc).__name__,
+                                       audit=audit_failure)
+                await self._release(lease, run_id=run["id"], status=status,
+                                    result={"counts": counts.as_record(),
+                                            "error": type(exc).__name__},
+                                    next_due_at=self._next_due_at())
+            except MonitorLeaseLost as lost:
+                raise lost from exc
+            raise
+        async def audit_finished(session):
             await self._audit(
                 action=ACTION_RUN_FINISHED, actor_id=principal.user_id,
-                entity_type="file_integrity_run", entity_id=run["id"], result=RESULT_FAILURE,
-                reason="integrity monitor run failed", correlation_id=run["id"],
-                error_code=type(exc).__name__,
-                structured_diff={"counts": counts.as_record(), "error": type(exc).__name__})
-            await self._release(lease, run_id=run["id"], status=status,
-                                result={"counts": counts.as_record(),
-                                        "error": type(exc).__name__},
-                                next_due_at=self._next_due_at())
-            raise
-        await self._finish_run(run, lease, counts, cursor, status=status, exhausted=exhausted)
+                entity_type="file_integrity_run", entity_id=run["id"],
+                correlation_id=run["id"],
+                reason="integrity monitor run finished", idempotency_key=None,
+                structured_diff={"counts": counts.as_record(), "exhausted": exhausted,
+                                 "policy": self.policy.as_record()},
+                session=session)
+
+        await self._finish_run(run, lease, counts, cursor, status=status,
+                               exhausted=exhausted, audit=audit_finished)
         # Computed ONCE: the returned result and the stored monitor state must
         # name the same next-due moment, not two readings of the clock.
         next_due_at = self._next_due_at()
@@ -1540,12 +1629,6 @@ class FileIntegrityMonitor:
                   "exhausted": exhausted, "policy": self.policy.as_record(),
                   "next_due_at": next_due_at,
                   "finding_schema": FINDING_SCHEMA}
-        await self._audit(
-            action=ACTION_RUN_FINISHED, actor_id=principal.user_id,
-            entity_type="file_integrity_run", entity_id=run["id"], correlation_id=run["id"],
-            reason="integrity monitor run finished", idempotency_key=None,
-            structured_diff={"counts": counts.as_record(), "exhausted": exhausted,
-                             "policy": self.policy.as_record()})
         await self._release(lease, run_id=run["id"], status=status,
                             result={"counts": counts.as_record(), "exhausted": exhausted},
                             next_due_at=next_due_at)
@@ -1564,9 +1647,27 @@ class FileIntegrityMonitor:
         A run left ``running`` by a crashed worker is TAKEN OVER rather than
         duplicated: its cursor, its checkpoint and its counts are the new
         owner's starting point, so no file is checked twice and none is skipped.
+
+        Opening or resuming a run writes the run document AND a FLOW-040
+        run-started AuditEvent, so it is one more lifecycle write that must not
+        happen under a claim this worker no longer holds. It takes the claim as
+        the first write of its own transaction, like every other path: the
+        window is small — ``_claim`` returned a moment ago — but "small" is the
+        argument the owner decision rejected, and a stalled process can lose a
+        claim between any two database operations.
         """
+        async def body(session):
+            await self._hold_claim(lease, session=session, what="open or resume a run")
+            return await self._write_run_open(principal, lease, run_id=run_id,
+                                              session=session)
+
+        return await self._transactions.run(body, what="open or resume a run")
+
+    async def _write_run_open(self, principal, lease: _Lease, *, run_id: Optional[str],
+                              session) -> Dict[str, Any]:
+        """The run document and its run-started AuditEvent. Inside the transaction."""
         if run_id:
-            existing = await self.runs.find_one({"id": run_id}, {"_id": 0})
+            existing = await self.runs.find_one({"id": run_id}, {"_id": 0}, session=session)
             if existing is None:
                 raise MonitorConfigurationRefused("no run %r in this tenant" % run_id)
             if existing.get("status") != RUN_RUNNING:
@@ -1574,7 +1675,8 @@ class FileIntegrityMonitor:
                     "run %r is %s; a finished run is history and is never reopened"
                     % (run_id, existing.get("status")))
         else:
-            rows = await self.runs.find({"status": RUN_RUNNING}, {"_id": 0}).to_list(None)
+            rows = await self.runs.find({"status": RUN_RUNNING}, {"_id": 0},
+                                        session=session).to_list(None)
             existing = sorted(rows, key=m.sort_key)[-1] if rows else None
         now = _iso(self.now())
         if existing is not None:
@@ -1584,15 +1686,18 @@ class FileIntegrityMonitor:
                           "fence": lease.fence, "worker_id": self.worker_id,
                           "resumed_at": now, "updated_at": now,
                           "policy": self.policy.as_record()},
-                 "$inc": {"takeovers": 0 if existing.get("lease_holder") is None else 1}})
-            row = await self.runs.find_one({"id": existing["id"]}, {"_id": 0})
+                 "$inc": {"takeovers": 0 if existing.get("lease_holder") is None else 1}},
+                session=session)
+            row = await self.runs.find_one({"id": existing["id"]}, {"_id": 0},
+                                           session=session)
             await self._audit(
                 action=ACTION_RUN_STARTED, actor_id=principal.user_id,
                 entity_type="file_integrity_run", entity_id=row["id"], correlation_id=row["id"],
                 reason="integrity monitor run resumed",
                 structured_diff={"resumed": True, "fence": lease.fence,
                                  "cursor": row.get("cursor"),
-                                 "policy": self.policy.as_record()})
+                                 "policy": self.policy.as_record()},
+                session=session)
             return row
         row = {"id": ID_PREFIX_RUN + uuid.uuid4().hex, "status": RUN_RUNNING,
                "worker_id": self.worker_id, "lease_holder": lease.holder, "fence": lease.fence,
@@ -1601,55 +1706,111 @@ class FileIntegrityMonitor:
                "policy": self.policy.as_record(), "cursor": _Cursor().as_record(),
                "processed_location_ids": [], "counts": _Counts().as_record(),
                "finding_schema": FINDING_SCHEMA}
-        await self.runs.insert_one(dict(row))
+        await self.runs.insert_one(dict(row), session=session)
         await self._audit(
             action=ACTION_RUN_STARTED, actor_id=principal.user_id,
             entity_type="file_integrity_run", entity_id=row["id"], correlation_id=row["id"],
             reason="integrity monitor run started",
             structured_diff={"resumed": False, "fence": lease.fence,
-                             "policy": self.policy.as_record()})
+                             "policy": self.policy.as_record()},
+            session=session)
         return row
+
+    async def _run_write(self, run: Mapping[str, Any], lease: _Lease, update: Mapping,
+                         *, what: str, session) -> None:
+        """One write to the RUN document, fenced on the run row itself.
+
+        This is the second lock, not the first. The run row carries the holder
+        and fence of whoever last took it over, so this filter stops a stale
+        worker from rewinding a cursor a newer owner has already moved. What it
+        CANNOT do is notice a takeover that has not reached the run document
+        yet — which is exactly what the C04 review exploited: ``_claim()``
+        ``$inc``s the fence on the CLAIM row and touches no run, so between B's
+        successful claim and B's first run write, A's filter still matched.
+        Every caller therefore holds the claim through :meth:`_hold_claim` in
+        the same transaction first.
+        """
+        result = await self.runs.update_one(
+            {"id": run["id"], "lease_holder": lease.holder, "fence": lease.fence},
+            update, session=session)
+        if getattr(result, "matched_count", 0) != 1:
+            raise MonitorLeaseLost(
+                "run %s was taken over; this worker must not %s" % (run["id"], what))
 
     async def _checkpoint(self, run: Mapping[str, Any], lease: _Lease, counts: _Counts,
                           cursor: _Cursor, location_id: Optional[str],
                           session=None) -> None:
-        """Commit the walk's position. FENCED: a stale worker cannot commit.
+        """Commit the walk's position. Gated on the LIVE claim, then on the run.
 
-        The filter carries the holder and the fence token the worker started
-        with. A newer owner has already rewritten both on the run document, so
-        this update matches nothing and the stale worker stops instead of
-        rewinding the new owner's cursor or double-counting its work.
+        C04 review finding 1. ``_walk`` commits a checkpoint for every item it
+        SKIPS — not due, out of scope, no longer readable — and for a phase
+        change, and C04 left those outside any transaction with only the run
+        row's holder/fence as their condition. A worker whose claim had been
+        taken over by a higher fence still matched that filter until the new
+        owner happened to touch the run, so it wrote ``counts``, ``cursor`` and
+        ``processed_location_ids`` it had no right to write. The required
+        answer is :class:`MonitorLeaseLost` and an unchanged run.
 
-        For a CHECKED item this runs inside that item's transaction
-        (:meth:`_persist_item`), so the run-item result is durable exactly when
-        the finding and the AuditEvent are. For a SKIPPED item — not due, out of
-        scope, no longer readable, or a phase change with no item at all — there
-        is no finding, no transition and no AuditEvent to be atomic with, so the
-        checkpoint is this one fenced single-document update and nothing else.
+        So the checkpoint now takes the claim first, exactly like a checked
+        item does, and the two writes live in one transaction:
+
+        * ``session is None`` — the skipped/phase-change path. This method opens
+          the transaction itself: :meth:`_hold_claim` and then the run write.
+        * ``session`` given — the checked-item path. :meth:`_persist_item`
+          already held the claim as the first write of THAT transaction, so the
+          run write simply joins it; holding the claim twice in one transaction
+          would be redundant, not safer.
         """
         update: Dict[str, Any] = {
             "$set": {"cursor": cursor.as_record(), "counts": counts.as_record(),
                      "updated_at": _iso(self.now())}}
         if location_id is not None:
             update["$addToSet"] = {"processed_location_ids": location_id}
-        result = await self.runs.update_one(
-            {"id": run["id"], "lease_holder": lease.holder, "fence": lease.fence}, update,
-            session=session)
-        if getattr(result, "matched_count", 0) != 1:
-            raise MonitorLeaseLost(
-                "run %s was taken over; this worker must not commit" % run["id"])
+        what = "commit a checkpoint"
+        if session is not None:
+            await self._run_write(run, lease, update, what=what, session=session)
+            return
+
+        async def body(opened):
+            await self._hold_claim(lease, session=opened,
+                                   what="%s for run %s" % (what, run["id"]))
+            await self._run_write(run, lease, update, what=what, session=opened)
+
+        await self._transactions.run(
+            body, what="%s for run %s" % (what, run["id"]))
 
     async def _finish_run(self, run: Mapping[str, Any], lease: _Lease, counts: _Counts,
                           cursor: _Cursor, *, status: str, exhausted: bool,
-                          error: Optional[str] = None) -> None:
-        result = await self.runs.update_one(
-            {"id": run["id"], "lease_holder": lease.holder, "fence": lease.fence},
-            {"$set": {"status": status, "finished_at": _iso(self.now()),
-                      "updated_at": _iso(self.now()), "counts": counts.as_record(),
-                      "cursor": cursor.as_record(), "exhausted": exhausted, "error": error}})
-        if getattr(result, "matched_count", 0) != 1:
-            raise MonitorLeaseLost(
-                "run %s was taken over; this worker must not close it" % run["id"])
+                          error: Optional[str] = None, audit=None) -> None:
+        """Close the run. Gated on the LIVE claim, then on the run.
+
+        C04 review finding 2. With only the run row's holder/fence as its
+        condition, a worker that had already lost the tenant to a higher fence
+        could still flip the run from ``running`` to ``completed`` — before the
+        new owner touched it — which both publishes a result that worker had no
+        right to publish and destroys the resume the next pass depends on (a
+        finished run is history and is never reopened). The claim is taken
+        first, in the same transaction as the run write.
+
+        ``audit`` is the run-finished FLOW-040 event, written INSIDE the same
+        transaction. The review noted that the stale finish "can also precede
+        its run-finished AuditEvent"; joining them removes the ordering
+        question entirely — the closure and the event that records it are one
+        commit or neither.
+        """
+        update = {"$set": {"status": status, "finished_at": _iso(self.now()),
+                           "updated_at": _iso(self.now()), "counts": counts.as_record(),
+                           "cursor": cursor.as_record(), "exhausted": exhausted,
+                           "error": error}}
+
+        async def body(opened):
+            await self._hold_claim(lease, session=opened,
+                                   what="close run %s" % run["id"])
+            await self._run_write(run, lease, update, what="close it", session=opened)
+            if audit is not None:
+                await audit(opened)
+
+        await self._transactions.run(body, what="close run %s" % run["id"])
 
     async def _walk(self, principal, run: Mapping[str, Any], lease: _Lease, counts: _Counts,
                     cursor: _Cursor, processed: set) -> bool:

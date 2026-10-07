@@ -407,9 +407,11 @@ class TestFencingAndPersistence:
             assert after["fence"] == fresh.fence and after["lease_holder"] == "w-2"
             assert after["status"] == "running" and after["counts"]["checked"] == 0
             assert "fl_ghost" not in (after.get("processed_location_ids") or [])
-            # the stale worker cannot publish its result either
-            await one._release(stale, run_id="fir_ghost", status="completed",
-                               result={"counts": {"checked": 42}}, next_due_at=None)
+            # the stale worker cannot publish its result either, and since C05
+            # it is refused outright instead of merely matching nothing
+            with pytest.raises(MonitorLeaseLost):
+                await one._release(stale, run_id="fir_ghost", status="completed",
+                                   result={"counts": {"checked": 42}}, next_due_at=None)
             state = await db[MONITOR_STATE_COLLECTION].find_one({})
             assert state["holder"] == "w-2" and state["last_run_id"] is None
         scratch(test)
@@ -1488,3 +1490,252 @@ class TestStandaloneIsRefused:
             assert await db[MONITOR_RUNS_COLLECTION].count_documents({}) == 0
             assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
         standalone_scratch(test)
+
+
+# ═══════════════ C05 — stale-lease lifecycle writes on a real replica set
+#
+# The C04 review's three counterexamples, on actual MongoDB where the claim row
+# and the run document really are separate documents. Each one puts worker A in
+# the exact gap the review used: B has claimed the tenant at a higher fence, or
+# A's own lease has simply expired, while the RUN document still names A.
+
+EXPIRED_AT = "2000-01-01T00:00:00.000000+00:00"
+
+
+class TestStaleLeaseLifecycleOnRealMongo:
+    """Only a live holder + fence + unexpired lease may write anything."""
+
+    @staticmethod
+    async def _a_with_a_run(w, db):
+        a = monitor(w, worker_id="w-A")
+        lease = await a._claim()
+        assert lease is not None
+        row = await a._open_run(principal(), lease, run_id=None)
+        return a, lease, row
+
+    @staticmethod
+    async def _expire(db, holder):
+        await db[MONITOR_STATE_COLLECTION].update_one(
+            {"holder": holder}, {"$set": {"expires_at": EXPIRED_AT}})
+
+    @classmethod
+    async def _b_takes_over(cls, w, db):
+        b = monitor(w, worker_id="w-B")
+        await cls._expire(db, "w-A")
+        lease = await b._claim()
+        assert lease is not None
+        return b, lease
+
+    def test_a_skipped_item_checkpoint_after_a_real_takeover_writes_nothing(self):
+        """C04 finding 1 on real MongoDB: two documents, one of them stale."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=2, relations=1)
+            a, lease, row = await self._a_with_a_run(w, db)
+            before = await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                                {"_id": 0})
+            b, b_lease = await self._b_takes_over(w, db)
+            # the gap: the claim row is B's, the run document still says A
+            assert (await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+                    )["holder"] == "w-B"
+            assert before["lease_holder"] == "w-A"
+            assert (await db[MONITOR_RUNS_COLLECTION].find_one(
+                {"id": row["id"]}, {"_id": 0}))["lease_holder"] == "w-A"
+
+            with pytest.raises(MonitorLeaseLost):
+                await a._checkpoint(row, lease, _Counts(scanned=1, skipped_not_due=1),
+                                    _Cursor(phase="unverified", last_id="fl_x"), None)
+            after = await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                               {"_id": 0})
+            assert after == before
+            assert after["counts"]["scanned"] == 0
+            assert after["cursor"]["last_id"] is None
+            assert after["processed_location_ids"] == []
+            with pytest.raises(MonitorLeaseLost):
+                await a._checkpoint(row, lease, _Counts(scanned=1),
+                                    _Cursor(last_id="fl_x"), "fl_x")
+            assert await db[MONITOR_RUNS_COLLECTION].find_one(
+                {"id": row["id"]}, {"_id": 0}) == before
+        scratch(test)
+
+    def test_a_stale_worker_cannot_finish_the_run_on_real_mongo(self):
+        """C04 finding 2 on real MongoDB, with the audit event in the same txn."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1, relations=1)
+            a, lease, row = await self._a_with_a_run(w, db)
+            before = await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                                {"_id": 0})
+            b, b_lease = await self._b_takes_over(w, db)
+            finished_before = await db["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"})
+            with pytest.raises(MonitorLeaseLost):
+                await a._finish_run(row, lease, _Counts(checked=7), _Cursor(),
+                                    status="completed", exhausted=True)
+            after = await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                               {"_id": 0})
+            assert after == before
+            assert after["status"] == "running" and after["finished_at"] is None
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"}) == finished_before
+            # and the result was not published either
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["holder"] == "w-B" and state["last_run_id"] is None
+            with pytest.raises(MonitorLeaseLost):
+                await a._release(lease, run_id=row["id"], status="completed",
+                                 result={"counts": {"checked": 999}}, next_due_at="2030")
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["last_result"] is None and state["runs_total"] == 0
+            # the rightful owner resumes and closes it properly
+            await b._abandon_claim(b_lease)
+            out = await b.run_once(principal(), run_id=row["id"])
+            assert out["status"] == "completed"
+            assert (await db[MONITOR_RUNS_COLLECTION].find_one(
+                {"id": row["id"]}, {"_id": 0}))["status"] == "completed"
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"}) == finished_before + 1
+        scratch(test)
+
+    def test_an_expired_lease_cannot_be_renewed_on_real_mongo(self):
+        """C04 finding 3 on real MongoDB: no takeover, and still refused."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1, relations=1)
+            a, lease, _row = await self._a_with_a_run(w, db)
+            await self._expire(db, "w-A")
+            before = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            with pytest.raises(MonitorLeaseLost):
+                await a._renew(lease)
+            after = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert after == before
+            assert after["expires_at"] == EXPIRED_AT
+            # the tenant really is free, and the next claim mints a new fence
+            b = monitor(w, worker_id="w-B")
+            b_lease = await b._claim()
+            assert b_lease is not None and b_lease.fence > lease.fence
+            # while a LIVE claim renews normally
+            renewed = await b._renew(b_lease)
+            assert renewed.fence == b_lease.fence
+            assert (await db[MONITOR_STATE_COLLECTION].find_one(
+                {}, {"_id": 0}))["expires_at"] == renewed.expires_at
+        scratch(test)
+
+    def test_a_merely_expired_claim_writes_nothing_anywhere(self):
+        """One sweep over every lifecycle path, on an expired claim, no takeover."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=2, relations=1)
+            a, lease, row = await self._a_with_a_run(w, db)
+            run_before = await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                                     {"_id": 0})
+            await self._expire(db, "w-A")
+            state_before = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            audits_before = await db["audit_events"].count_documents({})
+            for call in (
+                lambda: a._renew(lease),
+                lambda: a._checkpoint(row, lease, _Counts(scanned=3), _Cursor(), None),
+                lambda: a._finish_run(row, lease, _Counts(), _Cursor(),
+                                      status="completed", exhausted=True),
+                lambda: a._release(lease, run_id=row["id"], status="completed",
+                                   result={"counts": {}}, next_due_at=None),
+                lambda: a._open_run(principal(), lease, run_id=row["id"]),
+            ):
+                with pytest.raises(MonitorLeaseLost):
+                    await call()
+            assert await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0}) \
+                == state_before
+            assert await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                              {"_id": 0}) == run_before
+            assert await db["audit_events"].count_documents({}) == audits_before
+            assert await db[MONITOR_RUNS_COLLECTION].count_documents({}) == 1
+            # abandoning is the one quiet path: no write, no raise
+            assert await a._abandon_claim(lease) is False
+            assert await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0}) \
+                == state_before
+        scratch(test)
+
+    def test_the_walk_stops_at_a_skipped_item_after_a_takeover_on_real_mongo(self):
+        """End to end on real MongoDB, through the skip path only."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=3, relations=1)
+            policy = MonitorPolicy(max_attempts=1, batch_size=1,
+                                   categories=(m.CATEGORY_OFFERS,))
+            a = monitor(w, worker_id="w-A", policy=policy)
+            b = monitor(w, worker_id="w-B")
+            taken = {}
+            real_checkpoint = a._checkpoint
+
+            async def steal_then_checkpoint(*args, **kw):
+                if not taken:
+                    await self._expire(db, "w-A")
+                    taken["lease"] = await b._claim()
+                    assert taken["lease"] is not None
+                return await real_checkpoint(*args, **kw)
+            a._checkpoint = steal_then_checkpoint
+            with pytest.raises(MonitorLeaseLost):
+                await a.run_once(principal())
+            row = await db[MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            assert row["status"] == "running"
+            assert row["counts"]["scanned"] == 0
+            assert row["processed_location_ids"] == []
+            assert row["cursor"]["last_id"] is None
+            assert (await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+                    )["holder"] == "w-B"
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"}) == 0
+        scratch(test)
+
+    def test_a_concurrent_checkpoint_and_takeover_let_exactly_one_win(self):
+        """Two real transactions on the claim row: the stale one never lands."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=2, relations=1)
+            a, lease, row = await self._a_with_a_run(w, db)
+            b, b_lease = await self._b_takes_over(w, db)
+            b_run = await b._open_run(principal(), b_lease, run_id=row["id"])
+            results = await asyncio.gather(
+                a._checkpoint(row, lease, _Counts(scanned=9), _Cursor(last_id="fl_a"),
+                              "fl_a"),
+                b._checkpoint(b_run, b_lease, _Counts(scanned=1),
+                              _Cursor(last_id="fl_b"), "fl_b"),
+                return_exceptions=True)
+            assert sum(1 for r in results if isinstance(r, MonitorLeaseLost)) == 1, results
+            assert sum(1 for r in results if r is None) == 1, results
+            after = await db[MONITOR_RUNS_COLLECTION].find_one({"id": row["id"]},
+                                                                {"_id": 0})
+            # only the valid owner's checkpoint is there
+            assert after["counts"]["scanned"] == 1
+            assert after["cursor"]["last_id"] == "fl_b"
+            assert after["processed_location_ids"] == ["fl_b"]
+            assert after["fence"] == b_lease.fence
+        scratch(test)
+
+    def test_an_honest_worker_is_not_blocked_by_any_of_the_new_gates(self):
+        """The whole cycle still works, repeatedly, on a live claim."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=3, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            mon = monitor(w, worker_id="w-1",
+                          policy=MonitorPolicy(max_attempts=1, batch_size=2,
+                                               max_items_per_run=10,
+                                               max_scanned_per_run=10))
+            for _ in range(3):
+                out = await mon.run_once(principal())
+                assert out["status"] == "completed", out
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["occurrences"] == 3
+            assert len(found["transitions"]) == 3
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["holder"] is None and state["runs_total"] == 3
+            assert state["last_status"] == "completed"
+            runs = await db[MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(runs) == 3 and all(r["status"] == "completed" for r in runs)
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"}) == 3
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.started"}) == 3
+        scratch(test)
