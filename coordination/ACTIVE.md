@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C01 CHANGES_REQUESTED — W0-06C/C02 exact-head HANDOFF accepted for independent review
+Status: W0-06C/C02 CHANGES_REQUESTED — bounded C03 correction not dispatched
 Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
 Current-Agent: CODEX
-Current-State: REVIEWING
+Current-State: CHANGES_REQUESTED
 Claude-State: HANDOFF_PUBLISHED / STOPPED
-Codex-State: REVIEWING
-Pipeline-Step: INDEPENDENT_REVIEW
+Codex-State: CHANGES_REQUESTED
+Pipeline-Step: CORRECTION_PREPARATION
 Transition-Phase: OBSERVED
-Now: Claude публикува final C02 HANDOFF на 1a20a12dbc83538f752f248bc0fc41c91a5e697a и спря. Live Draft PR #49 head съвпада. Codex започва независим review на C01→C02 и whole main→head; още няма C02 verdict.
-Next-Agent: CODEX (independent review and verdict)
+Now: Codex независимо провери C02 на exact head 1a20a12dbc83538f752f248bc0fc41c91a5e697a. Реална MongoDB възпроизведе остатъчен lease race: нов worker поема след _verify_lease, а старият все пак записва finding. C02 е CHANGES_REQUESTED, няма PASS и няма C03 dispatch.
+Next-Agent: CODEX (prepare bounded C03 correction; UI Send requires platform action-time confirmation)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE during independent C02 review
-Dispatch-State: C02 SENT ONCE / HANDOFF PUBLISHED
+Krum-Action: Confirm one bounded C03 Computer Use Send only if platform requests action-time confirmation
+Dispatch-State: C02 SENT ONCE / HANDOFF PUBLISHED; C03 NOT SENT
 Dispatch-Run: private Claude session URL withheld; public C02 evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733
 Dispatch-Observed-At: 2026-10-07T11:49:31Z (C02 message visible in Claude UI; Claude is responding)
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
@@ -31,13 +31,15 @@ Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/48
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037849389
 Review: coordination/REVIEWS/W0-06C.md; C01 CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: W0-06C/C01 CHANGES_REQUESTED; C02 independent review in progress, no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: W0-06C/C02 CHANGES_REQUESTED — post-verification lease takeover still permits stale finding write; no W0-06C PASS. W0-06B PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06B/C04
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
 Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## W0-06C/C02 — bounded correction dispatched once; Claude working
+## W0-06C/C02 — independent CHANGES_REQUESTED; no C03 dispatch
+
+Codex reviewed the final exact-head C02 HANDOFF and full stacked diff, reran focused/adjacent/static/disposable real-Mongo gates, and independently reproduced one remaining same-scope defect: a lease takeover after the read-only `_verify_lease` but before the first finding write leaves a stale finding in MongoDB. Evidence and bounded correction are in `coordination/REVIEWS/W0-06C.md` (C02 section). C03 may address only atomic lease/finding/transition/audit fencing and unique deterministic finding identity; preserve the C02 proof and projection fixes. No C03 Send, new Task-ID, branch, Issue, PR, Routine or monitor. No merge, deploy or production activation.
 
 **Exact base and identity.** Same Task-ID `W0-06C`, new correction Cycle-ID `C02`, same Issue #48, branch `codex/w0-06c-integrity-monitoring` and Draft PR #49. Exact correction base `1b7d10a73e66b0a0680d5702019e73c7c57aa527`; C01 independent verdict https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286. The live PR head, branch, verdict and absence of prior C02 dispatch were checked immediately before one confirmed desktop UI Send. CORRECTION_DISPATCH_OK: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733. Do not send again or create a new Task-ID, branch, Issue, PR, Routine or monitor.
 
