@@ -9,8 +9,11 @@ here for provider secrets: a credential value can never be audited, even under
 an innocent-looking key.
 
 W0-06C adds the optional ``correlation_id`` the envelope has always carried, so
-every event of one periodic integrity run can be read back as one story. The
-parameter is additive: every existing caller keeps its exact behaviour.
+every event of one periodic integrity run can be read back as one story, and
+the optional ``session`` that makes the append part of the caller's
+multi-document transaction — so a lifecycle event and the finding write it
+describes commit together or not at all. Both parameters are additive: every
+existing caller keeps its exact behaviour.
 """
 from __future__ import annotations
 
@@ -54,7 +57,8 @@ async def record(view, *, action: str, actor_id: str, retention_class: str,
                  related_file_ids: Optional[List[str]] = None, entity_version: Optional[str] = None,
                  idempotency_key: Optional[str] = None, error_code: Optional[str] = None,
                  actor_type: str = ACTOR_HUMAN,
-                 correlation_id: Optional[str] = None) -> Dict[str, Any]:
+                 correlation_id: Optional[str] = None,
+                 session=None) -> Dict[str, Any]:
     _scan(structured_diff or {})
     event = build_event(
         tenant_id=view.org_id, actor_type=actor_type, actor_id=actor_id, action=action,
@@ -63,4 +67,4 @@ async def record(view, *, action: str, actor_id: str, retention_class: str,
         reason=reason, structured_diff=structured_diff, related_file_ids=related_file_ids or [],
         idempotency_key=idempotency_key, error_code=error_code,
         correlation_id=correlation_id)
-    return await record_event(view.audit_store_db(), event)
+    return await record_event(view.audit_store_db(), event, session=session)

@@ -73,12 +73,37 @@ from app.files.monitoring import (
     _Lease,
     alarm_level,
     ensure_monitor_indexes,
+    ensure_monitor_indexes_on,
     assert_no_secrets,
     finding_identity,
     resolution_proof,
     sanitize_error,
     service_principal,
+    BLOCKER_CLAIM_PREREQUISITE,
+    BLOCKER_INDEX_CONFLICT,
+    BLOCKER_MISSING_INDEX,
+    BLOCKER_NO_TRANSACTIONS,
+    MONITOR_INDEXES as _ALL_MONITOR_INDEXES,
+    READINESS_FAILED,
+    READINESS_READY,
+    REQUIRED_MONITOR_INDEXES,
+    SCHEDULER_DISABLED,
+    SCHEDULER_ENABLED,
+    TOPOLOGY_REPLICA_SET,
+    TOPOLOGY_SHARDED,
+    TOPOLOGY_STANDALONE,
+    TOPOLOGY_UNKNOWN,
+    MongoTransactionRunner,
+    MonitorNotReady,
+    MonitorTransactionUnavailable,
+    monitor_claim_report,
+    monitor_index_report,
+    monitor_readiness,
+    prepare_monitor_runtime,
+    transactions_unsupported,
+    _transition_key,
 )
+from app.files.monitor_bootstrap import bootstrap_integrity_monitor
 from app.files.registry import FileRegistry
 from app.tenancy.data_access import TenantData
 from tests.w0_06b_support import (
@@ -208,6 +233,10 @@ async def _world(files=1, relations_per_file=2, org=A, owner=OWNER_A, kind=KIND,
     for index in range(max(relations_per_file, 1)):
         await db["projects"].insert_one({"id": "P-%d" % index, "org_id": org,
                                          "name": "site %d" % index})
+    # C04: the required unique indexes are a PREREQUISITE the runner refuses to
+    # start without, so the harness installs them exactly where a real
+    # deployment does — in a bootstrap step, before any pass.
+    await ensure_monitor_indexes(reg._tenant)
     access = FileAccessService(reg, svc)
     file_ids = []
     for index in range(files):
@@ -219,11 +248,80 @@ async def _world(files=1, relations_per_file=2, org=A, owner=OWNER_A, kind=KIND,
             "binding_id": binding_id, "access": access, "file_ids": file_ids, "org": org}
 
 
-def monitor(w, *, policy=None, worker_id=None, clock=None, sleep=None, integrity=None):
+class _SequentialTransactions:
+    """The focused suite's stand-in for :class:`MongoTransactionRunner`.
+
+    ``mongomock`` has no sessions at all (``NotImplementedError: Mongomock does
+    not support sessions yet``), so the real runner REFUSES on it, by design —
+    there is no non-transactional production path to fall back to. This double
+    runs the SAME body, in the same order, with ``session=None``, so every
+    ordering, authorization, lifecycle and refusal property the focused suite
+    asserts is the real behaviour of the real code.
+
+    **It is not atomic and does not pretend to be.** What it cannot show is
+    that an aborted body leaves nothing behind, because nothing it does can be
+    rolled back. That property — the whole point of C04 — is proven only in
+    ``test_w0_06c_real_mongo.py``, on a disposable single-node replica set,
+    plus by the direct unit tests of ``MongoTransactionRunner`` below, which
+    drive the real runner against a fake client/session and assert exactly
+    which operations it issues.
+
+    ``fail_times``/``fail_with`` let a test drive the replay contract
+    deterministically, with no sleeps and no clock.
+    """
+
+    kind = "focused_test_double_not_atomic"
+
+    def __init__(self, *, topology="test_double", transactions=True,
+                 fail_times=0, fail_with=None, max_attempts=8):
+        self._topology = topology
+        self._transactions = transactions
+        self._fail_times = int(fail_times)
+        self._fail_with = fail_with
+        self.max_attempts = max_attempts
+        #: ``True`` only while a body is executing — what the "no provider call
+        #: inside the transaction" regression asserts against.
+        self.inside = False
+        self.calls = 0
+        self.bodies = 0
+        self.retries = 0
+        self.aborted = 0
+
+    async def capability(self, *, refresh=False):
+        return {"runner": self.kind, "transactions": self._transactions,
+                "topology": self._topology, "server_version": None,
+                "max_wire_version": 21, "replica_set": None, "error": None}
+
+    async def run(self, body, *, what):
+        if not self._transactions:
+            raise MonitorTransactionUnavailable(
+                "test double declares no transaction support; refusing to %s" % what)
+        self.calls += 1
+        attempt = 0
+        while True:
+            attempt += 1
+            self.bodies += 1
+            if self._fail_times > 0:
+                self._fail_times -= 1
+                self.aborted += 1
+                self.retries += 1
+                if attempt >= self.max_attempts:
+                    raise self._fail_with or RuntimeError("injected transaction failure")
+                continue
+            self.inside = True
+            try:
+                return await body(None)
+            finally:
+                self.inside = False
+
+
+def monitor(w, *, policy=None, worker_id=None, clock=None, sleep=None, integrity=None,
+            transactions=None):
     return FileIntegrityMonitor(
         w["reg"], w["svc"], integrity=integrity,
         policy=policy or MonitorPolicy(max_attempts=1),
-        worker_id=worker_id, clock=clock, sleep=sleep)
+        worker_id=worker_id, clock=clock, sleep=sleep,
+        transactions=transactions if transactions is not None else _SequentialTransactions())
 
 
 class _Racing(FileIntegrityMonitor):
@@ -239,6 +337,7 @@ class _Racing(FileIntegrityMonitor):
 
     def __init__(self, registry, storage, **kw):
         kw.setdefault("policy", MonitorPolicy(max_attempts=1))
+        kw.setdefault("transactions", _SequentialTransactions())
         super().__init__(registry, storage, **kw)
 
     async def _claim(self):
@@ -646,8 +745,9 @@ class TestBoundedWalk:
             row = await mon._open_run(principal(), lease, run_id=None)
             counts = _Counts()
             location = await w["reg"].primary_location(w["file_ids"][0], 1)
-            await mon._check_one(principal(), row, lease, counts, location)
-            await mon._check_one(principal(), row, lease, counts, location)
+            cursor = _Cursor()
+            await mon._check_one(principal(), row, lease, counts, cursor, location)
+            await mon._check_one(principal(), row, lease, counts, cursor, location)
             assert counts.checked == 2                 # two checks really happened
             assert len(await _monitor_check_events(w)) == 2      # both audited
             rows = await _findings(w)
@@ -953,7 +1053,17 @@ class TestLifecycle:
             assert opened == 1                          # the alarm was raised ONCE
         run(body())
 
-    def test_the_same_transition_at_the_same_marker_is_appended_only_once(self):
+    def test_the_same_transition_of_the_same_occurrence_is_appended_only_once(self):
+        """Replaying one observation appends once; two real ones never collide.
+
+        C04 root-causes the C03 flakiness here. The key used to be the
+        transition's wall-clock marker, so two honest observations inside one
+        microsecond produced one key and the second was silently dropped. The
+        key is now the finding's own ``occurrences`` counter, which cannot tie,
+        and this test asserts BOTH halves of that: the same occurrence replayed
+        is idempotent, and two different occurrences are never deduplicated
+        even when their markers are byte-for-byte identical.
+        """
         async def body():
             w = await _world(files=1)
             await _inject(w, w["file_ids"][0], "remove")
@@ -963,20 +1073,41 @@ class TestLifecycle:
             result = await _result_for(w, w["file_ids"][0])
             row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
             lease = _Lease(holder=row["lease_holder"], fence=row["fence"], expires_at="")
-            args = dict(marker="2026-10-07T12:00:00.000000+00:00", severity="critical",
+            marker = "2026-10-07T12:00:00.000000+00:00"
+            args = dict(marker=marker, severity="critical",
                         finding_type="missing_original")
             first = await mon._transition(principal(), row, lease, found["id"],
-                                          TRANSITION_OBSERVED, result, **args)
+                                          TRANSITION_OBSERVED, result,
+                                          occurrence=2, **args)
             second = await mon._transition(principal(), row, lease, found["id"],
-                                           TRANSITION_OBSERVED, result, **args)
-            assert first is True and second is False
+                                           TRANSITION_OBSERVED, result,
+                                           occurrence=2, **args)
+            assert first is True and second is False     # the replay is idempotent
+            # a DIFFERENT occurrence at the SAME marker is a different transition
+            third = await mon._transition(principal(), row, lease, found["id"],
+                                          TRANSITION_OBSERVED, result,
+                                          occurrence=3, **args)
+            assert third is True
             after, = await _findings(w)
             assert [t["transition"] for t in after["transitions"]] == [
-                TRANSITION_OPENED, TRANSITION_OBSERVED]
+                TRANSITION_OPENED, TRANSITION_OBSERVED, TRANSITION_OBSERVED]
             observed = await w["db"]["audit_events"].count_documents(
                 {"action": "file.integrity.finding.observed"})
-            assert observed == 1
+            assert observed == 2
+            assert len(set(after["transition_keys"])) == 3
         run(body())
+
+    def test_the_transition_key_counts_occurrences_and_never_reads_a_clock(self):
+        """The direct root-cause regression for the C03 flaky lifecycle runs."""
+        a = _transition_key("fif_x", TRANSITION_OBSERVED, 2)
+        b = _transition_key("fif_x", TRANSITION_OBSERVED, 3)
+        assert a != b                       # consecutive observations never tie
+        assert a == _transition_key("fif_x", TRANSITION_OBSERVED, 2)   # replay
+        assert a != _transition_key("fif_x", TRANSITION_RESOLVED, 2)   # kind counts
+        assert a != _transition_key("fif_y", TRANSITION_OBSERVED, 2)   # finding counts
+        # and a resolve of occurrence N cannot be mistaken for its observation
+        assert _transition_key("fif_x", TRANSITION_RESOLVED, 2) \
+            != _transition_key("fif_x", TRANSITION_REOPENED, 2)
 
     @pytest.mark.parametrize("inject,finding_type,kind", [
         ("remove", "missing_original", KIND),
@@ -1803,7 +1934,8 @@ class TestStaleWorkerSideEffects:
             with pytest.raises(MonitorLeaseLost):
                 await stale._observe(principal(), run_row, lease, _Counts(),
                                      await w["reg"].primary_location(w["file_ids"][0], 1),
-                                     result, "missing_original", "critical")
+                                     result, "missing_original", "critical",
+                                     session=None)
             after, = await _findings(w)
             assert after["fence"] == high_fence           # untouched
             assert after["occurrences"] == found["occurrences"]
@@ -2274,8 +2406,8 @@ class TestPostVerificationTakeover:
                 {"action": "file.integrity.finding.resolved"}) == 0
         run(body())
 
-    def test_the_commit_gate_is_a_conditional_write_not_a_read(self):
-        """It must refuse on an EXPIRED claim even when nobody took over."""
+    def test_the_claim_gate_is_a_conditional_write_not_a_read(self):
+        """It must refuse on an EXPIRED claim or a stale fence, with no takeover."""
         async def body():
             w = await _world(files=1)
             await _inject(w, w["file_ids"][0], "remove")
@@ -2284,42 +2416,31 @@ class TestPostVerificationTakeover:
             run_row = await mon._open_run(principal(), lease, run_id=None)
             location = await w["reg"].primary_location(w["file_ids"][0], 1)
             result = await _result_for(w, w["file_ids"][0])
-            # a live claim commits, and the commit RENEWS it
+            # a live claim matches, and the same write RENEWS it
             before = await w["db"][MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
-            await mon._commit_item(lease, run_id=run_row["id"], location=location,
-                                   result=result)
+            await mon._claim_gate(lease, session=None, run_id=run_row["id"],
+                                  location=location, result=result)
             after = await w["db"][MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
             assert after["expires_at"] >= before["expires_at"]
             assert after["last_commit"]["location_id"] == location["id"]
             assert after["last_commit"]["fence"] == lease.fence
-            # The commit RENEWS for a full TTL, and that is what bounds what is
-            # left: a takeover can only land between this commit and the finding
-            # write if the process stalls a whole lease_ttl_seconds between two
-            # adjacent database operations.
-            from datetime import datetime, timedelta, timezone
-            renewed = datetime.strptime(after["expires_at"],
-                                        "%Y-%m-%dT%H:%M:%S.%f+00:00").replace(
-                                            tzinfo=timezone.utc)
-            ttl = timedelta(seconds=mon.policy.lease_ttl_seconds)
-            assert renewed - mon.now() > ttl * 0.9
             assert after["renewed_at"]
             # an expired claim is refused, with nobody else involved
             await w["db"][MONITOR_STATE_COLLECTION].update_one(
                 {"holder": "w-1"},
                 {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
             with pytest.raises(MonitorLeaseLost):
-                await mon._commit_item(lease, run_id=run_row["id"], location=location,
-                                       result=result)
+                await mon._claim_gate(lease, session=None, run_id=run_row["id"],
+                                      location=location, result=result)
             # and so is a stale fence
             await w["db"][MONITOR_STATE_COLLECTION].update_one(
-                {"holder": "w-1"}, {"$set": {"fence": lease.fence + 5},
+                {"holder": "w-1"}, {"$set": {"fence": lease.fence + 5,
+                                             "expires_at":
+                                                 "2999-01-01T00:00:00.000000+00:00"},
                                     "$unset": {"released_at": ""}})
-            await w["db"][MONITOR_STATE_COLLECTION].update_one(
-                {"holder": "w-1"}, {"$set": {"expires_at":
-                                             "2999-01-01T00:00:00.000000+00:00"}})
             with pytest.raises(MonitorLeaseLost):
-                await mon._commit_item(lease, run_id=run_row["id"], location=location,
-                                       result=result)
+                await mon._claim_gate(lease, session=None, run_id=run_row["id"],
+                                      location=location, result=result)
         run(body())
 
     def test_the_gate_does_not_block_an_honest_worker(self):
@@ -2388,20 +2509,71 @@ class TestFindingIdentityUniqueness:
             # the identity already exists, written by a worker at the SAME fence
             counts = _Counts()
             await mon._observe(principal(), row, lease, counts, location, result,
-                               "missing_original", "critical")
+                               "missing_original", "critical", session=None)
             assert counts.findings_opened == 1
             # a second _observe for the same identity takes the update path and
             # does not create a second row
             again = _Counts()
             await mon._observe(principal(), row, lease, again, location, result,
-                               "missing_original", "critical")
+                               "missing_original", "critical", session=None)
             assert again.findings_opened == 0 and again.findings_observed == 1
             rows = await _findings(w)
             assert len(rows) == 1 and rows[0]["occurrences"] == 2
         run(body())
 
-    def test_a_duplicate_insert_falls_through_to_the_fenced_update_path(self):
-        """The insert loses the race; the fenced update then refuses a stale fence."""
+    def test_a_duplicate_identity_insert_is_raised_so_the_transaction_replays(self):
+        """C04 changes how the duplicate is answered, not that it is refused.
+
+        Before C04 the duplicate key was caught and the code switched to the
+        update path in the same breath. Inside a transaction that is wrong: the
+        write error has already aborted the transaction on the server, so the
+        following update could only fail too. The error is therefore raised, the
+        runner classifies it as replayable, and the replay reads the winner's
+        row under a FRESH snapshot and updates it under the fence.
+        """
+        async def body():
+            from pymongo.errors import DuplicateKeyError
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w, worker_id="w-1")
+            lease = await mon._claim()
+            row = await mon._open_run(principal(), lease, run_id=None)
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            result = await _result_for(w, w["file_ids"][0])
+            # the identity's row is already there, but this _observe is made to
+            # believe it is not: exactly the state a transaction sees when the
+            # winner committed after its snapshot opened.
+            await mon._observe(principal(), row, lease, _Counts(), location, result,
+                               "missing_original", "critical", session=None)
+            found, = await _findings(w)
+            from app.tenancy.data_access import TenantCollection
+            real_find_one = TenantCollection.find_one
+
+            async def blind(self, *a, **kw):
+                if self.name == MONITOR_FINDINGS_COLLECTION:
+                    return None
+                return await real_find_one(self, *a, **kw)
+            TenantCollection.find_one = blind
+            try:
+                with pytest.raises(Exception) as caught:
+                    await mon._observe(principal(), row, lease, _Counts(), location,
+                                       result, "missing_original", "critical",
+                                       session=None)
+            finally:
+                TenantCollection.find_one = real_find_one
+            # a duplicate key, by the SAME predicate the runner classifies with
+            # (mongomock raises its own DuplicateKeyError class, not pymongo's)
+            assert type(caught.value).__name__ == "DuplicateKeyError"
+            assert MongoTransactionRunner._replayable(caught.value) is True
+            # and the runner treats exactly that as replayable
+            assert MongoTransactionRunner._replayable(
+                DuplicateKeyError("E11000 duplicate key error")) is True
+            after, = await _findings(w)
+            assert after["occurrences"] == found["occurrences"]
+        run(body())
+
+    def test_a_stale_fence_is_refused_on_the_fenced_update_path(self):
+        """A straggler at an old fence can neither insert nor update the row."""
         async def body():
             w = await _world(files=1)
             await ensure_monitor_indexes(w["reg"]._tenant)
@@ -2424,9 +2596,869 @@ class TestFindingIdentityUniqueness:
                 await stale._observe(principal(), run_row,
                                      _Lease(holder="w-old", fence=1, expires_at=""),
                                      _Counts(), location, result, "missing_original",
-                                     "critical")
+                                     "critical", session=None)
             after, = await _findings(w)
             assert after["fence"] == found["fence"]
             assert after["occurrences"] == found["occurrences"]
             assert after["transitions"] == found["transitions"]
         run(body())
+
+
+# ═════════════════════════════ C04 — the transaction runner itself
+#
+# The owner architecture decision is implemented by two pieces: a runner that
+# owns the session/transaction/retry semantics, and a per-item body whose first
+# write is the claim gate. The runner is pure control flow, so it is tested here
+# directly against a fake client and session — deterministically, with no clock,
+# no sleeps and no server. Whether an aborted transaction really leaves nothing
+# behind is a property of MongoDB, and is proven in `test_w0_06c_real_mongo.py`
+# on a disposable single-node replica set.
+
+class _FakeSession:
+    def __init__(self, log, *, commit_errors=(), start_error=None):
+        self._log = log
+        self._commit_errors = list(commit_errors)
+        self._start_error = start_error
+        self.in_transaction = False
+        self.closed = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        self.closed = True
+        self._log.append("session_closed")
+        return False
+
+    def start_transaction(self, **kw):
+        if self._start_error is not None:
+            raise self._start_error
+        self.in_transaction = True
+        self._log.append("start_transaction")
+
+    async def commit_transaction(self):
+        self._log.append("commit")
+        if self._commit_errors:
+            raise self._commit_errors.pop(0)
+        self.in_transaction = False
+
+    async def abort_transaction(self):
+        self._log.append("abort")
+        self.in_transaction = False
+
+
+class _FakeClient:
+    def __init__(self, log, **session_kw):
+        self._log = log
+        self._session_kw = session_kw
+        self.sessions = []
+
+    async def start_session(self):
+        session = _FakeSession(self._log, **self._session_kw)
+        self.sessions.append(session)
+        self._log.append("start_session")
+        return session
+
+
+class _FakeDb:
+    def __init__(self, client, *, hello=None, hello_error=None):
+        self.client = client
+        self._hello = hello
+        self._hello_error = hello_error
+        self.commands = []
+
+    async def command(self, name, *a, **kw):
+        self.commands.append(name)
+        if self._hello_error is not None:
+            raise self._hello_error
+        return dict(self._hello or {})
+
+
+def _runner(hello, *, hello_error=None, log=None, max_attempts=4,
+            commit_attempts=3, **session_kw):
+    log = log if log is not None else []
+    client = _FakeClient(log, **session_kw)
+    db = _FakeDb(client, hello=hello, hello_error=hello_error)
+    async def no_sleep(_seconds):
+        return None
+    return MongoTransactionRunner(db, max_attempts=max_attempts,
+                                  commit_attempts=commit_attempts,
+                                  sleep=no_sleep), log, db
+
+
+REPLICA_SET_HELLO = {"setName": "rs0", "isWritablePrimary": True, "maxWireVersion": 21}
+SHARDED_HELLO = {"msg": "isdbgrid", "maxWireVersion": 21}
+STANDALONE_HELLO = {"isWritablePrimary": True, "maxWireVersion": 21}
+
+
+def _transient(label="TransientTransactionError", code=None):
+    from pymongo.errors import OperationFailure
+    exc = OperationFailure("injected", code=code)
+    exc._error_labels = {label}
+    return exc
+
+
+class TestTransactionCapability:
+    """Transaction support is a PREREQUISITE, decided by the real topology."""
+
+    def test_a_replica_set_can_run_the_transaction(self):
+        async def body():
+            runner, _, db = _runner(REPLICA_SET_HELLO)
+            cap = await runner.capability()
+            assert cap["transactions"] is True
+            assert cap["topology"] == TOPOLOGY_REPLICA_SET
+            assert cap["replica_set"] == "rs0"
+            assert db.commands == ["hello"]           # probed once
+            await runner.capability()
+            assert db.commands == ["hello"]           # and cached
+        run(body())
+
+    def test_a_mongos_can_run_the_transaction(self):
+        async def body():
+            runner, _, _ = _runner(SHARDED_HELLO)
+            cap = await runner.capability()
+            assert cap["transactions"] is True and cap["topology"] == TOPOLOGY_SHARDED
+        run(body())
+
+    def test_a_standalone_cannot_and_is_reported_as_such(self):
+        async def body():
+            runner, log, _ = _runner(STANDALONE_HELLO)
+            cap = await runner.capability()
+            assert cap["transactions"] is False
+            assert cap["topology"] == TOPOLOGY_STANDALONE
+            # and nothing is attempted: no session, no fallback write
+            with pytest.raises(MonitorTransactionUnavailable):
+                await runner.run(lambda s: None, what="write a finding")
+            assert log == []
+        run(body())
+
+    def test_a_server_too_old_for_transactions_is_refused(self):
+        async def body():
+            runner, _, _ = _runner({"setName": "rs0", "maxWireVersion": 6})
+            cap = await runner.capability()
+            assert cap["transactions"] is False and cap["max_wire_version"] == 6
+        run(body())
+
+    def test_an_unreachable_deployment_fails_closed(self):
+        async def body():
+            runner, _, db = _runner(None, hello_error=RuntimeError("no route"))
+            cap = await runner.capability()
+            assert cap["transactions"] is False
+            assert cap["topology"] == TOPOLOGY_UNKNOWN
+            assert cap["error"] == "RuntimeError"
+            assert db.commands == ["hello", "isMaster"]      # both tried
+        run(body())
+
+    @pytest.mark.parametrize("exc,expected", [
+        (NotImplementedError("Mongomock does not support sessions yet"), True),
+        (RuntimeError("Transaction numbers are only allowed on a replica set member "
+                      "or mongos"), True),
+        (RuntimeError("this deployment does not support sessions"), True),
+        (RuntimeError("E11000 duplicate key error"), False),
+        (MonitorLeaseLost("claim moved"), False),
+    ])
+    def test_the_unsupported_classifier_is_exact(self, exc, expected):
+        assert transactions_unsupported(exc) is expected
+
+    def test_an_illegal_operation_code_20_is_a_missing_prerequisite(self):
+        from pymongo.errors import OperationFailure
+        exc = OperationFailure(
+            "Transaction numbers are only allowed on a replica set member or mongos",
+            code=20)
+        assert transactions_unsupported(exc) is True
+
+
+class TestTransactionRunnerSemantics:
+    """Only one valid owner commits; a loser leaves nothing behind."""
+
+    def test_the_body_runs_inside_a_started_transaction_and_is_committed(self):
+        async def body():
+            runner, log, _ = _runner(REPLICA_SET_HELLO)
+            seen = {}
+
+            async def work(session):
+                seen["session"] = session
+                seen["in_transaction"] = session.in_transaction
+                log.append("body")
+                return "done"
+            assert await runner.run(work, what="write a finding") == "done"
+            assert seen["in_transaction"] is True
+            assert log == ["start_session", "start_transaction", "body", "commit",
+                           "session_closed"]
+        run(body())
+
+    def test_a_lost_lease_aborts_and_is_never_replayed(self):
+        """The decisive semantics: the loser commits nothing and does not retry."""
+        async def body():
+            runner, log, _ = _runner(REPLICA_SET_HELLO)
+            bodies = []
+
+            async def work(_session):
+                bodies.append(1)
+                raise MonitorLeaseLost("a newer owner holds the claim")
+            with pytest.raises(MonitorLeaseLost):
+                await runner.run(work, what="write a finding")
+            assert len(bodies) == 1                      # not replayed
+            assert log == ["start_session", "start_transaction", "abort",
+                           "session_closed"]
+            assert "commit" not in log                   # nothing was committed
+            assert runner.retries == 0
+        run(body())
+
+    def test_a_write_conflict_replays_the_body_against_a_fresh_snapshot(self):
+        async def body():
+            runner, log, _ = _runner(REPLICA_SET_HELLO)
+            bodies = []
+
+            async def work(_session):
+                bodies.append(1)
+                if len(bodies) == 1:
+                    raise _transient()
+                return "second"
+            assert await runner.run(work, what="write a finding") == "second"
+            assert len(bodies) == 2 and runner.retries == 1
+            assert log.count("abort") == 1 and log.count("commit") == 1
+            assert log.count("start_session") == 2       # a FRESH session/snapshot
+        run(body())
+
+    def test_a_duplicate_identity_replays_the_body(self):
+        async def body():
+            from pymongo.errors import DuplicateKeyError
+            runner, _, _ = _runner(REPLICA_SET_HELLO)
+            bodies = []
+
+            async def work(_session):
+                bodies.append(1)
+                if len(bodies) == 1:
+                    raise DuplicateKeyError("E11000 duplicate key error")
+                return "ok"
+            assert await runner.run(work, what="write a finding") == "ok"
+            assert len(bodies) == 2
+        run(body())
+
+    def test_a_replayable_failure_that_never_clears_is_raised_not_hidden(self):
+        async def body():
+            runner, log, _ = _runner(REPLICA_SET_HELLO, max_attempts=3)
+            bodies = []
+
+            async def work(_session):
+                bodies.append(1)
+                raise _transient()
+            with pytest.raises(Exception) as caught:
+                await runner.run(work, what="write a finding")
+            assert type(caught.value).__name__ == "OperationFailure"
+            assert len(bodies) == 3                      # bounded, then raised
+            assert "commit" not in log
+        run(body())
+
+    def test_an_unknown_commit_result_is_re_committed_not_replayed(self):
+        """A commit that may already be durable must never re-apply the body."""
+        async def body():
+            unknown = _transient("UnknownTransactionCommitResult")
+            runner, log, _ = _runner(REPLICA_SET_HELLO, commit_errors=[unknown])
+            bodies = []
+
+            async def work(_session):
+                bodies.append(1)
+                return "ok"
+            assert await runner.run(work, what="write a finding") == "ok"
+            assert len(bodies) == 1                      # body applied ONCE
+            assert log.count("commit") == 2              # the commit was retried
+        run(body())
+
+    def test_a_non_retryable_body_error_aborts_and_propagates(self):
+        async def body():
+            runner, log, _ = _runner(REPLICA_SET_HELLO)
+
+            async def work(_session):
+                raise ValueError("a real bug")
+            with pytest.raises(ValueError):
+                await runner.run(work, what="write a finding")
+            assert log == ["start_session", "start_transaction", "abort",
+                           "session_closed"]
+        run(body())
+
+    def test_a_deployment_that_refuses_to_start_a_transaction_is_a_prerequisite_error(self):
+        """A replica set that claims to be one but refuses: still no fallback."""
+        async def body():
+            from pymongo.errors import OperationFailure
+            refusal = OperationFailure(
+                "Transaction numbers are only allowed on a replica set member or mongos",
+                code=20)
+            runner, log, _ = _runner(REPLICA_SET_HELLO, start_error=refusal)
+
+            async def work(_session):           # pragma: no cover - never reached
+                raise AssertionError("the body must not run")
+            with pytest.raises(MonitorTransactionUnavailable):
+                await runner.run(work, what="write a finding")
+            assert "commit" not in log
+        run(body())
+
+    def test_a_failed_abort_does_not_replace_the_real_error(self):
+        async def body():
+            runner, log, _ = _runner(REPLICA_SET_HELLO)
+
+            async def work(session):
+                async def broken_abort():
+                    log.append("abort_failed")
+                    raise RuntimeError("abort itself failed")
+                session.abort_transaction = broken_abort
+                raise MonitorLeaseLost("claim moved")
+            with pytest.raises(MonitorLeaseLost):
+                await runner.run(work, what="write a finding")
+            assert "abort_failed" in log
+        run(body())
+
+
+# ═════════════════════════════ C04 — readiness is wired, not test-only
+class TestMonitorReadiness:
+    """The C03 review's second finding: the index existed only in tests."""
+
+    @staticmethod
+    async def _db():
+        w = await _world(files=1)
+        return w, w["reg"]._tenant.deployment_db()
+
+    def test_a_prepared_deployment_is_ready_and_a_scheduler_may_be_enabled(self):
+        async def body():
+            w, db = await self._db()
+            report = await monitor_readiness(db, transactions=_SequentialTransactions())
+            assert report["status"] == READINESS_READY and report["ready"] is True
+            assert report["scheduler"] == SCHEDULER_ENABLED
+            assert report["blockers"] == []
+            assert sorted(report["indexes"]["present"]) == sorted(
+                o["name"] for _c, _k, o in _ALL_MONITOR_INDEXES)
+            assert report["required_indexes"] == list(REQUIRED_MONITOR_INDEXES)
+            assert report["claims"]["broken_fence_rows"] == 0
+        run(body())
+
+    def test_a_standalone_deployment_is_not_ready_and_the_scheduler_stays_disabled(self):
+        async def body():
+            w, db = await self._db()
+            report = await monitor_readiness(
+                db, transactions=_SequentialTransactions(
+                    topology=TOPOLOGY_STANDALONE, transactions=False))
+            assert report["status"] == READINESS_FAILED and report["ready"] is False
+            assert report["scheduler"] == SCHEDULER_DISABLED
+            assert [b["blocker"] for b in report["blockers"]] == [BLOCKER_NO_TRANSACTIONS]
+            assert "standalone" in report["blockers"][0]["detail"]
+        run(body())
+
+    def test_a_missing_required_index_is_a_blocker(self):
+        async def body():
+            w, db = await self._db()
+            await db[MONITOR_FINDINGS_COLLECTION].drop_index(
+                "uniq_integrity_finding_identity")
+            report = await monitor_readiness(db, transactions=_SequentialTransactions())
+            assert report["status"] == READINESS_FAILED
+            assert {"blocker": BLOCKER_MISSING_INDEX,
+                    "detail": "uniq_integrity_finding_identity"} in report["blockers"]
+            assert report["scheduler"] == SCHEDULER_DISABLED
+        run(body())
+
+    def test_a_required_index_that_is_no_longer_unique_is_a_blocker(self):
+        """A name check alone would pass this and the guarantee would be gone."""
+        async def body():
+            w, db = await self._db()
+            await db[MONITOR_FINDINGS_COLLECTION].drop_index(
+                "uniq_integrity_finding_identity")
+            await db[MONITOR_FINDINGS_COLLECTION].create_index(
+                [("org_id", 1), ("id", 1)], name="uniq_integrity_finding_identity")
+            report = await monitor_index_report(db)
+            assert "uniq_integrity_finding_identity" in report["conflicting"]
+            full = await monitor_readiness(db, transactions=_SequentialTransactions())
+            assert {"blocker": BLOCKER_INDEX_CONFLICT,
+                    "detail": "uniq_integrity_finding_identity"} in full["blockers"]
+            # and nothing was dropped to "make room"
+            assert "uniq_integrity_finding_identity" in await db[
+                MONITOR_FINDINGS_COLLECTION].index_information()
+        run(body())
+
+    def test_a_claim_row_without_an_integer_fence_is_a_blocker(self):
+        async def body():
+            w, db = await self._db()
+            await monitor(w).run_once(principal())
+            assert (await monitor_claim_report(db))["broken_fence_rows"] == 0
+            await db[MONITOR_STATE_COLLECTION].update_one(
+                {}, {"$set": {"fence": "one"}})
+            claims = await monitor_claim_report(db)
+            assert claims["claim_rows"] == 1 and claims["broken_fence_rows"] == 1
+            report = await monitor_readiness(db, transactions=_SequentialTransactions())
+            assert report["status"] == READINESS_FAILED
+            assert [b["blocker"] for b in report["blockers"]] == [
+                BLOCKER_CLAIM_PREREQUISITE]
+            # the count is all that is reported: no tenant id, no _id, no value
+            assert set(claims) == {"claim_rows", "broken_fence_rows", "error"}
+        run(body())
+
+    def test_a_missing_fence_field_counts_as_broken_and_a_bool_is_not_an_integer(self):
+        async def body():
+            w, db = await self._db()
+            await db[MONITOR_STATE_COLLECTION].insert_one(
+                {"_id": "s1", "org_id": A})
+            await db[MONITOR_STATE_COLLECTION].insert_one(
+                {"_id": "s2", "org_id": A, "fence": True})
+            await db[MONITOR_STATE_COLLECTION].insert_one(
+                {"_id": "s3", "org_id": A, "fence": 7})
+            claims = await monitor_claim_report(db)
+            assert claims["claim_rows"] == 3 and claims["broken_fence_rows"] == 2
+        run(body())
+
+    def test_the_runner_refuses_to_run_without_its_prerequisites(self):
+        """It fails closed BEFORE the claim and before any provider contact."""
+        async def body():
+            w, db = await self._db()
+            await _inject(w, w["file_ids"][0], "remove")
+            await db[MONITOR_FINDINGS_COLLECTION].drop_index(
+                "uniq_integrity_finding_identity")
+            mon = monitor(w)
+            with pytest.raises(MonitorNotReady) as refused:
+                await mon.run_once(principal())
+            assert BLOCKER_MISSING_INDEX in str(refused.value)
+            assert await _findings(w) == []
+            assert await _monitor_check_events(w) == []          # no provider contact
+            assert await db[MONITOR_STATE_COLLECTION].count_documents({}) == 0
+            assert await db[MONITOR_RUNS_COLLECTION].count_documents({}) == 0
+        run(body())
+
+    def test_the_runner_refuses_on_a_deployment_without_transactions(self):
+        async def body():
+            w, db = await self._db()
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w, transactions=_SequentialTransactions(
+                topology=TOPOLOGY_STANDALONE, transactions=False))
+            with pytest.raises(MonitorNotReady) as refused:
+                await mon.run_once(principal())
+            assert BLOCKER_NO_TRANSACTIONS in str(refused.value)
+            assert await _findings(w) == []
+            assert await db[MONITOR_RUNS_COLLECTION].count_documents({}) == 0
+        run(body())
+
+    def test_prepare_builds_the_indexes_and_then_reports_ready(self):
+        async def body():
+            w, db = await self._db()
+            for name in ("uniq_integrity_finding_identity", "uniq_integrity_run"):
+                collection = (MONITOR_FINDINGS_COLLECTION
+                              if "finding" in name else MONITOR_RUNS_COLLECTION)
+                await db[collection].drop_index(name)
+            before = await monitor_index_report(db)
+            assert "uniq_integrity_finding_identity" in before["missing"]
+            report = await prepare_monitor_runtime(
+                db, transactions=_SequentialTransactions())
+            assert report["status"] == READINESS_READY
+            assert "uniq_integrity_finding_identity" in report["indexes_created"]
+            assert report["index_build_error"] is None
+            # idempotent: a second bootstrap changes nothing and still reports ready
+            again = await prepare_monitor_runtime(
+                db, transactions=_SequentialTransactions())
+            assert again["status"] == READINESS_READY
+            assert again["indexes_created"] == report["indexes_created"]
+        run(body())
+
+    def test_ensure_monitor_indexes_on_a_database_matches_the_tenant_form(self):
+        async def body():
+            w, db = await self._db()
+            from_tenant = await ensure_monitor_indexes(w["reg"]._tenant)
+            from_db = await ensure_monitor_indexes_on(db)
+            assert from_tenant == from_db
+        run(body())
+
+    def test_the_bootstrap_reports_and_never_breaks_startup(self):
+        async def body():
+            w, db = await self._db()
+            # The default runner is the REAL one, so on a deployment without
+            # transactions — which ``mongomock`` is, having no sessions at all —
+            # the honest answer is FAILED/DISABLED, and the bootstrap still
+            # returns instead of taking the server down.
+            real = await bootstrap_integrity_monitor(db)
+            assert real["status"] == READINESS_FAILED
+            assert real["scheduler"] == SCHEDULER_DISABLED
+            assert BLOCKER_NO_TRANSACTIONS in [b["blocker"] for b in real["blockers"]]
+            # the indexes are still built, because that part is always safe
+            assert "uniq_integrity_finding_identity" in \
+                (await monitor_index_report(db))["present"]
+            report = await bootstrap_integrity_monitor(
+                db, transactions=_SequentialTransactions())
+            assert report["status"] == READINESS_READY
+            # a broken handle is reported, not raised: the rest of the server
+            # does not depend on the integrity monitor
+            class _Broken:
+                def __getitem__(self, _name):
+                    raise RuntimeError("database is gone")
+                @property
+                def client(self):
+                    raise RuntimeError("database is gone")
+            broken = await bootstrap_integrity_monitor(_Broken())
+            assert broken["ready"] is False
+            assert broken["scheduler"] == SCHEDULER_DISABLED
+        run(body())
+
+    def test_the_bootstrap_is_wired_into_the_real_application_startup(self):
+        """`ensure_monitor_indexes` must not exist only in tests (C03 finding)."""
+        import pathlib
+        source = pathlib.Path("server.py").read_text(encoding="utf-8")
+        assert "from app.files.monitor_bootstrap import bootstrap_integrity_monitor" \
+            in source
+        assert "await bootstrap_integrity_monitor(db, logger=logger)" in source
+        startup = source[source.index('@app.on_event("startup")'):]
+        assert "bootstrap_integrity_monitor" in startup
+        # and the bootstrap really calls the index builder
+        import app.files.monitor_bootstrap as boot
+        import inspect
+        assert "prepare_monitor_runtime" in inspect.getsource(boot)
+
+
+# ═════════════════════════════ C04 — the per-item transaction boundary
+class _SentinelTransactions(_SequentialTransactions):
+    """Passes a RECOGNISABLE session object, so threading can be asserted.
+
+    ``mongomock`` never sees it: the spies installed by the tests below record
+    the session they were handed and then call the real driver with
+    ``session=None``. What is being proven is that every per-item write of the
+    monitor carries the runner's session, i.e. that it is inside the
+    transaction and not beside it.
+    """
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.session = object()
+        self.inside = False
+
+    async def run(self, body, *, what):
+        if not self._transactions:
+            raise MonitorTransactionUnavailable("no transactions; refusing to %s" % what)
+        self.calls += 1
+        self.bodies += 1
+        self.inside = True
+        try:
+            if self._fail_times > 0:
+                self._fail_times -= 1
+                self.aborted += 1
+                raise self._fail_with or RuntimeError("injected transaction failure")
+            return await body(self.session)
+        finally:
+            self.inside = False
+
+
+class _Spies:
+    """Records (collection, session) for every write the monitor makes."""
+
+    def __init__(self):
+        self.writes = []
+        self.reads = []
+        self.audits = []
+        self._saved = {}
+
+    def install(self):
+        from app.tenancy.data_access import TenantCollection
+        from app.files import audit_trail
+        spies = self
+        for name in ("insert_one", "update_one", "find_one", "find"):
+            self._saved[name] = getattr(TenantCollection, name)
+
+        real = self._saved
+
+        async def insert_one(self, doc, **kw):
+            spies.writes.append((self.name, "insert_one", kw.pop("session", None)))
+            return await real["insert_one"](self, doc, **kw)
+
+        async def update_one(self, flt, update, **kw):
+            spies.writes.append((self.name, "update_one", kw.pop("session", None)))
+            return await real["update_one"](self, flt, update, **kw)
+
+        async def find_one(self, flt=None, projection=None, **kw):
+            spies.reads.append((self.name, "find_one", kw.pop("session", None)))
+            return await real["find_one"](self, flt, projection, **kw)
+
+        def find(self, flt=None, projection=None, **kw):
+            spies.reads.append((self.name, "find", kw.pop("session", None)))
+            return real["find"](self, flt, projection, **kw)
+
+        TenantCollection.insert_one = insert_one
+        TenantCollection.update_one = update_one
+        TenantCollection.find_one = find_one
+        TenantCollection.find = find
+
+        self._saved["record_event"] = audit_trail.record_event
+
+        async def record_event(db, event, session=None):
+            spies.audits.append((event["action"], session))
+            return await self._saved["record_event"](db, event)
+        audit_trail.record_event = record_event
+
+    def remove(self):
+        from app.tenancy.data_access import TenantCollection
+        from app.files import audit_trail
+        for name in ("insert_one", "update_one", "find_one", "find"):
+            setattr(TenantCollection, name, self._saved[name])
+        audit_trail.record_event = self._saved["record_event"]
+
+    def __enter__(self):
+        self.install()
+        return self
+
+    def __exit__(self, *exc):
+        self.remove()
+        return False
+
+
+class TestPerItemTransaction:
+    """Everything an item persists is in ONE transaction, the claim gate first."""
+
+    def test_the_claim_gate_is_the_first_write_and_every_write_carries_the_session(self):
+        async def body():
+            w = await _world(files=1, relations_per_file=2)
+            await _inject(w, w["file_ids"][0], "remove")
+            runner = _SentinelTransactions()
+            mon = monitor(w, transactions=runner)
+            with _Spies() as spies:
+                out = await mon.run_once(principal())
+            assert out["counts"]["findings_opened"] == 1
+            inside = [row for row in spies.writes if row[2] is runner.session]
+            # 1. the FIRST write of the transaction is the claim row
+            assert inside[0] == (MONITOR_STATE_COLLECTION, "update_one", runner.session)
+            # 2. the finding, 3. its history, 4. the per-item checkpoint
+            collections = [row[0] for row in inside]
+            assert MONITOR_FINDINGS_COLLECTION in collections
+            assert MONITOR_RUNS_COLLECTION in collections
+            assert collections.index(MONITOR_STATE_COLLECTION) == 0
+            # 5. the lifecycle AuditEvent is in the SAME transaction
+            lifecycle = [a for a in spies.audits
+                         if a[0].startswith("file.integrity.finding")]
+            assert lifecycle and all(a[1] is runner.session for a in lifecycle)
+            # and the RUN-level events are deliberately NOT: they describe the
+            # pass, not an item, and must survive an item's abort
+            run_level = [a for a in spies.audits
+                         if a[0].startswith("file.integrity.monitor.")]
+            assert run_level and all(a[1] is None for a in run_level)
+            # the finding read that decides open-vs-observe is in the transaction too
+            finding_reads = [r for r in spies.reads
+                             if r[0] == MONITOR_FINDINGS_COLLECTION]
+            assert any(r[2] is runner.session for r in finding_reads)
+        run(body())
+
+    def test_the_item_checkpoint_and_run_item_result_are_in_the_transaction(self):
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            runner = _SentinelTransactions()
+            mon = monitor(w, transactions=runner)
+            with _Spies() as spies:
+                await mon.run_once(principal())
+            checkpoints = [row for row in spies.writes
+                           if row[0] == MONITOR_RUNS_COLLECTION and row[2] is runner.session]
+            assert checkpoints, "the per-item checkpoint must be inside the transaction"
+            row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            assert row["processed_location_ids"] == [location["id"]]
+            assert row["counts"]["checked"] == 1
+            assert row["cursor"]["last_id"] == location["id"]
+        run(body())
+
+    def test_no_provider_call_happens_inside_the_transaction(self):
+        """The owner decision forbids a provider/network await in the transaction."""
+        async def body():
+            w = await _world(files=2)
+            await _inject(w, w["file_ids"][0], "remove")
+            runner = _SequentialTransactions()
+            real = FileIntegrityService(w["reg"], w["svc"])
+            seen = []
+
+            class _Watched:
+                org_id = real.org_id
+                resolver = real.resolver
+
+                async def check(self, *a, **kw):
+                    seen.append(runner.inside)
+                    assert runner.inside is False, \
+                        "a provider check must never run inside the transaction"
+                    return await real.check(*a, **kw)
+            mon = monitor(w, integrity=_Watched(), transactions=runner)
+            out = await mon.run_once(principal())
+            assert out["counts"]["checked"] == 2
+            assert seen == [False, False]
+            assert runner.calls == 2
+        run(body())
+
+    def test_an_aborted_item_does_not_advance_the_walk_or_the_counters(self):
+        """A failed transaction must leave the cursor and the counts where they were."""
+        async def body():
+            w = await _world(files=2)
+            await _inject(w, w["file_ids"][0], "remove")
+            boom = RuntimeError("the transaction failed")
+            runner = _SentinelTransactions(fail_times=1, fail_with=boom)
+            mon = monitor(w, transactions=runner)
+            with pytest.raises(RuntimeError):
+                await mon.run_once(principal())
+            # the item was never committed: nothing of it is in the run document
+            row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            assert row["counts"]["checked"] == 0
+            assert row["processed_location_ids"] == []
+            assert row["cursor"]["last_id"] is None
+            assert row["status"] == "failed"
+            assert await _findings(w) == []
+        run(body())
+
+    def test_a_replayed_item_is_counted_exactly_once(self):
+        """The counters live in a per-attempt delta, so a replay cannot double."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            runner = _SequentialTransactions(fail_times=2,
+                                             fail_with=_transient(), max_attempts=8)
+            mon = monitor(w, transactions=runner)
+            out = await mon.run_once(principal())
+            assert runner.bodies == 3 and runner.retries == 2   # it really replayed
+            assert out["counts"]["checked"] == 1                # counted ONCE
+            assert out["counts"]["findings_opened"] == 1
+            found, = await _findings(w)
+            assert found["occurrences"] == 1
+            row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            assert row["counts"]["checked"] == 1
+            assert row["processed_location_ids"] == [
+                (await w["reg"].primary_location(w["file_ids"][0], 1))["id"]]
+        run(body())
+
+    def test_a_lost_claim_inside_the_transaction_raises_and_writes_nothing(self):
+        """The in-transaction gate, driven through the real `run_once` path."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            doomed = monitor(w, worker_id="w-A")
+            rescuer = monitor(w, worker_id="w-B")
+            taken = {}
+
+            async def take_over():
+                if taken:
+                    return
+                await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-A"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                taken["lease"] = await rescuer._claim()
+                assert taken["lease"] is not None
+
+            # the takeover lands after the read-only verification, i.e. the C03
+            # interleaving: only the in-transaction claim gate can stop it
+            doomed._verify_lease = _TakeoverAfterVerification(doomed,
+                                                              on_verified=take_over)
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            assert await _findings(w) == []
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": {"$regex": "^file.integrity.finding"}}) == 0
+            runs = await w["db"][MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(runs) == 1
+            assert runs[0]["counts"]["checked"] == 0
+            assert runs[0]["processed_location_ids"] == []
+        run(body())
+
+    def test_the_run_level_audit_survives_an_items_failure(self):
+        """A run that fails is still audited: the pass really did happen."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            runner = _SentinelTransactions(fail_times=1,
+                                           fail_with=RuntimeError("boom"))
+            mon = monitor(w, transactions=runner)
+            with pytest.raises(RuntimeError):
+                await mon.run_once(principal())
+            started = await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.started"})
+            finished = await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.monitor.finished"})
+            assert started == 1 and finished == 1
+            # the check itself happened and is audited; the FINDING is not
+            assert len(await _monitor_check_events(w)) == 1
+            assert await _findings(w) == []
+        run(body())
+
+
+# ═════════════════════════════ C04 — the C03 flakiness, made deterministic
+class TestDeterministicLifecycleHistory:
+    """The C03 focused runs were intermittently red. This is the exact cause.
+
+    `coordination/REVIEWS/W0-06C.md` (C03) recorded "four recorded occurrences
+    but only three transitions (open, observed, observed)". The transition's
+    idempotency key was built from its wall-clock `at` marker, so two honest
+    consecutive observations that landed inside the same microsecond produced
+    ONE key and the second was discarded as a replay. Whether that happens
+    depends on how fast the machine is, which is why the failures came and
+    went and why targeted reruns passed.
+
+    A FROZEN clock turns that race into a certainty, so the test is
+    deterministic in both directions: it fails every time on the old key and
+    passes every time on the occurrence-counted one. No sleeps, no retries, no
+    timing assumptions.
+    """
+
+    @staticmethod
+    def _frozen():
+        """A clock that does not move at all: every marker is identical."""
+        return lambda: FROZEN
+
+    def test_four_passes_under_a_frozen_clock_record_four_transitions(self):
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w, clock=self._frozen())
+            for _ in range(4):
+                out = await mon.run_once(principal())
+                assert out["status"] == "completed", out
+            found, = await _findings(w)
+            assert found["occurrences"] == 4
+            assert found["consecutive_observations"] == 4
+            # every marker IS the same instant, and the history is still complete
+            assert {t["at"] for t in found["transitions"]} == {_iso_frozen()}
+            assert [t["transition"] for t in found["transitions"]] == [
+                TRANSITION_OPENED] + [TRANSITION_OBSERVED] * 3
+            assert len(set(found["transition_keys"])) == 4
+            # and each one raised exactly one alarm event
+            observed = await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.finding.observed"})
+            opened = await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"})
+            assert opened == 1 and observed == 3
+        run(body())
+
+    def test_a_resolve_and_a_reopen_at_the_same_instant_are_both_recorded(self):
+        async def body():
+            w = await _world(files=1)
+            snapshot = _snapshot(w)
+            mon = monitor(w, clock=self._frozen())
+            await _inject(w, w["file_ids"][0], "remove")
+            await mon.run_once(principal())              # opened
+            _repair(w, snapshot)                         # the customer restores it
+            await mon.run_once(principal())              # resolved
+            await _inject(w, w["file_ids"][0], "remove")
+            await mon.run_once(principal())              # reopened
+            found, = await _findings(w)
+            assert [t["transition"] for t in found["transitions"]] == [
+                TRANSITION_OPENED, TRANSITION_RESOLVED, TRANSITION_REOPENED]
+            assert {t["at"] for t in found["transitions"]} == {_iso_frozen()}
+            assert len(set(found["transition_keys"])) == 3
+            assert found["state"] == FINDING_OPEN and found["reopened_at"]
+        run(body())
+
+    def test_two_findings_of_one_file_keep_separate_histories_at_one_instant(self):
+        """Two identities at the same marker must not share a transition key."""
+        async def body():
+            w = await _world(files=2)
+            await _inject(w, w["file_ids"][0], "remove")
+            await _inject(w, w["file_ids"][1], "mutate")
+            mon = monitor(w, clock=self._frozen())
+            for _ in range(3):
+                await mon.run_once(principal())
+            rows = sorted(await _findings(w), key=lambda r: r["finding_type"])
+            assert [r["finding_type"] for r in rows] == ["checksum_mismatch",
+                                                         "missing_original"]
+            for row in rows:
+                assert row["occurrences"] == 3
+                assert len(row["transitions"]) == 3
+                assert len(set(row["transition_keys"])) == 3
+            # across findings the keys are disjoint as well
+            assert not set(rows[0]["transition_keys"]) & set(rows[1]["transition_keys"])
+        run(body())
+
+
+def _iso_frozen():
+    return FROZEN.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")

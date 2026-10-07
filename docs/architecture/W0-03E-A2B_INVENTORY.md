@@ -187,7 +187,7 @@ app/routes/items.py:181 items.update_one in delete_item()
 app/routes/platform.py:242 users.find_one in bootstrap_create_platform_admin()
 app/routes/sales.py:316 items.find in sales_history()
 app/routes/sales.py:386 items.find_one in sale_details()
-app/tenancy/data_access.py:417 offers.find in resolve_review_token()
+app/tenancy/data_access.py:472 offers.find in resolve_review_token()
 app/tenancy/onboarding.py:81 users.find_one in onboard_tenant()
 app/tenancy/project_team.py:267 project_team.count_documents in ownerless_row_count()
 ```

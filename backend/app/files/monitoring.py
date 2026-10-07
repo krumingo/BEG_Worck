@@ -15,7 +15,14 @@ This module adds exactly the missing technical layer, and nothing else:
   skipping a file or duplicating its finding, alarm or audit effect;
 * an atomic per-tenant lease with a fence token, so two workers in two
   processes cannot run the same tenant at once and a worker that has lost its
-  lease can no longer commit;
+  lease can no longer commit — enforced by making the claim the FIRST write of
+  the same multi-document transaction that persists the item, so a worker whose
+  claim has moved leaves zero finding, transition, AuditEvent, checkpoint and
+  run-item result behind (see :class:`MongoTransactionRunner` and
+  :meth:`FileIntegrityMonitor._claim_gate`). A transaction-capable deployment —
+  a replica set or a mongos — is therefore a PREREQUISITE of this runner, which
+  :func:`monitor_readiness` checks and :meth:`FileIntegrityMonitor.run_once`
+  refuses to start without. There is no non-transactional fallback;
 * a finding HISTORY — ``open`` / ``observed`` / ``resolved`` / ``reopened`` —
   with one open finding per deterministic identity, so a daily check does not
   raise the same alarm thirty times;
@@ -61,7 +68,9 @@ FLOW-040, TENANCY_MODEL, and ``docs/architecture/W0-06C_INTEGRITY_MONITORING.md`
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import random
 import re
 import uuid
 from dataclasses import dataclass
@@ -91,6 +100,7 @@ from app.files.providers.base import (
 )
 from app.files.registry import FileNotFound
 from app.permissions import service as permission_service
+from app.tenancy.data_access import count_integer_key_health
 
 # --------------------------------------------------------------- collections
 #: The tenant's ONE monitor control row: the lease, its fence token and the
@@ -124,20 +134,457 @@ MONITOR_INDEXES = (
 )
 
 
+#: The index names whose ABSENCE voids a guarantee of this contract, so the
+#: runner refuses to start without them rather than discovering the gap later.
+REQUIRED_MONITOR_INDEXES = tuple(
+    options["name"] for _collection, _keys, options in MONITOR_INDEXES
+    if options.get("unique"))
+
+
 async def ensure_monitor_indexes(tenant) -> List[str]:
     """Create :data:`MONITOR_INDEXES` for one tenant. Idempotent.
 
     Index creation is a schema step, so it is NOT done implicitly on a
     monitoring pass: the canon gives migrations their own runner with a
-    per-tenant lock. This is the callable that an index bootstrap (and the test
-    harness) uses, and until it has run for a tenant the identity uniqueness is
-    not server-enforced for that tenant.
+    per-tenant lock, and an index build is not allowed inside a transaction at
+    all. This is the callable a tenant-scoped caller uses;
+    :func:`ensure_monitor_indexes_on` is the same step for a bootstrap that
+    holds the database handle instead of a tenant view. Until one of them has
+    run, the identity uniqueness is not server-enforced and
+    :func:`monitor_readiness` reports the runner as NOT ready.
+
+    Nothing here drops or rebuilds an index: an existing index of the same name
+    and definition is kept, and a CONFLICTING definition is left alone and
+    reported as a blocker for a human to resolve.
     """
     created: List[str] = []
     for collection, keys, options in MONITOR_INDEXES:
         created.append(await tenant.collection(collection)._raw.create_index(
             keys, **options))
     return created
+
+
+async def ensure_monitor_indexes_on(db) -> List[str]:
+    """:func:`ensure_monitor_indexes` for an application bootstrap.
+
+    The monitor collections are keyed by ``org_id`` inside the index itself, so
+    one index per collection serves every tenant in that database; a bootstrap
+    that holds the database handle does not need a tenant view to build it.
+    Idempotent, additive and non-destructive, exactly like the tenant form.
+    """
+    created: List[str] = []
+    for collection, keys, options in MONITOR_INDEXES:
+        created.append(await db[collection].create_index(keys, **options))
+    return created
+
+
+# =============================================== the deployment prerequisite
+#
+# Owner architecture decision for W0-06C/C04 (Issue #48): the guarantee "after
+# it loses its claim a stale worker leaves ZERO finding, transition, AuditEvent,
+# checkpoint or run-item result behind" is NOT weakened and is NOT replaced by a
+# lease-TTL probability argument. One document is atomic on every MongoDB, but
+# the claim row, the finding, the run document and the audit chain are FOUR
+# documents in THREE collections: making the later three conditional on the
+# first needs a multi-document transaction, and a multi-document transaction
+# needs a replica set or a transaction-capable mongos.
+#
+# So transaction support is a DEPLOYMENT PREREQUISITE of this runner, not a
+# capability it degrades without. On a standalone server the readiness report
+# below is FAILED, the runner refuses to start and a scheduler stays disabled.
+# There is no fallback path that writes findings outside a transaction: a
+# fallback is exactly the behaviour the decision rejects.
+
+TOPOLOGY_REPLICA_SET = "replica_set"
+TOPOLOGY_SHARDED = "sharded"
+TOPOLOGY_STANDALONE = "standalone"
+TOPOLOGY_UNKNOWN = "unknown"
+
+READINESS_READY = "READY"
+READINESS_FAILED = "FAILED"
+
+#: A scheduler is DISABLED, never "best effort", when a prerequisite is missing.
+SCHEDULER_ENABLED = "ENABLED"
+SCHEDULER_DISABLED = "DISABLED"
+
+BLOCKER_NO_TRANSACTIONS = "transactions_unavailable"
+BLOCKER_MISSING_INDEX = "required_index_missing"
+BLOCKER_INDEX_CONFLICT = "required_index_conflicting_definition"
+BLOCKER_CLAIM_PREREQUISITE = "claim_fence_prerequisite_broken"
+BLOCKER_UNREACHABLE = "deployment_unreachable"
+
+#: ``maxWireVersion`` of the first server release whose topology can run the
+#: transaction this runner needs: 7 is MongoDB 4.0 (replica set), 8 is 4.2
+#: (sharded). A lower wire version is reported as no transaction support.
+_MIN_WIRE_REPLICA_SET = 7
+_MIN_WIRE_SHARDED = 8
+
+
+class MonitorTransactionUnavailable(RuntimeError):
+    """This deployment cannot run a multi-document transaction.
+
+    Raised INSTEAD of writing anything. There is deliberately no non-
+    transactional path to fall back to.
+    """
+
+
+class MonitorNotReady(RuntimeError):
+    """A W0-06C prerequisite is missing, so the runner refuses to start."""
+
+
+def _error_code(exc: BaseException) -> Optional[int]:
+    code = getattr(exc, "code", None)
+    return int(code) if isinstance(code, int) else None
+
+
+def _has_label(exc: BaseException, label: str) -> bool:
+    checker = getattr(exc, "has_error_label", None)
+    if checker is None:
+        return False
+    try:
+        return bool(checker(label))
+    except Exception:                                                 # noqa: BLE001
+        return False
+
+
+#: Server/driver texts that mean "this deployment has no transactions". Matched
+#: case-insensitively and only together with the structural checks below, so an
+#: unrelated failure is never silently reclassified as a missing prerequisite.
+_NO_TRANSACTION_TEXTS = (
+    "transaction numbers are only allowed on a replica set member or mongos",
+    "does not support sessions",
+    "sessions are not supported",
+    "does not support transactions",
+    "transactions are not supported",
+    "mongomock does not support sessions",
+)
+
+
+def transactions_unsupported(exc: BaseException) -> bool:
+    """``True`` when ``exc`` says the DEPLOYMENT cannot do transactions.
+
+    Three independent signals, because three different layers report it:
+    a driver/double that has no sessions at all raises
+    :class:`NotImplementedError`; a standalone ``mongod`` answers the first
+    transactional command with ``IllegalOperation`` (code 20) and the
+    "replica set member or mongos" text; and a client configured against a
+    topology without session support raises a ``ConfigurationError``. A plain
+    text match alone is not enough, so the text list is checked against the
+    message of ANY exception only as the last of the three.
+    """
+    if isinstance(exc, NotImplementedError):
+        return True
+    if _error_code(exc) == 20 and "replica set member or mongos" in str(exc).lower():
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in _NO_TRANSACTION_TEXTS)
+
+
+class MongoTransactionRunner:
+    """Runs one bounded body inside a real MongoDB multi-document transaction.
+
+    The contract the caller gets:
+
+    * ``body(session)`` runs with every read and write carrying ``session``, so
+      the whole body commits together or leaves NOTHING behind;
+    * the body is called again from the start on a concurrency failure the
+      server itself marks retryable (``TransientTransactionError``, a write
+      conflict, or a unique-index collision with a transaction that committed
+      after this one's snapshot opened). A retry re-reads under a FRESH
+      snapshot, which is the only way the body can see the winner's row;
+    * a commit that returns an unknown result is re-committed rather than
+      re-run, because the transaction may already be durable;
+    * anything else — above all :class:`MonitorLeaseLost` — aborts the
+      transaction and propagates. An aborted transaction has no side effects,
+      which is the property the W0-06C contract asks for;
+    * when the deployment cannot do transactions at all, nothing is attempted
+      and :class:`MonitorTransactionUnavailable` is raised.
+
+    No provider or network call of the storage adapters may happen inside
+    ``body``: the integrity check runs BEFORE the transaction is started and
+    only its already-returned result is persisted here.
+    """
+
+    #: What this runner is, for the readiness report and the HANDOFF.
+    kind = "mongodb_multi_document_transaction"
+
+    def __init__(self, db, *, max_attempts: int = 8, commit_attempts: int = 3,
+                 sleep=None, backoff_base_seconds: float = 0.005,
+                 backoff_cap_seconds: float = 0.2):
+        self._db = db
+        self._client = db.client
+        self.max_attempts = max(1, int(max_attempts))
+        self.commit_attempts = max(1, int(commit_attempts))
+        self._sleep = sleep if sleep is not None else asyncio.sleep
+        self._backoff_base = float(backoff_base_seconds)
+        self._backoff_cap = float(backoff_cap_seconds)
+        self._capability: Optional[Dict[str, Any]] = None
+        #: Observability only: how many bodies were replayed, never a guarantee.
+        self.retries = 0
+
+    # ------------------------------------------------------------ capability
+    async def capability(self, *, refresh: bool = False) -> Dict[str, Any]:
+        """What this deployment can do. Probed once, then cached.
+
+        Fails CLOSED: an unreachable or unreadable deployment reports no
+        transaction support, so the runner refuses rather than guessing.
+        """
+        if self._capability is not None and not refresh:
+            return self._capability
+        report: Dict[str, Any] = {"runner": self.kind, "transactions": False,
+                                  "topology": TOPOLOGY_UNKNOWN, "server_version": None,
+                                  "max_wire_version": None, "error": None}
+        hello = None
+        for command in ("hello", "isMaster"):
+            try:
+                hello = await self._db.command(command)
+                break
+            except Exception as exc:                                  # noqa: BLE001
+                report["error"] = type(exc).__name__
+        if hello is None:
+            self._capability = report
+            return report
+        report["error"] = None
+        wire = hello.get("maxWireVersion")
+        report["max_wire_version"] = int(wire) if isinstance(wire, int) else None
+        if hello.get("msg") == "isdbgrid":
+            report["topology"] = TOPOLOGY_SHARDED
+            minimum = _MIN_WIRE_SHARDED
+        elif hello.get("setName"):
+            report["topology"] = TOPOLOGY_REPLICA_SET
+            minimum = _MIN_WIRE_REPLICA_SET
+        else:
+            report["topology"] = TOPOLOGY_STANDALONE
+            minimum = None
+        report["replica_set"] = hello.get("setName") or None
+        report["transactions"] = bool(
+            minimum is not None and report["max_wire_version"] is not None
+            and report["max_wire_version"] >= minimum)
+        self._capability = report
+        return report
+
+    # ------------------------------------------------------------------- run
+    async def run(self, body, *, what: str):
+        capability = await self.capability()
+        if not capability["transactions"]:
+            raise MonitorTransactionUnavailable(
+                "this deployment (%s) cannot run a multi-document transaction, so "
+                "W0-06C refuses to %s: a replica set or a transaction-capable mongos "
+                "is a prerequisite of the integrity monitor"
+                % (capability["topology"], what))
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                session_context = await self._client.start_session()
+            except Exception as exc:                                  # noqa: BLE001
+                if transactions_unsupported(exc):
+                    raise MonitorTransactionUnavailable(
+                        "this deployment has no sessions, so W0-06C refuses to %s"
+                        % what) from exc
+                raise
+            async with session_context as session:
+                try:
+                    session.start_transaction()
+                except Exception as exc:                              # noqa: BLE001
+                    if transactions_unsupported(exc):
+                        raise MonitorTransactionUnavailable(
+                            "this deployment refused to start a transaction, so W0-06C "
+                            "refuses to %s" % what) from exc
+                    raise
+                try:
+                    outcome = await body(session)
+                except BaseException as exc:
+                    await self._abort(session)
+                    if transactions_unsupported(exc):
+                        raise MonitorTransactionUnavailable(
+                            "this deployment cannot run the transaction W0-06C needs to "
+                            "%s" % what) from exc
+                    if self._replayable(exc) and attempt < self.max_attempts:
+                        self.retries += 1
+                        await self._backoff(attempt)
+                        continue
+                    raise
+                try:
+                    await self._commit(session)
+                except Exception as exc:                              # noqa: BLE001
+                    await self._abort(session)
+                    if transactions_unsupported(exc):
+                        raise MonitorTransactionUnavailable(
+                            "this deployment cannot commit the transaction W0-06C needs "
+                            "to %s" % what) from exc
+                    if self._replayable(exc) and attempt < self.max_attempts:
+                        self.retries += 1
+                        await self._backoff(attempt)
+                        continue
+                    raise
+                return outcome
+
+    async def _commit(self, session) -> None:
+        """Commit, re-committing only on an UNKNOWN result.
+
+        ``UnknownTransactionCommitResult`` means the commit may already be
+        durable, so the answer is to ask again — never to replay the body,
+        which could apply it twice.
+        """
+        for round_no in range(1, self.commit_attempts + 1):
+            try:
+                await session.commit_transaction()
+                return
+            except Exception as exc:                                  # noqa: BLE001
+                if _has_label(exc, "UnknownTransactionCommitResult") \
+                        and round_no < self.commit_attempts:
+                    await self._backoff(round_no)
+                    continue
+                raise
+
+    @staticmethod
+    async def _abort(session) -> None:
+        """Abort and swallow only the abort's own failure.
+
+        A transaction that cannot be aborted explicitly is aborted by the
+        server when the session ends, so the ORIGINAL error must not be
+        replaced by a secondary one from the abort.
+        """
+        try:
+            if getattr(session, "in_transaction", False):
+                await session.abort_transaction()
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    @staticmethod
+    def _replayable(exc: BaseException) -> bool:
+        """``True`` only for a concurrency failure a FRESH snapshot can resolve.
+
+        ``MonitorLeaseLost`` is deliberately not in this set: a worker that has
+        lost its claim must not try again, it must leave nothing behind.
+        """
+        if isinstance(exc, (MonitorLeaseLost, MonitorTransactionUnavailable)):
+            return False
+        if _has_label(exc, "TransientTransactionError"):
+            return True
+        if _error_code(exc) in (112, 11000):      # WriteConflict, DuplicateKey
+            return True
+        return _is_duplicate_key(exc)
+
+    async def _backoff(self, attempt: int) -> None:
+        wait = min(self._backoff_cap, self._backoff_base * (2 ** (attempt - 1)))
+        await self._sleep(random.uniform(0, wait))
+
+
+# ----------------------------------------------------------------- readiness
+async def monitor_index_report(db) -> Dict[str, Any]:
+    """Which required indexes this database really has, by definition not name.
+
+    A unique index that was re-created as NON-unique under the right name would
+    satisfy a name check and silently void "one open finding per deterministic
+    identity", so the keys and the ``unique`` flag are both compared.
+    """
+    present: List[str] = []
+    missing: List[str] = []
+    conflicting: List[str] = []
+    for collection, keys, options in MONITOR_INDEXES:
+        name = options["name"]
+        try:
+            info = await db[collection].index_information()
+        except Exception as exc:                                      # noqa: BLE001
+            return {"present": present, "missing": missing, "conflicting": conflicting,
+                    "error": type(exc).__name__}
+        found = info.get(name)
+        if found is None:
+            missing.append(name)
+            continue
+        same_keys = [(str(k), int(v)) for k, v in (found.get("key") or [])] \
+            == [(str(k), int(v)) for k, v in keys]
+        same_unique = bool(found.get("unique")) == bool(options.get("unique"))
+        (present if same_keys and same_unique else conflicting).append(name)
+    return {"present": present, "missing": missing, "conflicting": conflicting,
+            "error": None}
+
+
+async def monitor_claim_report(db) -> Dict[str, Any]:
+    """Whether the claim rows can still carry a fence token.
+
+    The whole exclusion rests on a monotonically increasing integer ``fence``
+    on the per-tenant claim row. A row whose fence is missing or is not an
+    integer cannot be compared, so the runner must not start against it. Only
+    the COUNT is reported: a claim ``_id`` carries a tenant id and this report
+    is read by an operator of the whole deployment.
+    """
+    try:
+        health = await count_integer_key_health(db, MONITOR_STATE_COLLECTION, "fence")
+    except Exception as exc:                                          # noqa: BLE001
+        return {"claim_rows": None, "broken_fence_rows": None, "error": type(exc).__name__}
+    return {"claim_rows": health["rows"], "broken_fence_rows": health["non_integer"],
+            "error": None}
+
+
+async def monitor_readiness(db, *, transactions=None) -> Dict[str, Any]:
+    """Is this deployment allowed to run the W0-06C monitor at all?
+
+    Three prerequisites, each of which the owner decision names: multi-document
+    transaction capability, the required UNIQUE indexes, and claim/fence rows a
+    fence comparison can still be made against. The answer is a report rather
+    than a boolean so a bootstrap can log exactly what is missing, and
+    ``scheduler`` is ``DISABLED`` for anything short of all three — there is no
+    partial activation.
+    """
+    runner = transactions if transactions is not None else MongoTransactionRunner(db)
+    capability = await runner.capability()
+    indexes = await monitor_index_report(db)
+    claims = await monitor_claim_report(db)
+    blockers: List[Dict[str, Any]] = []
+    if not capability.get("transactions"):
+        blockers.append({"blocker": BLOCKER_NO_TRANSACTIONS,
+                         "detail": "topology=%s" % capability.get("topology")})
+    if capability.get("error"):
+        blockers.append({"blocker": BLOCKER_UNREACHABLE,
+                         "detail": capability["error"]})
+    if indexes.get("error"):
+        blockers.append({"blocker": BLOCKER_UNREACHABLE, "detail": indexes["error"]})
+    for name in indexes.get("missing") or []:
+        if name in REQUIRED_MONITOR_INDEXES:
+            blockers.append({"blocker": BLOCKER_MISSING_INDEX, "detail": name})
+    for name in indexes.get("conflicting") or []:
+        if name in REQUIRED_MONITOR_INDEXES:
+            blockers.append({"blocker": BLOCKER_INDEX_CONFLICT, "detail": name})
+    if claims.get("error"):
+        blockers.append({"blocker": BLOCKER_UNREACHABLE, "detail": claims["error"]})
+    elif claims.get("broken_fence_rows"):
+        blockers.append({"blocker": BLOCKER_CLAIM_PREREQUISITE,
+                         "detail": "%d claim row(s) without an integer fence"
+                                   % claims["broken_fence_rows"]})
+    ready = not blockers
+    return {"status": READINESS_READY if ready else READINESS_FAILED,
+            "ready": ready,
+            "scheduler": SCHEDULER_ENABLED if ready else SCHEDULER_DISABLED,
+            "transactions": capability, "indexes": indexes, "claims": claims,
+            "required_indexes": list(REQUIRED_MONITOR_INDEXES),
+            "blockers": blockers, "checked_at": _iso(_now())}
+
+
+async def prepare_monitor_runtime(db, *, create_indexes: bool = True,
+                                  transactions=None) -> Dict[str, Any]:
+    """The application bootstrap step: build the indexes, then re-check.
+
+    Safe to call on every startup: the index build is idempotent and additive,
+    nothing is dropped, no data is migrated and NOTHING is activated. The
+    returned report is what a caller logs and what a future scheduler must
+    consult before it may run; a FAILED report leaves the scheduler disabled.
+    """
+    created: List[str] = []
+    index_error: Optional[str] = None
+    if create_indexes:
+        try:
+            created = await ensure_monitor_indexes_on(db)
+        except Exception as exc:                                      # noqa: BLE001
+            # A conflicting or unbuildable index is reported, never forced:
+            # monitor_readiness below turns it into an explicit blocker.
+            index_error = type(exc).__name__
+    report = await monitor_readiness(db, transactions=transactions)
+    report["indexes_created"] = created
+    report["index_build_error"] = index_error
+    return report
 
 # ------------------------------------------------------------ FLOW-002 actions
 #: Running the periodic check. A tenant-scoped service principal needs THIS
@@ -352,8 +799,32 @@ def finding_id_for(identity: str) -> str:
     return ID_PREFIX_FINDING + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
 
 
-def _transition_key(finding_id: str, transition: str, marker: str) -> str:
-    raw = "|".join((finding_id, transition, marker))
+def _transition_key(finding_id: str, transition: str, occurrence: int) -> str:
+    """The idempotency key of ONE lifecycle transition.
+
+    It is deliberately clock-free. C03's focused runs were intermittently red
+    because the key used the transition's wall-clock ``at`` marker: two honest
+    consecutive observations of the same finding that landed inside one
+    microsecond produced the SAME key, so the second was discarded as an
+    idempotent replay and the history was short by one entry (the C03 review
+    saw four occurrences with three transitions). Wall-clock resolution is not
+    a property this contract may depend on.
+
+    The finding's own ``occurrences`` counter is the honest identity instead:
+    it increases by exactly one per real observation, so
+
+    * two different observations always get two different keys, however fast
+      they follow one another — a monotonic counter cannot tie;
+    * a replay of the SAME observation gets the same key again, which is the
+      idempotency the contract asks for. Since C04 a replay can only happen
+      when the previous attempt's transaction did not commit, in which case the
+      counter was not incremented either, so the key really is the same;
+    * ``resolved`` cannot collide with the ``observed`` that preceded it, both
+      because the transition name is part of the key and because a finding is
+      resolved at most once per occurrence (only an OPEN finding is resolved,
+      and reopening it increments the counter).
+    """
+    raw = "|".join((finding_id, transition, str(int(occurrence))))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
@@ -513,6 +984,30 @@ class _Counts:
     def as_record(self) -> Dict[str, int]:
         return dict(self.__dict__)
 
+    def plus(self, delta: "_Counts") -> "_Counts":
+        """This counter PLUS ``delta``, as a new object. Neither is mutated.
+
+        A per-item transaction may be replayed, so the item's own increments
+        live in a throw-away ``delta`` created inside each attempt. The
+        checkpoint written INSIDE the transaction has to record the totals as
+        they will be once that attempt commits — this is that sum — while the
+        run's own counter is only advanced after the commit really happened
+        (:meth:`absorb`). Counting the item in the run's counter before the
+        commit would double-count a replayed attempt.
+        """
+        return _Counts(**{name: value + getattr(delta, name)
+                          for name, value in self.as_record().items()})
+
+    def absorb(self, delta: "_Counts") -> None:
+        """Add a COMMITTED item's increments into this counter, in place."""
+        for name, value in delta.as_record().items():
+            setattr(self, name, getattr(self, name) + value)
+
+
+#: What :meth:`FileIntegrityMonitor._consider` returns when the item committed
+#: its own checkpoint inside the transaction that wrote its finding, so the walk
+#: must not advance or checkpoint it a second time.
+_COMMITTED = object()
 
 #: The count names a stored run may restore. A run document written by an
 #: older build cannot inject an unknown field into the counter.
@@ -553,7 +1048,7 @@ class FileIntegrityMonitor:
 
     def __init__(self, registry, storage, *, integrity=None,
                  policy: Optional[MonitorPolicy] = None, worker_id: Optional[str] = None,
-                 clock=None, sleep=None):
+                 clock=None, sleep=None, transactions=None):
         if registry.org_id != storage.org_id:
             raise MonitorConfigurationRefused(
                 "registry and storage service belong to different tenants")
@@ -573,6 +1068,16 @@ class FileIntegrityMonitor:
         self.worker_id = worker_id or ("worker-" + uuid.uuid4().hex[:12])
         self._clock = clock or _now
         self._sleep = sleep
+        #: The one place a per-item transaction is opened. The default is the
+        #: real :class:`MongoTransactionRunner`, which REFUSES on a deployment
+        #: without transactions; there is no non-transactional path. A test
+        #: supplies its own runner, exactly as it supplies ``clock`` and
+        #: ``sleep``, and a runner that is not transactional proves ORDER and
+        #: LOGIC — never atomicity, which only a real replica set can show.
+        self._transactions = transactions if transactions is not None \
+            else MongoTransactionRunner(self._tenant.deployment_db())
+        #: The readiness report, cached after the first successful check.
+        self._runtime: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------- handles
     @property
@@ -595,6 +1100,33 @@ class FileIntegrityMonitor:
         """A deterministic per-tenant ``_id``: the one row two workers race on."""
         return "integrity_monitor:%d:%s" % (len(self.org_id), self.org_id)
 
+    async def readiness(self) -> Dict[str, Any]:
+        """This deployment's W0-06C prerequisite report. Read-only."""
+        return await monitor_readiness(self._tenant.deployment_db(),
+                                       transactions=self._transactions)
+
+    async def _require_runtime(self) -> Dict[str, Any]:
+        """Refuse to run at all unless the prerequisites are really there.
+
+        The C03 review's second finding: the unique finding index was built
+        only by a caller that chose to build it, so a deployment without it
+        lost "one open finding per deterministic identity" silently. It is
+        checked HERE, before the claim and before any provider contact, and the
+        answer is cached for this monitor object — a schema prerequisite does
+        not change under a running pass, and re-probing it per item would add a
+        round trip to every file.
+        """
+        if self._runtime is not None:
+            return self._runtime
+        report = await self.readiness()
+        if not report.get("ready"):
+            raise MonitorNotReady(
+                "the W0-06C integrity monitor cannot run on this deployment: %s"
+                % "; ".join("%s(%s)" % (b["blocker"], b.get("detail"))
+                            for b in report["blockers"]))
+        self._runtime = report
+        return report
+
     def now(self) -> datetime:
         return self._clock()
 
@@ -607,8 +1139,15 @@ class FileIntegrityMonitor:
                      idempotency_key: Optional[str] = None,
                      correlation_id: Optional[str] = None,
                      error_code: Optional[str] = None,
-                     actor_type: str = ACTOR_SYSTEM) -> Dict[str, Any]:
-        """One FLOW-040 envelope through the W0-06B entry point. Sanitized first."""
+                     actor_type: str = ACTOR_SYSTEM,
+                     session=None) -> Dict[str, Any]:
+        """One FLOW-040 envelope through the W0-06B entry point. Sanitized first.
+
+        ``session`` makes the append part of the caller's per-item transaction,
+        so a lifecycle AuditEvent exists exactly when the finding write it
+        describes does. Run-level events (started/finished) are written outside
+        any transaction, because they describe the pass and not one item.
+        """
         assert_no_secrets(structured_diff or {}, "structured_diff")
         return await audit_trail.record(
             self._tenant, action=action, actor_id=actor_id,
@@ -616,7 +1155,7 @@ class FileIntegrityMonitor:
             result=result, reason=reason, structured_diff=structured_diff,
             related_file_ids=related_file_ids, entity_version=entity_version,
             idempotency_key=idempotency_key, correlation_id=correlation_id,
-            error_code=error_code, actor_type=actor_type)
+            error_code=error_code, actor_type=actor_type, session=session)
 
     async def _authorize(self, principal, action: str, *, entity_id: str,
                          scope_type: Optional[str] = None, scope_id: Optional[str] = None):
@@ -703,20 +1242,21 @@ class FileIntegrityMonitor:
     async def _verify_lease(self, lease: _Lease, *, what: str) -> None:
         """Prove the claim is STILL ours, without extending it. Raises if not.
 
-        This is called immediately after every awaited provider call returns
-        and before any finding, history, alarm or AuditEvent write. The
-        provider call is the one place where a worker sits long enough for its
-        claim to expire, so it is where a taken-over worker has to learn it
-        lost — BEFORE it writes, not after. The fenced ``_checkpoint`` alone
-        could not give that: it runs after the finding and the audit event were
-        already appended, so a stale worker could still overwrite the newer
-        owner's evidence and raise an alarm the newer owner never saw.
+        Called immediately after every awaited provider call returns. Since C04
+        this is an EARLY EXIT, not the guarantee: the guarantee is
+        :meth:`_claim_gate`, the conditional claim write that opens the item's
+        transaction, and a read can never be that — the C02 and C03 reviews each
+        reproduced a takeover landing after a read like this one and before the
+        first separate write. What this read still buys is honest: a worker that
+        already knows it lost stops here instead of retrying a provider it has
+        no business talking to and then aborting a transaction anyway.
 
         An EXPIRED claim counts as lost even when nobody has taken over yet: at
         that moment any other worker is entitled to claim the tenant, so
         writing under it is exactly the hazard. A provider slower than
-        ``lease_ttl_seconds`` therefore ends the pass instead of risking a
-        double write; the run resumes from its checkpoint on the next pass.
+        ``lease_ttl_seconds`` therefore ends the pass instead of attempting a
+        write the claim gate would refuse; the run resumes from its checkpoint
+        on the next pass.
         """
         row = await self.state.find_one(
             {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence},
@@ -731,35 +1271,37 @@ class FileIntegrityMonitor:
                 "the monitor claim of %s (fence %d) expired during the provider call; "
                 "refusing to %s" % (lease.holder, lease.fence, what))
 
-    async def _commit_item(self, lease: _Lease, *, run_id: str,
-                           location: Mapping[str, Any],
-                           result: Mapping[str, Any]) -> None:
-        """Take the RIGHT to write this item's finding. The commit point.
+    async def _claim_gate(self, lease: _Lease, *, session, run_id: str,
+                          location: Mapping[str, Any],
+                          result: Mapping[str, Any]) -> None:
+        """The FIRST write of the per-item transaction: take the right to write.
 
-        This is the one operation that decides whether this worker may produce
-        a side effect, and it is a conditional WRITE, not a check:
+        Owner architecture decision for C04. The claim row is written — not
+        read — under the exact holder, the exact fence and a still-unexpired
+        lease, and the same update renews the lease. Three things follow:
 
-        * it targets the per-tenant claim row — the document a takeover
-          actually mutates (``_claim`` ``$inc``s the fence there, and touches
-          nothing else), so the server itself refuses a worker whose claim has
-          moved;
-        * its filter carries the holder AND the fence AND a live ``expires_at``,
-          so matching proves the claim was held, unexpired, at this instant;
-        * the same atomic update RENEWS the claim, so a worker that commits
-          here holds the tenant for another full ``lease_ttl_seconds``. A
-          takeover cannot then land before the finding write unless the process
-          stalls for a whole TTL between two adjacent database operations.
+        * **0 match means the claim moved.** A ``_claim`` by another worker
+          ``$inc``s the fence on this very row, so a stale worker's filter
+          matches nothing, :class:`MonitorLeaseLost` is raised and the
+          transaction is aborted. Nothing it would have written exists.
+        * **It is a WRITE, so a concurrent takeover collides with it.** Two
+          transactions that both touch this one document cannot both commit:
+          the loser gets a write conflict, and the runner either replays it
+          against a fresh snapshot — where it now sees the newer fence and
+          aborts — or gives up. Only one valid owner commits.
+        * **Everything else in this transaction is conditional on it.** The
+          finding insert/update, the lifecycle transition, the monitor
+          AuditEvent and the per-item checkpoint/run-item result are in the
+          same transaction, so they are durable exactly when this gate matched
+          and the commit succeeded, and absent in every other case.
 
-        ``_verify_lease`` cannot do this job: a read tells you what WAS true,
-        and the C02 review proved the gap — a takeover landing between that
-        read and the first ``insert_one`` persisted a stale finding, a stale
-        transition and a stale AuditEvent. Refusing here means nothing is
-        written at all, which is the property the contract asks for.
-
-        A single ``update_one`` is atomic on one document; MongoDB cannot make
-        a write to the findings collection conditional on this row without a
-        multi-document transaction, so the claim is proven on this row first
-        and the write follows under a freshly renewed claim.
+        This is what C03 could not do. There, the gate was its own atomic
+        update followed by separate writes: a takeover landing between the two
+        left a stale finding, transition and AuditEvent behind, which the C03
+        review reproduced on real MongoDB (1/1/1 instead of 0/0/0). A
+        single-document guarantee cannot make a write to ANOTHER collection
+        conditional, which is why a transaction is now a deployment
+        prerequisite instead of a probability argument about the lease TTL.
         """
         now = self.now()
         expires = _iso(now + timedelta(seconds=self.policy.lease_ttl_seconds))
@@ -771,12 +1313,55 @@ class FileIntegrityMonitor:
                                       "location_id": location.get("id"),
                                       "version_no": location.get("version_no"),
                                       "availability": result.get("availability"),
-                                      "at": _iso(now)}}})
+                                      "at": _iso(now)}}},
+            session=session)
         if getattr(applied, "matched_count", 0) != 1:
             raise MonitorLeaseLost(
                 "the monitor claim of %s (fence %d) is not live; refusing to write any "
                 "finding, history, alarm or audit event for location %s"
                 % (lease.holder, lease.fence, location.get("id")))
+
+    async def _persist_item(self, principal, run: Mapping[str, Any], lease: _Lease,
+                            counts: _Counts, cursor: _Cursor,
+                            location: Mapping[str, Any],
+                            result: Mapping[str, Any]) -> None:
+        """Persist EVERYTHING this item produces, in one transaction, or nothing.
+
+        The provider has already answered: :meth:`_check_one` made that call
+        before this method was entered and no provider or network await happens
+        below. What is left is only database work, and it is exactly the set the
+        owner decision names — the claim renew, the finding, its history, its
+        AuditEvent and the per-item checkpoint/run-item result.
+
+        Two details make a replay safe. The item's counters live in a ``delta``
+        created INSIDE each attempt, so a replayed attempt cannot count the item
+        twice; the run's own counter is advanced only after the commit returned.
+        And the cursor position this item moves to is computed BEFORE the
+        transaction and applied to the walk's cursor only after the commit, so a
+        failed attempt leaves the walk exactly where it was.
+        """
+        advanced = _Cursor(**cursor.as_record())
+        self._advance(advanced, location)
+
+        async def body(session):
+            delta = _Counts(checked=1, ok=1 if result["ok"] else 0)
+            # 1. the gate — the first write, and the condition for all the rest
+            await self._claim_gate(lease, session=session, run_id=run["id"],
+                                   location=location, result=result)
+            # 2. the finding, its history and its AuditEvents
+            await self._apply_result(principal, run, lease, delta, location, result,
+                                     session=session)
+            # 3. this item's checkpoint and run-item result
+            await self._checkpoint(run, lease, counts.plus(delta), advanced,
+                                   location["id"], session=session)
+            return delta
+
+        delta = await self._transactions.run(
+            body, what="commit the integrity check of location %s" % location.get("id"))
+        counts.absorb(delta)
+        cursor.phase = advanced.phase
+        cursor.last_id = advanced.last_id
+        cursor.last_verified_at = advanced.last_verified_at
 
     def _fenced(self, lease: _Lease, flt: Mapping[str, Any]) -> Dict[str, Any]:
         """``flt`` plus the fencing condition every finding write carries.
@@ -901,6 +1486,11 @@ class FileIntegrityMonitor:
         decides when a pass happens.
         """
         await self._authorize(principal, ACTION_MONITOR_RUN, entity_id=self.org_id)
+        # The deployment prerequisites, BEFORE the claim and before any provider
+        # is contacted: without a transaction-capable deployment and the unique
+        # finding index this runner cannot keep its own guarantees, so it
+        # refuses to start instead of running with them silently missing.
+        await self._require_runtime()
         lease = await self._claim()
         if lease is None:
             # Another worker holds this tenant. Nothing is checked, no provider
@@ -1021,13 +1611,21 @@ class FileIntegrityMonitor:
         return row
 
     async def _checkpoint(self, run: Mapping[str, Any], lease: _Lease, counts: _Counts,
-                          cursor: _Cursor, location_id: Optional[str]) -> None:
+                          cursor: _Cursor, location_id: Optional[str],
+                          session=None) -> None:
         """Commit the walk's position. FENCED: a stale worker cannot commit.
 
         The filter carries the holder and the fence token the worker started
         with. A newer owner has already rewritten both on the run document, so
         this update matches nothing and the stale worker stops instead of
         rewinding the new owner's cursor or double-counting its work.
+
+        For a CHECKED item this runs inside that item's transaction
+        (:meth:`_persist_item`), so the run-item result is durable exactly when
+        the finding and the AuditEvent are. For a SKIPPED item — not due, out of
+        scope, no longer readable, or a phase change with no item at all — there
+        is no finding, no transition and no AuditEvent to be atomic with, so the
+        checkpoint is this one fenced single-document update and nothing else.
         """
         update: Dict[str, Any] = {
             "$set": {"cursor": cursor.as_record(), "counts": counts.as_record(),
@@ -1035,7 +1633,8 @@ class FileIntegrityMonitor:
         if location_id is not None:
             update["$addToSet"] = {"processed_location_ids": location_id}
         result = await self.runs.update_one(
-            {"id": run["id"], "lease_holder": lease.holder, "fence": lease.fence}, update)
+            {"id": run["id"], "lease_holder": lease.holder, "fence": lease.fence}, update,
+            session=session)
         if getattr(result, "matched_count", 0) != 1:
             raise MonitorLeaseLost(
                 "run %s was taken over; this worker must not commit" % run["id"])
@@ -1089,10 +1688,15 @@ class FileIntegrityMonitor:
                     self._advance(cursor, location)
                     await self._checkpoint(run, lease, counts, cursor, None)
                     continue
-                outcome = await self._consider(principal, run, lease, counts, location,
-                                               processed)
+                outcome = await self._consider(principal, run, lease, counts, cursor,
+                                               location, processed)
                 if outcome is False:
                     return False
+                if outcome is _COMMITTED:
+                    # A checked item committed its own checkpoint inside the
+                    # transaction that wrote its finding, its history and its
+                    # AuditEvent, and advanced the cursor only after that commit.
+                    continue
                 self._advance(cursor, location)
                 await self._checkpoint(run, lease, counts, cursor, location["id"])
 
@@ -1106,8 +1710,14 @@ class FileIntegrityMonitor:
             cursor.last_id = location["id"]
 
     async def _consider(self, principal, run: Mapping[str, Any], lease: _Lease,
-                        counts: _Counts, location: Mapping[str, Any], processed: set):
-        """Skip or check one candidate. ``False`` = a bound stopped the walk."""
+                        counts: _Counts, cursor: _Cursor, location: Mapping[str, Any],
+                        processed: set):
+        """Skip or check one candidate.
+
+        ``False`` = a bound stopped the walk; :data:`_COMMITTED` = the item
+        committed its own checkpoint inside its transaction; ``True`` = a skip
+        whose cursor the caller still has to advance and checkpoint.
+        """
         counts.scanned += 1
         processed.add(location["id"])
         due_before = self._due_before()
@@ -1122,17 +1732,23 @@ class FileIntegrityMonitor:
             counts.scanned -= 1
             return False
         lease = await self._renew(lease)
-        await self._check_one(principal, run, lease, counts, location)
-        return True
+        return await self._check_one(principal, run, lease, counts, cursor, location)
 
     # ------------------------------------------------------------ one item
     async def _check_one(self, principal, run: Mapping[str, Any], lease: _Lease,
-                         counts: _Counts, location: Mapping[str, Any]) -> Dict[str, Any]:
+                         counts: _Counts, cursor: _Cursor,
+                         location: Mapping[str, Any]):
         """One original, through the W0-06B check, with bounded retry.
 
         Only a provider OUTAGE is retried. A missing, changed or forbidden
         object is a determinate answer: retrying it could only produce the same
         answer or hide a real problem behind an accidental success.
+
+        Every provider call below happens OUTSIDE any transaction — the owner
+        decision requires it, and a transaction held open across a network call
+        to a customer's storage would be held for as long as that provider is
+        slow. Only the already-returned result is then persisted, in one
+        transaction, by :meth:`_persist_item`.
         """
         result = None
         for attempt in range(1, self.policy.max_attempts + 1):
@@ -1161,9 +1777,11 @@ class FileIntegrityMonitor:
                     version_no=location.get("version_no"), role=location["role"])
             except FileNotFound:
                 # The registry changed under the walk (a version or location is
-                # gone). Not a provider problem and not a finding.
+                # gone). Not a provider problem and not a finding, so there is
+                # nothing for a transaction to make atomic: the caller advances
+                # the cursor and checkpoints it like any other skip.
                 counts.skipped_unreadable += 1
-                return {"status": "skipped_unreadable"}
+                return True
             # The awaited call above is the long one. Before this result is
             # allowed to become a finding, an alarm, a history entry or an
             # AuditEvent — and before another attempt hits the provider — the
@@ -1171,27 +1789,26 @@ class FileIntegrityMonitor:
             await self._verify_lease(lease, what="record an integrity check")
             if result["availability"] not in RETRYABLE_AVAILABILITY:
                 break
-        counts.checked += 1
         if result is None:                                            # pragma: no cover
             counts.skipped_unreadable += 1
-            return {"status": "skipped_unreadable"}
-        if result["ok"]:
-            counts.ok += 1
-        await self._apply_result(principal, run, lease, counts, location, result)
-        return result
+            return True
+        # ``checked`` and ``ok`` are counted INSIDE the item's transaction, so a
+        # replayed attempt cannot count the same item twice and a transaction
+        # that never commits does not count it at all.
+        await self._persist_item(principal, run, lease, counts, cursor, location, result)
+        return _COMMITTED
 
     # --------------------------------------------------- finding lifecycle
     async def _apply_result(self, principal, run: Mapping[str, Any], lease: _Lease,
                             counts: _Counts, location: Mapping[str, Any],
-                            result: Mapping[str, Any]) -> None:
+                            result: Mapping[str, Any], *, session) -> None:
         """Turn one W0-06B result into finding history. Never a new check.
 
-        Nothing below writes until :meth:`_commit_item` has atomically proven
-        this worker still holds a live claim. That call is the gate for the
-        whole method — the finding, its history, its alarm level and its
-        AuditEvents all sit behind it.
+        Called only from inside the item's transaction, AFTER
+        :meth:`_claim_gate` has conditionally written the claim row in that same
+        transaction. Everything below is therefore conditional on the claim: it
+        is durable when the transaction commits and does not exist otherwise.
         """
-        await self._commit_item(lease, run_id=run["id"], location=location, result=result)
         severity = result.get("severity") or m.severity_of(
             result["availability"], len(result.get("affected_records") or []))
         finding_type = result.get("finding_type")
@@ -1201,12 +1818,12 @@ class FileIntegrityMonitor:
                 % finding_type)
         if finding_type is not None:
             await self._observe(principal, run, lease, counts, location, result,
-                                finding_type, severity)
+                                finding_type, severity, session=session)
         # Whether or not THIS check found a problem, every other open finding of
         # this location is re-judged against its own type-specific proof. A
         # result that cannot prove a type fixed leaves that finding open.
         await self._try_resolve(principal, run, lease, counts, location, result,
-                                skip_type=finding_type)
+                                skip_type=finding_type, session=session)
 
     def _identity_of(self, location: Mapping[str, Any], result: Mapping[str, Any],
                      finding_type: str) -> Tuple[str, str]:
@@ -1239,14 +1856,24 @@ class FileIntegrityMonitor:
     async def _observe(self, principal, run: Mapping[str, Any], lease: _Lease,
                        counts: _Counts, location: Mapping[str, Any],
                        result: Mapping[str, Any], finding_type: str,
-                       severity: str) -> Dict[str, Any]:
-        """Open, re-observe or reopen the ONE finding of this identity."""
+                       severity: str, *, session) -> Dict[str, Any]:
+        """Open, re-observe or reopen the ONE finding of this identity.
+
+        Inside the item's transaction, so the read below and the write that
+        follows it see one snapshot: a finding another transaction commits in
+        between cannot slip past the read. If it commits before this
+        transaction's snapshot opened, the read sees it and takes the fenced
+        update path; if it commits after, the unique index refuses the insert
+        and the runner replays the whole transaction against a fresh snapshot,
+        where the read does see it.
+        """
         identity, finding_id = self._identity_of(location, result, finding_type)
         now = _iso(self.now())
         affected = list(result.get("affected_records") or [])
         groups = result.get("affected_by_group") or AffectedRecordResolver.grouped(affected)
         evidence = self._evidence(result)
-        existing = await self.findings.find_one({"id": finding_id}, {"_id": 0})
+        existing = await self.findings.find_one({"id": finding_id}, {"_id": 0},
+                                                session=session)
         shared = {
             "identity": identity, "schema": FINDING_SCHEMA,
             "file_id": result["file_id"], "version_no": result["version_no"],
@@ -1276,27 +1903,28 @@ class FileIntegrityMonitor:
                        # the fence of the run that wrote this finding last
                        fence=lease.fence)
             assert_no_secrets(row, "finding")
-            try:
-                await self.findings.insert_one(dict(row))
-            except Exception as exc:                                  # noqa: BLE001
-                if not _is_duplicate_key(exc):
-                    raise
-                # Another worker created this exact identity first and the
-                # unique index refused the second row. There is one finding per
-                # identity, as the contract requires; carry on down the fenced
-                # UPDATE path, which refuses us outright if that worker's fence
-                # is newer than ours.
-                existing = await self.findings.find_one({"id": finding_id}, {"_id": 0})
-                if existing is None:                      # pragma: no cover - defensive
-                    raise
-            else:
-                counts.findings_opened += 1
-                await self._transition(principal, run, lease, finding_id,
-                                       TRANSITION_OPENED, result, marker=now,
-                                       severity=severity, finding_type=finding_type)
-                return row
+            # One finding per deterministic identity is enforced by the SERVER
+            # (``uniq_integrity_finding_identity``), whose presence
+            # :meth:`_require_runtime` refuses to run without. A duplicate key
+            # here means another transaction committed this identity after this
+            # one's snapshot opened; inside a transaction that write error has
+            # already aborted the transaction, so it must NOT be handled by
+            # switching to the update path in the same session. It is raised,
+            # the runner replays the whole transaction, and the replay's read
+            # finds the winner's row and updates it under the fence.
+            await self.findings.insert_one(dict(row), session=session)
+            counts.findings_opened += 1
+            await self._transition(principal, run, lease, finding_id,
+                                   TRANSITION_OPENED, result, marker=now,
+                                   occurrence=1, severity=severity,
+                                   finding_type=finding_type, session=session)
+            return row
         reopened = existing.get("state") == FINDING_RESOLVED
         consecutive = 1 if reopened else int(existing.get("consecutive_observations") or 0) + 1
+        #: What ``occurrences`` becomes when the ``$inc`` below applies. It is the
+        #: transition's idempotency key, so it is read from the SAME transactional
+        #: snapshot as the row itself.
+        occurrence_no = int(existing.get("occurrences") or 0) + 1
         update: Dict[str, Any] = dict(
             shared, state=FINDING_OPEN, consecutive_observations=consecutive,
             outage_persistence=self._outage_persistence(finding_type, consecutive),
@@ -1307,7 +1935,7 @@ class FileIntegrityMonitor:
         assert_no_secrets(update, "finding")
         applied = await self.findings.update_one(
             self._fenced(lease, {"id": finding_id}),
-            {"$set": update, "$inc": {"occurrences": 1}})
+            {"$set": update, "$inc": {"occurrences": 1}}, session=session)
         self._fence_rejected(applied, lease, "re-observe this finding")
         if reopened:
             counts.findings_reopened += 1
@@ -1316,8 +1944,10 @@ class FileIntegrityMonitor:
         await self._transition(
             principal, run, lease, finding_id,
             TRANSITION_REOPENED if reopened else TRANSITION_OBSERVED, result,
-            marker=now, severity=severity, finding_type=finding_type)
-        return await self.findings.find_one({"id": finding_id}, {"_id": 0})
+            marker=now, occurrence=occurrence_no, severity=severity,
+            finding_type=finding_type, session=session)
+        return await self.findings.find_one({"id": finding_id}, {"_id": 0},
+                                            session=session)
 
     def _outage_persistence(self, finding_type: str, consecutive: int) -> Optional[str]:
         """Transient or persistent — only for an OUTAGE, and only with a policy.
@@ -1336,15 +1966,18 @@ class FileIntegrityMonitor:
 
     async def _transition(self, principal, run: Mapping[str, Any], lease: _Lease,
                           finding_id: str, transition: str, result: Mapping[str, Any], *,
-                          marker: str, severity: Optional[str], finding_type: str,
-                          reason: Optional[str] = None) -> bool:
+                          marker: str, occurrence: int, severity: Optional[str],
+                          finding_type: str, reason: Optional[str] = None,
+                          session=None) -> bool:
         """Append ONE lifecycle transition, idempotently, and audit it.
 
         The append is conditional on the transition's key being absent, so the
         same observation replayed by a resumed run cannot grow the history or
-        raise the alarm twice.
+        raise the alarm twice. ``marker`` is only the human-readable ``at``
+        timestamp; the KEY is :func:`_transition_key`, which counts occurrences
+        instead of reading a clock.
         """
-        key = _transition_key(finding_id, transition, marker)
+        key = _transition_key(finding_id, transition, occurrence)
         entry = {"transition": transition, "at": marker, "run_id": run["id"],
                  "event_key": key, "availability": result.get("availability"),
                  "severity": severity, "alarm_level": alarm_level(severity),
@@ -1352,7 +1985,8 @@ class FileIntegrityMonitor:
         assert_no_secrets(entry, "transition")
         applied = await self.findings.update_one(
             self._fenced(lease, {"id": finding_id, "transition_keys": {"$ne": key}}),
-            {"$push": {"transitions": entry}, "$addToSet": {"transition_keys": key}})
+            {"$push": {"transitions": entry}, "$addToSet": {"transition_keys": key}},
+            session=session)
         if getattr(applied, "matched_count", 0) != 1:
             # Either this exact transition is already recorded (idempotent
             # replay) or a newer owner has moved the finding past this fence.
@@ -1376,17 +2010,18 @@ class FileIntegrityMonitor:
                              "provider_binding_id": result.get("provider_binding_id"),
                              "affected_record_count": len(result.get("affected_records") or []),
                              "affected_by_group": result.get("affected_by_group"),
-                             "evidence": self._evidence(result)})
+                             "evidence": self._evidence(result)},
+            session=session)
         return True
 
     async def _try_resolve(self, principal, run: Mapping[str, Any], lease: _Lease,
                            counts: _Counts, location: Mapping[str, Any],
                            result: Mapping[str, Any], *,
-                           skip_type: Optional[str]) -> None:
+                           skip_type: Optional[str], session) -> None:
         """Close the open findings of this location that this result PROVES fixed."""
         rows = await self.findings.find(
             {"location_id": result["location_id"], "version_no": result["version_no"],
-             "state": FINDING_OPEN}, {"_id": 0}).to_list(None)
+             "state": FINDING_OPEN}, {"_id": 0}, session=session).to_list(None)
         now = _iso(self.now())
         for row in sorted(rows, key=m.sort_key):
             finding_type = row.get("finding_type")
@@ -1401,7 +2036,7 @@ class FileIntegrityMonitor:
                 blocked = await self.findings.update_one(
                     self._fenced(lease, {"id": row["id"]}),
                     {"$set": {"resolution_blocked_reason": reason, "updated_at": now,
-                              "fence": lease.fence}})
+                              "fence": lease.fence}}, session=session)
                 self._fence_rejected(blocked, lease, "record a blocked resolution")
                 continue
             closed = await self.findings.update_one(
@@ -1412,12 +2047,16 @@ class FileIntegrityMonitor:
                           "resolution": {"reason": reason, "run_id": run["id"],
                                          "availability": result.get("availability"),
                                          "method": result.get("method"), "at": now,
-                                         "evidence": self._evidence(result)}}})
+                                         "evidence": self._evidence(result)}}},
+                session=session)
             self._fence_rejected(closed, lease, "resolve this finding")
             counts.findings_resolved += 1
             await self._transition(principal, run, lease, row["id"], TRANSITION_RESOLVED,
-                                   result, marker=now, severity=row.get("severity"),
-                                   finding_type=finding_type, reason=reason)
+                                   result, marker=now,
+                                   occurrence=int(row.get("occurrences") or 1),
+                                   severity=row.get("severity"),
+                                   finding_type=finding_type, reason=reason,
+                                   session=session)
 
     # ------------------------------------------------- affected-record refresh
     async def refresh_affected_records(self, ctx, *, file_id: Optional[str] = None

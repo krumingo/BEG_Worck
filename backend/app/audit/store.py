@@ -131,13 +131,16 @@ def _is_duplicate_key(exc: BaseException) -> bool:
     return type(exc).__name__ == "DuplicateKeyError" or getattr(exc, "code", None) == 11000
 
 
-async def _last_event(db, tenant_id: str) -> Optional[Dict[str, Any]]:
+async def _last_event(db, tenant_id: str, **kw) -> Optional[Dict[str, Any]]:
+    """The tenant's current chain head. ``kw`` carries a ``session`` when the
+    append runs inside the caller's transaction, and is EMPTY otherwise, so the
+    ordinary path is the exact call it has always been."""
     return await db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)]
+        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)], **kw
     )
 
 
-async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
+async def record_event(db, event: Dict[str, Any], session=None) -> Dict[str, Any]:
     """
     Append one validated event to the tenant's audit chain.
 
@@ -151,17 +154,33 @@ async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
     onto that. The chain therefore never forks and never has a gap, and the
     append-only rule holds: no event is ever rewritten or removed to resolve a
     race. Tenants never contend with each other — their slots differ.
+
+    Inside a transaction (W0-06C). ``session`` makes the append part of the
+    caller's multi-document transaction, so the event either lands with the
+    business write it describes or does not exist at all. The loop above is
+    then WRONG and is not used: a write error inside a transaction has already
+    aborted it on the server, so retrying the insert in the same session could
+    only fail again. The lost slot is raised instead, and the caller's
+    transaction runner replays the whole transaction against a fresh snapshot
+    — on which :func:`_last_event` sees the winner's event and this append
+    chains onto it. A session that is not in a transaction behaves like the
+    normal path, retries included, because nothing has been aborted.
     """
     validate_event(event)
-    for attempt in range(MAX_APPEND_ATTEMPTS):
-        previous = await _last_event(db, event["tenant_id"])
+    in_transaction = bool(session is not None and getattr(session, "in_transaction", False))
+    attempts = 1 if in_transaction else MAX_APPEND_ATTEMPTS
+    # Without a session this is the empty mapping, so every existing caller and
+    # every existing test sees the identical call it has always made.
+    scoped = {"session": session} if session is not None else {}
+    for attempt in range(attempts):
+        previous = await _last_event(db, event["tenant_id"], **scoped)
         chained = chain_hashes(event, previous)
         doc = dict(chained)
         doc["_id"] = chain_slot_id(event["tenant_id"], chained["sequence"])
         try:
-            await db[AUDIT_COLLECTION].insert_one(doc)
+            await db[AUDIT_COLLECTION].insert_one(doc, **scoped)
         except Exception as exc:  # noqa: BLE001 — only a lost slot is retried
-            if not _is_duplicate_key(exc):
+            if not _is_duplicate_key(exc) or in_transaction:
                 raise
             # Lost the slot. Back off a little (jittered, bounded) so N writers
             # do not re-read the same head in lock-step, then chain again.

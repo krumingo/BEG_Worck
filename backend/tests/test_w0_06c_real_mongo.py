@@ -49,8 +49,21 @@ from app.files.monitoring import (
     MONITOR_RUNS_COLLECTION,
     MONITOR_STATE_COLLECTION,
     FileIntegrityMonitor,
+    MongoTransactionRunner,
     MonitorLeaseLost,
+    MonitorNotReady,
+    MonitorTransactionUnavailable,
+    READINESS_FAILED,
+    READINESS_READY,
+    SCHEDULER_DISABLED,
+    SCHEDULER_ENABLED,
+    TOPOLOGY_REPLICA_SET,
+    TOPOLOGY_STANDALONE,
+    BLOCKER_MISSING_INDEX,
+    BLOCKER_NO_TRANSACTIONS,
     ensure_monitor_indexes,
+    monitor_readiness,
+    prepare_monitor_runtime,
     _Lease,
     MonitorPolicy,
     _Counts,
@@ -694,7 +707,7 @@ class TestStaleWorkerSideEffectsOnRealMongo:
                 await stale._observe(principal(), run_row,
                                      _Lease(holder="w-old", fence=1, expires_at=""),
                                      _Counts(), location, result, "missing_original",
-                                     "critical")
+                                     "critical", session=None)
             after = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
             assert after["fence"] == before["fence"]
             assert after["occurrences"] == before["occurrences"]
@@ -828,7 +841,7 @@ class TestPostVerificationTakeoverOnRealMongo:
                 {"action": "file.integrity.finding.opened"}) == 1
         scratch(test)
 
-    def test_an_expired_claim_is_refused_by_the_commit_gate(self):
+    def test_an_expired_claim_is_refused_by_the_claim_gate(self):
         async def test(db, sysdb):
             w = await _build_world(db, sysdb, files=1)
             key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
@@ -839,9 +852,9 @@ class TestPostVerificationTakeoverOnRealMongo:
             location = await w["reg"].primary_location(w["file_ids"][0], 1)
             result = await FileIntegrityService(w["reg"], w["svc"]).check(
                 principal(), file_id=w["file_ids"][0], version_no=1)
-            # live claim: the commit lands and RENEWS it on the server
-            await mon._commit_item(lease, run_id=row["id"], location=location,
-                                   result=result)
+            # live claim: the gate lands and RENEWS it on the server
+            await mon._claim_gate(lease, session=None, run_id=row["id"],
+                                  location=location, result=result)
             state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
             assert state["last_commit"]["location_id"] == location["id"]
             assert state["last_commit"]["fence"] == lease.fence
@@ -850,8 +863,8 @@ class TestPostVerificationTakeoverOnRealMongo:
                 {"holder": "w-1"},
                 {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
             with pytest.raises(MonitorLeaseLost):
-                await mon._commit_item(lease, run_id=row["id"], location=location,
-                                       result=result)
+                await mon._claim_gate(lease, session=None, run_id=row["id"],
+                                      location=location, result=result)
             assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
         scratch(test)
 
@@ -932,3 +945,546 @@ class TestIdentityUniquenessOnRealMongo:
             assert len({r["id"] for r in rows}) == 2
             assert {r["occurrences"] for r in rows} == {3}
         scratch(test)
+
+
+# ═══════════════════ C04 — the per-item transaction on a real replica set
+#
+# This is where the owner architecture decision is actually PROVEN. Everything
+# below needs a transaction-capable deployment: a single-node replica set is
+# enough and is what the harness starts (fresh dbpath, bound to 127.0.0.1
+# only). On a standalone server these tests do not quietly pass — the readiness
+# gate refuses the runner, which `TestStandaloneIsRefused` asserts directly.
+
+TXN_ERROR_LABEL = "TransientTransactionError"
+
+
+async def _topology(db):
+    return await MongoTransactionRunner(db).capability()
+
+
+def _requires_transactions(capability):
+    if not capability.get("transactions"):
+        pytest.fail(
+            "W0-06C/C04 needs a transaction-capable deployment: this URL is a %s. "
+            "Start a disposable single-node replica set on 127.0.0.1 and point "
+            "W0_06C_REAL_MONGO_URL at it." % capability.get("topology"))
+
+
+class _GateObserver:
+    """Wraps the REAL `_claim_gate` and runs a hook once, INSIDE the transaction.
+
+    The hook fires after the gate's conditional claim write and before any
+    finding, transition, AuditEvent or checkpoint write — the exact instant the
+    C03 review's counterexample exploited.
+    """
+
+    def __init__(self, monitor, *, after_gate):
+        self._real = monitor._claim_gate
+        self._after = after_gate
+        self.calls = 0
+
+    async def __call__(self, lease, *, session, run_id, location, result):
+        await self._real(lease, session=session, run_id=run_id, location=location,
+                         result=result)
+        self.calls += 1
+        if self.calls == 1:
+            await self._after(session)
+
+
+def _bound(collection, *, millis=1500):
+    """Make one collection's claim write give up instead of waiting for a lock.
+
+    A non-transactional write against a document an open transaction has
+    written BLOCKS on the server. That is itself the guarantee being proven, so
+    the losing worker is given a server-side time limit: the server kills the
+    attempt and it therefore leaves nothing behind, instead of landing later
+    and making the assertion racy.
+    """
+    real = collection.find_one_and_update
+
+    async def bounded(flt, update, **kw):
+        kw.setdefault("maxTimeMS", millis)
+        return await real(flt, update, **kw)
+    collection.find_one_and_update = bounded
+    return collection
+
+
+class TestPerItemTransactionOnRealMongo:
+    """Only one valid owner commits; the loser leaves ZERO side effects."""
+
+    @staticmethod
+    async def _zero(db, *, runs_checked=0):
+        """Nothing a stale worker could have written is there."""
+        assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+        assert await db["audit_events"].count_documents(
+            {"action": {"$regex": "^file\\.integrity\\.finding"}}) == 0
+        runs = await db[MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+        for row in runs:
+            assert row["counts"]["checked"] == runs_checked, row["counts"]
+            assert row["processed_location_ids"] == []
+            assert row["cursor"]["last_id"] is None
+
+    def test_two_concurrent_per_item_transactions_let_exactly_one_commit(self):
+        """A checks the provider, then commits, while B holds a newer claim.
+
+        Both workers reach the per-item transaction with the SAME item: A with
+        the fence it started on, B with the fence its takeover minted. They run
+        at the same time, each in its own real transaction, so the server has to
+        serialise the one document they both write first — the claim row. The
+        invariant is the owner decision's, verbatim: only one valid owner
+        commits, and the losing worker leaves ZERO finding, transition,
+        AuditEvent, checkpoint and run-item result behind.
+        """
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            stale = monitor(w, worker_id="w-A")
+            current = monitor(w, worker_id="w-B")
+
+            # A claims and opens the run; the provider check happens here, i.e.
+            # OUTSIDE both transactions, exactly as the decision requires.
+            a_lease = await stale._claim()
+            run_row = await stale._open_run(principal(), a_lease, run_id=None)
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            result = await FileIntegrityService(w["reg"], w["svc"]).check(
+                principal(), file_id=w["file_ids"][0], version_no=1)
+
+            # B legitimately takes the tenant over: a strictly higher fence.
+            await db[MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-A"},
+                {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+            b_lease = await current._claim()
+            assert b_lease is not None and b_lease.fence > a_lease.fence
+            b_run = await current._open_run(principal(), b_lease, run_id=run_row["id"])
+
+            # and now BOTH commit the same item, at the same time.
+            outcomes = await asyncio.gather(
+                stale._persist_item(principal(), run_row, a_lease, _Counts(),
+                                    _Cursor(), location, result),
+                current._persist_item(principal(), b_run, b_lease, _Counts(),
+                                      _Cursor(), location, result),
+                return_exceptions=True)
+            losers = [o for o in outcomes if isinstance(o, BaseException)]
+            winners = [o for o in outcomes if not isinstance(o, BaseException)]
+            assert len(winners) == 1, outcomes
+            assert len(losers) == 1 and isinstance(losers[0], MonitorLeaseLost), losers
+            # exactly ONE of everything the item produces
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 1
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["occurrences"] == 1 and len(found["transitions"]) == 1
+            assert found["fence"] == b_lease.fence          # the VALID owner's
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 1
+            assert await db["audit_events"].count_documents(
+                {"action": {"$regex": "^file\\.integrity\\.finding"}}) == 1
+            row = await db[MONITOR_RUNS_COLLECTION].find_one({"id": run_row["id"]},
+                                                             {"_id": 0})
+            assert row["counts"]["checked"] == 1            # counted once
+            assert row["processed_location_ids"] == [location["id"]]
+            assert row["fence"] == b_lease.fence
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["last_commit"]["fence"] == b_lease.fence
+        scratch(test)
+
+    def test_a_stale_worker_racing_a_newer_owner_never_lands_a_partial_item(self):
+        """The same race on four different originals, asserting the invariant."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=4, relations=2)
+            for index, file_id in enumerate(w["file_ids"]):
+                key = (await w["reg"].primary_location(file_id, 1))["object_key"]
+                w["backend"].remove(key)
+                stale = monitor(w, worker_id="w-A%d" % index)
+                current = monitor(w, worker_id="w-B%d" % index)
+                a_lease = await stale._claim()
+                assert a_lease is not None
+                run_row = await stale._open_run(principal(), a_lease,
+                                                run_id=None)
+                location = await w["reg"].primary_location(file_id, 1)
+                result = await FileIntegrityService(w["reg"], w["svc"]).check(
+                    principal(), file_id=file_id, version_no=1)
+                await db[MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": a_lease.holder},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                b_lease = await current._claim()
+                assert b_lease is not None and b_lease.fence > a_lease.fence
+                b_run = await current._open_run(principal(), b_lease,
+                                                run_id=run_row["id"])
+                results = await asyncio.gather(
+                    stale._persist_item(principal(), run_row, a_lease, _Counts(),
+                                        _Cursor(), location, result),
+                    current._persist_item(principal(), b_run, b_lease, _Counts(),
+                                          _Cursor(), location, result),
+                    return_exceptions=True)
+                assert sum(1 for r in results
+                           if isinstance(r, MonitorLeaseLost)) == 1, results
+                assert sum(1 for r in results
+                           if not isinstance(r, BaseException)) == 1, results
+                rows = await db[MONITOR_FINDINGS_COLLECTION].find(
+                    {"file_id": file_id}, {"_id": 0}).to_list(None)
+                assert len(rows) == 1 and len(rows[0]["transitions"]) == 1
+                assert rows[0]["occurrences"] == 1
+                assert rows[0]["fence"] == b_lease.fence
+                assert await db["audit_events"].count_documents(
+                    {"action": {"$regex": "^file\\.integrity\\.finding"},
+                     "related_file_ids": file_id}) == 1
+                await current._abandon_claim(b_lease)
+            # four races, four findings, no duplicate and no partial item
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 4
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 4
+        scratch(test)
+
+    def test_a_higher_fence_taken_before_the_transaction_aborts_it_with_zero_writes(self):
+        """The owner decision's 0-match case, end to end on a real server."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            doomed = monitor(w, worker_id="w-A")
+            rescuer = monitor(w, worker_id="w-B")
+            taken = {}
+
+            async def take_over():
+                if taken:
+                    return
+                await db[MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-A"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                taken["lease"] = await rescuer._claim()
+                assert taken["lease"] is not None
+                assert taken["lease"].fence > 1
+
+            # B wins the claim after A's read-only verification and BEFORE A's
+            # transaction opens, which is the interleaving C03 could not close.
+            doomed._verify_lease = _TakeoverAfterVerification(doomed,
+                                                              on_verified=take_over)
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            await self._zero(db)
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["holder"] == "w-B"
+            assert "last_commit" not in state       # A's gate matched NOTHING
+            # the rightful owner finishes the same run afterwards
+            await rescuer._abandon_claim(taken["lease"])
+            out = await rescuer.run_once(principal())
+            assert out["counts"]["findings_opened"] == 1
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 1
+        scratch(test)
+
+    def test_a_lost_claim_inside_the_transaction_rolls_back_every_write(self):
+        """The decisive atomicity test: the gate passes, then the claim moves.
+
+        The finding, its transition and its AuditEvent are written INSIDE the
+        transaction and the claim is then invalidated before the commit, so the
+        commit must take the whole set with it — or nothing. C03's
+        counterexample left 1 finding / 1 transition / 1 AuditEvent here; the
+        required answer is 0 / 0 / 0.
+        """
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            doomed = monitor(w, worker_id="w-A")
+            real_apply = doomed._apply_result
+            seen = {}
+
+            async def apply_then_lose(principal_, run, lease, counts, location, result,
+                                      *, session):
+                # the finding, the transition and the AuditEvent are written
+                await real_apply(principal_, run, lease, counts, location, result,
+                                 session=session)
+                seen["inside"] = await db[MONITOR_FINDINGS_COLLECTION].count_documents(
+                    {}, session=session)
+                # ...and only now does this worker lose the tenant for good
+                raise MonitorLeaseLost("the claim moved while the item was being written")
+            doomed._apply_result = apply_then_lose
+
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            # inside the transaction the finding existed; after the abort it does not
+            assert seen["inside"] == 1
+            await self._zero(db)
+            # the check itself happened and is audited — that is the truth
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.checked", "actor_id": SERVICE_A}) == 1
+        scratch(test)
+
+    def test_a_write_conflict_is_replayed_and_commits_exactly_once(self):
+        """A write conflict on the claim row replays the body, not the result."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            mon = monitor(w, worker_id="w-1")
+            runner = mon._transactions
+            bodies = {"n": 0}
+            real_gate = mon._claim_gate
+
+            async def conflicting_gate(lease, *, session, run_id, location, result):
+                bodies["n"] += 1
+                await real_gate(lease, session=session, run_id=run_id,
+                                location=location, result=result)
+                if bodies["n"] == 1:
+                    # the server's own answer to two transactions on one
+                    # document (measured in
+                    # `test_two_concurrent_per_item_transactions_...`): the
+                    # loser is told to retry. The runner must replay the body
+                    # against a fresh snapshot and still commit exactly once.
+                    from pymongo.errors import OperationFailure
+                    raise OperationFailure("injected write conflict", code=112)
+            mon._claim_gate = conflicting_gate
+            out = await mon.run_once(principal())
+            assert bodies["n"] == 2                 # replayed exactly once
+            assert runner.retries >= 1
+            assert out["counts"]["checked"] == 1    # and counted exactly once
+            assert out["counts"]["findings_opened"] == 1
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 1
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["occurrences"] == 1 and len(found["transitions"]) == 1
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 1
+            row = await db[MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            assert row["counts"]["checked"] == 1
+        scratch(test)
+
+    def test_a_crash_mid_item_leaves_nothing_and_the_retry_completes_it(self):
+        """A process that dies inside the transaction commits nothing."""
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=2)
+            for file_id in w["file_ids"]:
+                key = (await w["reg"].primary_location(file_id, 1))["object_key"]
+                w["backend"].remove(key)
+            crashing = monitor(w, worker_id="w-crash")
+            real_apply = crashing._apply_result
+
+            async def crash(principal_, run, lease, counts, location, result, *, session):
+                await real_apply(principal_, run, lease, counts, location, result,
+                                 session=session)
+                raise KeyboardInterrupt("the process dies here")
+            crashing._apply_result = crash
+            with pytest.raises(KeyboardInterrupt):
+                await crashing.run_once(principal())
+            await self._zero(db)
+            # the claim is still held by the dead worker until it expires
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["holder"] == "w-crash"
+            await db[MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-crash"},
+                {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+            # the rescuer takes the run over and finishes it without a gap
+            rescuer = monitor(w, worker_id="w-rescue",
+                              policy=MonitorPolicy(max_attempts=1, batch_size=5,
+                                                   max_items_per_run=10,
+                                                   max_scanned_per_run=10))
+            out = await rescuer.run_once(principal())
+            assert out["status"] == "completed" and out["counts"]["checked"] == 2
+            assert out["counts"]["findings_opened"] == 2
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 2
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 2
+        scratch(test)
+
+    def test_the_whole_item_is_one_transaction_and_the_provider_call_is_outside_it(self):
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            mon = monitor(w)
+            real = FileIntegrityService(w["reg"], w["svc"])
+            state = {"in_transaction": False, "checks_inside": 0}
+            real_gate = mon._claim_gate
+
+            async def gate(lease, *, session, run_id, location, result):
+                state["in_transaction"] = session.in_transaction
+                await real_gate(lease, session=session, run_id=run_id,
+                                location=location, result=result)
+
+            class _Watched:
+                org_id = real.org_id
+                resolver = real.resolver
+
+                async def check(self, *a, **kw):
+                    if state["in_transaction"]:
+                        state["checks_inside"] += 1
+                    return await real.check(*a, **kw)
+            mon = monitor(w, integrity=_Watched())
+            real_gate = mon._claim_gate
+            mon._claim_gate = gate
+            out = await mon.run_once(principal())
+            assert out["counts"]["checked"] == 1
+            assert state["in_transaction"] is True     # the gate IS in a transaction
+            assert state["checks_inside"] == 0         # the provider call is not
+        scratch(test)
+
+
+class TestReadinessOnRealMongo:
+    def test_a_replica_set_is_ready_and_reports_its_topology(self):
+        async def test(db, sysdb):
+            capability = await _topology(db)
+            _requires_transactions(capability)
+            assert capability["topology"] == TOPOLOGY_REPLICA_SET
+            assert capability["replica_set"]
+            await _build_world(db, sysdb, files=0)
+            report = await monitor_readiness(db)
+            assert report["status"] == READINESS_READY
+            assert report["scheduler"] == SCHEDULER_ENABLED
+            assert report["blockers"] == []
+            assert report["claims"]["broken_fence_rows"] == 0
+        scratch(test)
+
+    def test_the_bootstrap_builds_the_required_indexes_on_the_server(self):
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            before = await monitor_readiness(db)
+            assert before["status"] == READINESS_FAILED
+            assert BLOCKER_MISSING_INDEX in [b["blocker"] for b in before["blockers"]]
+            report = await prepare_monitor_runtime(db)
+            assert report["status"] == READINESS_READY
+            assert "uniq_integrity_finding_identity" in report["indexes_created"]
+            info = await db[MONITOR_FINDINGS_COLLECTION].index_information()
+            assert info["uniq_integrity_finding_identity"]["unique"] is True
+            # and it is idempotent against the real server
+            again = await prepare_monitor_runtime(db)
+            assert again["status"] == READINESS_READY
+        scratch(test)
+
+    def test_the_runner_refuses_without_the_unique_index_on_a_real_server(self):
+        async def test(db, sysdb):
+            _requires_transactions(await _topology(db))
+            w = await _build_world(db, sysdb, files=1)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            await db[MONITOR_FINDINGS_COLLECTION].drop_index(
+                "uniq_integrity_finding_identity")
+            with pytest.raises(MonitorNotReady):
+                await monitor(w).run_once(principal())
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+            assert await db[MONITOR_RUNS_COLLECTION].count_documents({}) == 0
+            assert await db[MONITOR_STATE_COLLECTION].count_documents({}) == 0
+        scratch(test)
+
+
+# ════════════════ C04 — the NEGATIVE deployment gate: a standalone server
+#
+# The owner decision says a standalone deployment must report scheduler
+# readiness FAILED/DISABLED, with no unsafe fallback and no activation. That
+# cannot be shown on the replica set the tests above need, so it has its own
+# URL and its own disposable server:
+#
+#     W0_06C_STANDALONE_MONGO_URL=mongodb://127.0.0.1:27996 \
+#         pytest tests/test_w0_06c_real_mongo.py -k Standalone --noconftest
+#
+# Skipped — and reported as SKIPPED, never as passed — when that URL is absent.
+
+STANDALONE_URL = os.environ.get("W0_06C_STANDALONE_MONGO_URL", "")
+
+
+def _standalone_refusal():
+    if not STANDALONE_URL:
+        return ("W0_06C_STANDALONE_MONGO_URL is not set — no disposable local "
+                "standalone MongoDB given")
+    try:
+        from app.master_data import index_bootstrap as ib
+        from scripts.w0_03c_master_data_uniqueness import parse_mongo_url
+        scheme, hosts = parse_mongo_url(STANDALONE_URL)
+        ib.check_local(hosts=hosts, scheme=scheme)
+    except Exception as exc:                                          # noqa: BLE001
+        return "W0_06C_STANDALONE_MONGO_URL refused: %s" % exc
+    return ""
+
+
+def standalone_scratch(test):
+    """Run ``test(db)`` in a fresh database on the STANDALONE server; drop it."""
+    async def body():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        name = DB_PREFIX + "sa_" + uuid.uuid4().hex[:10]
+        client = AsyncIOMotorClient(STANDALONE_URL, serverSelectionTimeoutMS=5000)
+        try:
+            return await test(client[name])
+        finally:
+            await client.drop_database(name)
+            client.close()
+    _install_permissions()
+    return asyncio.run(body())
+
+
+@pytest.mark.skipif(bool(_standalone_refusal()), reason=_standalone_refusal() or "ok")
+class TestStandaloneIsRefused:
+    """A deployment without transactions is not "degraded"; it is refused."""
+
+    def test_a_standalone_server_reports_no_transaction_capability(self):
+        async def test(db):
+            capability = await MongoTransactionRunner(db).capability()
+            assert capability["topology"] == TOPOLOGY_STANDALONE
+            assert capability["transactions"] is False
+            assert capability["replica_set"] is None
+            assert capability["error"] is None            # it answered, it just cannot
+        standalone_scratch(test)
+
+    def test_readiness_is_failed_and_the_scheduler_is_disabled(self):
+        async def test(db):
+            report = await prepare_monitor_runtime(db)
+            assert report["status"] == READINESS_FAILED
+            assert report["ready"] is False
+            assert report["scheduler"] == SCHEDULER_DISABLED
+            assert BLOCKER_NO_TRANSACTIONS in [b["blocker"] for b in report["blockers"]]
+            # the indexes are still built — that part is always safe — so the
+            # ONLY thing standing between this server and the monitor is the
+            # topology, and it is reported, not worked around.
+            assert "uniq_integrity_finding_identity" in report["indexes_created"]
+        standalone_scratch(test)
+
+    def test_the_transaction_runner_refuses_instead_of_falling_back(self):
+        async def test(db):
+            runner = MongoTransactionRunner(db)
+            touched = []
+
+            async def work(_session):                   # pragma: no cover - never runs
+                touched.append(1)
+                await db["should_not_exist"].insert_one({"_id": 1})
+            with pytest.raises(MonitorTransactionUnavailable):
+                await runner.run(work, what="write a finding")
+            assert touched == []
+            assert await db["should_not_exist"].count_documents({}) == 0
+        standalone_scratch(test)
+
+    def test_a_real_transaction_really_is_rejected_by_this_server(self):
+        """Not an assumption about MongoDB: the server itself says no."""
+        async def test(db):
+            from motor.motor_asyncio import AsyncIOMotorClient  # noqa: F401
+            async with await db.client.start_session() as session:
+                session.start_transaction()
+                with pytest.raises(Exception) as refused:
+                    await db["probe"].insert_one({"_id": 1}, session=session)
+                    await session.commit_transaction()
+            text = str(refused.value).lower()
+            assert "replica set member or mongos" in text or "transaction" in text
+            from app.files.monitoring import transactions_unsupported
+            assert transactions_unsupported(refused.value) is True
+        standalone_scratch(test)
+
+    def test_the_monitor_refuses_to_run_on_a_standalone_deployment(self):
+        """End to end: no claim, no run, no provider contact, no finding."""
+        async def test(db):
+            from app.files.credentials import CredentialVault
+            from app.files.storage import StorageProviderService
+            tenant = TenantData(db, A)
+            svc = StorageProviderService(
+                tenant, db, vault=CredentialVault(tenant, master_key=b"0" * 32))
+            mon = FileIntegrityMonitor(FileRegistry(tenant), svc,
+                                       policy=MonitorPolicy(max_attempts=1))
+            with pytest.raises(MonitorNotReady) as refused:
+                await mon.run_once(principal())
+            assert BLOCKER_NO_TRANSACTIONS in str(refused.value)
+            assert await db[MONITOR_STATE_COLLECTION].count_documents({}) == 0
+            assert await db[MONITOR_RUNS_COLLECTION].count_documents({}) == 0
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+        standalone_scratch(test)
