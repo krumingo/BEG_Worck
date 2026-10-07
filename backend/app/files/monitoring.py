@@ -107,6 +107,38 @@ MONITOR_COLLECTIONS = frozenset({MONITOR_STATE_COLLECTION, MONITOR_RUNS_COLLECTI
 ID_PREFIX_RUN = "fir_"
 ID_PREFIX_FINDING = "fif_"
 
+#: The indexes this package needs, as ``(collection, keys, options)``.
+#:
+#: The unique one is the contract's "one open finding per deterministic
+#: identity", enforced by the SERVER rather than by a read-then-write in this
+#: module: two workers racing to create the same identity cannot both succeed,
+#: and a fence-filtered update that cannot match is rejected outright
+#: (``DuplicateKeyError``) instead of quietly inserting a second row.
+MONITOR_INDEXES = (
+    (MONITOR_FINDINGS_COLLECTION, [("org_id", 1), ("id", 1)],
+     {"unique": True, "name": "uniq_integrity_finding_identity"}),
+    (MONITOR_FINDINGS_COLLECTION, [("org_id", 1), ("state", 1), ("file_id", 1)],
+     {"name": "integrity_finding_state_file"}),
+    (MONITOR_RUNS_COLLECTION, [("org_id", 1), ("id", 1)],
+     {"unique": True, "name": "uniq_integrity_run"}),
+)
+
+
+async def ensure_monitor_indexes(tenant) -> List[str]:
+    """Create :data:`MONITOR_INDEXES` for one tenant. Idempotent.
+
+    Index creation is a schema step, so it is NOT done implicitly on a
+    monitoring pass: the canon gives migrations their own runner with a
+    per-tenant lock. This is the callable that an index bootstrap (and the test
+    harness) uses, and until it has run for a tenant the identity uniqueness is
+    not server-enforced for that tenant.
+    """
+    created: List[str] = []
+    for collection, keys, options in MONITOR_INDEXES:
+        created.append(await tenant.collection(collection)._raw.create_index(
+            keys, **options))
+    return created
+
 # ------------------------------------------------------------ FLOW-002 actions
 #: Running the periodic check. A tenant-scoped service principal needs THIS
 #: action in a live RoleAssignment of that tenant; nothing here creates one.
@@ -699,6 +731,53 @@ class FileIntegrityMonitor:
                 "the monitor claim of %s (fence %d) expired during the provider call; "
                 "refusing to %s" % (lease.holder, lease.fence, what))
 
+    async def _commit_item(self, lease: _Lease, *, run_id: str,
+                           location: Mapping[str, Any],
+                           result: Mapping[str, Any]) -> None:
+        """Take the RIGHT to write this item's finding. The commit point.
+
+        This is the one operation that decides whether this worker may produce
+        a side effect, and it is a conditional WRITE, not a check:
+
+        * it targets the per-tenant claim row — the document a takeover
+          actually mutates (``_claim`` ``$inc``s the fence there, and touches
+          nothing else), so the server itself refuses a worker whose claim has
+          moved;
+        * its filter carries the holder AND the fence AND a live ``expires_at``,
+          so matching proves the claim was held, unexpired, at this instant;
+        * the same atomic update RENEWS the claim, so a worker that commits
+          here holds the tenant for another full ``lease_ttl_seconds``. A
+          takeover cannot then land before the finding write unless the process
+          stalls for a whole TTL between two adjacent database operations.
+
+        ``_verify_lease`` cannot do this job: a read tells you what WAS true,
+        and the C02 review proved the gap — a takeover landing between that
+        read and the first ``insert_one`` persisted a stale finding, a stale
+        transition and a stale AuditEvent. Refusing here means nothing is
+        written at all, which is the property the contract asks for.
+
+        A single ``update_one`` is atomic on one document; MongoDB cannot make
+        a write to the findings collection conditional on this row without a
+        multi-document transaction, so the claim is proven on this row first
+        and the write follows under a freshly renewed claim.
+        """
+        now = self.now()
+        expires = _iso(now + timedelta(seconds=self.policy.lease_ttl_seconds))
+        applied = await self.state.update_one(
+            {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence,
+             "expires_at": {"$gt": _iso(now)}},
+            {"$set": {"expires_at": expires, "renewed_at": _iso(now),
+                      "last_commit": {"run_id": run_id, "fence": lease.fence,
+                                      "location_id": location.get("id"),
+                                      "version_no": location.get("version_no"),
+                                      "availability": result.get("availability"),
+                                      "at": _iso(now)}}})
+        if getattr(applied, "matched_count", 0) != 1:
+            raise MonitorLeaseLost(
+                "the monitor claim of %s (fence %d) is not live; refusing to write any "
+                "finding, history, alarm or audit event for location %s"
+                % (lease.holder, lease.fence, location.get("id")))
+
     def _fenced(self, lease: _Lease, flt: Mapping[str, Any]) -> Dict[str, Any]:
         """``flt`` plus the fencing condition every finding write carries.
 
@@ -1105,7 +1184,14 @@ class FileIntegrityMonitor:
     async def _apply_result(self, principal, run: Mapping[str, Any], lease: _Lease,
                             counts: _Counts, location: Mapping[str, Any],
                             result: Mapping[str, Any]) -> None:
-        """Turn one W0-06B result into finding history. Never a new check."""
+        """Turn one W0-06B result into finding history. Never a new check.
+
+        Nothing below writes until :meth:`_commit_item` has atomically proven
+        this worker still holds a live claim. That call is the gate for the
+        whole method — the finding, its history, its alarm level and its
+        AuditEvents all sit behind it.
+        """
+        await self._commit_item(lease, run_id=run["id"], location=location, result=result)
         severity = result.get("severity") or m.severity_of(
             result["availability"], len(result.get("affected_records") or []))
         finding_type = result.get("finding_type")
@@ -1190,12 +1276,25 @@ class FileIntegrityMonitor:
                        # the fence of the run that wrote this finding last
                        fence=lease.fence)
             assert_no_secrets(row, "finding")
-            await self.findings.insert_one(dict(row))
-            counts.findings_opened += 1
-            await self._transition(principal, run, lease, finding_id, TRANSITION_OPENED,
-                                   result, marker=now, severity=severity,
-                                   finding_type=finding_type)
-            return row
+            try:
+                await self.findings.insert_one(dict(row))
+            except Exception as exc:                                  # noqa: BLE001
+                if not _is_duplicate_key(exc):
+                    raise
+                # Another worker created this exact identity first and the
+                # unique index refused the second row. There is one finding per
+                # identity, as the contract requires; carry on down the fenced
+                # UPDATE path, which refuses us outright if that worker's fence
+                # is newer than ours.
+                existing = await self.findings.find_one({"id": finding_id}, {"_id": 0})
+                if existing is None:                      # pragma: no cover - defensive
+                    raise
+            else:
+                counts.findings_opened += 1
+                await self._transition(principal, run, lease, finding_id,
+                                       TRANSITION_OPENED, result, marker=now,
+                                       severity=severity, finding_type=finding_type)
+                return row
         reopened = existing.get("state") == FINDING_RESOLVED
         consecutive = 1 if reopened else int(existing.get("consecutive_observations") or 0) + 1
         update: Dict[str, Any] = dict(

@@ -52,6 +52,7 @@ from app.files.monitoring import (
     MONITOR_COLLECTIONS,
     MODULE_PROBE,
     MONITOR_FINDINGS_COLLECTION,
+    MONITOR_INDEXES,
     MONITOR_RUNS_COLLECTION,
     MONITOR_STATE_COLLECTION,
     OUTAGE_PERSISTENT,
@@ -71,6 +72,7 @@ from app.files.monitoring import (
     _Cursor,
     _Lease,
     alarm_level,
+    ensure_monitor_indexes,
     assert_no_secrets,
     finding_identity,
     resolution_proof,
@@ -2150,4 +2152,281 @@ class TestProjectionScope:
             # ...is still not disclosed to a project-scoped caller, because the
             # id belongs to `sites`, not to `projects`
             assert await monitor(w).list_findings(ctx(PM_P0, A), project_id="P-0") == []
+        run(body())
+
+
+# ═══════════════════════════ C03 — the post-verification takeover boundary
+class _TakeoverAfterVerification:
+    """Wraps the REAL `_verify_lease` and takes the tenant over right after it.
+
+    This is the C02 review's interleaving, and it is the one the C02 regression
+    missed: that test takes over *during* the provider call, i.e. BEFORE the
+    verification, so the read-only check still caught it. Here the read-only
+    check succeeds honestly and the claim moves immediately afterwards — so
+    only a conditional WRITE against the claim row can still stop the worker.
+    """
+
+    def __init__(self, monitor, *, on_verified):
+        self._real = monitor._verify_lease
+        self._on_verified = on_verified
+        self.calls = 0
+
+    async def __call__(self, lease, *, what):
+        await self._real(lease, what=what)
+        self.calls += 1
+        await self._on_verified()
+
+
+class TestPostVerificationTakeover:
+    """A takeover after the lease verification must still write NOTHING."""
+
+    @staticmethod
+    async def _staged(w, *, inject="remove"):
+        """Worker A mid-item, with B taking the tenant right after A verifies."""
+        await _inject(w, w["file_ids"][0], inject)
+        doomed = monitor(w, worker_id="w-A")
+        rescuer = monitor(w, worker_id="w-B")
+        taken = {}
+
+        async def take_over():
+            if taken:
+                return
+            await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-A"},
+                {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+            taken["lease"] = await rescuer._claim()
+            assert taken["lease"] is not None, "B could not claim"
+
+        doomed._verify_lease = _TakeoverAfterVerification(doomed, on_verified=take_over)
+        return doomed, rescuer, taken
+
+    def test_no_finding_history_alarm_or_audit_survives_the_takeover(self):
+        async def body():
+            w = await _world(files=1, relations_per_file=2)
+            doomed, rescuer, taken = await self._staged(w)
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+
+            # the read-only verification passed, and the write was still refused
+            assert doomed._verify_lease.calls == 1
+            assert await _findings(w) == []
+            for action in ("file.integrity.finding.opened",
+                           "file.integrity.finding.observed",
+                           "file.integrity.finding.resolved",
+                           "file.integrity.finding.reopened"):
+                assert await w["db"]["audit_events"].count_documents(
+                    {"action": action}) == 0, action
+            runs = await w["db"][MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(runs) == 1 and runs[0]["counts"]["checked"] == 0
+            assert runs[0]["processed_location_ids"] == []
+            assert runs[0]["status"] == "running"
+            # the check itself happened and is audited — that is the truth
+            assert len(await _monitor_check_events(w)) == 1
+            # and the rightful owner still finishes the work
+            await rescuer._abandon_claim(taken["lease"])
+            out = await rescuer.run_once(principal(), run_id=runs[0]["id"])
+            assert out["status"] == "completed"
+            assert out["counts"]["findings_opened"] == 1
+            found, = await _findings(w)
+            assert found["finding_type"] == "missing_original"
+            assert found["fence"] == out["fence"]
+        run(body())
+
+    @pytest.mark.parametrize("inject", ["remove", "mutate", "deny", "offline", "replace"])
+    def test_the_refusal_holds_for_every_finding_type(self, inject):
+        async def body():
+            w = await _world(files=1)
+            doomed, _, _ = await self._staged(w, inject=inject)
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            assert await _findings(w) == []
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": {"$regex": "^file.integrity.finding"}}) == 0
+        run(body())
+
+    def test_a_resolution_is_refused_after_the_takeover_too(self):
+        """Not only new findings: closing one is a write and is gated as well."""
+        async def body():
+            w = await _world(files=1)
+            snapshot = _snapshot(w)
+            await _inject(w, w["file_ids"][0], "remove")
+            await monitor(w).run_once(principal())
+            found, = await _findings(w)
+            assert found["state"] == FINDING_OPEN
+            _repair(w, snapshot)                 # the original is back
+
+            doomed = monitor(w, worker_id="w-A")
+            rescuer = monitor(w, worker_id="w-B")
+
+            async def take_over():
+                await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-A"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                assert await rescuer._claim() is not None
+            doomed._verify_lease = _TakeoverAfterVerification(doomed, on_verified=take_over)
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            # the finding is untouched: still open, no resolution, no new history
+            after, = await _findings(w)
+            assert after["state"] == FINDING_OPEN and after["resolution"] is None
+            assert after["transitions"] == found["transitions"]
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.finding.resolved"}) == 0
+        run(body())
+
+    def test_the_commit_gate_is_a_conditional_write_not_a_read(self):
+        """It must refuse on an EXPIRED claim even when nobody took over."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w, worker_id="w-1")
+            lease = await mon._claim()
+            run_row = await mon._open_run(principal(), lease, run_id=None)
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            result = await _result_for(w, w["file_ids"][0])
+            # a live claim commits, and the commit RENEWS it
+            before = await w["db"][MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            await mon._commit_item(lease, run_id=run_row["id"], location=location,
+                                   result=result)
+            after = await w["db"][MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert after["expires_at"] >= before["expires_at"]
+            assert after["last_commit"]["location_id"] == location["id"]
+            assert after["last_commit"]["fence"] == lease.fence
+            # The commit RENEWS for a full TTL, and that is what bounds what is
+            # left: a takeover can only land between this commit and the finding
+            # write if the process stalls a whole lease_ttl_seconds between two
+            # adjacent database operations.
+            from datetime import datetime, timedelta, timezone
+            renewed = datetime.strptime(after["expires_at"],
+                                        "%Y-%m-%dT%H:%M:%S.%f+00:00").replace(
+                                            tzinfo=timezone.utc)
+            ttl = timedelta(seconds=mon.policy.lease_ttl_seconds)
+            assert renewed - mon.now() > ttl * 0.9
+            assert after["renewed_at"]
+            # an expired claim is refused, with nobody else involved
+            await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-1"},
+                {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+            with pytest.raises(MonitorLeaseLost):
+                await mon._commit_item(lease, run_id=run_row["id"], location=location,
+                                       result=result)
+            # and so is a stale fence
+            await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-1"}, {"$set": {"fence": lease.fence + 5},
+                                    "$unset": {"released_at": ""}})
+            await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-1"}, {"$set": {"expires_at":
+                                             "2999-01-01T00:00:00.000000+00:00"}})
+            with pytest.raises(MonitorLeaseLost):
+                await mon._commit_item(lease, run_id=run_row["id"], location=location,
+                                       result=result)
+        run(body())
+
+    def test_the_gate_does_not_block_an_honest_worker(self):
+        async def body():
+            w = await _world(files=3)
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w)
+            for _ in range(3):
+                out = await mon.run_once(principal())
+                assert out["status"] == "completed", out
+            found, = await _findings(w)
+            assert found["occurrences"] == 3
+            state = await w["db"][MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["last_commit"]["run_id"] == out["run_id"]
+        run(body())
+
+
+# ═══════════════════════════ C03 — deterministic identity uniqueness
+class TestFindingIdentityUniqueness:
+    def test_the_index_contract_declares_a_unique_identity(self):
+        findings = [(c, k, o) for c, k, o in MONITOR_INDEXES
+                    if c == MONITOR_FINDINGS_COLLECTION and o.get("unique")]
+        assert findings == [(MONITOR_FINDINGS_COLLECTION, [("org_id", 1), ("id", 1)],
+                             {"unique": True,
+                              "name": "uniq_integrity_finding_identity"})]
+        # the run document is unique per id as well
+        assert any(c == MONITOR_RUNS_COLLECTION and o.get("unique")
+                   for c, k, o in MONITOR_INDEXES)
+
+    def test_ensure_monitor_indexes_is_idempotent_and_creates_them(self):
+        async def body():
+            w = await _world(files=0)
+            first = await ensure_monitor_indexes(w["reg"]._tenant)
+            second = await ensure_monitor_indexes(w["reg"]._tenant)
+            assert first == second
+            assert "uniq_integrity_finding_identity" in first
+        run(body())
+
+    def test_a_second_row_for_one_identity_is_refused_by_the_database(self):
+        async def body():
+            w = await _world(files=1)
+            await ensure_monitor_indexes(w["reg"]._tenant)
+            await _inject(w, w["file_ids"][0], "remove")
+            await monitor(w).run_once(principal())
+            found, = await _findings(w)
+            # a hand-rolled duplicate of the same identity cannot be stored
+            from pymongo.errors import DuplicateKeyError
+            with pytest.raises(DuplicateKeyError):
+                await w["db"][MONITOR_FINDINGS_COLLECTION].insert_one(
+                    {"org_id": A, "id": found["id"], "finding_type": "missing_original"})
+            assert len(await _findings(w)) == 1
+        run(body())
+
+    def test_a_concurrent_first_insert_converges_to_one_finding(self):
+        """Both workers race to create the same identity; the index decides."""
+        async def body():
+            w = await _world(files=1, relations_per_file=2)
+            await ensure_monitor_indexes(w["reg"]._tenant)
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w, worker_id="w-1")
+            lease = await mon._claim()
+            row = await mon._open_run(principal(), lease, run_id=None)
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            result = await _result_for(w, w["file_ids"][0])
+
+            # the identity already exists, written by a worker at the SAME fence
+            counts = _Counts()
+            await mon._observe(principal(), row, lease, counts, location, result,
+                               "missing_original", "critical")
+            assert counts.findings_opened == 1
+            # a second _observe for the same identity takes the update path and
+            # does not create a second row
+            again = _Counts()
+            await mon._observe(principal(), row, lease, again, location, result,
+                               "missing_original", "critical")
+            assert again.findings_opened == 0 and again.findings_observed == 1
+            rows = await _findings(w)
+            assert len(rows) == 1 and rows[0]["occurrences"] == 2
+        run(body())
+
+    def test_a_duplicate_insert_falls_through_to_the_fenced_update_path(self):
+        """The insert loses the race; the fenced update then refuses a stale fence."""
+        async def body():
+            w = await _world(files=1)
+            await ensure_monitor_indexes(w["reg"]._tenant)
+            await _inject(w, w["file_ids"][0], "remove")
+            owner = monitor(w, worker_id="w-new")
+            for _ in range(3):                  # raise the fence
+                held = await owner._claim()
+                await owner._abandon_claim(held)
+            out = await owner.run_once(principal())
+            found, = await _findings(w)
+            assert found["fence"] == out["fence"] >= 4
+
+            # a fence-1 straggler whose row does not exist yet in ITS view:
+            # the insert collides, and the fenced update then rejects it
+            stale = monitor(w, worker_id="w-old")
+            run_row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            result = await _result_for(w, w["file_ids"][0])
+            with pytest.raises(MonitorLeaseLost):
+                await stale._observe(principal(), run_row,
+                                     _Lease(holder="w-old", fence=1, expires_at=""),
+                                     _Counts(), location, result, "missing_original",
+                                     "critical")
+            after, = await _findings(w)
+            assert after["fence"] == found["fence"]
+            assert after["occurrences"] == found["occurrences"]
+            assert after["transitions"] == found["transitions"]
         run(body())

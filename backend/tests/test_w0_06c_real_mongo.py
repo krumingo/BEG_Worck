@@ -50,6 +50,7 @@ from app.files.monitoring import (
     MONITOR_STATE_COLLECTION,
     FileIntegrityMonitor,
     MonitorLeaseLost,
+    ensure_monitor_indexes,
     _Lease,
     MonitorPolicy,
     _Counts,
@@ -162,6 +163,11 @@ async def _build_world(db, sysdb, *, org=A, owner=OWNER_A, files=1, relations=2,
     assert activated["activated"], activated
 
     reg = FileRegistry(tenant)
+    # the monitor's own indexes, including the unique finding identity: the
+    # uniqueness this package relies on is the SERVER's, so the gate has to
+    # create it rather than assume it.
+    created = await ensure_monitor_indexes(tenant)
+    assert "uniq_integrity_finding_identity" in created, created
     for index in range(max(relations, 1)):
         await db["projects"].insert_one({"id": "P-%d" % index, "org_id": org,
                                          "name": "site %d" % index})
@@ -751,4 +757,178 @@ class TestFailClosedProofOnRealMongo:
             assert found["state"] == FINDING_RESOLVED
             assert found["resolution"]["reason"] == "authorized_content_read_succeeded"
             assert found["resolution"]["method"] == "read_and_hash"
+        scratch(test)
+
+
+# ═════════════════════ C03 — the post-verification boundary, on a real server
+class _TakeoverAfterVerification:
+    """Wraps the REAL `_verify_lease` and takes the tenant over right after it.
+
+    The C02 review's own counterexample. The read-only verification succeeds
+    honestly against the real server, the claim then moves for real, and only a
+    conditional write against the claim row can still stop the worker.
+    """
+
+    def __init__(self, monitor, *, on_verified):
+        self._real = monitor._verify_lease
+        self._on_verified = on_verified
+        self.calls = 0
+
+    async def __call__(self, lease, *, what):
+        await self._real(lease, what=what)
+        self.calls += 1
+        await self._on_verified()
+
+
+class TestPostVerificationTakeoverOnRealMongo:
+    def test_the_reviewed_interleaving_commits_nothing(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=1, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            doomed = monitor(w, worker_id="w-A")
+            rescuer = monitor(w, worker_id="w-B")
+            taken = {}
+
+            async def take_over():
+                if taken:
+                    return
+                await db[MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-A"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                taken["lease"] = await rescuer._claim()
+                assert taken["lease"] is not None
+
+            doomed._verify_lease = _TakeoverAfterVerification(doomed,
+                                                              on_verified=take_over)
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+
+            assert doomed._verify_lease.calls == 1      # the read DID pass
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+            for action in ("file.integrity.finding.opened",
+                           "file.integrity.finding.observed",
+                           "file.integrity.finding.resolved",
+                           "file.integrity.finding.reopened"):
+                assert await db["audit_events"].count_documents({"action": action}) == 0
+            runs = await db[MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(runs) == 1 and runs[0]["counts"]["checked"] == 0
+            assert runs[0]["processed_location_ids"] == []
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["holder"] == "w-B" and state["fence"] > 1
+
+            # the rightful owner still completes the same run
+            await rescuer._abandon_claim(taken["lease"])
+            out = await rescuer.run_once(principal(), run_id=runs[0]["id"])
+            assert out["status"] == "completed"
+            assert out["counts"]["findings_opened"] == 1
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["fence"] == out["fence"]
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 1
+        scratch(test)
+
+    def test_an_expired_claim_is_refused_by_the_commit_gate(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=1)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            mon = monitor(w, worker_id="w-1")
+            lease = await mon._claim()
+            row = await mon._open_run(principal(), lease, run_id=None)
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            result = await FileIntegrityService(w["reg"], w["svc"]).check(
+                principal(), file_id=w["file_ids"][0], version_no=1)
+            # live claim: the commit lands and RENEWS it on the server
+            await mon._commit_item(lease, run_id=row["id"], location=location,
+                                   result=result)
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["last_commit"]["location_id"] == location["id"]
+            assert state["last_commit"]["fence"] == lease.fence
+            # expired, with nobody taking over: still refused
+            await db[MONITOR_STATE_COLLECTION].update_one(
+                {"holder": "w-1"},
+                {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+            with pytest.raises(MonitorLeaseLost):
+                await mon._commit_item(lease, run_id=row["id"], location=location,
+                                       result=result)
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+        scratch(test)
+
+
+# ═══════════════ C03 — identity uniqueness under a real concurrent first insert
+def _insert_identity_in_child(url, db_name, sys_name, worker_id, finding_id, barrier,
+                              queue):
+    """Two processes race to create the SAME finding identity on the real server."""
+    async def body():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        _install_permissions()
+        client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=5000)
+        try:
+            rows = client[db_name][MONITOR_FINDINGS_COLLECTION]
+            doc = {"org_id": A, "id": finding_id, "finding_type": "missing_original",
+                   "state": FINDING_OPEN, "worker": worker_id, "fence": 1,
+                   "file_id": "file_x", "version_no": 1}
+            barrier.wait(timeout=30)
+            try:
+                await rows.insert_one(doc)
+                return "inserted"
+            except Exception as exc:                                  # noqa: BLE001
+                return "refused:%s" % type(exc).__name__
+        finally:
+            client.close()
+    try:
+        queue.put((worker_id, asyncio.run(body())))
+    except Exception as exc:                                          # noqa: BLE001
+        queue.put((worker_id, "ERROR:%s:%s" % (type(exc).__name__, exc)))
+
+
+class TestIdentityUniquenessOnRealMongo:
+    def test_two_processes_creating_one_identity_leave_exactly_one_row(self):
+        async def test(db, sysdb):
+            await _build_world(db, sysdb, files=1)     # creates the indexes
+            finding_id = "fif_" + "a" * 32
+            ctx = multiprocessing.get_context("spawn")
+            barrier, queue = ctx.Barrier(3), ctx.Queue()
+            children = [ctx.Process(target=_insert_identity_in_child,
+                                    args=(REAL_URL, db.name, sysdb.name,
+                                          "ins-%d" % i, finding_id, barrier, queue))
+                        for i in range(3)]
+            for child in children:
+                child.start()
+            answers = dict(queue.get(timeout=120) for _ in children)
+            for child in children:
+                child.join(timeout=120)
+                assert child.exitcode == 0, child.exitcode
+            assert not any(str(v).startswith("ERROR") for v in answers.values()), answers
+            inserted = [k for k, v in answers.items() if v == "inserted"]
+            refused = [v for v in answers.values() if str(v).startswith("refused")]
+            assert len(inserted) == 1, answers          # exactly one winner
+            assert all("DuplicateKeyError" in r for r in refused), refused
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents(
+                {"id": finding_id}) == 1
+        scratch(test)
+
+    def test_the_unique_index_exists_on_the_server(self):
+        async def test(db, sysdb):
+            await _build_world(db, sysdb, files=1)
+            names = await db[MONITOR_FINDINGS_COLLECTION].index_information()
+            assert "uniq_integrity_finding_identity" in names, sorted(names)
+            spec = names["uniq_integrity_finding_identity"]
+            assert spec.get("unique") is True
+            assert spec["key"] == [("org_id", 1), ("id", 1)]
+        scratch(test)
+
+    def test_a_monitor_pass_still_writes_one_finding_per_identity(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=2, relations=2)
+            for file_id in w["file_ids"]:
+                key = (await w["reg"].primary_location(file_id, 1))["object_key"]
+                w["backend"].remove(key)
+            for _ in range(3):
+                await monitor(w).run_once(principal())
+            rows = await db[MONITOR_FINDINGS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(rows) == 2
+            assert len({r["id"] for r in rows}) == 2
+            assert {r["occurrences"] for r in rows} == {3}
         scratch(test)
