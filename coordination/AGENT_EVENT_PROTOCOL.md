@@ -275,3 +275,21 @@ GPT не измисля процент progress, освен ако има док
 - final verdict;
 - review/evidence URL;
 - exact reviewed head.
+
+
+## 14. No-repeat-confirmation rule
+
+За agent-to-agent handoff в рамките на вече одобрен Task-ID има standing authorization от Крум.
+
+Следователно:
+- CODEX не пита повторно Крум „да изпратя ли към CLAUDE?“;
+- CLAUDE не пита повторно Крум „да върна ли HANDOFF към CODEX?“;
+- CODEX не пита повторно Крум „да върна ли PASS/result към GPT?“;
+- ако PC/Computer Use capability е налична, агентът директно изпълнява handoff-а и публикува съответния event.
+
+Само ако платформата технически изисква action-time confirmation, публикувай:
+- `BLOCKED_BY_PLATFORM_CONFIRMATION`
+или съответния `*_SEND_FAILED`,
+с точната UI/platform причина.
+
+Това не отменя отделното owner approval за merge/deploy/production/destructive/security-exception действия.
