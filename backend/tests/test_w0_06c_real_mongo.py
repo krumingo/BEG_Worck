@@ -41,6 +41,7 @@ import uuid
 import pytest
 
 from app.files import models as m
+from app.files.integrity import FileIntegrityService
 from app.files.monitoring import (
     FINDING_OPEN,
     FINDING_RESOLVED,
@@ -49,6 +50,7 @@ from app.files.monitoring import (
     MONITOR_STATE_COLLECTION,
     FileIntegrityMonitor,
     MonitorLeaseLost,
+    _Lease,
     MonitorPolicy,
     _Counts,
     _Cursor,
@@ -124,7 +126,7 @@ def _digest(data: bytes) -> dict:
 
 
 async def _build_world(db, sysdb, *, org=A, owner=OWNER_A, files=1, relations=2,
-                       bucket="tenant-bucket"):
+                       bucket="tenant-bucket", checksum_support=True):
     """An activated tenant with ``files`` uploaded originals, on a real database."""
     from app.files.access import FileAccessService
     from app.files.credentials import CredentialVault
@@ -141,7 +143,11 @@ async def _build_world(db, sysdb, *, org=A, owner=OWNER_A, files=1, relations=2,
     svc = StorageProviderService(tenant, sysdb,
                                  vault=CredentialVault(tenant, master_key=b"0" * 32),
                                  transport_for=transport_for)
-    backend, binding, creds = fb.build(m.PROVIDER_S3_COMPATIBLE, org_id=org, bucket=bucket)
+    # ``checksum_support=False`` makes the adapter READ the bytes instead of
+    # trusting a provider-reported digest — the only evidence that closes a
+    # permission finding.
+    backend, binding, creds = fb.build(m.PROVIDER_S3_COMPATIBLE, org_id=org, bucket=bucket,
+                                       checksum_support=checksum_support)
     out = await svc.configure_binding(
         _ctx(owner, org), role=m.LOCATION_ROLE_PRIMARY,
         provider_kind=m.PROVIDER_S3_COMPATIBLE, container=binding.container,
@@ -204,8 +210,8 @@ def scratch(test):
     return asyncio.run(body())
 
 
-def monitor(w, *, policy=None, worker_id=None):
-    return FileIntegrityMonitor(w["reg"], w["svc"],
+def monitor(w, *, policy=None, worker_id=None, integrity=None):
+    return FileIntegrityMonitor(w["reg"], w["svc"], integrity=integrity,
                                 policy=policy or MonitorPolicy(max_attempts=1),
                                 worker_id=worker_id)
 
@@ -578,4 +584,171 @@ class TestRealSanity:
                 for blob, label in ((findings, "findings"), (runs, "runs"),
                                     (events, "audit")):
                     assert marker not in blob, "%s/%s" % (label, marker)
+        scratch(test)
+
+
+# ══════════════════════════════════════ C02 — stale-worker side effects, for real
+class _TakeoverDuringCheck:
+    """An integrity service that lets another worker take the tenant MID-CALL.
+
+    The takeover below is a REAL atomic claim on the real server, executed
+    while the first worker is still inside its provider call. That is the
+    interleaving the C01 review found: everything the monitor does with the
+    result happens after this returns, so the server state the guard reads must
+    already belong to the new owner.
+    """
+
+    def __init__(self, inner, *, on_call, calls_before=0):
+        self._inner = inner
+        self._on_call = on_call
+        self._calls_before = calls_before
+        self.calls = 0
+        self.org_id = inner.org_id
+        self.resolver = inner.resolver
+
+    async def check(self, *args, **kw):
+        result = await self._inner.check(*args, **kw)
+        self.calls += 1
+        if self.calls > self._calls_before:
+            await self._on_call()
+        return result
+
+
+class TestStaleWorkerSideEffectsOnRealMongo:
+    def test_a_takeover_during_the_provider_call_commits_nothing(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=1, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            rescuer = monitor(w, worker_id="w-2")
+            taken = {}
+
+            async def take_over():
+                await db[MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-1"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                taken["lease"] = await rescuer._claim()
+                assert taken["lease"] is not None
+
+            doomed = monitor(w, worker_id="w-1",
+                             integrity=_TakeoverDuringCheck(
+                                 FileIntegrityService(w["reg"], w["svc"]),
+                                 on_call=take_over))
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+
+            # nothing of the stale worker reached the server
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents({}) == 0
+            for action in ("file.integrity.finding.opened",
+                           "file.integrity.finding.observed",
+                           "file.integrity.finding.resolved",
+                           "file.integrity.finding.reopened"):
+                assert await db["audit_events"].count_documents({"action": action}) == 0
+            runs = await db[MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(runs) == 1 and runs[0]["status"] == "running"
+            assert runs[0]["counts"]["checked"] == 0
+            assert runs[0]["processed_location_ids"] == []
+            # the new owner holds the claim at a strictly newer fence
+            state = await db[MONITOR_STATE_COLLECTION].find_one({}, {"_id": 0})
+            assert state["holder"] == "w-2" and state["fence"] > 1
+
+            # and the rightful owner finishes the work properly
+            await rescuer._abandon_claim(taken["lease"])
+            out = await rescuer.run_once(principal(), run_id=runs[0]["id"])
+            assert out["status"] == "completed"
+            assert out["counts"]["findings_opened"] == 1
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["finding_type"] == "missing_original"
+            assert found["fence"] == out["fence"]
+            assert await db["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 1
+        scratch(test)
+
+    def test_a_stale_fence_cannot_overwrite_the_new_owners_finding(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=1, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            owner = monitor(w, worker_id="w-new")
+            for _ in range(3):                  # push the fence up for real
+                held = await owner._claim()
+                assert held is not None
+                await owner._abandon_claim(held)
+            out = await owner.run_once(principal())
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["fence"] == out["fence"] >= 4
+            before = dict(found)
+
+            stale = monitor(w, worker_id="w-old")
+            run_row = await db[MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            result = await FileIntegrityService(w["reg"], w["svc"]).check(
+                principal(), file_id=w["file_ids"][0], version_no=1)
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            with pytest.raises(MonitorLeaseLost):
+                await stale._observe(principal(), run_row,
+                                     _Lease(holder="w-old", fence=1, expires_at=""),
+                                     _Counts(), location, result, "missing_original",
+                                     "critical")
+            after = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert after["fence"] == before["fence"]
+            assert after["occurrences"] == before["occurrences"]
+            assert after["transitions"] == before["transitions"]
+        scratch(test)
+
+    def test_the_guard_does_not_block_the_rightful_owner_across_passes(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=2, relations=2)
+            key = (await w["reg"].primary_location(w["file_ids"][0], 1))["object_key"]
+            w["backend"].remove(key)
+            mon = monitor(w)
+            for _ in range(4):
+                out = await mon.run_once(principal())
+                assert out["status"] == "completed", out
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["occurrences"] == 4 and found["state"] == FINDING_OPEN
+            assert found["fence"] == out["fence"]
+            assert [t["transition"] for t in found["transitions"]] == [
+                "open", "observed", "observed", "observed"]
+        scratch(test)
+
+
+# ══════════════════════════════ C02 — fail-closed proof, persisted and reread
+class TestFailClosedProofOnRealMongo:
+    def test_a_permission_finding_stays_open_on_a_stat_only_provider(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=1, relations=2)   # server digests
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            w["backend"].deny(location["object_key"])
+            await monitor(w).run_once(principal())
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["finding_type"] == "permission_failure"
+            # access is genuinely restored
+            w["backend"].denied.clear()
+            out = await monitor(w).run_once(principal())
+            assert out["counts"]["findings_resolved"] == 0
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["state"] == FINDING_OPEN and found["resolution"] is None
+            assert found["resolution_blocked_reason"] == \
+                "incomplete_proof:no_authorized_read"
+            # the blocked reason survives a reread, which is what an operator sees
+            assert await db[MONITOR_FINDINGS_COLLECTION].count_documents(
+                {"state": FINDING_RESOLVED}) == 0
+        scratch(test)
+
+    def test_a_permission_finding_closes_when_the_bytes_are_really_read(self):
+        async def test(db, sysdb):
+            w = await _build_world(db, sysdb, files=1, relations=2,
+                                   checksum_support=False)            # forces a read
+            location = await w["reg"].primary_location(w["file_ids"][0], 1)
+            w["backend"].deny(location["object_key"])
+            await monitor(w).run_once(principal())
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["finding_type"] == "permission_failure"
+            w["backend"].denied.clear()
+            out = await monitor(w).run_once(principal())
+            assert out["counts"]["findings_resolved"] == 1
+            found = await db[MONITOR_FINDINGS_COLLECTION].find_one({}, {"_id": 0})
+            assert found["state"] == FINDING_RESOLVED
+            assert found["resolution"]["reason"] == "authorized_content_read_succeeded"
+            assert found["resolution"]["method"] == "read_and_hash"
         scratch(test)

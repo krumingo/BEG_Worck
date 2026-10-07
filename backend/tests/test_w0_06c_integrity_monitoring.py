@@ -50,6 +50,7 @@ from app.files.monitoring import (
     FINDING_OPEN,
     FINDING_RESOLVED,
     MONITOR_COLLECTIONS,
+    MODULE_PROBE,
     MONITOR_FINDINGS_COLLECTION,
     MONITOR_RUNS_COLLECTION,
     MONITOR_STATE_COLLECTION,
@@ -68,6 +69,7 @@ from app.files.monitoring import (
     ServicePrincipal,
     _Counts,
     _Cursor,
+    _Lease,
     alarm_level,
     assert_no_secrets,
     finding_identity,
@@ -98,6 +100,9 @@ DATA = b"%PDF-1.7 act 14 signed original "
 #: FLOW-002 principals: the assignment below is what lets them run, and the
 #: ``NO_RIGHTS`` one deliberately has none.
 SERVICE_A, SERVICE_B, NO_RIGHTS, READER = "svc-a", "svc-b", "svc-none", "reader-a"
+#: C02 scope principals: a project-scoped reader, a module-restricted reader,
+#: and one holding BOTH a module-restricted and an unrestricted grant.
+PM_P0, MODULE_READER, BOTH_GRANTS = "pm-p0", "mod-reader", "both-grants"
 
 MONITOR_ACTIONS = ["file.integrity.monitor", "file.integrity.monitor.read",
                    "file.integrity.check"]
@@ -141,6 +146,23 @@ def _perms(monkeypatch):
         (READER, A): [{"id": "ra-reader", "status": "active", "role_id": "custom",
                        "permissions": ["file.integrity.monitor.read"],
                        "scope_type": "company"}],
+        # PROJECT-scoped: may read alarms of project P-0 and nothing else.
+        (PM_P0, A): [{"id": "ra-pm", "status": "active", "role_id": "custom",
+                      "permissions": ["file.integrity.monitor.read"],
+                      "scope_type": "project", "scope_id": "P-0"}],
+        # Company-scoped but MODULE-restricted: the C01 hole. Nothing maps a
+        # finding onto a module, so the projection must refuse it outright.
+        (MODULE_READER, A): [{"id": "ra-mod", "status": "active", "role_id": "custom",
+                              "permissions": ["file.integrity.monitor.read"],
+                              "scope_type": "company", "module": "M2"}],
+        # Both: the module-restricted grant must not take away what the
+        # unrestricted one gives.
+        (BOTH_GRANTS, A): [{"id": "ra-both-mod", "status": "active", "role_id": "custom",
+                            "permissions": ["file.integrity.monitor.read"],
+                            "scope_type": "company", "module": "M2"},
+                           {"id": "ra-both-open", "status": "active", "role_id": "custom",
+                            "permissions": ["file.integrity.monitor.read"],
+                            "scope_type": "company"}],
     })
 
 
@@ -938,11 +960,12 @@ class TestLifecycle:
             found, = await _findings(w)
             result = await _result_for(w, w["file_ids"][0])
             row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            lease = _Lease(holder=row["lease_holder"], fence=row["fence"], expires_at="")
             args = dict(marker="2026-10-07T12:00:00.000000+00:00", severity="critical",
                         finding_type="missing_original")
-            first = await mon._transition(principal(), row, found["id"],
+            first = await mon._transition(principal(), row, lease, found["id"],
                                           TRANSITION_OBSERVED, result, **args)
-            second = await mon._transition(principal(), row, found["id"],
+            second = await mon._transition(principal(), row, lease, found["id"],
                                            TRANSITION_OBSERVED, result, **args)
             assert first is True and second is False
             after, = await _findings(w)
@@ -953,16 +976,20 @@ class TestLifecycle:
             assert observed == 1
         run(body())
 
-    @pytest.mark.parametrize("inject,finding_type", [
-        ("remove", "missing_original"),
-        ("mutate", "checksum_mismatch"),
-        ("deny", "permission_failure"),
-        ("offline", "provider_unavailable"),
+    @pytest.mark.parametrize("inject,finding_type,kind", [
+        ("remove", "missing_original", KIND),
+        ("mutate", "checksum_mismatch", KIND),
+        ("offline", "provider_unavailable", KIND),
+        # A permission finding can only be closed by bytes BEG_Work actually
+        # READ, so its positive case needs a provider that reads them. On a
+        # provider that answers with its own digest from `stat` the finding
+        # stays open — proven in `test_a_permission_finding_is_not_closed_...`.
+        ("deny", "permission_failure", m.PROVIDER_ON_PREM_SERVER),
     ])
     def test_a_repaired_original_resolves_with_a_type_specific_proof(self, inject,
-                                                                     finding_type):
+                                                                     finding_type, kind):
         async def body():
-            w = await _world(files=1)
+            w = await _world(files=1, kind=kind)
             snapshot = _snapshot(w)
             await _inject(w, w["file_ids"][0], inject)
             await monitor(w).run_once(principal())
@@ -977,6 +1004,8 @@ class TestLifecycle:
             assert found["consecutive_observations"] == 0
             assert found["resolution"]["reason"] == PROOFS[finding_type]
             assert found["resolution"]["method"] in ("server_checksum", "read_and_hash")
+            if finding_type == "permission_failure":
+                assert found["resolution"]["method"] == "read_and_hash"
             assert found["resolution"]["run_id"] == out["run_id"]
             assert [t["transition"] for t in found["transitions"]] == [
                 TRANSITION_OPENED, TRANSITION_RESOLVED]
@@ -1014,15 +1043,18 @@ class TestLifecycle:
                                   "provider_version_id": "v1"},
                      "observed": {"checksum": None, "size_bytes": None,
                                   "provider_file_id": None, "provider_version_id": None}}
-        for finding_type in ("missing_original", "checksum_mismatch", "permission_failure"):
+        for finding_type in PROOFS:
             proven, reason = resolution_proof(finding_type, reachable)
-            assert proven is False and reason.startswith("incomplete_proof:")
+            assert proven is False, finding_type
+            assert reason.startswith(("incomplete_proof:", "requires_explicit_decision:"))
         # a size-only comparison is not a content comparison either
         sized = dict(reachable, method="size_only")
-        assert resolution_proof("missing_original", sized)[0] is False
-        # an outage, by contrast, IS closed by a full verification succeeding
+        assert resolution_proof("missing_original", sized) == (
+            False, "incomplete_proof:no_content_comparison")
+        # An OUTAGE is no exception: "the provider answered" is not a complete
+        # verification. `available` can come back with nothing compared at all.
         assert resolution_proof("provider_unavailable", reachable) == (
-            True, "provider_verification_succeeded")
+            False, "incomplete_proof:no_content_comparison")
 
     def test_a_still_failing_result_never_resolves_anything(self):
         failing = {"ok": False, "availability": m.AVAILABILITY_MISSING, "method": "none",
@@ -1050,7 +1082,9 @@ class TestLifecycle:
                 ({"checksum": {"algorithm": "sha256", "value": "aa"}, "size_bytes": 11},
                  "incomplete_proof:size_still_differs"),
                 ({"checksum": None, "size_bytes": 10},
-                 "incomplete_proof:no_checksum_comparison")]:
+                 "incomplete_proof:no_observed_checksum"),
+                ({"checksum": {"algorithm": "sha256", "value": "aa"}, "size_bytes": None},
+                 "incomplete_proof:no_observed_size")]:
             assert resolution_proof("checksum_mismatch", dict(base, observed=observed)) == (
                 False, reason)
 
@@ -1597,9 +1631,523 @@ class TestProjection:
                 principal(), alarm_level_in=[ALARM_INFORMATIONAL]) == []
             _repair(w, snapshot)
             await monitor(w).run_once(principal())
-            assert len(await mon.list_findings(principal(), state=FINDING_RESOLVED)) == 2
-            assert await mon.list_findings(principal(), state=FINDING_OPEN) == []
+            # The missing original closes on this provider's own digest. The
+            # permission finding does NOT: this backend answers `stat` with a
+            # server checksum and never reads the bytes, so the access that
+            # failed was never proven restored.
+            resolved = await mon.list_findings(principal(), state=FINDING_RESOLVED)
+            still_open = await mon.list_findings(principal(), state=FINDING_OPEN)
+            assert [r["finding_type"] for r in resolved] == ["missing_original"]
+            assert [r["finding_type"] for r in still_open] == ["permission_failure"]
+            assert still_open[0]["resolution_blocked_reason"] == \
+                "incomplete_proof:no_authorized_read"
             for bad in ({"state": "invented"}, {"alarm_level_in": ["loud"]}):
                 with pytest.raises(MonitorConfigurationRefused):
                     await mon.list_findings(principal(), **bad)
+        run(body())
+
+
+# ════════════════════════════════════════════ C02 / defect 1 — stale worker
+class _TakeoverDuringCheck:
+    """An integrity service that lets another worker take the tenant MID-CALL.
+
+    This is the interleaving the C01 review found and the C01 tests missed: the
+    worker is not stopped between two database writes, it is stopped inside the
+    one await that actually takes time — the provider call. Everything the
+    monitor does with the result (finding, history, alarm, AuditEvent) happens
+    after this returns, so this is the only place a guard can sit.
+    """
+
+    def __init__(self, inner, *, on_call, calls_before=0):
+        self._inner = inner
+        self._on_call = on_call
+        self._calls_before = calls_before
+        self.calls = 0
+        self.org_id = inner.org_id
+        self.resolver = inner.resolver
+
+    async def check(self, *args, **kw):
+        result = await self._inner.check(*args, **kw)
+        self.calls += 1
+        if self.calls > self._calls_before:
+            await self._on_call()          # the takeover happens HERE
+        return result
+
+
+class TestStaleWorkerSideEffects:
+    """A worker that lost its claim writes NOTHING — not even a finding."""
+
+    def test_a_takeover_during_the_provider_call_blocks_every_write(self):
+        async def body():
+            w = await _world(files=1, relations_per_file=2)
+            await _inject(w, w["file_ids"][0], "remove")
+            rescuer = monitor(w, worker_id="w-2")
+            taken = {}
+
+            async def take_over():
+                # B's claim becomes possible and B takes it, while A is still
+                # inside the provider call.
+                await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-1"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                taken["lease"] = await rescuer._claim()
+                assert taken["lease"] is not None
+
+            inner = FileIntegrityService(w["reg"], w["svc"])
+            doomed = monitor(w, worker_id="w-1",
+                             integrity=_TakeoverDuringCheck(inner, on_call=take_over))
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+
+            # NOTHING of A's reached the tenant: no finding, no history, no
+            # alarm, no finding AuditEvent, and no advanced checkpoint.
+            assert await _findings(w) == []
+            for action in ("file.integrity.finding.opened",
+                           "file.integrity.finding.observed",
+                           "file.integrity.finding.resolved",
+                           "file.integrity.finding.reopened"):
+                assert await w["db"]["audit_events"].count_documents(
+                    {"action": action}) == 0, action
+            runs = await w["db"][MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert len(runs) == 1
+            assert runs[0]["counts"]["checked"] == 0
+            assert runs[0]["processed_location_ids"] == []
+            assert runs[0]["status"] == "running"      # A never closed it either
+            # the check itself DID happen and is audited: that is the truth
+            assert len(await _monitor_check_events(w)) == 1
+            # and B, the rightful owner, can still finish the work properly
+            await rescuer._abandon_claim(taken["lease"])
+            out = await rescuer.run_once(principal(), run_id=runs[0]["id"])
+            assert out["status"] == "completed" and out["counts"]["findings_opened"] == 1
+            found, = await _findings(w)
+            assert found["finding_type"] == "missing_original"
+            assert found["fence"] == out["fence"]
+        run(body())
+
+    def test_an_expired_claim_blocks_writes_even_with_no_takeover(self):
+        """Nobody has taken over yet, but anyone MAY — so writing is the hazard."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+
+            async def expire():
+                await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-1"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+
+            inner = FileIntegrityService(w["reg"], w["svc"])
+            doomed = monitor(w, worker_id="w-1",
+                             integrity=_TakeoverDuringCheck(inner, on_call=expire))
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            assert await _findings(w) == []
+            assert await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"}) == 0
+        run(body())
+
+    def test_a_takeover_mid_run_stops_the_walk_before_the_second_item(self):
+        async def body():
+            w = await _world(files=4)
+            for file_id in w["file_ids"]:
+                await _inject(w, file_id, "remove")
+            rescuer = monitor(w, worker_id="w-2")
+
+            async def take_over():
+                await w["db"][MONITOR_STATE_COLLECTION].update_one(
+                    {"holder": "w-1"},
+                    {"$set": {"expires_at": "2000-01-01T00:00:00.000000+00:00"}})
+                assert await rescuer._claim() is not None
+
+            inner = FileIntegrityService(w["reg"], w["svc"])
+            # the first item is committed normally; the takeover lands during
+            # the SECOND provider call
+            doomed = monitor(w, worker_id="w-1",
+                             integrity=_TakeoverDuringCheck(inner, on_call=take_over,
+                                                            calls_before=1))
+            with pytest.raises(MonitorLeaseLost):
+                await doomed.run_once(principal())
+            # exactly one finding — the item A committed while it still held
+            rows = await _findings(w)
+            assert len(rows) == 1
+            opened = await w["db"]["audit_events"].count_documents(
+                {"action": "file.integrity.finding.opened"})
+            assert opened == 1
+            runs = await w["db"][MONITOR_RUNS_COLLECTION].find({}, {"_id": 0}).to_list(None)
+            assert runs[0]["counts"]["checked"] == 1
+            assert len(runs[0]["processed_location_ids"]) == 1
+        run(body())
+
+    def test_a_stale_worker_cannot_overwrite_a_newer_owners_finding(self):
+        """The fence on the finding itself, not just the cursor."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            # the rightful owner records the finding at a high fence
+            owner = monitor(w, worker_id="w-new")
+            for _ in range(3):            # claim/release cycles push the fence up
+                held = await owner._claim()
+                assert held is not None
+                await owner._abandon_claim(held)
+            out = await owner.run_once(principal())
+            found, = await _findings(w)
+            high_fence = found["fence"]
+            assert high_fence == out["fence"] and high_fence >= 4
+
+            # a straggler from fence 1 tries to write the same finding
+            stale = monitor(w, worker_id="w-old")
+            lease = _Lease(holder="w-old", fence=1, expires_at="")
+            run_row = await w["db"][MONITOR_RUNS_COLLECTION].find_one({}, {"_id": 0})
+            result = await _result_for(w, w["file_ids"][0])
+            with pytest.raises(MonitorLeaseLost):
+                await stale._observe(principal(), run_row, lease, _Counts(),
+                                     await w["reg"].primary_location(w["file_ids"][0], 1),
+                                     result, "missing_original", "critical")
+            after, = await _findings(w)
+            assert after["fence"] == high_fence           # untouched
+            assert after["occurrences"] == found["occurrences"]
+            assert after["transitions"] == found["transitions"]
+        run(body())
+
+    def test_the_fence_guard_still_accepts_the_current_owner(self):
+        """The guard must not block the worker that legitimately holds the claim."""
+        async def body():
+            w = await _world(files=1)
+            await _inject(w, w["file_ids"][0], "remove")
+            mon = monitor(w)
+            for _ in range(4):                 # four honest consecutive passes
+                out = await mon.run_once(principal())
+                assert out["status"] == "completed"
+            found, = await _findings(w)
+            assert found["occurrences"] == 4
+            assert found["fence"] == out["fence"]
+            assert [t["transition"] for t in found["transitions"]] == [
+                TRANSITION_OPENED] + [TRANSITION_OBSERVED] * 3
+        run(body())
+
+
+# ════════════════════════════════════════ C02 / defect 2 — fail-closed proof
+class TestFailClosedResolutionProof:
+    """The three C01 counterexamples, each reproduced and each now refused."""
+
+    #: `ok`, complete and matching — the shape every case below weakens.
+    COMPLETE = {"ok": True, "availability": m.AVAILABILITY_AVAILABLE,
+                "method": "read_and_hash",
+                "expected": {"checksum": {"algorithm": "sha256", "value": "aa"},
+                             "size_bytes": 10, "provider_file_id": "o1",
+                             "provider_version_id": "v1"},
+                "observed": {"checksum": {"algorithm": "sha256", "value": "aa"},
+                             "size_bytes": 10, "provider_file_id": "o1",
+                             "provider_version_id": "v1"}}
+
+    def test_counterexample_a_permission_failure_on_a_stat_derived_digest(self):
+        """A provider-reported digest comes from `stat`, which is not a read."""
+        stat_only = dict(self.COMPLETE, method="server_checksum")
+        assert resolution_proof("permission_failure", stat_only) == (
+            False, "incomplete_proof:no_authorized_read")
+        for method in ("none", "size_only", None):
+            assert resolution_proof("permission_failure", dict(
+                self.COMPLETE, method=method)) == (
+                    False, "incomplete_proof:no_authorized_read")
+        # only bytes actually read close it
+        assert resolution_proof("permission_failure", self.COMPLETE) == (
+            True, "authorized_content_read_succeeded")
+
+    def test_counterexample_b_provider_unavailable_with_nothing_compared(self):
+        """`available` can come back having compared nothing at all."""
+        nothing = dict(self.COMPLETE, method="none",
+                       observed={"checksum": None, "size_bytes": None,
+                                 "provider_file_id": None, "provider_version_id": None})
+        assert resolution_proof("provider_unavailable", nothing) == (
+            False, "incomplete_proof:no_content_comparison")
+        assert resolution_proof("provider_unavailable", dict(
+            self.COMPLETE, method="size_only")) == (
+                False, "incomplete_proof:no_content_comparison")
+        # a complete verification does close it, on either content method
+        for method in ("server_checksum", "read_and_hash"):
+            assert resolution_proof("provider_unavailable",
+                                    dict(self.COMPLETE, method=method)) == (
+                True, "provider_verification_succeeded")
+
+    def test_counterexample_c_checksum_mismatch_without_the_observed_size(self):
+        """The canonical size is known, so a verdict that did not see it is not proof."""
+        no_size = dict(self.COMPLETE,
+                       observed=dict(self.COMPLETE["observed"], size_bytes=None))
+        assert resolution_proof("checksum_mismatch", no_size) == (
+            False, "incomplete_proof:no_observed_size")
+        no_sum = dict(self.COMPLETE,
+                      observed=dict(self.COMPLETE["observed"], checksum=None))
+        assert resolution_proof("checksum_mismatch", no_sum) == (
+            False, "incomplete_proof:no_observed_checksum")
+        # and with no canonical checksum on file there is nothing to close against
+        unrecorded = dict(self.COMPLETE,
+                          expected=dict(self.COMPLETE["expected"], checksum=None))
+        assert resolution_proof("checksum_mismatch", unrecorded) == (
+            False, "incomplete_proof:no_checksum_comparison")
+        assert resolution_proof("checksum_mismatch", self.COMPLETE) == (
+            True, "canonical_checksum_and_size_match")
+
+    @pytest.mark.parametrize("finding_type", sorted(PROOFS))
+    def test_no_finding_type_closes_on_an_incomplete_observation(self, finding_type):
+        """One rule for all five: what the record expects must be observed."""
+        for weakened in (
+                dict(self.COMPLETE, method="none"),
+                dict(self.COMPLETE, method="size_only"),
+                dict(self.COMPLETE,
+                     observed=dict(self.COMPLETE["observed"], checksum=None)),
+                dict(self.COMPLETE,
+                     observed=dict(self.COMPLETE["observed"], size_bytes=None))):
+            proven, reason = resolution_proof(finding_type, weakened)
+            if finding_type == "external_change":
+                # identity, not content, is what this type turns on
+                continue
+            assert proven is False, (finding_type, weakened["method"])
+            assert reason.startswith("incomplete_proof:")
+
+    def test_missing_also_needs_the_observed_size_and_checksum(self):
+        for observed, reason in (
+                (dict(self.COMPLETE["observed"], size_bytes=None),
+                 "incomplete_proof:no_observed_size"),
+                (dict(self.COMPLETE["observed"], checksum=None),
+                 "incomplete_proof:no_observed_checksum"),
+                (dict(self.COMPLETE["observed"], size_bytes=99),
+                 "incomplete_proof:size_still_differs")):
+            assert resolution_proof("missing_original",
+                                    dict(self.COMPLETE, observed=observed)) == (False, reason)
+
+    def test_a_permission_finding_is_not_closed_by_a_stat_only_provider(self):
+        """End to end, on a real adapter that answers with its own digest."""
+        async def body():
+            w = await _world(files=1, kind=m.PROVIDER_S3_COMPATIBLE)
+            snapshot = _snapshot(w)
+            await _inject(w, w["file_ids"][0], "deny")
+            await monitor(w).run_once(principal())
+            found, = await _findings(w)
+            assert found["finding_type"] == "permission_failure"
+            _repair(w, snapshot)                 # access really is back
+            out = await monitor(w).run_once(principal())
+            assert out["counts"]["findings_resolved"] == 0
+            found, = await _findings(w)
+            assert found["state"] == FINDING_OPEN
+            assert found["resolution"] is None
+            assert found["resolution_blocked_reason"] == \
+                "incomplete_proof:no_authorized_read"
+            # the provider IS healthy again — the result is `available`
+            assert (await _result_for(w, w["file_ids"][0]))["ok"] is True
+        run(body())
+
+    def test_a_permission_finding_closes_on_a_provider_that_reads(self):
+        async def body():
+            w = await _world(files=1, kind=m.PROVIDER_SYNOLOGY_NAS)
+            snapshot = _snapshot(w)
+            await _inject(w, w["file_ids"][0], "deny")
+            await monitor(w).run_once(principal())
+            assert (await _findings(w))[0]["finding_type"] == "permission_failure"
+            _repair(w, snapshot)
+            out = await monitor(w).run_once(principal())
+            assert out["counts"]["findings_resolved"] == 1
+            found, = await _findings(w)
+            assert found["state"] == FINDING_RESOLVED
+            assert found["resolution"]["reason"] == "authorized_content_read_succeeded"
+            assert found["resolution"]["method"] == "read_and_hash"
+        run(body())
+
+
+# ═══════════════════════════════════ C02 / defect 3 — projection authorization
+class TestProjectionScope:
+    """Tenant, project, module and sensitivity — all four, before disclosure."""
+
+    @staticmethod
+    async def _two_projects():
+        """One alarm on project P-0 + P-1, one on P-1 only, one on no project."""
+        w = await _world(files=0, relations_per_file=2)
+        for index in (0, 1):
+            await w["db"]["projects"].insert_one(
+                {"id": "P-%d" % index, "org_id": A, "name": "site %d" % index})
+        await w["db"]["invoices"].insert_one(
+            {"id": "INV-9", "org_id": A, "invoice_no": "2026-009"})
+        shared = await _upload(w["access"], A, OWNER_A, "shared", relations=[
+            {"relation_type": m.RELATION_PROJECT, "record_id": "P-0"},
+            {"relation_type": m.RELATION_PROJECT, "record_id": "P-1"},
+            {"relation_type": m.RELATION_INVOICE, "record_id": "INV-9"}])
+        other = await _upload(w["access"], A, OWNER_A, "otherproj", relations=[
+            {"relation_type": m.RELATION_PROJECT, "record_id": "P-1"}])
+        orphan = await _upload(w["access"], A, OWNER_A, "orphan")
+        for file_id in (shared, other, orphan):
+            await _inject(w, file_id, "remove")
+        out = await monitor(w).run_once(principal())
+        assert out["counts"]["findings_opened"] == 3
+        return w, {"shared": shared, "other": other, "orphan": orphan}
+
+    def test_a_project_scoped_caller_cannot_ask_for_the_whole_tenant(self):
+        async def body():
+            w, _ = await self._two_projects()
+            with pytest.raises(FileAccessDenied) as denied:
+                await monitor(w).list_findings(ctx(PM_P0, A))
+            assert denied.value.reason_code == "SCOPE_MISMATCH"
+            assert denied.value.action == ACTION_MONITOR_READ
+        run(body())
+
+    def test_a_project_scoped_caller_cannot_ask_for_another_project(self):
+        async def body():
+            w, _ = await self._two_projects()
+            with pytest.raises(FileAccessDenied) as denied:
+                await monitor(w).list_findings(ctx(PM_P0, A), project_id="P-1")
+            assert denied.value.reason_code == "SCOPE_MISMATCH"
+        run(body())
+
+    def test_a_project_scoped_caller_sees_only_its_own_project_narrowed(self):
+        async def body():
+            w, files = await self._two_projects()
+            rows = await monitor(w).list_findings(ctx(PM_P0, A), project_id="P-0")
+            # only the alarm that touches P-0; not P-1's and not the orphan's
+            assert [r["file_id"] for r in rows] == [files["shared"]]
+            found = rows[0]
+            # the ALARM is intact: type, severity, level, state, total weight
+            assert found["finding_type"] == "missing_original"
+            assert found["alarm_level"] == ALARM_CRITICAL
+            assert found["affected_record_count"] == 3
+            # but only P-0's record is disclosed — P-1's label and the invoice
+            # number are withheld, not guessed into this project
+            assert [r["record_id"] for r in found["affected_records"]] == ["P-0"]
+            assert found["affected_by_group"] == {"projects": ["P-0"]}
+            assert found["disclosure"] == {"scope": "project", "project_id": "P-0",
+                                           "affected_records_withheld": 2,
+                                           "provider_identifiers": False}
+            blob = repr(found)
+            assert "P-1" not in blob and "INV-9" not in blob
+            assert "2026-009" not in blob and "site 1" not in blob
+            # and no provider identifier reaches a project-scoped caller
+            for field in ("provider_binding_id", "provider_kind", "location_id",
+                          "evidence"):
+                assert field not in found, field
+            assert w["binding_id"] not in blob
+        run(body())
+
+    def test_a_company_scoped_caller_sees_the_whole_finding(self):
+        async def body():
+            w, files = await self._two_projects()
+            rows = await monitor(w).list_findings(ctx(READER, A))
+            assert len(rows) == 3
+            shared = [r for r in rows if r["file_id"] == files["shared"]][0]
+            assert shared["disclosure"] == {"scope": "company", "project_id": None,
+                                            "affected_records_withheld": 0,
+                                            "provider_identifiers": True}
+            assert shared["affected_record_count"] == 3
+            assert len(shared["affected_records"]) == 3
+            assert shared["provider_binding_id"] == w["binding_id"]
+            assert shared["provider_kind"] == KIND and shared["location_id"]
+            assert shared["evidence"]["availability"] == m.AVAILABILITY_MISSING
+            # a company caller may still narrow the view itself
+            narrowed = await monitor(w).list_findings(ctx(READER, A), project_id="P-1")
+            assert sorted(r["file_id"] for r in narrowed) == sorted(
+                [files["shared"], files["other"]])
+            assert all(r["disclosure"]["scope"] == "company" for r in narrowed)
+            assert all(r["provider_binding_id"] == w["binding_id"] for r in narrowed)
+        run(body())
+
+    def test_a_module_restricted_grant_is_refused_outright(self):
+        async def body():
+            w, _ = await self._two_projects()
+            with pytest.raises(FileAccessDenied) as denied:
+                await monitor(w).list_findings(ctx(MODULE_READER, A))
+            assert denied.value.reason_code == "MODULE_NOT_ALLOWED"
+            assert denied.value.action == ACTION_MONITOR_READ
+            # the same restriction applies to the tenant-wide monitor state
+            with pytest.raises(FileAccessDenied) as state_denied:
+                await monitor(w).monitor_state(ctx(MODULE_READER, A))
+            assert state_denied.value.reason_code == "MODULE_NOT_ALLOWED"
+            # and the refusal is an audited security event, not a silent empty list
+            events = await w["db"]["audit_events"].find(
+                {"action": "file.access.denied", "error_code": "MODULE_NOT_ALLOWED"},
+                {"_id": 0}).to_list(None)
+            assert len(events) == 2
+            assert {e["retention_class"] for e in events} == {"R3"}
+            assert {e["tenant_id"] for e in events} == {A}
+            assert events[0]["structured_diff"]["module_probe"] == MODULE_PROBE
+        run(body())
+
+    def test_an_unrestricted_grant_beside_a_module_restricted_one_still_works(self):
+        async def body():
+            w, _ = await self._two_projects()
+            rows = await monitor(w).list_findings(ctx(BOTH_GRANTS, A))
+            assert len(rows) == 3
+            assert all(r["disclosure"]["scope"] == "company" for r in rows)
+            assert await monitor(w).monitor_state(ctx(BOTH_GRANTS, A)) is not None
+        run(body())
+
+    def test_a_project_scoped_caller_cannot_read_the_tenant_wide_monitor_state(self):
+        async def body():
+            w, _ = await self._two_projects()
+            with pytest.raises(FileAccessDenied) as denied:
+                await monitor(w).monitor_state(ctx(PM_P0, A))
+            assert denied.value.reason_code == "SCOPE_MISMATCH"
+        run(body())
+
+    def test_the_project_scope_denial_is_audited_with_the_requested_scope(self):
+        async def body():
+            w, _ = await self._two_projects()
+            with pytest.raises(FileAccessDenied):
+                await monitor(w).list_findings(ctx(PM_P0, A), project_id="P-1")
+            event = await w["db"]["audit_events"].find_one(
+                {"action": "file.access.denied", "error_code": "SCOPE_MISMATCH"},
+                {"_id": 0})
+            assert event["structured_diff"]["scope_type"] == "project"
+            assert event["structured_diff"]["scope_id"] == "P-1"
+            assert event["retention_class"] == "R3"
+        run(body())
+
+    def test_sensitivity_still_narrows_a_project_scoped_view(self):
+        """All four dimensions compose; none replaces another."""
+        async def body():
+            w = await _world(files=0)
+            await w["db"]["projects"].insert_one(
+                {"id": "P-0", "org_id": A, "name": "site 0"})
+            payroll = await _upload(w["access"], A, OWNER_A, "payroll",
+                                    category=m.CATEGORY_INVOICES,
+                                    sensitivity=m.SENSITIVITY_CONFIDENTIAL,
+                                    relations=[{"relation_type": m.RELATION_PROJECT,
+                                                "record_id": "P-0"}])
+            plain = await _upload(w["access"], A, OWNER_A, "plain",
+                                  relations=[{"relation_type": m.RELATION_PROJECT,
+                                              "record_id": "P-0"}])
+            for file_id in (payroll, plain):
+                await _inject(w, file_id, "remove")
+            out = await monitor(w).run_once(principal())
+            assert out["counts"]["findings_opened"] == 2
+            rows = await monitor(w).list_findings(ctx(PM_P0, A), project_id="P-0")
+            assert [r["file_id"] for r in rows] == [plain]
+            assert payroll not in {r["file_id"] for r in rows}
+            assert len(await _findings(w)) == 2      # both still recorded
+        run(body())
+
+    def test_a_cross_tenant_caller_is_still_refused_at_every_scope(self):
+        async def body():
+            w, _ = await self._two_projects()
+            for kwargs in ({}, {"project_id": "P-0"}):
+                with pytest.raises(FileAccessDenied) as denied:
+                    await monitor(w).list_findings(principal(SERVICE_B, B), **kwargs)
+                assert denied.value.reason_code == "CROSS_TENANT"
+        run(body())
+
+    def test_only_a_relation_that_targets_projects_counts_as_a_project(self):
+        """A site is not a project: that mapping is a business rule, not ours."""
+        from app.files.monitoring import PROJECT_RELATION_TYPES
+        assert PROJECT_RELATION_TYPES == {m.RELATION_PROJECT, m.RELATION_SUB_PROJECT}
+        assert {m.RELATION_TARGETS[r] for r in PROJECT_RELATION_TYPES} == {"projects"}
+        assert m.RELATION_TARGETS[m.RELATION_SITE] == "sites"
+        assert m.RELATION_SITE not in PROJECT_RELATION_TYPES
+
+        async def body():
+            w = await _world(files=0)
+            await w["db"]["sites"].insert_one({"id": "P-0", "org_id": A, "name": "yard"})
+            # a SITE whose id collides with the project the caller is scoped to
+            file_id = await _upload(w["access"], A, OWNER_A, "sitedoc", relations=[
+                {"relation_type": m.RELATION_SITE, "record_id": "P-0"}])
+            await _inject(w, file_id, "remove")
+            await monitor(w).run_once(principal())
+            found, = await _findings(w)
+            assert found["affected_by_group"] == {"projects": ["P-0"]}
+            # ...is still not disclosed to a project-scoped caller, because the
+            # id belongs to `sites`, not to `projects`
+            assert await monitor(w).list_findings(ctx(PM_P0, A), project_id="P-0") == []
         run(body())

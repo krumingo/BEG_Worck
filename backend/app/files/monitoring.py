@@ -66,7 +66,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
 from app.audit.envelope import (
     ACTOR_HUMAN,
@@ -90,6 +90,7 @@ from app.files.providers.base import (
     VERIFY_SERVER_CHECKSUM,
 )
 from app.files.registry import FileNotFound
+from app.permissions import service as permission_service
 
 # --------------------------------------------------------------- collections
 #: The tenant's ONE monitor control row: the lease, its fence token and the
@@ -200,6 +201,18 @@ FINDING_EXTERNAL_CHANGE = "external_change"
 MONITORED_FINDING_TYPES = frozenset({FINDING_MISSING, FINDING_PERMISSION_FAILURE,
                                      FINDING_CHECKSUM_MISMATCH, FINDING_PROVIDER_UNAVAILABLE,
                                      FINDING_EXTERNAL_CHANGE})
+
+#: The relation types whose target IS a project record, so their ``record_id``
+#: is what a FLOW-002 project ``scope_id`` is compared against.
+#: ``RELATION_SITE`` targets the ``sites`` collection, not ``projects``, so a
+#: site is deliberately NOT read as a project: that mapping is a business rule
+#: and W0-06C does not invent one.
+PROJECT_RELATION_TYPES: FrozenSet[str] = frozenset({m.RELATION_PROJECT,
+                                                    m.RELATION_SUB_PROJECT})
+
+#: A module name no real module may use. Requesting it asks the Permission
+#: Service one question: is this grant restricted to some module at all?
+MODULE_PROBE = "__beg_work_w0_06c_module_probe__"
 
 #: Verification methods in which the CONTENT was actually compared. A verdict
 #: that compared nothing is not proof that a missing, corrupt or forbidden
@@ -573,10 +586,18 @@ class FileIntegrityMonitor:
             idempotency_key=idempotency_key, correlation_id=correlation_id,
             error_code=error_code, actor_type=actor_type)
 
-    async def _authorize(self, principal, action: str, *, entity_id: str):
-        """FLOW-002 BEFORE anything else. A denial is audited and then raised."""
+    async def _authorize(self, principal, action: str, *, entity_id: str,
+                         scope_type: Optional[str] = None, scope_id: Optional[str] = None):
+        """FLOW-002 BEFORE anything else. A denial is audited and then raised.
+
+        ``scope_type``/``scope_id`` are passed straight through to the
+        Permission Service, so a project-scoped assignment is judged against
+        the project the caller actually asked for instead of being handed an
+        unscoped request it can never satisfy.
+        """
         try:
-            return await authorize(principal, action, org_id=self.org_id)
+            return await authorize(principal, action, org_id=self.org_id,
+                                   scope_type=scope_type, scope_id=scope_id)
         except FileAccessDenied as denied:
             await self._audit(
                 action=audit_trail.ACTION_PERMISSION_FAILED,
@@ -586,7 +607,8 @@ class FileIntegrityMonitor:
                 error_code=denied.reason_code,
                 actor_type=getattr(principal, "actor_type", ACTOR_HUMAN),
                 structured_diff={"action": denied.action, "reason_code": denied.reason_code,
-                                 "tenant_id": self.org_id})
+                                 "tenant_id": self.org_id,
+                                 "scope_type": scope_type, "scope_id": scope_id})
             raise
 
     # ---------------------------------------------------------- the lease
@@ -646,6 +668,56 @@ class FileIntegrityMonitor:
                 % (lease.holder, lease.fence))
         return _Lease(holder=lease.holder, fence=lease.fence, expires_at=expires)
 
+    async def _verify_lease(self, lease: _Lease, *, what: str) -> None:
+        """Prove the claim is STILL ours, without extending it. Raises if not.
+
+        This is called immediately after every awaited provider call returns
+        and before any finding, history, alarm or AuditEvent write. The
+        provider call is the one place where a worker sits long enough for its
+        claim to expire, so it is where a taken-over worker has to learn it
+        lost — BEFORE it writes, not after. The fenced ``_checkpoint`` alone
+        could not give that: it runs after the finding and the audit event were
+        already appended, so a stale worker could still overwrite the newer
+        owner's evidence and raise an alarm the newer owner never saw.
+
+        An EXPIRED claim counts as lost even when nobody has taken over yet: at
+        that moment any other worker is entitled to claim the tenant, so
+        writing under it is exactly the hazard. A provider slower than
+        ``lease_ttl_seconds`` therefore ends the pass instead of risking a
+        double write; the run resumes from its checkpoint on the next pass.
+        """
+        row = await self.state.find_one(
+            {"_id": self._state_id(), "holder": lease.holder, "fence": lease.fence},
+            {"_id": 0, "expires_at": 1})
+        if row is None:
+            raise MonitorLeaseLost(
+                "the monitor claim of %s (fence %d) was taken over; refusing to %s"
+                % (lease.holder, lease.fence, what))
+        expires_at = row.get("expires_at")
+        if not expires_at or expires_at <= _iso(self.now()):
+            raise MonitorLeaseLost(
+                "the monitor claim of %s (fence %d) expired during the provider call; "
+                "refusing to %s" % (lease.holder, lease.fence, what))
+
+    def _fenced(self, lease: _Lease, flt: Mapping[str, Any]) -> Dict[str, Any]:
+        """``flt`` plus the fencing condition every finding write carries.
+
+        A finding records the fence of the run that last wrote it, and a write
+        is accepted only from a fence at least as new. So even if a stale
+        worker's write somehow raced past :meth:`_verify_lease`, it cannot
+        clobber what a newer owner already wrote. The ``$exists`` branch keeps
+        a finding written before this field existed updatable.
+        """
+        return dict(flt, **{"$or": [{"fence": {"$exists": False}},
+                                    {"fence": {"$lte": lease.fence}}]})
+
+    @staticmethod
+    def _fence_rejected(result: Any, lease: _Lease, what: str) -> None:
+        if getattr(result, "matched_count", 0) != 1:
+            raise MonitorLeaseLost(
+                "a newer owner already wrote this finding (fence %d); refusing to %s"
+                % (lease.fence, what))
+
     async def _release(self, lease: _Lease, *, run_id: str, status: str,
                        result: Mapping[str, Any], next_due_at: Optional[str]) -> None:
         """Free the claim and publish the last/next/result metadata.
@@ -669,8 +741,17 @@ class FileIntegrityMonitor:
                       "released_at": _iso(self.now())}})
 
     async def monitor_state(self, ctx) -> Optional[Dict[str, Any]]:
-        """The tenant's last/next/result metadata. FLOW-002 checked."""
+        """The tenant's last/next/result metadata. FLOW-002 checked.
+
+        This row is TENANT-WIDE: it describes every pass over every original.
+        It is therefore a company-scope read, and a project-scoped grant cannot
+        satisfy it — asking for the whole tenant is not a project request. A
+        module-restricted grant is refused for the same reason as
+        :meth:`list_findings`.
+        """
         await self._authorize(ctx, ACTION_MONITOR_READ, entity_id=self.org_id)
+        await self._module_unrestricted(ctx, ACTION_MONITOR_READ, scope_type=None,
+                                        scope_id=None, entity_id=self.org_id)
         return await self.state.find_one({"_id": self._state_id()}, {"_id": 0})
 
     # ------------------------------------------------------------ the walk
@@ -1004,6 +1085,11 @@ class FileIntegrityMonitor:
                 # gone). Not a provider problem and not a finding.
                 counts.skipped_unreadable += 1
                 return {"status": "skipped_unreadable"}
+            # The awaited call above is the long one. Before this result is
+            # allowed to become a finding, an alarm, a history entry or an
+            # AuditEvent — and before another attempt hits the provider — the
+            # claim must still be ours.
+            await self._verify_lease(lease, what="record an integrity check")
             if result["availability"] not in RETRYABLE_AVAILABILITY:
                 break
         counts.checked += 1
@@ -1028,11 +1114,12 @@ class FileIntegrityMonitor:
                 "unknown W0-06B finding type %r — classify it before monitoring it"
                 % finding_type)
         if finding_type is not None:
-            await self._observe(principal, run, counts, location, result, finding_type, severity)
+            await self._observe(principal, run, lease, counts, location, result,
+                                finding_type, severity)
         # Whether or not THIS check found a problem, every other open finding of
         # this location is re-judged against its own type-specific proof. A
         # result that cannot prove a type fixed leaves that finding open.
-        await self._try_resolve(principal, run, counts, location, result,
+        await self._try_resolve(principal, run, lease, counts, location, result,
                                 skip_type=finding_type)
 
     def _identity_of(self, location: Mapping[str, Any], result: Mapping[str, Any],
@@ -1063,9 +1150,10 @@ class FileIntegrityMonitor:
         assert_no_secrets(evidence)
         return evidence
 
-    async def _observe(self, principal, run: Mapping[str, Any], counts: _Counts,
-                       location: Mapping[str, Any], result: Mapping[str, Any],
-                       finding_type: str, severity: str) -> Dict[str, Any]:
+    async def _observe(self, principal, run: Mapping[str, Any], lease: _Lease,
+                       counts: _Counts, location: Mapping[str, Any],
+                       result: Mapping[str, Any], finding_type: str,
+                       severity: str) -> Dict[str, Any]:
         """Open, re-observe or reopen the ONE finding of this identity."""
         identity, finding_id = self._identity_of(location, result, finding_type)
         now = _iso(self.now())
@@ -1098,31 +1186,36 @@ class FileIntegrityMonitor:
                        occurrences=1, consecutive_observations=consecutive,
                        resolution=None, resolution_blocked_reason=None,
                        outage_persistence=self._outage_persistence(finding_type, consecutive),
-                       transitions=[], transition_keys=[])
+                       transitions=[], transition_keys=[],
+                       # the fence of the run that wrote this finding last
+                       fence=lease.fence)
             assert_no_secrets(row, "finding")
             await self.findings.insert_one(dict(row))
             counts.findings_opened += 1
-            await self._transition(principal, run, finding_id, TRANSITION_OPENED, result,
-                                   marker=now, severity=severity, finding_type=finding_type)
+            await self._transition(principal, run, lease, finding_id, TRANSITION_OPENED,
+                                   result, marker=now, severity=severity,
+                                   finding_type=finding_type)
             return row
         reopened = existing.get("state") == FINDING_RESOLVED
         consecutive = 1 if reopened else int(existing.get("consecutive_observations") or 0) + 1
         update: Dict[str, Any] = dict(
             shared, state=FINDING_OPEN, consecutive_observations=consecutive,
             outage_persistence=self._outage_persistence(finding_type, consecutive),
-            resolution=None, resolution_blocked_reason=None)
+            resolution=None, resolution_blocked_reason=None, fence=lease.fence)
         if reopened:
             update["reopened_at"] = now
             update["resolved_at"] = None
         assert_no_secrets(update, "finding")
-        await self.findings.update_one({"id": finding_id},
-                                       {"$set": update, "$inc": {"occurrences": 1}})
+        applied = await self.findings.update_one(
+            self._fenced(lease, {"id": finding_id}),
+            {"$set": update, "$inc": {"occurrences": 1}})
+        self._fence_rejected(applied, lease, "re-observe this finding")
         if reopened:
             counts.findings_reopened += 1
         else:
             counts.findings_observed += 1
         await self._transition(
-            principal, run, finding_id,
+            principal, run, lease, finding_id,
             TRANSITION_REOPENED if reopened else TRANSITION_OBSERVED, result,
             marker=now, severity=severity, finding_type=finding_type)
         return await self.findings.find_one({"id": finding_id}, {"_id": 0})
@@ -1142,9 +1235,9 @@ class FileIntegrityMonitor:
             return OUTAGE_UNCLASSIFIED
         return OUTAGE_PERSISTENT if consecutive >= threshold else OUTAGE_TRANSIENT
 
-    async def _transition(self, principal, run: Mapping[str, Any], finding_id: str,
-                          transition: str, result: Mapping[str, Any], *, marker: str,
-                          severity: Optional[str], finding_type: str,
+    async def _transition(self, principal, run: Mapping[str, Any], lease: _Lease,
+                          finding_id: str, transition: str, result: Mapping[str, Any], *,
+                          marker: str, severity: Optional[str], finding_type: str,
                           reason: Optional[str] = None) -> bool:
         """Append ONE lifecycle transition, idempotently, and audit it.
 
@@ -1159,9 +1252,12 @@ class FileIntegrityMonitor:
                  "method": result.get("method"), "reason": reason}
         assert_no_secrets(entry, "transition")
         applied = await self.findings.update_one(
-            {"id": finding_id, "transition_keys": {"$ne": key}},
+            self._fenced(lease, {"id": finding_id, "transition_keys": {"$ne": key}}),
             {"$push": {"transitions": entry}, "$addToSet": {"transition_keys": key}})
         if getattr(applied, "matched_count", 0) != 1:
+            # Either this exact transition is already recorded (idempotent
+            # replay) or a newer owner has moved the finding past this fence.
+            # Both mean: append nothing and audit nothing.
             return False
         await self._audit(
             action=_TRANSITION_ACTIONS[transition], actor_id=principal.user_id,
@@ -1184,9 +1280,10 @@ class FileIntegrityMonitor:
                              "evidence": self._evidence(result)})
         return True
 
-    async def _try_resolve(self, principal, run: Mapping[str, Any], counts: _Counts,
-                           location: Mapping[str, Any], result: Mapping[str, Any],
-                           *, skip_type: Optional[str]) -> None:
+    async def _try_resolve(self, principal, run: Mapping[str, Any], lease: _Lease,
+                           counts: _Counts, location: Mapping[str, Any],
+                           result: Mapping[str, Any], *,
+                           skip_type: Optional[str]) -> None:
         """Close the open findings of this location that this result PROVES fixed."""
         rows = await self.findings.find(
             {"location_id": result["location_id"], "version_no": result["version_no"],
@@ -1202,22 +1299,25 @@ class FileIntegrityMonitor:
                 continue
             proven, reason = resolution_proof(finding_type, result)
             if not proven:
-                await self.findings.update_one(
-                    {"id": row["id"]},
-                    {"$set": {"resolution_blocked_reason": reason, "updated_at": now}})
+                blocked = await self.findings.update_one(
+                    self._fenced(lease, {"id": row["id"]}),
+                    {"$set": {"resolution_blocked_reason": reason, "updated_at": now,
+                              "fence": lease.fence}})
+                self._fence_rejected(blocked, lease, "record a blocked resolution")
                 continue
-            await self.findings.update_one(
-                {"id": row["id"]},
+            closed = await self.findings.update_one(
+                self._fenced(lease, {"id": row["id"]}),
                 {"$set": {"state": FINDING_RESOLVED, "resolved_at": now,
                           "resolution_blocked_reason": None, "updated_at": now,
-                          "consecutive_observations": 0,
+                          "consecutive_observations": 0, "fence": lease.fence,
                           "resolution": {"reason": reason, "run_id": run["id"],
                                          "availability": result.get("availability"),
                                          "method": result.get("method"), "at": now,
                                          "evidence": self._evidence(result)}}})
+            self._fence_rejected(closed, lease, "resolve this finding")
             counts.findings_resolved += 1
-            await self._transition(principal, run, row["id"], TRANSITION_RESOLVED, result,
-                                   marker=now, severity=row.get("severity"),
+            await self._transition(principal, run, lease, row["id"], TRANSITION_RESOLVED,
+                                   result, marker=now, severity=row.get("severity"),
                                    finding_type=finding_type, reason=reason)
 
     # ------------------------------------------------- affected-record refresh
@@ -1273,20 +1373,44 @@ class FileIntegrityMonitor:
                 "refreshed_at": now}
 
     # ------------------------------------------------- the alarm projection
-    async def list_findings(self, ctx, *, state: Optional[str] = None,
+    async def list_findings(self, ctx, *, project_id: Optional[str] = None,
+                            state: Optional[str] = None,
                             alarm_level_in: Optional[Sequence[str]] = None,
                             finding_type: Optional[str] = None,
                             file_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """This tenant's findings/alarms, FLOW-002 checked, sensitivity filtered.
+        """This tenant's findings/alarms, scoped by FLOW-002 before disclosure.
 
-        Two narrower rights apply on top of :data:`ACTION_MONITOR_READ`: the
-        tenant (the view itself cannot reach another tenant's documents) and
-        the FILE's sensitivity — a restricted or confidential file's alarm is
-        only listed for a caller who also holds that file's sensitivity action
-        (FLOW-016: reaching a file does not grant payroll, bank or personal
-        documents).
+        FOUR narrower rights apply on top of :data:`ACTION_MONITOR_READ`, and
+        all four are enforced BEFORE any affected-record label or provider
+        identifier leaves this method:
+
+        * **tenant** — the view itself cannot reach another tenant's documents,
+          and a caller of another tenant is refused as ``CROSS_TENANT``;
+        * **project** — ``project_id`` is the scope the caller asks for, and it
+          is passed to the Permission Service as the requested project scope. A
+          project-scoped assignment therefore gets its OWN project and nothing
+          else, and gets nothing at all without naming one (asking for every
+          project is a company-scope request it cannot satisfy);
+        * **module** — a module-restricted grant is refused outright, see
+          :meth:`_module_unrestricted`;
+        * **sensitivity** — a restricted or confidential file's alarm is listed
+          only for a caller who also holds that file's sensitivity action
+          (FLOW-016: reaching a file does not grant payroll, bank or personal
+          documents).
+
+        A caller whose grant is narrower than company scope receives a NARROWED
+        view: only the affected records of the project it asked for, with the
+        number of undisclosed records stated rather than their labels, and
+        without the provider identifiers. See :meth:`_project_of`.
         """
-        await self._authorize(ctx, ACTION_MONITOR_READ, entity_id=file_id or self.org_id)
+        scope_type, scope_id = ("project", project_id) if project_id else (None, None)
+        await self._authorize(ctx, ACTION_MONITOR_READ, entity_id=file_id or self.org_id,
+                              scope_type=scope_type, scope_id=scope_id)
+        await self._module_unrestricted(ctx, ACTION_MONITOR_READ,
+                                        scope_type=scope_type, scope_id=scope_id,
+                                        entity_id=file_id or self.org_id)
+        company_wide = await self._allowed(ctx, ACTION_MONITOR_READ)
+
         flt: Dict[str, Any] = {}
         if state is not None:
             if state not in FINDING_STATES:
@@ -1302,12 +1426,132 @@ class FileIntegrityMonitor:
                 raise MonitorConfigurationRefused(
                     "unknown alarm level: %s" % ", ".join(unknown))
             flt["alarm_level"] = {"$in": list(alarm_level_in)}
+
         rows = await self.findings.find(flt, {"_id": 0}).to_list(None)
         allowed: List[Dict[str, Any]] = []
         for row in sorted(rows, key=m.sort_key):
-            if await self._may_read_file(ctx, row["file_id"]):
-                allowed.append(row)
+            if project_id is not None and project_id not in self._projects_of(row):
+                continue        # this alarm does not touch the project asked for
+            if not await self._may_read_file(ctx, row["file_id"]):
+                continue
+            allowed.append(self._disclose(row, company_wide=company_wide,
+                                          project_id=project_id))
         return allowed
+
+    @staticmethod
+    def _projects_of(row: Mapping[str, Any]) -> FrozenSet[str]:
+        """The PROJECT ids this finding's affected records name.
+
+        Only the relation types whose target IS the ``projects`` collection
+        count, because that is what a FLOW-002 project ``scope_id`` is compared
+        against. A site relation targets ``sites``, a different collection, so
+        it is NOT read as a project here: mapping a site onto a project is a
+        business rule, and W0-06C does not invent one.
+        """
+        return frozenset(
+            str(record.get("record_id"))
+            for record in (row.get("affected_records") or [])
+            if record.get("relation_type") in PROJECT_RELATION_TYPES
+            and record.get("record_id"))
+
+    def _disclose(self, row: Mapping[str, Any], *, company_wide: bool,
+                  project_id: Optional[str]) -> Dict[str, Any]:
+        """One finding as this caller is allowed to see it.
+
+        A company-scoped grant sees the finding as recorded. A narrower grant
+        sees the same ALARM — type, severity, level, state, history, the total
+        number of affected records — but only the affected records of the
+        project it is scoped to, and no provider identifiers: a record in
+        another group cannot be shown to be inside that project without a
+        business mapping this package must not invent, so it is counted and
+        withheld rather than guessed at either way.
+        """
+        out = dict(row)
+        records = list(row.get("affected_records") or [])
+        total = int(row.get("affected_record_count") or len(records))
+        if company_wide:
+            out["disclosure"] = {"scope": "company", "project_id": project_id,
+                                 "affected_records_withheld": 0,
+                                 "provider_identifiers": True}
+            return out
+        visible = [r for r in records
+                   if r.get("relation_type") in PROJECT_RELATION_TYPES
+                   and str(r.get("record_id")) == project_id]
+        out["affected_records"] = visible
+        out["affected_by_group"] = AffectedRecordResolver.grouped(visible)
+        out["affected_record_count"] = total          # the alarm's own weight
+        # `identity` is the deterministic key and it ENCODES the provider
+        # binding and the location, so withholding the fields while leaving the
+        # key behind would disclose them anyway. The opaque `id` stays: it is a
+        # hash, and a caller needs something to refer to the alarm by.
+        for field in ("provider_binding_id", "provider_kind", "location_id", "evidence",
+                      "identity"):
+            out.pop(field, None)
+        out["disclosure"] = {"scope": "project", "project_id": project_id,
+                             "affected_records_withheld": total - len(visible),
+                             "provider_identifiers": False}
+        return out
+
+    async def _allowed(self, ctx, action: str, *, scope_type: Optional[str] = None,
+                       scope_id: Optional[str] = None) -> bool:
+        """Would FLOW-002 allow this, yes or no? Silent: it audits nothing.
+
+        Used for the two PROBES below, which ask the Permission Service a
+        question rather than make a decision. A probe that came back ``False``
+        is not a denial of anything the caller asked for, so auditing it would
+        fill the chain with refusals nobody attempted.
+        """
+        try:
+            await authorize(ctx, action, org_id=self.org_id,
+                            scope_type=scope_type, scope_id=scope_id)
+            return True
+        except FileAccessDenied:
+            return False
+
+    async def _module_unrestricted(self, ctx, action: str, *, scope_type: Optional[str],
+                                   scope_id: Optional[str], entity_id: str) -> None:
+        """Refuse a module-restricted grant. FAIL CLOSED, by design.
+
+        ``_evaluate_one`` enforces an assignment's ``module`` only when the
+        caller names a requested module, so a company-scoped grant restricted
+        to one module would otherwise project EVERY module's findings. Deciding
+        which module a finding belongs to would need a file/relation → module
+        mapping, and the canon has none: ``module`` appears only as per-route
+        literals, with no registry and no mapping from a file category or a
+        relation group. Inventing one is exactly what this task forbids.
+
+        So the question asked here is the only one that can be answered from
+        the canon: *is the grant restricted to some module at all?* Requesting
+        the reserved :data:`MODULE_PROBE` is denied by any assignment that
+        names a module and allowed by any assignment that names none. If every
+        matching grant is module-restricted, the projection refuses rather than
+        guessing which findings are in that module.
+        """
+        if await self._allowed(ctx, action, scope_type=scope_type, scope_id=scope_id):
+            if not await self._allowed_for_module(ctx, action, scope_type, scope_id):
+                denied = FileAccessDenied(action, permission_service.REASON_MODULE_NOT_ALLOWED)
+                await self._audit(
+                    action=audit_trail.ACTION_PERMISSION_FAILED,
+                    actor_id=getattr(ctx, "user_id", None) or "anonymous",
+                    entity_type="file_integrity_monitor", entity_id=entity_id,
+                    result=RESULT_FAILURE,
+                    reason="integrity alarm projection refused: module-restricted grant",
+                    error_code=denied.reason_code,
+                    actor_type=getattr(ctx, "actor_type", ACTOR_HUMAN),
+                    structured_diff={"action": action, "reason_code": denied.reason_code,
+                                     "tenant_id": self.org_id,
+                                     "module_probe": MODULE_PROBE})
+                raise denied
+
+    async def _allowed_for_module(self, ctx, action: str, scope_type: Optional[str],
+                                  scope_id: Optional[str]) -> bool:
+        try:
+            decision = await permission_service.evaluate_permission(
+                ctx, action, module=MODULE_PROBE, scope_type=scope_type,
+                scope_id=scope_id, resource_tenant_id=self.org_id)
+        except Exception:                                             # noqa: BLE001
+            return False                                   # fail closed, always
+        return bool(decision.allowed)
 
     async def _may_read_file(self, ctx, file_id: str) -> bool:
         """The file's own sensitivity right, evaluated through FLOW-002."""
@@ -1317,21 +1561,69 @@ class FileIntegrityMonitor:
         action = sensitivity_action(file_row.get("sensitivity"))
         if action is None:
             return True
-        try:
-            await authorize(ctx, action, org_id=self.org_id)
-        except FileAccessDenied:
-            return False
-        return True
+        return await self._allowed(ctx, action)
 
 
 # ------------------------------------------------------- the resolution rules
+def _complete_content_proof(expected: Mapping[str, Any], observed: Mapping[str, Any],
+                            method: Optional[str], *, require_read: bool
+                            ) -> Tuple[bool, str]:
+    """Was the object POSITIVELY identified and its content actually compared?
+
+    One rule, used by every type that needs content evidence, so no type can
+    quietly accept less than another:
+
+    * ``require_read`` demands a real ``read_and_hash`` — bytes BEG_Work
+      actually fetched. A provider-reported digest (``server_checksum``) comes
+      from ``stat()``, which an adapter may answer without ever performing an
+      authorized read, so it cannot prove read access was restored.
+    * otherwise some real content method is still required: a verdict that
+      compared nothing (``none``) or only a length (``size_only``) is not
+      evidence that the right bytes are back.
+    * whatever the canonical record EXPECTS must have been observed and must
+      match. A missing observed checksum or a missing observed size next to a
+      known expected one is an incomplete proof, not a pass.
+    """
+    if require_read and method != VERIFY_READ_AND_HASH:
+        return False, "incomplete_proof:no_authorized_read"
+    if method not in CONTENT_METHODS:
+        return False, "incomplete_proof:no_content_comparison"
+
+    want_sum, got_sum = expected.get("checksum"), observed.get("checksum")
+    if want_sum:
+        if not got_sum:
+            return False, "incomplete_proof:no_observed_checksum"
+        if (want_sum.get("algorithm") or "") != (got_sum.get("algorithm") or "") \
+                or want_sum.get("value") != got_sum.get("value"):
+            return False, "incomplete_proof:checksum_still_differs"
+
+    want_size, got_size = expected.get("size_bytes"), observed.get("size_bytes")
+    if want_size is not None:
+        if got_size is None:
+            return False, "incomplete_proof:no_observed_size"
+        if want_size != got_size:
+            return False, "incomplete_proof:size_still_differs"
+    return True, ""
+
+
 def resolution_proof(finding_type: Optional[str], result: Mapping[str, Any]
                      ) -> Tuple[bool, str]:
     """``(proven, reason)`` — the TYPE-SPECIFIC proof that a finding is fixed.
 
-    A provider that answers at all is not proof. Each type needs the evidence
-    that contradicts what was recorded, and an incomplete proof is not a
+    A provider that answers at all is not proof, and neither is a verdict that
+    merely failed to contradict the record. Each type needs the evidence that
+    answers what actually failed, and an incomplete proof is never a
     resolution: the finding stays open and the reason says what is missing.
+
+    ====================  ===========================================================
+    finding type          what closes it
+    ====================  ===========================================================
+    ``provider_unavailable``  a COMPLETE object + content verification
+    ``missing_original``      an identified object whose content was compared
+    ``checksum_mismatch``     the canonical checksum AND size observed and matching
+    ``permission_failure``    an authorized READ of the bytes, never a reachable stat
+    ``external_change``       the recorded provider identity matching again
+    ====================  ===========================================================
     """
     if finding_type not in MONITORED_FINDING_TYPES:
         return False, "unknown_finding_type"
@@ -1341,40 +1633,42 @@ def resolution_proof(finding_type: Optional[str], result: Mapping[str, Any]
     expected = result.get("expected") or {}
     observed = result.get("observed") or {}
     method = result.get("method")
-    content_compared = method in CONTENT_METHODS
 
     if finding_type == FINDING_PROVIDER_UNAVAILABLE:
-        # FLOW-016/W0-06C: a full provider verification succeeding IS the proof
-        # for an outage — and `ok` already means the object was found, its size
-        # and checksum matched and its identity matched. It is not a bare ping.
-        return True, "provider_verification_succeeded"
+        # An outage is closed by a verification that actually completed, not by
+        # the provider merely answering: ``available`` can come back with
+        # nothing compared at all when there is no provider digest and no
+        # readable body, and that says nothing about the bytes.
+        proven, reason = _complete_content_proof(expected, observed, method,
+                                                 require_read=False)
+        return (True, "provider_verification_succeeded") if proven else (False, reason)
 
     if finding_type == FINDING_MISSING:
-        if not content_compared:
-            return False, "incomplete_proof:no_content_comparison"
+        proven, reason = _complete_content_proof(expected, observed, method,
+                                                 require_read=False)
+        if not proven:
+            return False, reason
         if expected.get("provider_file_id") and observed.get("provider_file_id") \
                 and expected["provider_file_id"] != observed["provider_file_id"]:
             return False, "incomplete_proof:provider_object_not_identified"
         return True, "identified_original_present_and_compared"
 
     if finding_type == FINDING_CHECKSUM_MISMATCH:
-        want, got = expected.get("checksum"), observed.get("checksum")
-        if not content_compared or not want or not got:
+        # A checksum finding cannot be closed without a canonical checksum to
+        # close it against, whatever else the provider reports.
+        if not expected.get("checksum"):
             return False, "incomplete_proof:no_checksum_comparison"
-        if (want.get("algorithm") or "") != (got.get("algorithm") or "") \
-                or want.get("value") != got.get("value"):
-            return False, "incomplete_proof:checksum_still_differs"
-        want_size, got_size = expected.get("size_bytes"), observed.get("size_bytes")
-        if want_size is not None and got_size is not None and want_size != got_size:
-            return False, "incomplete_proof:size_still_differs"
-        return True, "canonical_checksum_and_size_match"
+        proven, reason = _complete_content_proof(expected, observed, method,
+                                                 require_read=False)
+        return (True, "canonical_checksum_and_size_match") if proven else (False, reason)
 
     if finding_type == FINDING_PERMISSION_FAILURE:
-        # A reachable `stat` is not a read. Only a completed CONTENT comparison
-        # shows the account got back the access the check actually needs.
-        if not content_compared:
-            return False, "incomplete_proof:no_authorized_read"
-        return True, "authorized_content_read_succeeded"
+        # The access that failed is READ access. A reachable ``stat`` — which
+        # is where a provider-reported digest comes from — does not prove it
+        # came back, so only bytes BEG_Work actually read will close this.
+        proven, reason = _complete_content_proof(expected, observed, method,
+                                                 require_read=True)
+        return (True, "authorized_content_read_succeeded") if proven else (False, reason)
 
     # external_change: the recorded provider identity must match again. Bytes
     # alone are never enough — adopting a replaced object silently is exactly
@@ -1402,4 +1696,11 @@ def resolution_proof(finding_type: Optional[str], result: Mapping[str, Any]
 #: availability state in W0-06B would otherwise be scheduled and never
 #: reported, which is the exact failure this assertion exists to prevent.
 assert MONITORED_FINDING_TYPES == {v for v in FINDING_TYPES.values() if v is not None}
+
+#: Every relation this package reads as a project must actually target the
+#: ``projects`` collection. If a relation type is ever retargeted, the project
+#: scope of the alarm projection must be reconsidered rather than silently
+#: comparing a FLOW-002 project id against some other collection's id.
+assert {m.RELATION_TARGETS[r] for r in PROJECT_RELATION_TYPES} == {"projects"}
+assert MODULE_PROBE not in ("", None) and MODULE_PROBE.startswith("__beg_work")
 assert set(ALARM_BY_SEVERITY.values()) <= set(ALARM_LEVELS)
