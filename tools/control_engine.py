@@ -301,7 +301,7 @@ def render_board(state: dict) -> str:
         lines.append(f"- {'Draft ' if state['pr_draft'] else ''}PR: [#{state['pr_number']}]({url}) · exact head `{state['pr_head_sha']}`")
     if state["last_handoff"]:
         lines.append(f"- HANDOFF: [comment]({state['last_handoff']['url']}) · head `{state['last_handoff']['head_sha']}`")
-    lines += [f"- Dispatch session: {state['dispatch_run_url'] or '—'} · dispatch state **{state['dispatch_state']}**",
+    lines += [f"- Dispatch session/evidence: {state['dispatch_run_url'] or '—'} · dispatch state **{state['dispatch_state']}**",
               f"- HANDOFF comment SHA-256: `{refs.get('handoff_comment_sha256') or '—'}`",
               "- Canonical docs: " + (", ".join(f"`{item['path']}` @ `{item['blob_sha'][:8]}`" for item in refs.get("canonical_docs", [])) or "—"),
               f"- Wave/Flow: `{state['wave']}` / `{state['flow']}` · progress: **{state['progress']['stage']} / {state['progress']['mode']}**" + (f" ({state['progress']['percent']}%)" if state['progress']['percent'] is not None else " (no proven percentage)"),

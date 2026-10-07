@@ -124,7 +124,7 @@ def render_board(state: dict) -> str:
             f"- HANDOFF: [comment]({state['last_handoff']['url']}) · head `{state['last_handoff']['head_sha']}`"
         )
     lines += [
-        f"- Dispatch session: {state['dispatch_run_url'] or '—'} · dispatch state **{state['dispatch_state']}**",
+        f"- Dispatch session/evidence: {state['dispatch_run_url'] or '—'} · dispatch state **{state['dispatch_state']}**",
         f"- HANDOFF comment SHA-256: `{refs.get('handoff_comment_sha256') or '—'}`",
         "- Canonical docs: "
         + (
