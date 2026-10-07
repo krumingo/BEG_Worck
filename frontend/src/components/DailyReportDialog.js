@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDate } from "@/lib/i18nUtils";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS_LABELS = { WORKING: "На работа", LEAVE: "Отпуск", ABSENT_UNEXCUSED: "Самоотлъчка", SICK: "Болен" };
 const STATUS_COLORS = { WORKING: "bg-emerald-500/15 text-emerald-400", LEAVE: "bg-blue-500/15 text-blue-400", ABSENT_UNEXCUSED: "bg-red-500/15 text-red-400", SICK: "bg-orange-500/15 text-orange-400" };
@@ -499,7 +500,7 @@ export function ProjectPersonnelCard({ projectId }) {
           <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors" data-testid={`personnel-row-${i}`}>
             <div className="flex items-center gap-3">
               {emp.avatar_url ? (
-                <img src={`${process.env.REACT_APP_BACKEND_URL}${emp.avatar_url}`} alt="" className="w-8 h-8 rounded-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
+                <AuthImage src={emp.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
                   {(emp.first_name?.[0] || "")}{(emp.last_name?.[0] || "")}

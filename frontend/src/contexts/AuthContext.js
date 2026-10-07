@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
+import { clearProtectedImages } from "@/components/AuthImage";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Company Auth Context - uses bw_token / bw_user
@@ -41,6 +42,8 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await API.post("/auth/login", { email, password });
+    // W0-06B/C03: a new principal never sees the previous one's protected images.
+    clearProtectedImages();
     localStorage.setItem("bw_token", res.data.token);
     localStorage.setItem("bw_user", JSON.stringify(res.data.user));
     setUser(res.data.user);
@@ -52,6 +55,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("bw_token");
     localStorage.removeItem("bw_user");
+    clearProtectedImages();
     setUser(null);
     setOrg(null);
   };

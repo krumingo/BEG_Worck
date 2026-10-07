@@ -117,7 +117,34 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_TASKS,
               "worker_calendar", "alarm_rules", "alarm_events"),
     **_family(FAMILY_FILES,
-              "media_files", "scan_docs", "excel_import_templates"),
+              # Legacy per-module file metadata (W0-06A inventory: the records
+              # the File Registry replaces as the identity of a file).
+              "media_files", "scan_docs", "excel_import_templates",
+              # W0-06A canonical File Registry (FLOW-016). ``org_id``-keyed like
+              # every other operational collection, because its relations point
+              # at ``org_id``-keyed business records: splitting the two keys
+              # would put half of each relation on each side of the boundary.
+              # The one list in ``app.files.models.REGISTRY_COLLECTIONS`` must
+              # equal the names here; ``tests/test_w0_06a_file_registry.py``
+              # proves it, so a new collection cannot appear unclassified.
+              "file_registry", "file_versions", "file_relations",
+              "file_provider_locations", "file_derived_cache",
+              "file_delete_requests",
+              # W0-06B: the registry's per-tenant registration counter.
+              "file_registry_sequences",
+              # W0-06B storage providers (FLOW-016 onboarding): the tenant's
+              # provider bindings, its sealed credentials, the evidence of each
+              # activation attempt and the short-lived BEG_Work access grants.
+              "storage_provider_bindings", "storage_credentials",
+              "storage_activation_runs", "storage_access_grants",
+              # W0-06C periodic integrity monitoring (FLOW-016): the tenant's
+              # monitor control row (its lease, fence token and last/next/result
+              # metadata), one record per bounded run with its cursor and
+              # checkpoint, and the finding/alarm history. ``org_id``-keyed like
+              # the rest of the family: a finding names this tenant's business
+              # records, so it belongs on this tenant's side of the boundary.
+              "storage_integrity_monitor_state", "storage_integrity_runs",
+              "storage_integrity_findings"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,
