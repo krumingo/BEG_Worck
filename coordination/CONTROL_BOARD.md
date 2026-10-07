@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-07T13:32:40Z · CONTROL STATE: **VALID** as of 2026-10-07T13:32:40Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-07T13:43:35Z · CONTROL STATE: **VALID** as of 2026-10-07T13:43:35Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06C / C02 / CODEX / **REVIEWING**
-LAST: CLAUDE — final exact-head C02 HANDOFF published; direct cloud-to-Codex handoff unavailable / HANDOFF_SEND_FAILED
+CURRENT: W0-06C / C02 / CODEX / **CHANGES_REQUESTED**
+LAST: CODEX — independent C02 review reproduced stale finding after post-verification lease takeover / CHANGES_REQUESTED
 RELAY: NO_RELAY_NEEDED · — → —
-NOW: Claude published final C02 HANDOFF at 1a20a12dbc83538f752f248bc0fc41c91a5e697a and stopped. Draft PR #49 head matches; Codex independently reviews C01→C02 and whole main→head. No C02 verdict yet.
-TRANSITION: HANDOFF_DETECTED / OBSERVED · HANDOFF https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037849389
+NOW: Independent C02 review reproduced a post-verification lease-takeover race on disposable real MongoDB: stale worker persisted a finding after a new owner claimed the tenant. C02 CHANGES_REQUESTED; no C03 Send and no W0-06C PASS.
+TRANSITION: CHANGES_REQUESTED / OBSERVED · review https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md
 NEXT: CODEX
-KRUM ACTION: NONE during independent C02 review
-WAITING FOR: Independent C02 verdict
+KRUM ACTION: Platform action-time confirmation only before one bounded C03 Computer Use Send
+WAITING FOR: Bounded C03 correction dispatch after platform confirmation
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-06C
 CYCLE: C02
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: REVIEWING
+STATE: CHANGES_REQUESTED
 NEXT: CODEX
-WAITING_FOR: Independent C02 verdict
+WAITING_FOR: Bounded C03 correction dispatch after platform confirmation
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06C | C02 | WAITING | REVIEWING | STOPPED | CODEX | Independent C02 verdict | REVIEWING |
+| W0-06C | C02 | WAITING | CHANGES_REQUESTED | STOPPED | CODEX | Bounded C03 correction dispatch after platform confirmation | CHANGES_REQUESTED |
 
 ## Agent cards
 
@@ -38,19 +38,20 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06C/C01/GPT | Independent Codex C02 verdict | 2026-10-07T13:32:40Z |
-| CODEX | REVIEWING | W0-06C/C02/CX | Independent code and test gates | 2026-10-07T13:32:40Z |
-| CLAUDE | STOPPED | W0-06C/C02/CL | Codex independent verdict | 2026-10-07T13:32:40Z |
+| GPT | WAITING | W0-06C/C01/GPT | Bounded C03 correction result | 2026-10-07T13:43:35Z |
+| CODEX | CHANGES_REQUESTED | W0-06C/C02/CX | Bounded C03 correction dispatch with platform confirmation | 2026-10-07T13:43:35Z |
+| CLAUDE | STOPPED | W0-06C/C02/CL | C03 assignment if dispatched | 2026-10-07T13:43:35Z |
 
-GPT → Claude (C02 correction complete) → **Codex independent review** → GPT
+GPT → Claude (C02 correction complete) → **Codex CHANGES_REQUESTED** → bounded C03 after platform confirmation
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `91163ba2c5ac9cfede7c271c759e4ec93836f863` · blob `372e55b1dd960c9b84129213c56f92b529f3da86`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `4d19e8f` · blob `645746fcf7d8506e3de70ad8a2680e35934e5a3c`
 - Draft PR: [#49](https://github.com/krumingo/BEG_Worck/pull/49) · exact head `1a20a12dbc83538f752f248bc0fc41c91a5e697a`
 - HANDOFF: [comment](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037849389) · head `1a20a12dbc83538f752f248bc0fc41c91a5e697a`
 - Independent C01 verdict: [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286) · [review evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md)
-- C02 UI Send evidence: [CORRECTION_DISPATCH_OK](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733) · session URL withheld from public GitHub · dispatch state **SENT_ONCE_RUNNING**
+- C02 UI Send evidence: [CORRECTION_DISPATCH_OK](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733) · session URL withheld from public GitHub · C03 dispatch state **NOT SENT**
+- Independent C02 verdict: [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md) · post-verification lease race reproduced on disposable real Mongo
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `7488b4c8`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `e7957b71`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `e0ce9c2a`, `docs/architecture/TENANCY_MODEL.md` @ `93997df2`, `docs/flows/FLOW-002.md` @ `5594ffa4`, `docs/flows/FLOW-016.md` @ `af092bbd`, `docs/flows/FLOW-040.md` @ `3d2ce96e`
 - Wave/Flow: `W0` / `FLOW-016` · progress: **IMPLEMENTATION / STAGE_ONLY** (no proven percentage)

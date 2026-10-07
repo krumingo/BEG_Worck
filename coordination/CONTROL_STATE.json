@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-07T13:32:40Z",
+  "validated_at": "2026-10-07T13:43:35Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "657f019",
-  "control_state_commit_sha": "b1d08d8cb33a0825a3bd9cd500d276072f726824",
-  "now": "Claude published final exact-head C02 HANDOFF at 1a20a12dbc83538f752f248bc0fc41c91a5e697a and stopped. Live Draft PR #49 head matches. Codex is independently reviewing C01-to-C02 and whole main-to-head; no C02 verdict yet.",
+  "active_source_commit_sha": "4d19e8f",
+  "control_state_commit_sha": "fd3673e",
+  "now": "Independent C02 review reproduced a post-verification lease-takeover race on disposable real MongoDB: stale worker persisted a finding after a new owner claimed the tenant. C02 CHANGES_REQUESTED; no C03 Send and no W0-06C PASS.",
   "transition": {
-    "event": "HANDOFF_DETECTED",
+    "event": "CHANGES_REQUESTED",
     "phase": "OBSERVED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037849389",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md",
     "verdict_publication": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
@@ -26,59 +26,59 @@
       "state": "WAITING",
       "work_id": "W0-06C/C01/GPT",
       "waiting_for": "Independent Codex C02 verdict",
-      "updated_at": "2026-10-07T13:32:40Z"
+      "updated_at": "2026-10-07T13:43:35Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "CHANGES_REQUESTED",
       "work_id": "W0-06C/C02/CX",
-      "waiting_for": "Independent code and test gates",
-      "updated_at": "2026-10-07T13:32:40Z"
+      "waiting_for": "Bounded C03 correction dispatch with platform action-time confirmation",
+      "updated_at": "2026-10-07T13:43:35Z"
     },
     "CLAUDE": {
       "state": "STOPPED",
       "work_id": "W0-06C/C02/CL",
       "waiting_for": "Codex independent verdict",
-      "updated_at": "2026-10-07T13:32:40Z"
+      "updated_at": "2026-10-07T13:43:35Z"
     }
   },
   "current_work_id": "W0-06C/C02/CX",
-  "state": "REVIEWING",
-  "pipeline_step": "INDEPENDENT_REVIEW",
+  "state": "CHANGES_REQUESTED",
+  "pipeline_step": "CORRECTION_PREPARATION",
   "next_agent": "CODEX",
-  "waiting_for": "Independent C02 verdict",
+  "waiting_for": "Bounded C03 correction dispatch with platform action-time confirmation",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 49,
   "pr_head_sha": "1a20a12dbc83538f752f248bc0fc41c91a5e697a",
   "pr_draft": true,
-  "dispatch_state": "SENT_ONCE_HANDOFF_PUBLISHED",
+  "dispatch_state": "C02_SENT_ONCE_HANDOFF_PUBLISHED_C03_NOT_SENT",
   "dispatch_run_url": null,
   "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037849389", "head_sha": "1a20a12dbc83538f752f248bc0fc41c91a5e697a", "at": "2026-10-07T12:25:07Z"},
-  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286", "head_sha": "1b7d10a73e66b0a0680d5702019e73c7c57aa527", "verdict": "CHANGES_REQUESTED", "cycle_id": "C01"},
+  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md", "head_sha": "1a20a12dbc83538f752f248bc0fc41c91a5e697a", "verdict": "CHANGES_REQUESTED", "cycle_id": "C02"},
   "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "Final C02 exact-head HANDOFF published; direct cloud-to-Codex handoff unavailable",
-    "last_result": "HANDOFF_SEND_FAILED",
+    "last_agent": "CODEX",
+    "last_event": "Independent C02 review reproduced stale finding after post-verification lease takeover",
+    "last_result": "CHANGES_REQUESTED",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Codex independently reviews exact C02 head. No duplicate Send, Routine, monitor, merge, deploy or next Task-ID.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037863355",
-    "updated_at": "2026-10-07T13:32:40Z"
+    "instruction": "Prepare only bounded same-task C03 lease correction; do not Send without platform action-time confirmation. No Routine, monitor, merge, deploy or next Task-ID.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md",
+    "updated_at": "2026-10-07T13:43:35Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "Platform action-time confirmation for one Computer Use C03 Send",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "INDEPENDENT_REVIEW",
+    "stage": "CORRECTION_PREPARATION",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "4a834f3780743da88d11bfc6e219ac279a8e8913",
+    "active_blob_sha": "645746fcf7d8506e3de70ad8a2680e35934e5a3c",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-07T13:32:40Z",
+  "updated_at": "2026-10-07T13:43:35Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
