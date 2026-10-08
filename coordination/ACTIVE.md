@@ -1,23 +1,23 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06D/C01 ASSIGNMENT PREPARED — exact contract and Draft PR published; Claude Send PENDING
+Status: W0-06D/C01 DISPATCH BLOCKED — Computer Use refused wrong-session Send; zero Claude Sends
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
 Current-Agent: CODEX
-Current-State: ASSIGNMENT_PREPARED
+Current-State: DISPATCH_BLOCKED
 Claude-State: WAITING; W0-06D not dispatched
-Codex-State: PREPARING_DISPATCH
+Codex-State: BLOCKED_ON_CORRECT_TARGET
 Pipeline-Step: DISPATCH
-Transition-Phase: INTENT
-Now: W0-06D/C01 canon-derived contract is published on Draft PR #51 at d647bfbffa3d92f9b314e3b8e49be1b7a97cac71; Issue #50 exists; exact live preflight found no duplicate. No Claude Send yet. Computer Use requires action-time confirmation for the representational UI message, despite standing authorization.
-Next-Agent: CODEX (one direct Claude Send only after required action-time confirmation)
+Transition-Phase: BLOCKED
+Now: Krum gave action-time confirmation. Live PR #51 and duplicate preflight passed, but Computer Use refused the Send because the verified Claude window is the W0-06C session attached to PR #49, not a W0-06D/PR #51 session. The payload was typed into that composer but NOT sent. Zero W0-06D Claude Sends and no HANDOFF.
+Next-Agent: KRUM (resolve/approve a correctly targeted Claude session for PR #51; no workaround or retry in PR #49 session)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: platform action-time confirmation is required before the one PC/UI Claude Send; no confirmation for this Send has been received
-Dispatch-State: W0-06D/C01 PENDING — zero Claude Sends
+Krum-Action: identify or approve a correctly targeted W0-06D/PR #51 Claude session; existing PR #49 session was rejected by Computer Use
+Dispatch-State: W0-06D/C01 FAILED_WRONG_SESSION — zero Claude Sends
 Dispatch-Run: NONE
 Dispatch-Observed-At: NONE
-Dispatch-Failure-Evidence: NONE
+Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844
 Task-ID: W0-06D
 Cycle-ID: C01
 Base-branch: codex/w0-06c-integrity-monitoring (independently accepted technical base, PR #49 unmerged)
@@ -35,11 +35,11 @@ Final-Verdict: NONE for W0-06D. W0-06C technical PASS is not FLOW-016 Implementa
 Predecessor-Task-ID: W0-06C/C05
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
-Authorization: New W0-06D request is provided in the attached owner task. Standing PC/Computer Use authorization does not override mandatory action-time confirmation for UI Send; record exact failure if not confirmed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
+Authorization: Krum explicitly confirmed this one UI Send, but Computer Use rejected the wrong target before transmission. Do not bypass the rejection. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## W0-06D/C01 — contract published; dispatch pending
+## W0-06D/C01 — contract published; dispatch blocked on target identity
 
-Exact contract: https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md. Issue #50 and Draft PR #51 were created after live preflight; no W0-06D branch/Issue/PR existed previously. The technical base is the independently accepted C05 head. Assignment is limited to a tenant-bound read-only inventory and deterministic adoption-readiness plan with drift refusal; it may not execute migration or modify originals. W0-06A's legacy map is reused, not duplicated. Legacy app disk is not a customer-managed provider; such rows cannot be called executable in-place adoption. No Claude Send has occurred. GitHub event stream records the preflight and a transparent gap for two STARTED events; no event was backdated. Await the platform-required action-time confirmation for one PC/UI Send, then publish DISPATCH_ATTEMPT and observed OK/FAILED.
+Exact contract: https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md. Issue #50 and Draft PR #51 were created after live preflight; no W0-06D branch/Issue/PR existed previously. The technical base is the independently accepted C05 head. Assignment is limited to a tenant-bound read-only inventory and deterministic adoption-readiness plan with drift refusal; it may not execute migration or modify originals. W0-06A's legacy map is reused, not duplicated. Legacy app disk is not a customer-managed provider; such rows cannot be called executable in-place adoption. Krum confirmed one Send; Computer Use rejected it before transmission because the only verified Claude window was the existing W0-06C/PR #49 session. DISPATCH_ATTEMPT and DISPATCH_FAILED are recorded in Issue #50; zero W0-06D Sends. Do not bypass the rejection, use the wrong session, or create a workaround session without direction. GitHub event stream also records a transparent gap for two earlier STARTED events; no event was backdated.
 
 ## W0-06C/C05 — independent PASS
 
