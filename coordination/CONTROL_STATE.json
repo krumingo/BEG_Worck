@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-08T15:33:54Z",
+  "validated_at": "2026-10-08T22:58:52Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "7bde0fdf48bb34769ff3f83f0021e317a2d97f70",
-  "control_state_commit_sha": "589fc97d62995f4c686d8da69e09e9ef1ffed1d6",
-  "now": "Krum confirmed one Send, but Computer Use rejected the PR #49 Claude session as the wrong target for W0-06D PR #51 before transmission. Zero Claude Sends; no implementation or HANDOFF.",
+  "active_source_commit_sha": "5396706acb6f8d265b5fb4f0c7ade4f1b5117f16",
+  "control_state_commit_sha": "6d9b3af627e1b6abf9a2ffda2c14f0436f5a0c37",
+  "now": "Krum directly assigned W0-06D to Claude after the rejected Codex wrong-session Send. Claude finished and published exact-head HANDOFF on Draft PR #51; Codex independent review is underway, no verdict yet.",
   "transition": {
-    "event": "DISPATCH_FAILED",
-    "phase": "BLOCKED",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844",
+    "event": "REVIEW_STARTED",
+    "phase": "REVIEW",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6070707452",
     "verdict_publication": null
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
@@ -25,60 +25,60 @@
     "GPT": {
       "state": "COORDINATING",
       "work_id": "W0-06D/C01/GPT",
-      "waiting_for": "correctly targeted PR #51 Claude session or owner direction",
-      "updated_at": "2026-10-08T15:33:54Z"
+      "waiting_for": "Codex independent W0-06D verdict",
+      "updated_at": "2026-10-08T22:58:52Z"
     },
     "CODEX": {
-      "state": "BLOCKED_ON_CORRECT_TARGET",
+      "state": "REVIEWING",
       "work_id": "W0-06D/C01/CX",
-      "waiting_for": "correct W0-06D/PR #51 Claude session; Computer Use denied PR #49 target",
-      "updated_at": "2026-10-08T15:33:54Z"
+      "waiting_for": "whole-package audit and independent test gates",
+      "updated_at": "2026-10-08T22:58:52Z"
     },
     "CLAUDE": {
-      "state": "WAITING",
+      "state": "FINISHED",
       "work_id": "W0-06D/C01/CL",
-      "waiting_for": "not dispatched; no assignment received",
-      "updated_at": "2026-10-08T15:33:54Z"
+      "waiting_for": "Codex review or bounded same-scope correction",
+      "updated_at": "2026-10-08T22:58:52Z"
     }
   },
   "current_work_id": "W0-06D/C01/CX",
-  "state": "DISPATCH_BLOCKED",
-  "pipeline_step": "DISPATCH",
-  "next_agent": "KRUM",
-  "waiting_for": "correctly targeted Claude session for PR #51 or owner direction; do not retry in PR #49 session",
+  "state": "CODEX_REVIEWING",
+  "pipeline_step": "REVIEW",
+  "next_agent": "CODEX",
+  "waiting_for": "independent review on final exact PR #51 head",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 51,
-  "pr_head_sha": "d647bfbffa3d92f9b314e3b8e49be1b7a97cac71",
+  "pr_head_sha": "0a0984fe6dbff59601003c3dbc2f2bc119c82f52",
   "pr_draft": true,
-  "dispatch_state": "W0-06D/C01_FAILED_WRONG_SESSION_ZERO_SENDS",
+  "dispatch_state": "KRUM_DIRECT_ASSIGNMENT_CLAUDE_FINISHED; CODEX_UI_SEND_ZERO",
   "dispatch_run_url": null,
-  "last_handoff": null,
+  "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6065037093", "head_sha": "0a0984fe6dbff59601003c3dbc2f2bc119c82f52", "cycle_id": "C01"},
   "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559", "head_sha": "e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6", "verdict": "PASS", "cycle_id": "C05"},
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-06D/C01 DISPATCH_FAILED; wrong Claude session, zero Sends",
-    "last_result": "DISPATCH_FAILED",
-    "required_by_krum": true,
+    "last_event": "W0-06D/C01 final exact-head HANDOFF detected; Codex review started",
+    "last_result": "REVIEW_STARTED",
+    "required_by_krum": false,
     "from": null,
     "to": null,
-    "status": "BLOCKED_WRONG_TARGET",
-    "instruction": "Do not bypass Computer Use rejection or send W0-06D into PR #49 session; identify/approve correct PR #51 target.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844",
-    "updated_at": "2026-10-08T15:33:54Z"
+    "status": "HANDOFF_RECEIVED_VIA_GITHUB",
+    "instruction": "Codex independently review exact head; no duplicate W0-06D Send.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6065037093",
+    "updated_at": "2026-10-08T22:58:52Z"
   },
-  "requires_krum": true,
-  "requires_krum_reason": "Computer Use rejected the only verified Claude window because it is the existing W0-06C/PR #49 session, not W0-06D/PR #51; Krum's confirmation was received but no Send occurred.",
+  "requires_krum": false,
+  "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "DISPATCH_BLOCKED",
+    "stage": "REVIEW",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "07f23d1b68d1525605fbe2d748479ce323608735",
+    "active_blob_sha": "7cea1f3f4b3f50d03f32cc7b33b635841b7b2e33",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-08T15:33:54Z",
+  "updated_at": "2026-10-08T22:58:52Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
@@ -216,6 +216,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844",
       "source_commit_sha": "7bde0fdf48bb34769ff3f83f0021e317a2d97f70",
       "summary": "Computer Use rejected Send to W0-06C/PR #49 Claude session for W0-06D/PR #51. Message was not sent; Claude received zero W0-06D assignments."
+    },
+    {
+      "event_id": "w0-06d-c01-handoff-detected-20261008t225852z",
+      "occurred_at": "2026-10-08T22:58:52Z",
+      "task_id": "W0-06D",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "HANDOFF",
+      "state_after": "CODEX_REVIEWING",
+      "head_sha": "0a0984fe6dbff59601003c3dbc2f2bc119c82f52",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6065037093",
+      "source_commit_sha": "5396706acb6f8d265b5fb4f0c7ade4f1b5117f16",
+      "summary": "Krum directly assigned Claude after the earlier rejected UI Send; final exact-head HANDOFF matched live Draft PR #51 and independent Codex review began."
     }
   ]
 }
