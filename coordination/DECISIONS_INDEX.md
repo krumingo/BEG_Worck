@@ -128,6 +128,8 @@
 - [W0-06A review](REVIEWS/W0-06A.md)
 - [W0-06B review](REVIEWS/W0-06B.md)
 - [W0-06C monitoring contract](https://github.com/krumingo/BEG_Worck/blob/codex/w0-06c-integrity-monitoring/docs/architecture/W0-06C_INTEGRITY_MONITORING.md) — implementation scope for periodic checks, technical alarms and affected records; FLOW-016 remains the business source of truth.
+- [W0-06C independent review](REVIEWS/W0-06C.md) — C05 technical PASS; Draft PR #49 remains unmerged and FLOW-016 Gate OPEN.
+- [W0-06D legacy adoption-readiness contract](https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md) — read-only legacy scan and deterministic dry-run plan; not execution authorization.
 
 Current implementation references:
 - Issue #43 — W0-06A
@@ -135,6 +137,7 @@ Current implementation references:
 - Issue #45 — W0-06B
 - Draft PR #46 — W0-06B independent PASS, unmerged technical predecessor
 - Issue #48 / Draft PR #49 — W0-06C current package, stacked on accepted W0-06B exact head
+- Issue #50 / Draft PR #51 — W0-06D contract prepared on accepted W0-06C exact head; Claude dispatch pending
 
 Текущият active cycle и exact SHA не се поддържат ръчно тук. Винаги се четат от:
 - [ACTIVE.md](ACTIVE.md)

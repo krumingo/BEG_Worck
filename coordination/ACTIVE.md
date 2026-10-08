@@ -1,41 +1,45 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06C/C05 INDEPENDENT PASS — technical foundation closed; Draft PR #49 unmerged
-Human-Summary-BG: BEG_Work ще проверява автоматично регистрираните клиентски оригинали, ще пази история на проблемите и ще показва засегнатите бизнес записи, без сам да поправя или изтрива оригинали.
+Status: W0-06D/C01 ASSIGNMENT PREPARED — exact contract and Draft PR published; Claude Send PENDING
+Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
 Current-Agent: CODEX
-Current-State: PASS
-Claude-State: C05 HANDOFF_PUBLISHED / STOPPED
-Codex-State: INDEPENDENT_PASS
-Pipeline-Step: CLOSED
-Transition-Phase: DECIDED
-Now: Codex независимо прие W0-06C/C05 на exact PR #49 head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6 след C04→C05 и whole-package review, focused/adjacent/static и disposable real-Mongo gates. FLOW-016 Implementation Gate остава OPEN; Draft PR #49 не е merge-нат.
-Next-Agent: GPT / KRUM (separate decision for any next Task-ID or merge/deploy)
+Current-State: ASSIGNMENT_PREPARED
+Claude-State: WAITING; W0-06D not dispatched
+Codex-State: PREPARING_DISPATCH
+Pipeline-Step: DISPATCH
+Transition-Phase: INTENT
+Now: W0-06D/C01 canon-derived contract is published on Draft PR #51 at d647bfbffa3d92f9b314e3b8e49be1b7a97cac71; Issue #50 exists; exact live preflight found no duplicate. No Claude Send yet. Computer Use requires action-time confirmation for the representational UI message, despite standing authorization.
+Next-Agent: CODEX (one direct Claude Send only after required action-time confirmation)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE for W0-06C technical PASS; separate approval needed for merge/deploy/production scheduler or next Task-ID
-Dispatch-State: C04 SENT ONCE / HANDOFF REVIEWED; C05 SENT ONCE / HANDOFF PUBLISHED
-Dispatch-Run: private Claude session URL withheld; C05 dispatch evidence https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6044075485
-Dispatch-Observed-At: 2026-10-07T18:18:42Z (C05 message visible in Claude UI; Claude started live git preflight)
-Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6035305508
-Task-ID: W0-06C
-Cycle-ID: C05
-Base-branch: codex/w0-06b-storage-provider-foundation (independently accepted technical base, PR #46 unmerged)
-Base-SHA: 203a61fe91fe20c955ffed9ec81b1d506725d151
-Implementation-branch: codex/w0-06c-integrity-monitoring
-PR-URL: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, base main; stacked W0-06B predecessor unmerged)
-PR-Head: e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6
-Correction-Base-SHA: cf0a90f15e62a11ced5f6e60a20bce97150ee921
+Krum-Action: platform action-time confirmation is required before the one PC/UI Claude Send; no confirmation for this Send has been received
+Dispatch-State: W0-06D/C01 PENDING — zero Claude Sends
+Dispatch-Run: NONE
+Dispatch-Observed-At: NONE
+Dispatch-Failure-Evidence: NONE
+Task-ID: W0-06D
+Cycle-ID: C01
+Base-branch: codex/w0-06c-integrity-monitoring (independently accepted technical base, PR #49 unmerged)
+Base-SHA: e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6
+Implementation-branch: codex/w0-06d-migration-readiness
+PR-URL: https://github.com/krumingo/BEG_Worck/pull/51 (Draft, base main; stacked W0-06B/C predecessors unmerged)
+PR-Head: d647bfbffa3d92f9b314e3b8e49be1b7a97cac71
+Correction-Base-SHA: NONE
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
-Issue: https://github.com/krumingo/BEG_Worck/issues/48
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6044580936
-Review: coordination/REVIEWS/W0-06C.md; C04 CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6043902587; C05 assignment https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6043939164; predecessor W0-06B PASS evidence at coordination/REVIEWS/W0-06B.md and https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
-Final-Verdict: W0-06C PASS — FILE REGISTRY INTEGRITY MONITORING FOUNDATION CLOSED on e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6; not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
-Predecessor-Task-ID: W0-06B/C04
-Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/46 (Draft, unmerged, head 203a61fe91fe20c955ffed9ec81b1d506725d151)
-Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568
-Authorization: Krum explicitly started W0-06C/C01 after W0-06B PASS and authorized agent-to-agent PC/Computer Use within this Task-ID. Platform action-time confirmation, if mandatory, must not be bypassed; publish DISPATCH_FAILED/BLOCKED_BY_PLATFORM_CONFIRMATION rather than claiming Send. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
+Issue: https://github.com/krumingo/BEG_Worck/issues/50
+HANDOFF-URL: NONE for W0-06D
+Review: W0-06D not reviewed; predecessor W0-06C independent PASS https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559 and coordination/REVIEWS/W0-06C.md; W0-06B PASS https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
+Final-Verdict: NONE for W0-06D. W0-06C technical PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
+Predecessor-Task-ID: W0-06C/C05
+Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
+Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
+Authorization: New W0-06D request is provided in the attached owner task. Standing PC/Computer Use authorization does not override mandatory action-time confirmation for UI Send; record exact failure if not confirmed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
+
+## W0-06D/C01 — contract published; dispatch pending
+
+Exact contract: https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md. Issue #50 and Draft PR #51 were created after live preflight; no W0-06D branch/Issue/PR existed previously. The technical base is the independently accepted C05 head. Assignment is limited to a tenant-bound read-only inventory and deterministic adoption-readiness plan with drift refusal; it may not execute migration or modify originals. W0-06A's legacy map is reused, not duplicated. Legacy app disk is not a customer-managed provider; such rows cannot be called executable in-place adoption. No Claude Send has occurred. GitHub event stream records the preflight and a transparent gap for two STARTED events; no event was backdated. Await the platform-required action-time confirmation for one PC/UI Send, then publish DISPATCH_ATTEMPT and observed OK/FAILED.
 
 ## W0-06C/C05 — independent PASS
 
