@@ -144,7 +144,15 @@ ORG_KEYED: Dict[str, str] = {
               # the rest of the family: a finding names this tenant's business
               # records, so it belongs on this tenant's side of the boundary.
               "storage_integrity_monitor_state", "storage_integrity_runs",
-              "storage_integrity_findings"),
+              "storage_integrity_findings",
+              # W0-06D legacy adoption readiness (FLOW-016): one record per
+              # dry-run scan and one per observed legacy row or orphan object.
+              # ``org_id``-keyed like the rest of the family, and for the same
+              # reason: an item names this tenant's legacy rows and the
+              # business records they imply, so it sits on this tenant's side
+              # of the boundary. Neither collection holds a customer original,
+              # a provider credential or a filesystem path.
+              "legacy_adoption_scans", "legacy_adoption_items"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,

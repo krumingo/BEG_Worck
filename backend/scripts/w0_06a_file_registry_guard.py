@@ -223,6 +223,11 @@ FOUNDATION_MODULES: FrozenSet[str] = frozenset({
     # READS the registry's locations through the tenant view and writes only
     # its own monitor collections; it never writes a File Registry collection.
     "app/files/monitoring.py",
+    # W0-06D: the dry-run legacy adoption readiness scanner. It READS the
+    # registry through the tenant view and the declared legacy collections
+    # through the same view, and writes only its own two adoption collections;
+    # it never writes a File Registry collection and has no apply path.
+    "app/files/adoption_readiness.py",
 })
 
 #: Field names that hold a provider path, URL or stored object name today.

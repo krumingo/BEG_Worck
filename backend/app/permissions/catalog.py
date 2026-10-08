@@ -87,6 +87,14 @@ ACTIONS: Set[str] = {
     # itself anything and fails closed before any provider access.
     "file.integrity.monitor",
     "file.integrity.monitor.read",
+    # W0-06D legacy adoption readiness (FLOW-016). Also granted to no role
+    # below: running a dry-run scan reads a tenant's legacy rows and may hash
+    # their originals, and reading the plan exposes where a customer's files
+    # are today. Two actions, because an operator who may LOOK at the readiness
+    # of a migration is not thereby allowed to produce one, and the projection
+    # narrows itself for a reader who holds only the read right.
+    "file.adoption.scan",
+    "file.adoption.read",
     "file.sensitivity.restricted",
     "file.sensitivity.confidential",
 }
