@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06D/C01 DISPATCH BLOCKED — Computer Use refused wrong-session Send; zero Claude Sends
+Status: W0-06D/C01 CODEX REVIEWING — final exact-head Claude HANDOFF on Draft PR #51
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
 Current-Agent: CODEX
-Current-State: DISPATCH_BLOCKED
-Claude-State: WAITING; W0-06D not dispatched
-Codex-State: BLOCKED_ON_CORRECT_TARGET
-Pipeline-Step: DISPATCH
-Transition-Phase: BLOCKED
-Now: Krum gave action-time confirmation. Live PR #51 and duplicate preflight passed, but Computer Use refused the Send because the verified Claude window is the W0-06C session attached to PR #49, not a W0-06D/PR #51 session. The payload was typed into that composer but NOT sent. Zero W0-06D Claude Sends and no HANDOFF.
-Next-Agent: KRUM (resolve/approve a correctly targeted Claude session for PR #51; no workaround or retry in PR #49 session)
+Current-State: CODEX_REVIEWING
+Claude-State: FINISHED; final W0-06D/C01 HANDOFF published
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: HANDOFF_DETECTED
+Now: Krum directly assigned W0-06D to Claude after the earlier rejected Codex UI Send. Claude finished and published final exact-head HANDOFF in Draft PR #51 at 0a0984fe6dbff59601003c3dbc2f2bc119c82f52, matching live PR head. Codex independent whole-package review is in progress. No new Claude Send.
+Next-Agent: CODEX (independent review of exact head)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: identify or approve a correctly targeted W0-06D/PR #51 Claude session; existing PR #49 session was rejected by Computer Use
-Dispatch-State: W0-06D/C01 FAILED_WRONG_SESSION — zero Claude Sends
+Krum-Action: none for review; decision only on genuine out-of-scope blocker or platform-enforced confirmation
+Dispatch-State: Krum direct assignment received by Claude after Codex wrong-session Send was rejected; no Codex Send
 Dispatch-Run: NONE
 Dispatch-Observed-At: NONE
 Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844
@@ -24,22 +24,22 @@ Base-branch: codex/w0-06c-integrity-monitoring (independently accepted technical
 Base-SHA: e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6
 Implementation-branch: codex/w0-06d-migration-readiness
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/51 (Draft, base main; stacked W0-06B/C predecessors unmerged)
-PR-Head: d647bfbffa3d92f9b314e3b8e49be1b7a97cac71
+PR-Head: 0a0984fe6dbff59601003c3dbc2f2bc119c82f52
 Correction-Base-SHA: NONE
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/50
-HANDOFF-URL: NONE for W0-06D
-Review: W0-06D not reviewed; predecessor W0-06C independent PASS https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559 and coordination/REVIEWS/W0-06C.md; W0-06B PASS https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6065037093
+Review: W0-06D independent review started https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6070707452; no verdict yet. Predecessor W0-06C independent PASS https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559 and coordination/REVIEWS/W0-06C.md; W0-06B PASS https://github.com/krumingo/BEG_Worck/pull/46#issuecomment-6034977568.
 Final-Verdict: NONE for W0-06D. W0-06C technical PASS is not FLOW-016 Implementation Gate PASS. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06C/C05
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
 Authorization: Krum explicitly confirmed this one UI Send, but Computer Use rejected the wrong target before transmission. Do not bypass the rejection. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-07 or automatic next Task-ID.
 
-## W0-06D/C01 — contract published; dispatch blocked on target identity
+## W0-06D/C01 — exact-head HANDOFF; independent review in progress
 
-Exact contract: https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md. Issue #50 and Draft PR #51 were created after live preflight; no W0-06D branch/Issue/PR existed previously. The technical base is the independently accepted C05 head. Assignment is limited to a tenant-bound read-only inventory and deterministic adoption-readiness plan with drift refusal; it may not execute migration or modify originals. W0-06A's legacy map is reused, not duplicated. Legacy app disk is not a customer-managed provider; such rows cannot be called executable in-place adoption. Krum confirmed one Send; Computer Use rejected it before transmission because the only verified Claude window was the existing W0-06C/PR #49 session. DISPATCH_ATTEMPT and DISPATCH_FAILED are recorded in Issue #50; zero W0-06D Sends. Do not bypass the rejection, use the wrong session, or create a workaround session without direction. GitHub event stream also records a transparent gap for two earlier STARTED events; no event was backdated.
+Exact contract: https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md. Issue #50 and Draft PR #51 were created after live preflight. The technical base is independently accepted C05. Earlier Codex UI Send to the W0-06C/PR #49 session was rejected before transmission; Krum then directly assigned W0-06D to Claude. Claude's final HANDOFF https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6065037093 matches live PR #51 head `0a0984fe6dbff59601003c3dbc2f2bc119c82f52`. Claimed gates are self-report, not independent PASS. Codex now reviews W0-06C→D and whole main→head, reruns critical tests and publishes one verdict. No repeat dispatch, merge, deploy, production migration or W0-06E.
 
 ## W0-06C/C05 — independent PASS
 
