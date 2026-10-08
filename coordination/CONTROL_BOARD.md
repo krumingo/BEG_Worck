@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-08T22:58:52Z · CONTROL STATE: **VALID** as of 2026-10-08T22:58:52Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-08T23:14:13Z · CONTROL STATE: **VALID** as of 2026-10-08T23:14:13Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06D / C01 / CODEX / **REVIEWING**
-LAST: CLAUDE — final exact-head HANDOFF in PR #51; Codex independent review started
-RELAY: HANDOFF_RECEIVED_VIA_GITHUB · no duplicate Codex UI Send
-NOW: Krum directly assigned Claude after the rejected wrong-session Send; final HANDOFF matches Draft PR #51 head `0a0984fe6dbff59601003c3dbc2f2bc119c82f52`.
-TRANSITION: REVIEW_STARTED / REVIEW · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6070707452
-NEXT: CODEX — independent whole-package review and critical reruns
-KRUM ACTION: none for review; only a genuine blocker or platform-enforced confirmation
-WAITING FOR: independent verdict
+CURRENT: W0-06D / C01 verdict / C02 prepared / CODEX / **CHANGES_REQUESTED**
+LAST: CODEX — independent CHANGES_REQUESTED on exact PR #51 head
+RELAY: C02_SEND_PENDING_CONFIRMATION · zero C02 UI Sends
+NOW: Four bounded adoption-readiness defects are recorded on `0a0984fe6dbff59601003c3dbc2f2bc119c82f52`; same-Task-ID C02 correction is prepared, not sent.
+TRANSITION: CORRECTION_PREPARED / CORRECTION_DISPATCH · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6070887921
+NEXT: CODEX — verify correct Claude target, then one bounded C02 Send after mandatory action-time confirmation
+KRUM ACTION: platform-required confirmation for this specific Computer Use Send only
+WAITING FOR: confirmation and correct Claude target
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-06D
 CYCLE: C01
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: CODEX_REVIEWING
+STATE: CHANGES_REQUESTED
 NEXT: CODEX
-WAITING_FOR: independent exact-head verdict
+WAITING_FOR: one bounded C02 Send after required confirmation
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06D | C01 | COORDINATING | REVIEWING | FINISHED | CODEX | independent exact-head review | HANDOFF, not PASS |
+| W0-06D | C01 → C02 prepared | COORDINATING | CORRECTION_PREPARED | FINISHED | CODEX | confirmation and target verification | CHANGES_REQUESTED, not PASS |
 
 ## Agent cards
 
@@ -38,16 +38,17 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | COORDINATING | W0-06D/C01/GPT | Codex independent verdict | 2026-10-08T22:58:52Z |
-| CODEX | REVIEWING | W0-06D/C01/CX | whole-package audit and independent tests | 2026-10-08T22:58:52Z |
-| CLAUDE | FINISHED | W0-06D/C01/CL | Codex review or bounded correction | 2026-10-08T22:58:52Z |
+| GPT | COORDINATING | W0-06D/C01/GPT | C02 correction and re-review | 2026-10-08T23:14:13Z |
+| CODEX | CORRECTION_PREPARED | W0-06D/C01/CX | required confirmation and correct target verification | 2026-10-08T23:14:13Z |
+| CLAUDE | FINISHED | W0-06D/C01/CL | bounded C02 correction; no Send yet | 2026-10-08T23:14:13Z |
 
-W0-06C independent PASS → W0-06D contract/PR #51 → Krum direct Claude assignment → exact-head HANDOFF → **CODEX REVIEWING**
+W0-06C independent PASS → W0-06D/C01 exact-head HANDOFF → **CHANGES_REQUESTED** → C02 prepared, zero Sends
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `5396706` · blob `7cea1f3f4b3f50d03f32cc7b33b635841b7b2e33`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `69f492c` · blob `f7fd30c7b0417468b38b113af0235f79bd23a8c2`
 - Current Draft PR: [#51](https://github.com/krumingo/BEG_Worck/pull/51) · final exact head `0a0984fe6dbff59601003c3dbc2f2bc119c82f52` · [HANDOFF](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6065037093)
+- Independent W0-06D/C01 [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6070884166) · [review evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06D.md) · [C02 correction prepared](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6070887921), zero Sends
 - Current Task Issue: [#50](https://github.com/krumingo/BEG_Worck/issues/50) · [assignment prepared](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381) · [dispatch attempt](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063338527) · [dispatch failed: wrong session](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844) · [event gap](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161569)
 - W0-06D contract: [legacy adoption readiness](https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md)
 - Predecessor Draft PR: [#49](https://github.com/krumingo/BEG_Worck/pull/49) · accepted head `e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6`
@@ -73,5 +74,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-07T11:18:19Z | C01 | — | HANDOFF | CLAUDE | REVIEW | `1b7d10a7` | [evidence](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6036704567) |
 | 2026-10-07T11:37:47Z | C01 | — | REVIEW / CHANGES_REQUESTED | CODEX | CORRECTION_PREPARING | `1b7d10a7` | [evidence](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286) |
 | 2026-10-07T11:49:31Z | C02 | — | CORRECTION_DISPATCH_OK | CODEX | WORKING | `1b7d10a7` | [evidence](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733) |
+| 2026-10-08T23:14:13Z | C01 | — | REVIEW / CHANGES_REQUESTED | CODEX | CHANGES_REQUESTED | `0a0984fe` | [evidence](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6070884166) |
 
-**Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01 has a Claude HANDOFF but no independent verdict yet. Earlier Computer Use rejection was not bypassed: Krum directly assigned Claude. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.
+**Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01 is CHANGES_REQUESTED, not PASS. C02 is prepared but unsent. Earlier Computer Use rejection was not bypassed: Krum directly assigned Claude. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.
