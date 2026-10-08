@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-08T05:40:34Z · CONTROL STATE: **VALID** as of 2026-10-08T05:40:34Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-08T15:33:54Z · CONTROL STATE: **VALID** as of 2026-10-08T15:33:54Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06D / C01 / CODEX / **ASSIGNMENT_PREPARED**
-LAST: CODEX — W0-06D contract, Issue #50 and Draft PR #51 prepared; no Claude Send
-RELAY: PENDING_PLATFORM_CONFIRMATION · CODEX → CLAUDE
-NOW: Exact W0-06D contract-only head d647bfb on Draft PR #51; implementation has not started. One PC/UI Send requires mandatory action-time confirmation.
-TRANSITION: ASSIGNMENT_PREPARED / INTENT · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381
-NEXT: CODEX after required action-time confirmation
-KRUM ACTION: confirm one UI Send if requested by platform; no merge/deploy/migration authority implied
-WAITING FOR: action-time confirmation before direct Claude assignment
+CURRENT: W0-06D / C01 / CODEX / **DISPATCH_BLOCKED**
+LAST: CODEX — Krum confirmed Send; Computer Use refused wrong PR #49 session; zero Claude Sends
+RELAY: BLOCKED_WRONG_TARGET · CODEX → CLAUDE not transmitted
+NOW: Exact W0-06D contract-only head d647bfb on Draft PR #51; implementation has not started. The verified Claude window was attached to W0-06C/PR #49, so Computer Use rejected the Send before transmission.
+TRANSITION: DISPATCH_FAILED / BLOCKED · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844
+NEXT: KRUM — identify or approve a correctly targeted PR #51 Claude session; do not bypass the rejection
+KRUM ACTION: resolve the PR #51 target mismatch; prior action-time confirmation was received, but no message was sent
+WAITING FOR: correctly targeted Claude session or owner direction
 
 ## Required agent banner
 
@@ -23,14 +23,14 @@ TASK: W0-06D
 CYCLE: C01
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: ASSIGNMENT_PREPARED
-NEXT: CODEX
-WAITING_FOR: action-time confirmation before one Claude Send
+STATE: DISPATCH_BLOCKED
+NEXT: KRUM
+WAITING_FOR: correctly targeted PR #51 Claude session
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06D | C01 | COORDINATING | PREPARING_DISPATCH | WAITING | CODEX | platform-required action-time confirmation | Contract/PR ready; no Send |
+| W0-06D | C01 | COORDINATING | BLOCKED_ON_CORRECT_TARGET | WAITING | KRUM | correct PR #51 Claude session | Contract/PR ready; rejected Send; zero Sends |
 
 ## Agent cards
 
@@ -38,17 +38,17 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | COORDINATING | W0-06D/C01/GPT | Codex dispatch and eventual independent result | 2026-10-08T05:40:34Z |
-| CODEX | PREPARING_DISPATCH | W0-06D/C01/CX | platform-required action-time confirmation | 2026-10-08T05:40:34Z |
-| CLAUDE | WAITING | W0-06D/C01/CL | not dispatched; no assignment received | 2026-10-08T05:40:34Z |
+| GPT | COORDINATING | W0-06D/C01/GPT | correctly targeted PR #51 Claude session or owner direction | 2026-10-08T15:33:54Z |
+| CODEX | BLOCKED_ON_CORRECT_TARGET | W0-06D/C01/CX | Computer Use denied PR #49 target for PR #51 assignment | 2026-10-08T15:33:54Z |
+| CLAUDE | WAITING | W0-06D/C01/CL | not dispatched; no assignment received | 2026-10-08T15:33:54Z |
 
-W0-06C independent PASS → W0-06D canon/preflight → contract-only Draft PR #51 → **CLAUDE SEND PENDING**
+W0-06C independent PASS → W0-06D canon/preflight → contract-only Draft PR #51 → **CLAUDE SEND BLOCKED: WRONG SESSION**
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `36a6aa4` · blob `904713b59ced9472977f1e98d0df8291507e77ae`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `7bde0fd` · blob `07f23d1b68d1525605fbe2d748479ce323608735`
 - Current Draft PR: [#51](https://github.com/krumingo/BEG_Worck/pull/51) · contract-only exact head `d647bfbffa3d92f9b314e3b8e49be1b7a97cac71` · no W0-06D HANDOFF
-- Current Task Issue: [#50](https://github.com/krumingo/BEG_Worck/issues/50) · [assignment prepared](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381) · [event gap](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161569)
+- Current Task Issue: [#50](https://github.com/krumingo/BEG_Worck/issues/50) · [assignment prepared](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381) · [dispatch attempt](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063338527) · [dispatch failed: wrong session](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844) · [event gap](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161569)
 - W0-06D contract: [legacy adoption readiness](https://github.com/krumingo/BEG_Worck/blob/codex/w0-06d-migration-readiness/docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md)
 - Predecessor Draft PR: [#49](https://github.com/krumingo/BEG_Worck/pull/49) · accepted head `e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6`
 - Independent C01 verdict: [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286) · [review evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06C.md)
@@ -58,7 +58,7 @@ W0-06C independent PASS → W0-06D canon/preflight → contract-only Draft PR #5
 - C05 review: [HANDOFF_DETECTED](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6044789915) · [REVIEW_STARTED](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6044790210) · [independent PASS](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559) · [event](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6045130377) · [event gap](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6045092781)
 - HANDOFF comment SHA-256: `—`
 - Canonical docs: `CLAUDE.md` @ `7488b4c8`, `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md` @ `e7957b71`, `docs/architecture/IMPLEMENTATION_WAVES.md` @ `e0ce9c2a`, `docs/architecture/TENANCY_MODEL.md` @ `93997df2`, `docs/flows/FLOW-002.md` @ `5594ffa4`, `docs/flows/FLOW-016.md` @ `af092bbd`, `docs/flows/FLOW-040.md` @ `3d2ce96e`
-- Wave/Flow: `W0` / `FLOW-016` · progress: **DISPATCH_PENDING / STAGE_ONLY** (no proven percentage)
+- Wave/Flow: `W0` / `FLOW-016` · progress: **DISPATCH_BLOCKED / STAGE_ONLY** (no proven percentage)
 - `control_state_commit_sha` names the previous published state commit; it cannot self-reference this file's own Git commit.
 
 ## Append-only history
@@ -74,4 +74,4 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-07T11:37:47Z | C01 | — | REVIEW / CHANGES_REQUESTED | CODEX | CORRECTION_PREPARING | `1b7d10a7` | [evidence](https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6037093286) |
 | 2026-10-07T11:49:31Z | C02 | — | CORRECTION_DISPATCH_OK | CODEX | WORKING | `1b7d10a7` | [evidence](https://github.com/krumingo/BEG_Worck/issues/48#issuecomment-6037284733) |
 
-**Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01 is contract-only and NOT DISPATCHED. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.
+**Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01 is contract-only and NOT DISPATCHED. Computer Use rejected PR #49 as the wrong target for PR #51; no workaround or duplicate Send. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.

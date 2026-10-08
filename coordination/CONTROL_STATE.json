@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-08T05:40:34Z",
+  "validated_at": "2026-10-08T15:33:54Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "36a6aa4cfa2fa9ad818b70e63d826668d7a213b7",
-  "control_state_commit_sha": "927df7e1a8a6543b6c851e9c6dfb126a58dc8677",
-  "now": "W0-06D/C01 contract and Draft PR #51 exist at d647bfb. No Claude Send yet; mandatory Computer Use action-time confirmation is required before direct assignment.",
+  "active_source_commit_sha": "7bde0fdf48bb34769ff3f83f0021e317a2d97f70",
+  "control_state_commit_sha": "589fc97d62995f4c686d8da69e09e9ef1ffed1d6",
+  "now": "Krum confirmed one Send, but Computer Use rejected the PR #49 Claude session as the wrong target for W0-06D PR #51 before transmission. Zero Claude Sends; no implementation or HANDOFF.",
   "transition": {
-    "event": "ASSIGNMENT_PREPARED",
-    "phase": "INTENT",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381",
+    "event": "DISPATCH_FAILED",
+    "phase": "BLOCKED",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844",
     "verdict_publication": null
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
@@ -25,60 +25,60 @@
     "GPT": {
       "state": "COORDINATING",
       "work_id": "W0-06D/C01/GPT",
-      "waiting_for": "Codex W0-06D dispatch and eventual independent result",
-      "updated_at": "2026-10-08T05:40:34Z"
+      "waiting_for": "correctly targeted PR #51 Claude session or owner direction",
+      "updated_at": "2026-10-08T15:33:54Z"
     },
     "CODEX": {
-      "state": "PREPARING_DISPATCH",
+      "state": "BLOCKED_ON_CORRECT_TARGET",
       "work_id": "W0-06D/C01/CX",
-      "waiting_for": "platform-required action-time confirmation for one direct Claude Send",
-      "updated_at": "2026-10-08T05:40:34Z"
+      "waiting_for": "correct W0-06D/PR #51 Claude session; Computer Use denied PR #49 target",
+      "updated_at": "2026-10-08T15:33:54Z"
     },
     "CLAUDE": {
       "state": "WAITING",
       "work_id": "W0-06D/C01/CL",
       "waiting_for": "not dispatched; no assignment received",
-      "updated_at": "2026-10-08T05:40:34Z"
+      "updated_at": "2026-10-08T15:33:54Z"
     }
   },
   "current_work_id": "W0-06D/C01/CX",
-  "state": "ASSIGNMENT_PREPARED",
+  "state": "DISPATCH_BLOCKED",
   "pipeline_step": "DISPATCH",
-  "next_agent": "CODEX",
-  "waiting_for": "action-time confirmation before one direct UI Send to Claude",
+  "next_agent": "KRUM",
+  "waiting_for": "correctly targeted Claude session for PR #51 or owner direction; do not retry in PR #49 session",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 51,
   "pr_head_sha": "d647bfbffa3d92f9b314e3b8e49be1b7a97cac71",
   "pr_draft": true,
-  "dispatch_state": "W0-06D/C01_PENDING_ZERO_SENDS",
+  "dispatch_state": "W0-06D/C01_FAILED_WRONG_SESSION_ZERO_SENDS",
   "dispatch_run_url": null,
   "last_handoff": null,
   "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559", "head_sha": "e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6", "verdict": "PASS", "cycle_id": "C05"},
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-06D/C01 assignment prepared; no Claude Send",
-    "last_result": "ASSIGNMENT_PREPARED",
-    "required_by_krum": false,
+    "last_event": "W0-06D/C01 DISPATCH_FAILED; wrong Claude session, zero Sends",
+    "last_result": "DISPATCH_FAILED",
+    "required_by_krum": true,
     "from": null,
     "to": null,
-    "status": "PENDING_PLATFORM_CONFIRMATION",
-    "instruction": "One direct PC/UI W0-06D assignment Send after mandatory action-time confirmation; no duplicate Send.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381",
-    "updated_at": "2026-10-08T05:40:34Z"
+    "status": "BLOCKED_WRONG_TARGET",
+    "instruction": "Do not bypass Computer Use rejection or send W0-06D into PR #49 session; identify/approve correct PR #51 target.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844",
+    "updated_at": "2026-10-08T15:33:54Z"
   },
   "requires_krum": true,
-  "requires_krum_reason": "Computer Use requires action-time confirmation for a representational UI Send to Claude despite standing authorization.",
+  "requires_krum_reason": "Computer Use rejected the only verified Claude window because it is the existing W0-06C/PR #49 session, not W0-06D/PR #51; Krum's confirmation was received but no Send occurred.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "DISPATCH_PENDING",
+    "stage": "DISPATCH_BLOCKED",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "904713b59ced9472977f1e98d0df8291507e77ae",
+    "active_blob_sha": "07f23d1b68d1525605fbe2d748479ce323608735",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-08T05:40:34Z",
+  "updated_at": "2026-10-08T15:33:54Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
@@ -202,6 +202,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6053161381",
       "source_commit_sha": "36a6aa4cfa2fa9ad818b70e63d826668d7a213b7",
       "summary": "W0-06D contract-only Draft PR #51 and Task Issue #50 prepared from accepted C05 head; direct Claude UI Send pending mandatory action-time confirmation."
+    },
+    {
+      "event_id": "w0-06d-c01-dispatch-failed-wrong-session-20261008t153236z",
+      "occurred_at": "2026-10-08T15:32:36Z",
+      "task_id": "W0-06D",
+      "cycle_id": "C01",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "DISPATCH",
+      "state_after": "DISPATCH_BLOCKED",
+      "head_sha": "d647bfbffa3d92f9b314e3b8e49be1b7a97cac71",
+      "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6063386844",
+      "source_commit_sha": "7bde0fdf48bb34769ff3f83f0021e317a2d97f70",
+      "summary": "Computer Use rejected Send to W0-06C/PR #49 Claude session for W0-06D/PR #51. Message was not sent; Claude received zero W0-06D assignments."
     }
   ]
 }
