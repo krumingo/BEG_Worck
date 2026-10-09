@@ -1,15 +1,15 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06D/C03 RUNNING — bounded correction sent once to verified PR #51 Claude session
+Status: W0-06D/C03 CODEX REVIEWING — final exact-head HANDOFF matched Draft PR #51
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING; W0-06D/C03 message observed in PR #51 session
-Codex-State: WAITING
-Pipeline-Step: IMPLEMENTATION
-Transition-Phase: DISPATCH_CONFIRMED
-Now: Codex independently reviewed exact C02 head 8ffb112174d9517aaddd979cfc24ff44588dfc45 and published CHANGES_REQUESTED for three bounded defects: DB-row object-count cap bypass, actual streaming read over byte cap, and symlink-file read through physical walk. Krum confirmed C03 action-time Send; Codex sent the bounded correction once to the verified PR #51 Claude UI and observed Claude responding.
-Next-Agent: CLAUDE (bounded C03 implementation and final exact-head HANDOFF; then Codex independent review)
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY; final W0-06D/C03 HANDOFF published
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: HANDOFF_OBSERVED
+Now: Claude published final C03 HANDOFF on exact head 860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45, matching live open Draft PR #51. Codex began independent C02→C03 and whole-package review; no C03 verdict yet.
+Next-Agent: CODEX (independent C03 review and exact-head verdict)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
@@ -24,22 +24,22 @@ Base-branch: codex/w0-06c-integrity-monitoring (independently accepted technical
 Base-SHA: e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6
 Implementation-branch: codex/w0-06d-migration-readiness
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/51 (Draft, base main; stacked W0-06B/C predecessors unmerged)
-PR-Head: 8ffb112174d9517aaddd979cfc24ff44588dfc45
+PR-Head: 860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45
 Correction-Base-SHA: 8ffb112174d9517aaddd979cfc24ff44588dfc45
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/50
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6074657145
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6077439978
 Review: W0-06D/C02 independent CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740 and coordination/REVIEWS/W0-06D.md C02. C01 was also CHANGES_REQUESTED. Predecessor W0-06C and W0-06B technical PASS.
-Final-Verdict: W0-06D/C02 CHANGES_REQUESTED; no technical PASS. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: W0-06D/C03 PENDING independent review; no technical PASS. C02 was CHANGES_REQUESTED. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06C/C05
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
 Authorization: Krum explicitly confirmed the C03 UI Send at action time; sent exactly once to the verified PR #51 Claude session and Claude response observed. Earlier C01 wrong-target rejection was not bypassed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-06E or automatic next Task-ID.
 
-## W0-06D/C03 — bounded correction in progress
+## W0-06D/C03 — final HANDOFF, Codex independent review
 
-Exact correction base is `8ffb112174d9517aaddd979cfc24ff44588dfc45`. The three C02 findings and independent verdict are in `coordination/REVIEWS/W0-06D.md` and https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740. Krum confirmed one action-time Computer Use Send; Codex verified Draft PR #51, the correct existing Claude session, and no prior C03 Send. Dispatch attempt: https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6076970857. One UI Send was observed, with Claude responding: https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6076991061. Do not resend, review an intermediate push, merge, deploy, migrate in production, or start W0-06E. Await final exact-head HANDOFF, stable matching PR head and completed Claude session before independent whole-package review.
+Exact correction base is `8ffb112174d9517aaddd979cfc24ff44588dfc45`. The three C02 findings and independent verdict are in `coordination/REVIEWS/W0-06D.md` and https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740. Krum confirmed one action-time Computer Use Send; Codex verified Draft PR #51 and sent once: https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6076991061. Claude published final C03 HANDOFF https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6077439978 at `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`, matching live PR #51. Codex recorded HANDOFF_DETECTED / REVIEW_STARTED https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6078454100. Review C02→C03 and whole main→head code independently; no repeat Send, merge, deploy, production migration or W0-06E.
 
 ## W0-06D/C02 — independent CHANGES_REQUESTED; C03 sent once
 
