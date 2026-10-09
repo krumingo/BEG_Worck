@@ -1,19 +1,19 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-09T05:51:02Z",
+  "validated_at": "2026-10-09T06:02:39Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "6da21a058f4f26a9615d826aba4536d9b73def6a",
-  "control_state_commit_sha": "a50576f23dfddf21e5b89401bd93f0b6d830f345",
-  "now": "Claude published final W0-06D/C02 HANDOFF at 8ffb112174d9517aaddd979cfc24ff44588dfc45, matching live Draft PR #51. Codex independent exact-head review is in progress; no C02 verdict yet.",
+  "active_source_commit_sha": "fab960ff9b0cd87ca60c84468e73639dd8b32fbf",
+  "control_state_commit_sha": "a7f3d0c5f888a6c2b20ff9b1ae9eda5365f821d8",
+  "now": "Independent W0-06D/C02 CHANGES_REQUESTED on exact PR #51 head for three bounded scan safety/budget defects. Same-Task-ID C03 correction prepared, not sent; Computer Use action-time confirmation required for distinct C03 Send.",
   "transition": {
-    "event": "REVIEW_STARTED",
-    "phase": "REVIEW",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6075155525",
-    "verdict_publication": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6070884166"
+    "event": "CORRECTION_PREPARED",
+    "phase": "CORRECTION_DISPATCH",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6075283502",
+    "verdict_publication": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
   "task_id": "W0-06D",
@@ -25,60 +25,60 @@
     "GPT": {
       "state": "COORDINATING",
       "work_id": "W0-06D/C02/GPT",
-      "waiting_for": "Codex independent C02 verdict",
-      "updated_at": "2026-10-09T05:51:02Z"
+      "waiting_for": "C03 correction and independent re-review",
+      "updated_at": "2026-10-09T06:02:39Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "CORRECTION_PREPARED",
       "work_id": "W0-06D/C02/CX",
-      "waiting_for": "whole-package audit and critical independent gates",
-      "updated_at": "2026-10-09T05:51:02Z"
+      "waiting_for": "platform-required action-time confirmation and correct Claude target verification before one C03 Send",
+      "updated_at": "2026-10-09T06:02:39Z"
     },
     "CLAUDE": {
       "state": "FINISHED",
       "work_id": "W0-06D/C02/CL",
-      "waiting_for": "Codex independent review or bounded same-scope correction",
-      "updated_at": "2026-10-09T05:51:02Z"
+      "waiting_for": "bounded C03 correction; no Send yet",
+      "updated_at": "2026-10-09T06:02:39Z"
     }
   },
   "current_work_id": "W0-06D/C02/CX",
-  "state": "CODEX_REVIEWING",
-  "pipeline_step": "REVIEW",
+  "state": "CHANGES_REQUESTED",
+  "pipeline_step": "CORRECTION_DISPATCH",
   "next_agent": "CODEX",
-  "waiting_for": "independent C02 verdict on exact PR #51 head",
+  "waiting_for": "one bounded C03 Computer Use Send after platform-required action-time confirmation",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 51,
   "pr_head_sha": "8ffb112174d9517aaddd979cfc24ff44588dfc45",
   "pr_draft": true,
-  "dispatch_state": "W0-06D/C02_SENT_ONCE; CLAUDE_RESPONDING",
+  "dispatch_state": "W0-06D/C02_SENT_ONCE_AND_REVIEWED; C03_SEND_ZERO",
   "dispatch_run_url": null,
   "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6074657145", "head_sha": "8ffb112174d9517aaddd979cfc24ff44588dfc45", "cycle_id": "C02"},
-  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6070884166", "head_sha": "0a0984fe6dbff59601003c3dbc2f2bc119c82f52", "verdict": "CHANGES_REQUESTED", "cycle_id": "C01"},
+  "last_review": {"url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740", "head_sha": "8ffb112174d9517aaddd979cfc24ff44588dfc45", "verdict": "CHANGES_REQUESTED", "cycle_id": "C02"},
   "relay": {
     "last_agent": "CODEX",
-    "last_event": "W0-06D/C02 final exact-head HANDOFF detected; independent Codex review started",
-    "last_result": "REVIEW_STARTED",
+    "last_event": "W0-06D/C02 independent CHANGES_REQUESTED; bounded C03 correction prepared",
+    "last_result": "CORRECTION_PREPARED",
     "required_by_krum": false,
     "from": null,
     "to": null,
-    "status": "HANDOFF_RECEIVED_VIA_GITHUB",
-    "instruction": "Independently review final exact C02 head; no duplicate C02 Send.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6074657145",
-    "updated_at": "2026-10-09T05:51:02Z"
+    "status": "C03_SEND_PENDING_CONFIRMATION",
+    "instruction": "One bounded C03 Send only after platform-required action-time confirmation and target verification; no duplicate C02 Send.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6075283502",
+    "updated_at": "2026-10-09T06:02:39Z"
   },
-  "requires_krum": false,
-  "requires_krum_reason": null,
+  "requires_krum": true,
+  "requires_krum_reason": "Computer Use requires action-time confirmation for this distinct C03 UI Send despite standing agent-to-agent authorization.",
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "REVIEW",
+    "stage": "CORRECTION_DISPATCH",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "69ea0e119fafb8d5794f66bc50dc11e3b6918a13",
+    "active_blob_sha": "1329f45f029bb34229a2aa02f97ebc312533bb20",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-09T05:51:02Z",
+  "updated_at": "2026-10-09T06:02:39Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
@@ -272,6 +272,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6074657145",
       "source_commit_sha": "6da21a058f4f26a9615d826aba4536d9b73def6a",
       "summary": "Final C02 HANDOFF matched live Draft PR #51 exact head and Codex independent review began."
+    },
+    {
+      "event_id": "w0-06d-c02-changes-requested-20261009t060239z",
+      "occurred_at": "2026-10-09T06:02:39Z",
+      "task_id": "W0-06D",
+      "cycle_id": "C02",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "8ffb112174d9517aaddd979cfc24ff44588dfc45",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740",
+      "source_commit_sha": "fab960ff9b0cd87ca60c84468e73639dd8b32fbf",
+      "summary": "Independent exact-head C02 CHANGES_REQUESTED for DB-row object-cap bypass, byte overread and symlink-file physical walk; same-Task-ID C03 prepared but unsent."
     }
   ]
 }
