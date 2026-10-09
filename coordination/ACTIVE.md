@@ -3,9 +3,9 @@
 Status: W0-06D/C03 RUNNING — bounded correction sent once to verified PR #51 Claude session
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
 Current-Agent: CLAUDE
-Current-State: RUNNING
+Current-State: WORKING
 Claude-State: WORKING; W0-06D/C03 message observed in PR #51 session
-Codex-State: WAITING_FOR_HANDOFF
+Codex-State: WAITING
 Pipeline-Step: IMPLEMENTATION
 Transition-Phase: DISPATCH_CONFIRMED
 Now: Codex independently reviewed exact C02 head 8ffb112174d9517aaddd979cfc24ff44588dfc45 and published CHANGES_REQUESTED for three bounded defects: DB-row object-count cap bypass, actual streaming read over byte cap, and symlink-file read through physical walk. Krum confirmed C03 action-time Send; Codex sent the bounded correction once to the verified PR #51 Claude UI and observed Claude responding.
