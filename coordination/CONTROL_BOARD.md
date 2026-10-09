@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-09T09:56:44Z · CONTROL STATE: **VALID** as of 2026-10-09T09:56:44Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-09T16:44:39Z · CONTROL STATE: **VALID** as of 2026-10-09T16:44:39Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06D / C03 / CODEX / **CHANGES_REQUESTED**
-LAST: CODEX — independent exact-head C03 CHANGES_REQUESTED; bounded C04 prepared, not sent
-RELAY: NO_RELAY_NEEDED · C03 dispatched once; C04 not dispatched
-NOW: Live Draft PR #51 head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`; C03 bounded-inventory finding requires C04 correction.
-TRANSITION: CODEX_REVIEW / CHANGES_REQUESTED · https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054
-NEXT: CODEX — one C04 UI Send after platform-required action-time confirmation
-KRUM ACTION: confirm that specific C04 Computer Use Send; no architectural decision needed
-WAITING FOR: action-time confirmation; C04 not sent
+CURRENT: W0-06D / C03 / CODEX / **C04 DISPATCH FAILED BEFORE SEND**
+LAST: CODEX — C04 UI attempt stopped on concurrent user input; no C04 text typed or sent
+RELAY: WAITING_FOR_OWNER_DECISION · C03 dispatched once; C04 not dispatched
+NOW: Live Draft PR #51 head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`; C03 CHANGES_REQUESTED. Krum confirmed C04 Send, but the existing Claude composer had an unfinished changing draft.
+TRANSITION: CORRECTION_DISPATCH_FAILED / UI_SEND_STOPPED · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629
+NEXT: KRUM — decide whether existing Claude draft may be cleared; then CODEX can safely retry one C04 UI Send
+KRUM ACTION: confirm whether the unfinished Claude composer draft may be cleared
+WAITING FOR: owner decision about draft; C04 not sent
 
 ## Required agent banner
 
@@ -24,13 +24,13 @@ CYCLE: C03
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
 STATE: CHANGES_REQUESTED
-NEXT: CODEX
-WAITING_FOR: action-time confirmation for one C04 UI Send
+NEXT: KRUM
+WAITING_FOR: decision whether the unfinished Claude composer draft may be cleared
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06D | C03 | WAITING | CORRECTION_PREPARED | WAITING_FOR_CORRECTION | CODEX | action-time confirmation for C04 Send | CHANGES_REQUESTED, not PASS |
+| W0-06D | C03 | WAITING | CORRECTION_DISPATCH_FAILED | WAITING_FOR_CORRECTION | KRUM | decision on unfinished draft | C04 NOT SENT |
 
 ## Agent cards
 
@@ -38,15 +38,16 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06D/C03/GPT | bounded C04 correction | 2026-10-09T09:56:44Z |
-| CODEX | CORRECTION_PREPARED | W0-06D/C03/CX | action-time confirmation before C04 UI Send | 2026-10-09T09:56:44Z |
-| CLAUDE | WAITING_FOR_CORRECTION | W0-06D/C03/CL | C04 not yet dispatched | 2026-10-09T09:56:44Z |
+| GPT | WAITING | W0-06D/C03/GPT | bounded C04 correction | 2026-10-09T16:44:39Z |
+| CODEX | CORRECTION_DISPATCH_FAILED | W0-06D/C03/CX | Krum decision on clearing unfinished composer draft | 2026-10-09T16:44:39Z |
+| CLAUDE | WAITING_FOR_CORRECTION | W0-06D/C03/CL | C04 not yet dispatched | 2026-10-09T16:44:39Z |
 
 W0-06C independent PASS → W0-06D/C01 CHANGES_REQUESTED → C02 CHANGES_REQUESTED → C03 CHANGES_REQUESTED → C04 prepared, not sent
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `4c09374` · blob `6f938eb340a171a43c3e019f6d93c896d9abfc2a`
+- ACTIVE: `coordination/ACTIVE.md` · source commit `3427b9e` · blob `fdcc0b9755130d4b88324248b1adf67d7879e70e`
+- C04 UI attempt: [CORRECTION_DISPATCH_FAILED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629) before typing or Send · existing Claude composer draft preserved
 - Independent C03 verdict: [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054) · [finding](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6078620765) · `coordination/REVIEWS/W0-06D.md` C03
 - Current Draft PR: [#51](https://github.com/krumingo/BEG_Worck/pull/51) · final C03 head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45` · [C03 HANDOFF](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6077439978) · [review started](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6078454100)
 - Independent C02 [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740) · [review evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06D.md) · [C03 correction prepared](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6075283502) and [sent once](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6076991061)
@@ -81,5 +82,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-09T05:51:02Z | C02 | — | HANDOFF_DETECTED / REVIEW_STARTED | CODEX | CODEX_REVIEWING | `8ffb1121` | [evidence](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6075155525) |
 | 2026-10-09T06:02:39Z | C02 | — | REVIEW / CHANGES_REQUESTED | CODEX | CHANGES_REQUESTED | `8ffb1121` | [evidence](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740) |
 | 2026-10-09T09:56:44Z | C03 | — | REVIEW / CHANGES_REQUESTED | CODEX | CHANGES_REQUESTED | `860c9c90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054) |
+| 2026-10-09T16:44:39Z | C04 | — | CORRECTION_DISPATCH_FAILED | CODEX | C04 NOT SENT | `860c9c90` | [evidence](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629) |
 
 **Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01, C02 and C03 are CHANGES_REQUESTED. C04 is prepared but not sent. Earlier Computer Use rejection was not bypassed: Krum directly assigned Claude for C01. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.
