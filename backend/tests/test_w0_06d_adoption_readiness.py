@@ -1979,3 +1979,456 @@ class TestDefect4StreamingCapsAreEnforced:
         pass_ = inv.open_pass()
         inv._checksum(path, 2, pass_)
         assert pass_.bytes_read == 60
+
+
+# ══════════════════════════ C02 review — the three remaining counterexamples
+#: A host that cannot create a symlink cannot test the link gate. The five
+#: C01 failures in the independent review were exactly this: `WinError 1314`,
+#: a missing OS privilege, raised while BUILDING the fixture. Such a result is
+#: not a pass and not a failure of the guard — it is an untested guard, so it
+#: is marked as skipped, loudly, instead of being counted either way.
+def _symlinks_work():
+    probe = tempfile.mkdtemp(prefix="w006d_linkprobe_")
+    try:
+        os.symlink(probe, os.path.join(probe, "l"))
+        return True
+    except (OSError, NotImplementedError, AttributeError):
+        return False
+    finally:
+        shutil.rmtree(probe, ignore_errors=True)
+
+
+SYMLINKS = _symlinks_work()
+needs_symlinks = pytest.mark.skipif(
+    not SYMLINKS, reason="this host cannot create a symlink, so the link gate "
+                         "cannot be exercised here — NOT a pass")
+
+
+class _Spy:
+    """An opener that records every path it was asked to open."""
+
+    def __init__(self):
+        self.opened = []
+
+    def __call__(self, path):
+        self.opened.append(path)
+        return open(path, "rb")
+
+
+class TestC02Defect1ObjectBudgetBindsEveryEntryPath:
+    """`max_objects` belongs to the object, not to how it was reached."""
+
+    def test_the_review_counterexample_a_db_row_at_cap_zero(self, roots):
+        """`max_objects=0`, an EXISTING file named by a row: zero reads."""
+        roots.write("big.pdf", b"z" * 4096)
+        spy = _Spy()
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots), opener=spy,
+            budget=ar.ScanBudget(max_objects=0, allow_content_read=True))
+        pass_ = inv.open_pass()
+        seen = inv.observe_path("/app/backend/uploads/big.pdf", pass_)
+        assert seen.checksum is None, "an object beyond the cap was hashed"
+        assert seen.refusal == ar.REASON_OBJECT_BUDGET_EXHAUSTED
+        assert seen.readable is False
+        assert pass_.objects_seen == 0
+        assert pass_.bytes_read == 0
+        assert pass_.truncated is True
+        assert spy.opened == [], "the file was opened although the cap was 0"
+
+    def test_a_row_naming_an_object_past_the_cap_is_not_read(self, roots):
+        """The service-level regression the review asked for, not a helper test.
+
+        The walk spends the whole object budget on the object it reaches
+        first; the legacy DB row then names a DIFFERENT object. Before the fix
+        that row was observed and hashed anyway, because only ``walk`` charged
+        the limit.
+        """
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            # two objects on disk; the budget allows ONE
+            roots.write("aaa.pdf", b"first object")
+            roots.write("zzz.pdf", b"second object")
+            await _seed(db, A, "media_files", [_media_row("md-1", "zzz.pdf")])
+            spy = _Spy()
+            inv = ar.LegacyRootInventory(
+                roots.roots(), declared_roots=declared_map(roots), opener=spy,
+                budget=ar.ScanBudget(max_objects=1, allow_content_read=True))
+            out = await readiness(reg, inv=inv).scan(ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            # the walk reached aaa.pdf first and spent the one charge there
+            assert out["inventory"]["objects_seen"] == 1
+            assert out["inventory"]["truncated"] is True
+            assert row["observed"]["checksum"] is None
+            assert row["observed"]["refusal"] == ar.REASON_OBJECT_BUDGET_EXHAUSTED
+            # and zzz.pdf was never opened
+            assert all("zzz" not in path for path in spy.opened), spy.opened
+            # a refusal is never a missing original and never readiness
+            assert row["state"] not in (ar.MISSING_ORIGINAL, ar.READY_TO_ADOPT)
+            assert row["proposed_action"] != ar.PROPOSE_ADOPT_IN_PLACE
+            assert ar.REASON_OBJECT_BUDGET_EXHAUSTED in row["reasons"]
+        run(body())
+
+    def test_the_same_object_is_still_charged_only_once(self, roots):
+        """The C02 shared-limit accounting must survive the new charge point."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            roots.write("shared.pdf", b"shared bytes")
+            await _seed(db, A, "media_files", [_media_row("md-1", "shared.pdf")])
+            inv = inventory(roots, max_objects=1)
+            out = await readiness(reg, inv=inv).scan(ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            # ONE object, ONE charge — the row reuses the walk's observation
+            assert out["inventory"]["objects_seen"] == 1
+            assert out["inventory"]["truncated"] is False
+            assert row["observed"]["checksum"] is not None
+            assert row["observed"]["refusal"] is None
+        run(body())
+
+    def test_an_exhausted_budget_refuses_every_later_object(self, roots):
+        for name in ("a.pdf", "b.pdf", "c.pdf"):
+            roots.write(name, b"content " + name.encode())
+        inv = inventory(roots, max_objects=2)
+        pass_ = inv.open_pass()
+        inv.walk(pass_)
+        assert pass_.objects_seen == 2
+        # a third object, named directly, is now beyond the budget
+        later = inv.observe_path("/app/backend/uploads/c.pdf", pass_)
+        assert later.refusal == ar.REASON_OBJECT_BUDGET_EXHAUSTED
+        assert later.checksum is None
+        assert pass_.objects_seen == 2, "the cap was exceeded"
+
+    def test_the_cap_is_per_pass_not_per_inventory(self, roots):
+        """Defect 1's fix must not undo C02's defect 3."""
+        roots.write("one.pdf", b"one")
+        inv = inventory(roots, max_objects=1)
+        for _attempt in range(3):
+            pass_ = inv.open_pass()
+            seen = inv.observe_path("/app/backend/uploads/one.pdf", pass_)
+            assert seen.checksum is not None, "a fresh pass started exhausted"
+            assert pass_.objects_seen == 1
+
+    @pytest.mark.parametrize("claimed_state", ["absent", "absent_or_unreadable"])
+    def test_a_budget_refusal_is_not_an_absent_original(self, claimed_state):
+        """The classifier distinction, directly and at its hardest.
+
+        ``absent`` is the deliberately adversarial half: even if a caller
+        asserts the object is absent, a refusal saying the scan was not
+        PERMITTED to look says nothing about whether the bytes are there.
+        Reporting `MISSING_ORIGINAL` from a truncated inventory would be the
+        exact mislabelling the contract forbids, so the refusal has to
+        override the claim rather than the other way round.
+        """
+        state, reasons, evidence = _classifier()._classify(
+            direction=ar.DIRECTION_DB_ROW,
+            plan=TestDefect1ReadinessNeedsObservedEvidence._plan(),
+            source=mp.SOURCES_BY_KEY["media_files"],
+            observed={"state": claimed_state, "size_bytes": None,
+                      "checksum": None, "checksum_reason": None,
+                      "refusal": ar.REASON_OBJECT_BUDGET_EXHAUSTED,
+                      "relative_path": None, "registered_size": None},
+            registry=_registry(file_exists=True, verified_location=True,
+                               checksum_matches=True, size_matches=True,
+                               relations_match=True))
+        assert state != ar.MISSING_ORIGINAL, \
+            "a budget refusal was reported as a proven absence"
+        assert state != ar.READY_TO_ADOPT
+        assert evidence is False
+        # and the refusal itself is on the record, not just its effect
+        assert ar.REASON_OBJECT_BUDGET_EXHAUSTED in reasons
+
+
+class TestC02Defect2TheReadNeverExceedsTheCap:
+    """The caps bound the physical read, not merely the verdict."""
+
+    class _Stream:
+        def __init__(self, payload):
+            self.payload = payload
+            self.asked = []
+            self.done = False
+
+        def read(self, want):
+            self.asked.append(want)
+            if self.done:
+                return b""
+            self.done = True
+            return self.payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def test_the_review_counterexample_zero_caps_read_zero_bytes(self, roots):
+        """size 0, both caps 0, a stream offering one byte: nothing is read."""
+        path = roots.write("z.pdf", b"x")
+        stream = self._Stream(b"x")
+        opened = []
+
+        def opener(target):
+            opened.append(target)
+            return stream
+
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=0,
+                                 max_checksum_bytes=0),
+            opener=opener)
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 0, pass_)
+        assert checksum is None
+        assert pass_.bytes_read == 0, "a byte was read past a zero cap"
+        assert pass_.bytes_read <= inv.budget.max_checksum_bytes
+        assert stream.asked == [], "the stream was read at a zero cap"
+        # Nothing may be read, so the object is not opened either: an `open`
+        # is an action in its own right — it can block on a FIFO, fail on a
+        # permission, and it touches the original. A zero budget buys nothing.
+        assert opened == [], "the object was opened at a zero budget"
+        assert reason == ar.REASON_SIZE_UNCERTAIN
+
+    def test_no_read_ever_asks_for_more_than_is_owed(self, roots):
+        """The ceiling+1 probe is gone: every request is within the budget."""
+        path = roots.write("exact.pdf", b"abcd")
+        stream = self._Stream(b"abcd")
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=4,
+                                 max_checksum_bytes=4),
+            opener=lambda _p: stream)
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 4, pass_)
+        assert reason is None and checksum is not None
+        assert stream.asked, "nothing was read at all"
+        assert max(stream.asked) <= 4, stream.asked
+        assert sum(min(a, 4) for a in stream.asked[:1]) <= 4
+        assert pass_.bytes_read == 4 <= inv.budget.max_checksum_bytes
+
+    @pytest.mark.parametrize("cap", [0, 1, 2, 7, 64])
+    def test_the_physical_bytes_read_never_exceed_the_cap(self, roots, cap):
+        """The invariant, swept across limits, with a real file."""
+        path = roots.write("sweep.pdf", b"y" * 64)
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=cap,
+                                 max_checksum_bytes=cap))
+        pass_ = inv.open_pass()
+        inv._checksum(path, 64, pass_)
+        assert pass_.bytes_read <= cap, (pass_.bytes_read, cap)
+
+    def test_a_file_that_grew_after_the_stat_is_refused_without_an_overread(self,
+                                                                           roots):
+        """Growth is caught by a second stat, not by an over-cap byte."""
+        path = roots.write("grow.pdf", b"abcd")
+
+        class Growing:
+            def __init__(self, target):
+                self.handle = open(target, "rb")
+                self.target = target
+
+            def read(self, want):
+                data = self.handle.read(want)
+                # the file grows underneath the scan, mid-read
+                with open(self.target, "ab") as more:
+                    more.write(b"MORE")
+                return data
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                self.handle.close()
+                return False
+
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=16,
+                                 max_checksum_bytes=16),
+            opener=lambda p: Growing(p))
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 4, pass_)
+        assert checksum is None, "a file that grew mid-read was hashed"
+        assert reason == ar.REASON_SIZE_UNCERTAIN
+        assert pass_.bytes_read <= 16
+        assert pass_.checksums_read == 0
+
+    def test_a_stream_that_ends_early_is_refused(self, roots):
+        """Shrinkage is the same uncertainty, not a checksum of a prefix."""
+        path = roots.write("short.pdf", b"abcd")
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=16,
+                                 max_checksum_bytes=16),
+            opener=lambda _p: self._Stream(b"ab"))
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 4, pass_)
+        assert checksum is None
+        assert reason == ar.REASON_SIZE_UNCERTAIN
+        assert pass_.bytes_read == 2, "the bytes read were not charged honestly"
+
+    def test_an_unknown_size_cannot_be_hashed_at_all(self, roots):
+        """A read with no ceiling is not a budgeted read."""
+        path = roots.write("u.pdf", b"abcd")
+        inv = inventory(roots)
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, None, pass_)
+        assert checksum is None
+        assert reason == ar.REASON_SIZE_UNCERTAIN
+        assert pass_.bytes_read == 0
+
+    def test_a_handle_returning_more_than_asked_is_charged_and_refused(self,
+                                                                       roots):
+        """We ask for what is owed; a lying handle is still charged honestly."""
+        path = roots.write("lie.pdf", b"a")
+        stream = self._Stream(b"abc")
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=1,
+                                 max_checksum_bytes=1),
+            opener=lambda _p: stream)
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 1, pass_)
+        assert checksum is None
+        assert reason == ar.REASON_BUDGET_EXHAUSTED
+        assert stream.asked == [1], "more than the cap was REQUESTED"
+        assert pass_.bytes_read == 3, "the bytes that arrived were not charged"
+        assert pass_.checksums_read == 0
+
+    def test_a_genuinely_empty_object_still_gets_its_checksum(self, roots):
+        """The positive edge: nothing to read is not a refusal."""
+        path = roots.write("empty.pdf", b"")
+        inv = inventory(roots)
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 0, pass_)
+        assert reason is None
+        assert checksum == m.checksum(hashlib.sha256(b"").hexdigest())
+        assert pass_.bytes_read == 0
+        assert pass_.checksums_read == 1
+
+    def test_a_real_scan_at_an_exact_limit_reads_exactly_the_limit(self, roots):
+        """End to end, through the service, with no injected opener."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            payload = b"w" * 12
+            roots.write("fit.pdf", payload)
+            await _seed(db, A, "media_files", [_media_row("md-1", "fit.pdf")])
+            inv = inventory(roots, max_object_bytes=12, max_checksum_bytes=12)
+            out = await readiness(reg, inv=inv).scan(ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            assert out["inventory"]["bytes_read"] == 12
+            assert out["inventory"]["bytes_read"] <= 12
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["observed"]["checksum"] == m.checksum(
+                hashlib.sha256(payload).hexdigest())
+        run(body())
+
+
+class TestC02Defect3TheWalkGatesFileEntriesToo:
+    """A symlink FILE is a link, whichever entry path finds it."""
+
+    @needs_symlinks
+    def test_the_review_counterexample_an_in_root_link_to_an_outside_target(
+            self, roots):
+        """A real symlink file, in a real root, pointing really outside it."""
+        secret = roots.write_outside("secret.pdf", b"NOT YOURS")
+        link = os.path.join(roots.uploads, "escape.pdf")
+        os.symlink(secret, link)
+        spy = _Spy()
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots), opener=spy,
+            budget=ar.ScanBudget(allow_content_read=True))
+        # the gate says no, on its own
+        safe, refusal = ar.path_within_root(roots.uploads, link)
+        assert safe is False
+        # and the WALK now agrees with the gate
+        found = {o.relative_path: o for o in inv.walk()}
+        assert "escape.pdf" in found, "the entry vanished instead of being refused"
+        entry = found["escape.pdf"]
+        assert entry.checksum is None, "a symlink out of the root was hashed"
+        assert entry.refusal == ar.REASON_PATH_IS_LINK
+        assert entry.readable is False
+        assert spy.opened == [], "the link target was opened"
+        assert inv.last_pass.bytes_read == 0
+
+    @needs_symlinks
+    def test_an_in_root_link_to_an_in_root_target_is_also_refused(self, roots):
+        """"It resolves inside today" is not a safety property."""
+        roots.write("real.pdf", b"inside bytes")
+        link = os.path.join(roots.uploads, "alias.pdf")
+        os.symlink(os.path.join(roots.uploads, "real.pdf"), link)
+        inv = inventory(roots)
+        found = {o.relative_path: o for o in inv.walk()}
+        assert found["alias.pdf"].refusal == ar.REASON_PATH_IS_LINK
+        assert found["alias.pdf"].checksum is None
+        # the real file beside it is unaffected
+        assert found["real.pdf"].checksum is not None
+
+    @needs_symlinks
+    def test_the_two_entry_paths_now_agree(self, roots):
+        """The inconsistency the review named: walk vs observe_path."""
+        secret = roots.write_outside("s.pdf", b"outside")
+        os.symlink(secret, os.path.join(roots.uploads, "both.pdf"))
+        inv = inventory(roots)
+        pass_ = inv.open_pass()
+        walked = {o.relative_path: o for o in inv.walk(pass_)}["both.pdf"]
+        told = inv.observe_path("/app/backend/uploads/both.pdf", pass_)
+        assert walked.refusal == ar.REASON_PATH_IS_LINK
+        assert told.refusal == ar.REASON_PATH_IS_LINK
+        assert walked.checksum is told.checksum is None
+
+    @needs_symlinks
+    def test_a_refused_link_does_not_consume_the_object_budget(self, roots):
+        """A refusal is not an observation, so it pays nothing."""
+        roots.write("real.pdf", b"real")
+        os.symlink(roots.write_outside("x.pdf", b"x"),
+                   os.path.join(roots.uploads, "aaa_link.pdf"))
+        inv = inventory(roots, max_objects=1)
+        objects = inv.walk()
+        by_name = {o.relative_path: o for o in objects}
+        # the link sorts FIRST, and must not spend the single charge
+        assert by_name["aaa_link.pdf"].refusal == ar.REASON_PATH_IS_LINK
+        assert by_name["real.pdf"].checksum is not None
+        assert inv.last_pass.objects_seen == 1
+
+    @needs_symlinks
+    def test_a_symlinked_file_is_refused_through_the_service(self, roots):
+        """Service level: a legacy row whose object is a link out of the root."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            secret = roots.write_outside("payroll.pdf", b"ANOTHER TENANTS BYTES")
+            os.symlink(secret, os.path.join(roots.uploads, "linked.pdf"))
+            await _seed(db, A, "media_files", [_media_row("md-1", "linked.pdf")])
+            spy = _Spy()
+            inv = ar.LegacyRootInventory(
+                roots.roots(), declared_roots=declared_map(roots), opener=spy,
+                budget=ar.ScanBudget(allow_content_read=True))
+            out = await readiness(reg, inv=inv).scan(ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["observed"]["checksum"] is None
+            assert row["observed"]["refusal"] == ar.REASON_PATH_IS_LINK
+            assert row["state"] not in (ar.MISSING_ORIGINAL, ar.READY_TO_ADOPT)
+            assert ar.REASON_PATH_IS_LINK in row["reasons"]
+            assert spy.opened == []
+            # and nothing about the other tenant's bytes is anywhere
+            assert "ANOTHER" not in repr(out["item_records"])
+            assert "payroll" not in repr(out["item_records"])
+        run(body())
+
+    def test_every_walked_file_passed_the_gate(self, roots):
+        """The invariant itself, with no link involved: positive control."""
+        for name in ("a.pdf", "projects/b.pdf", "deep/c.pdf"):
+            roots.write(name, b"content of " + name.encode())
+        inv = inventory(roots)
+        for obj in inv.walk():
+            if obj.refusal is not None:
+                continue
+            absolute = os.path.join(obj.root, obj.relative_path)
+            safe, refusal = ar.path_within_root(obj.root, absolute)
+            assert safe is True, (obj.relative_path, refusal)
+            assert obj.checksum is not None

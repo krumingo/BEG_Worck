@@ -58,9 +58,12 @@ A checksum can only be computed by reading the object, which is the one
 genuinely dangerous thing a "read-only" scanner does. It is therefore off by
 default and, when switched on, fenced four ways: an allowlisted root, a
 real-path containment check that a DB-supplied path cannot escape, a refusal of
-any symlink or reparse point, and a bounded budget of objects and bytes. A
-path that fails any of them is reported, not read. Nothing is opened for
-writing anywhere in this module.
+any symlink or reparse point, and a bounded budget of objects and bytes. Every
+one of those fences is applied in :meth:`LegacyRootInventory._observe`, which
+is the single way into a ``stat``, an ``open`` or a ``read`` — so the physical
+walk and a path a database row named are gated identically, and a path that
+fails any fence is reported, not read. Nothing is opened for writing anywhere
+in this module.
 
 What the C02 correction changed
 -------------------------------
@@ -91,6 +94,32 @@ the evidence behind it.
    grew, or a stream that returned more than it declared, was hashed past
    both caps. The read is now bounded by a single ceiling and an overrun
    fails closed.
+
+What the C03 correction changed
+-------------------------------
+
+The C02 independent review found three places where a bound was declared and
+not actually enforced. The architecture is unchanged; each fix moves a check
+to where it cannot be bypassed.
+
+1. **An object limit that every entry path obeys.** ``max_objects`` was
+   checked and charged in ``walk`` alone, so ``observe_path`` — the DB-row
+   path — obeyed no object limit at all: at ``max_objects=0`` a row naming an
+   existing file was still opened and hashed. The limit belongs to the object,
+   so it is charged in :meth:`LegacyRootInventory._observe`. A refusal is not
+   cached, because it is not an observation; a cached observation of the same
+   object still reuses its one charge.
+2. **A read that cannot exceed its budget.** The previous fix asked for one
+   byte past the ceiling so an overrun would surface immediately — which
+   settled the verdict but not the budget: at a cap of zero it physically read
+   and charged a byte. The ceiling is now the declared size, already proven
+   within both caps, every ``read`` asks for at most what is owed, and nothing
+   is opened at a zero ceiling. Growth is caught by a second ``stat`` instead.
+3. **The walk gates its file entries.** It filtered symlinked *directories*
+   and then handed filenames straight to ``_observe``, which never consulted
+   :func:`path_within_root`; a symlink FILE in a real directory was therefore
+   followed out of the allowlisted root. The gate now runs on every entry,
+   before the stat, the open and the cache.
 
 Canon: `docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md`, FLOW-016,
 FLOW-002, FLOW-040, TENANCY_MODEL, and the W0-06A inventory and migration map.
@@ -277,6 +306,10 @@ REASON_DUPLICATE_SAME_CHECKSUM = "SAME_CHECKSUM_AS_ANOTHER_FILE"
 REASON_ORIGINAL_NOT_OBSERVED = "LEGACY_ORIGINAL_NOT_OBSERVED"
 REASON_SIZE_UNKNOWN = "SIZE_NOT_OBSERVED"
 REASON_SAME_OBJECT_UNPROVEN = "OBSERVED_OBJECT_NOT_PROVEN_SAME"
+#: C02 review defects 1 and 2: a bounded inventory that is not actually
+#: bounded, and a bounded read that physically overran its cap.
+REASON_OBJECT_BUDGET_EXHAUSTED = "OBJECT_BUDGET_EXHAUSTED"
+REASON_SIZE_UNCERTAIN = "SIZE_UNCERTAIN_AT_READ_TIME"
 #: C01 review defect 2: a relation COUNT is not a relation identity.
 REASON_RELATION_NOT_REGISTERED = "PROPOSED_RELATION_NOT_REGISTERED"
 REASON_RELATION_TARGET_MISSING = "RELATION_TARGET_NOT_IN_THIS_TENANT"
@@ -559,11 +592,14 @@ class LegacyRootInventory:
                                if not os.path.islink(os.path.join(directory, d))]
                 for name in sorted(filenames):
                     if pass_.objects_seen >= self.budget.max_objects:
+                        # The limit itself is charged and enforced in
+                        # :meth:`_observe`, which both entry paths share (C02
+                        # review defect 1). Stopping here as well keeps the
+                        # walk from reading a whole tree it may not inspect.
                         pass_.truncated = True
                         return sorted(found, key=lambda o: (o.root, o.relative_path))
                     absolute = os.path.join(directory, name)
                     relative = os.path.relpath(absolute, root)
-                    pass_.objects_seen += 1
                     found.append(self._observe(root, relative, absolute, pass_))
         return sorted(found, key=lambda o: (o.root, o.relative_path))
 
@@ -608,9 +644,33 @@ class LegacyRootInventory:
     # ------------------------------------------------------------------ one object
     def _observe(self, root: str, relative: str, absolute: str,
                  pass_: ScanPass) -> PhysicalObject:
-        # One object, one charge against this pass. The physical walk and a DB
-        # row naming the same object therefore SHARE the limit instead of
-        # paying it twice, which is what makes an exact limit deterministic.
+        """Observe ONE object. The only way into a stat, an open or a read.
+
+        C02 review defect 3. ``walk`` used to filter symlinked *directories*
+        and then hand every filename straight to this method, which stat'd,
+        opened and hashed it without ever consulting
+        :func:`path_within_root`. A symlink FILE sitting in a perfectly real
+        directory was therefore followed out of the allowlisted root — the
+        exact thing the gate exists to refuse, and the exact thing
+        ``observe_path`` already refused for a DB-supplied path. The two entry
+        paths were inconsistent; now they are not. The gate runs before the
+        stat, before the open, and before the cache, so a refused object never
+        becomes a cached observation and never charges the budget.
+
+        C02 review defect 1. ``max_objects`` was checked and charged in
+        ``walk`` alone, so ``observe_path`` — the DB-row entry path — obeyed no
+        object limit at all: at ``max_objects=0`` a row naming an existing
+        file was still opened and hashed, with ``objects_seen`` left at 0. The
+        limit belongs to the object, not to the way the object was reached, so
+        it is charged here. A cached observation of the SAME object reuses its
+        one charge, which is what keeps the C02 shared-limit accounting and
+        its determinism intact.
+        """
+        safe, refusal = path_within_root(root, absolute)
+        if not safe:
+            return PhysicalObject(relative_path=relative, root=root,
+                                  size_bytes=None, checksum=None, readable=False,
+                                  refusal=refusal, checksum_reason=refusal)
         key = os.path.realpath(absolute)
         cached = pass_.seen.get(key)
         if cached is not None:
@@ -618,6 +678,16 @@ class LegacyRootInventory:
                 relative_path=relative, root=root, size_bytes=cached.size_bytes,
                 checksum=cached.checksum, checksum_reason=cached.checksum_reason,
                 readable=cached.readable, refusal=cached.refusal)
+        if pass_.objects_seen >= self.budget.max_objects:
+            # Not permitted to inspect this object at all. That is a refusal
+            # with evidence, never an absent or an unverified-but-fine object,
+            # and it is deliberately NOT cached: it is not an observation.
+            pass_.truncated = True
+            return PhysicalObject(relative_path=relative, root=root,
+                                  size_bytes=None, checksum=None, readable=False,
+                                  refusal=REASON_OBJECT_BUDGET_EXHAUSTED,
+                                  checksum_reason=REASON_OBJECT_BUDGET_EXHAUSTED)
+        pass_.objects_seen += 1
         observed = self._observe_uncached(root, relative, absolute, pass_)
         pass_.seen[key] = observed
         return observed
@@ -642,58 +712,85 @@ class LegacyRootInventory:
     #: after one chunk rather than after a whole file.
     CHUNK_BYTES = 1024 * 1024
 
+    def _declared_size_still_holds(self, absolute: str, size: int) -> bool:
+        """Is the object still exactly the size the read was bounded by?
+
+        This is how growth is detected WITHOUT reading a byte past the cap
+        (C02 review defect 2). The previous fix asked for one byte beyond the
+        ceiling so an overrun would show up in the first chunk; that answered
+        the classification but not the budget — at a cap of zero it still
+        physically read and charged one byte. A second ``stat`` costs nothing
+        and proves the same thing from outside the budget.
+        """
+        try:
+            return os.path.getsize(absolute) == size
+        except OSError:
+            return False
+
     def _checksum(self, absolute: str, size: Optional[int], pass_: ScanPass
                   ) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
         """The object's sha256, or the precise reason there is none.
 
-        C01 review defect 4. The caps used to be checked ONCE, against the
-        size ``stat`` reported, and the read then ran to EOF. A file that grew
-        after the ``stat``, or an opener that returned more than it declared,
-        was hashed past both ``max_object_bytes`` and ``max_checksum_bytes``:
-        the review's injected stream reported size 1 with both caps at 1 and
-        still read and hashed three bytes.
+        The read is bounded by the object's declared size, which the three
+        pre-read gates have already proven to be within both the per-object
+        cap and what is left of the pass's byte budget. So the ceiling IS the
+        declared size, every ``read`` asks for at most what is still owed, and
+        **no byte beyond the cap is ever requested** — at a cap of zero
+        nothing is opened at all.
 
-        The caps are now enforced DURING the read, against a single ceiling,
-        and an overrun fails closed — no checksum, the bytes actually read
-        charged to the pass, and ``CHECKSUM_BUDGET_EXHAUSTED`` as the reason.
-        The ceiling is the strictest of the three things that bound this read:
-        the per-object cap, what is left of the pass's byte budget, and the
-        size the object declared. Including the declared size is what catches
-        the growing file: an object that turns out to be longer than it said
-        is not silently hashed, it is refused.
+        Three ways this fails closed, none of which needs an over-cap byte:
+
+        * the stream ends early — the object is not what it declared, so
+          ``SIZE_UNCERTAIN_AT_READ_TIME`` rather than a checksum of a prefix;
+        * the object no longer has its declared size once the read is done —
+          it grew or shrank underneath the scan, same refusal;
+        * a handle returns MORE than it was asked for, which a real file
+          object never does but an injected one can. The bytes are already in
+          hand, so they are charged honestly and the object gets no checksum.
+
+        C01 review defect 4 and C02 review defect 2 are both answered here:
+        the caps bound the physical read, not merely the verdict.
         """
         if not self.budget.allow_content_read:
             return None, REASON_CONTENT_READ_NOT_PERMITTED
-        if size is not None and size > self.budget.max_object_bytes:
+        if size is None:
+            # Nothing to bound the read by. Refusing is the only honest
+            # answer: a read with no ceiling is not a budgeted read.
+            return None, REASON_SIZE_UNCERTAIN
+        if size > self.budget.max_object_bytes:
             return None, REASON_BUDGET_EXHAUSTED
         if pass_.checksums_read >= self.budget.max_checksum_objects:
             return None, REASON_BUDGET_EXHAUSTED
         remaining = self.budget.max_checksum_bytes - pass_.bytes_read
-        if size is not None and size > remaining:
+        if size > remaining:
             return None, REASON_BUDGET_EXHAUSTED
-        ceiling = min(self.budget.max_object_bytes, max(remaining, 0))
-        if size is not None:
-            ceiling = min(ceiling, size)
+        #: Proven above to be within the per-object cap AND the pass's
+        #: remaining bytes, so reading exactly this much exceeds neither.
+        ceiling = size
         digest = hashlib.sha256()
         read = 0
         try:
-            with self._opener(absolute) as handle:
-                while True:
-                    # One byte MORE than the ceiling, so an object that exceeds
-                    # it is visible in the very first chunk instead of being
-                    # read to the end and judged afterwards.
-                    want = min(self.CHUNK_BYTES, ceiling - read + 1)
-                    chunk = handle.read(want)
-                    if not chunk:
-                        break
-                    read += len(chunk)
-                    if read > ceiling:
-                        # Fail closed. The bytes really were read, so they are
-                        # charged; the object gets no checksum.
-                        pass_.bytes_read += read
-                        return None, REASON_BUDGET_EXHAUSTED
-                    digest.update(chunk)
+            if ceiling > 0:
+                with self._opener(absolute) as handle:
+                    while read < ceiling:
+                        chunk = handle.read(min(self.CHUNK_BYTES, ceiling - read))
+                        if not chunk:
+                            break
+                        if len(chunk) > ceiling - read:
+                            # Asked for what was owed and got more. Charge the
+                            # bytes that really arrived; hash none of them.
+                            pass_.bytes_read += read + len(chunk)
+                            return None, REASON_BUDGET_EXHAUSTED
+                        read += len(chunk)
+                        digest.update(chunk)
+            if read != ceiling:
+                pass_.bytes_read += read
+                return None, REASON_SIZE_UNCERTAIN
+            if not self._declared_size_still_holds(absolute, size):
+                pass_.bytes_read += read
+                return None, REASON_SIZE_UNCERTAIN
         except OSError:
+            pass_.bytes_read += read
             return None, REASON_SOURCE_INACCESSIBLE
         pass_.checksums_read += 1
         pass_.bytes_read += read
@@ -1120,7 +1217,12 @@ class LegacyAdoptionReadiness:
         proven_absent = observed.get("refusal") == REASON_ORIGINAL_ABSENT \
             or observed.get("state") == "absent"
         inaccessible = observed.get("refusal") in (
-            REASON_SOURCE_INACCESSIBLE, REASON_PATH_OUTSIDE_ROOT, REASON_PATH_IS_LINK)
+            REASON_SOURCE_INACCESSIBLE, REASON_PATH_OUTSIDE_ROOT, REASON_PATH_IS_LINK,
+            # C02 review defect 1. An object the scan was not PERMITTED to
+            # inspect says nothing about whether its bytes are there, so a
+            # truncated inventory must never be read as a missing original —
+            # and must never be read as evidence of readiness either.
+            REASON_OBJECT_BUDGET_EXHAUSTED)
         if inaccessible:
             # The decisive distinction of this contract: an unreadable source
             # says nothing about whether the bytes are there.

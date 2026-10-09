@@ -635,3 +635,124 @@ class TestRealC02BudgetDeterminism:
             assert stored["state"] != ar.READY_TO_ADOPT
             assert out["inventory"]["bytes_read"] == 0
         scratch(test)
+
+
+# ═══════════════════════════════════════════════════ C03 bounded correction
+def _symlinks_work():
+    probe = tempfile.mkdtemp(prefix="w006d_linkprobe_")
+    try:
+        os.symlink(probe, os.path.join(probe, "l"))
+        return True
+    except (OSError, NotImplementedError, AttributeError):
+        return False
+    finally:
+        shutil.rmtree(probe, ignore_errors=True)
+
+
+needs_symlinks = pytest.mark.skipif(
+    not _symlinks_work(), reason="this host cannot create a symlink, so the "
+                                 "link gate cannot be exercised here — NOT a pass")
+
+
+class _Spy:
+    def __init__(self):
+        self.opened = []
+
+    def __call__(self, path):
+        self.opened.append(path)
+        return open(path, "rb")
+
+
+def _gated(roots, spy=None, **budget):
+    budget.setdefault("allow_content_read", True)
+    return ar.LegacyRootInventory(
+        [roots.uploads, roots.projects],
+        budget=ar.ScanBudget(**budget),
+        declared_roots={mp.LEGACY_PROJECT_UPLOADS_ROOT: roots.projects,
+                        mp.LEGACY_UPLOADS_ROOT: roots.uploads},
+        opener=spy or (lambda p: open(p, "rb")))
+
+
+class TestRealC03Bounds:
+    """The three C02 counterexamples, against a real server."""
+
+    def test_a_row_past_the_object_cap_is_persisted_as_refused(self):
+        """Defect 1: what the real server stores is the refusal, not a hash."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            roots.write("aaa.pdf", b"first")
+            roots.write("zzz.pdf", b"second")
+            await _seed(db, A, "media_files", [_media_row("md-1", "zzz.pdf")])
+            spy = _Spy()
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=_gated(roots, spy, max_objects=1))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            stored = await db[ar.ADOPTION_ITEMS_COLLECTION].find_one(
+                {"scan_id": out["id"], "direction": ar.DIRECTION_DB_ROW})
+            assert stored["observed"]["checksum"] is None
+            assert stored["observed"]["refusal"] == \
+                ar.REASON_OBJECT_BUDGET_EXHAUSTED
+            assert stored["state"] not in (ar.MISSING_ORIGINAL, ar.READY_TO_ADOPT)
+            assert out["inventory"]["objects_seen"] == 1
+            assert out["inventory"]["truncated"] is True
+            assert all("zzz" not in path for path in spy.opened), spy.opened
+        scratch(test)
+
+    def test_the_byte_budget_is_never_exceeded_on_a_real_scan(self):
+        """Defect 2: the stored counters and the physical read agree."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            for index in range(3):
+                roots.write("b%d.pdf" % index, b"q" * 10)
+                await _seed(db, A, "media_files",
+                            [_media_row("md-%d" % index, "b%d.pdf" % index)])
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=_gated(roots, max_object_bytes=10,
+                                 max_checksum_bytes=20))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            scan_doc = await db[ar.ADOPTION_SCANS_COLLECTION].find_one(
+                {"id": out["id"]})
+            assert scan_doc["inventory"]["bytes_read"] <= 20
+            assert out["inventory"]["bytes_read"] <= 20
+            hashed = [i for i in out["item_records"]
+                      if (i["observed"] or {}).get("checksum")]
+            assert len(hashed) == 2, "the byte budget was not binding"
+            # and repeating it decides the same way
+            answer = await svc.validate_plan(_ctx(OPERATOR_A, A),
+                                              scan_id=out["id"])
+            assert answer["valid"] is True
+        scratch(test)
+
+    @needs_symlinks
+    def test_a_symlinked_file_is_refused_and_never_read_on_a_real_scan(self):
+        """Defect 3: a real in-root symlink to a real outside target."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            outside = os.path.join(roots.base, "elsewhere")
+            os.makedirs(outside, exist_ok=True)
+            secret = os.path.join(outside, "secret.pdf")
+            with open(secret, "wb") as handle:
+                handle.write(b"NOT YOURS")
+            os.symlink(secret, os.path.join(roots.uploads, "linked.pdf"))
+            await _seed(db, A, "media_files", [_media_row("md-1", "linked.pdf")])
+            spy = _Spy()
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)), inventory=_gated(roots, spy))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            stored = await db[ar.ADOPTION_ITEMS_COLLECTION].find_one(
+                {"scan_id": out["id"], "direction": ar.DIRECTION_DB_ROW})
+            assert stored["observed"]["checksum"] is None
+            assert stored["observed"]["refusal"] == ar.REASON_PATH_IS_LINK
+            assert stored["state"] not in (ar.MISSING_ORIGINAL, ar.READY_TO_ADOPT)
+            assert spy.opened == [], spy.opened
+            # the outside file is untouched and nothing about it was stored
+            with open(secret, "rb") as handle:
+                assert handle.read() == b"NOT YOURS"
+            text = str(stored)
+            assert "NOT YOURS" not in text and "secret" not in text
+        scratch(test)
