@@ -149,8 +149,18 @@ def inventory(roots_obj, *, allow_content_read=True, mapped=True, **budget):
         declared_roots=declared_map(roots_obj) if mapped else None)
 
 
-async def _tenant_world(org=A):
+async def _tenant_world(org=A, *, projects=("P-1",)):
+    """A tenant view plus the business records the planned relations name.
+
+    C02: the planned relation target is now RESOLVED in this tenant, so a
+    fixture that omits the project is testing ``BUSINESS_RELATION_AMBIGUOUS``
+    whether it meant to or not. The projects are created by default and
+    ``projects=()`` is the explicit way to ask for an unresolvable target.
+    """
     db, sysdb = await world()
+    for project_id in projects:
+        await db["projects"].insert_one({"id": project_id, "org_id": org,
+                                         "name": "site " + project_id})
     return db, sysdb, FileRegistry(TenantData(db, org))
 
 
@@ -379,7 +389,8 @@ class TestChecksumBudget:
         obj, = [o for o in inv.walk() if o.relative_path == "a.pdf"]
         assert obj.checksum is None
         assert obj.checksum_reason == ar.REASON_CONTENT_READ_NOT_PERMITTED
-        assert inv.bytes_read == 0 and inv.checksums_read == 0
+        # C02: the counters live on the PASS, not on the reusable inventory
+        assert inv.last_pass.bytes_read == 0 and inv.last_pass.checksums_read == 0
         assert obj.size_bytes == 5                # stat is fine; reading is not
 
     def test_a_permitted_read_produces_the_real_checksum(self, roots):
@@ -388,7 +399,7 @@ class TestChecksumBudget:
         obj, = [o for o in inv.walk() if o.relative_path == "a.pdf"]
         assert obj.checksum == m.checksum(hashlib.sha256(b"bytes").hexdigest())
         assert obj.checksum_reason is None
-        assert inv.checksums_read == 1 and inv.bytes_read == 5
+        assert inv.last_pass.checksums_read == 1 and inv.last_pass.bytes_read == 5
 
     def test_the_object_count_budget_stops_the_walk_and_says_so(self, roots):
         for index in range(5):
@@ -396,7 +407,7 @@ class TestChecksumBudget:
         inv = inventory(roots, max_objects=2)
         objects = inv.walk()
         assert len(objects) == 2
-        assert inv.truncated is True
+        assert inv.last_pass.truncated is True
         assert inv.as_record()["truncated"] is True
 
     def test_the_checksum_count_budget_leaves_a_reason_not_a_silent_none(self, roots):
@@ -417,7 +428,7 @@ class TestChecksumBudget:
         assert objects["big.pdf"].checksum is None
         assert objects["big.pdf"].checksum_reason == ar.REASON_BUDGET_EXHAUSTED
         assert objects["small.pdf"].checksum is not None
-        assert inv.bytes_read <= 50
+        assert inv.last_pass.bytes_read <= 50
 
     def test_an_object_larger_than_the_per_object_cap_is_never_hashed(self, roots):
         roots.write("huge.pdf", b"z" * 200)
@@ -534,7 +545,7 @@ class TestReconciliation:
             await _seed(db, A, "media_files", [_media_row("md-1", "locked.pdf")])
 
             class _Unreadable(ar.LegacyRootInventory):
-                def _observe(self, root, relative, absolute):
+                def _observe_uncached(self, root, relative, absolute, pass_):
                     return ar.PhysicalObject(
                         relative_path=relative, root=root, size_bytes=None,
                         checksum=None, readable=False,
@@ -783,14 +794,30 @@ class TestAdoptInPlaceInvariant:
 
     def test_adopt_in_place_needs_a_verified_customer_managed_location(self):
         """The rule, exercised directly on the pure proposal function."""
-        assert ar.propose_action(ar.READY_TO_ADOPT, at_customer_managed_location=True,
-                                 has_owning_file=True) == ar.PROPOSE_ADOPT_IN_PLACE
-        assert ar.propose_action(ar.READY_TO_ADOPT, at_customer_managed_location=False,
-                                 has_owning_file=True) \
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=True, has_owning_file=True,
+            evidence_complete=True, relations_match=True) == ar.PROPOSE_ADOPT_IN_PLACE
+        # C02: a verified location WITHOUT the observed evidence is not enough
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=True, has_owning_file=True,
+            evidence_complete=False, relations_match=True) \
             == ar.PROPOSE_REGISTER_REFERENCE_ONLY
-        assert ar.propose_action(ar.READY_TO_ADOPT, at_customer_managed_location=False,
-                                 has_owning_file=False) \
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=True, has_owning_file=False,
+            evidence_complete=False, relations_match=False) \
             == ar.PROPOSE_BLOCKED_FUTURE_STEP
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=False, has_owning_file=True,
+            evidence_complete=True, relations_match=True) \
+            == ar.PROPOSE_REGISTER_REFERENCE_ONLY
+        # C02: an owning file with an UNPROVEN relation is a decision, not a reference
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=False, has_owning_file=True,
+            evidence_complete=True, relations_match=False) \
+            == ar.PROPOSE_BLOCKED_FUTURE_STEP
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=False,
+            has_owning_file=False) == ar.PROPOSE_BLOCKED_FUTURE_STEP
 
     def test_inline_base64_sources_are_blocked_not_adoptable(self, roots):
         async def body():
@@ -1379,3 +1406,576 @@ class TestVerifiedLocationIsRequired:
         os.symlink(roots.outside, os.path.join(roots.uploads, "linked"))
         objects = inventory(roots).walk()
         assert {o.relative_path for o in objects} == {"real.pdf"}
+
+
+# ════════════════════════════ C02 — the four independently reproduced defects
+#
+# Each class below starts from the counterexample the C01 independent review
+# executed, asserts the behaviour it got (now refused) and then asserts the
+# positive case, so none of the new guards is vacuously strict.
+# Evidence: coordination/REVIEWS/W0-06D.md, C01 section, defects 1-4.
+
+#: The review's defect-1 shape: a same-tenant registered File whose location
+#: stores `availability=available`, while the scan observed NOTHING.
+UNOBSERVED = {"state": "unknown", "size_bytes": None, "checksum": None,
+              "checksum_reason": None, "refusal": None, "relative_path": None,
+              "registered_size": None}
+
+
+def _registry(**over):
+    """A `_registry_state`-shaped dict with everything absent by default."""
+    base = {"file_exists": False, "version_no": None, "checksum_matches": None,
+            "size_matches": None, "registered_size": None, "availability": None,
+            "provider_kind": None, "customer_managed": False,
+            "verified_location": False, "relation_count": 0,
+            "relations_registered": [], "relations_missing": [],
+            "relation_targets_missing": [], "relations_match": False,
+            "duplicate_of": []}
+    base.update(over)
+    return base
+
+
+def _classifier(registry=None):
+    """The pure classifier, reachable without a database.
+
+    `_classify` touches no state of its own, so an unbound call is the honest
+    way to exercise it — and it is how the review reproduced both
+    classification defects in the first place.
+    """
+    async def body():
+        db, sysdb, reg = await _tenant_world()
+        return readiness(reg)
+    return run(body())
+
+
+class TestDefect1ReadinessNeedsObservedEvidence:
+    """A stored location status is not proof about THIS legacy original."""
+
+    #: A `media_files` plan with its relation resolvable and the W0-06A
+    #: `CHECKSUM_UNKNOWN_UNTIL_READ` blocker cleared, so the only thing left
+    #: deciding readiness is W0-06D's own evidence. (No real legacy row stores
+    #: a checksum, which is why `test_a_row_without_a_legacy_checksum_stays_blocked`
+    #: pins the ordinary case separately.)
+    @staticmethod
+    def _plan(**over):
+        row = _media_row("md-1", "x.pdf")
+        row.update({"org_id": A, "checksum": "a" * 64})
+        row.update(over)
+        return mp.plan_row(mp.SOURCES_BY_KEY["media_files"], row)
+
+    def test_the_review_counterexample_is_now_refused(self):
+        """Verified location, observed nothing: C01 said READY/ADOPT_IN_PLACE."""
+        service = _classifier()
+        state, reasons, evidence = service._classify(
+            direction=ar.DIRECTION_DB_ROW, plan=self._plan(), observed=UNOBSERVED,
+            registry=_registry(file_exists=True, customer_managed=True,
+                               verified_location=True,
+                               availability=m.AVAILABILITY_AVAILABLE),
+            source=mp.SOURCES_BY_KEY["media_files"])
+        assert state != ar.READY_TO_ADOPT
+        assert state != ar.ALREADY_REGISTERED
+        assert evidence is False
+        assert ar.REASON_ORIGINAL_NOT_OBSERVED in reasons
+        assert ar.REASON_SIZE_UNKNOWN in reasons
+        assert ar.propose_action(
+            state, at_customer_managed_location=True, has_owning_file=True,
+            evidence_complete=evidence, relations_match=False) \
+            != ar.PROPOSE_ADOPT_IN_PLACE
+
+    @pytest.mark.parametrize("missing", [
+        "original", "checksum", "size", "same_object", "location", "owner"])
+    def test_each_single_piece_of_missing_evidence_blocks_readiness(self, missing):
+        """Every clause is necessary: drop one and readiness is gone."""
+        service = _classifier()
+        digest = m.checksum(hashlib.sha256(b"bytes").hexdigest())
+        observed = {"state": "present", "size_bytes": 5, "checksum": digest,
+                    "checksum_reason": None, "refusal": None,
+                    "relative_path": "x.pdf", "registered_size": 5}
+        registry = _registry(file_exists=True, customer_managed=True,
+                             verified_location=True, checksum_matches=True,
+                             size_matches=True, registered_size=5,
+                             availability=m.AVAILABILITY_AVAILABLE)
+        plan = self._plan()
+        if missing == "original":
+            observed["state"] = "unknown"
+        elif missing == "checksum":
+            observed["checksum"] = None
+        elif missing == "size":
+            observed["size_bytes"] = None
+        elif missing == "same_object":
+            registry["checksum_matches"] = None
+            registry["size_matches"] = None
+        elif missing == "location":
+            registry["verified_location"] = False
+        else:
+            plan = mp.plan_row(mp.SOURCES_BY_KEY["media_files"],
+                               _media_row("md-1", "x.pdf"))        # no org_id
+        state, _reasons, evidence = service._classify(
+            direction=ar.DIRECTION_DB_ROW, plan=plan, observed=observed,
+            registry=registry, source=mp.SOURCES_BY_KEY["media_files"])
+        assert evidence is False, "missing %s must not count as complete" % missing
+        assert state != ar.READY_TO_ADOPT
+
+    def test_complete_evidence_does_reach_readiness(self):
+        """The positive case, so the guard is not vacuously strict."""
+        service = _classifier()
+        digest = m.checksum(hashlib.sha256(b"bytes").hexdigest())
+        state, reasons, evidence = service._classify(
+            direction=ar.DIRECTION_DB_ROW, plan=self._plan(),
+            observed={"state": "present", "size_bytes": 5, "checksum": digest,
+                      "checksum_reason": None, "refusal": None,
+                      "relative_path": "x.pdf", "registered_size": 5},
+            registry=_registry(file_exists=True, customer_managed=True,
+                               verified_location=True, checksum_matches=True,
+                               size_matches=True, registered_size=5,
+                               availability=m.AVAILABILITY_AVAILABLE),
+            source=mp.SOURCES_BY_KEY["media_files"])
+        assert evidence is True
+        assert state == ar.READY_TO_ADOPT
+        assert ar.REASON_ORIGINAL_NOT_OBSERVED not in reasons
+        assert ar.propose_action(
+            state, at_customer_managed_location=True, has_owning_file=True,
+            evidence_complete=evidence, relations_match=False) \
+            == ar.PROPOSE_ADOPT_IN_PLACE
+
+    def test_a_row_without_a_legacy_checksum_stays_blocked(self):
+        """The ordinary real case: no legacy row stores a checksum.
+
+        W0-06A adds `CHECKSUM_UNKNOWN_UNTIL_READ` to every REGISTER row, and a
+        row with any blocker is never ready. So even with complete W0-06D
+        evidence the state is BLOCKED, and that is correct — the readiness
+        guard added here is the SECOND lock, not a replacement for the first.
+        """
+        service = _classifier()
+        digest = m.checksum(hashlib.sha256(b"bytes").hexdigest())
+        plan = mp.plan_row(mp.SOURCES_BY_KEY["media_files"],
+                           _media_row("md-1", "x.pdf") | {"org_id": A})
+        assert mp.BLOCKER_NO_CHECKSUM in plan.blockers
+        state, _reasons, evidence = service._classify(
+            direction=ar.DIRECTION_DB_ROW, plan=plan,
+            observed={"state": "present", "size_bytes": 5, "checksum": digest,
+                      "checksum_reason": None, "refusal": None,
+                      "relative_path": "x.pdf", "registered_size": 5},
+            registry=_registry(file_exists=True, customer_managed=True,
+                               verified_location=True, checksum_matches=True,
+                               size_matches=True, registered_size=5),
+            source=mp.SOURCES_BY_KEY["media_files"])
+        assert evidence is True              # W0-06D's own evidence IS complete
+        assert state == ar.BLOCKED           # and the W0-06A blocker still wins
+
+    def test_an_unobserved_row_is_refused_end_to_end(self, roots):
+        """Through the real scan: a registered file with the original absent."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            data = b"registered but not on disk"
+            await TestVerifiedLocationIsRequired._registry_holding(
+                db, A, "md-gone", availability=m.AVAILABILITY_AVAILABLE,
+                kind=m.PROVIDER_S3_COMPATIBLE, data=data)
+            # the row exists, the registry says available, the ORIGINAL is gone
+            await _seed(db, A, "media_files", [_media_row("md-gone", "gone.pdf")])
+            out = await readiness(reg, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["state"] == ar.MISSING_ORIGINAL
+            assert row["proposed_action"] != ar.PROPOSE_ADOPT_IN_PLACE
+            assert ar.REASON_ORIGINAL_NOT_OBSERVED in row["reasons"]
+            assert out["summary"]["ready"] == 0
+        run(body())
+
+    def test_a_size_mismatch_against_the_registry_is_a_conflict(self, roots):
+        """Same checksum shape, different size: not the same object."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            data = b"twelve bytes"
+            await TestVerifiedLocationIsRequired._registry_holding(
+                db, A, "md-s", availability=m.AVAILABILITY_AVAILABLE,
+                kind=m.PROVIDER_S3_COMPATIBLE, data=data)
+            # the registry's version says len(data); put different bytes on disk
+            await db[m.VERSIONS_COLLECTION].update_one(
+                {"file_id": mp.deterministic_file_id(A, "media_files", "md-s")},
+                {"$set": {"size_bytes": 999}})
+            roots.write("s.pdf", data)
+            await _seed(db, A, "media_files", [_media_row("md-s", "s.pdf")])
+            out = await readiness(reg, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["size_matches"] is False
+            assert row["state"] == ar.CHECKSUM_CONFLICT
+            assert ar.REASON_SIZE_DIFFERS in row["reasons"]
+            assert row["proposed_action"] == ar.PROPOSE_NEEDS_HUMAN_DECISION
+        run(body())
+
+
+class TestDefect2RelationIdentityNotCount:
+    """A relation COUNT is not a relation identity."""
+
+    def test_the_review_counterexample_is_now_refused(self):
+        """Plan wants project=missing-project; registry has one OTHER relation."""
+        service = _classifier()
+        digest = m.checksum(hashlib.sha256(b"bytes").hexdigest())
+        plan = mp.plan_row(mp.SOURCES_BY_KEY["media_files"],
+                           {"id": "md-1", "org_id": A, "stored_filename": "x.pdf",
+                            "context_type": "project",
+                            "context_id": "missing-project"})
+        state, reasons, _evidence = service._classify(
+            direction=ar.DIRECTION_DB_ROW, plan=plan,
+            observed={"state": "present", "size_bytes": 5, "checksum": digest,
+                      "checksum_reason": None, "refusal": None,
+                      "relative_path": "x.pdf", "registered_size": 5},
+            # one unrelated relation, matching checksum, available location
+            registry=_registry(file_exists=True, customer_managed=True,
+                               verified_location=True, checksum_matches=True,
+                               size_matches=True, relation_count=1,
+                               relations_missing=[["project", "missing-project"]],
+                               relation_targets_missing=[["project",
+                                                          "missing-project"]],
+                               relations_match=False),
+            source=mp.SOURCES_BY_KEY["media_files"])
+        assert state != ar.ALREADY_REGISTERED
+        assert state == ar.BUSINESS_RELATION_AMBIGUOUS
+        assert ar.REASON_RELATION_TARGET_MISSING in reasons
+        assert ar.REASON_RELATION_NOT_REGISTERED in reasons
+
+    def test_an_unrelated_registered_relation_is_not_already_registered(self, roots):
+        """End to end: the file carries a relation to ANOTHER record."""
+        async def body():
+            db, sysdb, reg = await _tenant_world(projects=("P-1", "P-OTHER"))
+            data = b"content"
+            derived, _digest = await TestVerifiedLocationIsRequired._registry_holding(
+                db, A, "md-r", availability=m.AVAILABILITY_AVAILABLE,
+                kind=m.PROVIDER_S3_COMPATIBLE, data=data)
+            # repoint the registered relation at a DIFFERENT project
+            await db[m.RELATIONS_COLLECTION].update_one(
+                {"file_id": derived}, {"$set": {"record_id": "P-OTHER"}})
+            roots.write("r.pdf", data)
+            await _seed(db, A, "media_files", [_media_row("md-r", "r.pdf")])
+            out = await readiness(reg, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["relation_count"] == 1    # the count is nonzero
+            assert row["registry"]["relations_match"] is False
+            assert row["registry"]["relations_missing"] == [["project", "P-1"]]
+            assert row["state"] != ar.ALREADY_REGISTERED
+            assert row["proposed_action"] != ar.PROPOSE_NO_ACTION
+            assert ar.REASON_RELATION_NOT_REGISTERED in row["reasons"]
+        run(body())
+
+    def test_a_relation_to_a_target_that_does_not_exist_is_ambiguous(self, roots):
+        """The target is resolved in THIS tenant, not taken on trust."""
+        async def body():
+            db, sysdb, reg = await _tenant_world(projects=())
+            roots.write("t.pdf", b"t")
+            await _seed(db, A, "media_files", [_media_row("md-t", "t.pdf")])
+            out = await readiness(reg, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["relation_targets_missing"] == [["project", "P-1"]]
+            assert row["state"] == ar.BUSINESS_RELATION_AMBIGUOUS
+            assert ar.REASON_RELATION_TARGET_MISSING in row["reasons"]
+            assert row["proposed_action"] == ar.PROPOSE_NEEDS_HUMAN_DECISION
+        run(body())
+
+    def test_a_target_that_exists_only_in_the_other_tenant_does_not_count(self,
+                                                                          roots):
+        """Relation isolation: a colliding id in tenant B resolves to nothing here."""
+        async def body():
+            db, sysdb = await world()
+            # P-1 exists ONLY in tenant B
+            await db["projects"].insert_one({"id": "P-1", "org_id": B, "name": "b"})
+            reg_a = FileRegistry(TenantData(db, A))
+            roots.write("x.pdf", b"x")
+            await _seed(db, A, "media_files", [_media_row("md-x", "x.pdf")])
+            out = await readiness(reg_a, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["relation_targets_missing"] == [["project", "P-1"]]
+            assert row["state"] == ar.BUSINESS_RELATION_AMBIGUOUS
+        run(body())
+
+    def test_the_exact_relation_match_does_reach_already_registered(self, roots):
+        """The positive case: same type, same target, target verified."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            data = b"exactly registered"
+            await TestVerifiedLocationIsRequired._registry_holding(
+                db, A, "md-ok", availability=m.AVAILABILITY_AVAILABLE,
+                kind=m.PROVIDER_S3_COMPATIBLE, data=data)
+            roots.write("ok.pdf", data)
+            await _seed(db, A, "media_files", [_media_row("md-ok", "ok.pdf")])
+            out = await readiness(reg, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["relations_match"] is True
+            assert row["registry"]["relations_registered"] == [["project", "P-1"]]
+            assert row["registry"]["relations_missing"] == []
+            assert row["state"] == ar.ALREADY_REGISTERED
+            assert row["proposed_action"] == ar.PROPOSE_NO_ACTION
+        run(body())
+
+    def test_register_reference_only_needs_the_proven_relation(self):
+        """A pointer with an owning file but no proven relation is a decision."""
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=False,
+            has_owning_file=True, evidence_complete=False, relations_match=True) \
+            == ar.PROPOSE_REGISTER_REFERENCE_ONLY
+        assert ar.propose_action(
+            ar.READY_TO_ADOPT, at_customer_managed_location=False,
+            has_owning_file=True, evidence_complete=False, relations_match=False) \
+            == ar.PROPOSE_BLOCKED_FUTURE_STEP
+
+    def test_an_empty_proposed_relation_set_is_never_a_match(self):
+        """Nothing proposed proves nothing registered."""
+        service = _classifier()
+        digest = m.checksum(hashlib.sha256(b"b").hexdigest())
+        plan = mp.plan_row(mp.SOURCES_BY_KEY["excel_import_templates"],
+                           {"id": "t-1", "org_id": A})
+        state, reasons, _ev = service._classify(
+            direction=ar.DIRECTION_DB_ROW, plan=plan,
+            observed={"state": "present", "size_bytes": 1, "checksum": digest,
+                      "checksum_reason": None, "refusal": None,
+                      "relative_path": "t", "registered_size": 1},
+            registry=_registry(file_exists=True, verified_location=True,
+                               customer_managed=True, checksum_matches=True,
+                               size_matches=True, relations_match=False),
+            source=mp.SOURCES_BY_KEY["excel_import_templates"])
+        assert state == ar.NO_CONTENT          # this source owns nothing anyway
+
+
+class TestDefect3BudgetIsPerPass:
+    """A budget belongs to a PASS, so unchanged inputs decide the same way."""
+
+    def test_the_review_counterexample_is_now_deterministic(self, roots):
+        """Same inputs, one-object limit, two calls: C01 drifted on the second."""
+        roots.write("one.pdf", b"one")
+        inv = inventory(roots, max_checksum_objects=1)
+        first = inv.observe_path("/app/backend/uploads/one.pdf", inv.open_pass())
+        second = inv.observe_path("/app/backend/uploads/one.pdf", inv.open_pass())
+        assert first.checksum is not None
+        assert second.checksum == first.checksum, "a fresh pass must start fresh"
+        assert second.checksum_reason is None
+
+    def test_a_reused_inventory_carries_no_spent_budget_into_the_next_pass(self,
+                                                                           roots):
+        for index in range(3):
+            roots.write("f%d.pdf" % index, b"x" * (index + 1))
+        inv = inventory(roots, max_checksum_objects=2)
+        for _attempt in range(4):
+            objects = inv.walk()                     # each walk is its own pass
+            hashed = [o for o in objects if o.checksum]
+            assert len(hashed) == 2, "the budget was carried over"
+            assert inv.last_pass.checksums_read == 2
+
+    def test_repeated_validation_at_an_exact_limit_never_invents_drift(self, roots):
+        """The actual failure the review described, end to end."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            # exactly as many objects as the budget allows to hash
+            for index in range(2):
+                roots.write("e%d.pdf" % index, b"bytes %d" % index)
+                await _seed(db, A, "media_files",
+                            [_media_row("md-%d" % index, "e%d.pdf" % index)])
+            service = readiness(reg, inv=inventory(roots, max_checksum_objects=2))
+            out = await service.scan(ctx(OPERATOR_A, A), source_keys=["media_files"])
+            # five validations in a row, nothing touched in between
+            for _attempt in range(5):
+                answer = await service.validate_plan(ctx(OPERATOR_A, A),
+                                                      scan_id=out["id"])
+                assert answer["valid"] is True
+                assert answer["plan_hash"] == out["plan_hash"]
+            refusals = await db["audit_events"].count_documents(
+                {"action": ar.AUDIT_PLAN_REFUSED})
+            assert refusals == 0, "a stale plan was reported with nothing drifted"
+        run(body())
+
+    def test_a_db_row_and_the_physical_walk_share_one_charge(self, roots):
+        """One object, one charge — the review's "shared limit" requirement.
+
+        The walk sees the object and the DB row names the same object. With a
+        one-object hash budget that must still work: the row reuses the walk's
+        observation instead of paying for it a second time.
+        """
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            roots.write("shared.pdf", b"shared bytes")
+            await _seed(db, A, "media_files", [_media_row("md-1", "shared.pdf")])
+            service = readiness(reg, inv=inventory(roots, max_checksum_objects=1))
+            out = await service.scan(ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["observed"]["checksum"] == m.checksum(
+                hashlib.sha256(b"shared bytes").hexdigest())
+            assert row["observed"]["checksum_reason"] is None
+            # charged once, not twice
+            assert out["inventory"]["checksums_read"] == 1
+            assert out["inventory"]["bytes_read"] == len(b"shared bytes")
+            # and the orphan direction did not duplicate it
+            assert [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_PHYSICAL_OBJECT] == []
+            # repeated validation still agrees
+            answer = await service.validate_plan(ctx(OPERATOR_A, A),
+                                                  scan_id=out["id"])
+            assert answer["valid"] is True
+        run(body())
+
+    def test_two_objects_sharing_a_one_object_limit_are_deterministic(self, roots):
+        """At the limit, the SAME object wins every pass — sorted order decides."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            for name in ("a.pdf", "b.pdf"):
+                roots.write(name, b"content of " + name.encode())
+                await _seed(db, A, "media_files",
+                            [_media_row("md-" + name, name)])
+            service = readiness(reg, inv=inventory(roots, max_checksum_objects=1))
+            hashes = []
+            for _attempt in range(3):
+                out = await service.scan(ctx(OPERATOR_A, A),
+                                          source_keys=["media_files"], persist=False)
+                hashes.append(out["plan_hash"])
+                hashed = [i for i in out["item_records"]
+                          if (i["observed"] or {}).get("checksum")]
+                assert len(hashed) == 1
+            assert len(set(hashes)) == 1, "the same inputs produced two plans"
+        run(body())
+
+    def test_the_object_walk_budget_is_also_per_pass(self, roots):
+        for index in range(4):
+            roots.write("w%d.pdf" % index)
+        inv = inventory(roots, max_objects=2)
+        for _attempt in range(3):
+            assert len(inv.walk()) == 2
+            assert inv.last_pass.truncated is True
+            assert inv.last_pass.objects_seen == 2
+
+    def test_a_pass_reports_its_own_counters(self, roots):
+        roots.write("p.pdf", b"abc")
+        inv = inventory(roots)
+        pass_ = inv.open_pass()
+        inv.walk(pass_)
+        assert pass_.as_record()["checksums_read"] == 1
+        assert pass_.as_record()["bytes_read"] == 3
+        assert pass_.as_record()["truncated"] is False
+        assert pass_.as_record()["budget"]["allow_content_read"] is True
+
+
+class TestDefect4StreamingCapsAreEnforced:
+    """A cap checked once before the read is not a cap."""
+
+    class _Lying:
+        """A handle that returns more than it was asked for.
+
+        The review's injected-stream counterexample: reported size 1, both
+        caps 1, and a stream of three bytes was read and hashed in full.
+        """
+
+        def __init__(self, payload):
+            self._payload = payload
+            self._done = False
+
+        def read(self, _want):
+            if self._done:
+                return b""
+            self._done = True
+            return self._payload                     # ignores `_want` entirely
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def test_the_review_counterexample_now_fails_closed(self, roots):
+        """Reported size 1, caps 1, stream b"abc": must be refused."""
+        path = roots.write("lying.pdf", b"a")        # stat reports 1 byte
+        inv = ar.LegacyRootInventory(
+            roots.roots(),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=1,
+                                 max_checksum_bytes=1),
+            declared_roots=declared_map(roots),
+            opener=lambda _p: self._Lying(b"abc"))
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 1, pass_)
+        assert checksum is None, "an over-long stream was hashed"
+        assert reason == ar.REASON_BUDGET_EXHAUSTED
+        assert pass_.checksums_read == 0
+        # the bytes really were read, so they are charged honestly
+        assert pass_.bytes_read == 3
+
+    def test_a_file_that_grew_after_the_stat_is_refused(self, roots):
+        """The growing-file case: stat said 4, the stream has 400."""
+        path = roots.write("grow.pdf", b"abcd")
+        inv = ar.LegacyRootInventory(
+            roots.roots(),
+            budget=ar.ScanBudget(allow_content_read=True,
+                                 max_object_bytes=1024, max_checksum_bytes=1024),
+            declared_roots=declared_map(roots),
+            opener=lambda _p: self._Lying(b"x" * 400))
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 4, pass_)
+        assert checksum is None
+        assert reason == ar.REASON_BUDGET_EXHAUSTED
+        assert pass_.checksums_read == 0
+
+    def test_the_remaining_byte_budget_is_enforced_during_the_read(self, roots):
+        """Not just the per-object cap: what is LEFT of the pass budget too."""
+        path = roots.write("left.pdf", b"ab")
+        inv = ar.LegacyRootInventory(
+            roots.roots(),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=1024,
+                                 max_checksum_bytes=10),
+            declared_roots=declared_map(roots),
+            opener=lambda _p: self._Lying(b"z" * 50))
+        pass_ = inv.open_pass()
+        pass_.bytes_read = 9                      # only one byte of budget left
+        checksum, reason = inv._checksum(path, 2, pass_)
+        assert checksum is None
+        assert reason == ar.REASON_BUDGET_EXHAUSTED
+
+    def test_an_honest_stream_at_exactly_the_cap_still_succeeds(self, roots):
+        """The positive case: the guard must not refuse a conforming object."""
+        path = roots.write("exact.pdf", b"abcd")
+        inv = ar.LegacyRootInventory(
+            roots.roots(),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=4,
+                                 max_checksum_bytes=4),
+            declared_roots=declared_map(roots))
+        pass_ = inv.open_pass()
+        checksum, reason = inv._checksum(path, 4, pass_)
+        assert reason is None
+        assert checksum == m.checksum(hashlib.sha256(b"abcd").hexdigest())
+        assert pass_.bytes_read == 4 and pass_.checksums_read == 1
+
+    def test_a_real_oversized_file_is_refused_through_the_scan(self, roots):
+        """End to end, with a real file and no injected opener."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            roots.write("big.pdf", b"y" * 200)
+            await _seed(db, A, "media_files", [_media_row("md-1", "big.pdf")])
+            out = await readiness(reg, inv=inventory(roots, max_object_bytes=50)
+                                  ).scan(ctx(OPERATOR_A, A),
+                                          source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["observed"]["checksum"] is None
+            assert row["observed"]["checksum_reason"] == ar.REASON_BUDGET_EXHAUSTED
+            assert row["state"] != ar.READY_TO_ADOPT
+            assert out["inventory"]["bytes_read"] == 0, "an over-cap object was read"
+        run(body())
+
+    def test_the_bytes_actually_read_are_never_understated(self, roots):
+        """An overrun charges what it read, so a later object cannot sneak in."""
+        path = roots.write("over.pdf", b"ab")
+        inv = ar.LegacyRootInventory(
+            roots.roots(),
+            budget=ar.ScanBudget(allow_content_read=True, max_object_bytes=2,
+                                 max_checksum_bytes=100),
+            declared_roots=declared_map(roots),
+            opener=lambda _p: self._Lying(b"q" * 60))
+        pass_ = inv.open_pass()
+        inv._checksum(path, 2, pass_)
+        assert pass_.bytes_read == 60

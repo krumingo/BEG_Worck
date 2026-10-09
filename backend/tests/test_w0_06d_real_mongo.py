@@ -114,9 +114,10 @@ class _Roots:
         return path
 
     def inventory(self, **budget):
+        budget.setdefault("allow_content_read", True)
         return ar.LegacyRootInventory(
             [self.uploads, self.projects],
-            budget=ar.ScanBudget(allow_content_read=True, **budget),
+            budget=ar.ScanBudget(**budget),
             declared_roots={mp.LEGACY_PROJECT_UPLOADS_ROOT: self.projects,
                             mp.LEGACY_UPLOADS_ROOT: self.uploads})
 
@@ -419,4 +420,218 @@ class TestRealNothingIsTouched:
                     {}, {"_id": 0}).to_list(None))
                 assert roots.base not in payload
                 assert mp.LEGACY_UPLOADS_ROOT not in payload
+        scratch(test)
+
+
+# ═══════════════════════════════════════════════════ C02 bounded correction
+async def _seed_registered(db, org, file_id, data, *, relations,
+                           availability=m.AVAILABILITY_AVAILABLE,
+                           provider_kind="s3_compatible", size=None):
+    """A registry row the C02 comparisons read, written to the real server.
+
+    Seeded directly rather than through the upload path because the identity
+    under test is the DERIVED ``file_id`` of a legacy row, which the upload
+    path generates for itself.
+    """
+    digest = m.checksum(hashlib.sha256(data).hexdigest())
+    await db[m.FILES_COLLECTION].insert_one({
+        "id": file_id, "org_id": org, "status": m.FILE_ACTIVE,
+        "category": m.CATEGORY_PHOTO_VIDEO,
+        "sensitivity": m.SENSITIVITY_STANDARD, "created_at": "2026-01-01"})
+    await db[m.VERSIONS_COLLECTION].insert_one({
+        "file_id": file_id, "org_id": org, "version_no": 1, "is_current": True,
+        "checksum": digest, "checksum_key": m.checksum_key(digest),
+        "size_bytes": len(data) if size is None else size,
+        "created_at": "2026-01-01"})
+    await db[m.LOCATIONS_COLLECTION].insert_one({
+        "file_id": file_id, "org_id": org, "version_no": 1,
+        "role": m.LOCATION_ROLE_PRIMARY, "provider_kind": provider_kind,
+        "provider_binding_id": "pb-1", "object_key": "k/" + file_id,
+        "availability": availability, "created_at": "2026-01-01"})
+    for relation_type, record_id in relations:
+        await db[m.RELATIONS_COLLECTION].insert_one({
+            "file_id": file_id, "org_id": org, "relation_type": relation_type,
+            "record_id": record_id, "active": True, "created_at": "2026-01-01"})
+
+
+class TestRealC02Readiness:
+    """Defect 1 and 2 on the real server: evidence and relation identity."""
+
+    def test_an_unobserved_original_is_never_ready_on_a_real_server(self):
+        """The row is registered and available, but the bytes are NOT there."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            legacy, data = "md-unobs", b"registered content"
+            derived = mp.deterministic_file_id(A, "media_files", legacy)
+            await _seed_registered(db, A, derived, data,
+                                   relations=[(m.RELATION_PROJECT, "P-1")])
+            await _seed(db, A, "media_files", [_media_row(legacy, "gone.pdf")])
+            # deliberately NOT written to disk
+            out = await readiness(db, A, roots).scan(_ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["state"] != ar.READY_TO_ADOPT
+            assert row["proposed_action"] != ar.PROPOSE_ADOPT_IN_PLACE
+            assert ar.REASON_ORIGINAL_NOT_OBSERVED in row["reasons"]
+        scratch(test)
+
+    def test_an_unrelated_relation_is_not_already_registered_on_a_real_server(self):
+        """Defect 2: the count is 1, but it points somewhere else."""
+        async def test(db, sysdb, roots):
+            for project in ("P-1", "P-OTHER"):
+                await db["projects"].insert_one({"id": project, "org_id": A,
+                                                 "name": "site " + project})
+            legacy, data = "md-unrelated", b"the very same bytes"
+            derived = mp.deterministic_file_id(A, "media_files", legacy)
+            # one ACTIVE relation, to the WRONG project
+            await _seed_registered(db, A, derived, data,
+                                   relations=[(m.RELATION_PROJECT, "P-OTHER")])
+            await _seed(db, A, "media_files", [_media_row(legacy, "u.pdf")])
+            roots.write("u.pdf", data)
+            out = await readiness(db, A, roots).scan(_ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["relation_count"] == 1
+            assert row["registry"]["relations_match"] is False
+            assert row["registry"]["relations_missing"] == [
+                [m.RELATION_PROJECT, "P-1"]]
+            assert row["state"] != ar.ALREADY_REGISTERED
+            assert row["proposed_action"] != ar.PROPOSE_REGISTER_REFERENCE_ONLY
+            assert ar.REASON_RELATION_NOT_REGISTERED in row["reasons"]
+        scratch(test)
+
+    def test_the_exact_relation_is_recognised_on_a_real_server(self):
+        """The positive half: same type, same target, target resolves."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            legacy, data = "md-exact", b"exactly these bytes"
+            derived = mp.deterministic_file_id(A, "media_files", legacy)
+            await _seed_registered(db, A, derived, data,
+                                   relations=[(m.RELATION_PROJECT, "P-1")])
+            await _seed(db, A, "media_files", [_media_row(legacy, "e.pdf")])
+            roots.write("e.pdf", data)
+            out = await readiness(db, A, roots).scan(_ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["relations_match"] is True
+            assert row["registry"]["relations_missing"] == []
+            assert row["registry"]["relation_targets_missing"] == []
+            assert row["state"] == ar.ALREADY_REGISTERED
+            assert row["proposed_action"] == ar.PROPOSE_NO_ACTION
+        scratch(test)
+
+    def test_a_relation_belonging_to_the_other_tenant_does_not_count(self):
+        """Tenant isolation of the C02 relation comparison itself."""
+        async def test(db, sysdb, roots):
+            # the project and the relation live in B; A plans the same target
+            await db["projects"].insert_one({"id": "P-1", "org_id": B,
+                                             "name": "b site"})
+            legacy, data = "md-cross", b"cross tenant bytes"
+            derived = mp.deterministic_file_id(A, "media_files", legacy)
+            await _seed_registered(db, B, derived, data,
+                                   relations=[(m.RELATION_PROJECT, "P-1")])
+            await _seed(db, A, "media_files", [_media_row(legacy, "x.pdf")])
+            roots.write("x.pdf", data)
+            out = await readiness(db, A, roots).scan(_ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            # A sees neither the file, nor the relation, nor the target
+            assert row["registry"]["file_exists"] is False
+            assert row["registry"]["relations_match"] is False
+            assert row["registry"]["relation_targets_missing"] == [
+                [m.RELATION_PROJECT, "P-1"]]
+            assert row["state"] != ar.ALREADY_REGISTERED
+            assert row["state"] != ar.READY_TO_ADOPT
+        scratch(test)
+
+    def test_a_stored_available_location_alone_is_not_readiness(self):
+        """Defect 1: the registry SAYS available; the disk says nothing."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            legacy, data = "md-stored", b"stored only"
+            derived = mp.deterministic_file_id(A, "media_files", legacy)
+            await _seed_registered(db, A, derived, data,
+                                   relations=[(m.RELATION_PROJECT, "P-1")])
+            await _seed(db, A, "media_files", [_media_row(legacy, "s.pdf")])
+            roots.write("s.pdf", data)
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=roots.inventory(allow_content_read=False))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["registry"]["verified_location"] is True
+            assert row["observed"]["checksum"] is None
+            assert row["state"] != ar.READY_TO_ADOPT
+            assert row["proposed_action"] != ar.PROPOSE_ADOPT_IN_PLACE
+        scratch(test)
+
+
+class TestRealC02BudgetDeterminism:
+    """Defects 3 and 4 on the real server."""
+
+    def test_repeated_validation_at_an_exact_limit_never_drifts(self):
+        """The review's counterexample, against a real stored plan."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            for index in range(2):
+                roots.write("l%d.pdf" % index, b"limit bytes %d" % index)
+                await _seed(db, A, "media_files",
+                            [_media_row("md-%d" % index, "l%d.pdf" % index)])
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=roots.inventory(max_checksum_objects=2))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            for _attempt in range(5):
+                answer = await svc.validate_plan(_ctx(OPERATOR_A, A),
+                                                  scan_id=out["id"])
+                assert answer["valid"] is True, answer
+                assert answer["plan_hash"] == out["plan_hash"]
+            assert await db["audit_events"].count_documents(
+                {"action": ar.AUDIT_PLAN_REFUSED}) == 0
+        scratch(test)
+
+    def test_a_db_row_and_the_walk_share_one_charge_on_a_real_server(self):
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            roots.write("shared.pdf", b"shared real bytes")
+            await _seed(db, A, "media_files", [_media_row("md-1", "shared.pdf")])
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=roots.inventory(max_checksum_objects=1))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            assert out["inventory"]["checksums_read"] == 1
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert row["observed"]["checksum"] is not None
+            assert row["observed"]["checksum_reason"] is None
+        scratch(test)
+
+    def test_an_over_cap_object_is_refused_and_persisted_as_refused(self):
+        """Defect 4 end to end: the refusal is what the real server stores."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            roots.write("big.pdf", b"z" * 500)
+            await _seed(db, A, "media_files", [_media_row("md-1", "big.pdf")])
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=roots.inventory(max_object_bytes=100))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            stored = await db[ar.ADOPTION_ITEMS_COLLECTION].find_one(
+                {"scan_id": out["id"], "direction": ar.DIRECTION_DB_ROW})
+            assert stored["observed"]["checksum"] is None
+            assert stored["observed"]["checksum_reason"] == \
+                ar.REASON_BUDGET_EXHAUSTED
+            assert stored["state"] != ar.READY_TO_ADOPT
+            assert out["inventory"]["bytes_read"] == 0
         scratch(test)

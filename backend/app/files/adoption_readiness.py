@@ -62,6 +62,36 @@ any symlink or reparse point, and a bounded budget of objects and bytes. A
 path that fails any of them is reported, not read. Nothing is opened for
 writing anywhere in this module.
 
+What the C02 correction changed
+-------------------------------
+
+The C01 independent review found four ways this module said more than it had
+proven. None of them changed the architecture; all four made a claim require
+the evidence behind it.
+
+1. **Readiness is observed, never inferred.** ``READY_TO_ADOPT`` and
+   ``ADOPT_IN_PLACE`` rested on ``verified_location`` alone — a fact about the
+   registry. A stored ``available`` status with nothing observed on disk was
+   enough. Readiness now needs the actual legacy original observed, its
+   checksum AND its size observed, a proven owner, the registered object
+   proven to be the SAME object, and the verified customer-managed location.
+   Each missing piece is named in ``reasons``.
+2. **A relation identity, not a relation count.** ``ALREADY_REGISTERED`` and
+   ``REGISTER_REFERENCE_ONLY`` accepted ``relation_count > 0``, so one
+   unrelated relation satisfied a plan proposing a different target. The exact
+   proposed ``(relation_type, record_id)`` pairs are now compared against this
+   tenant's active relations, and each target is resolved in this tenant.
+3. **A budget belongs to a pass.** The counters lived on the inventory, which
+   ``validate_plan`` reuses, so a second look at unchanged inputs started
+   with the first one's budget spent and raised ``AdoptionPlanStale`` with
+   nothing drifted. :class:`ScanPass` holds them, and one pass charges one
+   object once — the physical walk and the DB rows share the limit.
+4. **The caps are enforced during the read.** They were checked once against
+   the size ``stat`` reported and the read then ran to EOF, so a file that
+   grew, or a stream that returned more than it declared, was hashed past
+   both caps. The read is now bounded by a single ceiling and an overrun
+   fails closed.
+
 Canon: `docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md`, FLOW-016,
 FLOW-002, FLOW-040, TENANCY_MODEL, and the W0-06A inventory and migration map.
 """
@@ -242,6 +272,15 @@ REASON_NOT_CUSTOMER_MANAGED = "CURRENT_LOCATION_NOT_CUSTOMER_MANAGED"
 REASON_BUDGET_EXHAUSTED = "CHECKSUM_BUDGET_EXHAUSTED"
 REASON_CONTENT_READ_NOT_PERMITTED = "CONTENT_READ_NOT_PERMITTED"
 REASON_DUPLICATE_SAME_CHECKSUM = "SAME_CHECKSUM_AS_ANOTHER_FILE"
+#: C01 review defect 1: readiness was being read off a stored location status.
+#: These name what was actually missing instead.
+REASON_ORIGINAL_NOT_OBSERVED = "LEGACY_ORIGINAL_NOT_OBSERVED"
+REASON_SIZE_UNKNOWN = "SIZE_NOT_OBSERVED"
+REASON_SAME_OBJECT_UNPROVEN = "OBSERVED_OBJECT_NOT_PROVEN_SAME"
+#: C01 review defect 2: a relation COUNT is not a relation identity.
+REASON_RELATION_NOT_REGISTERED = "PROPOSED_RELATION_NOT_REGISTERED"
+REASON_RELATION_TARGET_MISSING = "RELATION_TARGET_NOT_IN_THIS_TENANT"
+REASON_NO_PROPOSED_RELATION = "NO_PROPOSED_BUSINESS_RELATION"
 
 #: Keys that may never appear in a stored evidence block, a projection or an
 #: AuditEvent. ``assert_no_secrets`` (W0-06C) already refuses credential-shaped
@@ -355,6 +394,42 @@ def path_within_root(root: str, candidate: str) -> Tuple[bool, Optional[str]]:
 
 
 @dataclass
+class ScanPass:
+    """The budget counters of ONE independent scan pass.
+
+    C01 review defect 3. These counters used to live on
+    :class:`LegacyRootInventory`, which ``validate_plan`` reuses: a second pass
+    over unchanged inputs therefore started with the first pass's budget
+    already spent, so an item hashed the first time came back
+    ``CHECKSUM_BUDGET_EXHAUSTED`` the second time, its fingerprint changed, and
+    :class:`AdoptionPlanStale` was raised with nothing whatsoever having
+    drifted. A budget is a property of a PASS, so it lives here and the
+    inventory holds none.
+
+    ``seen`` is the other half of the fix: one pass charges one object ONCE.
+    The physical walk and the DB rows that name the same object share this
+    pass's limit — which is what "shared limit" has to mean — and a row whose
+    object the walk already observed reuses that observation instead of
+    re-hashing it. Without it the same object could be charged twice in one
+    pass, which is both wasteful and non-deterministic at an exact limit.
+    """
+
+    budget: "ScanBudget"
+    objects_seen: int = 0
+    checksums_read: int = 0
+    bytes_read: int = 0
+    truncated: bool = False
+    #: ``absolute real path -> what this pass already observed about it``.
+    seen: Dict[str, "PhysicalObject"] = field(default_factory=dict)
+
+    def as_record(self) -> Dict[str, Any]:
+        return {"objects_seen": self.objects_seen,
+                "checksums_read": self.checksums_read,
+                "bytes_read": self.bytes_read, "truncated": self.truncated,
+                "budget": self.budget.as_record()}
+
+
+@dataclass
 class ScanBudget:
     """How much the scanner may look at. Exceeding a bound stops it, politely.
 
@@ -439,10 +514,15 @@ class LegacyRootInventory:
         #: before ``/uploads``.
         self.declared_roots: Tuple[Tuple[str, str], ...] = tuple(
             sorted(mapped.items(), key=lambda kv: (-len(kv[0]), kv[0])))
-        self.objects_seen = 0
-        self.checksums_read = 0
-        self.bytes_read = 0
-        self.truncated = False
+        #: The LAST pass this inventory served, for :meth:`as_record` only. The
+        #: counters themselves live on the pass (C01 review defect 3), so a
+        #: reused inventory cannot carry a spent budget into the next pass.
+        self.last_pass: Optional[ScanPass] = None
+
+    def open_pass(self) -> ScanPass:
+        """A fresh budget for one independent pass. Nothing is carried over."""
+        self.last_pass = ScanPass(budget=self.budget)
+        return self.last_pass
 
     def translate(self, location: str) -> str:
         """A declared legacy path, rewritten onto the root it is mounted at.
@@ -457,8 +537,13 @@ class LegacyRootInventory:
         return location
 
     # ---------------------------------------------------------------- walking
-    def walk(self) -> List[PhysicalObject]:
-        """Every object under every allowlisted root, in a stable order."""
+    def walk(self, pass_: Optional[ScanPass] = None) -> List[PhysicalObject]:
+        """Every object under every allowlisted root, in a stable order.
+
+        ``pass_`` carries the budget. Omitting it opens a fresh one, which is
+        the honest default: a walk with no pass is its own pass.
+        """
+        pass_ = pass_ if pass_ is not None else self.open_pass()
         found: List[PhysicalObject] = []
         for root in self.roots:
             if not os.path.isdir(root):
@@ -473,17 +558,18 @@ class LegacyRootInventory:
                 dirnames[:] = [d for d in dirnames
                                if not os.path.islink(os.path.join(directory, d))]
                 for name in sorted(filenames):
-                    if self.objects_seen >= self.budget.max_objects:
-                        self.truncated = True
+                    if pass_.objects_seen >= self.budget.max_objects:
+                        pass_.truncated = True
                         return sorted(found, key=lambda o: (o.root, o.relative_path))
                     absolute = os.path.join(directory, name)
                     relative = os.path.relpath(absolute, root)
-                    self.objects_seen += 1
-                    found.append(self._observe(root, relative, absolute))
+                    pass_.objects_seen += 1
+                    found.append(self._observe(root, relative, absolute, pass_))
         return sorted(found, key=lambda o: (o.root, o.relative_path))
 
     # ------------------------------------------------------- a path we were told
-    def observe_path(self, location: Optional[str]) -> Optional[PhysicalObject]:
+    def observe_path(self, location: Optional[str],
+                     pass_: Optional[ScanPass] = None) -> Optional[PhysicalObject]:
         """Look at a path a DATABASE ROW named. ``None`` when no root owns it.
 
         The row is untrusted input: it may name a path under no allowlisted
@@ -492,6 +578,7 @@ class LegacyRootInventory:
         """
         if not isinstance(location, str) or not location:
             return None
+        pass_ = pass_ if pass_ is not None else self.open_pass()
         location = self.translate(location)
         for root in self.roots:
             safe, refusal = path_within_root(root, location)
@@ -509,7 +596,7 @@ class LegacyRootInventory:
                                       checksum=None, readable=False,
                                       refusal=REASON_ORIGINAL_ABSENT,
                                       checksum_reason=REASON_ORIGINAL_ABSENT)
-            return self._observe(root, relative, absolute)
+            return self._observe(root, relative, absolute, pass_)
         # Named a path, but under no root this scan is allowed to look at. That
         # is a refusal with evidence, not an absent object: saying "missing"
         # here would be exactly the mislabelling the contract forbids.
@@ -519,7 +606,24 @@ class LegacyRootInventory:
                               checksum_reason=REASON_PATH_OUTSIDE_ROOT)
 
     # ------------------------------------------------------------------ one object
-    def _observe(self, root: str, relative: str, absolute: str) -> PhysicalObject:
+    def _observe(self, root: str, relative: str, absolute: str,
+                 pass_: ScanPass) -> PhysicalObject:
+        # One object, one charge against this pass. The physical walk and a DB
+        # row naming the same object therefore SHARE the limit instead of
+        # paying it twice, which is what makes an exact limit deterministic.
+        key = os.path.realpath(absolute)
+        cached = pass_.seen.get(key)
+        if cached is not None:
+            return PhysicalObject(
+                relative_path=relative, root=root, size_bytes=cached.size_bytes,
+                checksum=cached.checksum, checksum_reason=cached.checksum_reason,
+                readable=cached.readable, refusal=cached.refusal)
+        observed = self._observe_uncached(root, relative, absolute, pass_)
+        pass_.seen[key] = observed
+        return observed
+
+    def _observe_uncached(self, root: str, relative: str, absolute: str,
+                          pass_: ScanPass) -> PhysicalObject:
         size: Optional[int] = None
         try:
             size = os.path.getsize(absolute)
@@ -530,43 +634,81 @@ class LegacyRootInventory:
                                   checksum=None, readable=False,
                                   refusal=REASON_SOURCE_INACCESSIBLE,
                                   checksum_reason=REASON_SOURCE_INACCESSIBLE)
-        checksum, reason = self._checksum(absolute, size)
+        checksum, reason = self._checksum(absolute, size, pass_)
         return PhysicalObject(relative_path=relative, root=root, size_bytes=size,
                               checksum=checksum, checksum_reason=reason, readable=True)
 
-    def _checksum(self, absolute: str, size: Optional[int]
+    #: How much is read per syscall. Small enough that an overrun is noticed
+    #: after one chunk rather than after a whole file.
+    CHUNK_BYTES = 1024 * 1024
+
+    def _checksum(self, absolute: str, size: Optional[int], pass_: ScanPass
                   ) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
-        """The object's sha256, or the precise reason there is none."""
+        """The object's sha256, or the precise reason there is none.
+
+        C01 review defect 4. The caps used to be checked ONCE, against the
+        size ``stat`` reported, and the read then ran to EOF. A file that grew
+        after the ``stat``, or an opener that returned more than it declared,
+        was hashed past both ``max_object_bytes`` and ``max_checksum_bytes``:
+        the review's injected stream reported size 1 with both caps at 1 and
+        still read and hashed three bytes.
+
+        The caps are now enforced DURING the read, against a single ceiling,
+        and an overrun fails closed — no checksum, the bytes actually read
+        charged to the pass, and ``CHECKSUM_BUDGET_EXHAUSTED`` as the reason.
+        The ceiling is the strictest of the three things that bound this read:
+        the per-object cap, what is left of the pass's byte budget, and the
+        size the object declared. Including the declared size is what catches
+        the growing file: an object that turns out to be longer than it said
+        is not silently hashed, it is refused.
+        """
         if not self.budget.allow_content_read:
             return None, REASON_CONTENT_READ_NOT_PERMITTED
         if size is not None and size > self.budget.max_object_bytes:
             return None, REASON_BUDGET_EXHAUSTED
-        if self.checksums_read >= self.budget.max_checksum_objects:
+        if pass_.checksums_read >= self.budget.max_checksum_objects:
             return None, REASON_BUDGET_EXHAUSTED
-        if size is not None and self.bytes_read + size > self.budget.max_checksum_bytes:
+        remaining = self.budget.max_checksum_bytes - pass_.bytes_read
+        if size is not None and size > remaining:
             return None, REASON_BUDGET_EXHAUSTED
+        ceiling = min(self.budget.max_object_bytes, max(remaining, 0))
+        if size is not None:
+            ceiling = min(ceiling, size)
         digest = hashlib.sha256()
         read = 0
         try:
             with self._opener(absolute) as handle:
                 while True:
-                    chunk = handle.read(1024 * 1024)
+                    # One byte MORE than the ceiling, so an object that exceeds
+                    # it is visible in the very first chunk instead of being
+                    # read to the end and judged afterwards.
+                    want = min(self.CHUNK_BYTES, ceiling - read + 1)
+                    chunk = handle.read(want)
                     if not chunk:
                         break
                     read += len(chunk)
+                    if read > ceiling:
+                        # Fail closed. The bytes really were read, so they are
+                        # charged; the object gets no checksum.
+                        pass_.bytes_read += read
+                        return None, REASON_BUDGET_EXHAUSTED
                     digest.update(chunk)
         except OSError:
             return None, REASON_SOURCE_INACCESSIBLE
-        self.checksums_read += 1
-        self.bytes_read += read
+        pass_.checksums_read += 1
+        pass_.bytes_read += read
         return m.checksum(digest.hexdigest()), None
 
     def as_record(self) -> Dict[str, Any]:
         """What this inventory did, for the scan document. No paths."""
-        return {"roots": len(self.roots), "declared_roots_mapped":
-                len(self.declared_roots), "objects_seen": self.objects_seen,
-                "checksums_read": self.checksums_read, "bytes_read": self.bytes_read,
-                "truncated": self.truncated, "budget": self.budget.as_record()}
+        last = self.last_pass
+        return {"roots": len(self.roots),
+                "declared_roots_mapped": len(self.declared_roots),
+                "objects_seen": last.objects_seen if last else 0,
+                "checksums_read": last.checksums_read if last else 0,
+                "bytes_read": last.bytes_read if last else 0,
+                "truncated": last.truncated if last else False,
+                "budget": self.budget.as_record()}
 
 
 # ====================================================== one observed item
@@ -649,30 +791,38 @@ def readiness_state(*, direction: str, candidates: Mapping[str, bool],
 
 
 def propose_action(state: str, *, at_customer_managed_location: bool,
-                   has_owning_file: bool) -> str:
+                   has_owning_file: bool, evidence_complete: bool = False,
+                   relations_match: bool = False) -> str:
     """What may be PROPOSED for this state. Never what will be done.
 
-    Two gates, and both are structural rather than advisory:
+    Three gates, all structural rather than advisory:
 
     * ``ADOPT_IN_PLACE`` needs the original to be at a verified, tenant-owned,
-      customer-managed provider location ALREADY. The migration map reports
-      every legacy row at ``legacy_app_disk``, which is not in
+      customer-managed provider location ALREADY **and** the full observed
+      evidence behind it. The migration map reports every legacy row at
+      ``legacy_app_disk``, which is not in
       :data:`app.files.models.CUSTOMER_MANAGED_PROVIDER_KINDS`, so an
       application-disk row cannot reach this branch at all;
-    * ``REGISTER_REFERENCE_ONLY`` needs an existing same-tenant File with a
-      proven relation. A pointer with nothing behind it is a decision, not a
-      reference.
+    * ``REGISTER_REFERENCE_ONLY`` needs an existing same-tenant File **and the
+      exact proposed relation proven registered on it**. A pointer with
+      nothing behind it, or with some other relation, is a decision — not a
+      reference;
+    * ``evidence_complete`` is passed in rather than inferred. C01's review
+      found readiness being read off a stored location status; this parameter
+      exists so no caller can reach ``ADOPT_IN_PLACE`` without the observed
+      proof, even if a future state were to be added above.
     """
     if state == NO_CONTENT:
         return PROPOSE_NO_ACTION
     if state == ALREADY_REGISTERED:
         return PROPOSE_NO_ACTION
     if state == READY_TO_ADOPT:
-        if at_customer_managed_location:
+        if at_customer_managed_location and evidence_complete:
             return PROPOSE_ADOPT_IN_PLACE
-        if has_owning_file:
+        if has_owning_file and relations_match:
             return PROPOSE_REGISTER_REFERENCE_ONLY
-        # Coherent, but the bytes are not anywhere this slice may adopt from.
+        # Coherent, but the bytes are not anywhere this slice may adopt from,
+        # or the relation that would carry the reference is not proven.
         return PROPOSE_BLOCKED_FUTURE_STEP
     if state in (TENANT_AMBIGUOUS, BUSINESS_RELATION_AMBIGUOUS, CHECKSUM_CONFLICT,
                  DUPLICATE_CANDIDATE, ORPHAN_DB_RECORD, ORPHAN_PHYSICAL_FILE,
@@ -816,8 +966,26 @@ class LegacyAdoptionReadiness:
         return sorted(rows, key=lambda r: str(r.get("id") or ""))
 
     # ----------------------------------------------- the registry comparison
+    async def _relation_target_exists(self, relation_type: str, record_id: str) -> bool:
+        """Does the business record this relation names exist IN THIS TENANT?
+
+        The same question :meth:`app.files.registry.FileRegistry._assert_relation_target`
+        asks before CREATING a relation, asked here without raising, because a
+        readiness scan reports rather than refuses. Read through the tenant
+        view, so a record id that belongs to another tenant — including one
+        that collides with a real id here — resolves to nothing.
+        """
+        target = m.RELATION_TARGETS.get(relation_type)
+        if not target or not record_id:
+            return False
+        found = await self._tenant.collection(target).find_one(
+            {"id": record_id}, {"_id": 0, "id": 1})
+        return bool(found)
+
     async def _registry_state(self, file_id: Optional[str],
-                              observed_checksum: Optional[Mapping[str, Any]]
+                              observed_checksum: Optional[Mapping[str, Any]],
+                              observed_size: Optional[int] = None,
+                              planned_relations: Sequence[Mapping[str, Any]] = ()
                               ) -> Dict[str, Any]:
         """What the SAME tenant's File Registry already holds for this identity.
 
@@ -825,30 +993,55 @@ class LegacyAdoptionReadiness:
         helpers. ``duplicate_of`` is a checksum lookup, which can only ever
         return this tenant's files: ``find_by_checksum`` goes through the
         tenant view too.
+
+        C01 review defect 2. This used to reduce every FileRelation to
+        ``relation_count``, and a nonzero count was then accepted as
+        "already registered" — so a file carrying one UNRELATED relation
+        satisfied a plan that proposed ``project=missing-project``. A count is
+        not an identity. The planned ``(relation_type, record_id)`` pairs are
+        now compared one by one against this tenant's ACTIVE relations, and
+        each planned target is additionally resolved in this tenant, because a
+        relation to a record that does not exist here is not a relation.
         """
         state: Dict[str, Any] = {
             "file_exists": False, "version_no": None, "checksum_matches": None,
-            "size_matches": None, "availability": None, "provider_kind": None,
-            "customer_managed": False, "verified_location": False,
-            "relation_count": 0, "duplicate_of": [],
+            "size_matches": None, "registered_size": None, "availability": None,
+            "provider_kind": None, "customer_managed": False,
+            "verified_location": False, "relation_count": 0,
+            "relations_registered": [], "relations_missing": [],
+            "relation_targets_missing": [], "relations_match": False,
+            "duplicate_of": [],
         }
+        planned = sorted({(str(r.get("relation_type")), str(r.get("record_id")))
+                          for r in planned_relations})
         if observed_checksum:
             others = await self._registry.find_by_checksum(observed_checksum)
             state["duplicate_of"] = sorted(
                 row["id"] for row in others if row.get("id") != file_id)
+        # A planned target is resolved whether or not the file exists: an
+        # unresolvable target is a blocker on its own, not a detail of a
+        # comparison that may never happen.
+        targets_missing = [list(pair) for pair in planned
+                           if not await self._relation_target_exists(*pair)]
+        state["relation_targets_missing"] = targets_missing
         if not file_id:
+            state["relations_missing"] = [list(p) for p in planned]
             return state
         row = await self._registry.get_file(file_id)
         if not row:
+            state["relations_missing"] = [list(p) for p in planned]
             return state
         state["file_exists"] = True
         version = await self._registry.current_version(file_id)
         if version:
             state["version_no"] = version.get("version_no")
+            state["registered_size"] = version.get("size_bytes")
             expected = version.get("checksum") or {}
             if observed_checksum and expected:
                 state["checksum_matches"] = (
                     m.checksum_key(observed_checksum) == m.checksum_key(expected))
+            if observed_size is not None and version.get("size_bytes") is not None:
+                state["size_matches"] = observed_size == version.get("size_bytes")
             location = await self._registry.primary_location(
                 file_id, version["version_no"])
             if location:
@@ -864,13 +1057,31 @@ class LegacyAdoptionReadiness:
                     and state["customer_managed"])
         relations = await self._registry.list_relations(file_id)
         state["relation_count"] = len(relations)
+        registered = {(str(r.get("relation_type")), str(r.get("record_id")))
+                      for r in relations}
+        state["relations_registered"] = sorted(
+            [list(p) for p in planned if p in registered])
+        state["relations_missing"] = sorted(
+            [list(p) for p in planned if p not in registered])
+        # The exact match the contract asks for: every proposed relation is
+        # really registered on THIS file, and every proposed target really
+        # exists in THIS tenant. An empty proposal proves nothing, so it is
+        # not a match either.
+        state["relations_match"] = bool(
+            planned and not state["relations_missing"] and not targets_missing)
         return state
 
     # ------------------------------------------------------------ classifying
     def _classify(self, *, direction: str, plan: Optional[mp.PlanEntry],
                   observed: Mapping[str, Any], registry: Mapping[str, Any],
-                  source: Optional[mp.LegacySource]) -> Tuple[str, List[str]]:
-        """``(state, reasons)`` for one item. Pure, so it is directly testable."""
+                  source: Optional[mp.LegacySource]
+                  ) -> Tuple[str, List[str], bool]:
+        """``(state, reasons, evidence_complete)`` for one item.
+
+        Pure, so it is directly testable — which is how the C01 review
+        reproduced both classification defects, and how the C02 regressions
+        pin them.
+        """
         reasons: List[str] = []
         blockers = list(plan.blockers) if plan else []
 
@@ -879,14 +1090,14 @@ class LegacyAdoptionReadiness:
             # does NOT make it owned: there is no row, so there is no owner.
             reasons.append(REASON_UNATTRIBUTED_OBJECT)
             reasons.append(REASON_OWNERSHIP_UNVERIFIED)
-            return ORPHAN_PHYSICAL_FILE, reasons
+            return ORPHAN_PHYSICAL_FILE, reasons, False
 
         if source is None:
             reasons.append(REASON_SOURCE_NOT_DECLARED)
-            return UNSUPPORTED_SOURCE, reasons
+            return UNSUPPORTED_SOURCE, reasons, False
 
         if plan is not None and plan.action == mp.ACTION_NONE:
-            return NO_CONTENT, reasons
+            return NO_CONTENT, reasons, False
 
         owns_bytes = source.action == mp.ACTION_REGISTER
         pointer_only = source.action in (mp.ACTION_RELATE,
@@ -923,26 +1134,82 @@ class LegacyAdoptionReadiness:
         if registry.get("file_exists") and not registry.get("customer_managed"):
             reasons.append(REASON_NOT_CUSTOMER_MANAGED)
 
-        exact_match = bool(
-            registry.get("file_exists") and registry.get("verified_location")
-            and registry.get("checksum_matches") is True
-            and registry.get("relation_count"))
+        # ---- C01 review defect 2: an exact relation identity, not a count ----
+        if registry.get("relation_targets_missing"):
+            reasons.append(REASON_RELATION_TARGET_MISSING)
+        if registry.get("file_exists") and registry.get("relations_missing"):
+            reasons.append(REASON_RELATION_NOT_REGISTERED)
+        if owns_bytes or pointer_only:
+            if not (plan and plan.relations):
+                reasons.append(REASON_NO_PROPOSED_RELATION)
+
+        # ---- C01 review defect 1: readiness is OBSERVED, never inferred ----
+        # The review's counterexample was a same-tenant File whose stored
+        # location said ``available`` while the scan had observed nothing at
+        # all: state ``unknown``, no checksum, no size, no relation. A stored
+        # status is a fact about the registry, not proof about THIS legacy
+        # original, so each piece of evidence is now required explicitly and
+        # its absence is named.
+        original_observed = observed.get("state") == "present" and not inaccessible
+        checksum_observed = bool(observed.get("checksum"))
+        size_observed = observed.get("size_bytes") is not None
+        same_object = (registry.get("checksum_matches") is True
+                       and registry.get("size_matches") is True)
+        if owns_bytes:
+            if not original_observed:
+                reasons.append(REASON_ORIGINAL_NOT_OBSERVED)
+            if not checksum_observed:
+                reasons.append(REASON_CHECKSUM_UNKNOWN)
+            if not size_observed:
+                reasons.append(REASON_SIZE_UNKNOWN)
+            if original_observed and checksum_observed and size_observed \
+                    and registry.get("file_exists") and not same_object:
+                reasons.append(REASON_SAME_OBJECT_UNPROVEN)
+
+        #: Everything the contract requires before a row may be called ready:
+        #: a proven owner, the actual legacy original observed, its checksum
+        #: AND size observed, the registered object proven to be the SAME
+        #: object, and a verified customer-managed location. Every clause is
+        #: necessary; none of them can be substituted by a stored status.
+        evidence_complete = bool(
+            owns_bytes
+            and not no_owner
+            and original_observed
+            and checksum_observed
+            and size_observed
+            and registry.get("file_exists")
+            and same_object
+            and registry.get("verified_location"))
+
+        #: ALREADY_REGISTERED is the same evidence PLUS the exact relation
+        #: identity. It is not a weaker claim than readiness — it is a
+        #: stronger one, so it cannot rest on less.
+        exact_match = bool(evidence_complete and registry.get("relations_match"))
+
+        #: A pointer-only row owns no bytes, so it can never be "ready"; what
+        #: it can be is a reference to an already-verified File of this
+        #: tenant, and only with the exact relation proven.
+        reference_ready = bool(
+            pointer_only and not no_owner and registry.get("file_exists")
+            and registry.get("verified_location") and registry.get("relations_match"))
 
         candidates = {
             TENANT_AMBIGUOUS: no_owner,
-            CHECKSUM_CONFLICT: registry.get("checksum_matches") is False,
-            BUSINESS_RELATION_AMBIGUOUS: relation_ambiguous,
+            CHECKSUM_CONFLICT: registry.get("checksum_matches") is False
+            or registry.get("size_matches") is False,
+            BUSINESS_RELATION_AMBIGUOUS: bool(
+                relation_ambiguous or registry.get("relation_targets_missing")),
             # Only ever from PROVEN absence, and only for a source that is
             # supposed to own bytes at all.
             MISSING_ORIGINAL: bool(owns_bytes and proven_absent and not inaccessible),
             ORPHAN_DB_RECORD: pointer_unresolved,
-            ALREADY_REGISTERED: exact_match,
+            ALREADY_REGISTERED: exact_match or reference_ready,
             DUPLICATE_CANDIDATE: bool(registry.get("duplicate_of")),
-            READY_TO_ADOPT: bool(registry.get("verified_location")),
+            READY_TO_ADOPT: evidence_complete,
         }
         state = readiness_state(direction=direction, candidates=candidates,
                                 has_blockers=bool(blockers))
-        return state, reasons
+        return state, reasons, evidence_complete
 
     # ------------------------------------------------------------------ scan
     async def scan(self, ctx, *, scan_id: Optional[str] = None,
@@ -978,7 +1245,12 @@ class LegacyAdoptionReadiness:
                              "budget": (self._inventory.budget.as_record()
                                         if self._inventory else None)})
 
-        physical = self._inventory.walk() if self._inventory else []
+        # ONE budget for this pass, shared by the physical walk and by every
+        # DB row that names an object (C01 review defect 3). A later pass over
+        # unchanged inputs opens its own, so the same inputs decide the same
+        # way and a revalidation cannot invent drift.
+        scan_pass = self._inventory.open_pass() if self._inventory else None
+        physical = self._inventory.walk(scan_pass) if self._inventory else []
         #: Which physical objects a DB row claimed. What is left over is the
         #: other direction of the reconciliation.
         claimed: set = set()
@@ -987,7 +1259,8 @@ class LegacyAdoptionReadiness:
         for source in selected:
             for row in await self._legacy_rows(source):
                 item = await self._item_for_row(source, row, run_id=run_id,
-                                                scanned_at=started, claimed=claimed)
+                                                scanned_at=started, claimed=claimed,
+                                                scan_pass=scan_pass)
                 items.append(item)
 
         for obj in physical:
@@ -1048,15 +1321,16 @@ class LegacyAdoptionReadiness:
 
     # -------------------------------------------------------------- one row
     async def _item_for_row(self, source: mp.LegacySource, row: Mapping[str, Any],
-                            *, run_id: str, scanned_at: str, claimed: set
-                            ) -> ReadinessItem:
+                            *, run_id: str, scanned_at: str, claimed: set,
+                            scan_pass: Optional[ScanPass] = None) -> ReadinessItem:
         plan = mp.plan_row(source, row)
         observed: Dict[str, Any] = {"state": "unknown", "size_bytes": None,
                                     "checksum": None, "checksum_reason": None,
                                     "refusal": None, "relative_path": None,
                                     "registered_size": None}
         if plan.current_physical_location and self._inventory is not None:
-            seen = self._inventory.observe_path(plan.current_physical_location)
+            seen = self._inventory.observe_path(plan.current_physical_location,
+                                                scan_pass)
             if seen is None:
                 observed["state"] = "unknown"
             else:
@@ -1074,17 +1348,22 @@ class LegacyAdoptionReadiness:
             observed["state"] = "unknown"
             observed["checksum_reason"] = REASON_CHECKSUM_UNKNOWN
 
-        registry = await self._registry_state(plan.file_id, observed.get("checksum"))
-        if registry.get("version_no") is not None:
-            version = await self._registry.current_version(plan.file_id)
-            observed["registered_size"] = (version or {}).get("size_bytes")
+        planned_relations = [{"relation_type": r.relation_type,
+                              "record_id": r.record_id} for r in plan.relations]
+        registry = await self._registry_state(
+            plan.file_id, observed.get("checksum"),
+            observed_size=observed.get("size_bytes"),
+            planned_relations=planned_relations)
+        observed["registered_size"] = registry.get("registered_size")
 
-        state, reasons = self._classify(direction=DIRECTION_DB_ROW, plan=plan,
-                                        observed=observed, registry=registry,
-                                        source=source)
+        state, reasons, evidence_complete = self._classify(
+            direction=DIRECTION_DB_ROW, plan=plan, observed=observed,
+            registry=registry, source=source)
         proposal = propose_action(
             state, at_customer_managed_location=bool(registry.get("verified_location")),
-            has_owning_file=bool(registry.get("file_exists")))
+            has_owning_file=bool(registry.get("file_exists")),
+            evidence_complete=evidence_complete,
+            relations_match=bool(registry.get("relations_match")))
         expected = {
             "source_key": source.key, "action": source.action,
             "category": source.category, "sensitivity": source.sensitivity,
@@ -1122,8 +1401,9 @@ class LegacyAdoptionReadiness:
                     "size_bytes": obj.size_bytes, "checksum": obj.checksum,
                     "checksum_reason": obj.checksum_reason, "refusal": obj.refusal,
                     "relative_path": obj.relative_path, "registered_size": None}
-        state, reasons = self._classify(direction=DIRECTION_PHYSICAL_OBJECT, plan=None,
-                                        observed=observed, registry={}, source=None)
+        state, reasons, _evidence = self._classify(
+            direction=DIRECTION_PHYSICAL_OBJECT, plan=None, observed=observed,
+            registry={}, source=None)
         # No owner, so no tenant-scoped registry comparison is even attempted:
         # looking a stray object up by checksum and attaching it to whichever
         # file matched is precisely the heuristic the contract forbids.
