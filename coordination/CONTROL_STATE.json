@@ -1,18 +1,18 @@
 {
   "protocol_version": 2,
   "control_state_status": "VALID",
-  "validated_at": "2026-10-10T07:02:28Z",
+  "validated_at": "2026-10-10T07:13:58Z",
   "validation_mode": "LIVE_GITHUB",
   "repository": "krumingo/BEG_Worck",
   "branch": "codex/claude-queue",
   "producer": "CODEX",
-  "active_source_commit_sha": "865aa68bce017408e64e0aeb32e3129be4ccbd8d",
-  "control_state_commit_sha": "100a01f7316ea9ff0b9ef409af569fc092226bf0",
-  "now": "Claude published final W0-06D/C04 HANDOFF at 891fb53718e72ba218f6fa29dd7098988037e153; Draft PR #51 head matches. Codex independent review has started. C04 has no verdict yet; do not resend.",
+  "active_source_commit_sha": "1d80db2efcff89c936b533b73e16288fdb7c36ea",
+  "control_state_commit_sha": "02d564991d60054d378a0a685917e5dd7d121bbe",
+  "now": "Independent W0-06D/C04 review found overlapping allowlisted roots can return 3 entries with max_objects=2, objects_seen=1 and truncated=false. CHANGES_REQUESTED on exact PR #51 head 891fb53718e72ba218f6fa29dd7098988037e153. C05 bounded correction prepared but NOT SENT; platform action-time confirmation required for a later PC/UI Send.",
   "transition": {
-    "event": "HANDOFF_DETECTED_REVIEW_STARTED",
-    "phase": "CODEX_REVIEWING",
-    "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094908283",
+    "event": "REVIEW_CHANGES_REQUESTED",
+    "phase": "CORRECTION_PREPARING",
+    "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636",
     "verdict_publication": "PUBLISHED"
   },
   "generated_from": ["ACTIVE", "CANONICAL_DOCS", "PR/HANDOFF"],
@@ -25,60 +25,60 @@
     "GPT": {
       "state": "WAITING",
       "work_id": "W0-06D/C04/GPT",
-      "waiting_for": "Independent Codex C04 verdict",
-      "updated_at": "2026-10-10T07:02:28Z"
+      "waiting_for": "bounded C05 correction and later independent review",
+      "updated_at": "2026-10-10T07:13:58Z"
     },
     "CODEX": {
-      "state": "REVIEWING",
+      "state": "CORRECTION_PREPARING",
       "work_id": "W0-06D/C04/CX",
-      "waiting_for": "Independent review completion on exact PR head",
-      "updated_at": "2026-10-10T07:02:28Z"
+      "waiting_for": "platform-required action-time confirmation before bounded C05 UI Send",
+      "updated_at": "2026-10-10T07:13:58Z"
     },
     "CLAUDE": {
-      "state": "WAITING_FOR_REVIEW",
+      "state": "WAITING_FOR_CORRECTION",
       "work_id": "W0-06D/C04/CL",
-      "waiting_for": "Independent Codex C04 verdict",
-      "updated_at": "2026-10-10T07:02:28Z"
+      "waiting_for": "bounded C05 dispatch after required action-time confirmation",
+      "updated_at": "2026-10-10T07:13:58Z"
     }
   },
   "current_work_id": "W0-06D/C04/CX",
-  "state": "REVIEWING",
-  "pipeline_step": "INDEPENDENT_REVIEW",
+  "state": "CHANGES_REQUESTED",
+  "pipeline_step": "CORRECTION_PREPARING",
   "next_agent": "CODEX",
-  "waiting_for": "independent exact-head C04 verdict",
+  "waiting_for": "platform-required action-time confirmation for C05 UI Send",
   "wave": "W0",
   "flow": "FLOW-016",
   "pr_number": 51,
   "pr_head_sha": "891fb53718e72ba218f6fa29dd7098988037e153",
   "pr_draft": true,
-  "dispatch_state": "C04_SENT_ONCE_HANDOFF_RECEIVED",
+  "dispatch_state": "C04_SENT_ONCE_REVIEWED_C05_NOT_SENT",
   "dispatch_run_url": null,
   "last_handoff": {"url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6094882457", "head_sha": "891fb53718e72ba218f6fa29dd7098988037e153", "at": "2026-10-10T07:00:00Z"},
-  "last_review": {"path": "coordination/REVIEWS/W0-06D.md", "blob_sha": "60e22bf907360c02a026715d4cf306e94f263fb4", "reviewed_head_sha": "860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45", "verdict": "CHANGES_REQUESTED"},
+  "last_review": {"path": "coordination/REVIEWS/W0-06D.md", "blob_sha": "6c48bdd3f5ebf5a50e04ba2ddbb2817fefa0dbcf", "reviewed_head_sha": "891fb53718e72ba218f6fa29dd7098988037e153", "verdict": "CHANGES_REQUESTED"},
   "relay": {
-    "last_agent": "CLAUDE",
-    "last_event": "W0-06D/C04 final exact-head HANDOFF published; Codex independent review started",
-    "last_result": "HANDOFF_DETECTED",
+    "last_agent": "CODEX",
+    "last_event": "W0-06D/C04 independent CHANGES_REQUESTED; bounded C05 prepared but not sent",
+    "last_result": "CHANGES_REQUESTED",
     "required_by_krum": false,
     "from": null,
     "to": null,
     "status": "NO_RELAY_NEEDED",
-    "instruction": "Do not resend C04. Complete independent exact-head Codex review. No merge/deploy.",
-    "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094908283",
-    "updated_at": "2026-10-10T07:02:28Z"
+    "instruction": "Do not resend C04. C05 remains NOT SENT until platform-required action-time confirmation; then only bounded overlapping-root output-accounting correction. No merge/deploy.",
+    "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636",
+    "updated_at": "2026-10-10T07:13:58Z"
   },
   "requires_krum": false,
   "requires_krum_reason": null,
   "progress": {
     "mode": "STAGE_ONLY",
-    "stage": "INDEPENDENT_REVIEW",
+    "stage": "CORRECTION_PREPARING",
     "completed": null,
     "total": null,
     "percent": null
   },
   "source_refs": {
     "active_path": "coordination/ACTIVE.md",
-    "active_blob_sha": "e43c84b1297b8b4313f88efdfa5b8c23697b75aa",
+    "active_blob_sha": "78bf48dbfa08fdece8ded28826838831f4783e70",
     "canonical_docs": [
       {"path": "CLAUDE.md", "blob_sha": "7488b4c8ad449d554a436d5c81328eddc523ce0c"},
       {"path": "docs/architecture/IMPLEMENTATION_GATE_MATRIX.md", "blob_sha": "e7957b710436be084e9e11ba3ae9e9b2948ff4a0"},
@@ -89,7 +89,7 @@
       {"path": "docs/flows/FLOW-040.md", "blob_sha": "3d2ce96e3ba353721c763a53a3e0110ebaaee926"}
     ]
   },
-  "updated_at": "2026-10-10T07:02:28Z",
+  "updated_at": "2026-10-10T07:13:58Z",
   "history": [
     {
       "event_id": "w0-06c-c01-assignment-prepared",
@@ -370,6 +370,20 @@
       "source_url": "https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094908283",
       "source_commit_sha": "865aa68bce017408e64e0aeb32e3129be4ccbd8d",
       "summary": "Final C04 HANDOFF detected with exact PR head match; Codex independent review started. No verdict yet."
+    },
+    {
+      "event_id": "w0-06d-c04-review-changes-requested-20261010t071358z",
+      "occurred_at": "2026-10-10T07:13:58Z",
+      "task_id": "W0-06D",
+      "cycle_id": "C04",
+      "mapped_cycle": null,
+      "actor": "CODEX",
+      "kind": "REVIEW",
+      "state_after": "CHANGES_REQUESTED",
+      "head_sha": "891fb53718e72ba218f6fa29dd7098988037e153",
+      "source_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636",
+      "source_commit_sha": "1d80db2efcff89c936b533b73e16288fdb7c36ea",
+      "summary": "Independent C04 finding: overlapping allowlisted roots return more entries than max_objects while the same-realpath cache charges only once. Bounded C05 correction prepared, not sent."
     }
   ]
 }
