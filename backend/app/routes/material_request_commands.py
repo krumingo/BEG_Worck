@@ -305,6 +305,30 @@ async def material_request_write_status(user: dict = Depends(require_m2)):
             "Записът на заявки е изключен, докато Permission Service не е в режим enforce."}
 
 
+@router.get("/material-requests/item-options")
+async def material_request_item_options(request: Request, q: str = "",
+                                        user: dict = Depends(require_m2)):
+    """Active Master items of the SESSION tenant for the line picker (read-only).
+
+    Free text is never turned into an item here: no match simply leaves the
+    line as an explicit pending-mapping line.
+    """
+    if _raw_mode() != "enforce":
+        return {"status": "unavailable", "items": [],
+                "message": "Изборът на Master материал е наличен само в режим enforce."}
+    from app.tenancy.guard import get_tenant_context
+    ctx = await get_tenant_context(request, user)
+    tdb = await ctx.db()
+    flt: Dict[str, Any] = {"tenant_id": ctx.tenant_id, "status": "active"}
+    q = (q or "").strip()[:100]
+    if q:
+        flt["display_name"] = {"$regex": re.escape(q), "$options": "i"}
+    rows = await tdb[mrc.ITEM_COLLECTION].find(
+        flt, {"_id": 0, "id": 1, "display_name": 1, "base_unit": 1, "category": 1}
+    ).sort("display_name", 1).to_list(30)
+    return {"status": "ok", "items": rows}
+
+
 @router.get("/material-requests/{req_id}")
 async def get_material_request(req_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)

@@ -25,8 +25,8 @@ import {
   ClipboardList, Warehouse, ArrowRight, Check, ExternalLink,
 } from "lucide-react";
 
-const REQ_STATUS = { draft: "Чернова", submitted: "Подадена", partially_fulfilled: "Частично", fulfilled: "Изпълнена", cancelled: "Отменена" };
-const REQ_COLORS = { draft: "bg-gray-500/20 text-gray-400", submitted: "bg-blue-500/20 text-blue-400", partially_fulfilled: "bg-amber-500/20 text-amber-400", fulfilled: "bg-emerald-500/20 text-emerald-400", cancelled: "bg-red-500/20 text-red-400" };
+const REQ_STATUS = { draft: "Чернова", submitted: "Подадена", approved: "Одобрена", rejected: "Отхвърлена", cancelled: "Анулирана" };
+const REQ_COLORS = { draft: "bg-gray-500/20 text-gray-400", submitted: "bg-blue-500/20 text-blue-400", approved: "bg-emerald-500/20 text-emerald-400", rejected: "bg-red-500/20 text-red-400", cancelled: "bg-zinc-500/20 text-zinc-400" };
 const INV_STATUS = { uploaded: "Качена", reviewed: "Прегледана", posted_to_warehouse: "В склада" };
 const INV_COLORS = { uploaded: "bg-blue-500/20 text-blue-400", reviewed: "bg-amber-500/20 text-amber-400", posted_to_warehouse: "bg-emerald-500/20 text-emerald-400" };
 
@@ -158,6 +158,12 @@ export default function ProcurementPage() {
 
         {/* Material Requests Tab */}
         <TabsContent value="requests">
+          <div className="mb-3 text-sm" data-testid="requests-moved">
+            Създаване, подаване и одобрение на заявки:{" "}
+            <button type="button" className="text-primary underline" onClick={() => navigate("/material-requests")}>
+              Заявки за материали
+            </button>
+          </div>
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="requests-table">
             <Table>
               <TableHeader><TableRow className="hover:bg-transparent">
@@ -173,13 +179,13 @@ export default function ProcurementPage() {
                 {filteredReqs.length === 0 ? (
                   <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>Няма заявки</p></TableCell></TableRow>
                 ) : filteredReqs.map(r => (
-                  <TableRow key={r.id} className="cursor-pointer hover:bg-muted/30" data-testid={`req-row-${r.id}`}>
+                  <TableRow key={r.id} className="cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/material-requests/${r.id}`)} data-testid={`req-row-${r.id}`}>
                     <TableCell className="font-mono text-sm text-primary">{r.request_number}</TableCell>
                     <TableCell className="text-sm">{r.project_code} {r.project_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.stage_name || "—"}</TableCell>
                     <TableCell className="text-sm font-mono">{r.lines?.length || 0}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.needed_date ? formatDate(r.needed_date) : "—"}</TableCell>
-                    <TableCell><Badge variant="outline" className={`text-[10px] ${REQ_COLORS[r.status] || ""}`}>{REQ_STATUS[r.status] || r.status}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={`text-[10px] ${REQ_COLORS[r.request_state] || ""}`}>{REQ_STATUS[r.request_state] || `стар: ${r.status}`}</Badge></TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                   </TableRow>
                 ))}

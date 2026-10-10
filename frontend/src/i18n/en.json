@@ -144,6 +144,7 @@
     "passwordRequirements": "Requirements: min 10 chars, uppercase, lowercase, digit, special char"
   },
   "nav": {
+    "materialRequests": "Material requests",
     "assetsGroup": "Assets",
     "assetsQr": "QR base",
     "assetsBatchIntake": "Stock intake",

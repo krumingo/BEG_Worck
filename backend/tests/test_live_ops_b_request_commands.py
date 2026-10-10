@@ -579,6 +579,14 @@ def test_two_tenants_colliding_ids_both_orders_no_cross_read_or_write(monkeypatc
         assert r.json()["history"]["status"] == "ok"
         assert all(e.get("event_id") for e in r.json()["history"]["events"])
 
+        # the Master item picker returns only the session tenant's ACTIVE items
+        r = await a["owner"].get("/api/material-requests/item-options?q=item")
+        assert r.status_code == 200 and [i["id"] for i in r.json()["items"]] == ["IT-1"]
+        assert "TCBMARK" not in r.text
+        r = await b["owner"].get("/api/material-requests/item-options")
+        assert sorted(i["id"] for i in r.json()["items"]) == ["IT-1", "IT-TCBONLY"]
+        assert "BEGMARK" not in r.text
+
         # each chain holds only its own tenant's events, and both chains verify
         for org in (BEG, TCB):
             evs = await h.chain_ok(org)
@@ -918,6 +926,7 @@ def test_request_commands_write_only_request_audit_and_idempotency(monkeypatch):
         await h.u[TCB]["owner"].send("POST", "/api/material-requests/%s/approve" % req["id"])
         await h.create(h.u[TCB]["owner"])
         for path in ("/api/material-requests", "/api/material-requests/%s" % req["id"],
+                     "/api/material-requests/item-options?q=x",
                      "/api/material-requests/%s/view" % req["id"], "/api/material-requests/write-status"):
             assert (await u["owner"].get(path)).status_code == 200
         after = await h.snapshot()
