@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06D/C04 CLAUDE WORKING — bounded correction sent exactly once in verified PR #51 session
+Status: W0-06D/C04 CODEX REVIEWING — final exact-head HANDOFF matches stable Draft PR #51
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
-Current-Agent: CLAUDE
-Current-State: WORKING
-Claude-State: WORKING; C04 message visible in existing PR #51 session
-Codex-State: WAITING_FOR_FINAL_HANDOFF
-Pipeline-Step: CORRECTION_IN_PROGRESS
-Transition-Phase: CORRECTION_DISPATCH_OK
-Now: Krum explicitly authorized clearing the unfinished draft and one C04 Send. Exact PR #51 head and prior C03 CHANGES_REQUESTED were rechecked; the existing Claude session showed PR #51/C03. The bounded C04 message was sent exactly once, composer cleared and Claude responding.
-Next-Agent: CLAUDE (bounded C04 implementation, tests and final exact-head HANDOFF), then CODEX independent review
+Current-Agent: CODEX
+Current-State: REVIEW
+Claude-State: HANDOFF_READY; final C04 HANDOFF published and Claude stopped
+Codex-State: REVIEWING
+Pipeline-Step: REVIEW
+Transition-Phase: HANDOFF_OBSERVED
+Now: Claude published final C04 HANDOFF at 891fb53718e72ba218f6fa29dd7098988037e153; repeated live checks show stable open Draft PR #51 head matches. Codex began independent C03→C04 and whole-package review; no C04 verdict yet.
+Next-Agent: CODEX (independent exact-head C04 review and verdict)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
 Krum-Action: NONE for ongoing bounded C04 work; new action-time confirmation only if platform explicitly requires a later action
-Dispatch-State: W0-06D/C02 SENT ONCE; C03 SENT ONCE; C04 SENT ONCE — do not resend
+Dispatch-State: W0-06D/C02 SENT ONCE; C03 SENT ONCE; C04 SENT ONCE — HANDOFF RECEIVED; do not resend
 Dispatch-Run: existing verified PR #51 Claude session (private URL withheld)
 Dispatch-Observed-At: 2026-10-10T06:34:31Z
 Dispatch-Failure-Evidence: previous unsent attempt https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629; resolved by Krum confirmation and successful Send
@@ -24,20 +24,22 @@ Base-branch: codex/w0-06c-integrity-monitoring (independently accepted technical
 Base-SHA: e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6
 Implementation-branch: codex/w0-06d-migration-readiness
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/51 (Draft, base main; stacked W0-06B/C predecessors unmerged)
-PR-Head: 860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45
+PR-Head: 891fb53718e72ba218f6fa29dd7098988037e153
 Correction-Base-SHA: 860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/50
-HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6077439978
+HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6094882457
 Review: W0-06D/C03 independent CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054 and coordination/REVIEWS/W0-06D.md C03. C01/C02 were also CHANGES_REQUESTED. Predecessor W0-06C and W0-06B technical PASS.
-Final-Verdict: W0-06D/C03 CHANGES_REQUESTED; C04 sent once and Claude working. C04 PENDING final HANDOFF and independent review; no technical PASS. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: W0-06D/C03 CHANGES_REQUESTED; C04 final exact-head HANDOFF under independent review, verdict PENDING. No technical PASS yet. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06C/C05
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
 Authorization: Krum explicitly confirmed clearing the unfinished composer draft and one C04 UI Send; sent once to the verified PR #51 Claude session and Claude response observed. Earlier unsent C04 attempt and C01 wrong-target rejection were not bypassed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-06E or automatic next Task-ID.
 
-## W0-06D/C04 — bounded correction sent once; Claude working
+## W0-06D/C04 — final HANDOFF, Codex independent review
+
+Claude published [final C04 HANDOFF](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6094882457) on `891fb53718e72ba218f6fa29dd7098988037e153`, matching stable open Draft PR #51. [TEST_RESULT and cleanup](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094889449) are Claude claims, not independent PASS. Codex recorded [HANDOFF_DETECTED / REVIEW_STARTED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094908283). Review exact C03→C04 and whole main→head code, reproduce bounded accounting counterexample and independently run critical gates. No repeat Send, merge, deploy, production migration or W0-06E.
 
 Krum explicitly approved clearing the unfinished Claude composer draft and one C04 UI Send. Live preflight confirmed open Draft PR #51 at exact base `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`, C03 CHANGES_REQUESTED and no prior successful C04 dispatch. Codex cleared only that draft in the existing PR #51 session, sent the bounded assignment once, then observed the C04 message, empty composer and Claude responding. [CORRECTION_DISPATCH_OK](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094698202). Do not resend. Await final exact-head HANDOFF, then independent whole-package review. No monitor, merge, deploy, production migration or W0-06E.
 
