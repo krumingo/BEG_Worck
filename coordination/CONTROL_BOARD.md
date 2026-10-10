@@ -1,17 +1,17 @@
 # BEG_WORK control board
 
 Source: `coordination/CONTROL_STATE.json` · branch: `codex/claude-queue` · protocol v2
-ACTIVE source updated: 2026-10-09T16:44:39Z · CONTROL STATE: **VALID** as of 2026-10-09T16:44:39Z (LIVE_GITHUB)
+ACTIVE source updated: 2026-10-10T06:34:31Z · CONTROL STATE: **VALID** as of 2026-10-10T06:34:31Z (LIVE_GITHUB)
 **Snapshot only:** `VALID` is not live verification. Recheck source blobs, PR head and review before any consequential action.
 
-CURRENT: W0-06D / C03 / CODEX / **C04 DISPATCH FAILED BEFORE SEND**
-LAST: CODEX — C04 UI attempt stopped on concurrent user input; no C04 text typed or sent
-RELAY: WAITING_FOR_OWNER_DECISION · C03 dispatched once; C04 not dispatched
-NOW: Live Draft PR #51 head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`; C03 CHANGES_REQUESTED. Krum confirmed C04 Send, but the existing Claude composer had an unfinished changing draft.
-TRANSITION: CORRECTION_DISPATCH_FAILED / UI_SEND_STOPPED · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629
-NEXT: KRUM — decide whether existing Claude draft may be cleared; then CODEX can safely retry one C04 UI Send
-KRUM ACTION: confirm whether the unfinished Claude composer draft may be cleared
-WAITING FOR: owner decision about draft; C04 not sent
+CURRENT: W0-06D / C04 / CLAUDE / **WORKING**
+LAST: CODEX — bounded C04 sent exactly once in existing PR #51 Claude session
+RELAY: NO_RELAY_NEEDED · C04 dispatched once; do not resend
+NOW: Draft PR #51 correction base `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`; new C04 message visible, composer empty, Claude responding.
+TRANSITION: CORRECTION_DISPATCH_OK / CLAUDE_WORKING · https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094698202
+NEXT: CLAUDE — bounded implementation, tests and final exact-head HANDOFF; then CODEX independent review
+KRUM ACTION: none for ongoing bounded C04 work
+WAITING FOR: final exact-head C04 HANDOFF; no repeat Send
 
 ## Required agent banner
 
@@ -20,17 +20,17 @@ All three agents must read the control state and recheck live evidence before co
 ```text
 BEG_WORK
 TASK: W0-06D
-CYCLE: C03
+CYCLE: C04
 AGENT: GPT | CODEX | CLAUDE (select the actual sender)
 ROLE: ARCHITECT | TECH_LEAD_QA | IMPLEMENTER (match AGENT)
-STATE: CHANGES_REQUESTED
-NEXT: KRUM
-WAITING_FOR: decision whether the unfinished Claude composer draft may be cleared
+STATE: WORKING
+NEXT: CLAUDE
+WAITING_FOR: final exact-head C04 HANDOFF
 ```
 
 | Task | Cycle | ChatGPT | Codex | Claude | Current | Waiting for | Result |
 |---|---|---|---|---|---|---|---|
-| W0-06D | C03 | WAITING | CORRECTION_DISPATCH_FAILED | WAITING_FOR_CORRECTION | KRUM | decision on unfinished draft | C04 NOT SENT |
+| W0-06D | C04 | WAITING | WAITING_FOR_FINAL_HANDOFF | WORKING | CLAUDE | final exact-head HANDOFF | C04 SENT ONCE, no PASS yet |
 
 ## Agent cards
 
@@ -38,16 +38,16 @@ Current agent state is explicit in `agent_states`; history below is evidence, no
 
 | Agent | State | Work-ID | Waiting for | Updated at (UTC) |
 |---|---|---|---|---|
-| GPT | WAITING | W0-06D/C03/GPT | bounded C04 correction | 2026-10-09T16:44:39Z |
-| CODEX | CORRECTION_DISPATCH_FAILED | W0-06D/C03/CX | Krum decision on clearing unfinished composer draft | 2026-10-09T16:44:39Z |
-| CLAUDE | WAITING_FOR_CORRECTION | W0-06D/C03/CL | C04 not yet dispatched | 2026-10-09T16:44:39Z |
+| GPT | WAITING | W0-06D/C04/GPT | Claude HANDOFF and independent Codex review | 2026-10-10T06:34:31Z |
+| CODEX | WAITING_FOR_FINAL_HANDOFF | W0-06D/C04/CX | Claude final exact-head HANDOFF | 2026-10-10T06:34:31Z |
+| CLAUDE | WORKING | W0-06D/C04/CL | bounded correction and final HANDOFF | 2026-10-10T06:34:31Z |
 
-W0-06C independent PASS → W0-06D/C01 CHANGES_REQUESTED → C02 CHANGES_REQUESTED → C03 CHANGES_REQUESTED → C04 prepared, not sent
+W0-06C independent PASS → W0-06D/C01 CHANGES_REQUESTED → C02 CHANGES_REQUESTED → C03 CHANGES_REQUESTED → C04 sent once, Claude working
 
 ## Evidence
 
-- ACTIVE: `coordination/ACTIVE.md` · source commit `3427b9e` · blob `fdcc0b9755130d4b88324248b1adf67d7879e70e`
-- C04 UI attempt: [CORRECTION_DISPATCH_FAILED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629) before typing or Send · existing Claude composer draft preserved
+- ACTIVE: `coordination/ACTIVE.md` · source commit `ecc2ca0` · blob `52579171a78918106f0a0dc9e6cd578c7b0e95c7`
+- C04 UI Send: prior [CORRECTION_DISPATCH_FAILED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629) before Send; Krum then approved clearing the draft; [CORRECTION_DISPATCH_OK](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094698202) exactly once
 - Independent C03 verdict: [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054) · [finding](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6078620765) · `coordination/REVIEWS/W0-06D.md` C03
 - Current Draft PR: [#51](https://github.com/krumingo/BEG_Worck/pull/51) · final C03 head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45` · [C03 HANDOFF](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6077439978) · [review started](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6078454100)
 - Independent C02 [CHANGES_REQUESTED](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740) · [review evidence](https://github.com/krumingo/BEG_Worck/blob/codex/claude-queue/coordination/REVIEWS/W0-06D.md) · [C03 correction prepared](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6075283502) and [sent once](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6076991061)
@@ -83,5 +83,6 @@ Legacy events have no original Cycle-ID; `mapped_cycle` is an explicit mapping, 
 | 2026-10-09T06:02:39Z | C02 | — | REVIEW / CHANGES_REQUESTED | CODEX | CHANGES_REQUESTED | `8ffb1121` | [evidence](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6075276740) |
 | 2026-10-09T09:56:44Z | C03 | — | REVIEW / CHANGES_REQUESTED | CODEX | CHANGES_REQUESTED | `860c9c90` | [evidence](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054) |
 | 2026-10-09T16:44:39Z | C04 | — | CORRECTION_DISPATCH_FAILED | CODEX | C04 NOT SENT | `860c9c90` | [evidence](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629) |
+| 2026-10-10T06:34:31Z | C04 | — | CORRECTION_DISPATCH_OK | CODEX | CLAUDE_WORKING | `860c9c90` | [evidence](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094698202) |
 
-**Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01, C02 and C03 are CHANGES_REQUESTED. C04 is prepared but not sent. Earlier Computer Use rejection was not bypassed: Krum directly assigned Claude for C01. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.
+**Gate:** W0-06C/C05 has independent technical PASS; W0-06D/C01, C02 and C03 are CHANGES_REQUESTED. C04 is sent once and Claude working; no C04 PASS yet. Earlier Computer Use rejection was not bypassed: Krum directly assigned Claude for C01. This is **not** FLOW-016 Implementation Gate PASS. No merge, deploy, production migration, customer-original operation, periodic monitor or automatic next Task-ID.
