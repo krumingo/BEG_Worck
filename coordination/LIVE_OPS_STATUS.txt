@@ -52,10 +52,11 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📐 Technical contract draft
-🔎 CODEX independent contract review
-🔎 CLAUDE independent contract review
-👤 Krum resolves only true business decisions
+📐 Technical contract draft — DONE
+🔎 CLAUDE contract review — DONE
+🔎 CODEX contract verification — DONE
+✅ Owner decision F-09 — B (разход при приемане)
+🟡 Следва CONTRACT FREEZE candidate
 🛠️ Implementation after contract freeze
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -74,3 +75,10 @@
 - warehouse display = human-readable name first.
 - Няма implementation преди contract freeze.
 - Няма write-enabled pilot преди Permission Service + AuditEvent enforcement.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ OWNER DECISION F-09
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B — разходът на обекта се признава при приемане.
+Пример: изпратени 10, приети 8, липсват 2 → обектът поема 8; 2 остават in_transit/unresolved до resolution.
