@@ -37,7 +37,7 @@
 - [x] 1.2 Създаден е Issue #52
 - [x] 1.3 Първи визуален mockup е одобрен от Крум
 - [x] 1.4 Изпратени са независими review requests към CODEX и CLAUDE
-- [ ] 1.5 CODEX review получен
+- [x] 1.5 CODEX review получен
 - [ ] 1.6 CLAUDE review получен
 - [ ] 1.7 GPT comparison: AGREED / DISAGREED / OWNER DECISION
 - [ ] 1.8 Потвърдено е, че LIVE-OPS не създава паралелен canonical model
@@ -56,7 +56,7 @@
 
 ## 🎨 3. Заключваме UX преди implementation
 - [x] 3.1 Mockup v1 — одобрен
-- [ ] 3.2 Събиране на CODEX UX предложения
+- [x] 3.2 Събиране на CODEX UX предложения
 - [ ] 3.3 Събиране на CLAUDE UX предложения
 - [ ] 3.4 Mockup v2 — desktop control screen
 - [ ] 3.5 Mockup v2 — Заявки
