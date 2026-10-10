@@ -73,23 +73,23 @@
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LIVE-OPS-A staging приет от Крум
-🟡 Следва подготовка на следващ bounded slice
+🟡 LIVE-OPS-B — Material Requests safe-write core: preflight / CLAUDE assignment
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
-Task: TASK-5A — Read-only Control Center
-Stage: STAGING_ACCEPTED
-Responsible: CODEX приключи техническия gate
-Next: NEXT_BOUNDED_SLICE
-PR: #53 draft/open/unmerged
-Head: e2a07ee66d5d6d59a95f6b17bb90996917790193
-Verdict: PASS_CANDIDATE
-Acceptance: ACCEPTED
-Correction loops: implementation 1; staging acceptance 1
+Task: TASK-5B — Material Requests Safe-Write Core
+Stage: PREFLIGHT / ASSIGNMENT_PREPARING
+Responsible: CODEX
+Next: CLAUDE implementation, exact-head HANDOFF, then CODEX independent review
+PR: NONE YET (required Draft PR)
+Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
+Verdict: NONE YET
+Acceptance: NOT STARTED
+Correction loops: 0
 Blockers: NONE
-Last update: 2026-10-10T20:16:19Z
+Last update: 2026-10-10T21:42:18Z
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО

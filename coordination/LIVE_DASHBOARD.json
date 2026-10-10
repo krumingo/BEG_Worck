@@ -1,6 +1,6 @@
 {
   "schema": "beg.live-dashboard/v2",
-  "generated_at": "2026-10-10T20:16:19Z",
+  "generated_at": "2026-10-10T21:42:18Z",
   "projection_mode": "MULTI_TRACK",
   "source_priority": ["task_issue_events", "pr_review_evidence", "control_state", "implementation_waves"],
   "canonical_percent_policy": "Percent is null unless a versioned denominator and completed count exist.",
@@ -31,12 +31,12 @@
       "wave": "LIVE-OPS-01",
       "task_id": "TASK-5A",
       "cycle_id": "STAGING-A02",
-      "state": "PASS_CANDIDATE",
-      "stage": "OWNER_ACCEPTANCE",
+      "state": "STAGING_ACCEPTED",
+      "stage": "COMPLETE",
       "responsible_agent": "CODEX",
-      "next_agent": "KRUM",
-      "next_action": "Owner review from the private LAN staging address",
-      "waiting_for": "owner acceptance",
+      "next_agent": "NONE",
+      "next_action": "No action; PR #53 remains draft/open/unmerged until a separate merge gate",
+      "waiting_for": null,
       "pr": 53,
       "head_sha": "e2a07ee66d5d6d59a95f6b17bb90996917790193",
       "base_sha": "79af297612f57c055bb7caef3f0c48493800d1b6",
@@ -46,7 +46,7 @@
       "contract": {"version": "v6-contract-freeze", "sha256": "489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E"},
       "progress": {
         "mode": "STAGE_ONLY",
-        "stage": "OWNER_ACCEPTANCE",
+        "stage": "COMPLETE",
         "completed": null,
         "total": null,
         "percent": null,
@@ -83,14 +83,48 @@
       },
       "correction_loops": {"implementation": 1, "staging_acceptance": 1},
       "review_verdict": "PASS_CANDIDATE",
-      "acceptance_status": "OWNER_PENDING",
+      "acceptance_status": "ACCEPTED",
       "blockers": [],
       "staging_access": {"scope": "private_lan_only", "public_exposure": false, "address_publication": "WITHHELD_FROM_REPOSITORY"},
-      "last_updated": "2026-10-10T20:16:19Z",
+      "last_updated": "2026-10-10T21:39:35Z",
       "evidence_urls": [
         "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101397109",
         "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101638979",
-        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101641941"
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101641941",
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102446197"
+      ]
+    },
+    "LIVE-OPS-01/TASK-5B": {
+      "track_type": "implementation",
+      "wave": "LIVE-OPS-01",
+      "task_id": "TASK-5B",
+      "cycle_id": "C01",
+      "state": "ASSIGNMENT_PREPARING",
+      "stage": "PREFLIGHT",
+      "responsible_agent": "CODEX",
+      "next_agent": "CLAUDE",
+      "next_action": "Publish exact assignment and dispatch once through the approved direct PC channel",
+      "waiting_for": null,
+      "pr": null,
+      "head_sha": null,
+      "base_sha": "79af297612f57c055bb7caef3f0c48493800d1b6",
+      "implementation_branch": null,
+      "draft": null,
+      "merge": false,
+      "deploy": false,
+      "contract": {"version": "v6-contract-freeze", "sha256": "489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E", "coordination_commit": "860c005a48ef7cd2c3a7a613e4af4927ea548b9c"},
+      "progress": {"mode": "STAGE_ONLY", "stage": "PREFLIGHT", "completed": null, "total": null, "percent": null},
+      "timing": {"task_accepted": "2026-10-10T21:42:18Z", "implementation_start": null, "implementation_finish": null, "implementation_seconds": null},
+      "tests": {"backend": "NOT_RUN", "real_mongo": "NOT_RUN", "frontend": "NOT_RUN", "phone": "NOT_RUN", "desktop": "NOT_RUN", "no_write_outside_domain": "NOT_RUN"},
+      "correction_loops": 0,
+      "review_verdict": null,
+      "acceptance_status": "NOT_STARTED",
+      "blockers": [],
+      "last_updated": "2026-10-10T21:42:18Z",
+      "evidence_urls": [
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102456196",
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102486216",
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102486532"
       ]
     }
   },
@@ -98,7 +132,9 @@
     {"track": "W0-06B/C02", "snapshot_generated_at": "2026-10-06T16:13:58Z", "state": "AWAITING_CODEX_REVIEW_PICKUP", "note": "Preserved from beg.live-dashboard/v1; superseded by W0-06D control state."},
     {"track": "W0-06D/C04", "occurred_at": "2026-10-10T07:13:58Z", "state": "CHANGES_REQUESTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636"},
     {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T19:41:41Z", "state": "STAGING_ACCEPTANCE_STARTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101463794"},
-    {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T20:16:19Z", "state": "PASS_CANDIDATE_OWNER_PENDING", "summary": "Real Mongo 21/21 with exit code 0; central multi-track dashboard updated; private-LAN staging prepared."}
+    {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T20:16:19Z", "state": "PASS_CANDIDATE_OWNER_PENDING", "summary": "Real Mongo 21/21 with exit code 0; central multi-track dashboard updated; private-LAN staging prepared."},
+    {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T21:39:35Z", "state": "STAGING_ACCEPTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102446197"},
+    {"track": "LIVE-OPS-01/TASK-5B", "occurred_at": "2026-10-10T21:42:18Z", "state": "TASK_ACCEPTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102486216"}
   ],
   "preserved_legacy_evidence": {
     "w0_06b_c02_claude_implementation_seconds": 527,

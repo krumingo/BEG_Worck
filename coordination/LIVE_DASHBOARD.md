@@ -1,7 +1,7 @@
 # BEG_WORK — CENTRAL LIVE DASHBOARD
 
 > Status: canonical management projection, schema `beg.live-dashboard/v2`.
-> Generated: `2026-10-10T20:16:19Z`.
+> Generated: `2026-10-10T21:42:18Z`.
 > Source priority: Task Issue events → exact PR/review evidence → `CONTROL_STATE.json` → implementation waves.
 > This is a **multi-track** projection. `CONTROL_STATE.json` remains the single W0 execution-control record; this dashboard does not overwrite it.
 
@@ -10,7 +10,8 @@
 | Track | Stage | State | Responsible / next | PR / head | Next action |
 |---|---|---|---|---|---|
 | W0-06D / C04 | CORRECTION_PREPARING | CHANGES_REQUESTED | CODEX / CODEX | #51 / `891fb537` | Bounded C05 only after required action-time confirmation |
-| LIVE-OPS-01 / TASK-5A | OWNER_ACCEPTANCE | **PASS_CANDIDATE** | CODEX / Krum | #53 / `e2a07ee` | Owner reviews private-LAN staging |
+| LIVE-OPS-01 / TASK-5A | COMPLETE | **STAGING_ACCEPTED** | CODEX / none | #53 / `e2a07ee` | No action; separate merge gate required |
+| LIVE-OPS-01 / TASK-5B | PREFLIGHT | **ASSIGNMENT_PREPARING** | CODEX / CLAUDE | none / merged main `79af297` | Publish exact assignment and dispatch once |
 
 The W0 track is preserved from `CONTROL_STATE.json` and remains unchanged. LIVE-OPS is an additional acceptance track, not a replacement for W0.
 
@@ -21,7 +22,7 @@ The W0 track is preserved from `CONTROL_STATE.json` and remains unchanged. LIVE-
 - PR #53: draft, open, unmerged
 - Exact head: `e2a07ee66d5d6d59a95f6b17bb90996917790193`
 - Review verdict: **PASS_CANDIDATE**
-- Acceptance: **OWNER_PENDING**
+- Acceptance: **ACCEPTED**
 - Blockers: **none**
 - Merge / deploy / production activation: **NO / NO / NO**
 
@@ -73,6 +74,17 @@ Pytest originally stalled in its cache provider while trying to create a cache d
 - Evidence: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636
 
 Historical W0-06B timings and test counts from dashboard v1 are retained in `LIVE_DASHBOARD.json` under `preserved_legacy_evidence`; W0-06D append-only execution history remains in `CONTROL_STATE.json` and `CONTROL_BOARD.md`.
+
+## LIVE-OPS-B status
+
+- Task: `LIVE-OPS-01/TASK-5B`, cycle `C01`
+- Scope: Material Requests safe-write core only
+- Exact code baseline: merged `main` `79af297612f57c055bb7caef3f0c48493800d1b6`
+- LIVE-OPS-A dependency: separate Draft PR #53; **not** included in this baseline
+- Contract: `v6-contract-freeze`, SHA-256 `489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E`
+- Current stage: canonical read and preflight complete; exact CLAUDE assignment is being prepared
+- Tests: backend, Real Mongo, frontend, phone/desktop and no-write-outside-domain are all **NOT RUN** for TASK 5B
+- Merge / deploy / production activation: **NO / NO / NO**
 
 ## Evidence
 
