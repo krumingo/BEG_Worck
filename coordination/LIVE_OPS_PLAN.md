@@ -1,11 +1,19 @@
-# LIVE-OPS — постоянен план за реално използваема BEG_Work
+# 🧭 LIVE-OPS — постоянен план за реално използваема BEG_Work
+
+> 🎯 **Цел:** BEG_Work да стане реално използваема по време на разработката.
+>
+> 🟦 **Status:** `[ ]` NOT STARTED · 🟨 `[~]` IN PROGRESS · 🟩 `[x]` DONE · 🟥 `[!]` BLOCKED
+>
+> 📍 **Source of truth:** този файл + Issue #52.
+>
+> 🧱 **FLOW rule:** одобрените FLOW са authoritative. Не препроектираме бизнес логика, освен при CODEX+CLAUDE потвърдена грешка.
 
 > Owner: Krum
 > Status model: [ ] NOT STARTED · [~] IN PROGRESS · [x] DONE · [!] BLOCKED
 > Source of truth: this file + Issue #52.
 > Important: FLOW behavior is NOT rewritten here. Existing approved FLOWs remain authoritative. Only a CODEX+CLAUDE-confirmed logical/technical inconsistency may trigger a proposed FLOW correction, and that requires Krum's decision.
 
-## Правила за работа
+## 🧩 Правила за работа
 
 - Този план стои като постоянен checklist за LIVE-OPS.
 - Всяка точка и подточка се отбелязва при доказано изпълнение.
@@ -22,9 +30,9 @@
 
 ---
 
-# MASTER PLAN — как BEG_Work ще стане използваема още по време на разработката
+# 🗺️ MASTER PLAN — как BEG_Work ще стане използваема още по време на разработката
 
-## 1. Разделяме разработката от ежедневната работа
+## 🧱 1. Разделяме разработката от ежедневната работа
 - [x] 1.1 Създаден е отделен LIVE-OPS track
 - [x] 1.2 Създаден е Issue #52
 - [x] 1.3 Първи визуален mockup е одобрен от Крум
@@ -34,7 +42,7 @@
 - [ ] 1.7 GPT comparison: AGREED / DISAGREED / OWNER DECISION
 - [ ] 1.8 Потвърдено е, че LIVE-OPS не създава паралелен canonical model
 
-## 2. Проверяваме какво реално може да се ползва
+## 🔎 2. Проверяваме какво реално може да се ползва
 - [ ] 2.1 Inventory на наличния backend
 - [ ] 2.2 Inventory на наличния frontend
 - [ ] 2.3 Inventory на наличните tests
@@ -46,7 +54,7 @@
 - [ ] 2.9 Проверка за tenant/permission risk
 - [ ] 2.10 Проверка за data-loss / rollback risk
 
-## 3. Заключваме UX преди implementation
+## 🎨 3. Заключваме UX преди implementation
 - [x] 3.1 Mockup v1 — одобрен
 - [ ] 3.2 Събиране на CODEX UX предложения
 - [ ] 3.3 Събиране на CLAUDE UX предложения
@@ -57,7 +65,7 @@
 - [ ] 3.8 Mockup v2 — phone-first screens
 - [ ] 3.9 Крум одобрява UX v2
 
-## 4. Freeze на technical contract
+## 📐 4. Freeze на technical contract
 - [ ] 4.1 Reuse map: кои текущи models/routes/screens се използват
 - [ ] 4.2 Missing technical links
 - [ ] 4.3 Permission matrix
@@ -71,36 +79,36 @@
 - [ ] 4.11 CLAUDE independent contract review
 - [ ] 4.12 Krum resolves only true business decisions
 
-## 5. Implementation на малки стабилни части
-### LIVE-OPS-A — Control center / read-only
+## 🛠️ 5. Implementation на малки стабилни части
+### 🖥️ LIVE-OPS-A — Control center / read-only
 - [ ] 5A.1 Implementation
 - [ ] 5A.2 Tests
 - [ ] 5A.3 CODEX independent review
 - [ ] 5A.4 PASS
 - [ ] 5A.5 Staging accepted
 
-### LIVE-OPS-B — operational slice 2
+### 📋 LIVE-OPS-B — operational slice 2
 - [ ] 5B.1 Implementation
 - [ ] 5B.2 Tests
 - [ ] 5B.3 CODEX independent review
 - [ ] 5B.4 PASS
 - [ ] 5B.5 Staging accepted
 
-### LIVE-OPS-C — operational slice 3
+### 🏭 LIVE-OPS-C — operational slice 3
 - [ ] 5C.1 Implementation
 - [ ] 5C.2 Tests
 - [ ] 5C.3 CODEX independent review
 - [ ] 5C.4 PASS
 - [ ] 5C.5 Staging accepted
 
-### LIVE-OPS-D — operational slice 4
+### 🧰 LIVE-OPS-D — operational slice 4
 - [ ] 5D.1 Implementation
 - [ ] 5D.2 Tests
 - [ ] 5D.3 CODEX independent review
 - [ ] 5D.4 PASS
 - [ ] 5D.5 Staging accepted
 
-### LIVE-OPS-E — integrated end-to-end gate
+### 🔗 LIVE-OPS-E — integrated end-to-end gate
 - [ ] 5E.1 End-to-end test
 - [ ] 5E.2 Real Mongo
 - [ ] 5E.3 Permissions / tenant isolation
@@ -112,7 +120,7 @@
 
 > Имената/точният функционален scope на B/C/D ще се заключат след CODEX+CLAUDE audit, за да не пренаписваме вече одобрените FLOW.
 
-## 6. Staging
+## 🧪 6. Staging
 - [ ] 6.1 Production-shaped data copy/restore
 - [ ] 6.2 Migration dry-run
 - [ ] 6.3 Exact-version artifact
@@ -124,7 +132,7 @@
 - [ ] 6.9 Rollback
 - [ ] 6.10 STAGING ACCEPTED
 
-## 7. Ограничен production pilot
+## 🚀 7. Ограничен production pilot
 - [ ] 7.1 Owner approval за pilot
 - [ ] 7.2 Exact production SHA/release manifest
 - [ ] 7.3 Backup преди deploy
@@ -135,7 +143,7 @@
 - [ ] 7.8 Rollback readiness
 - [ ] 7.9 Pilot verdict
 
-## 8. Stable production
+## ✅ 8. Stable production
 - [ ] 8.1 P0 defects = 0
 - [ ] 8.2 P1 operational blockers = 0
 - [ ] 8.3 Backup/restore доказани
@@ -145,9 +153,19 @@
 
 ---
 
-# Винаги видим статус
+# 📌 Винаги видим статус
 
-Current step: **1.5 / 1.6 — чакаме независимите CODEX и CLAUDE review-и**
+### 🔴 ТЕКУЩО
+**1.5 / 1.6 — чакаме независимите CODEX и CLAUDE review-и**
+
+### ⏭️ СЛЕДВА
+**1.7 — GPT comparison: AGREED / DISAGREED / OWNER DECISION**
+
+### 👤 KRUM ACTION
+**Няма действие в момента**
+
+### 💻 CODE ACTION
+**Няма LIVE-OPS implementation преди двата audit-а**
 
 Next decision: **няма business decision преди двата review-а**
 
