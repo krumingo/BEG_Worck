@@ -2,8 +2,8 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 ОБЩ ПРОГРЕС ПО CHECKLIST
-🟦 █░░░░░░░░░ 8%
-7 / 92 точки са доказано завършени
+🟦 ██░░░░░░░░ 22%
+20 / 92 точки са доказано завършени
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎨 ЛЕГЕНДА
@@ -14,16 +14,17 @@
 
 
 🧱 1. Разделяме разработката от ежедневната работа
-🟦 ██████░░░░ 63%
-🟢 5 / 8 готови
+🟩 ██████████ 100%
+🟢 8 / 8 готови
 
 🔎 2. Проверяваме какво реално може да се ползва
-🟨 █████░░░░░ 50%
-🟡 CODEX audit е готов; чакаме CLAUDE за независимо потвърждение
+🟨 █████████░ 90%
+🟢 9 / 10 готови
+⚪ Остава runtime end-to-end доказване
 
 🎨 3. UX преди implementation
-🟦 ██░░░░░░░░ 22%
-🟢 2 / 9 готови
+🟦 ███░░░░░░░ 33%
+🟢 3 / 9 готови
 
 📐 4. Technical contract freeze
 ⬜ ░░░░░░░░░░ 0%
@@ -44,42 +45,35 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟢 НАПРАВЕНО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ LIVE-OPS track
-✅ Issue #52
-✅ Mockup v1 одобрен
-✅ Review заявки към CODEX и CLAUDE
-✅ Постоянен LIVE-OPS план
-✅ CODEX independent audit получен
-✅ CODEX UX предложения получени
+✅ CODEX independent audit
+✅ CLAUDE independent audit
+✅ CODEX final comparison
+✅ Всички основни CODEX findings потвърдени
+✅ 11 допълнителни CLAUDE findings проверени
+✅ Няма FLOW-to-FLOW противоречие
+✅ Потвърден reuse-first подход — без паралелен canonical model
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 ПРАВИ СЕ
+🔴 OWNER DECISIONS — НУЖНИ ОТ КРУМ
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 CLAUDE independent audit
+1. Pilot gate:
+   преди или след Permission Service + AuditEvent enforcement
 
+2. Canonical stock source:
+   коя от съществуващите складови системи става authoritative
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 КЛЮЧОВИ РИСКОВЕ ОТ CODEX
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 Две несъгласувани складови наличности / ledgers
-🔴 API може да заобиколи статуси и права по заявките
-🔴 Asset custody сменя факта преди приемане
-🔴 Неатомично отпускане / връщане на склад
-🟠 central vs main warehouse naming
-🟠 invoice-post може да затвори заявка преждевременно
-🟠 непълно permission / AuditEvent покритие
-🟠 dashboard totals могат да са непълни без предупреждение
+3. Warehouse identity:
+   как се съгласуват central и main
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚪ СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-➡️ CLAUDE независим audit
-➡️ GPT сравнява CODEX и CLAUDE
-🎨 Mockup v2
-👤 Одобрение от Крум
-📐 Technical contract
+➡️ Крум взема 3 owner decisions
+🎨 GPT прави Mockup v2
+👤 Крум одобрява Mockup v2
+📐 Technical contract freeze
 🛠️ Implementation
 🧪 Staging
 🚀 Pilot
@@ -87,16 +81,9 @@
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 КРУМ
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 Няма business решение в момента
-🟡 Следва да види задачата към CLAUDE преди изпращане
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - FLOW остава authoritative.
-- Не променяме FLOW логика без конкретна CODEX+CLAUDE потвърдена грешка.
-- Преди всяка задача към CODEX/CLAUDE: кратко „На човешки“ какво ще се прави.
-- Процентите са checklist progress, не инженерни часове.
+- Няма implementation преди 3 owner decisions + Mockup v2 + contract freeze.
+- Runtime PASS още няма; audit-ите са статични/read-only.
+- Всеки процент е checklist progress, не инженерни часове.
