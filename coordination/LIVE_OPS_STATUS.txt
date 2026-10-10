@@ -2,8 +2,8 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 ОБЩ ПРОГРЕС ПО CHECKLIST
-🟦 ██░░░░░░░░ 25%
-23 / 92 точки са доказано завършени
+🟦 ███░░░░░░░ 27%
+25 / 92 точки са доказано завършени
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎨 ЛЕГЕНДА
@@ -17,15 +17,16 @@
 
 🔎 2. Проверяваме какво реално може да се ползва
 🟨 █████████░ 90%
-🟢 Dual audit + comparison готови
-⚪ Runtime end-to-end доказване остава за по-късен gate
 
 🎨 3. UX преди implementation
-🟦 ███░░░░░░░ 33%
-🟡 Следва Mockup v2
+🟦 ██████░░░░ 56%
+🟢 Mockup v2 desktop control screen — DONE
+🟢 Krum UX v2 approval — DONE
+📌 Складовете се показват по ИМЕ; code/ID е вторичен
 
 📐 4. Technical contract freeze
-⬜ ░░░░░░░░░░ 0%
+🟨 █░░░░░░░░░ 8%
+🟡 Следва contract draft + independent reviews
 
 🛠️ 5. Implementation slices
 ⬜ ░░░░░░░░░░ 0%
@@ -42,38 +43,34 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟢 НАПРАВЕНО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ CODEX independent audit
-✅ CLAUDE independent audit
-✅ FINAL_AUDIT_COMPARISON
-✅ Owner decisions approved
-
-🔐 Pilot = след Permission Service + AuditEvent
-📦 Canonical stock = warehouse_transactions
-📚 warehouse_batches = FIFO/batch/cost projection
-🏢 Canonical warehouse type = central
-🧹 main = legacy inconsistency за reconcile/migration
+✅ Dual audit
+✅ Final comparison
+✅ Owner architecture decisions
+✅ Mockup v2 approved
+✅ Warehouse display-name rule approved
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎨 Mockup v2
-👤 Krum UX approval
-📐 Technical contract freeze
-🛠️ Implementation
-🧪 Staging
-🚀 Pilot
-✅ Stable production
+📐 Technical contract draft
+🔎 CODEX independent contract review
+🔎 CLAUDE independent contract review
+👤 Krum resolves only true business decisions
+🛠️ Implementation after contract freeze
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 КРУМ
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 Няма решение за вземане в момента
-⚪ Следва да прегледа Mockup v2
+🟢 Няма действие в момента
+⚪ Следва да види contract review само ако има owner decision
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - FLOW остава authoritative.
-- Няма implementation преди Mockup v2 approval + technical contract freeze.
+- warehouse_transactions = canonical movement ledger.
+- warehouse_batches = FIFO/batch/cost projection.
+- central = canonical warehouse type.
+- warehouse display = human-readable name first.
+- Няма implementation преди contract freeze.
 - Няма write-enabled pilot преди Permission Service + AuditEvent enforcement.
-- Процентите са checklist progress, не инженерни часове.
