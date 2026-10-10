@@ -1,10 +1,12 @@
 🧭 LIVE-OPS — ТЕКУЩ СТАТУС
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 ОБЩ ПРОГРЕС ПО CHECKLIST
-🟦 ████░░░░░░ 37%
-34 / 92 точки са доказано завършени
+📊 ОБЩ ПРОГРЕС ПО ТЕКУЩИЯ CHECKLIST
+🟦 █████░░░░░ 49%
+51 / 104 точки са доказано завършени
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ℹ️ Предишният статус 34/92 е superseded: текущият versioned checklist съдържа 104 точки. Процентът е изчислен от реалните [x] записи, не е прогноза.
 
 🎨 ЛЕГЕНДА
 🟢 ГОТОВО
@@ -16,8 +18,8 @@
 🟩 ██████████ 100%
 
 🔎 2. Проверяваме какво реално може да се ползва
-🟨 █████████░ 90%
-⚪ Runtime end-to-end доказване остава за implementation/staging gate
+🟩 ██████████ 100%
+✅ LIVE-OPS-A е доказан end-to-end в изолирана staging среда
 
 🎨 3. UX преди implementation
 🟦 ██████░░░░ 56%
@@ -34,10 +36,14 @@
 ✅ OWNER_DECISION: NONE
 
 🛠️ 5. Implementation slices
-⬜ ░░░░░░░░░░ 0%
-🟡 Следва LIVE-OPS-A — Control center / read-only
+🟦 █░░░░░░░░░ 14%
+✅ LIVE-OPS-A implementation
+✅ Tests
+✅ CODEX independent review
+✅ PASS_CANDIDATE
+🟡 Staging owner acceptance — чака Крум
 
-🧪 6. Staging
+🧪 6. Общ integrated staging gate
 ⬜ ░░░░░░░░░░ 0%
 
 🚀 7. Production pilot
@@ -54,25 +60,36 @@
 ✅ Owner architecture decisions
 ✅ Mockup v2 approved
 ✅ Technical contract v6 frozen/ready
-✅ F1–F9 closed
-✅ R1–R5 closed
-✅ N1 closed
-✅ No unresolved owner decision
+✅ F1–F9, R1–R5 и N1 затворени
+✅ LIVE-OPS-A implementation + bounded correction
+✅ CODEX independent review
+✅ Frontend 14/14
+✅ Backend + Real Mongo 21/21, exit code 0
+✅ No-write, tenant isolation, incomplete projection и source/freshness
+✅ Desktop и phone viewport smoke
+✅ Private-LAN staging подготвен
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛠️ LIVE-OPS-A — bounded read-only control center implementation
-🧪 Tests
-🔎 Independent review
-✅ PASS
-🧪 Staging acceptance
+👤 Крум прави собственически преглед на LIVE-OPS-A staging
+⚪ 5A.5 Staging accepted остава отворено до изричното решение на Крум
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 КРУМ
+📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 Няма решение за вземане в момента
-⚪ Следва само да подадеш следващата implementation задача към CODEX, когато ти я дам
+Wave: LIVE-OPS-01
+Task: TASK-5A — Read-only Control Center
+Stage: OWNER_ACCEPTANCE
+Responsible: CODEX приключи техническия gate
+Next: KRUM
+PR: #53 draft/open/unmerged
+Head: e2a07ee66d5d6d59a95f6b17bb90996917790193
+Verdict: PASS_CANDIDATE
+Acceptance: OWNER_PENDING
+Correction loops: implementation 1; staging acceptance 1
+Blockers: NONE
+Last update: 2026-10-10T20:16:19Z
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО
@@ -80,6 +97,5 @@
 - FLOW остава authoritative.
 - Frozen contract v6 е implementation baseline.
 - Няма отклонение от source-of-truth/permissions/audit правилата.
-- Runtime PASS още няма.
-- Implementation се прави само на малки bounded slices.
 - Няма migration execution / merge / deploy / production activation без отделен gate.
+- W0-06D/C04 остава отделен активен track в централния multi-track dashboard и не е презаписан.

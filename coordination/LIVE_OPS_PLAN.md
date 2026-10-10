@@ -46,7 +46,7 @@
 - [x] 2.1 Inventory на наличния backend
 - [x] 2.2 Inventory на наличния frontend
 - [x] 2.3 Inventory на наличните tests
-- [ ] 2.4 Проверка кое вече работи end-to-end
+- [x] 2.4 Проверка кое вече работи end-to-end
 - [x] 2.5 Проверка кое е частично
 - [x] 2.6 Проверка кое липсва технически
 - [x] 2.7 Проверка за конфликт с FLOW/Wave
@@ -81,10 +81,10 @@
 
 ## 🛠️ 5. Implementation на малки стабилни части
 ### 🖥️ LIVE-OPS-A — Control center / read-only
-- [ ] 5A.1 Implementation
-- [ ] 5A.2 Tests
-- [ ] 5A.3 CODEX independent review
-- [ ] 5A.4 PASS
+- [x] 5A.1 Implementation
+- [x] 5A.2 Tests
+- [x] 5A.3 CODEX independent review
+- [x] 5A.4 PASS
 - [ ] 5A.5 Staging accepted
 
 ### 📋 LIVE-OPS-B — operational slice 2
@@ -156,7 +156,7 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**CONTRACT FREEZE READY — следва Implementation slice A**
+**LIVE-OPS-A PASS_CANDIDATE — чака собственическо staging приемане**
 
 ### ⏭️ СЛЕДВА
 **LIVE-OPS-A — Control center / read-only implementation**
