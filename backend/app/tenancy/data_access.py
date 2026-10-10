@@ -155,8 +155,8 @@ class TenantCollection:
         return self._raw.aggregate([{"$match": {TENANT_KEY: self._scope.org_id}}] + checked)
 
     # --------------------------------------------------------------- writes
-    async def insert_one(self, doc: Dict):
-        return await self._raw.insert_one(self._own(doc))
+    async def insert_one(self, doc: Dict, **kw):   # kw: driver options, e.g. session
+        return await self._raw.insert_one(self._own(doc), **kw)
 
     async def insert_many(self, docs: List[Dict]):
         return await self._raw.insert_many([self._own(d) for d in docs])
