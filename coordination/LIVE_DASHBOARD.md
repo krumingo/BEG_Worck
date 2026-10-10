@@ -1,132 +1,86 @@
-# BEG_WORK — LIVE DASHBOARD
+# BEG_WORK — CENTRAL LIVE DASHBOARD
 
-> Статус: management projection.
-> Source priority: Task Issue event stream → exact PR/review evidence → CONTROL_STATE/CONTROL_BOARD → IMPLEMENTATION_WAVES.
-> Do not infer PASS or percentages from stale projection.
-> Dashboard tracking baseline: 2026-10-06 (new event protocol). Historical durations before this date are shown only where exact timestamps exist.
+> Status: canonical management projection, schema `beg.live-dashboard/v2`.
+> Generated: `2026-10-10T20:16:19Z`.
+> Source priority: Task Issue events → exact PR/review evidence → `CONTROL_STATE.json` → implementation waves.
+> This is a **multi-track** projection. `CONTROL_STATE.json` remains the single W0 execution-control record; this dashboard does not overwrite it.
 
-## 1. Agent communication
+## Active tracks
 
-| Agent | State | Current action | Waiting for | Last confirmed event |
-|---|---|---|---|---|
-| GPT | ACTIVE / COORDINATION | Maintains roadmap, task scope and dashboard | Codex review events | `CODEX_TASK_ASSIGNED` + `CLAUDE_STANDING_TASK_ASSIGNED` |
-| Codex | EXPECTED NEXT | Independent W0-06B/C02 review | Must publish `HANDOFF_DETECTED` then `REVIEW_STARTED` | No post-protocol Codex event yet |
-| Claude | WAITING | C02 implementation finished | Bounded correction only if Codex dispatches it | FINAL HANDOFF in PR #46 @ `d69145e...` |
+| Track | Stage | State | Responsible / next | PR / head | Next action |
+|---|---|---|---|---|---|
+| W0-06D / C04 | CORRECTION_PREPARING | CHANGES_REQUESTED | CODEX / CODEX | #51 / `891fb537` | Bounded C05 only after required action-time confirmation |
+| LIVE-OPS-01 / TASK-5A | OWNER_ACCEPTANCE | **PASS_CANDIDATE** | CODEX / Krum | #53 / `e2a07ee` | Owner reviews private-LAN staging |
 
-### Communication path
+The W0 track is preserved from `CONTROL_STATE.json` and remains unchanged. LIVE-OPS is an additional acceptance track, not a replacement for W0.
 
-```text
-GPT → Krum → Codex → Claude → Codex ↔ Claude corrections → Codex PASS → GPT → Krum
-```
+## LIVE-OPS-A status
 
-## 2. Current task
+- Contract: `v6-contract-freeze`
+- Contract SHA-256: `489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E`
+- PR #53: draft, open, unmerged
+- Exact head: `e2a07ee66d5d6d59a95f6b17bb90996917790193`
+- Review verdict: **PASS_CANDIDATE**
+- Acceptance: **OWNER_PENDING**
+- Blockers: **none**
+- Merge / deploy / production activation: **NO / NO / NO**
 
-- Wave: **W0**
-- Item: **W0-06 File Registry**
-- Task: **W0-06B**
-- Cycle: **C02**
-- PR: **#46**
-- Exact head: **d69145e795445ca3ca18df9a6e9818b1dfb8001e**
-- Current stage: **Awaiting independent Codex review pickup**
-- Claude implementation: **DONE / HANDOFF PUBLISHED**
-- Codex independent verdict: **PENDING**
-- Merge: **NO**
-- Deploy: **NO**
+### Progress
 
-## 3. Current task timing
+No canonical percentage is calculated because no versioned denominator exists. The previously owner-reported **37%** is retained as context only; it is not recomputed or advanced.
 
-Exact timestamps available from GitHub evidence:
+### Timing
 
-| Stage | Start | Finish | Wall time | Meaning |
-|---|---|---|---:|---|
-| C02 Claude implementation | 2026-10-06 15:25:01Z | 2026-10-06 15:33:48Z | **8m 47s** | Dispatch/start observed → final HANDOFF published |
-| C02 waiting for Codex review | 2026-10-06 15:33:48Z | OPEN | live | HANDOFF published → `REVIEW_STARTED` not yet published |
-| C01 Claude implementation | 2026-10-04 22:01:04Z | 2026-10-04 23:11:35Z | **1h 10m 31s** | Historical exact evidence |
-| C01 review wall interval | 2026-10-04 23:11:35Z | 2026-10-05 05:41:36Z | **6h 30m 01s** | Wall interval only; not claimed as active Codex work |
+| Stage | Start | Finish | Duration |
+|---|---|---|---:|
+| Staging acceptance | 2026-10-10 19:41:41Z | 2026-10-10 20:16:19Z | **34m 38s** |
+| Implementation | missing | missing | missing — not inferred |
 
-**Important:** wall time and active work time are different. From the new event protocol onward, stage START/RESULT events are used to derive task timing more accurately.
+### Test statistics
 
-## 4. Test statistics — Claude C02 handoff, not yet independently accepted
+| Gate | Passed | Failed | Skipped | Exit / status |
+|---|---:|---:|---:|---|
+| Backend + disposable Real Mongo | 21 | 0 | 0 | **exit code 0**, 25.93s |
+| Frontend focused smoke | 14 | 0 | 0 | exit code 0 |
+| Live no-write probe | 1 | 0 | 0 | DB byte-equal; POST/PUT/PATCH/DELETE = 405 |
+| Tenant read separation | 1 | 0 | 0 | PASS |
+| Desktop UI | 1 | 0 | 0 | PASS |
+| Phone 390×844 UI | 1 | 0 | 0 | PASS |
+| Source/freshness | 1 | 0 | 0 | PASS |
+| Incomplete projection warning | 1 | 0 | 0 | PASS |
 
-| Gate | Result |
-|---|---:|
-| Avatar security | 30 / 30 PASS |
-| W0-06A + W0-06B focused | 451 / 451 PASS |
-| FLOW-002 / tenancy | 125 / 125 PASS |
-| Real Mongo W0-06 | 33 / 33 PASS |
-| Static guards | 0 violations |
-| Broad W0 batch | 1619 PASS / 15 FAIL / 0 SKIP |
-| Live `test_media_acl.py` | NOT RUN |
-| Browser/Jest acceptance | NOT RUN |
+Pytest originally stalled in its cache provider while trying to create a cache directory inside the managed read-only worktree. The verified command disables only that cache plugin; the original tests and PR head remain unchanged. Final result: `21 passed, 6 warnings in 25.93s`, exit code `0`.
 
-These are Claude evidence until Codex independently verifies them.
+### Correction loops
 
-## 5. Event coverage — post-protocol
+- Implementation: **1**
+- Staging acceptance: **1**
 
-| Required event | State |
-|---|---|
-| GPT `PROTOCOL_UPDATED` | ✅ |
-| GPT `CODEX_TASK_ASSIGNED` | ✅ |
-| GPT `CLAUDE_STANDING_TASK_ASSIGNED` | ✅ |
-| Codex `HANDOFF_DETECTED` | ⏳ |
-| Codex `REVIEW_STARTED` | ⏳ |
-| Codex `REVIEW_PROGRESS` | ⏳ |
-| Codex `PASS / CHANGES_REQUESTED / BLOCKED` | ⏳ |
-| Codex `RESULT_SENT_TO_GPT` | ⏳ |
+### Staging access
 
-## 6. Wave 0 roadmap
+- Scope: **private LAN only**
+- Public exposure: **NO**
+- The private address and disposable credential are intentionally not stored in the repository; they are handed directly to the owner.
 
-| Order | Item | Status |
-|---:|---|---|
-| 1 | WAVE-PLAN-SYNC | ✅ DONE |
-| 2 | W0-09A Release core | ✅ MERGED / NOT DEPLOYED |
-| 3 | W0-10A Restore proof | ✅ PASS |
-| 4 | W0-03 Master Data | ◐ PARTIAL / open debt |
-| 5 | **W0-06 File Registry** | ▶ **CURRENT** |
-| 6 | W0-07 DQ + Approval | ○ NOT STARTED |
-| 7 | W0-05 Payment Core | ○ NOT STARTED |
-| 8 | W0-08 Billing / Entitlements | ○ NOT STARTED |
-| 9 | W0-04B Audit lifecycle | ○ NOT STARTED |
-| 10 | W0-10B Full DR | ○ NOT STARTED |
-| 11 | W0-11 Export / Retention / Deletion | ○ NOT STARTED |
-| 12 | W0-09B Wave-0 exit gate | ○ NOT STARTED |
+## Preserved W0 state
 
-### W0-06 internal execution
+- Task: W0-06D / C04
+- State: **CHANGES_REQUESTED**
+- Stage: **CORRECTION_PREPARING**
+- PR #51 head: `891fb53718e72ba218f6fa29dd7098988037e153`
+- C05: prepared, **NOT SENT**
+- Waiting for: platform-required action-time confirmation for C05 UI Send
+- Evidence: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636
 
-```text
-W0-06A foundation             ◐ predecessor / reviewed with findings
-W0-06B C01 providers          ◐ CHANGES_REQUESTED
-W0-06B C02 avatar correction  ▶ HANDOFF DONE → CODEX REVIEW NEXT
-W0-06C integrity/scheduler    ○ NEXT AFTER PASS
-W0-06D legacy migration       ○ PLANNED
-W0-06E final FLOW-016 gate    ○ PLANNED
-```
+Historical W0-06B timings and test counts from dashboard v1 are retained in `LIVE_DASHBOARD.json` under `preserved_legacy_evidence`; W0-06D append-only execution history remains in `CONTROL_STATE.json` and `CONTROL_BOARD.md`.
 
-## 7. Forecast model
+## Evidence
 
-Forecasts are not invented. Every new task gets a GPT estimate before dispatch:
-- `estimate_low`
-- `estimate_expected`
-- `estimate_high`
-- confidence: LOW / MEDIUM / HIGH
-- reason / comparable prior tasks.
+- LIVE-OPS PASS_CANDIDATE: https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101397109
+- Initial staging result: https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101638979
+- Prior statistics/verdict: https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101641941
+- PR #53: https://github.com/krumingo/BEG_Worck/pull/53
 
-During execution, the dashboard shows:
-- actual elapsed;
-- stage elapsed;
-- forecast remaining;
-- forecast total;
-- variance to expected.
+## Dashboard rule
 
-### Current forecast status
-
-- W0-06B/C02: implementation finished; **review duration forecast not yet set because Codex has not published REVIEW_STARTED**.
-- W0-06C: scope known conceptually but not yet assigned; estimate will be published before task dispatch.
-- Wave 0 remaining forecast: **TBD until remaining-item estimates are baselined**.
-- Whole-program elapsed/remaining forecast: **historical baseline not yet reconstructed; do not invent days**.
-
-## 8. Dashboard rule
-
-GPT includes a current dashboard snapshot before every new task and whenever Krum asks for status/dashboard.
-
-Codex/Claude event stream supplies the live data. The ChatGPT UI itself cannot be permanently modified or pinned by GPT; this GitHub dashboard is the persistent source and GPT renders the latest snapshot in chat.
+This central projection may show multiple concurrent tracks. It must never erase another track merely because a newer acceptance task is active. Percentages, durations, PASS and completion are shown only from explicit evidence; missing values remain missing.

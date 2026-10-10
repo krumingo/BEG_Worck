@@ -1,102 +1,119 @@
 {
-  "schema": "beg.live-dashboard/v1",
-  "generated_at": "2026-10-06T16:13:58Z",
-  "source_priority": [
-    "task_issue_events",
-    "pr_review_evidence",
-    "control_state",
-    "implementation_waves"
+  "schema": "beg.live-dashboard/v2",
+  "generated_at": "2026-10-10T20:16:19Z",
+  "projection_mode": "MULTI_TRACK",
+  "source_priority": ["task_issue_events", "pr_review_evidence", "control_state", "implementation_waves"],
+  "canonical_percent_policy": "Percent is null unless a versioned denominator and completed count exist.",
+  "tracks": {
+    "W0-06D/C04": {
+      "track_type": "implementation",
+      "preserved_from": "coordination/CONTROL_STATE.json",
+      "wave": "W0",
+      "task_id": "W0-06D",
+      "cycle_id": "C04",
+      "state": "CHANGES_REQUESTED",
+      "stage": "CORRECTION_PREPARING",
+      "responsible_agent": "CODEX",
+      "next_agent": "CODEX",
+      "next_action": "Send bounded C05 only after the required action-time confirmation",
+      "waiting_for": "platform-required confirmation for C05 UI Send",
+      "pr": 51,
+      "head_sha": "891fb53718e72ba218f6fa29dd7098988037e153",
+      "draft": true,
+      "merge": false,
+      "deploy": false,
+      "progress": {"mode": "STAGE_ONLY", "stage": "CORRECTION_PREPARING", "completed": null, "total": null, "percent": null},
+      "last_updated": "2026-10-10T07:13:58Z",
+      "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636"
+    },
+    "LIVE-OPS-01/TASK-5A": {
+      "track_type": "staging_acceptance",
+      "wave": "LIVE-OPS-01",
+      "task_id": "TASK-5A",
+      "cycle_id": "STAGING-A02",
+      "state": "PASS_CANDIDATE",
+      "stage": "OWNER_ACCEPTANCE",
+      "responsible_agent": "CODEX",
+      "next_agent": "KRUM",
+      "next_action": "Owner review from the private LAN staging address",
+      "waiting_for": "owner acceptance",
+      "pr": 53,
+      "head_sha": "e2a07ee66d5d6d59a95f6b17bb90996917790193",
+      "base_sha": "79af297612f57c055bb7caef3f0c48493800d1b6",
+      "draft": true,
+      "merge": false,
+      "deploy": false,
+      "contract": {"version": "v6-contract-freeze", "sha256": "489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E"},
+      "progress": {
+        "mode": "STAGE_ONLY",
+        "stage": "OWNER_ACCEPTANCE",
+        "completed": null,
+        "total": null,
+        "percent": null,
+        "owner_reported_prior_percent": 37,
+        "note": "37% is retained as owner-reported context, not recomputed or advanced."
+      },
+      "timing": {
+        "staging_acceptance_start": "2026-10-10T19:41:41Z",
+        "staging_acceptance_finish": "2026-10-10T20:16:19Z",
+        "staging_acceptance_seconds": 2078,
+        "implementation_start": null,
+        "implementation_finish": null,
+        "implementation_seconds": null,
+        "implementation_timing_note": "Missing machine-readable start/finish evidence; not inferred."
+      },
+      "tests": {
+        "backend_real_mongo": {
+          "passed": 21,
+          "failed": 0,
+          "skipped": 0,
+          "exit_code": 0,
+          "seconds": 25.93,
+          "warnings": 6,
+          "topology": "MongoDB 7.0.43 single-node replica set",
+          "command_note": "pytest cacheprovider disabled because the managed worktree cache path is read-only"
+        },
+        "frontend_focused": {"passed": 14, "failed": 0, "skipped": 0, "exit_code": 0},
+        "live_no_write_probe": {"passed": 1, "failed": 0, "skipped": 0, "database_byte_equal": true, "write_method_statuses": [405, 405, 405, 405]},
+        "desktop_ui": "PASS",
+        "phone_390x844_ui": "PASS",
+        "tenant_read_separation": "PASS",
+        "source_freshness": "PASS",
+        "incomplete_projection_warning": "PASS"
+      },
+      "correction_loops": {"implementation": 1, "staging_acceptance": 1},
+      "review_verdict": "PASS_CANDIDATE",
+      "acceptance_status": "OWNER_PENDING",
+      "blockers": [],
+      "staging_access": {"scope": "private_lan_only", "public_exposure": false, "address_publication": "WITHHELD_FROM_REPOSITORY"},
+      "last_updated": "2026-10-10T20:16:19Z",
+      "evidence_urls": [
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101397109",
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101638979",
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101641941"
+      ]
+    }
+  },
+  "history": [
+    {"track": "W0-06B/C02", "snapshot_generated_at": "2026-10-06T16:13:58Z", "state": "AWAITING_CODEX_REVIEW_PICKUP", "note": "Preserved from beg.live-dashboard/v1; superseded by W0-06D control state."},
+    {"track": "W0-06D/C04", "occurred_at": "2026-10-10T07:13:58Z", "state": "CHANGES_REQUESTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6095011636"},
+    {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T19:41:41Z", "state": "STAGING_ACCEPTANCE_STARTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6101463794"},
+    {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T20:16:19Z", "state": "PASS_CANDIDATE_OWNER_PENDING", "summary": "Real Mongo 21/21 with exit code 0; central multi-track dashboard updated; private-LAN staging prepared."}
   ],
-  "agents": {
-    "GPT": {
-      "state": "ACTIVE_COORDINATION",
-      "current_action": "roadmap/task/dashboard",
-      "waiting_for": "Codex review events"
-    },
-    "CODEX": {
-      "state": "EXPECTED_NEXT",
-      "current_action": "W0-06B/C02 independent review",
-      "waiting_for": "publish HANDOFF_DETECTED then REVIEW_STARTED"
-    },
-    "CLAUDE": {
-      "state": "WAITING",
-      "current_action": "C02 handoff complete",
-      "waiting_for": "bounded correction only if Codex dispatches"
+  "preserved_legacy_evidence": {
+    "w0_06b_c02_claude_implementation_seconds": 527,
+    "w0_06b_c01_claude_implementation_seconds": 4231,
+    "w0_06b_c01_review_wall_seconds": 23401,
+    "w0_06b_handoff_tests": {
+      "avatar_security_passed": 30,
+      "w006_focused_passed": 451,
+      "flow002_tenancy_passed": 125,
+      "real_mongo_passed": 33,
+      "broad_w0_passed": 1619,
+      "broad_w0_failed": 15,
+      "broad_w0_skipped": 0,
+      "live_media_acl": "NOT_RUN",
+      "browser_jest": "NOT_RUN"
     }
-  },
-  "current_task": {
-    "wave": "W0",
-    "item": "W0-06",
-    "task_id": "W0-06B",
-    "cycle_id": "C02",
-    "pr": 46,
-    "head_sha": "d69145e795445ca3ca18df9a6e9818b1dfb8001e",
-    "stage": "AWAITING_CODEX_REVIEW_PICKUP",
-    "merge": false,
-    "deploy": false
-  },
-  "timing": {
-    "c02_claude_implementation": {
-      "start": "2026-10-06T15:25:01Z",
-      "finish": "2026-10-06T15:33:48Z",
-      "seconds": 527
-    },
-    "c01_claude_implementation": {
-      "start": "2026-10-04T22:01:04Z",
-      "finish": "2026-10-04T23:11:35Z",
-      "seconds": 4231
-    },
-    "c01_review_wall_interval": {
-      "start": "2026-10-04T23:11:35Z",
-      "finish": "2026-10-05T05:41:36Z",
-      "seconds": 23401,
-      "note": "wall interval, not active-work claim"
-    }
-  },
-  "claude_handoff_tests": {
-    "avatar_security": {
-      "passed": 30,
-      "failed": 0,
-      "skipped": 0
-    },
-    "w006_focused": {
-      "passed": 451,
-      "failed": 0,
-      "skipped": 0
-    },
-    "flow002_tenancy": {
-      "passed": 125,
-      "failed": 0,
-      "skipped": 0
-    },
-    "real_mongo": {
-      "passed": 33,
-      "failed": 0,
-      "skipped": 0
-    },
-    "broad_w0": {
-      "passed": 1619,
-      "failed": 15,
-      "skipped": 0
-    },
-    "static_guard_violations": 0,
-    "live_media_acl": "NOT_RUN",
-    "browser_jest": "NOT_RUN"
-  },
-  "event_coverage": {
-    "PROTOCOL_UPDATED": "DONE",
-    "CODEX_TASK_ASSIGNED": "DONE",
-    "CLAUDE_STANDING_TASK_ASSIGNED": "DONE",
-    "HANDOFF_DETECTED": "PENDING",
-    "REVIEW_STARTED": "PENDING",
-    "REVIEW_PROGRESS": "PENDING",
-    "FINAL_VERDICT": "PENDING",
-    "RESULT_SENT_TO_GPT": "PENDING"
-  },
-  "forecasts": {
-    "current_review": "UNSET_UNTIL_REVIEW_STARTED",
-    "w006c": "UNSET_UNTIL_ASSIGNMENT_SCOPED",
-    "wave0_remaining": "TBD_BASELINE_REQUIRED",
-    "whole_program": "TBD_HISTORICAL_BASELINE_REQUIRED"
   }
 }
