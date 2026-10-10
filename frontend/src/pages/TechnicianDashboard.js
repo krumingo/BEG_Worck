@@ -22,6 +22,7 @@ import {
   QrCode, Truck, Bell, Calendar, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import AuthImage from "@/components/AuthImage";
 
 export default function TechnicianDashboard() {
   const { t } = useTranslation();
@@ -815,7 +816,7 @@ export default function TechnicianDashboard() {
               const isAdmin = w.status === "SickLeave" || w.status === "Leave" || w.status === "Vacation";
               return (
                 <div key={w.worker_id} className={`flex items-center gap-3 p-3 rounded-2xl border-2 bg-card ${isAdmin ? "border-red-500/30 bg-red-500/5" : "border-emerald-500/40"}`}>
-                  {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : (
+                  {w.avatar_url ? <AuthImage src={w.avatar_url} className="w-10 h-10 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : (
                     <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -839,7 +840,7 @@ export default function TechnicianDashboard() {
             <p className="text-xs text-muted-foreground font-semibold">Работили преди на обекта ({shortlistFiltered.length})</p>
             {shortlistFiltered.slice(0, 8).map(w => (
               <div key={w.worker_id} className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-border bg-card/30">
-                {w.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-8 h-8 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : (
+                {w.avatar_url ? <AuthImage src={w.avatar_url} className="w-8 h-8 rounded-full object-cover" alt="" onError={e => e.target.style.display = "none"} /> : (
                   <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">{(w.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -888,7 +889,7 @@ export default function TechnicianDashboard() {
                     filtered.map(p => (
                       <label key={p.worker_id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedToAdd.includes(p.worker_id) ? "border-primary bg-primary/5" : "border-border"}`}>
                         <Checkbox checked={selectedToAdd.includes(p.worker_id)} onCheckedChange={c => setSelectedToAdd(prev => c ? [...prev, p.worker_id] : prev.filter(id => id !== p.worker_id))} />
-                        {p.avatar_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" /> : (
+                        {p.avatar_url ? <AuthImage src={p.avatar_url} className="w-10 h-10 rounded-full object-cover" alt="" /> : (
                           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{(p.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                         )}
                         <div className="flex-1 min-w-0">

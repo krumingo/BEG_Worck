@@ -155,11 +155,16 @@ class TenantCollection:
         return self._raw.aggregate([{"$match": {TENANT_KEY: self._scope.org_id}}] + checked)
 
     # --------------------------------------------------------------- writes
-    async def insert_one(self, doc: Dict):
-        return await self._raw.insert_one(self._own(doc))
+    async def insert_one(self, doc: Dict, **kw):
+        """Scoped insert. ``**kw`` reaches the driver unchanged, exactly as it
+        already does on :meth:`update_one` and :meth:`find_one`, so a caller
+        that runs inside a multi-document transaction can pass its ``session``
+        without leaving this layer for the raw handle. The tenant stamp is
+        applied first and is not something a keyword can switch off."""
+        return await self._raw.insert_one(self._own(doc), **kw)
 
-    async def insert_many(self, docs: List[Dict]):
-        return await self._raw.insert_many([self._own(d) for d in docs])
+    async def insert_many(self, docs: List[Dict], **kw):
+        return await self._raw.insert_many([self._own(d) for d in docs], **kw)
 
     async def update_one(self, flt: Mapping, update: Mapping, **kw):
         return await self._raw.update_one(self._scope.scoped(flt), update, **kw)
@@ -269,6 +274,48 @@ class TenantData:
         """The tenant's own ``organizations`` record (its ``id`` IS the tenant key)."""
         return await self._db["organizations"].find_one({"id": self.org_id}, _proj(projection))
 
+    def audit_store_db(self):
+        """The database handle of THIS tenant's records, for the W0-04 audit store.
+
+        W0-06A. The canonical AuditEvent store (``app.audit.store``) is not a
+        tenant-owned collection in the sense this class scopes: it keys on
+        ``tenant_id``, maintains its own per-tenant hash chain, and must be
+        appended to with the raw handle rather than through a view that would
+        stamp ``org_id`` onto an audit document. What it does require is that an
+        event lands in the SAME database as the business write it describes —
+        the rule ``app/permissions/audit_hooks.py`` already follows, so that a
+        legacy-database write is never chained into another database's history.
+
+        This accessor is that handle, named for its one use. It returns a
+        database, not a collection, so it cannot become a way to reach a
+        tenant-owned collection unscoped; callers pass it straight to
+        ``record_event``, which scopes by ``tenant_id`` itself.
+        """
+        return self._db
+
+    def deployment_db(self):
+        """The database handle for DEPLOYMENT-level work on this tenant's database.
+
+        W0-06C. Two things cannot be expressed through a collection view and are
+        not reads or writes of tenant data at all:
+
+        * **readiness** — whether this deployment is a replica set / mongos and
+          whether the required unique indexes exist. Both are properties of the
+          server and of the collection's schema, answered by ``db.command`` and
+          ``index_information``; neither returns a tenant document.
+        * **a session** — a multi-document transaction is opened on the CLIENT
+          of this database, so several of this tenant's own collections (its
+          monitor claim row, its finding, its run document and its audit chain)
+          can commit together or not at all.
+
+        Like :meth:`audit_store_db` it returns a database, not a collection, so
+        it cannot become a way to read a tenant-owned collection unscoped: every
+        document read or written inside such a transaction still goes through a
+        :class:`TenantCollection` of this view, which adds the tenant predicate
+        and stamps the owner exactly as it does outside one.
+        """
+        return self._db
+
     async def update_own_organization(self, update: Mapping, **kw):
         """Update the tenant's OWN ``organizations`` row — W0-03E-A2C.
 
@@ -336,6 +383,33 @@ async def count_ownerless(db, collection: str) -> int:
     """
     return await db[collection].count_documents({"$or": [{TENANT_KEY: None},
                                                          {TENANT_KEY: {"$exists": False}}]})
+
+
+async def count_integer_key_health(db, collection: str, field: str) -> Dict[str, int]:
+    """``{"rows": N, "non_integer": M}`` — a DEPLOYMENT readiness figure.
+
+    W0-06C. The integrity monitor's whole cross-process exclusion rests on a
+    monotonically increasing INTEGER fence token on each tenant's claim row: a
+    row whose fence is missing or is not an integer cannot be compared, so the
+    runner must refuse to start against that database. Answering that question
+    is not a tenant read — it is a schema-health check over the whole
+    collection, which no :class:`TenantData` can express, and running it per
+    tenant would be both wrong (one bad row anywhere voids the guarantee) and a
+    way to enumerate tenants.
+
+    Like :func:`count_ownerless` it is therefore deliberately not tenant-scoped
+    and deliberately discloses nothing: it returns two COUNTS. No document, no
+    ``_id``, no tenant id and no field value leaves this function, so it cannot
+    become a way to read another tenant's records.
+    """
+    rows = await db[collection].count_documents({})
+    # ``$nor`` of the two BSON integer types rather than ``$not`` of a list of
+    # them: it counts an absent field and a non-integer value alike, it keeps
+    # ``true`` out (BSON ``bool`` is not ``int``), and it is the one spelling
+    # that behaves identically on a real server and in the test double.
+    non_integer = await db[collection].count_documents(
+        {"$nor": [{field: {"$type": "int"}}, {field: {"$type": "long"}}]})
+    return {"rows": int(rows), "non_integer": int(non_integer)}
 
 
 # ------------------------------------------------------------------ all tenants

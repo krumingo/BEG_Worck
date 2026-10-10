@@ -207,18 +207,69 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     return media
 
 
+#: Where the legacy upload routes write (``upload_media`` above). A module
+#: constant so the avatar route and its tests name one directory.
+AVATAR_UPLOAD_DIR = Path("/app/backend/uploads")
+AVATAR_URL_PREFIX = "/api/media/avatar/"
+
+
 @router.get("/media/avatar/{filename}")
-async def serve_avatar(filename: str):
-    """Serve avatar/profile image without auth (public)"""
-    from pathlib import Path
-    UPLOAD_DIR = Path("/app/backend/uploads")
-    if "/" in filename or "\\" in filename or ".." in filename:
+async def serve_avatar(filename: str, user: dict = Depends(get_current_user)):
+    """Serve a user's CURRENT profile photo to a signed-in user of the SAME tenant.
+
+    W0-06B/C02 (FLOW-002). The route used to be public; C01 narrowed it to
+    current profile photos but still answered without a session, so anyone
+    holding a stored name could fetch another tenant's avatar. It now requires
+    an authenticated, active session (``get_current_user``: the signed
+    ``(user_id, org_id)`` pair, verified against the database) and resolves the
+    photo ONLY inside that session's tenant:
+
+    * no session / an invalid token -> 403 / 401 before anything is read;
+    * a filename of another tenant -> the same 404 as a missing file, because
+      the lookup runs through the caller's own tenant view and cannot see it;
+    * inside the tenant, a file is served only when exactly one ``media_files``
+      row of the tenant names it, the row is a ``profile`` upload of a user, that
+      user exists in the tenant and their ``avatar_url`` is this very file, the
+      content type is an allowed image type and the path stays in the uploads
+      directory — so invoice photos and every other media stay blocked here.
+
+    Who may see a colleague's photo: any authenticated, active member of the
+    same tenant — the same audience that already receives ``avatar_url`` from
+    the tenant's own list and roster routes. Narrowing that audience by role
+    would be a FLOW-002 business decision, not part of this correction.
+
+    The browser loads it with an authenticated request (frontend
+    ``components/AuthImage.js``) into a short-lived in-memory object URL; there
+    is no public or permanent URL for an avatar.
+    """
+    not_found = HTTPException(status_code=404, detail="File not found")
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
-    file_path = UPLOAD_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    from fastapi.responses import FileResponse
-    return FileResponse(file_path, media_type="image/jpeg")
+    tenant = _tenant(user)
+    rows = await tenant.media_files.find(
+        {"stored_filename": filename},
+        {"_id": 0, "org_id": 1, "stored_filename": 1, "context_type": 1, "context_id": 1,
+         "content_type": 1}).limit(2).to_list(2)
+    if len(rows) != 1:
+        raise not_found
+    media = rows[0]
+    if media.get("context_type") != "profile" or not media.get("context_id"):
+        raise not_found
+    owner = await tenant.users.find_one({"id": media["context_id"]},
+                                        {"_id": 0, "id": 1, "avatar_url": 1})
+    if not owner or owner.get("avatar_url") != AVATAR_URL_PREFIX + filename:
+        raise not_found
+    content_type = media.get("content_type")
+    if content_type not in ALLOWED_MEDIA_TYPES:
+        raise not_found
+    root = AVATAR_UPLOAD_DIR.resolve()
+    file_path = (AVATAR_UPLOAD_DIR / filename).resolve()
+    if root not in file_path.parents or not file_path.is_file():
+        raise not_found
+    return FileResponse(file_path, media_type=content_type,
+                        headers={"X-Content-Type-Options": "nosniff",
+                                 "Cache-Control": "private, max-age=300",
+                                 "Vary": "Authorization"})
 
 
 

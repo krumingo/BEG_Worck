@@ -66,6 +66,37 @@ ACTIONS: Set[str] = {
     # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
     # adapter write and needs this action; default deny for every other role.
     "master_data.legacy.delete",
+    # W0-06B File Registry / storage providers (FLOW-016 "Права и сигурност").
+    # Granted to no role below except through Owner/Admin's full set; any other
+    # role needs an explicit assignment. Connecting a provider and activating
+    # it are security/credential actions; opening, downloading and sharing a
+    # file are checked on every call, and a restricted / confidential file
+    # additionally needs its sensitivity action ("the narrower right wins").
+    "storage.provider.configure",
+    "storage.provider.activate",
+    "storage.provider.read",
+    "file.upload",
+    "file.open",
+    "file.download",
+    "file.share",
+    "file.integrity.check",
+    # W0-06C periodic integrity monitoring (FLOW-016 "Периодична проверка").
+    # Granted to no role below except through Owner/Admin's full set. The
+    # periodic runner's tenant-scoped service principal needs an EXPLICIT
+    # assignment carrying "file.integrity.monitor"; the runner never grants
+    # itself anything and fails closed before any provider access.
+    "file.integrity.monitor",
+    "file.integrity.monitor.read",
+    # W0-06D legacy adoption readiness (FLOW-016). Also granted to no role
+    # below: running a dry-run scan reads a tenant's legacy rows and may hash
+    # their originals, and reading the plan exposes where a customer's files
+    # are today. Two actions, because an operator who may LOOK at the readiness
+    # of a migration is not thereby allowed to produce one, and the projection
+    # narrows itself for a reader who holds only the read right.
+    "file.adoption.scan",
+    "file.adoption.read",
+    "file.sensitivity.restricted",
+    "file.sensitivity.confidential",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited

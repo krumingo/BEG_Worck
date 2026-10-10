@@ -15,8 +15,10 @@ per-tenant AuditEvent requirement of W0-01.
 
 This module is additive: nothing existing is imported from it yet.
 """
+import asyncio
 import hashlib
 import json
+import random
 from typing import Dict, Any, Optional, List, Tuple
 
 from app.audit.envelope import (
@@ -98,25 +100,97 @@ def verify_chain(events: List[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-async def _last_event(db, tenant_id: str) -> Optional[Dict[str, Any]]:
+#: How many times one append may lose the race for its chain slot before it
+#: gives up. Every lost round means another writer of the SAME tenant won a
+#: slot, so N concurrent writers need at most N rounds; the bound only stops a
+#: pathological loop from spinning forever.
+MAX_APPEND_ATTEMPTS = 64
+
+
+class AuditChainContention(RuntimeError):
+    """An append could not win a chain slot within MAX_APPEND_ATTEMPTS."""
+
+
+def chain_slot_id(tenant_id: str, sequence: int) -> str:
+    """The primary key of the event at ``sequence`` in ``tenant_id``'s chain.
+
+    W0-06B (W0-06A review finding 1). Two writers of one tenant that read the
+    same predecessor compute the same next sequence; with a random ``_id`` both
+    inserts succeeded and the chain forked into ``[1, 1, 2, 3]``. Making the
+    slot itself the primary key turns that race into a duplicate-key refusal
+    on MongoDB's built-in, always-present ``_id`` index — no optional index has
+    to exist for the guarantee to hold. The length prefix keeps the key
+    unambiguous for any tenant id, so two tenants can never share a slot.
+    ``_id`` is excluded from the canonical hash, so the chain format is
+    unchanged.
+    """
+    return "ae:%d:%s:%d" % (len(tenant_id), tenant_id, int(sequence))
+
+
+def _is_duplicate_key(exc: BaseException) -> bool:
+    return type(exc).__name__ == "DuplicateKeyError" or getattr(exc, "code", None) == 11000
+
+
+async def _last_event(db, tenant_id: str, **kw) -> Optional[Dict[str, Any]]:
+    """The tenant's current chain head. ``kw`` carries a ``session`` when the
+    append runs inside the caller's transaction, and is EMPTY otherwise, so the
+    ordinary path is the exact call it has always been."""
     return await db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)]
+        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)], **kw
     )
 
 
-async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
+async def record_event(db, event: Dict[str, Any], session=None) -> Dict[str, Any]:
     """
     Append one validated event to the tenant's audit chain.
 
     The event must come from build_event(). Returns the stored event
     including its sequence and hashes.
+
+    Concurrency (W0-06B). The append is optimistic: read the chain head,
+    chain onto it, and insert into the slot :func:`chain_slot_id` names. A
+    writer that lost the slot to a concurrent writer of the same tenant wrote
+    NOTHING (the insert was refused), so it re-reads the new head and chains
+    onto that. The chain therefore never forks and never has a gap, and the
+    append-only rule holds: no event is ever rewritten or removed to resolve a
+    race. Tenants never contend with each other — their slots differ.
+
+    Inside a transaction (W0-06C). ``session`` makes the append part of the
+    caller's multi-document transaction, so the event either lands with the
+    business write it describes or does not exist at all. The loop above is
+    then WRONG and is not used: a write error inside a transaction has already
+    aborted it on the server, so retrying the insert in the same session could
+    only fail again. The lost slot is raised instead, and the caller's
+    transaction runner replays the whole transaction against a fresh snapshot
+    — on which :func:`_last_event` sees the winner's event and this append
+    chains onto it. A session that is not in a transaction behaves like the
+    normal path, retries included, because nothing has been aborted.
     """
     validate_event(event)
-    previous = await _last_event(db, event["tenant_id"])
-    chained = chain_hashes(event, previous)
-    await db[AUDIT_COLLECTION].insert_one(dict(chained))
-    chained.pop("_id", None)
-    return chained
+    in_transaction = bool(session is not None and getattr(session, "in_transaction", False))
+    attempts = 1 if in_transaction else MAX_APPEND_ATTEMPTS
+    # Without a session this is the empty mapping, so every existing caller and
+    # every existing test sees the identical call it has always made.
+    scoped = {"session": session} if session is not None else {}
+    for attempt in range(attempts):
+        previous = await _last_event(db, event["tenant_id"], **scoped)
+        chained = chain_hashes(event, previous)
+        doc = dict(chained)
+        doc["_id"] = chain_slot_id(event["tenant_id"], chained["sequence"])
+        try:
+            await db[AUDIT_COLLECTION].insert_one(doc, **scoped)
+        except Exception as exc:  # noqa: BLE001 — only a lost slot is retried
+            if not _is_duplicate_key(exc) or in_transaction:
+                raise
+            # Lost the slot. Back off a little (jittered, bounded) so N writers
+            # do not re-read the same head in lock-step, then chain again.
+            await asyncio.sleep(random.uniform(0, 0.002 * min(attempt + 1, 10)))
+            continue
+        chained.pop("_id", None)
+        return chained
+    raise AuditChainContention(
+        "could not append to the audit chain of tenant %r after %d attempts"
+        % (event["tenant_id"], MAX_APPEND_ATTEMPTS))
 
 
 # ---------------------------------------------------------------------------

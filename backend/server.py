@@ -67,6 +67,7 @@ from app.utils.audit import log_audit  # noqa: F401
 
 # ── Seed & background jobs ──────────────────────────────────────────────
 from app.tenancy import project_team
+from app.files.monitor_bootstrap import bootstrap_integrity_monitor
 from app.core.seed import seed_data
 from app.routes.attendance import run_reminder_jobs
 
@@ -396,6 +397,11 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # W0-06C: build the File Registry integrity-monitor indexes and record the
+    # deployment readiness report. Idempotent, additive, non-destructive, and it
+    # ACTIVATES NOTHING: there is no periodic scheduler in W0-06C, and this
+    # report is what one would have to consult before it could ever be enabled.
+    await bootstrap_integrity_monitor(db, logger=logger)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])
