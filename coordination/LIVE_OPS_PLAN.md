@@ -156,13 +156,13 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**OWNER DECISIONS — 3 решения преди Mockup v2 / implementation scoping**
+**OWNER DECISIONS — DONE; следва Mockup v2**
 
 ### ⏭️ СЛЕДВА
-**Крум решава 3 owner decisions → след това Mockup v2**
+**Mockup v2 → Krum UX approval → technical contract freeze**
 
 ### 👤 KRUM ACTION
-**Нужни са 3 решения: pilot gate, canonical stock source, central/main mapping**
+**Няма owner decision pending; следва UX v2 approval**
 
 ### 💻 CODE ACTION
 **Няма LIVE-OPS implementation преди owner decisions + Mockup v2 + contract freeze**
@@ -173,3 +173,11 @@ Current owner action: **none**
 
 Current code action: **none for LIVE-OPS until audit is complete**
 
+
+
+## OWNER DECISIONS — APPROVED
+- [x] Pilot only after Permission Service + AuditEvent enforcement.
+- [x] warehouse_transactions = canonical authoritative movement ledger.
+- [x] warehouse_batches = FIFO/batch/cost projection, not second stock source.
+- [x] central = canonical warehouse type.
+- [x] main = legacy inconsistency to reconcile/migrate with dry-run + rollback proof.
