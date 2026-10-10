@@ -1,20 +1,20 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06D/C04 CODEX REVIEWING — final exact-head HANDOFF matches stable Draft PR #51
+Status: W0-06D/C04 CHANGES_REQUESTED — one bounded same-scope defect; C05 prepared, NOT SENT
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
 Current-Agent: CODEX
-Current-State: REVIEW
-Claude-State: HANDOFF_READY; final C04 HANDOFF published and Claude stopped
-Codex-State: REVIEWING
-Pipeline-Step: REVIEW
-Transition-Phase: HANDOFF_OBSERVED
-Now: Claude published final C04 HANDOFF at 891fb53718e72ba218f6fa29dd7098988037e153; repeated live checks show stable open Draft PR #51 head matches. Codex began independent C03→C04 and whole-package review; no C04 verdict yet.
-Next-Agent: CODEX (independent exact-head C04 review and verdict)
+Current-State: CHANGES_REQUESTED
+Claude-State: WAITING; final C04 HANDOFF published and Claude stopped
+Codex-State: C04 REVIEW COMPLETE; bounded C05 correction prepared but not sent
+Pipeline-Step: CORRECTION_PREPARING
+Transition-Phase: REVIEW_VERDICT
+Now: Independent C04 review at exact Draft PR #51 head 891fb53718e72ba218f6fa29dd7098988037e153 found overlapping allowlisted roots can return 3 inventory entries with max_objects=2, objects_seen=1 and truncated=false. C04 is not PASS; prepare one bounded C05 correction. Do not resend C04.
+Next-Agent: CODEX (publish bounded C05 assignment; PC/UI Send only after platform-required action-time confirmation)
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: NONE for ongoing bounded C04 work; new action-time confirmation only if platform explicitly requires a later action
-Dispatch-State: W0-06D/C02 SENT ONCE; C03 SENT ONCE; C04 SENT ONCE — HANDOFF RECEIVED; do not resend
+Krum-Action: action-time confirmation required by Computer Use platform before a later C05 UI Send; no other business decision requested
+Dispatch-State: W0-06D/C02 SENT ONCE; C03 SENT ONCE; C04 SENT ONCE — HANDOFF REVIEWED; C05 NOT SENT
 Dispatch-Run: existing verified PR #51 Claude session (private URL withheld)
 Dispatch-Observed-At: 2026-10-10T06:34:31Z
 Dispatch-Failure-Evidence: previous unsent attempt https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629; resolved by Krum confirmation and successful Send
@@ -30,16 +30,18 @@ Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/50
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6094882457
-Review: W0-06D/C03 independent CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054 and coordination/REVIEWS/W0-06D.md C03. C01/C02 were also CHANGES_REQUESTED. Predecessor W0-06C and W0-06B technical PASS.
-Final-Verdict: W0-06D/C03 CHANGES_REQUESTED; C04 final exact-head HANDOFF under independent review, verdict PENDING. No technical PASS yet. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
+Review: W0-06D/C04 independent CHANGES_REQUESTED; finding event https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094996206; detailed evidence coordination/REVIEWS/W0-06D.md C04 (publishing after dashboard-first state). C01/C02/C03 were also CHANGES_REQUESTED. Predecessor W0-06C and W0-06B technical PASS.
+Final-Verdict: W0-06D/C04 CHANGES_REQUESTED on 891fb53718e72ba218f6fa29dd7098988037e153; one bounded overlapping-root output-accounting defect. C05 NOT SENT. No technical PASS yet. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06C/C05
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
 Authorization: Krum explicitly confirmed clearing the unfinished composer draft and one C04 UI Send; sent once to the verified PR #51 Claude session and Claude response observed. Earlier unsent C04 attempt and C01 wrong-target rejection were not bypassed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-06E or automatic next Task-ID.
 
-## W0-06D/C04 — final HANDOFF, Codex independent review
+## W0-06D/C04 — independent CHANGES_REQUESTED; C05 NOT SENT
 
-Claude published [final C04 HANDOFF](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6094882457) on `891fb53718e72ba218f6fa29dd7098988037e153`, matching stable open Draft PR #51. [TEST_RESULT and cleanup](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094889449) are Claude claims, not independent PASS. Codex recorded [HANDOFF_DETECTED / REVIEW_STARTED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094908283). Review exact C03→C04 and whole main→head code, reproduce bounded accounting counterexample and independently run critical gates. No repeat Send, merge, deploy, production migration or W0-06E.
+Independent exact-head review found that overlapping allowlisted roots can enumerate the same file multiple times; the realpath cache charges it once, but `walk()` appends every entry and stops only on `objects_seen`. With three nested roots and `max_objects=2`, the measured result is three returned entries, `objects_seen=1`, `truncated=false`. This violates the C04 bound on returned entries. C05 may correct only overlapping-root enumeration/output accounting while preserving same-object physical/DB-row cache reuse, refusal-before-open, strict byte cap and dry-run semantics. A deterministic overlapping-root regression must prove `len(walk()) <= max_objects`, accurate counters/truncation and stable plan; rerun focused and relevant Mongo gates. C05 is not dispatched. Evidence: [FINDING](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094996206) and `coordination/REVIEWS/W0-06D.md` C04. No merge/deploy/production migration/W0-06E.
+
+Claude published [final C04 HANDOFF](https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6094882457) on `891fb53718e72ba218f6fa29dd7098988037e153`, matching stable open Draft PR #51. [TEST_RESULT and cleanup](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094889449) are Claude claims, not independent PASS. Codex recorded [HANDOFF_DETECTED / REVIEW_STARTED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094908283) and independently reviewed; result above. No repeat Send, merge, deploy, production migration or W0-06E.
 
 Krum explicitly approved clearing the unfinished Claude composer draft and one C04 UI Send. Live preflight confirmed open Draft PR #51 at exact base `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`, C03 CHANGES_REQUESTED and no prior successful C04 dispatch. Codex cleared only that draft in the existing PR #51 session, sent the bounded assignment once, then observed the C04 message, empty composer and Claude responding. [CORRECTION_DISPATCH_OK](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094698202). Do not resend. Await final exact-head HANDOFF, then independent whole-package review. No monitor, merge, deploy, production migration or W0-06E.
 
