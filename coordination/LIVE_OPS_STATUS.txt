@@ -73,14 +73,14 @@
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LIVE-OPS-A staging приет от Крум
-🟡 LIVE-OPS-B — Material Requests safe-write core: preflight / CLAUDE assignment
+🟡 LIVE-OPS-B — Material Requests safe-write core: CLAUDE assignment ready / dispatch pending
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: PREFLIGHT / ASSIGNMENT_PREPARING
+Stage: ASSIGNMENT_READY / DISPATCH_PENDING
 Responsible: CODEX
 Next: CLAUDE implementation, exact-head HANDOFF, then CODEX independent review
 PR: NONE YET (required Draft PR)
@@ -89,7 +89,7 @@ Verdict: NONE YET
 Acceptance: NOT STARTED
 Correction loops: 0
 Blockers: NONE
-Last update: 2026-10-10T21:42:18Z
+Last update: 2026-10-10T21:46:25Z
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО

@@ -1,7 +1,7 @@
 # BEG_WORK — CENTRAL LIVE DASHBOARD
 
 > Status: canonical management projection, schema `beg.live-dashboard/v2`.
-> Generated: `2026-10-10T21:42:18Z`.
+> Generated: `2026-10-10T21:46:25Z`.
 > Source priority: Task Issue events → exact PR/review evidence → `CONTROL_STATE.json` → implementation waves.
 > This is a **multi-track** projection. `CONTROL_STATE.json` remains the single W0 execution-control record; this dashboard does not overwrite it.
 
@@ -11,7 +11,7 @@
 |---|---|---|---|---|---|
 | W0-06D / C04 | CORRECTION_PREPARING | CHANGES_REQUESTED | CODEX / CODEX | #51 / `891fb537` | Bounded C05 only after required action-time confirmation |
 | LIVE-OPS-01 / TASK-5A | COMPLETE | **STAGING_ACCEPTED** | CODEX / none | #53 / `e2a07ee` | No action; separate merge gate required |
-| LIVE-OPS-01 / TASK-5B | PREFLIGHT | **ASSIGNMENT_PREPARING** | CODEX / CLAUDE | none / merged main `79af297` | Publish exact assignment and dispatch once |
+| LIVE-OPS-01 / TASK-5B | ASSIGNMENT_READY | **DISPATCH_PENDING** | CODEX / CLAUDE | none / merged main `79af297` | Dispatch the published C01 assignment once |
 
 The W0 track is preserved from `CONTROL_STATE.json` and remains unchanged. LIVE-OPS is an additional acceptance track, not a replacement for W0.
 
@@ -82,7 +82,8 @@ Historical W0-06B timings and test counts from dashboard v1 are retained in `LIV
 - Exact code baseline: merged `main` `79af297612f57c055bb7caef3f0c48493800d1b6`
 - LIVE-OPS-A dependency: separate Draft PR #53; **not** included in this baseline
 - Contract: `v6-contract-freeze`, SHA-256 `489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E`
-- Current stage: canonical read and preflight complete; exact CLAUDE assignment is being prepared
+- Current stage: canonical read and preflight complete; exact CLAUDE assignment is published and pending one direct dispatch
+- Assignment: https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102528774
 - Tests: backend, Real Mongo, frontend, phone/desktop and no-write-outside-domain are all **NOT RUN** for TASK 5B
 - Merge / deploy / production activation: **NO / NO / NO**
 
