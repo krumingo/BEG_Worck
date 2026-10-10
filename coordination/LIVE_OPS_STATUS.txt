@@ -2,8 +2,8 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 ОБЩ ПРОГРЕС ПО CHECKLIST
-🟦 ██░░░░░░░░ 22%
-20 / 92 точки са доказано завършени
+🟦 ██░░░░░░░░ 25%
+23 / 92 точки са доказано завършени
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎨 ЛЕГЕНДА
@@ -12,19 +12,17 @@
 🔴 БЛОКИРАНО / ПРОБЛЕМ
 ⚪ ПРЕДСТОИ
 
-
 🧱 1. Разделяме разработката от ежедневната работа
 🟩 ██████████ 100%
-🟢 8 / 8 готови
 
 🔎 2. Проверяваме какво реално може да се ползва
 🟨 █████████░ 90%
-🟢 9 / 10 готови
-⚪ Остава runtime end-to-end доказване
+🟢 Dual audit + comparison готови
+⚪ Runtime end-to-end доказване остава за по-късен gate
 
 🎨 3. UX преди implementation
 🟦 ███░░░░░░░ 33%
-🟢 3 / 9 готови
+🟡 Следва Mockup v2
 
 📐 4. Technical contract freeze
 ⬜ ░░░░░░░░░░ 0%
@@ -41,49 +39,41 @@
 ✅ 8. Stable production
 ⬜ ░░░░░░░░░░ 0%
 
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟢 НАПРАВЕНО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ CODEX independent audit
 ✅ CLAUDE independent audit
-✅ CODEX final comparison
-✅ Всички основни CODEX findings потвърдени
-✅ 11 допълнителни CLAUDE findings проверени
-✅ Няма FLOW-to-FLOW противоречие
-✅ Потвърден reuse-first подход — без паралелен canonical model
+✅ FINAL_AUDIT_COMPARISON
+✅ Owner decisions approved
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 OWNER DECISIONS — НУЖНИ ОТ КРУМ
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Pilot gate:
-   преди или след Permission Service + AuditEvent enforcement
-
-2. Canonical stock source:
-   коя от съществуващите складови системи става authoritative
-
-3. Warehouse identity:
-   как се съгласуват central и main
-
+🔐 Pilot = след Permission Service + AuditEvent
+📦 Canonical stock = warehouse_transactions
+📚 warehouse_batches = FIFO/batch/cost projection
+🏢 Canonical warehouse type = central
+🧹 main = legacy inconsistency за reconcile/migration
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚪ СЛЕДВА
+🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-➡️ Крум взема 3 owner decisions
-🎨 GPT прави Mockup v2
-👤 Крум одобрява Mockup v2
+🎨 Mockup v2
+👤 Krum UX approval
 📐 Technical contract freeze
 🛠️ Implementation
 🧪 Staging
 🚀 Pilot
 ✅ Stable production
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 КРУМ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟢 Няма решение за вземане в момента
+⚪ Следва да прегледа Mockup v2
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - FLOW остава authoritative.
-- Няма implementation преди 3 owner decisions + Mockup v2 + contract freeze.
-- Runtime PASS още няма; audit-ите са статични/read-only.
-- Всеки процент е checklist progress, не инженерни часове.
+- Няма implementation преди Mockup v2 approval + technical contract freeze.
+- Няма write-enabled pilot преди Permission Service + AuditEvent enforcement.
+- Процентите са checklist progress, не инженерни часове.
