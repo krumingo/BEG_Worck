@@ -2,8 +2,8 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 ОБЩ ПРОГРЕС ПО CHECKLIST
-🟦 ███░░░░░░░ 27%
-25 / 92 точки са доказано завършени
+🟦 ████░░░░░░ 37%
+34 / 92 точки са доказано завършени
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎨 ЛЕГЕНДА
@@ -17,6 +17,7 @@
 
 🔎 2. Проверяваме какво реално може да се ползва
 🟨 █████████░ 90%
+⚪ Runtime end-to-end доказване остава за implementation/staging gate
 
 🎨 3. UX преди implementation
 🟦 ██████░░░░ 56%
@@ -25,11 +26,16 @@
 📌 Складовете се показват по ИМЕ; code/ID е вторичен
 
 📐 4. Technical contract freeze
-🟨 █░░░░░░░░░ 8%
-🟡 Следва contract draft + independent reviews
+🟩 ██████████ 100%
+✅ CONTRACT_FREEZE_READY
+✅ Version: v6-contract-freeze
+✅ SHA-256: 489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E
+✅ CLAUDE verdict: READY_FOR_FREEZE
+✅ OWNER_DECISION: NONE
 
 🛠️ 5. Implementation slices
 ⬜ ░░░░░░░░░░ 0%
+🟡 Следва LIVE-OPS-A — Control center / read-only
 
 🧪 6. Staging
 ⬜ ░░░░░░░░░░ 0%
@@ -47,38 +53,33 @@
 ✅ Final comparison
 ✅ Owner architecture decisions
 ✅ Mockup v2 approved
-✅ Warehouse display-name rule approved
+✅ Technical contract v6 frozen/ready
+✅ F1–F9 closed
+✅ R1–R5 closed
+✅ N1 closed
+✅ No unresolved owner decision
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📐 Technical contract draft — DONE
-🔎 CLAUDE contract review — DONE
-🔎 CODEX contract verification — DONE
-✅ Owner decision F-09 — B (разход при приемане)
-🟡 Следва CONTRACT FREEZE candidate
-🛠️ Implementation after contract freeze
+🛠️ LIVE-OPS-A — bounded read-only control center implementation
+🧪 Tests
+🔎 Independent review
+✅ PASS
+🧪 Staging acceptance
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 КРУМ
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 Няма действие в момента
-⚪ Следва да види contract review само ако има owner decision
+🟢 Няма решение за вземане в момента
+⚪ Следва само да подадеш следващата implementation задача към CODEX, когато ти я дам
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - FLOW остава authoritative.
-- warehouse_transactions = canonical movement ledger.
-- warehouse_batches = FIFO/batch/cost projection.
-- central = canonical warehouse type.
-- warehouse display = human-readable name first.
-- Няма implementation преди contract freeze.
-- Няма write-enabled pilot преди Permission Service + AuditEvent enforcement.
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ OWNER DECISION F-09
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-B — разходът на обекта се признава при приемане.
-Пример: изпратени 10, приети 8, липсват 2 → обектът поема 8; 2 остават in_transit/unresolved до resolution.
+- Frozen contract v6 е implementation baseline.
+- Няма отклонение от source-of-truth/permissions/audit правилата.
+- Runtime PASS още няма.
+- Implementation се прави само на малки bounded slices.
+- Няма migration execution / merge / deploy / production activation без отделен gate.
