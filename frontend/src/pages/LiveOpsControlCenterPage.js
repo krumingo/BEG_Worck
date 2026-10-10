@@ -195,6 +195,11 @@ function WarehousesCard({ section }) {
           </ul>
         </div>
       )}
+      {section.complete === false && (
+        <p className="text-xs text-red-500 font-medium mb-2" role="status" data-testid="lo-stock-incomplete">
+          Непълна проекция: {section.unprojectable_movements} движения не могат да се отразят в наличностите.
+        </p>
+      )}
       {whs.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center" data-testid="lo-warehouses-empty">Няма складове.</p>
       ) : (
@@ -217,7 +222,8 @@ function WarehousesCard({ section }) {
       )}
       <SourceLine section={section} testId="lo-warehouses-source"
         extra={<>
-          <span>Движения: {section.movement_count} (всички прочетени)</span>
+          <span>Движения: {section.movement_count} прочетени
+            {section.complete === false ? `, ${section.unprojectable_movements} неотразени` : ", всички отразени"}</span>
           <span>Последно движение: {fmtDateTime(section.last_movement_at)}</span>
         </>} />
     </Card>
@@ -290,6 +296,7 @@ function AssetIndicators({ section }) {
         </li>
       </ul>
       <p className="text-[11px] text-muted-foreground mt-2">{section.overdue?.reason}</p>
+      <SourceLine section={section} testId="lo-asset-indicators-source" />
     </Card>
   );
 }
@@ -367,7 +374,7 @@ function AssetsCard({ section }) {
 }
 
 // ── Integrity + audit ────────────────────────────────────────────────────────
-function IntegrityCard({ warnings }) {
+function IntegrityCard({ warnings, generatedAt }) {
   return (
     <Card title="Предупреждения за цялост" icon={AlertTriangle} testId="lo-integrity">
       {warnings.length === 0 ? (
@@ -387,6 +394,9 @@ function IntegrityCard({ warnings }) {
           ))}
         </ul>
       )}
+      <p className="text-[11px] text-muted-foreground mt-2" data-testid="lo-integrity-source">
+        Източник: изведено от секциите заявки, склад, активи и журнал · Изчислено: {fmtDateTime(generatedAt)}
+      </p>
     </Card>
   );
 }
@@ -498,7 +508,8 @@ export default function LiveOpsControlCenterPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
+      <section className="mb-5" aria-label="Обобщени показатели" data-testid="lo-kpis">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi testId="lo-kpi-open" label="Отворени заявки" value={rq ? rq.counts.open : "—"} />
         <Kpi testId="lo-kpi-pending" label="Чакат решение" value={rq ? rq.counts.pending : "—"} tone={rq?.counts.pending ? "warn" : undefined} />
         <Kpi testId="lo-kpi-overdue" label="Просрочени заявки" value={rq ? rq.counts.overdue : "—"} tone={rq?.counts.overdue ? "bad" : undefined}
@@ -507,6 +518,11 @@ export default function LiveOpsControlCenterPage() {
         <Kpi testId="lo-kpi-repair" label="В ремонт" value={as ? as.open_repairs : "—"} />
         <Kpi testId="lo-kpi-critical" label="Критични предупреждения" value={critical} tone={critical ? "bad" : undefined} />
       </div>
+      <p className="text-[11px] text-muted-foreground mt-2 flex flex-wrap gap-x-3" data-testid="lo-kpi-source">
+        <span>Източник: заявки — {data.requests?.source || "няма данни"}; ремонт и предавания — {data.assets?.source || "няма данни"}; предупреждения — изведени</span>
+        <span>Изчислено: {fmtDateTime(data.generated_at)}</span>
+      </p>
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 space-y-4">
@@ -515,7 +531,7 @@ export default function LiveOpsControlCenterPage() {
           <AssetsCard section={data.assets} />
         </div>
         <div className="space-y-4">
-          <IntegrityCard warnings={integrity} />
+          <IntegrityCard warnings={integrity} generatedAt={data.generated_at} />
           <AssetIndicators section={data.assets} />
           <AuditCard section={data.audit} />
         </div>

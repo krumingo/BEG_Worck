@@ -57,6 +57,7 @@ function projection(overrides = {}) {
     warehouses: {
       status: "ok", source: "warehouse_transactions (legacy регистър, пълно четене без лимит)",
       generated_at: NOW_ISO, last_movement_at: NOW_ISO, movement_count: 1205, complete: true,
+      unprojectable_movements: 0,
       trust: "untrusted",
       trust_reasons: ["Материалите в склада се разпознават по свободен текст (име|мярка), не по Master артикул."],
       warehouses: [
@@ -261,4 +262,30 @@ test("direct URL /live-ops is behind AdminRoute and the page source only reads",
   expect(page).not.toMatch(/API\.(post|put|patch|delete)\b/);
   expect(page.match(/API\.get\(/g)).toHaveLength(1);
   expect(page).toContain('API.get("/live-ops/control-center")');
+});
+
+test("every derived card shows source and freshness (KPIs, indicators, integrity)", async () => {
+  renderPage();
+  await screen.findByTestId("live-ops-control-center");
+  for (const id of ["lo-kpi-source", "lo-asset-indicators-source", "lo-integrity-source"]) {
+    expect(screen.getByTestId(id)).toHaveTextContent("Източник:");
+    expect(screen.getByTestId(id)).toHaveTextContent("Изчислено:");
+  }
+  expect(screen.getByTestId("lo-kpi-source")).toHaveTextContent("material_requests");
+  expect(screen.getByTestId("lo-kpi-source")).toHaveTextContent("asset_units");
+  expect(within(screen.getByTestId("lo-kpis")).getByTestId("lo-kpi-open")).toBeInTheDocument();
+  expect(screen.queryByTestId("lo-stock-incomplete")).not.toBeInTheDocument();
+  expect(screen.getByTestId("lo-warehouses-source")).toHaveTextContent("всички отразени");
+});
+
+test("an incomplete stock projection is shown as incomplete", async () => {
+  const base = projection();
+  API.get.mockResolvedValue({ data: projection({
+    warehouses: { ...base.warehouses, complete: false, unprojectable_movements: 2 },
+  }) });
+  renderPage();
+  await screen.findByTestId("live-ops-control-center");
+  expect(screen.getByTestId("lo-stock-incomplete")).toHaveTextContent("Непълна проекция: 2 движения");
+  expect(screen.getByTestId("lo-warehouses-source")).toHaveTextContent("2 неотразени");
+  expect(screen.getByTestId("lo-warehouses-source")).not.toHaveTextContent("всички отразени");
 });

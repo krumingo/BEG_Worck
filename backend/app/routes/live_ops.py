@@ -41,7 +41,8 @@ from typing import Any, Dict, Iterable, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.db import db
-from app.deps.modules import require_m2
+from app.deps.auth import get_current_user
+from app.deps.modules import SUBSCRIPTION_PLANS
 from app.tenancy.data_access import TenantData
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,61 @@ INDICATORS = {
 }
 
 CUSTODY_ACTIVE = ("given", "accepted")
+
+
+# ── Read-only module gate ────────────────────────────────────────────────────
+
+def _m2_decision(sub: Optional[Dict[str, Any]], now: datetime) -> Optional[str]:
+    """The M2 access outcome of ``check_module_access_for_org``, evaluated purely.
+
+    Same plan table, same statuses, same messages. The one difference is the
+    expired trial: the shared helper PERSISTS ``trialing -> past_due``; here the
+    expiry is only evaluated, so a GET never writes. ``None`` means allowed.
+    """
+    if not sub:
+        return "No subscription"
+    plan = SUBSCRIPTION_PLANS.get(sub.get("plan_id", "free"), SUBSCRIPTION_PLANS["free"])
+    status = sub.get("status", "")
+    trial_ends_at = sub.get("trial_ends_at")
+    if status == "trialing" and trial_ends_at:
+        try:
+            if now >= datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00")):
+                status = "past_due"          # evaluated, never stored
+        except (ValueError, TypeError, AttributeError):
+            pass
+    if status in ("canceled", "past_due", "incomplete"):
+        return f"Subscription {status}. Please upgrade your plan."
+    if "M2" not in plan["allowed_modules"]:
+        return "Module not in your current plan"
+    return None
+
+
+async def require_m2_read_only(user: dict = Depends(get_current_user)) -> dict:
+    """M2 gate for this GET: the access outcome of ``require_m2`` without its write."""
+    sub = await TenantData.for_user(db, user).subscriptions.find_one(
+        {"org_id": user["org_id"]}, {"_id": 0})
+    reason = _m2_decision(sub, datetime.now(timezone.utc))
+    if reason:
+        raise HTTPException(status_code=403, detail=reason)
+    return user
+
+
+def _assert_single_tenant_path(user: Dict[str, Any]) -> str:
+    """The ONE tenant id this projection reads, operational and audit alike.
+
+    The operational reads are bound to ``user.org_id`` (``TenantData.for_user``).
+    A session whose ``active_tenant_id`` names a different tenant cannot be
+    served safely by that legacy path, so the request fails closed instead of
+    showing one tenant's stock next to another tenant's audit.
+    """
+    org_id = user.get("org_id")
+    active = user.get("active_tenant_id")
+    if not org_id or (active and active != org_id):
+        raise HTTPException(status_code=409, detail={
+            "error_code": "LIVE_OPS_TENANT_PATH_MISMATCH",
+            "message": "Активната фирма на сесията не съвпада с фирмата на данните. "
+                       "Контролният център не показва смесени данни."})
+    return org_id
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -264,6 +320,12 @@ async def _warehouses_section(tenant: TenantData) -> Dict[str, Any]:
     txns = await _all(tenant.warehouse_transactions.find(
         {}, {"_id": 0, "id": 1, "type": 1, "warehouse_id": 1, "lines": 1, "created_at": 1}))
     batch_count = await tenant.warehouse_batches.count_documents({})
+    # Contract §2.5.1: legacy parallel material writers. Counted only — they are
+    # NEVER added to the totals below, which stay warehouse_transactions-only.
+    legacy_parallel = {
+        "project_material_ops": await tenant.project_material_ops.count_documents({}),
+        "material_consumption_log": await tenant.material_consumption_log.count_documents({}),
+    }
 
     by_id = {w.get("id"): w for w in warehouses if w.get("id")}
     stock: Dict[Any, Dict[str, Dict[str, Any]]] = {}
@@ -329,11 +391,19 @@ async def _warehouses_section(tenant: TenantData) -> Dict[str, Any]:
         "Материалите в склада се разпознават по свободен текст (име|мярка), не по Master артикул.",
         "Стойността идва от въведени цени в изписването, не от FIFO по партиди.",
     ]
+    unprojectable = no_warehouse_txns + unknown_warehouse_txns + unknown_type_txns
+    if unprojectable:
+        trust_reasons.append(
+            f"{unprojectable} движения не могат да се отразят в наличностите "
+            f"(без склад: {no_warehouse_txns}, непознат склад: {unknown_warehouse_txns}, "
+            f"непознат вид: {unknown_type_txns}). Проекцията е непълна.")
+    if any(legacy_parallel.values()):
+        trust_reasons.append(
+            "Има паралелни legacy материални записи (project_material_ops / "
+            "material_consumption_log), които не са включени в наличностите.")
     if batch_count:
         trust_reasons.append(
             f"Има {batch_count} записа в warehouse_batches, които не са равнени с движенията.")
-    if no_warehouse_txns or unknown_warehouse_txns:
-        trust_reasons.append("Има движения без склад или към непознат склад.")
     if negative_rows:
         trust_reasons.append("Има отрицателни наличности.")
     if zero_value_returns:
@@ -345,7 +415,10 @@ async def _warehouses_section(tenant: TenantData) -> Dict[str, Any]:
         "generated_at": _now_iso(),
         "last_movement_at": _max_iso(t.get("created_at") for t in txns),
         "movement_count": len(txns),
-        "complete": True,
+        # Every movement was READ; "complete" also requires that every one could
+        # be projected. A skipped movement makes the projection incomplete.
+        "complete": unprojectable == 0,
+        "unprojectable_movements": unprojectable,
         "trust": "untrusted",
         "trust_reasons": trust_reasons,
         "warehouses": out,
@@ -358,6 +431,8 @@ async def _warehouses_section(tenant: TenantData) -> Dict[str, Any]:
             "free_text_lines": free_text_lines,
             "negative_positions": negative_rows,
             "batch_projection_rows": batch_count,
+            "unprojectable_movements": unprojectable,
+            "legacy_parallel_sources": legacy_parallel,
             "zero_value_return_lines": zero_value_returns,
         },
         "link": "/data/warehouses",
@@ -509,37 +584,46 @@ async def _assets_section(tenant: TenantData) -> Dict[str, Any]:
 
 # ── Canonical audit preview ──────────────────────────────────────────────────
 
-async def _audit_db_for(user: Dict[str, Any]):
-    """The database the canonical store writes this tenant's events to.
+async def _audit_path_ok(tenant_id: str, operational_db) -> Optional[str]:
+    """``None`` when this tenant's canonical events live in the SAME database the
+    operational projection reads; otherwise the fail-closed reason.
 
-    Mirrors the write path without touching it: off/shadow write into the legacy
-    database (``LegacyCompatContext.db()``), enforce into the registry-resolved
-    tenant database. The tenant id is the session's, never a request value.
+    off/shadow: the canonical store writes into the legacy database
+    (``LegacyCompatContext.db()``) — the same handle as the operational reads.
+    enforce: it writes into the registry-resolved tenant database; it is read
+    only if that IS the operational database. No other database is opened.
     """
     from app.permissions.deps import current_mode
-    from app.tenancy.resolver import get_tenant_db
+    from app.tenancy import registry
 
-    tenant_id = user.get("active_tenant_id") or user.get("org_id")
-    if current_mode() == "enforce":
-        return await get_tenant_db(tenant_id), tenant_id
-    return db, tenant_id
+    if current_mode() != "enforce":
+        return None
+    tenant = await registry.get_tenant(tenant_id)
+    if not tenant:
+        return "Фирмата не е в регистъра; каноничният журнал не може да бъде намерен."
+    if registry.resolve_database_name(tenant) != operational_db.name:
+        return ("Каноничният журнал на фирмата е в друга база от операционните данни; "
+                "не се смесват източници.")
+    return None
 
 
-async def _audit_section(user: Dict[str, Any]) -> Dict[str, Any]:
-    audit_db, tenant_id = await _audit_db_for(user)
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="No tenant")
-    events = await audit_db.audit_events.find(
+async def _audit_section(tenant_id: str) -> Dict[str, Any]:
+    base = {
+        "source": "audit_events (каноничен AuditEvent, FLOW-040)",
+        "generated_at": _now_iso(),
+        "legacy_audit_used": False,
+        "tenant_id": tenant_id,
+    }
+    refused = await _audit_path_ok(tenant_id, db)
+    if refused:
+        return {**base, "status": "unavailable", "events": [], "fail_closed": True,
+                "message": "Каноничен AuditEvent не е наличен: " + refused}
+    events = await db.audit_events.find(
         {"tenant_id": tenant_id, "entity_type": {"$in": list(LIVE_OPS_AUDIT_ENTITY_TYPES)}},
         {"_id": 0, "event_id": 1, "occurred_at": 1, "action": 1, "entity_type": 1,
          "entity_id": 1, "actor_type": 1, "actor_id": 1, "result": 1, "source_flow": 1,
          "sequence": 1},
     ).sort("sequence", -1).to_list(AUDIT_PREVIEW_LIMIT)
-    base = {
-        "source": "audit_events (каноничен AuditEvent, FLOW-040)",
-        "generated_at": _now_iso(),
-        "legacy_audit_used": False,
-    }
     if not events:
         return {**base, "status": "unavailable", "events": [],
                 "message": "Каноничен AuditEvent не е наличен за записите в склад, заявки и "
@@ -579,13 +663,21 @@ def _integrity(requests: Dict[str, Any], stock: Dict[str, Any], assets: Dict[str
                 "FREE_TEXT_MATERIAL", "warning", "Материали без Master артикул (складови движения)",
                 "Редове от складови движения разпознават материала само по име и мярка.",
                 d["free_text_lines"], "/data/master-data"))
-        if d["batch_projection_rows"] or d["movements_without_warehouse"] or d["movements_unknown_warehouse"]:
+        if d["batch_projection_rows"] or d["unprojectable_movements"]:
             out.append(_warning(
                 "STOCK_UNRECONCILED", "critical", "Наличностите не са равнени",
-                "Има партиди (warehouse_batches), които не са равнени с регистъра, или "
-                "движения без валиден склад.",
-                d["batch_projection_rows"] + d["movements_without_warehouse"]
-                + d["movements_unknown_warehouse"], "/inventory"))
+                f"Партиди (warehouse_batches) без равнение: {d['batch_projection_rows']}. "
+                f"Движения, които не могат да се отразят (без склад, непознат склад или "
+                f"непознат вид): {d['unprojectable_movements']}.",
+                d["batch_projection_rows"] + d["unprojectable_movements"], "/inventory"))
+        lp = d["legacy_parallel_sources"]
+        if any(lp.values()):
+            out.append(_warning(
+                "LEGACY_PARALLEL_STOCK_SOURCE", "critical", "Паралелен legacy източник на материали",
+                f"project_material_ops: {lp['project_material_ops']}, material_consumption_log: "
+                f"{lp['material_consumption_log']}. Тези записи не са включени в наличностите и "
+                "не са равнени с регистъра.",
+                sum(lp.values()), "/inventory"))
         if d["negative_positions"]:
             out.append(_warning(
                 "NEGATIVE_STOCK", "critical", "Отрицателни наличности",
@@ -646,11 +738,12 @@ def _integrity(requests: Dict[str, Any], stock: Dict[str, Any], assets: Dict[str
 # ── Endpoint ─────────────────────────────────────────────────────────────────
 
 @router.get("/live-ops/control-center")
-async def live_ops_control_center(user: dict = Depends(require_m2)):
+async def live_ops_control_center(user: dict = Depends(require_m2_read_only)):
     """Read-only LIVE-OPS projection. There is no write endpoint in this module."""
     if user.get("role") not in READ_ROLES:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    tenant = TenantData.for_user(db, user)
+    tenant_id = _assert_single_tenant_path(user)
+    tenant = TenantData.for_user(db, user)     # bound to user.org_id == tenant_id
     today = datetime.now(timezone.utc).date()
 
     async def guarded(name, coro):
@@ -664,7 +757,7 @@ async def live_ops_control_center(user: dict = Depends(require_m2)):
     requests = await guarded("requests", _requests_section(tenant, today))
     stock = await guarded("warehouses", _warehouses_section(tenant))
     assets = await guarded("assets", _assets_section(tenant))
-    audit = await guarded("audit", _audit_section(user))
+    audit = await guarded("audit", _audit_section(tenant_id))
     return {
         "read_only": True,
         "generated_at": _now_iso(),

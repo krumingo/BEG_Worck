@@ -15,6 +15,13 @@ What these tests hold onto (TASK 5A required evidence):
 * no write: every collection is byte-equal before and after the call, the
   module contains no write call, and the router exposes only ``GET``;
 * direct URL access stays read-only: POST/PUT/PATCH/DELETE are refused;
+* the REAL route dependency is exercised (no override): an expired trial is
+  denied exactly like ``require_m2`` denies it, and nothing is persisted;
+* one tenant path: a session whose ``active_tenant_id`` differs from its
+  ``org_id`` is refused; enforce-mode audit is read only from the operational
+  database;
+* legacy parallel material writers are counted and warned about, never summed;
+  a movement that cannot be projected makes the stock projection incomplete;
 * the activity preview reads canonical ``audit_events`` only — a legacy
   ``audit_logs`` row is never shown — and says so when none exists.
 
@@ -127,6 +134,14 @@ def _tenant_docs(org, mark, qty_scale):
         ],
         "warehouse_batches": [{"id": "B-" + org, "org_id": org, "warehouse_id": SHARED["wh"],
                                "item_id": "X", "qty": 1}],
+        # Legacy parallel writers (contract §2.5.1) — the material name collides
+        # with the ledger on purpose: if these were summed, the totals would move.
+        "project_material_ops": [{"id": "PMO-%s-%d" % (org, i), "org_id": org,
+                                  "project_id": SHARED["proj"], "material_name": mark + "Цимент",
+                                  "unit": "торба", "qty": 999} for i in range(2)],
+        "material_consumption_log": [{"id": "MCL-%s-%d" % (org, i), "org_id": org,
+                                      "project_id": SHARED["proj"], "material_name": mark + "Цимент",
+                                      "unit": "торба", "qty": 777} for i in range(3)],
         "audit_logs": [{"id": "AL-" + org, "org_id": org, "action": mark + "LEGACYAUDIT",
                         "entity_type": "warehouse_transaction"}],
     }
@@ -150,6 +165,9 @@ def _ledger(org, mark, qty_scale):
     txns.append({"id": "T-NOWH-" + org, "org_id": org, "warehouse_id": None,
                  "type": "return", "created_at": "2026-10-09T14:00:00+00:00",
                  "lines": [{"material_name": mark + "Цимент", "unit": "торба", "qty_returned": 1}]})
+    txns.append({"id": "T-ODD-" + org, "org_id": org, "warehouse_id": SHARED["wh"],
+                 "type": "legacy_adjust", "created_at": "2026-10-09T15:00:00+00:00",
+                 "lines": [{"material_name": mark + "Цимент", "unit": "торба", "qty_received": 500}]})
     return txns
 
 
@@ -179,13 +197,11 @@ async def _seed(op, sysdb, order):
 
 
 def _app(monkeypatch, op, sysdb):
-    from fastapi import Depends, FastAPI
+    from fastapi import FastAPI
 
     import app.db as appdb
     from app.deps import auth as deps_auth
     from app.deps import modules as deps_modules
-    from app.deps.auth import get_current_user
-    from app.deps.modules import require_m2
     from app.master_data.deps import ENV_MODE
     from app.tenancy import registry
     import server  # noqa: F401 — route modules import server constants
@@ -205,12 +221,9 @@ def _app(monkeypatch, op, sysdb):
     app.include_router(auth.router, prefix="/api")
     app.include_router(live_ops.router, prefix="/api")
 
-    async def _authenticated(user: dict = Depends(get_current_user)):
-        return user
-    # The M2 subscription gate is the shared, pre-existing dependency of every
-    # procurement read; it is replaced here so the no-write proof measures the
-    # LIVE-OPS projection itself.
-    app.dependency_overrides[require_m2] = _authenticated
+    # No dependency override: every call runs the route's REAL dependencies,
+    # including its read-only M2 gate, so the byte-equal proof covers them.
+    assert not app.dependency_overrides
     return app
 
 
@@ -326,21 +339,35 @@ def test_warehouse_name_is_the_primary_label(ev):
 def test_stock_reads_the_complete_ledger_and_is_not_trusted(ev):
     for body, scale in ((ev["a"], 1), (ev["b"], 7)):
         st = body["warehouses"]
-        assert st["complete"] is True and st["movement_count"] == LEGACY_TXNS + 3
+        # Every movement was read, but two could not be projected (one without a
+        # warehouse, one of an unknown type): the projection is NOT complete.
+        assert st["movement_count"] == LEGACY_TXNS + 4
+        assert st["complete"] is False and st["unprojectable_movements"] == 2
         assert st["trust"] == "untrusted" and st["trust_reasons"]
         central = next(w for w in st["warehouses"] if w["id"] == SHARED["wh"])
         cement = central["items"][0]
         # 1205 intakes − 5 issued, all counted (a to_list(1000) read gives 995).
+        # The unknown-type movement (+500) and the legacy parallel stores
+        # (999s and 777s) are NOT in the total: warehouse_transactions only.
         assert cement["qty"] == (LEGACY_TXNS - 5) * scale
         assert "value" not in cement and "value_unverified" in cement
         d = st["diagnostics"]
         assert d["movements_without_warehouse"] == 1
         assert d["negative_positions"] == 1
         assert d["batch_projection_rows"] == 1
+        assert d["movements_unknown_type"] == 1 and d["unprojectable_movements"] == 2
+        assert d["legacy_parallel_sources"] == {"project_material_ops": 2,
+                                                "material_consumption_log": 3}
+        assert any("Проекцията е непълна" in r for r in st["trust_reasons"])
+        assert any("project_material_ops" in r for r in st["trust_reasons"])
+        warn = {w["code"]: w for w in body["integrity"]}
+        assert warn["STOCK_UNRECONCILED"]["count"] == 1 + 2
+        assert warn["LEGACY_PARALLEL_STOCK_SOURCE"]["count"] == 5
         assert st["source"] and st["generated_at"] and st["last_movement_at"]
         codes = {w["code"] for w in body["integrity"]}
         assert {"STOCK_UNRECONCILED", "NEGATIVE_STOCK", "STOCK_VALUE_UNVERIFIED",
-                "LEGACY_STOCK_TRUNCATED", "FREE_TEXT_MATERIAL"} <= codes
+                "LEGACY_STOCK_TRUNCATED", "FREE_TEXT_MATERIAL",
+                "LEGACY_PARALLEL_STOCK_SOURCE"} <= codes
 
 
 def test_pending_handover_is_separate_from_accepted_custody(ev):
@@ -398,6 +425,131 @@ def test_a_failing_section_is_reported_not_hidden(monkeypatch):
     assert body["assets"]["status"] == "error" and "items" not in body["assets"]
     assert body["requests"]["status"] == "ok" and body["warehouses"]["status"] == "ok"
     assert "SECTION_UNAVAILABLE" in {w["code"] for w in body["integrity"]}
+
+
+# ═══════════════════════════════════════════════════════ correction loop 1/2
+def _with_app(monkeypatch, body, prepare=None):
+    """Seed (BEG first), optionally adjust the data, log in, run ``body``."""
+    import httpx
+    from mongomock_motor import AsyncMongoMockClient
+
+    async def run():
+        client = AsyncMongoMockClient()
+        op, sysdb = client["lo_c_op"], client["lo_c_sys"]
+        await _seed(op, sysdb, "A")
+        if prepare:
+            await prepare(op, sysdb)
+        app = _app(monkeypatch, op, sysdb)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://gate") as c:
+            ha = await _login(c, "owner@beg.test")
+            return await body(c, op, sysdb, ha)
+    return asyncio.run(run())
+
+
+def test_expired_trial_is_denied_by_the_real_dependency_without_any_write(monkeypatch):
+    """CODEX #1: the real route dependency, not an override."""
+    async def expire(op, _sys):
+        await op.subscriptions.update_one(
+            {"org_id": BEG}, {"$set": {"status": "trialing", "plan_id": "pro",
+                                       "trial_ends_at": "2026-01-01T00:00:00+00:00"}})
+
+    async def body(c, op, _sys, ha):
+        before = await _snapshot(op)
+        r = await c.get(URL, headers=ha)
+        assert r.status_code == 403, r.text[:300]
+        # Same outcome and message as the shared require_m2 gate.
+        assert r.json()["detail"] == "Subscription past_due. Please upgrade your plan."
+        assert await _snapshot(op) == before, "the GET persisted the trial expiry"
+        sub = await op.subscriptions.find_one({"org_id": BEG})
+        assert sub["status"] == "trialing"
+
+        # Contrast: the shared helper WOULD have written. This proves the test
+        # can see the write the read-only gate avoids.
+        from app.deps.modules import check_module_access_for_org
+        allowed, _ = await check_module_access_for_org(BEG, "M2")
+        assert allowed is False
+        assert (await op.subscriptions.find_one({"org_id": BEG}))["status"] == "past_due"
+        return True
+    assert _with_app(monkeypatch, body, expire)
+
+
+def test_read_only_gate_matches_require_m2_outcomes():
+    """The pure evaluation gives the shared helper's allow/deny for each state."""
+    from datetime import datetime, timezone
+    from app.routes.live_ops import _m2_decision
+    now = datetime(2026, 10, 10, tzinfo=timezone.utc)
+    assert _m2_decision(None, now) == "No subscription"
+    assert _m2_decision({"plan_id": "pro", "status": "active"}, now) is None
+    assert _m2_decision({"plan_id": "free", "status": "active"}, now) == "Module not in your current plan"
+    for st in ("canceled", "past_due", "incomplete"):
+        assert _m2_decision({"plan_id": "pro", "status": st}, now) == \
+            "Subscription %s. Please upgrade your plan." % st
+    live_trial = {"plan_id": "pro", "status": "trialing", "trial_ends_at": "2026-12-01T00:00:00Z"}
+    assert _m2_decision(live_trial, now) is None
+    expired = {"plan_id": "pro", "status": "trialing", "trial_ends_at": "2026-10-01T00:00:00Z"}
+    assert _m2_decision(expired, now) == "Subscription past_due. Please upgrade your plan."
+
+
+def test_active_tenant_different_from_org_is_refused_and_never_mixed(monkeypatch):
+    """CODEX #2: org_id = BEG, active_tenant_id = TCB (colliding ids everywhere)."""
+    async def body(c, op, _sys, ha):
+        # TCB also has a canonical LIVE-OPS event under a colliding entity id.
+        await op.audit_events.insert_one({
+            "event_id": "EV-TCB-1", "tenant_id": TCB, "sequence": 1, "action": "asset_unit.viewed",
+            "entity_type": "asset_unit", "entity_id": SHARED["unit_acc"], "actor_type": "human",
+            "actor_id": "tcb-owner", "occurred_at": "2026-10-09T15:00:00+00:00",
+            "source_flow": "FLOW-011", "result": "success"})
+        await op.users.update_one({"id": "beg-owner", "org_id": BEG},
+                                  {"$set": {"active_tenant_id": TCB}})
+        before = await _snapshot(op)
+        r = await c.get(URL, headers=ha)
+        assert r.status_code == 409, r.text[:300]
+        assert r.json()["detail"]["error_code"] == "LIVE_OPS_TENANT_PATH_MISMATCH"
+        for leak in (A_MARK, B_MARK, "EV-TCB-1", "EV-BEG-1"):
+            assert leak not in r.text
+        assert await _snapshot(op) == before
+
+        # active_tenant_id == org_id: served, and audit is BEG's only.
+        await op.users.update_one({"id": "beg-owner", "org_id": BEG},
+                                  {"$set": {"active_tenant_id": BEG}})
+        r = await c.get(URL, headers=ha)
+        assert r.status_code == 200, r.text[:300]
+        body_ = r.json()
+        assert [e["event_id"] for e in body_["audit"]["events"]] == ["EV-BEG-1"]
+        assert body_["audit"]["tenant_id"] == BEG
+        assert B_MARK not in r.text and "EV-TCB-1" not in r.text
+        return True
+    assert _with_app(monkeypatch, body)
+
+
+def test_enforce_mode_audit_reads_only_the_operational_database(monkeypatch):
+    """CODEX #2: enforce-mode resolution, without any Permission Service change."""
+    async def body(c, op, sysdb, ha):
+        monkeypatch.setenv("PERMISSION_SERVICE_MODE", "enforce")
+        # Registry maps BEG to the operational database -> canonical events shown.
+        r = await c.get(URL, headers=ha)
+        assert r.status_code == 200, r.text[:300]
+        assert [e["event_id"] for e in r.json()["audit"]["events"]] == ["EV-BEG-1"]
+
+        # Registry maps BEG to ANOTHER database -> fail closed, nothing mixed.
+        await sysdb.tenant_registry.update_one({"id": BEG},
+                                               {"$set": {"database_name": "some_other_db"}})
+        before = await _snapshot(op)
+        r = await c.get(URL, headers=ha)
+        assert r.status_code == 200, r.text[:300]
+        audit = r.json()["audit"]
+        assert audit["status"] == "unavailable" and audit["fail_closed"] is True
+        assert audit["events"] == [] and "EV-BEG-1" not in r.text
+        assert "AUDIT_READINESS" in {w["code"] for w in r.json()["integrity"]}
+        assert await _snapshot(op) == before
+
+        # Unknown tenant in the registry -> also fail closed.
+        await sysdb.tenant_registry.delete_one({"id": BEG})
+        r = await c.get(URL, headers=ha)
+        assert r.json()["audit"]["status"] == "unavailable"
+        return True
+    assert _with_app(monkeypatch, body)
 
 
 # ═══════════════════════════════════════════════════════════════════ static
