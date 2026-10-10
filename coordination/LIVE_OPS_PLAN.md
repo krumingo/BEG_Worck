@@ -58,26 +58,26 @@
 - [x] 3.1 Mockup v1 — одобрен
 - [x] 3.2 Събиране на CODEX UX предложения
 - [x] 3.3 Събиране на CLAUDE UX предложения
-- [ ] 3.4 Mockup v2 — desktop control screen
+- [x] 3.4 Mockup v2 — desktop control screen
 - [ ] 3.5 Mockup v2 — Заявки
 - [ ] 3.6 Mockup v2 — Склад
 - [ ] 3.7 Mockup v2 — Машини / инструменти
 - [ ] 3.8 Mockup v2 — phone-first screens
-- [ ] 3.9 Крум одобрява UX v2
+- [x] 3.9 Крум одобрява UX v2
 
 ## 📐 4. Freeze на technical contract
-- [ ] 4.1 Reuse map: кои текущи models/routes/screens се използват
-- [ ] 4.2 Missing technical links
-- [ ] 4.3 Permission matrix
-- [ ] 4.4 AuditEvent coverage
-- [ ] 4.5 Tenant/project isolation
-- [ ] 4.6 Feature flags
-- [ ] 4.7 Migration plan
-- [ ] 4.8 Rollback plan
-- [ ] 4.9 Required acceptance tests
-- [ ] 4.10 CODEX independent contract review
-- [ ] 4.11 CLAUDE independent contract review
-- [ ] 4.12 Krum resolves only true business decisions
+- [x] 4.1 Reuse map: кои текущи models/routes/screens се използват
+- [x] 4.2 Missing technical links
+- [x] 4.3 Permission matrix
+- [x] 4.4 AuditEvent coverage
+- [x] 4.5 Tenant/project isolation
+- [x] 4.6 Feature flags
+- [x] 4.7 Migration plan
+- [x] 4.8 Rollback plan
+- [x] 4.9 Required acceptance tests
+- [x] 4.10 CODEX independent contract review
+- [x] 4.11 CLAUDE independent contract review
+- [x] 4.12 Krum resolves only true business decisions
 
 ## 🛠️ 5. Implementation на малки стабилни части
 ### 🖥️ LIVE-OPS-A — Control center / read-only
@@ -156,22 +156,22 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**OWNER DECISIONS — DONE; следва Mockup v2**
+**CONTRACT FREEZE READY — следва Implementation slice A**
 
 ### ⏭️ СЛЕДВА
-**Technical contract freeze**
+**LIVE-OPS-A — Control center / read-only implementation**
 
 ### 👤 KRUM ACTION
-**UX v2 е одобрен; следва technical contract freeze**
+**Няма действие; следва implementation task**
 
 ### 💻 CODE ACTION
-**Няма LIVE-OPS implementation преди owner decisions + Mockup v2 + contract freeze**
+**Implementation вече може да започне само по frozen contract и на малки bounded slices**
 
-Next decision: **няма business decision преди двата review-а**
+Next decision: **няма owner decision pending**
 
 Current owner action: **none**
 
-Current code action: **none for LIVE-OPS until audit is complete**
+Current code action: **prepare LIVE-OPS-A implementation task against v6-contract-freeze**
 
 
 
@@ -181,3 +181,13 @@ Current code action: **none for LIVE-OPS until audit is complete**
 - [x] warehouse_batches = FIFO/batch/cost projection, not second stock source.
 - [x] central = canonical warehouse type.
 - [x] main = legacy inconsistency to reconcile/migrate with dry-run + rollback proof.
+
+
+## CONTRACT FREEZE — READY
+- [x] Version: v6-contract-freeze
+- [x] Final SHA-256: 489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E
+- [x] Baseline: 79af297612f57c055bb7caef3f0c48493800d1b6
+- [x] CLAUDE verdict: READY_FOR_FREEZE
+- [x] OWNER_DECISION: NONE
+- [x] F1–F9, R1–R5, N1 closed
+- [x] No runtime PASS claimed
