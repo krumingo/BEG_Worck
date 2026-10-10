@@ -69,6 +69,7 @@ import AICalibrationPage from "@/pages/AICalibrationPage";
 import OfferReviewPage from "@/pages/OfferReviewPage";
 import ProcurementPage from "@/pages/ProcurementPage";
 import InventoryDashboardPage from "@/pages/InventoryDashboardPage";
+import LiveOpsControlCenterPage from "@/pages/LiveOpsControlCenterPage";
 import HistoricalOffersPage from "@/pages/HistoricalOffersPage";
 import EmployeeDetailPage from "@/pages/EmployeeDetailPage";
 import NovoSMRPage from "@/pages/NovoSMRPage";
@@ -229,6 +230,7 @@ function AppRoutes() {
       <Route path="/ai-calibration" element={<AdminRoute><AICalibrationPage /></AdminRoute>} />
       <Route path="/procurement" element={<AdminRoute><ProcurementPage /></AdminRoute>} />
       <Route path="/inventory" element={<AdminRoute><InventoryDashboardPage /></AdminRoute>} />
+      <Route path="/live-ops" element={<AdminRoute><LiveOpsControlCenterPage /></AdminRoute>} />
       <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
       <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
       <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />
