@@ -1,6 +1,6 @@
 {
   "schema": "beg.live-dashboard/v2",
-  "generated_at": "2026-10-10T21:46:25Z",
+  "generated_at": "2026-10-10T21:49:45Z",
   "projection_mode": "MULTI_TRACK",
   "source_priority": ["task_issue_events", "pr_review_evidence", "control_state", "implementation_waves"],
   "canonical_percent_policy": "Percent is null unless a versioned denominator and completed count exist.",
@@ -99,11 +99,11 @@
       "wave": "LIVE-OPS-01",
       "task_id": "TASK-5B",
       "cycle_id": "C01",
-      "state": "DISPATCH_PENDING",
-      "stage": "ASSIGNMENT_READY",
-      "responsible_agent": "CODEX",
+      "state": "WORKING",
+      "stage": "CLAUDE_IMPLEMENTATION",
+      "responsible_agent": "CLAUDE",
       "next_agent": "CLAUDE",
-      "next_action": "Dispatch the published C01 assignment once through the approved direct PC channel",
+      "next_action": "Implement, test, publish exact-head HANDOFF and directly notify CODEX",
       "waiting_for": null,
       "pr": null,
       "head_sha": null,
@@ -113,19 +113,20 @@
       "merge": false,
       "deploy": false,
       "contract": {"version": "v6-contract-freeze", "sha256": "489525BF36D69182CC0AED49EED2BA22C9883435021C4AF81241A3CB57700C3E", "coordination_commit": "860c005a48ef7cd2c3a7a613e4af4927ea548b9c"},
-      "progress": {"mode": "STAGE_ONLY", "stage": "ASSIGNMENT_READY", "completed": null, "total": null, "percent": null},
+      "progress": {"mode": "STAGE_ONLY", "stage": "CLAUDE_IMPLEMENTATION", "completed": null, "total": null, "percent": null},
       "timing": {"task_accepted": "2026-10-10T21:42:18Z", "implementation_start": null, "implementation_finish": null, "implementation_seconds": null},
       "tests": {"backend": "NOT_RUN", "real_mongo": "NOT_RUN", "frontend": "NOT_RUN", "phone": "NOT_RUN", "desktop": "NOT_RUN", "no_write_outside_domain": "NOT_RUN"},
       "correction_loops": 0,
       "review_verdict": null,
       "acceptance_status": "NOT_STARTED",
       "blockers": [],
-      "last_updated": "2026-10-10T21:46:25Z",
+      "last_updated": "2026-10-10T21:49:45Z",
       "evidence_urls": [
         "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102456196",
         "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102486216",
         "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102486532",
-        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102528774"
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102528774",
+        "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102547382"
       ]
     }
   },
@@ -136,7 +137,8 @@
     {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T20:16:19Z", "state": "PASS_CANDIDATE_OWNER_PENDING", "summary": "Real Mongo 21/21 with exit code 0; central multi-track dashboard updated; private-LAN staging prepared."},
     {"track": "LIVE-OPS-01/TASK-5A", "occurred_at": "2026-10-10T21:39:35Z", "state": "STAGING_ACCEPTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102446197"},
     {"track": "LIVE-OPS-01/TASK-5B", "occurred_at": "2026-10-10T21:42:18Z", "state": "TASK_ACCEPTED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102486216"},
-    {"track": "LIVE-OPS-01/TASK-5B", "occurred_at": "2026-10-10T21:46:25Z", "state": "ASSIGNMENT_PREPARED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102528774"}
+    {"track": "LIVE-OPS-01/TASK-5B", "occurred_at": "2026-10-10T21:46:25Z", "state": "ASSIGNMENT_PREPARED", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102528774"},
+    {"track": "LIVE-OPS-01/TASK-5B", "occurred_at": "2026-10-10T21:49:45Z", "state": "CLAUDE_WORKING", "evidence_url": "https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6102547382"}
   ],
   "preserved_legacy_evidence": {
     "w0_06b_c02_claude_implementation_seconds": 527,
