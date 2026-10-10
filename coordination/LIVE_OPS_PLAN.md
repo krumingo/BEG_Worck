@@ -38,26 +38,26 @@
 - [x] 1.3 Първи визуален mockup е одобрен от Крум
 - [x] 1.4 Изпратени са независими review requests към CODEX и CLAUDE
 - [x] 1.5 CODEX review получен
-- [ ] 1.6 CLAUDE review получен
-- [ ] 1.7 GPT comparison: AGREED / DISAGREED / OWNER DECISION
-- [ ] 1.8 Потвърдено е, че LIVE-OPS не създава паралелен canonical model
+- [x] 1.6 CLAUDE review получен
+- [x] 1.7 GPT comparison: AGREED / DISAGREED / OWNER DECISION
+- [x] 1.8 Потвърдено е, че LIVE-OPS не създава паралелен canonical model
 
 ## 🔎 2. Проверяваме какво реално може да се ползва
-- [ ] 2.1 Inventory на наличния backend
-- [ ] 2.2 Inventory на наличния frontend
-- [ ] 2.3 Inventory на наличните tests
+- [x] 2.1 Inventory на наличния backend
+- [x] 2.2 Inventory на наличния frontend
+- [x] 2.3 Inventory на наличните tests
 - [ ] 2.4 Проверка кое вече работи end-to-end
-- [ ] 2.5 Проверка кое е частично
-- [ ] 2.6 Проверка кое липсва технически
-- [ ] 2.7 Проверка за конфликт с FLOW/Wave
-- [ ] 2.8 Проверка за migration risk
-- [ ] 2.9 Проверка за tenant/permission risk
-- [ ] 2.10 Проверка за data-loss / rollback risk
+- [x] 2.5 Проверка кое е частично
+- [x] 2.6 Проверка кое липсва технически
+- [x] 2.7 Проверка за конфликт с FLOW/Wave
+- [x] 2.8 Проверка за migration risk
+- [x] 2.9 Проверка за tenant/permission risk
+- [x] 2.10 Проверка за data-loss / rollback risk
 
 ## 🎨 3. Заключваме UX преди implementation
 - [x] 3.1 Mockup v1 — одобрен
 - [x] 3.2 Събиране на CODEX UX предложения
-- [ ] 3.3 Събиране на CLAUDE UX предложения
+- [x] 3.3 Събиране на CLAUDE UX предложения
 - [ ] 3.4 Mockup v2 — desktop control screen
 - [ ] 3.5 Mockup v2 — Заявки
 - [ ] 3.6 Mockup v2 — Склад
@@ -156,16 +156,16 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**1.5 / 1.6 — чакаме независимите CODEX и CLAUDE review-и**
+**OWNER DECISIONS — 3 решения преди Mockup v2 / implementation scoping**
 
 ### ⏭️ СЛЕДВА
-**1.7 — GPT comparison: AGREED / DISAGREED / OWNER DECISION**
+**Крум решава 3 owner decisions → след това Mockup v2**
 
 ### 👤 KRUM ACTION
-**Няма действие в момента**
+**Нужни са 3 решения: pilot gate, canonical stock source, central/main mapping**
 
 ### 💻 CODE ACTION
-**Няма LIVE-OPS implementation преди двата audit-а**
+**Няма LIVE-OPS implementation преди owner decisions + Mockup v2 + contract freeze**
 
 Next decision: **няма business decision преди двата review-а**
 
