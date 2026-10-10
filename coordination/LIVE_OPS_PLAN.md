@@ -159,10 +159,10 @@
 **OWNER DECISIONS — DONE; следва Mockup v2**
 
 ### ⏭️ СЛЕДВА
-**Mockup v2 → Krum UX approval → technical contract freeze**
+**Technical contract freeze**
 
 ### 👤 KRUM ACTION
-**Няма owner decision pending; следва UX v2 approval**
+**UX v2 е одобрен; следва technical contract freeze**
 
 ### 💻 CODE ACTION
 **Няма LIVE-OPS implementation преди owner decisions + Mockup v2 + contract freeze**
