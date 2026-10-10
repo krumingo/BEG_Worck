@@ -1,45 +1,49 @@
 # BEG_WORK — active implementation assignment
 
-Status: W0-06D/C03 CHANGES_REQUESTED — C04 UI dispatch failed before Send; correction still not dispatched
+Status: W0-06D/C04 CLAUDE WORKING — bounded correction sent exactly once in verified PR #51 session
 Human-Summary-BG: BEG_Work ще инвентаризира старите файлове и медийни връзки и ще изготви проверим dry-run план за приемането им във File Registry, без да мести, изтрива или променя клиентски оригинали.
-Current-Agent: CODEX
-Current-State: CHANGES_REQUESTED
-Claude-State: HANDOFF_READY; final W0-06D/C03 HANDOFF published
-Codex-State: CORRECTION_DISPATCH_FAILED
-Pipeline-Step: CORRECTION_DISPATCH_FAILED
-Transition-Phase: UI_SEND_STOPPED
-Now: Krum confirmed one C04 UI Send; exact preflight passed. Computer Use detected concurrent user input in the verified Claude PR #51 composer, which contains unfinished draft text. Codex stopped before typing or Send. C04 is prepared but NOT SENT.
-Next-Agent: KRUM (decide whether the existing Claude composer draft may be cleared); then CODEX may retry one C04 UI Send
+Current-Agent: CLAUDE
+Current-State: WORKING
+Claude-State: WORKING; C04 message visible in existing PR #51 session
+Codex-State: WAITING_FOR_FINAL_HANDOFF
+Pipeline-Step: CORRECTION_IN_PROGRESS
+Transition-Phase: CORRECTION_DISPATCH_OK
+Now: Krum explicitly authorized clearing the unfinished draft and one C04 Send. Exact PR #51 head and prior C03 CHANGES_REQUESTED were rechecked; the existing Claude session showed PR #51/C03. The bounded C04 message was sent exactly once, composer cleared and Claude responding.
+Next-Agent: CLAUDE (bounded C04 implementation, tests and final exact-head HANDOFF), then CODEX independent review
 Relay-State: NO_RELAY_NEEDED
 Relay-From: NONE
 Relay-To: NONE
-Krum-Action: confirm whether the unfinished Claude composer draft may be cleared for the already-authorized C04 Send
-Dispatch-State: W0-06D/C02 SENT ONCE; C03 SENT ONCE; C04 ATTEMPT FAILED BEFORE SEND — NOT SENT
+Krum-Action: NONE for ongoing bounded C04 work; new action-time confirmation only if platform explicitly requires a later action
+Dispatch-State: W0-06D/C02 SENT ONCE; C03 SENT ONCE; C04 SENT ONCE — do not resend
 Dispatch-Run: existing verified PR #51 Claude session (private URL withheld)
-Dispatch-Observed-At: 2026-10-09T08:05:07Z
-Dispatch-Failure-Evidence: https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629
+Dispatch-Observed-At: 2026-10-10T06:34:31Z
+Dispatch-Failure-Evidence: previous unsent attempt https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629; resolved by Krum confirmation and successful Send
 Task-ID: W0-06D
-Cycle-ID: C03
+Cycle-ID: C04
 Base-branch: codex/w0-06c-integrity-monitoring (independently accepted technical base, PR #49 unmerged)
 Base-SHA: e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6
 Implementation-branch: codex/w0-06d-migration-readiness
 PR-URL: https://github.com/krumingo/BEG_Worck/pull/51 (Draft, base main; stacked W0-06B/C predecessors unmerged)
 PR-Head: 860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45
-Correction-Base-SHA: 8ffb112174d9517aaddd979cfc24ff44588dfc45
+Correction-Base-SHA: 860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45
 Merge-SHA: NONE
 Main-Head: 79af297612f57c055bb7caef3f0c48493800d1b6
 Issue: https://github.com/krumingo/BEG_Worck/issues/50
 HANDOFF-URL: https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6077439978
 Review: W0-06D/C03 independent CHANGES_REQUESTED https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054 and coordination/REVIEWS/W0-06D.md C03. C01/C02 were also CHANGES_REQUESTED. Predecessor W0-06C and W0-06B technical PASS.
-Final-Verdict: W0-06D/C03 CHANGES_REQUESTED; C04 UI attempt failed before Send because of concurrent user input and unfinished composer draft. C04 remains not dispatched. No technical PASS. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
+Final-Verdict: W0-06D/C03 CHANGES_REQUESTED; C04 sent once and Claude working. C04 PENDING final HANDOFF and independent review; no technical PASS. FLOW-016 Implementation Gate OPEN. W0-06A remains separately CHANGES_REQUESTED.
 Predecessor-Task-ID: W0-06C/C05
 Predecessor-PR: https://github.com/krumingo/BEG_Worck/pull/49 (Draft, unmerged, head e3cfb4a1be95b10d8b2331d99c63c8daf7eb2bd6)
 Predecessor-Review: https://github.com/krumingo/BEG_Worck/pull/49#issuecomment-6045125559
-Authorization: Krum explicitly confirmed the C03 UI Send at action time; sent exactly once to the verified PR #51 Claude session and Claude response observed. Earlier C01 wrong-target rejection was not bypassed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-06E or automatic next Task-ID.
+Authorization: Krum explicitly confirmed clearing the unfinished composer draft and one C04 UI Send; sent once to the verified PR #51 Claude session and Claude response observed. Earlier unsent C04 attempt and C01 wrong-target rejection were not bypassed. No merge, deploy, production/NAS/Atlas writes, live credentials, customer-original modification/deletion, W0-06E or automatic next Task-ID.
 
-## W0-06D/C03 — independent CHANGES_REQUESTED; C04 not sent
+## W0-06D/C04 — bounded correction sent once; Claude working
 
-Independent review on exact head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45` found one bounded-inventory defect: refused symlink/path file entries are returned by `walk()` before they are charged to `objects_seen`, so `max_objects=1` can yield 3 refused results with count 0 and no truncation. Evidence: `coordination/REVIEWS/W0-06D.md` C03 and https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054. C04 may correct only this shared object-budget accounting, preserving C03 pre-open path denial and byte caps; add deterministic and service-level regressions. C04 is **NOT DISPATCHED**. No repeat C03 Send, merge, deploy, production migration or W0-06E.
+Krum explicitly approved clearing the unfinished Claude composer draft and one C04 UI Send. Live preflight confirmed open Draft PR #51 at exact base `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45`, C03 CHANGES_REQUESTED and no prior successful C04 dispatch. Codex cleared only that draft in the existing PR #51 session, sent the bounded assignment once, then observed the C04 message, empty composer and Claude responding. [CORRECTION_DISPATCH_OK](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6094698202). Do not resend. Await final exact-head HANDOFF, then independent whole-package review. No monitor, merge, deploy, production migration or W0-06E.
+
+## W0-06D/C03 — independent CHANGES_REQUESTED; C04 sent once afterward
+
+Independent review on exact head `860c9c90e5e0776f41d5ac9ba5a1e346dd5ecd45` found one bounded-inventory defect: refused symlink/path file entries are returned by `walk()` before they are charged to `objects_seen`, so `max_objects=1` can yield 3 refused results with count 0 and no truncation. Evidence: `coordination/REVIEWS/W0-06D.md` C03 and https://github.com/krumingo/BEG_Worck/pull/51#issuecomment-6078624054. C04 may correct only this shared object-budget accounting, preserving C03 pre-open path denial and byte caps; add deterministic and service-level regressions. At this verdict C04 was not dispatched; it was later sent once as recorded above. No repeat C03 Send, merge, deploy, production migration or W0-06E.
 
 Krum later confirmed the one-time C04 Send. Exact PR head, C03 verdict, duplicate absence and the existing Claude session/PR #51 were rechecked. During UI selection, Computer Use reported concurrent user input; the composer contained unfinished draft text and changed during the attempt. No C04 text was typed and no Send clicked. Exact [CORRECTION_DISPATCH_FAILED](https://github.com/krumingo/BEG_Worck/issues/50#issuecomment-6085217629); asked Krum whether this specific draft may be cleared. No retry before that answer.
 
