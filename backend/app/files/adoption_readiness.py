@@ -121,6 +121,26 @@ to where it cannot be bypassed.
    followed out of the allowlisted root. The gate now runs on every entry,
    before the stat, the open and the cache.
 
+What the C04 correction changed
+-------------------------------
+
+C03 applied the path gate to every walked file entry but charged the object
+allowance only to the entries that *passed* it. The C03 independent review
+showed what that costs: with ``max_objects=1``, a directory of three refused
+symlinks produced three results, ``objects_seen`` stuck at 0 and ``truncated``
+never set — so both the work and the output grew with the directory while the
+configured limit said otherwise. A budget that only counts the readable part
+of an enumeration does not bound the enumeration.
+
+Every enumerated file entry now consumes one unit of the allowance, refused or
+not, and the refusal still happens before any ``stat``, ``open`` or ``read``.
+A safe object is identified for the pass by its real path, so the walk and a
+DB row naming it still share one charge; a refused entry is identified by the
+path as enumerated, because resolving a link that has just been refused would
+let two different refused links collapse into a single charge. A budget
+refusal itself is not cached: it is a fact about the budget, not about the
+object.
+
 Canon: `docs/architecture/W0-06D_LEGACY_ADOPTION_READINESS.md`, FLOW-016,
 FLOW-002, FLOW-040, TENANCY_MODEL, and the W0-06A inventory and migration map.
 """
@@ -619,10 +639,12 @@ class LegacyRootInventory:
         for root in self.roots:
             safe, refusal = path_within_root(root, location)
             if refusal == REASON_PATH_IS_LINK:
-                return PhysicalObject(relative_path=os.path.basename(location), root=root,
-                                      size_bytes=None, checksum=None, readable=False,
-                                      refusal=REASON_PATH_IS_LINK,
-                                      checksum_reason=REASON_PATH_IS_LINK)
+                # Same gate, same refusal, and now the same charge: a row
+                # naming a link is an enumerated entry of this pass too
+                # (C03 review). `_observe` re-runs the gate and reaches the
+                # identical refusal, so there is one place that decides.
+                return self._observe(root, os.path.basename(location),
+                                     location, pass_)
             if not safe:
                 continue
             relative = os.path.relpath(os.path.realpath(location), root)
@@ -667,11 +689,14 @@ class LegacyRootInventory:
         its determinism intact.
         """
         safe, refusal = path_within_root(root, absolute)
-        if not safe:
-            return PhysicalObject(relative_path=relative, root=root,
-                                  size_bytes=None, checksum=None, readable=False,
-                                  refusal=refusal, checksum_reason=refusal)
-        key = os.path.realpath(absolute)
+        #: How this entry is identified for the rest of the pass. A SAFE
+        #: object is identified by its real path, so the physical walk and a
+        #: DB row naming the same object share one charge — the C02
+        #: shared-limit semantics. A REFUSED entry is identified by the path as
+        #: it was enumerated, because resolving a link we have just refused to
+        #: follow would let two different refused links collapse into one
+        #: charge, which is the under-counting this correction is about.
+        key = os.path.realpath(absolute) if safe else absolute
         cached = pass_.seen.get(key)
         if cached is not None:
             return PhysicalObject(
@@ -681,13 +706,31 @@ class LegacyRootInventory:
         if pass_.objects_seen >= self.budget.max_objects:
             # Not permitted to inspect this object at all. That is a refusal
             # with evidence, never an absent or an unverified-but-fine object,
-            # and it is deliberately NOT cached: it is not an observation.
+            # and it is deliberately NOT cached: it is not an observation of
+            # the object, it is a fact about the budget.
             pass_.truncated = True
             return PhysicalObject(relative_path=relative, root=root,
                                   size_bytes=None, checksum=None, readable=False,
                                   refusal=REASON_OBJECT_BUDGET_EXHAUSTED,
                                   checksum_reason=REASON_OBJECT_BUDGET_EXHAUSTED)
+        # C03 review. EVERY enumerated file entry consumes the allowance,
+        # including one the gate refuses. C03 charged only the entries that
+        # passed the gate, so a directory of refused links produced one result
+        # per entry with `objects_seen` stuck at 0 and `truncated` never set:
+        # the work and the output grew with the directory while the configured
+        # limit said otherwise. The budget bounds the INVENTORY — how many
+        # entries this pass will enumerate and answer for — not merely how
+        # many of them turn out to be readable.
         pass_.objects_seen += 1
+        if not safe:
+            # Refused before any stat, open or read, exactly as before; what
+            # is new is that the refusal is accounted for.
+            refused = PhysicalObject(relative_path=relative, root=root,
+                                     size_bytes=None, checksum=None,
+                                     readable=False, refusal=refusal,
+                                     checksum_reason=refusal)
+            pass_.seen[key] = refused
+            return refused
         observed = self._observe_uncached(root, relative, absolute, pass_)
         pass_.seen[key] = observed
         return observed

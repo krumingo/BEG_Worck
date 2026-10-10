@@ -2381,18 +2381,26 @@ class TestC02Defect3TheWalkGatesFileEntriesToo:
         assert walked.checksum is told.checksum is None
 
     @needs_symlinks
-    def test_a_refused_link_does_not_consume_the_object_budget(self, roots):
-        """A refusal is not an observation, so it pays nothing."""
+    def test_a_refused_link_consumes_the_object_budget(self, roots):
+        """A refused entry is still an enumerated entry, so it pays.
+
+        C03 asserted the opposite here, and the C03 independent review showed
+        that reading to be wrong: a budget that only charges the entries which
+        turn out to be readable does not bound the inventory at all. The link
+        sorts FIRST, so with one charge available it takes it and the real
+        file beside it is refused for budget — which is the honest answer, and
+        the pass says so with `truncated`.
+        """
         roots.write("real.pdf", b"real")
         os.symlink(roots.write_outside("x.pdf", b"x"),
                    os.path.join(roots.uploads, "aaa_link.pdf"))
         inv = inventory(roots, max_objects=1)
         objects = inv.walk()
-        by_name = {o.relative_path: o for o in objects}
-        # the link sorts FIRST, and must not spend the single charge
-        assert by_name["aaa_link.pdf"].refusal == ar.REASON_PATH_IS_LINK
-        assert by_name["real.pdf"].checksum is not None
+        assert len(objects) == 1, [o.relative_path for o in objects]
+        assert objects[0].relative_path == "aaa_link.pdf"
+        assert objects[0].refusal == ar.REASON_PATH_IS_LINK
         assert inv.last_pass.objects_seen == 1
+        assert inv.last_pass.truncated is True
 
     @needs_symlinks
     def test_a_symlinked_file_is_refused_through_the_service(self, roots):
@@ -2432,3 +2440,279 @@ class TestC02Defect3TheWalkGatesFileEntriesToo:
             safe, refusal = ar.path_within_root(obj.root, absolute)
             assert safe is True, (obj.relative_path, refusal)
             assert obj.checksum is not None
+
+
+# ════════════════════════════ C03 review — the inventory is actually bounded
+class TestC03BoundedInventoryChargesEveryEntry:
+    """`max_objects` bounds the ENUMERATION, not just the readable part of it.
+
+    The C03 independent review's counterexample: a directory of refused
+    symlinks produced one `PhysicalObject` per entry with `objects_seen` stuck
+    at 0 and `truncated` never set, so both the work and the output grew with
+    the directory while the configured limit said otherwise. C03 had charged
+    only the entries that passed the gate — a reading these tests now forbid.
+    """
+
+    @staticmethod
+    def _refused_links(roots, count, prefix="link"):
+        """`count` real in-root symlinks, each to a real target outside it."""
+        made = []
+        for index in range(count):
+            target = roots.write_outside("t%d.pdf" % index, b"SECRET %d" % index)
+            link = os.path.join(roots.uploads, "%s%d.pdf" % (prefix, index))
+            os.symlink(target, link)
+            made.append(os.path.basename(link))
+        return made
+
+    @needs_symlinks
+    def test_the_review_counterexample_three_refused_entries_one_allowance(
+            self, roots):
+        """Exactly the assignment's acceptance condition."""
+        self._refused_links(roots, 3)
+        spy = _Spy()
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots), opener=spy,
+            budget=ar.ScanBudget(max_objects=1, allow_content_read=True))
+        pass_ = inv.open_pass()
+        found = inv.walk(pass_)
+        assert len(found) <= 1, [o.relative_path for o in found]
+        assert pass_.objects_seen == 1
+        assert pass_.truncated is True
+        # still refused before any stat, open or read
+        assert found[0].refusal == ar.REASON_PATH_IS_LINK
+        assert found[0].checksum is None
+        assert pass_.bytes_read == 0
+        assert spy.opened == [], "a refused path was opened"
+
+    @needs_symlinks
+    @pytest.mark.parametrize("entries", [3, 5, 12])
+    def test_the_output_does_not_grow_with_the_directory(self, roots, entries):
+        """The property the review named: work bounded by the limit, not the tree."""
+        self._refused_links(roots, entries)
+        inv = inventory(roots, max_objects=2)
+        found = inv.walk()
+        assert len(found) <= 2, len(found)
+        assert inv.last_pass.objects_seen == 2
+        assert inv.last_pass.truncated is True
+
+    @needs_symlinks
+    def test_a_zero_cap_enumerates_nothing_at_all(self, roots):
+        """Zero means zero, refused entries included."""
+        self._refused_links(roots, 3)
+        roots.write("real.pdf", b"real bytes")
+        spy = _Spy()
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots), opener=spy,
+            budget=ar.ScanBudget(max_objects=0, allow_content_read=True))
+        pass_ = inv.open_pass()
+        assert inv.walk(pass_) == []
+        assert pass_.objects_seen == 0
+        assert pass_.truncated is True
+        assert pass_.bytes_read == 0
+        assert spy.opened == []
+
+    @needs_symlinks
+    def test_safe_and_refused_entries_share_one_allowance_in_either_order(
+            self, roots):
+        """Mixed order: whichever two come first spend the two charges."""
+        # "aaa_link" sorts before "mmm_real", "zzz_link" after
+        target = roots.write_outside("t.pdf", b"outside")
+        os.symlink(target, os.path.join(roots.uploads, "aaa_link.pdf"))
+        roots.write("mmm_real.pdf", b"readable bytes")
+        os.symlink(target, os.path.join(roots.uploads, "zzz_link.pdf"))
+        inv = inventory(roots, max_objects=2)
+        found = inv.walk()
+        assert [o.relative_path for o in found] == ["aaa_link.pdf",
+                                                    "mmm_real.pdf"]
+        assert found[0].refusal == ar.REASON_PATH_IS_LINK
+        assert found[1].checksum is not None, "the safe object was not read"
+        assert inv.last_pass.objects_seen == 2
+        assert inv.last_pass.truncated is True
+
+    @needs_symlinks
+    def test_each_distinct_refused_link_is_charged_separately(self, roots):
+        """Two different links to the SAME target are two entries, not one.
+
+        This is why a refused entry is keyed by the path as enumerated: it has
+        been refused precisely so that its link is NOT followed, so resolving
+        it to decide identity would collapse two refusals into one charge.
+        """
+        target = roots.write_outside("one.pdf", b"shared target")
+        os.symlink(target, os.path.join(roots.uploads, "a.pdf"))
+        os.symlink(target, os.path.join(roots.uploads, "b.pdf"))
+        inv = inventory(roots, max_objects=5)
+        found = inv.walk()
+        assert len(found) == 2
+        assert {o.refusal for o in found} == {ar.REASON_PATH_IS_LINK}
+        assert inv.last_pass.objects_seen == 2, "two refusals shared one charge"
+
+    @needs_symlinks
+    def test_the_same_refused_entry_seen_twice_is_charged_once(self, roots):
+        """Cache semantics are preserved for refusals too: one entry, one charge."""
+        target = roots.write_outside("t.pdf", b"outside")
+        os.symlink(target, os.path.join(roots.uploads, "link.pdf"))
+        inv = inventory(roots, max_objects=5)
+        pass_ = inv.open_pass()
+        walked = {o.relative_path: o for o in inv.walk(pass_)}["link.pdf"]
+        assert pass_.objects_seen == 1
+        # the SAME entry, now named by a DB row, in the same pass
+        told = inv.observe_path("/app/backend/uploads/link.pdf", pass_)
+        assert told.refusal == ar.REASON_PATH_IS_LINK
+        assert walked.refusal == told.refusal
+        assert pass_.objects_seen == 1, "one entry was charged twice"
+
+    def test_a_safe_object_is_still_charged_once_across_both_entry_paths(self,
+                                                                        roots):
+        """The C02 shared-limit guarantee, unchanged by this correction."""
+        roots.write("shared.pdf", b"shared bytes")
+        inv = inventory(roots, max_objects=1)
+        pass_ = inv.open_pass()
+        inv.walk(pass_)
+        assert pass_.objects_seen == 1
+        told = inv.observe_path("/app/backend/uploads/shared.pdf", pass_)
+        assert told.checksum is not None, "the cached observation was lost"
+        assert told.refusal is None
+        assert pass_.objects_seen == 1
+        assert pass_.checksums_read == 1
+
+    @needs_symlinks
+    def test_a_repeated_pass_starts_with_the_whole_allowance(self, roots):
+        """C02's per-pass budget survives: refusals do not leak between passes."""
+        self._refused_links(roots, 3)
+        inv = inventory(roots, max_objects=2)
+        for _attempt in range(4):
+            found = inv.walk()
+            assert len(found) == 2
+            assert inv.last_pass.objects_seen == 2
+            assert inv.last_pass.truncated is True
+
+    @needs_symlinks
+    def test_a_db_row_naming_a_link_is_charged(self, roots):
+        """The DB-row entry path charges the same allowance as the walk."""
+        target = roots.write_outside("t.pdf", b"outside")
+        os.symlink(target, os.path.join(roots.uploads, "row.pdf"))
+        spy = _Spy()
+        inv = ar.LegacyRootInventory(
+            roots.roots(), declared_roots=declared_map(roots), opener=spy,
+            budget=ar.ScanBudget(max_objects=5, allow_content_read=True))
+        pass_ = inv.open_pass()
+        told = inv.observe_path("/app/backend/uploads/row.pdf", pass_)
+        assert told.refusal == ar.REASON_PATH_IS_LINK
+        assert pass_.objects_seen == 1, "the DB-row refusal was not charged"
+        assert spy.opened == []
+
+    @needs_symlinks
+    def test_a_refused_entry_beyond_the_cap_reports_the_budget_not_the_link(
+            self, roots):
+        """Once the allowance is gone, the budget is the first thing in the way."""
+        self._refused_links(roots, 2)
+        inv = inventory(roots, max_objects=1)
+        pass_ = inv.open_pass()
+        inv.walk(pass_)
+        assert pass_.objects_seen == 1
+        later = inv.observe_path("/app/backend/uploads/link1.pdf", pass_)
+        assert later.refusal == ar.REASON_OBJECT_BUDGET_EXHAUSTED
+        assert later.checksum is None
+        assert pass_.objects_seen == 1
+
+
+class TestC03BoundedInventoryThroughTheService:
+    """Service-level: the scan and its stored plan report the truth."""
+
+    @needs_symlinks
+    def test_a_scan_over_refused_entries_is_bounded_and_says_so(self, roots):
+        """The plan's inventory record must show the limit was reached."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            TestC03BoundedInventoryChargesEveryEntry._refused_links(roots, 3)
+            spy = _Spy()
+            inv = ar.LegacyRootInventory(
+                roots.roots(), declared_roots=declared_map(roots), opener=spy,
+                budget=ar.ScanBudget(max_objects=1, allow_content_read=True))
+            out = await readiness(reg, inv=inv).scan(ctx(OPERATOR_A, A),
+                                                      source_keys=["media_files"])
+            assert out["inventory"]["objects_seen"] == 1
+            assert out["inventory"]["truncated"] is True
+            assert out["inventory"]["bytes_read"] == 0
+            physical = [i for i in out["item_records"]
+                        if i["direction"] == ar.DIRECTION_PHYSICAL_OBJECT]
+            assert len(physical) <= 1, len(physical)
+            assert spy.opened == [], "a refused path was opened"
+            # nothing about the refused targets is anywhere in the plan
+            assert "SECRET" not in repr(out["item_records"])
+            assert "t0.pdf" not in repr(out["item_records"])
+        run(body())
+
+    @needs_symlinks
+    def test_a_row_is_bounded_too_and_the_plan_revalidates(self, roots):
+        """A legacy row whose object is a refused link, under a spent budget."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            TestC03BoundedInventoryChargesEveryEntry._refused_links(roots, 2)
+            await _seed(db, A, "media_files", [_media_row("md-1", "link1.pdf")])
+            spy = _Spy()
+            inv = ar.LegacyRootInventory(
+                roots.roots(), declared_roots=declared_map(roots), opener=spy,
+                budget=ar.ScanBudget(max_objects=1, allow_content_read=True))
+            service = readiness(reg, inv=inv)
+            out = await service.scan(ctx(OPERATOR_A, A),
+                                      source_keys=["media_files"])
+            assert out["inventory"]["objects_seen"] == 1
+            assert out["inventory"]["truncated"] is True
+            row, = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            # the walk spent the allowance, so the row is budget-refused
+            assert row["observed"]["refusal"] == \
+                ar.REASON_OBJECT_BUDGET_EXHAUSTED
+            assert row["observed"]["checksum"] is None
+            # never a proven absence and never readiness
+            assert row["state"] not in (ar.MISSING_ORIGINAL, ar.READY_TO_ADOPT)
+            assert row["proposed_action"] != ar.PROPOSE_ADOPT_IN_PLACE
+            assert spy.opened == []
+            # and the same bounded inputs revalidate without inventing drift
+            for _attempt in range(3):
+                answer = await service.validate_plan(ctx(OPERATOR_A, A),
+                                                      scan_id=out["id"])
+                assert answer["valid"] is True, answer
+                assert answer["plan_hash"] == out["plan_hash"]
+        run(body())
+
+    @needs_symlinks
+    def test_a_bounded_scan_is_deterministic_across_repeats(self, roots):
+        """Same inputs, same limit, same plan — every time."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            TestC03BoundedInventoryChargesEveryEntry._refused_links(roots, 4)
+            roots.write("zzz_real.pdf", b"readable")
+            hashes = []
+            for _attempt in range(3):
+                inv = ar.LegacyRootInventory(
+                    roots.roots(), declared_roots=declared_map(roots),
+                    budget=ar.ScanBudget(max_objects=2, allow_content_read=True))
+                out = await readiness(reg, inv=inv).scan(
+                    ctx(OPERATOR_A, A), source_keys=["media_files"],
+                    persist=False)
+                hashes.append(out["plan_hash"])
+                assert out["inventory"]["objects_seen"] == 2
+                assert out["inventory"]["truncated"] is True
+            assert len(set(hashes)) == 1, "a bounded scan was not deterministic"
+        run(body())
+
+    def test_an_unbounded_scan_still_sees_everything(self, roots):
+        """The positive control: the limit must not refuse ordinary work."""
+        async def body():
+            db, sysdb, reg = await _tenant_world()
+            for index in range(3):
+                roots.write("ok%d.pdf" % index, b"bytes %d" % index)
+                await _seed(db, A, "media_files",
+                            [_media_row("md-%d" % index, "ok%d.pdf" % index)])
+            out = await readiness(reg, inv=inventory(roots)).scan(
+                ctx(OPERATOR_A, A), source_keys=["media_files"])
+            assert out["inventory"]["objects_seen"] == 3
+            assert out["inventory"]["truncated"] is False
+            rows = [i for i in out["item_records"]
+                    if i["direction"] == ar.DIRECTION_DB_ROW]
+            assert len(rows) == 3
+            assert all(r["observed"]["checksum"] for r in rows)
+            assert all(r["observed"]["refusal"] is None for r in rows)
+        run(body())

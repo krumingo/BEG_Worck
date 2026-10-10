@@ -756,3 +756,75 @@ class TestRealC03Bounds:
             text = str(stored)
             assert "NOT YOURS" not in text and "secret" not in text
         scratch(test)
+
+
+class TestRealC04BoundedInventory:
+    """The bounded-inventory accounting, as the real server stores it."""
+
+    @needs_symlinks
+    def test_a_bounded_scan_persists_its_real_counters(self):
+        """Defect: refused entries were uncharged, so the stored record lied.
+
+        The scan document is what a later slice and an operator read, so the
+        counters it persists have to be the ones the pass actually spent.
+        """
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            outside = os.path.join(roots.base, "elsewhere")
+            os.makedirs(outside, exist_ok=True)
+            for index in range(3):
+                target = os.path.join(outside, "t%d.pdf" % index)
+                with open(target, "wb") as handle:
+                    handle.write(b"NOT YOURS %d" % index)
+                os.symlink(target,
+                           os.path.join(roots.uploads, "link%d.pdf" % index))
+            spy = _Spy()
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=_gated(roots, spy, max_objects=1))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            scan_doc = await db[ar.ADOPTION_SCANS_COLLECTION].find_one(
+                {"id": out["id"]})
+            assert scan_doc["inventory"]["objects_seen"] == 1
+            assert scan_doc["inventory"]["truncated"] is True
+            assert scan_doc["inventory"]["bytes_read"] == 0
+            items = await db[ar.ADOPTION_ITEMS_COLLECTION].count_documents(
+                {"scan_id": out["id"],
+                 "direction": ar.DIRECTION_PHYSICAL_OBJECT})
+            assert items <= 1, items
+            assert spy.opened == [], spy.opened
+            # the refused targets are untouched and absent from the records
+            for index in range(3):
+                with open(os.path.join(outside, "t%d.pdf" % index), "rb") as h:
+                    assert h.read() == b"NOT YOURS %d" % index
+            stored = [d async for d in db[ar.ADOPTION_ITEMS_COLLECTION].find(
+                {"scan_id": out["id"]})]
+            assert "NOT YOURS" not in str(stored)
+        scratch(test)
+
+    @needs_symlinks
+    def test_a_bounded_plan_revalidates_on_a_real_server(self):
+        """Truncation is not drift: the same bounded inputs stay valid."""
+        async def test(db, sysdb, roots):
+            await db["projects"].insert_one({"id": "P-1", "org_id": A,
+                                             "name": "site"})
+            outside = os.path.join(roots.base, "elsewhere")
+            os.makedirs(outside, exist_ok=True)
+            target = os.path.join(outside, "t.pdf")
+            with open(target, "wb") as handle:
+                handle.write(b"outside")
+            for name in ("a.pdf", "b.pdf"):
+                os.symlink(target, os.path.join(roots.uploads, name))
+            svc = ar.LegacyAdoptionReadiness(
+                FileRegistry(TenantData(db, A)),
+                inventory=_gated(roots, max_objects=1))
+            out = await svc.scan(_ctx(OPERATOR_A, A), source_keys=["media_files"])
+            for _attempt in range(3):
+                answer = await svc.validate_plan(_ctx(OPERATOR_A, A),
+                                                  scan_id=out["id"])
+                assert answer["valid"] is True, answer
+                assert answer["plan_hash"] == out["plan_hash"]
+            assert await db["audit_events"].count_documents(
+                {"action": ar.AUDIT_PLAN_REFUSED}) == 0
+        scratch(test)
