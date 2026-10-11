@@ -73,22 +73,22 @@
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LIVE-OPS-A staging приет от Крум
-🟡 LIVE-OPS-B — Material Requests safe-write core: CLAUDE implementation
+🟡 LIVE-OPS-B — Material Requests safe-write core: CODEX independent review pending
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: CLAUDE_IMPLEMENTATION
-Responsible: CLAUDE
-Next: exact-head HANDOFF, then CODEX independent review
-PR: NONE YET (required Draft PR)
+Stage: CODEX_REVIEW_PENDING
+Responsible: CODEX
+Next: CODEX independent review of PR #54 exact head
+PR: #54 draft/open/unmerged
 Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
-Verdict: NONE YET
+Verdict: NONE YET — owner decisions closed
 Acceptance: NOT STARTED
 Correction loops: 0
-Blockers: NONE
+Blockers: direct PC handoff unavailable in CLAUDE cloud; Issue #52 HANDOFF available
 Last update: 2026-10-10T21:49:45Z
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -107,3 +107,13 @@ Last update: 2026-10-10T21:49:45Z
 LIVE-OPS-A staging е приет от Крум.
 5A.5 = DONE.
 PR #53 остава draft/open/unmerged до отделен merge gate.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ TASK 5B OWNER DECISIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+D1: qty_approved must satisfy 0 < qty_approved <= qty_requested.
+D2: needed_date + valid destination are mandatory at submit.
+No new business flow may be invented for quantity increases.
+PR #54 exact head: 48ccf7f265bec962444f8eff1d07f95077db48cb.
+Next gate: CODEX independent review.
