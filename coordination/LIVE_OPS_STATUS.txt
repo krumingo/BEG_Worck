@@ -80,9 +80,9 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: OWNER_ACCEPTANCE_PREP
-Responsible: CODEX technical gate complete
-Next: prepare staging owner review for LIVE-OPS-B
+Stage: STAGING_PREPARATION
+Responsible: CODEX
+Next: prepare private-LAN staging acceptance package
 PR: #54 draft/open/unmerged
 Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
 Verdict: PASS_CANDIDATE
@@ -173,3 +173,14 @@ D2 CONFIRMED
 
 PR #54 remains draft/open/unmerged.
 Next gate: staging owner acceptance.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟡 TASK 5B — STAGING PREPARATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS_CANDIDATE head:
+48306bab333d403369636da2ecc4922ffa915d9a
+
+Next:
+private-LAN staging → owner smoke checks → 5B.5 acceptance.
+No merge / no production deploy.
