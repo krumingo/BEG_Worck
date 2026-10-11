@@ -80,9 +80,9 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: CODEX_REVIEW_PENDING
+Stage: CODEX_REREVIEW_PENDING
 Responsible: CODEX
-Next: CODEX independent review of PR #54 exact head
+Next: CODEX independent re-review of PR #54 corrected exact head
 PR: #54 draft/open/unmerged
 Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
 Verdict: NONE YET — owner decisions closed
@@ -115,5 +115,19 @@ PR #53 остава draft/open/unmerged до отделен merge gate.
 D1: qty_approved must satisfy 0 < qty_approved <= qty_requested.
 D2: needed_date + valid destination are mandatory at submit.
 No new business flow may be invented for quantity increases.
-PR #54 exact head: 48ccf7f265bec962444f8eff1d07f95077db48cb.
-Next gate: CODEX independent review.
+PR #54 exact corrected head: 3ab226e7bf8342f8957f3dcca7d79cbe28df49d2.
+Next gate: CODEX independent re-review of corrected head.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛠️ TASK 5B CORRECTION HANDOFF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ F-01/T1 correction published
+✅ F-02/T2 correction published
+✅ F-03/T3 correction published
+✅ F-04 requester correction published
+✅ Focused backend: 41 passed / 0 skipped
+✅ Frontend: 102 passed
+✅ A1/A2C: 0 violations
+🟡 CODEX re-review pending
+Exact head: 3ab226e7bf8342f8957f3dcca7d79cbe28df49d2
