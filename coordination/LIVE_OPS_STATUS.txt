@@ -184,3 +184,14 @@ PASS_CANDIDATE head:
 Next:
 private-LAN staging → owner smoke checks → 5B.5 acceptance.
 No merge / no production deploy.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 TASK 5B — OWNER STAGING FEEDBACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CHANGES_REQUESTED before owner acceptance:
+1) Least-privilege access/navigation: requester/approver currently appear as Owner and see excessive modules.
+2) Phone UI must be compact/clean; current desktop sidebar/table layout is not phone-first.
+
+5B.5 remains OWNER_PENDING / NOT ACCEPTED.
+Same PR #54; bounded UX/access correction only.
