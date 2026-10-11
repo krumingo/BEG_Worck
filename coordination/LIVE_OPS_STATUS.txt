@@ -73,22 +73,22 @@
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LIVE-OPS-A staging приет от Крум
-🟡 LIVE-OPS-B — Material Requests safe-write core: CLAUDE portability correction pending
+🟡 LIVE-OPS-B — Material Requests safe-write core: WAITING_FOR_CLAUDE
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: CLAUDE_CORRECTION_PENDING
-Responsible: CLAUDE
-Next: one-line UTF-8 portability correction → focused 41/41 → CODEX recheck
+Stage: WAITING_FOR_CLAUDE
+Responsible: CLAUDE (currently not active)
+Next: when CLAUDE is active → one-line UTF-8 portability correction → focused 41/41 → CODEX recheck
 PR: #54 draft/open/unmerged
 Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
 Verdict: CHANGES_REQUESTED
 Acceptance: NOT STARTED
 Correction loops: 2
-Blockers: direct PC handoff unavailable in CLAUDE cloud; Issue #52 HANDOFF available
+Blockers: CLAUDE currently not active; correction request is already queued in Issue #52
 Last update: 2026-10-10T21:49:45Z
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -143,3 +143,12 @@ CODEX re-review at 3ab226e7bf8342f8957f3dcca7d79cbe28df49d2:
 - Required correction: one-line UTF-8 test-harness fix
 - F-01/F-02/F-03/F-04 mechanisms remain technically confirmed
 - PASS_CANDIDATE is withheld until clean 41/41, exit 0
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏸️ WAITING FOR CLAUDE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLAUDE is currently not active.
+Do not duplicate-send the correction.
+Existing bounded correction request remains canonical in Issue #52.
+When CLAUDE resumes: apply UTF-8 test fix only → rerun focused suite → publish exact-head HANDOFF.
