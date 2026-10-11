@@ -195,3 +195,15 @@ CHANGES_REQUESTED before owner acceptance:
 
 5B.5 remains OWNER_PENDING / NOT ACCEPTED.
 Same PR #54; bounded UX/access correction only.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟡 NEXT — LIVE-OPS-C FLOW-FIRST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Next functional block:
+FLOW-009 Canonical Warehouse / Stock Core
+
+Method:
+full FLOW read → full affected code read → FLOW↔CODE map → CODEX→CLAUDE implementation → CODEX independent tests/review.
+
+Owner staging for Materials is deferred until the integrated Materials gate after FLOW-009 + FLOW-012 + FLOW-020 chain.
