@@ -138,7 +138,7 @@ def test_the_decider_makes_exactly_one_permission_decision():
 def test_the_index_gate_keeps_no_positive_cache():
     from app.services import material_request_commands as mrc
     assert not hasattr(mrc, "_index_ok_cache")
-    src = ast.unparse(next(n for n in ast.walk(ast.parse((BACKEND / SERVICE).read_text()))
+    src = ast.unparse(next(n for n in ast.walk(ast.parse((BACKEND / SERVICE).read_text(encoding="utf-8")))
                            if isinstance(n, ast.AsyncFunctionDef)
                            and n.name == "assert_required_indexes"))
     assert "cache" not in src.split('"""')[-1]
