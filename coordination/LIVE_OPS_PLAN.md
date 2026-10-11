@@ -88,10 +88,10 @@
 - [x] 5A.5 Staging accepted
 
 ### 📋 LIVE-OPS-B — operational slice 2
-- [ ] 5B.1 Implementation
-- [ ] 5B.2 Tests
-- [ ] 5B.3 CODEX independent review
-- [ ] 5B.4 PASS
+- [x] 5B.1 Implementation
+- [x] 5B.2 Tests
+- [x] 5B.3 CODEX independent review
+- [x] 5B.4 PASS
 - [ ] 5B.5 Staging accepted
 
 ### 🏭 LIVE-OPS-C — operational slice 3
@@ -156,22 +156,22 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**LIVE-OPS-A STAGING ACCEPTED — следва следващ bounded slice**
+**LIVE-OPS-B PASS_CANDIDATE — чака staging owner acceptance**
 
 ### ⏭️ СЛЕДВА
-**Подготовка на LIVE-OPS-B scope/task по frozen contract**
+**LIVE-OPS-B staging acceptance**
 
 ### 👤 KRUM ACTION
-**Няма действие; LIVE-OPS-A staging е приет**
+**Нужно е staging приемане на LIVE-OPS-B след owner smoke**
 
 ### 💻 CODE ACTION
 **Implementation вече може да започне само по frozen contract и на малки bounded slices**
 
 Next decision: **няма owner decision pending**
 
-Current owner action: **none — LIVE-OPS-A accepted**
+Current owner action: **review LIVE-OPS-B staging when prepared**
 
-Current code action: **prepare next bounded LIVE-OPS slice against v6-contract-freeze**
+Current code action: **prepare LIVE-OPS-B staging acceptance package**
 
 
 
