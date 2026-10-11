@@ -73,22 +73,22 @@
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LIVE-OPS-A staging приет от Крум
-🟡 LIVE-OPS-B — Material Requests safe-write core: WAITING_FOR_CLAUDE
+🟡 LIVE-OPS-B — Material Requests safe-write core: PASS_CANDIDATE / OWNER_PENDING
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: WAITING_FOR_CLAUDE
-Responsible: CLAUDE (currently not active)
-Next: when CLAUDE is active → one-line UTF-8 portability correction → focused 41/41 → CODEX recheck
+Stage: OWNER_ACCEPTANCE_PREP
+Responsible: CODEX technical gate complete
+Next: prepare staging owner review for LIVE-OPS-B
 PR: #54 draft/open/unmerged
 Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
-Verdict: CHANGES_REQUESTED
-Acceptance: NOT STARTED
+Verdict: PASS_CANDIDATE
+Acceptance: OWNER_PENDING
 Correction loops: 2
-Blockers: CLAUDE currently not active; correction request is already queued in Issue #52
+Blockers: NONE
 Last update: 2026-10-10T21:49:45Z
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -152,3 +152,24 @@ CLAUDE is currently not active.
 Do not duplicate-send the correction.
 Existing bounded correction request remains canonical in Issue #52.
 When CLAUDE resumes: apply UTF-8 test fix only → rerun focused suite → publish exact-head HANDOFF.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ TASK 5B — FINAL CODEX VERDICT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS_CANDIDATE on exact head:
+48306bab333d403369636da2ecc4922ffa915d9a
+
+Independent CODEX focused result:
+41 passed / 0 failed / 0 skipped
+PYTEST_EXIT=0
+
+F-01/T1 CLOSED
+F-02/T2 CLOSED
+F-03/T3 CLOSED
+F-04 CLOSED
+D1 CONFIRMED
+D2 CONFIRMED
+
+PR #54 remains draft/open/unmerged.
+Next gate: staging owner acceptance.
