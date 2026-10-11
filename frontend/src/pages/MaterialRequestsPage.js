@@ -237,6 +237,11 @@ function RequestForm({ initial, projects, isPhone, writesEnabled, onCancel, onSa
             <option value="">— изберете —</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.code} {p.name}</option>)}
           </select>
+          {!f.id && projects.length === 0 && (
+            <span className="block text-xs text-amber-300 mt-1" data-testid="no-project-options">
+              Нямате право да създавате заявки в нито един обект.
+            </span>
+          )}
         </label>
         <div className="grid grid-cols-2 gap-2">
           <label className="block text-sm">
@@ -534,14 +539,16 @@ export default function MaterialRequestsPage() {
     setLoading(true);
     setLoadError(null);
     try {
+      // Create options come from the SAME Permission Service authority the create
+      // command enforces — not from the legacy team list (CODEX C01 F-02).
       const [rq, ws, pr] = await Promise.all([
         API.get("/material-requests"),
         API.get("/material-requests/write-status").catch(() => ({ data: { writes_enabled: false } })),
-        API.get("/projects").catch(() => ({ data: [] })),
+        API.get("/material-requests/project-options").catch(() => ({ data: { projects: [] } })),
       ]);
       setRequests(Array.isArray(rq.data) ? rq.data : []);
       setWriteStatus(ws.data || { writes_enabled: false });
-      setProjects(Array.isArray(pr.data) ? pr.data : pr.data?.items || []);
+      setProjects(Array.isArray(pr.data?.projects) ? pr.data.projects : []);
     } catch (e) {
       setLoadError(errorText(e));
     } finally {
@@ -625,6 +632,15 @@ export default function MaterialRequestsPage() {
     if (out) await after(out);
   };
 
+  // Filter by any project that has a visible request (read scope), not only by
+  // projects this user may create in.
+  const filterProjects = Object.values(requests.reduce((acc, r) => {
+    if (r.project_id && !acc[r.project_id]) {
+      acc[r.project_id] = { id: r.project_id, code: r.project_code, name: r.project_name };
+    }
+    return acc;
+  }, {}));
+
   const shown = requests.filter((r) =>
     (!filters.state || r.request_state === filters.state || (filters.state === "legacy" && !r.request_state))
     && (!filters.project || r.project_id === filters.project)
@@ -683,7 +699,7 @@ export default function MaterialRequestsPage() {
           <select className="bg-card border border-border rounded px-3 py-2 text-sm" value={filters.project}
             onChange={(e) => setFilters({ ...filters, project: e.target.value })} data-testid="filter-project">
             <option value="">Всички обекти</option>
-            {projects.map((p) => <option key={p.id} value={p.id}>{p.code} {p.name}</option>)}
+            {filterProjects.map((p) => <option key={p.id} value={p.id}>{p.code} {p.name}</option>)}
           </select>
         </div>
       )}

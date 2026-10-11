@@ -85,6 +85,8 @@ ACTION_SUBMIT = "material_request.submit"
 ACTION_APPROVE = "material_request.approve"
 ACTION_CANCEL = "material_request.cancel"
 ACTION_CANCEL_APPROVED = "material_request.cancel_approved"
+REQUEST_ACTIONS = (ACTION_CREATE, ACTION_EDIT_DRAFT, ACTION_SUBMIT, ACTION_APPROVE,
+                   ACTION_CANCEL, ACTION_CANCEL_APPROVED)
 
 #: The only valid control transitions in the pilot (§3.2). No reopen.
 TRANSITIONS = {
@@ -107,11 +109,23 @@ BLOCKED_PROJECT_STATUSES = {"Completed", "Cancelled", "Archived"}
 #: duplicate-key race on the idempotency claim). Each retry re-reads everything.
 MAX_TXN_ATTEMPTS = 8
 
-#: Unique indexes that MUST exist before any write (contract §9.3, §12 item 5).
+#: Display numbers: ``MR-`` followed by digits only. Anything else in legacy
+#: data is reported by the inventory and ignored by the allocator.
+REQUEST_NUMBER_PATTERN = r"^MR-[0-9]+$"
+REQUEST_NUMBER_PREFIX = "MR-"
+#: Partial filter of the request-number uniqueness index: legacy rows without a
+#: number (e.g. the retired field writer) are not indexed, every string is.
+REQUEST_NUMBER_PARTIAL = {"request_number": {"$type": "string"}}
+
+#: Unique indexes that MUST exist before any write (contract §9.3, §12 item 5),
+#: as ``(collection, keys, partialFilterExpression or None)``. This tuple is the
+#: single source for the runtime gate AND the bootstrap/verify tool
+#: (``scripts/live_ops_b_bootstrap.py``).
 REQUIRED_UNIQUE_INDEXES = (
-    (AUDIT_COLLECTION, (("event_id", 1),)),
-    (AUDIT_COLLECTION, (("tenant_id", 1), ("sequence", 1))),
-    (IDEMPOTENCY_COLLECTION, (("id", 1),)),
+    (AUDIT_COLLECTION, (("event_id", 1),), None),
+    (AUDIT_COLLECTION, (("tenant_id", 1), ("sequence", 1)), None),
+    (IDEMPOTENCY_COLLECTION, (("id", 1),), None),
+    (COLLECTION, (("org_id", 1), ("request_number", 1)), REQUEST_NUMBER_PARTIAL),
 )
 
 #: Draft fields a client may author (contract §2.2 "Mutable in DRAFT").
@@ -392,26 +406,51 @@ def project_request(doc: Dict[str, Any], facts: Dict[str, Dict[str, float]]) -> 
 
 
 # ═══════════════════════════════════════════════════════════════ preconditions
-_index_ok_cache: Dict[str, bool] = {}
+def missing_required_indexes(info_by_collection: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Pure check: which required unique indexes are absent from ``index_information()``.
+
+    An index satisfies a requirement only when it is unique, has exactly the
+    required keys in order, and — for a partial requirement — carries a partial
+    filter that is at least as wide (a non-partial unique index is wider and
+    therefore accepted).
+    """
+    missing = []
+    for coll, keys, partial in REQUIRED_UNIQUE_INDEXES:
+        want = [tuple(k) for k in keys]
+        ok = False
+        for spec in (info_by_collection.get(coll) or {}).values():
+            if not spec.get("unique") or [tuple(k) for k in spec.get("key", [])] != want:
+                continue
+            have_partial = spec.get("partialFilterExpression")
+            if have_partial is None or (partial is not None and have_partial == partial):
+                ok = True
+                break
+        if not ok:
+            missing.append({"collection": coll, "keys": [k for k, _ in keys],
+                            "partial": partial})
+    return missing
 
 
 async def assert_required_indexes(db) -> None:
-    """Fail closed when the canonical audit/idempotency unique indexes are absent."""
-    if _index_ok_cache.get(db.name):
-        return
-    for coll, keys in REQUIRED_UNIQUE_INDEXES:
+    """Fail closed when a required unique index is absent.
+
+    Checked on EVERY command — there is deliberately no positive cache, so an
+    index dropped after an earlier successful check disables the very next
+    write (CODEX C01 F-03).
+    """
+    info: Dict[str, Dict[str, Any]] = {}
+    for coll in sorted({c for c, _, _ in REQUIRED_UNIQUE_INDEXES}):
         try:
-            info = await db[coll].index_information()
-        except Exception:
-            info = {}
-        want = list(keys)
-        if not any(v.get("unique") and [tuple(k) for k in v.get("key", [])] == want
-                   for v in info.values()):
-            raise CommandError(503, "REQUIRED_INDEX_MISSING",
-                               "Canonical audit/idempotency indexes are not provisioned for this "
-                               "tenant database; request writes are disabled.",
-                               collection=coll, keys=[k for k, _ in keys])
-    _index_ok_cache[db.name] = True
+            info[coll] = await db[coll].index_information()
+        except Exception:                                       # noqa: BLE001
+            info[coll] = {}          # absent collection / unreadable: nothing satisfied
+    missing = missing_required_indexes(info)
+    if missing:
+        raise CommandError(503, "REQUIRED_INDEX_MISSING",
+                           "Required unique indexes are not provisioned for this tenant database; "
+                           "request writes are disabled. Run scripts/live_ops_b_bootstrap.py "
+                           "(inventory, then --apply) for this database.",
+                           missing=missing)
 
 
 # ═══════════════════════════════════════════════════════════════ audit helpers
@@ -489,7 +528,10 @@ async def execute(cmd: Command, *, decide) -> Dict[str, Any]:
     """Run one command atomically.
 
     ``decide(project_id, request_doc)`` is the injected Permission Service call;
-    it returns ``(allowed, reason_code, role_assignment_ids, basis, revisions)``.
+    it returns ``(allowed, reason_code, role_assignment_ids, basis, revisions)``
+    where ``basis`` is a dict: the exact ``action`` evaluated, the Permission
+    Service ``decision`` and the ``basis`` that allowed the command
+    (``permission`` or the frozen §3.2 ``requester`` alternative).
     """
     db, ctx = cmd.db, cmd.ctx
     org_id = ctx.org_id
@@ -516,11 +558,11 @@ async def execute(cmd: Command, *, decide) -> Dict[str, Any]:
     if not allowed:
         await append_standalone_event(db, _event(
             ctx=ctx, action=cmd.action, result=RESULT_DENIED, request_id=cmd.request_id,
-            project_id=project_id, diff={"permission_action": basis}, reason="permission denied",
+            project_id=project_id, diff={"permission": basis}, reason="permission denied",
             correlation_id=cmd.correlation_id, idempotency_key=cmd.idempotency_key,
             role_ids=[], error_code=reason_code, channel=cmd.channel, endpoint=cmd.endpoint))
         raise CommandError(403, "PERMISSION_DENIED", "Нямате право за това действие по този обект.",
-                           reason=reason_code, action=basis)
+                           reason=reason_code, action=basis.get("action"))
 
     # ---- 3. the atomic boundary
     client = db.client
@@ -530,7 +572,7 @@ async def execute(cmd: Command, *, decide) -> Dict[str, Any]:
             try:
                 async with s.start_transaction():
                     result = await _apply(cmd, s, project_id, role_ids,
-                                          {"action": basis, "role_assignment_revisions": revisions})
+                                          {**basis, "role_assignment_revisions": revisions})
                 return result
             except CommandError as err:
                 # The transaction aborted: no partial write. Record the stop.
@@ -626,16 +668,22 @@ def _audit_view(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _next_request_number(db, s, org_id: str) -> str:
-    last = await db[COLLECTION].find_one({"org_id": org_id, "request_number": {"$regex": "^MR-"}},
-                                         {"_id": 0, "request_number": 1},
-                                         sort=[("created_at", -1)], session=s)
-    num = 1
-    if last and last.get("request_number"):
-        try:
-            num = int(last["request_number"].split("-")[1]) + 1
-        except (IndexError, ValueError):
-            num = 1
-    return "MR-%04d" % num
+    """Next tenant display number: highest existing ``MR-<digits>`` + 1.
+
+    The maximum is taken over the NUMBER, not over the newest row, so legacy
+    history stored out of order (an older MR-0003 beside a newer MR-0002) can
+    never hand out an existing number again. Concurrent allocators may compute
+    the same candidate; the unique ``(org_id, request_number)`` index makes the
+    loser's transaction fail and the bounded retry recomputes (F-01).
+    """
+    cursor = db[COLLECTION].aggregate([
+        {"$match": {"org_id": org_id, "request_number": {"$regex": REQUEST_NUMBER_PATTERN}}},
+        {"$group": {"_id": None, "top": {"$max": {"$toLong": {
+            "$substrCP": ["$request_number", len(REQUEST_NUMBER_PREFIX), 30]}}}}},
+    ], session=s)
+    rows = await cursor.to_list(1)
+    top = int(rows[0]["top"]) if rows and rows[0].get("top") is not None else 0
+    return "%s%04d" % (REQUEST_NUMBER_PREFIX, top + 1)
 
 
 async def _create(cmd: Command, s, project_id: str, now: str) -> Dict[str, Any]:

@@ -38,12 +38,6 @@ FORBIDDEN_WRITE = (
 #: The only collections a request command may write.
 ALLOWED_WRITE = {"material_requests", "audit_events", "audit_idempotency"}
 
-AUDIT_INDEXES = [
-    ("audit_events", [("event_id", 1)], True),
-    ("audit_events", [("tenant_id", 1), ("sequence", 1)], True),
-    ("audit_idempotency", [("id", 1)], True),
-    ("audit_idempotency", [("tenant_id", 1), ("action", 1), ("key", 1)], True),
-]
 
 
 def _refusal():
@@ -144,7 +138,7 @@ async def _seed(op, sysdb):
         p = org.lower()
         for name, role in (("owner", "Owner"), ("tech", "Technician"), ("sm", "SiteManager"),
                            ("outsider", "Technician"), ("revoked", "SiteManager"),
-                           ("nobody", "Owner"), ("tech2", "Technician")):
+                           ("nobody", "Owner"), ("tech2", "Technician"), ("member", "Technician")):
             users.append({"id": "%s-%s" % (p, name), "org_id": org, "email": "%s@%s.test" % (name, p),
                           "password_hash": pw, "role": role, "first_name": MARK[org] + name,
                           "last_name": "B", "is_active": True})
@@ -158,10 +152,16 @@ async def _seed(op, sysdb):
             _ra(p + "-ra-rev", p + "-revoked", org, permissions=APPROVER, status="revoked"),
             # "nobody" carries the legacy JWT role Owner and NO assignment at all.
         ]
+        # "member": legacy project_team membership on P2 and NO RoleAssignment.
+        await op.project_team.insert_one({
+            "id": p + "-pt-member", "org_id": org, "project_id": "P2", "user_id": p + "-member",
+            "role_in_project": "Technician", "active": True, "from_date": None, "to_date": None})
     await op.users.insert_many(users)
     await sysdb.tenant_role_assignments.insert_many(ras)
-    for coll, keys, unique in AUDIT_INDEXES:
-        await op[coll].create_index(keys, unique=unique)
+    # the pilot prerequisite indexes, provisioned the way staging/pilot does it
+    from scripts.live_ops_b_bootstrap import apply as bootstrap_apply
+    out = await bootstrap_apply(op)
+    assert out["status"] == "OK", out
 
 
 def _app(monkeypatch, op, sysdb):
@@ -192,9 +192,6 @@ def _app(monkeypatch, op, sysdb):
             raise TenantNotFound(tenant_id)
         return op
     monkeypatch.setattr(guard, "get_tenant_db", _tenant_db)
-
-    from app.services import material_request_commands as mrc
-    mrc._index_ok_cache.clear()
 
     app = FastAPI()
     api = APIRouter(prefix="/api")
@@ -293,7 +290,8 @@ def run(scenario):
                 callers = {}
                 for org in (BEG, TCB):
                     callers[org] = {}
-                    for name in ("owner", "tech", "sm", "outsider", "revoked", "nobody", "tech2"):
+                    for name in ("owner", "tech", "sm", "outsider", "revoked", "nobody", "tech2",
+                                 "member"):
                         r = await c.post("/api/auth/login", json={
                             "email": "%s@%s.test" % (name, org.lower()), "password": PASSWORD})
                         assert r.status_code == 200, (name, r.text[:200])
@@ -619,20 +617,28 @@ def test_each_consequential_action_appends_one_complete_canonical_event(monkeypa
         assert [e["action"] for e in evs] == [
             "material_request.create", "material_request.edit_draft", "material_request.submit",
             "material_request.approve", "material_request.cancel"]
-        for e, key in zip(evs, ["key-create-0001", "key-edit-0001", "key-submit-0001",
-                                "key-approve-0001", "key-cancel-0001"]):
+        for i, (e, key) in enumerate(zip(evs, ["key-create-0001", "key-edit-0001", "key-submit-0001",
+                                               "key-approve-0001", "key-cancel-0001"])):
             assert e["tenant_id"] == BEG and e["actor_type"] == "human"
             assert e["source_flow"] == "FLOW-020" and e["entity_type"] == "material_request"
             assert e["scope_type"] == "project" and e["scope_id"] == "P1"
             assert e["correlation_id"] == "corr-flow-0001" and e["idempotency_key"] == key
-            assert e["effective_role_assignments"], e["action"]
-            assert e["structured_diff"]["permission_basis"]["role_assignment_revisions"]
+            basis = e["structured_diff"]["permission_basis"]
+            if i == 1:
+                # beg-tech holds no edit_draft: the frozen requester alternative
+                # allowed it, and the event says so instead of borrowing a role
+                assert basis["basis"] == "requester" and basis["action"] == "material_request.edit_draft"
+                assert basis["decision"] == "ACTION_NOT_ALLOWED"
+                assert e["effective_role_assignments"] == []
+            else:
+                assert basis["basis"] == "permission" and basis["decision"] == "ALLOWED"
+                assert e["effective_role_assignments"], e["action"]
+                assert basis["role_assignment_revisions"]
             assert e["retention_class"] == "R2" and e["integrity_hash"] and e["sequence"]
             assert e["entity_version"]
         assert evs[0]["source_channel"] == "phone"
         assert evs[0]["actor_id"] == "beg-tech" and evs[3]["actor_id"] == "beg-sm"
         assert evs[3]["effective_role_assignments"] == ["beg-ra-sm"]
-        assert evs[1]["structured_diff"]["permission_basis"]["action"] == "requester+material_request.create"
         sub = evs[2]["structured_diff"]
         assert sub["from_state"] == "draft" and sub["to_state"] == "submitted"
         assert sub["before"]["status"] == "draft" and sub["after"]["status"] == "submitted"
@@ -887,15 +893,38 @@ def test_audit_failure_aborts_the_domain_write_and_the_idempotency_claim(monkeyp
     run(s)(monkeypatch)
 
 
-def test_missing_canonical_indexes_disable_writes(monkeypatch):
+@pytest.mark.parametrize("coll,index", [
+    ("audit_events", "liveops_b_uniq_tenant_id_sequence"),
+    ("audit_events", "liveops_b_uniq_event_id"),
+    ("audit_idempotency", "liveops_b_uniq_id"),
+    ("material_requests", "liveops_b_uniq_org_id_request_number"),
+])
+def test_an_index_dropped_after_a_successful_write_disables_the_next_write(monkeypatch, coll, index):
+    """F-03: no positive cache. A first write passes the gate; the index is then
+    dropped and the very next write fails closed — no internal state is reset."""
     async def s(h):
-        from app.services import material_request_commands as mrc
-        await h.op.audit_events.drop_index([("tenant_id", 1), ("sequence", 1)])
-        mrc._index_ok_cache.clear()
-        snap = await h.snapshot(["material_requests"])
-        r = await h.u[BEG]["owner"].send("POST", "/api/material-requests", {"project_id": "P1"})
+        owner = h.u[BEG]["owner"]
+        first = await h.create(owner)                        # gate checked and passed
+        assert first["request_number"]
+        await h.op[coll].drop_index(index)
+        snap = await h.snapshot(["material_requests", "audit_idempotency"])
+        n_events = len(await h.events())
+        r = await owner.send("POST", "/api/material-requests", {"project_id": "P1"})
+        assert r.status_code == 503 and _code(r) == "REQUIRED_INDEX_MISSING", r.text
+        assert [m["collection"] for m in r.json()["detail"]["missing"]] == [coll]
+        r = await owner.send("POST", "/api/material-requests/%s/submit" % first["id"])
         assert r.status_code == 503 and _code(r) == "REQUIRED_INDEX_MISSING"
-        assert await h.snapshot(["material_requests"]) == snap
+        assert await h.snapshot(["material_requests", "audit_idempotency"]) == snap
+        assert len(await h.events()) == n_events
+        # the explicit, repeatable bootstrap restores it; verify is green again
+        from scripts.live_ops_b_bootstrap import apply, verify
+        assert (await verify(h.op))["ok"] is False
+        out = await apply(h.op)
+        assert out["status"] == "OK" and [a["name"] for a in out["applied"]] == [index]
+        assert (await apply(h.op))["applied"] == []          # re-run is a no-op
+        assert (await verify(h.op))["ok"] is True
+        r = await owner.send("POST", "/api/material-requests", {"project_id": "P1"})
+        assert r.status_code == 201
     run(s)(monkeypatch)
 
 
@@ -927,6 +956,7 @@ def test_request_commands_write_only_request_audit_and_idempotency(monkeypatch):
         await h.create(h.u[TCB]["owner"])
         for path in ("/api/material-requests", "/api/material-requests/%s" % req["id"],
                      "/api/material-requests/item-options?q=x",
+                     "/api/material-requests/project-options",
                      "/api/material-requests/%s/view" % req["id"], "/api/material-requests/write-status"):
             assert (await u["owner"].get(path)).status_code == 200
         after = await h.snapshot()
@@ -935,4 +965,236 @@ def test_request_commands_write_only_request_audit_and_idempotency(monkeypatch):
         assert changed <= ALLOWED_WRITE, changed
         for name in FORBIDDEN_WRITE:
             assert before.get(name) == after.get(name), name
+    run(s)(monkeypatch)
+
+
+# ═══════════════════════════════════════════════════════ C01 correction — T1 numbering
+def test_request_numbers_are_unique_sequential_after_out_of_order_legacy_history(monkeypatch):
+    async def s(h):
+        owner = h.u[BEG]["owner"]
+        # valid legacy history stored out of order: the NEWER row has the LOWER
+        # number; plus a non-standard and a missing number, and the other tenant
+        await h.op.material_requests.insert_many([
+            {"id": "LEG-3", "org_id": BEG, "project_id": "P1", "status": "draft",
+             "request_number": "MR-0003", "created_at": "2026-01-01T00:00:00+00:00", "lines": []},
+            {"id": "LEG-2", "org_id": BEG, "project_id": "P1", "status": "draft",
+             "request_number": "MR-0002", "created_at": "2026-06-01T00:00:00+00:00", "lines": []},
+            {"id": "LEG-X", "org_id": BEG, "project_id": "P1", "status": "draft",
+             "request_number": "MR-ABC", "created_at": "2026-07-01T00:00:00+00:00", "lines": []},
+            {"id": "LEG-N", "org_id": BEG, "project_id": "P1", "status": "submitted", "lines": []},
+            {"id": "LEG-T", "org_id": TCB, "project_id": "P1", "status": "draft",
+             "request_number": "MR-0950", "created_at": "2026-08-01T00:00:00+00:00", "lines": []},
+        ])
+        a = await h.create(owner)
+        b = await h.create(owner)
+        assert (a["request_number"], b["request_number"]) == ("MR-0004", "MR-0005")
+        t = await h.create(h.u[TCB]["owner"])                   # per-tenant sequence
+        assert t["request_number"] == "MR-0951"
+
+        rs = await asyncio.gather(*[h.create(h.u[BEG]["tech"]) for _ in range(8)])
+        nums = [r["request_number"] for r in rs]
+        assert len(set(nums)) == 8, nums
+        assert sorted(nums) == ["MR-%04d" % n for n in range(6, 14)]
+        all_nums = await h.op.material_requests.distinct("request_number", {"org_id": BEG})
+        docs = await h.op.material_requests.find(
+            {"org_id": BEG, "request_number": {"$type": "string"}}, {"request_number": 1}).to_list(None)
+        assert len(docs) == len(all_nums)                        # no display number twice
+        await h.chain_ok()
+    run(s)(monkeypatch)
+
+
+def test_request_number_index_refuses_a_duplicate_even_without_the_allocator(monkeypatch):
+    async def s(h):
+        await h.op.material_requests.insert_one({"id": "D1", "org_id": BEG, "request_number": "MR-0700"})
+        from pymongo.errors import DuplicateKeyError
+        with pytest.raises(DuplicateKeyError):
+            await h.op.material_requests.insert_one({"id": "D2", "org_id": BEG,
+                                                     "request_number": "MR-0700"})
+        await h.op.material_requests.insert_one({"id": "D3", "org_id": TCB, "request_number": "MR-0700"})
+        await h.op.material_requests.insert_many([{"id": "N1", "org_id": BEG},   # partial: no number
+                                                  {"id": "N2", "org_id": BEG}])
+    run(s)(monkeypatch)
+
+
+def test_inventory_reports_legacy_duplicates_read_only_and_bootstrap_stays_fail_closed(monkeypatch):
+    async def s(h):
+        from scripts.live_ops_b_bootstrap import apply, inventory, verify
+        await h.op.material_requests.drop_index("liveops_b_uniq_org_id_request_number")
+        await h.op.material_requests.insert_many([
+            {"id": "DUP-A", "org_id": BEG, "request_number": "MR-0042", "lines": []},
+            {"id": "DUP-B", "org_id": BEG, "request_number": "MR-0042", "lines": []},
+            {"id": "OK-T", "org_id": TCB, "request_number": "MR-0042", "lines": []},
+            {"id": "ODD", "org_id": BEG, "request_number": "заявка 7", "lines": []},
+            {"id": "NONE", "org_id": BEG, "lines": []}])
+        before = await h.snapshot()
+        rep1, rep2 = await inventory(h.op), await inventory(h.op)
+        assert await h.snapshot() == before                      # inventory writes nothing
+        assert rep1 == rep2                                      # deterministic, same hash
+        assert rep1["blocking"] is True
+        assert rep1["request_number_duplicates"] == [
+            {"org_id": BEG, "request_number": "MR-0042", "count": 2, "ids": ["DUP-A", "DUP-B"]}]
+        assert rep1["tenants"][BEG]["non_standard_number"] == 1
+        assert rep1["tenants"][BEG]["missing_number"] == 1 and rep1["tenants"][BEG]["max_number"] == 42
+        assert [m["collection"] for m in rep1["missing_indexes"]] == ["material_requests"]
+
+        out = await apply(h.op)                                  # refused, nothing changed
+        assert out["status"] == "BLOCKED" and out["applied"] == []
+        assert await h.snapshot() == before
+        assert (await verify(h.op))["ok"] is False
+        r = await h.u[BEG]["owner"].send("POST", "/api/material-requests", {"project_id": "P1"})
+        assert r.status_code == 503 and _code(r) == "REQUIRED_INDEX_MISSING"
+        assert await h.snapshot(["material_requests"]) == {"material_requests": before["material_requests"]}
+    run(s)(monkeypatch)
+
+
+def test_bootstrap_cli_inventory_apply_verify_per_named_database(monkeypatch):
+    async def s(h):
+        from scripts import live_ops_b_bootstrap as boot
+        await h.op.material_requests.drop_index("liveops_b_uniq_org_id_request_number")
+        args = ["--mongo-url", REAL_URL, "--db", h.op.name]
+        assert await boot.main(["--verify"] + args) == boot.EXIT_MISSING
+        assert await boot.main(args) == boot.EXIT_OK                       # inventory: clean
+        assert await boot.main(["--apply"] + args) == boot.EXIT_USAGE      # no confirmation
+        assert await boot.main(["--apply", "--confirm-db", h.op.name] + args) == boot.EXIT_OK
+        assert await boot.main(["--verify"] + args) == boot.EXIT_OK
+        assert await boot.main(["--apply", "--confirm-db", h.op.name] + args) == boot.EXIT_OK
+        # --all-tenants reads the registry's database names
+        assert await boot.main(["--verify", "--all-tenants", "--system-db", h.sysdb.name,
+                                "--mongo-url", REAL_URL]) == boot.EXIT_OK
+    run(s)(monkeypatch)
+
+
+# ═══════════════════════════════════════════════════════ C01 correction — T4 requester
+def test_requester_alternative_is_one_decision_and_survives_create_revocation(monkeypatch):
+    async def s(h):
+        from app.permissions import service
+        u = h.u[BEG]
+        d1 = await h.create(u["tech"])
+        d2 = await h.submitted()
+        # the requester's own create/submit assignment is revoked
+        await h.sysdb.tenant_role_assignments.update_one(
+            {"id": "beg-ra-tech"}, {"$set": {"status": "revoked"}, "$inc": {"revision": 1}})
+
+        calls = []
+        real = service.evaluate_permission
+
+        async def counting(ctx, action, **kw):
+            calls.append((action, kw.get("scope_type"), kw.get("scope_id")))
+            return await real(ctx, action, **kw)
+        monkeypatch.setattr(service, "evaluate_permission", counting)
+
+        r = await u["tech"].send("PATCH", "/api/material-requests/%s/draft" % d1["id"], {"notes": "own"})
+        assert r.status_code == 200, r.text
+        assert calls == [("material_request.edit_draft", "project", "P1")]   # ONE exact decision
+        calls.clear()
+        r = await u["tech"].send("POST", "/api/material-requests/%s/cancel" % d2["id"], {"reason": "own"})
+        assert r.status_code == 200 and r.json()["request"]["request_state"] == "cancelled"
+        assert calls == [("material_request.cancel", "project", "P1")]
+        for rid, action in ((d1["id"], "material_request.edit_draft"),
+                            (d2["id"], "material_request.cancel")):
+            ev = (await h.events(entity_id=rid, action=action, result="success"))[-1]
+            basis = ev["structured_diff"]["permission_basis"]
+            assert basis == {"action": action, "decision": "ASSIGNMENT_REVOKED", "basis": "requester",
+                             "role_assignment_revisions": {}}
+            assert ev["effective_role_assignments"] == [] and ev["actor_id"] == "beg-tech"
+
+        # the alternative covers ONLY draft edit and pre-approval cancel
+        calls.clear()
+        r = await u["tech"].send("POST", "/api/material-requests/%s/submit" % d1["id"])
+        assert r.status_code == 403 and r.json()["detail"]["reason"] == "ASSIGNMENT_REVOKED"
+        assert calls == [("material_request.submit", "project", "P1")]
+
+        # a NON-requester still needs the exact action: tech2 holds create+submit only
+        d4 = await h.create(u["owner"])
+        r = await u["tech2"].send("PATCH", "/api/material-requests/%s/draft" % d4["id"], {"notes": "x"})
+        assert r.status_code == 403 and r.json()["detail"]["reason"] == "ACTION_NOT_ALLOWED"
+        r = await u["tech2"].send("POST", "/api/material-requests/%s/cancel" % d4["id"], {"reason": "x"})
+        assert r.status_code == 403 and r.json()["detail"]["reason"] == "ACTION_NOT_ALLOWED"
+        # …and an exact-action holder who is not the requester is allowed by permission
+        r = await u["sm"].send("POST", "/api/material-requests/%s/cancel" % d4["id"], {"reason": "x"})
+        assert r.status_code == 200
+        ev = (await h.events(entity_id=d4["id"], action="material_request.cancel", result="success"))[-1]
+        assert ev["structured_diff"]["permission_basis"]["basis"] == "permission"
+        assert ev["effective_role_assignments"] == ["beg-ra-sm"]
+        # the requester alternative is never available after approval
+        await h.sysdb.tenant_role_assignments.update_one(
+            {"id": "beg-ra-tech"}, {"$set": {"status": "active"}})
+        appr = await h.approved()
+        r = await u["tech"].send("POST", "/api/material-requests/%s/cancel" % appr["id"], {"reason": "x"})
+        assert r.status_code == 403 and r.json()["detail"]["action"] == "material_request.cancel_approved"
+    run(s)(monkeypatch)
+
+
+# ═══════════════════════════════════════════════════════ C01 correction — T2 visibility
+def test_project_options_follow_the_create_authority(monkeypatch):
+    async def s(h):
+        u = h.u[BEG]
+
+        async def options(caller):
+            r = await caller.get("/api/material-requests/project-options")
+            assert r.status_code == 200, r.text
+            assert "TCBMARK" not in r.text
+            return [p["id"] for p in r.json()["projects"]]
+        # beg-tech: project-scope create on P1 and NO project_team row
+        assert await options(u["tech"]) == ["P1"]
+        r = await u["tech"].send("POST", "/api/material-requests", {"project_id": "P1"})
+        assert r.status_code == 201                       # what the picker offers, create accepts
+        assert await options(u["outsider"]) == ["P2"]
+        assert await options(u["sm"]) == []               # approver, not a creator
+        assert await options(u["member"]) == []           # legacy membership grants no write
+        assert await options(u["nobody"]) == []           # JWT role Owner, no assignment
+        assert await options(u["revoked"]) == []
+        assert await options(u["owner"]) == ["P1", "P2"]  # company scope; closed PC omitted
+        monkeypatch.setenv("PERMISSION_SERVICE_MODE", "shadow")
+        r = await u["owner"].get("/api/material-requests/project-options")
+        assert r.json()["status"] == "unavailable" and r.json()["projects"] == []
+    run(s)(monkeypatch)
+
+
+def test_list_and_detail_visibility_has_no_cross_project_leak(monkeypatch):
+    async def s(h):
+        u = h.u[BEG]
+        p1 = await h.create(u["owner"], project="P1", reason="P1-ONLY-MARK")
+        p2 = await h.create(u["owner"], project="P2", reason="P2-ONLY-MARK")
+        mine = await h.create(u["tech"], project="P1")
+
+        async def visible(caller):
+            r = await caller.get("/api/material-requests")
+            assert r.status_code == 200
+            return r, {x["id"] for x in r.json()}
+
+        # tech: request authority on P1 only (no project_team) → P1, never P2
+        r, ids = await visible(u["tech"])
+        assert ids == {p1["id"], mine["id"]} and "P2-ONLY-MARK" not in r.text
+        for path in ("", "/view"):
+            assert (await u["tech"].get("/api/material-requests/%s%s" % (p2["id"], path))).status_code == 404
+            assert (await u["tech"].get("/api/material-requests/%s%s" % (p1["id"], path))).status_code == 200
+        # outsider: authority on P2 only
+        r, ids = await visible(u["outsider"])
+        assert ids == {p2["id"]} and "P1-ONLY-MARK" not in r.text
+        assert (await u["outsider"].get("/api/material-requests/%s/view" % p1["id"])).status_code == 404
+        # member: the preserved legacy boundary — project_team on P2, read only
+        r, ids = await visible(u["member"])
+        assert ids == {p2["id"]} and "P1-ONLY-MARK" not in r.text
+        assert (await u["member"].get("/api/material-requests/%s" % p1["id"])).status_code == 404
+        v = (await u["member"].get("/api/material-requests/%s/view" % p2["id"])).json()
+        assert not any(a["allowed"] for a in v["allowed_actions"].values())
+        # revoked approver on P1, no membership: sees nothing
+        r, ids = await visible(u["revoked"])
+        assert ids == set()
+        # the documented legacy read boundary for Admin/Owner/Accountant is unchanged
+        r, ids = await visible(u["nobody"])
+        assert {p1["id"], p2["id"], mine["id"]} <= ids
+        # a requester keeps seeing their own request after losing the project
+        await h.sysdb.tenant_role_assignments.update_one(
+            {"id": "beg-ra-tech"}, {"$set": {"status": "revoked"}})
+        r, ids = await visible(u["tech"])
+        assert ids == {mine["id"]}
+        assert (await u["tech"].get("/api/material-requests/%s" % p1["id"])).status_code == 404
+        # off-enforce: authority adds nothing, the legacy boundary still applies
+        monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+        r, ids = await visible(u["outsider"])
+        assert ids == set()
+        r, ids = await visible(u["member"])
+        assert ids == {p2["id"]}
     run(s)(monkeypatch)

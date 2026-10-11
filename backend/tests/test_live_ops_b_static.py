@@ -101,10 +101,74 @@ def test_request_actions_are_deny_by_default_outside_owner_admin():
             assert not granted, (rid, granted)
 
 
-def test_the_service_never_reads_role_from_the_jwt_user():
-    for rel in (SERVICE, ROUTES):
-        src = (BACKEND / rel).read_text(encoding="utf-8")
-        assert 'user["role"]' not in src and "user.get(\"role\")" not in src, rel
+def _functions_reading_role(rel):
+    tree = ast.parse((BACKEND / rel).read_text(encoding="utf-8"))
+    found = set()
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for node in ast.walk(fn):
+            is_sub = (isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant)
+                      and node.slice.value == "role")
+            is_get = (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                      and node.func.attr == "get" and node.args
+                      and isinstance(node.args[0], ast.Constant) and node.args[0].value == "role")
+            if is_sub or is_get:
+                found.add(fn.name)
+    return found
+
+
+def test_no_write_is_decided_by_a_session_role_name():
+    # the command service never looks at a role name at all
+    assert _functions_reading_role(SERVICE) == set()
+    # the routes read it ONLY in the documented legacy READ-visibility boundary
+    assert _functions_reading_role(ROUTES) == {"_legacy_visible_project_ids"}
+
+
+def test_the_decider_makes_exactly_one_permission_decision():
+    tree = ast.parse((BACKEND / ROUTES).read_text(encoding="utf-8"))
+    decide = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.AsyncFunctionDef) and n.name == "decide")
+    calls = [n for n in ast.walk(decide) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name) and n.func.id == "evaluate_permission"]
+    assert len(calls) == 1
+    assert "material_request.create" not in ast.unparse(decide)
+
+
+def test_the_index_gate_keeps_no_positive_cache():
+    from app.services import material_request_commands as mrc
+    assert not hasattr(mrc, "_index_ok_cache")
+    src = ast.unparse(next(n for n in ast.walk(ast.parse((BACKEND / SERVICE).read_text()))
+                           if isinstance(n, ast.AsyncFunctionDef)
+                           and n.name == "assert_required_indexes"))
+    assert "cache" not in src.split('"""')[-1]
+    # the bootstrap tool and the runtime gate share ONE requirement list
+    boot = (BACKEND / "scripts/live_ops_b_bootstrap.py").read_text(encoding="utf-8")
+    assert "REQUIRED_UNIQUE_INDEXES" in boot and "missing_required_indexes" in boot
+
+
+def test_missing_required_indexes_is_exact():
+    from app.services.material_request_commands import missing_required_indexes
+    full = {
+        "audit_events": {"a": {"unique": True, "key": [("event_id", 1)]},
+                         "b": {"unique": True, "key": [("tenant_id", 1), ("sequence", 1)]}},
+        "audit_idempotency": {"c": {"unique": True, "key": [("id", 1)]}},
+        "material_requests": {"d": {"unique": True, "key": [("org_id", 1), ("request_number", 1)],
+                                    "partialFilterExpression": {"request_number": {"$type": "string"}}}},
+    }
+    assert missing_required_indexes(full) == []
+    for coll, name, broken in (
+            ("audit_events", "b", {"unique": False, "key": [("tenant_id", 1), ("sequence", 1)]}),
+            ("audit_events", "b", {"unique": True, "key": [("sequence", 1), ("tenant_id", 1)]}),
+            ("material_requests", "d", {"unique": True, "key": [("org_id", 1), ("request_number", 1)],
+                                        "partialFilterExpression": {"status": "draft"}})):
+        bad = {k: dict(v) for k, v in full.items()}
+        bad[coll] = {**bad[coll], name: broken}
+        assert [m["collection"] for m in missing_required_indexes(bad)] == [coll]
+    # a non-partial unique index is wider than required and is accepted
+    wide = {**full, "material_requests": {"d": {"unique": True,
+                                                "key": [("org_id", 1), ("request_number", 1)]}}}
+    assert missing_required_indexes(wide) == []
 
 
 def test_audit_store_session_is_optional_and_backward_compatible():

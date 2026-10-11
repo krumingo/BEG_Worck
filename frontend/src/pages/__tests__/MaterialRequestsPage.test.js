@@ -46,15 +46,18 @@ const ALLOW = (codes) => Object.fromEntries(["edit_draft", "submit", "approve", 
   .map((c) => [c, codes[c] || { allowed: false, reason: "INVALID_STATE" }]));
 
 let state;
-function setupApi({ requests = [REQ()], view = null, writes = true } = {}) {
-  state = { requests, view, calls: [] };
+function setupApi({ requests = [REQ()], view = null, writes = true,
+  projectOptions = [{ id: "P1", code: "XO", name: "XOPark" }] } = {}) {
+  state = { requests, view, calls: [], projectOptions };
   API.get.mockImplementation((url) => {
     state.calls.push(["GET", url]);
     if (url === "/material-requests") return Promise.resolve({ data: state.requests });
     if (url === "/material-requests/write-status") {
       return Promise.resolve({ data: { writes_enabled: writes, message: writes ? null : "Записът на заявки е изключен." } });
     }
-    if (url === "/projects") return Promise.resolve({ data: [{ id: "P1", code: "XO", name: "XOPark" }] });
+    if (url === "/material-requests/project-options") {
+      return Promise.resolve({ data: { status: "ok", projects: state.projectOptions } });
+    }
     if (url === "/material-requests/item-options") return Promise.resolve({ data: { items: [{ id: "IT-1", display_name: "Лепило Baumit" }] } });
     if (url === "/warehouses") return Promise.resolve({ data: [{ id: "W1", name: "Централен склад", code: "C1" }] });
     if (/\/material-requests\/[^/]+\/view$/.test(url)) return Promise.resolve({ data: state.view });
@@ -303,4 +306,24 @@ test("no warehouse, asset, QR or migration control and no raw status write", asy
     expect(["GET", "POST", "PATCH"]).toContain(c[0]);
     if (c[2]) expect(JSON.stringify(c[2])).not.toMatch(/tenant_id|org_id/);
   }
+});
+
+test("create offers only the projects the server's create authority returns", async () => {
+  setupApi({ requests: [REQ({ project_id: "P9", project_code: "OLD", project_name: "Видим за четене" })] });
+  await renderAt();
+  // the list filter shows projects of VISIBLE requests …
+  expect(within(screen.getByTestId("filter-project")).getByText("OLD Видим за четене")).toBeInTheDocument();
+  await userEvent.click(screen.getByTestId("new-request"));
+  // … while the create picker shows only the create-authorized ones
+  const opts = within(screen.getByTestId("form-project")).getAllByRole("option").map((o) => o.value);
+  expect(opts).toEqual(["", "P1"]);
+  expect(state.calls.some((c) => c[1] === "/projects")).toBe(false);
+});
+
+test("no create authority anywhere is said plainly", async () => {
+  setupApi({ requests: [], projectOptions: [] });
+  await renderAt();
+  await userEvent.click(screen.getByTestId("new-request"));
+  expect(screen.getByTestId("no-project-options")).toHaveTextContent("Нямате право");
+  expect(screen.getByTestId("form-save")).toBeDisabled();
 });

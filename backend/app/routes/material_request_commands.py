@@ -129,13 +129,30 @@ def _headers(request: Request):
     return key, corr, (channel if channel in _CHANNELS else "api")
 
 
-def _decider(ctx, command: str):
-    """The single Permission Service decision for this command (§7.1).
+#: Frozen §3.2 requester alternative: the requester may edit their own DRAFT and
+#: cancel their own request before approval, as an alternative to holding the
+#: exact action. Nothing else (submit, approve, reject, cancel after approval).
+_REQUESTER_ALTERNATIVE = {
+    mrc.CMD_EDIT_DRAFT: (mrc.STATE_DRAFT,),
+    mrc.CMD_CANCEL: (mrc.STATE_DRAFT, mrc.STATE_SUBMITTED),
+}
 
-    The project scope is passed in by the service from the STORED request (or,
-    for create, the project being created under). The requester basis for draft
-    edit / pre-approval cancel still needs the requester's own project-scope
-    ``material_request.create`` assignment — there is no role-name shortcut.
+
+def _is_requester(ctx, target) -> bool:
+    return bool(target) and ctx.user_id in {target.get("requested_by"), target.get("created_by")} - {None}
+
+
+def _decider(ctx, command: str):
+    """The single Permission Service decision for this command (§3.3, §7.1).
+
+    Exactly ONE ``evaluate_permission`` call, for the exact action and the
+    project scope the service passes in (taken from the STORED request, or for
+    create the project being created under). When that decision denies, the
+    frozen §3.2 requester alternative may still allow draft edit / pre-approval
+    cancel for the request's own requester — decided from the stored record, not
+    from a second, different permission action (CODEX C01 F-04). The audit
+    basis says which of the two allowed the command, and keeps the denied
+    decision's reason.
     """
     from app.permissions.service import evaluate_permission, ALLOWED
     from app.tenancy import registry
@@ -156,27 +173,21 @@ def _decider(ctx, command: str):
                       mrc.CMD_REJECT: mrc.ACTION_APPROVE, mrc.CMD_CANCEL: mrc.ACTION_CANCEL}[command]
         try:
             d = await evaluate_permission(ctx, action, scope_type="project", scope_id=project_id)
-            if d.allowed:
-                return True, ALLOWED, d.effective_assignment_ids, action, \
-                    await revisions(d.effective_assignment_ids)
-            requester_ok = (
-                target is not None
-                and (target.get("requested_by") or target.get("created_by")) == ctx.user_id
-                and ((command == mrc.CMD_EDIT_DRAFT and target.get("status") == mrc.STATE_DRAFT)
-                     or (command == mrc.CMD_CANCEL
-                         and target.get("status") in (mrc.STATE_DRAFT, mrc.STATE_SUBMITTED))))
-            if requester_ok:
-                d2 = await evaluate_permission(ctx, mrc.ACTION_CREATE, scope_type="project",
-                                               scope_id=project_id)
-                if d2.allowed:
-                    return True, ALLOWED, d2.effective_assignment_ids, \
-                        "requester+" + mrc.ACTION_CREATE, await revisions(d2.effective_assignment_ids)
-            return False, d.reason_code, [], action, {}
         except Exception as exc:                                # noqa: BLE001
             # Unknown is never ALLOW.
             raise mrc.CommandError(503, "PERMISSION_EVALUATION_UNAVAILABLE",
                                    "Правата не могат да бъдат проверени; действието е отказано.",
                                    cause=type(exc).__name__)
+        if d.allowed:
+            return True, ALLOWED, d.effective_assignment_ids, \
+                {"action": action, "decision": ALLOWED, "basis": "permission"}, \
+                await revisions(d.effective_assignment_ids)
+        if (command in _REQUESTER_ALTERNATIVE and _is_requester(ctx, target)
+                and target.get("status") in _REQUESTER_ALTERNATIVE[command]):
+            return True, ALLOWED, [], \
+                {"action": action, "decision": d.reason_code, "basis": "requester"}, {}
+        return False, d.reason_code, [], \
+            {"action": action, "decision": d.reason_code, "basis": None}, {}
     return decide
 
 
@@ -276,11 +287,95 @@ class _TenantLedger:
         return self._t.collection(name)
 
 
-@router.get("/material-requests")
-async def list_material_requests(project_id: Optional[str] = None, status: Optional[str] = None,
-                                 user: dict = Depends(require_m2)):
+# ───────────────────────────────────────────────────────── read visibility
+#: The documented legacy READ boundary of ``GET /projects``, kept exactly: these
+#: session roles read every project of the tenant; everyone else reads the
+#: projects of their active ``project_team`` membership. It is a visibility
+#: rule only — no write is ever decided by a role name.
+LEGACY_ALL_PROJECT_READ_ROLES = ("Admin", "Owner", "Accountant")
+
+
+async def _legacy_visible_project_ids(user: dict):
+    """``None`` = every project of the tenant; otherwise the membership set."""
+    if user.get("role") in LEGACY_ALL_PROJECT_READ_ROLES:
+        return None
+    from app.deps.auth import get_user_project_ids
+    return set(await get_user_project_ids(user.get("id"), user))
+
+
+async def _authority_project_ids(request: Request, user: dict, actions):
+    """Projects where the Permission Service allows ANY of ``actions``.
+
+    ``None`` = company-wide authority (every project). Only in ``enforce``;
+    otherwise, or when the tenant/permission resolver is unavailable, the
+    answer is the empty set — authority never widens visibility on an unknown.
+    Candidates come from the user's own project-scope assignments; every one
+    is DECIDED by ``evaluate_permission`` (the registry read only enumerates).
+    """
+    if _raw_mode() != "enforce":
+        return set()
+    from app.permissions.service import evaluate_permission
+    from app.tenancy import registry
+    from app.tenancy.guard import get_tenant_context
+    try:
+        ctx = await get_tenant_context(request, user)
+        ctx.mode = "enforce"
+        for action in actions:
+            if (await evaluate_permission(ctx, action, scope_type=None, scope_id=None)).allowed:
+                return None
+        rows = await registry.list_role_assignments(ctx.user_id, ctx.tenant_id)
+        candidates = sorted({r.get("scope_id") for r in rows
+                             if r.get("scope_type") == "project" and r.get("scope_id")})
+        allowed = set()
+        for pid in candidates:
+            for action in actions:
+                if (await evaluate_permission(ctx, action, scope_type="project",
+                                              scope_id=pid)).allowed:
+                    allowed.add(pid)
+                    break
+        return allowed
+    except Exception:                                           # noqa: BLE001
+        return set()
+
+
+async def _visible_project_ids(request: Request, user: dict):
+    """Legacy membership boundary ∪ canonical project/action authority.
+
+    ``None`` = every project. A request is additionally visible to its own
+    requester (the frozen §3.2 requester alternative acts on it).
+    """
+    legacy = await _legacy_visible_project_ids(user)
+    if legacy is None:
+        return None
+    authority = await _authority_project_ids(request, user, mrc.REQUEST_ACTIONS)
+    if authority is None:
+        return None
+    return legacy | authority
+
+
+def _visibility_filter(visible, user: dict) -> Dict[str, Any]:
+    if visible is None:
+        return {}
+    uid = user.get("id")
+    return {"$or": [{"project_id": {"$in": sorted(visible)}},
+                    {"requested_by": uid}, {"created_by": uid}]}
+
+
+async def _visible_request(request: Request, user: dict, req_id: str):
+    """The request when this user may see it; 404 otherwise (no existence leak)."""
     tenant = _tenant(user)
-    query: Dict[str, Any] = {}
+    flt = {"id": req_id, **_visibility_filter(await _visible_project_ids(request, user), user)}
+    doc = await tenant.material_requests.find_one(flt, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Request not found")
+    return tenant, doc
+
+
+@router.get("/material-requests")
+async def list_material_requests(request: Request, project_id: Optional[str] = None,
+                                 status: Optional[str] = None, user: dict = Depends(require_m2)):
+    tenant = _tenant(user)
+    query: Dict[str, Any] = _visibility_filter(await _visible_project_ids(request, user), user)
     if project_id:
         query["project_id"] = project_id
     if status:
@@ -294,6 +389,23 @@ async def list_material_requests(project_id: Optional[str] = None, status: Optio
         r["project_code"] = p.get("code", "")
         r["project_name"] = p.get("name", "")
     return out
+
+
+@router.get("/material-requests/project-options")
+async def material_request_project_options(request: Request, user: dict = Depends(require_m2)):
+    """Projects this user may CREATE a request in — the same Permission Service
+    authority the create command enforces (F-02). Closed projects are omitted
+    because create refuses them."""
+    if _raw_mode() != "enforce":
+        return {"status": "unavailable", "projects": [],
+                "message": "Изборът на обект е наличен само в режим enforce."}
+    authority = await _authority_project_ids(request, user, (mrc.ACTION_CREATE,))
+    flt: Dict[str, Any] = {"status": {"$nin": sorted(mrc.BLOCKED_PROJECT_STATUSES)}}
+    if authority is not None:
+        flt["id"] = {"$in": sorted(authority)}
+    rows = await _tenant(user).projects.find(
+        flt, {"_id": 0, "id": 1, "code": 1, "name": 1, "status": 1}).sort("code", 1).to_list(None)
+    return {"status": "ok", "projects": rows}
 
 
 @router.get("/material-requests/write-status")
@@ -330,21 +442,15 @@ async def material_request_item_options(request: Request, q: str = "",
 
 
 @router.get("/material-requests/{req_id}")
-async def get_material_request(req_id: str, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    doc = await tenant.material_requests.find_one({"id": req_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Request not found")
+async def get_material_request(req_id: str, request: Request, user: dict = Depends(require_m2)):
+    tenant, doc = await _visible_request(request, user, req_id)
     return (await _project_many(tenant, [doc]))[0]
 
 
 @router.get("/material-requests/{req_id}/view")
 async def view_material_request(req_id: str, request: Request, user: dict = Depends(require_m2)):
     """Detail + allowed actions + canonical history for the review screen."""
-    tenant = _tenant(user)
-    doc = await tenant.material_requests.find_one({"id": req_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Request not found")
+    tenant, doc = await _visible_request(request, user, req_id)
     projected = (await _project_many(tenant, [doc]))[0]
     project = await tenant.projects.get(doc.get("project_id"), {"_id": 0, "id": 1, "code": 1,
                                                                 "name": 1})
@@ -370,7 +476,8 @@ async def view_material_request(req_id: str, request: Request, user: dict = Depe
                     actions[c] = {"allowed": False, "reason": "INVALID_STATE"}
                     continue
                 ok, reason, _, basis, _ = await _decider(ctx, c)(doc.get("project_id"), doc)
-                actions[c] = {"allowed": ok, "reason": reason, "action": basis}
+                actions[c] = {"allowed": ok, "reason": reason, "action": basis.get("action"),
+                              "basis": basis.get("basis")}
             tdb = await ctx.db()
             if ctx.owns(doc):
                 events = await tdb["audit_events"].find(
