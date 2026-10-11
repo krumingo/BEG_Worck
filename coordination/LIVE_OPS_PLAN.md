@@ -89,7 +89,11 @@
 - [x] 4.11 CLAUDE independent contract review
 - [x] 4.12 Krum resolves only true business decisions
 
-## 🛠️ 5. Implementation на малки стабилни части
+## 🛠️ 5. FLOW-first implementation на последователни функционални блокове
+
+> Правило: owner staging acceptance не затваря частичен екран. То идва след завършен релевантен FLOW scope.
+> Всеки блок започва с пълен прочит на FLOW-овете + реалния код и FLOW↔CODE map.
+
 ### 🖥️ LIVE-OPS-A — Control center / read-only
 - [x] 5A.1 Implementation
 - [x] 5A.2 Tests
@@ -97,38 +101,68 @@
 - [x] 5A.4 PASS
 - [x] 5A.5 Staging accepted
 
-### 📋 LIVE-OPS-B — operational slice 2
-- [x] 5B.1 Implementation
-- [x] 5B.2 Tests
+### 📋 LIVE-OPS-B — Material Requests core (FLOW-020 request domain)
+- [x] 5B.1 Safe-write request implementation
+- [x] 5B.2 Real-Mongo + frontend tests
 - [x] 5B.3 CODEX independent review
-- [x] 5B.4 PASS
-- [ ] 5B.5 Staging accepted
+- [x] 5B.4 PASS_CANDIDATE
+- [ ] 5B.5 Final acceptance — отлага се до integrated Materials FLOW gate
 
-### 🏭 LIVE-OPS-C — operational slice 3
-- [ ] 5C.1 Implementation
-- [ ] 5C.2 Tests
-- [ ] 5C.3 CODEX independent review
-- [ ] 5C.4 PASS
-- [ ] 5C.5 Staging accepted
+### 🏭 LIVE-OPS-C — Canonical Warehouse / Stock core (FLOW-009 + FLOW-032 + FLOW-002 + FLOW-040)
+- [ ] 5C.1 Full FLOW read + FLOW↔CODE map
+- [ ] 5C.2 Canonical warehouse movement implementation
+- [ ] 5C.3 FIFO/value projection + reconciliation
+- [ ] 5C.4 Return/quarantine/revision/correction
+- [ ] 5C.5 Permissions + AuditEvent + tenancy
+- [ ] 5C.6 Real-Mongo concurrency/idempotency tests
+- [ ] 5C.7 CODEX independent review
+- [ ] 5C.8 PASS
 
-### 🧰 LIVE-OPS-D — operational slice 4
-- [ ] 5D.1 Implementation
-- [ ] 5D.2 Tests
-- [ ] 5D.3 CODEX independent review
-- [ ] 5D.4 PASS
-- [ ] 5D.5 Staging accepted
+### 🚚 LIVE-OPS-D — Logistics / Delivery / Acceptance (FLOW-012 + FLOW-020 + FLOW-009)
+- [ ] 5D.1 Full FLOW read + FLOW↔CODE map
+- [ ] 5D.2 Trip / delivery / loading-unloading implementation
+- [ ] 5D.3 Quantity acceptance / technical acceptance
+- [ ] 5D.4 Partial/missing/damaged/refused flows
+- [ ] 5D.5 Offline/phone-first driver and receiver UX
+- [ ] 5D.6 Permissions + AuditEvent + file evidence links
+- [ ] 5D.7 Real-Mongo + frontend/E2E tests
+- [ ] 5D.8 CODEX independent review
+- [ ] 5D.9 PASS
 
-### 🔗 LIVE-OPS-E — integrated end-to-end gate
-- [ ] 5E.1 End-to-end test
-- [ ] 5E.2 Real Mongo
-- [ ] 5E.3 Permissions / tenant isolation
-- [ ] 5E.4 Frontend desktop smoke
-- [ ] 5E.5 Frontend phone smoke
-- [ ] 5E.6 Backup / restore
-- [ ] 5E.7 Rollback proof
-- [ ] 5E.8 Independent PASS
+### 🧾 LIVE-OPS-E — Full Materials lifecycle integration (FLOW-020 + dependencies)
+- [ ] 5E.1 Full FLOW-020/dependency read + FLOW↔CODE map
+- [ ] 5E.2 Request → order/supplier-confirmation facts
+- [ ] 5E.3 Invoice-line classification/allocation without double counting
+- [ ] 5E.4 Direct delivery vs warehouse path
+- [ ] 5E.5 Accepted quantity → project cost rule B
+- [ ] 5E.6 Material readiness / shortages / remaining quantities
+- [ ] 5E.7 Master aliases / pending mapping integration
+- [ ] 5E.8 Material budget / consumption projection
+- [ ] 5E.9 End-to-end FLOW-020/012/009 tests
+- [ ] 5E.10 CODEX independent review
+- [ ] 5E.11 PASS
 
-> Имената/точният функционален scope на B/C/D ще се заключат след CODEX+CLAUDE audit, за да не пренаписваме вече одобрените FLOW.
+### 🔗 LIVE-OPS-F — Integrated Materials Gate
+- [ ] 5F.1 Request → approval → procurement/delivery → acceptance → stock/site availability → consumption
+- [ ] 5F.2 Partial / over / under / damaged / refused scenarios
+- [ ] 5F.3 Real Mongo replica-set
+- [ ] 5F.4 Permissions / tenant / project isolation
+- [ ] 5F.5 Canonical AuditEvent completeness
+- [ ] 5F.6 Backup / restore / rollback proof
+- [ ] 5F.7 Desktop E2E
+- [ ] 5F.8 Phone E2E
+- [ ] 5F.9 Independent PASS
+- [ ] 5F.10 Owner staging acceptance for Materials flow
+
+### 🧰 LIVE-OPS-G — Machines / tools complete flow
+- [ ] 5G.1 Full FLOW-011/dependencies read + FLOW↔CODE map
+- [ ] 5G.2 Asset/custody/repair implementation
+- [ ] 5G.3 Two-phase handover + QR
+- [ ] 5G.4 Permissions / AuditEvent
+- [ ] 5G.5 Real-Mongo + phone/desktop E2E
+- [ ] 5G.6 CODEX independent review
+- [ ] 5G.7 PASS
+- [ ] 5G.8 Owner staging acceptance
 
 ## 🧪 6. Staging
 - [ ] 6.1 Production-shaped data copy/restore
@@ -166,22 +200,22 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**LIVE-OPS-B PASS_CANDIDATE — чака staging owner acceptance**
+**FLOW-first Materials implementation — следва LIVE-OPS-C (FLOW-009 canonical warehouse core)**
 
 ### ⏭️ СЛЕДВА
-**LIVE-OPS-B staging acceptance**
+**LIVE-OPS-C — full FLOW-009 read + FLOW↔CODE map → implementation**
 
 ### 👤 KRUM ACTION
-**Нужно е staging приемане на LIVE-OPS-B след owner smoke**
+**Няма owner action; staging acceptance за Materials се мести след integrated FLOW gate**
 
 ### 💻 CODE ACTION
 **Implementation вече може да започне само по frozen contract и на малки bounded slices**
 
 Next decision: **няма owner decision pending**
 
-Current owner action: **review LIVE-OPS-B staging when prepared**
+Current owner action: **none**
 
-Current code action: **prepare LIVE-OPS-B staging acceptance package**
+Current code action: **start LIVE-OPS-C from full FLOW-009 + dependencies and current code**
 
 
 
