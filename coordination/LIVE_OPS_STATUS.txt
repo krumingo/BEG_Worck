@@ -73,21 +73,21 @@
 🟡 ПРАВИ СЕ / СЛЕДВА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LIVE-OPS-A staging приет от Крум
-🟡 LIVE-OPS-B — Material Requests safe-write core: CODEX independent review pending
+🟡 LIVE-OPS-B — Material Requests safe-write core: CLAUDE portability correction pending
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5B — Material Requests Safe-Write Core
-Stage: CODEX_REREVIEW_PENDING
-Responsible: CODEX
-Next: CODEX independent re-review of PR #54 corrected exact head
+Stage: CLAUDE_CORRECTION_PENDING
+Responsible: CLAUDE
+Next: one-line UTF-8 portability correction → focused 41/41 → CODEX recheck
 PR: #54 draft/open/unmerged
 Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
-Verdict: NONE YET — owner decisions closed
+Verdict: CHANGES_REQUESTED
 Acceptance: NOT STARTED
-Correction loops: 0
+Correction loops: 2
 Blockers: direct PC handoff unavailable in CLAUDE cloud; Issue #52 HANDOFF available
 Last update: 2026-10-10T21:49:45Z
 
@@ -131,3 +131,15 @@ Next gate: CODEX independent re-review of corrected head.
 ✅ A1/A2C: 0 violations
 🟡 CODEX re-review pending
 Exact head: 3ab226e7bf8342f8957f3dcca7d79cbe28df49d2
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 TASK 5B — BOUNDED PORTABILITY DEFECT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CODEX re-review at 3ab226e7bf8342f8957f3dcca7d79cbe28df49d2:
+- Focused Backend + Real Mongo: 40 passed / 1 failed / 0 skipped
+- Cause: new static test uses read_text() without encoding="utf-8" on Windows
+- Production logic: unchanged / not implicated
+- Required correction: one-line UTF-8 test-harness fix
+- F-01/F-02/F-03/F-04 mechanisms remain technically confirmed
+- PASS_CANDIDATE is withheld until clean 41/41, exit 0
