@@ -13,6 +13,16 @@
 > Source of truth: this file + Issue #52.
 > Important: FLOW behavior is NOT rewritten here. Existing approved FLOWs remain authoritative. Only a CODEX+CLAUDE-confirmed logical/technical inconsistency may trigger a proposed FLOW correction, and that requires Krum's decision.
 
+## 🧭 Управляващ принцип
+
+- GPT носи отговорност за последователността на плана.
+- FLOW-first е методът за изпълнение на задачите вътре в плана, не заместител на плана.
+- Приоритет: правилно работеща програма без повторно пренаписване > скорост на всяка цена.
+- Планът може да цели по-бърза употреба, но не може да прескача зависимости, да чупи FLOW логика или да създава паралелни решения.
+- Owner testing се поставя там, където функционалният scope е достатъчно цялостен за смислен тест.
+
+**FLOW-FIRST Е МЕТОДЪТ, НЕ ЗАМЕСТИТЕЛ НА ПЛАНА.**
+
 ## 🧩 Правила за работа
 
 - Този план стои като постоянен checklist за LIVE-OPS.
