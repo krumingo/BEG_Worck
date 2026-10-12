@@ -16,11 +16,42 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
+# LIVE-OPS-01 / TASK 5C — Legacy warehouse writer fail-close guard.
+# The four writer endpoints below (post-to-warehouse, warehouse-issue,
+# warehouse-return, project-consumption) are retired physical writers per
+# FLOW_CODE_MAP_READY and must redirect to the canonical command service.
+from app.services.warehouse_movements.legacy_inventory import (
+    refuse_if_disabled as _refuse_legacy_warehouse_writer,
+)
+from app.services.warehouse_movements.errors import (
+    LegacyWriterRetiredError as _LegacyWriterRetiredError,
+)
 
 
 def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
+
+
+def _guard_legacy_warehouse_writer(route_id: str, canonical_action: str) -> None:
+    """Raise HTTP 410 Gone unless the LEGACY_WAREHOUSE_WRITERS_ENABLED
+    emergency escape hatch is set. TASK 5C fail-close.
+
+    The response names the canonical replacement so the UI never has to
+    invent its own redirect text (FLOW-002 — direct URL cannot bypass).
+    """
+    try:
+        _refuse_legacy_warehouse_writer(route_id, canonical_action)
+    except _LegacyWriterRetiredError as exc:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "context": exc.context,
+                "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+            },
+        ) from exc
 
 router = APIRouter(tags=["Procurement"])
 
@@ -407,7 +438,16 @@ async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(
 
 @router.post("/supplier-invoices/{inv_id}/post-to-warehouse", status_code=201)
 async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2)):
-    """Post reviewed supplier invoice lines to Main Warehouse"""
+    """Post reviewed supplier invoice lines to Main Warehouse
+
+    LIVE-OPS-01 / TASK 5C — RETIRED. The canonical path is one
+    `receive_from_supplier` / `receive_from_supplier_to_project` command
+    per allocated destination, posted to
+    `POST /api/warehouse/canonical/movements`.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.post_to_warehouse", "receive_from_supplier",
+    )
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -588,7 +628,16 @@ async def get_next_issue_number(org_id: str) -> str:
 
 @router.post("/warehouse-issue", status_code=201)
 async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
-    """Issue materials from Main Warehouse to a project"""
+    """Issue materials from Main Warehouse to a project
+
+    LIVE-OPS-01 / TASK 5C — RETIRED. Dispatch and acceptance are two
+    separate canonical commands:
+      1. `dispatch_warehouse_to_project` (origin-scoped, in-transit)
+      2. `accept_project_delivery` (Rule B costing).
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.warehouse_issue", "dispatch_warehouse_to_project",
+    )
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -670,7 +719,15 @@ async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
 
 @router.post("/project-consumption", status_code=201)
 async def record_consumption(data: dict, user: dict = Depends(require_m2)):
-    """Record material consumption on a project"""
+    """Record material consumption on a project
+
+    LIVE-OPS-01 / TASK 5C — RETIRED. The canonical path is
+    `consume_to_smr` on the canonical command service, which allocates
+    FIFO layers from the project's own stock bucket.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.project_consumption", "consume_to_smr",
+    )
     tenant = _tenant(user)
     org_id = user["org_id"]
     project_id = data.get("project_id")
@@ -728,7 +785,18 @@ async def record_consumption(data: dict, user: dict = Depends(require_m2)):
 
 @router.post("/warehouse-return", status_code=201)
 async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
-    """Return unused materials from project to Main Warehouse"""
+    """Return unused materials from project to Main Warehouse
+
+    LIVE-OPS-01 / TASK 5C — RETIRED. Returned material does NOT land in
+    free stock directly; the canonical path is `quarantine_entry` at the
+    receiving warehouse first, then `quarantine_release` after
+    inspection (FLOW-009 §"Връщане и карантина"). A direct
+    project→warehouse transfer in free state is permitted only for
+    uncontested material via `transfer_project_to_warehouse`.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.warehouse_return", "quarantine_entry",
+    )
     tenant = _tenant(user)
     org_id = user["org_id"]
     project_id = data.get("project_id")

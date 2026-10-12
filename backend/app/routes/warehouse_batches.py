@@ -13,11 +13,36 @@ from app.services.fifo_service import (
     InsufficientStockError,
 )
 from app.tenancy.data_access import TenantData
+# LIVE-OPS-01 / TASK 5C — Legacy warehouse writer fail-close guard.
+# `warehouse_batches` is a PROJECTION-ONLY collection; direct writes are
+# retired. Reads below remain operational.
+from app.services.warehouse_movements.legacy_inventory import (
+    refuse_if_disabled as _refuse_legacy_warehouse_writer,
+)
+from app.services.warehouse_movements.errors import (
+    LegacyWriterRetiredError as _LegacyWriterRetiredError,
+)
 
 
 def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
+
+
+def _guard_legacy_warehouse_writer(route_id: str, canonical_action: str) -> None:
+    """Raise HTTP 410 Gone unless `LEGACY_WAREHOUSE_WRITERS_ENABLED` is set."""
+    try:
+        _refuse_legacy_warehouse_writer(route_id, canonical_action)
+    except _LegacyWriterRetiredError as exc:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "context": exc.context,
+                "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+            },
+        ) from exc
 
 router = APIRouter(tags=["Warehouse Batches"])
 
@@ -102,6 +127,12 @@ async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
 
 @router.post("/warehouse/batches", status_code=201)
 async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)):
+    """LIVE-OPS-01 / TASK 5C — RETIRED. `warehouse_batches` is a
+    projector over the canonical ledger. Supplier receipts land as
+    `receive_from_supplier` on the canonical command service."""
+    _guard_legacy_warehouse_writer(
+        "warehouse_batches.create_batch", "receive_from_supplier",
+    )
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -127,6 +158,12 @@ async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)
 
 @router.post("/warehouse/consume")
 async def consume_stock(data: ConsumeRequest, user: dict = Depends(get_current_user)):
+    """LIVE-OPS-01 / TASK 5C — RETIRED. Use `consume_to_smr` on the
+    canonical command service; FIFO is server-derived and layer
+    allocations are recorded on the ledger line."""
+    _guard_legacy_warehouse_writer(
+        "warehouse_batches.consume", "consume_to_smr",
+    )
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper", "SiteManager", "Technician"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -153,6 +190,12 @@ async def consume_stock(data: ConsumeRequest, user: dict = Depends(get_current_u
 
 @router.put("/warehouse/batches/{batch_id}/block")
 async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
+    """LIVE-OPS-01 / TASK 5C — RETIRED. Mutating a batch directly
+    bypasses the canonical ledger. Use `quarantine_entry` on the
+    canonical command service, which emits a tracked movement."""
+    _guard_legacy_warehouse_writer(
+        "warehouse_batches.block", "quarantine_entry",
+    )
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
