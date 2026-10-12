@@ -229,3 +229,26 @@ Critical review requirements:
 - verify legacy frontend writers are not left broken behind 410;
 - verify material_entries is canonical-ledger projection, not legacy-derived;
 - verify any legacy-writer escape hatch cannot create a second source of truth.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 LIVE-OPS-C — CHANGES_REQUESTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PR #55: draft/open/unmerged
+Exact reviewed head:
+7e929a3dab269a24a2e3907c76d0e81bc30f0bbe
+
+Independent CODEX re-review:
+- DB-free backend: 50 passed
+- Frontend focused: 5 passed
+- Standard build: PASS
+- Real Mongo: 52 passed / 16 failed / 0 skipped / exit 1
+
+Primary runtime blocker:
+apply_projection(..., extra_rows=...) signature mismatch.
+
+C01–C10 remain OPEN / not fully proven.
+Next:
+CODEX → direct bounded correction handoff to CLAUDE → corrected exact head → CODEX fresh independent re-review.
+
+No merge / deploy / migration / staging / production activation.
