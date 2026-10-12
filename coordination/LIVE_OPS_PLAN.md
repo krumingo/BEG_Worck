@@ -109,11 +109,11 @@
 - [ ] 5B.5 Final acceptance — отлага се до integrated Materials FLOW gate
 
 ### 🏭 LIVE-OPS-C — Canonical Warehouse / Stock core (FLOW-009 + FLOW-032 + FLOW-002 + FLOW-040)
-- [ ] 5C.1 Full FLOW read + FLOW↔CODE map
-- [ ] 5C.2 Canonical warehouse movement implementation
-- [ ] 5C.3 FIFO/value projection + reconciliation
-- [ ] 5C.4 Return/quarantine/revision/correction
-- [ ] 5C.5 Permissions + AuditEvent + tenancy
+- [x] 5C.1 Full FLOW read + FLOW↔CODE map
+- [x] 5C.2 Canonical warehouse movement implementation
+- [x] 5C.3 FIFO/value projection + reconciliation
+- [x] 5C.4 Return/quarantine/revision/correction
+- [x] 5C.5 Permissions + AuditEvent + tenancy
 - [ ] 5C.6 Real-Mongo concurrency/idempotency tests
 - [ ] 5C.7 CODEX independent review
 - [ ] 5C.8 PASS
@@ -200,10 +200,10 @@
 # 📌 Винаги видим статус
 
 ### 🔴 ТЕКУЩО
-**FLOW-first Materials implementation — следва LIVE-OPS-C (FLOW-009 canonical warehouse core)**
+**LIVE-OPS-C implementation HANDOFF готов — CODEX independent review**
 
 ### ⏭️ СЛЕДВА
-**LIVE-OPS-C — full FLOW-009 read + FLOW↔CODE map → implementation**
+**CODEX independent review на PR #55 + задължителен Real Mongo gate**
 
 ### 👤 KRUM ACTION
 **Няма owner action; staging acceptance за Materials се мести след integrated FLOW gate**
@@ -215,7 +215,7 @@ Next decision: **няма owner decision pending**
 
 Current owner action: **none**
 
-Current code action: **start LIVE-OPS-C from full FLOW-009 + dependencies and current code**
+Current code action: **review PR #55 exact head 027be29d... against FLOW + real frozen v6 contract**
 
 
 
