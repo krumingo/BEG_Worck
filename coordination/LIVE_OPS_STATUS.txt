@@ -2,8 +2,8 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 ОБЩ ПРОГРЕС ПО ТЕКУЩИЯ CHECKLIST
-🟦 █████░░░░░ 50%
-52 / 104 точки са доказано завършени
+🟦 ████░░░░░░ 46.2%
+61 / 132 точки са доказано завършени
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ℹ️ Предишният статус 34/92 е superseded: текущият versioned checklist съдържа 104 точки. Процентът е изчислен от реалните [x] записи, не е прогноза.
@@ -207,3 +207,25 @@ Method:
 full FLOW read → full affected code read → FLOW↔CODE map → CODEX→CLAUDE implementation → CODEX independent tests/review.
 
 Owner staging for Materials is deferred until the integrated Materials gate after FLOW-009 + FLOW-012 + FLOW-020 chain.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟡 LIVE-OPS-C — CODEX REVIEW PENDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PR #55: Draft/open/unmerged
+Exact head: 027be29d5e37a613c13af93b3d48bc446986811e
+Baseline: 79af297612f57c055bb7caef3f0c48493800d1b6
+
+✅ Full FLOW/code map published
+✅ CLAUDE implementation HANDOFF published
+✅ 37 DB-free tests passed
+⚪ Real Mongo replica-set tests NOT RUN by CLAUDE
+⚪ CODEX independent review pending
+⚪ PASS not claimed
+
+Critical review requirements:
+- fetch real v6 frozen contract from codex/claude-queue and compare;
+- run Real Mongo/concurrency/overflow gates;
+- verify legacy frontend writers are not left broken behind 410;
+- verify material_entries is canonical-ledger projection, not legacy-derived;
+- verify any legacy-writer escape hatch cannot create a second source of truth.
