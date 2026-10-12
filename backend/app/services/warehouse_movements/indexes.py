@@ -54,10 +54,23 @@ class RequiredIndex:
         extra options, but must at least cover our prefix in order, with
         our uniqueness constraint, and (if we required a partial filter)
         the same filter expression.
+
+        PyMongo's `index_information()` returns the `key` entry as a
+        **list of (field, direction) tuples**, not a dict (CODEX C05 /
+        `indexes.py:58` fix). Earlier revisions called `.items()` on it
+        and crashed against a real server. The normalization below
+        accepts either shape so unit tests that pass a dict and real
+        PyMongo output both work.
         """
-        mongo_keys = list(mongo_index.get("key", {}).items())
-        # order-sensitive prefix check
-        if mongo_keys[: len(self.keys)] != [(k, v) for k, v in self.keys]:
+        raw = mongo_index.get("key", [])
+        if isinstance(raw, dict):
+            mongo_keys = list(raw.items())
+        else:
+            # list of (field, direction) tuples, exactly as PyMongo returns
+            mongo_keys = [(k, v) for k, v in raw]
+        want_prefix = [(k, int(v)) for k, v in self.keys]
+        got_prefix = [(k, int(v)) for k, v in mongo_keys[: len(self.keys)]]
+        if got_prefix != want_prefix:
             return False
         if self.unique and not mongo_index.get("unique", False):
             return False
@@ -68,12 +81,60 @@ class RequiredIndex:
 
 
 # Required index set for TASK 5C.
+#
+# Covers v6 contract §9.3 "verified unique indexes" preconditions:
+#   - AuditEvent (tenant_id, sequence), event_id, idempotency keys;
+#   - acceptance_line_id;
+#   - supplier-origin (tenant_id, supplier_source_line_key);
+#   - FIFO server-sequence ordering stability.
+#
+# CODEX C03 fix: the single-accept-per-dispatch unique index was wrong
+# — contract §10 explicitly requires MULTIPLE partial acceptances per
+# dispatch. The uniqueness constraint moves down to `acceptance_line_id`
+# (one acceptance "line" per discrete acceptance event); supplier-origin
+# gets its own tenant-scoped uniqueness.
+AUDIT_EVENTS_COLLECTION = "audit_events"
+
 REQUIRED_INDEXES: List[RequiredIndex] = [
+    # --- warehouse_transactions ---
     RequiredIndex(
         name="wh_movements_unique_movement_id",
         collection=MOVEMENTS_COLLECTION,
         keys=[("tenant_id", 1), ("movement_id", 1)],
         unique=True,
+    ),
+    # Server-ledger sequence per tenant: stable FIFO ordering tie-break
+    # (CODEX C09 — "FIFO ordering has stable canonical sequence tie-break").
+    RequiredIndex(
+        name="wh_movements_unique_sequence",
+        collection=MOVEMENTS_COLLECTION,
+        keys=[("tenant_id", 1), ("ledger_sequence", 1)],
+        unique=True,
+        # Legacy rows (pre-TASK-5C) have no `ledger_sequence`; the sparse
+        # partial filter admits them while still guaranteeing uniqueness
+        # across every canonical writer row.
+        partial_filter={"ledger_sequence": {"$exists": True}},
+    ),
+    # Multi-partial acceptance uniqueness (CODEX C03).
+    # One acceptance_line_id per acceptance event — many may reference
+    # the same dispatch_movement_id. Enforced at the service level by a
+    # per-tenant uuid; the unique index catches a replay collision.
+    RequiredIndex(
+        name="wh_movements_unique_acceptance_line",
+        collection=MOVEMENTS_COLLECTION,
+        keys=[("tenant_id", 1), ("acceptance_line_id", 1)],
+        unique=True,
+        partial_filter={"acceptance_line_id": {"$exists": True}},
+    ),
+    # Supplier-origin uniqueness per v6 §9.3 and §10 "Supplier-origin
+    # uniqueness": one `supplier_delivery_origin` per linked supplier
+    # source line per tenant; a second concurrent create cannot win.
+    RequiredIndex(
+        name="wh_movements_unique_supplier_origin",
+        collection=MOVEMENTS_COLLECTION,
+        keys=[("tenant_id", 1), ("supplier_source_line_key", 1)],
+        unique=True,
+        partial_filter={"supplier_source_line_key": {"$exists": True}},
     ),
     RequiredIndex(
         name="wh_movements_destination_scan",
@@ -84,7 +145,7 @@ REQUIRED_INDEXES: List[RequiredIndex] = [
             ("destination.location_type", 1),
             ("destination.location_id", 1),
             ("destination.state", 1),
-            ("recorded_at", 1),
+            ("ledger_sequence", 1),
         ],
     ),
     RequiredIndex(
@@ -96,20 +157,27 @@ REQUIRED_INDEXES: List[RequiredIndex] = [
             ("source.location_type", 1),
             ("source.location_id", 1),
             ("source.state", 1),
-            ("recorded_at", 1),
+            ("ledger_sequence", 1),
         ],
     ),
-    RequiredIndex(
-        name="wh_movements_dispatch_single_accept",
-        collection=MOVEMENTS_COLLECTION,
-        keys=[("tenant_id", 1), ("dispatch_movement_id", 1), ("action", 1)],
-        unique=True,
-        partial_filter={"action": "accept_project_delivery"},
-    ),
+    # --- audit idempotency ---
     RequiredIndex(
         name="wh_idempotency_unique_claim",
         collection=IDEMPOTENCY_COLLECTION,
         keys=[("tenant_id", 1), ("action", 1), ("key", 1)],
+        unique=True,
+    ),
+    # --- audit events (contract §9.3) ---
+    RequiredIndex(
+        name="wh_audit_unique_sequence",
+        collection=AUDIT_EVENTS_COLLECTION,
+        keys=[("tenant_id", 1), ("sequence", 1)],
+        unique=True,
+    ),
+    RequiredIndex(
+        name="wh_audit_unique_event_id",
+        collection=AUDIT_EVENTS_COLLECTION,
+        keys=[("event_id", 1)],
         unique=True,
     ),
 ]

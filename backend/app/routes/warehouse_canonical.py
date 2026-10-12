@@ -61,6 +61,13 @@ class LocationBody(BaseModel):
 
 
 class MovementCommandBody(BaseModel):
+    """Request body for the canonical movement endpoint.
+
+    CODEX C06: `confirmed_by`, `confirmed_at`, and
+    `item_is_pending_mapping` were previously client-authored. They have
+    been **removed** from the request contract — the server derives all
+    three from storage and the authenticated session.
+    """
     action: str
     item_id: str
     unit: str
@@ -81,8 +88,6 @@ class MovementCommandBody(BaseModel):
     subproject_id: Optional[str] = None
     smr_id: Optional[str] = None
     work_package_id: Optional[str] = None
-    confirmed_by: Optional[str] = None
-    confirmed_at: Optional[str] = None
     correlation_id: Optional[str] = None
     requested_quantity: Optional[str] = None
     accepted_quantity: Optional[str] = None
@@ -92,7 +97,6 @@ class MovementCommandBody(BaseModel):
     corrects_movement_id: Optional[str] = None
     revision_evidence: Optional[Dict[str, Any]] = None
     occurred_at: Optional[str] = None
-    item_is_pending_mapping: bool = False
 
     @validator("action")
     def _known_action(cls, v: str) -> str:
@@ -199,8 +203,6 @@ async def post_movement(
             subproject_id=body.subproject_id,
             smr_id=body.smr_id,
             work_package_id=body.work_package_id,
-            confirmed_by=body.confirmed_by,
-            confirmed_at=body.confirmed_at,
             correlation_id=body.correlation_id,
             requested_quantity=body.requested_quantity,
             accepted_quantity=body.accepted_quantity,
@@ -210,7 +212,9 @@ async def post_movement(
             corrects_movement_id=body.corrects_movement_id,
             revision_evidence=body.revision_evidence,
             occurred_at=body.occurred_at,
-            item_is_pending_mapping=body.item_is_pending_mapping,
+            # C06: `confirmed_by`, `confirmed_at`, pending-mapping are
+            # all SERVER-DERIVED by the command service — never
+            # accepted from the request body.
         )
         result = await service.execute(
             ctx=ctx,

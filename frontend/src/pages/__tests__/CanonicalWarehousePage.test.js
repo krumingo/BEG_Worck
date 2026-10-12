@@ -9,8 +9,8 @@
  *
  * The frontend smoke suite is required by TASK 5C.
  */
-import React from "react";
-import { render, screen } from "@testing-library/react";
+import React, { act } from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 jest.mock("@/lib/warehouseCanonicalApi", () => {
@@ -91,16 +91,39 @@ describe("CanonicalWarehousePage", () => {
     expect(screen.getByText("Склад (каноничен)")).toBeInTheDocument();
   });
 
-  it("exposes every canonical action in the command form", () => {
+  it("exposes every canonical action in the command form", async () => {
     renderAt(390, 844, <CanonicalWarehousePage />);
-    // Open the commands tab
+    // Switch to the Движения (commands) tab, wrapped in act so React
+    // flushes the state update before the DOM is queried.
     const commandsTab = screen.getByText("Движения");
-    commandsTab.click();
-    const actionSelect = document.querySelector("select");
-    expect(actionSelect).toBeTruthy();
-    const options = Array.from(actionSelect.querySelectorAll("option")).map(o => o.value);
-    Object.values(ACTIONS).forEach(a => {
-      expect(options).toContain(a);
+    act(() => { fireEvent.click(commandsTab); });
+    await waitFor(() => {
+      const actionSelect = document.querySelector("select");
+      expect(actionSelect).toBeTruthy();
+      const options = Array.from(actionSelect.querySelectorAll("option")).map(o => o.value);
+      Object.values(ACTIONS).forEach(a => {
+        expect(options).toContain(a);
+      });
     });
+  });
+
+  it("renders no horizontal page overflow at 390x844", () => {
+    renderAt(390, 844, <CanonicalWarehousePage />);
+    // The page container owns `overflow-x: hidden` and
+    // `max-width: 100vw`; assert both are present inline so the
+    // guarantee survives a future style refactor.
+    const page = document.querySelector(".wh-canonical-page");
+    expect(page).toBeTruthy();
+    const style = page?.ownerDocument?.querySelector("style")?.textContent || "";
+    expect(style).toMatch(/\.wh-canonical-page[^}]*overflow-x:\s*hidden/);
+    expect(style).toMatch(/\.wh-canonical-page[^}]*max-width:\s*100vw/);
+  });
+
+  it("surfaces canonical source and freshness on warnings panel", () => {
+    renderAt(390, 844, <CanonicalWarehousePage />);
+    const warningsTab = screen.getByText("Аларми");
+    act(() => { fireEvent.click(warningsTab); });
+    // Panel title/empty state is rendered after state resolves.
+    expect(document.querySelector(".wh-warnings-header, .wh-panel")).toBeTruthy();
   });
 });

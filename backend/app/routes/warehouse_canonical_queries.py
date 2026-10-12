@@ -27,6 +27,7 @@ from app.services.warehouse_movements.queries import (
     integrity_warnings,
 )
 from app.services.warehouse_movements.errors import WarehouseMovementError
+from app.permissions.service import evaluate_permission
 
 
 router = APIRouter(prefix="/warehouse/canonical", tags=["warehouse_canonical_queries"])
@@ -34,6 +35,40 @@ router = APIRouter(prefix="/warehouse/canonical", tags=["warehouse_canonical_que
 
 def _tenant_for(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
+
+
+async def _authorize_resource_scope(
+    ctx: TenantContext, *, action: str,
+    location_type: Optional[str], location_id: Optional[str],
+    project_id: Optional[str],
+) -> None:
+    """CODEX C06 — reads enforce RESOURCE scope, not just module.
+
+    If the caller references a specific location or project, the
+    Permission Service re-evaluates `action` against that exact scope;
+    a module-wide grant is NOT enough to look at every warehouse.
+    """
+    scopes = []
+    if project_id:
+        scopes.append(("project", project_id))
+    if location_id and location_type not in {
+        None, LocationType.IN_TRANSIT.value,
+        LocationType.UNRESOLVED.value,
+        LocationType.SUPPLIER.value,
+    }:
+        scopes.append(("location", location_id))
+    for scope_type, scope_id in scopes:
+        decision = await evaluate_permission(
+            ctx, action, module="warehouse",
+            scope_type=scope_type, scope_id=scope_id,
+        )
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail={
+                "error_code": "PERMISSION_DENIED",
+                "action": action,
+                "scope_type": scope_type,
+                "scope_id": scope_id,
+            })
 
 
 @router.get("/stock/{item_id}")
@@ -55,6 +90,10 @@ async def read_stock(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"error_code": "BAD_LOCATION",
                                                      "message": str(exc)})
+    await _authorize_resource_scope(
+        ctx, action="warehouse.read_stock",
+        location_type=location_type, location_id=location_id, project_id=None,
+    )
     tenant = _tenant_for(user)
     return await stock_at(
         tenant.warehouse_transactions,
@@ -91,6 +130,11 @@ async def read_history(
     ctx: TenantContext = Depends(require_permission(
         "warehouse.read_history", module="warehouse")),
 ) -> Dict[str, Any]:
+    await _authorize_resource_scope(
+        ctx, action="warehouse.read_history",
+        location_type=location_type, location_id=location_id,
+        project_id=project_id,
+    )
     tenant = _tenant_for(user)
     return await movement_history(
         tenant.warehouse_transactions,

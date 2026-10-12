@@ -109,15 +109,59 @@ export default function ProcurementPage() {
     finally { setSaving(false); }
   };
 
-  // Post to warehouse
+  // Post to warehouse — CODEX C08.
+  // The retired `/supplier-invoices/{id}/post-to-warehouse` legacy
+  // endpoint has been replaced. The button now dispatches one canonical
+  // `receive_from_supplier` command per invoice line. Multi-destination
+  // allocation uses the canonical warehouse page (one movement per
+  // destination) to meet v6 §4.6 line-sum constraints.
   const postToWarehouse = async (invId) => {
-    if (!window.confirm("Потвърдете приемане в Основен склад?")) return;
+    if (!window.confirm("Потвърдете приемане в Основен склад (каноничен поток)?")) return;
     setPosting(true);
     try {
-      await API.post(`/supplier-invoices/${invId}/post-to-warehouse`);
+      const inv = invoices.find((i) => i.id === invId);
+      if (!inv) throw new Error("Invoice not found");
+      const centralWh = (await API.get("/warehouses")).data?.items?.find?.(
+        (w) => w.type === "central"
+      );
+      if (!centralWh) throw new Error("Няма централен склад — създайте такъв преди приемане");
+      const { postMovement, ACTIONS, LOCATION_TYPES, STATES } =
+        await import("@/lib/warehouseCanonicalApi");
+      for (const line of (inv.lines || [])) {
+        if (!line.item_id) {
+          alert(`Линия без item_id: '${line.material_name}'. Моля първо мапнете материала.`);
+          continue;
+        }
+        const qty = parseFloat(line.qty || 0);
+        if (qty <= 0) continue;
+        await postMovement({
+          action: ACTIONS.RECEIVE_FROM_SUPPLIER,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(qty),
+          unit_value: String(parseFloat(line.final_unit_price || line.unit_price || 0)),
+          currency: inv.currency || "BGN",
+          source: {
+            location_type: LOCATION_TYPES.SUPPLIER,
+            location_id: inv.supplier_id || "unknown_supplier",
+            state: STATES.FREE,
+          },
+          destination: {
+            location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+            location_id: centralWh.id,
+            state: STATES.FREE,
+          },
+          invoice_id: inv.id,
+          invoice_line_id: line.id,
+          project_id: line.project_id || inv.project_id,
+          request_id: line.linked_request_id || inv.linked_request_id,
+        });
+      }
       setReviewOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || err.message || "Грешка");
+    }
     finally { setPosting(false); }
   };
 

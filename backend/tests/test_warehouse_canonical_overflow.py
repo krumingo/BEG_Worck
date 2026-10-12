@@ -15,18 +15,18 @@ from decimal import Decimal
 
 import pytest
 
-from .warehouse_canonical_conftest import (
-    canonical_mongo_db, allow_always_gate, require_replica_set_or_fail,
-)
 from app.services.warehouse_movements import (
     CanonicalAction, LocationKey, LocationType,
 )
 from app.services.warehouse_movements.queries import (
-    item_balance_by_location, free_balance as svc_free_balance,
+    item_balance_by_location,
 )
+from app.services.warehouse_movements.fifo import free_balance as svc_free_balance
 from app.services.warehouse_movements.service import (
     CommandService, CommandInput,
 )
+
+pytest_plugins = ["tests.warehouse_canonical_conftest"]
 
 
 class _Ctx:
@@ -39,7 +39,6 @@ def _tenant_data(db, org_id="org_test"):
     return TenantData.for_resolved_org(db, org_id)
 
 
-@pytest.mark.asyncio
 async def test_balance_scan_over_1200_inbound_rows_is_complete(
     canonical_mongo_db, allow_always_gate,
 ):

@@ -16,9 +16,6 @@ from decimal import Decimal
 
 import pytest
 
-from .warehouse_canonical_conftest import (
-    canonical_mongo_db, allow_always_gate, require_replica_set_or_fail,
-)
 from app.services.warehouse_movements import (
     CanonicalAction, LocationKey, LocationType, MovementState,
 )
@@ -26,6 +23,8 @@ from app.services.warehouse_movements.service import (
     CommandService, CommandInput,
 )
 from app.services.warehouse_movements.errors import NegativeStockError
+
+pytest_plugins = ["tests.warehouse_canonical_conftest"]
 
 
 class _Ctx:
@@ -52,7 +51,6 @@ def _inp(action, tenant_id, **kw):
     return CommandInput(**base)
 
 
-@pytest.mark.asyncio
 async def test_two_concurrent_last_unit_dispatches_one_winner(canonical_mongo_db, allow_always_gate):
     os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
     client, db = canonical_mongo_db
@@ -71,7 +69,8 @@ async def test_two_concurrent_last_unit_dispatches_one_winner(canonical_mongo_db
         return await svc.execute(_Ctx("org_test"), db, coll, _inp(
             CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT, tenant_id="org_test",
             source=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh_c1"),
-            destination=LocationKey(LocationType.IN_TRANSIT, f"disp_{idx}"),
+            destination=LocationKey(LocationType.IN_TRANSIT, f"disp_{idx}",
+                                    state=MovementState.IN_TRANSIT),
             quantity=Decimal("1"), project_id=f"proj_{idx}",
             idempotency_key=f"disp-{idx}-{uuid.uuid4().hex[:4]}",
         ))
@@ -90,7 +89,6 @@ async def test_two_concurrent_last_unit_dispatches_one_winner(canonical_mongo_db
     assert outbound_count == 1
 
 
-@pytest.mark.asyncio
 async def test_tenant_a_b_collision_does_not_cross_wires(canonical_mongo_db, allow_always_gate):
     os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
     client, db = canonical_mongo_db

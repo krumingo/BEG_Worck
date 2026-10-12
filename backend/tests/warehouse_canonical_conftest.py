@@ -22,6 +22,7 @@ import uuid
 from typing import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
 try:
     from motor.motor_asyncio import AsyncIOMotorClient
@@ -70,7 +71,7 @@ def require_replica_set_or_fail():
         )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def canonical_mongo_db():
     """Fresh database for a single test."""
     require_replica_set_or_fail()

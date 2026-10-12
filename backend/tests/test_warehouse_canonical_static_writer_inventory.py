@@ -31,38 +31,11 @@ from app.services.warehouse_movements.legacy_inventory import (
 # place for compile-time stability but the physical writes are
 # guarded. Any entries that would otherwise flag need an owner decision.
 BASELINE_WRITERS: dict[str, set[str]] = {
-    # Pre-TASK-5C writer positions preserved in function bodies behind
-    # fail-close guards. Each line writes to a canonical-only collection
-    # but is unreachable in normal runtime (its route raises
-    # LEGACY_WRITER_RETIRED → HTTP 410 before the body runs). Removing
-    # the bodies would churn the diff and lose context for operations;
-    # the guard is what matters.
-    "warehouse_transactions": {
-        "backend/app/routes/procurement.py:519",      # post_invoice_to_warehouse body (guarded, 410)
-        "backend/app/routes/procurement.py:710",      # record_consumption body (guarded, 410)
-        "backend/app/routes/procurement.py:850",      # warehouse_return body (guarded, 410)
-    },
-    "warehouse_batches": {
-        # fifo_service.add_batch / consume_fifo — now callable only from
-        # the retired POST /warehouse/batches and /warehouse/consume
-        # handlers, both of which fail-close at HTTP 410 before the
-        # service is reached.
-        "backend/app/services/fifo_service.py:85",
-        "backend/app/services/fifo_service.py:129",
-        # PUT /warehouse/batches/{id}/block body — guarded (410).
-        "backend/app/routes/warehouse_batches.py:208",
-    },
-    "material_entries": {
-        # /material-entries/sync/{project_id} — projection rebuild only.
-        # Not a physical writer per FLOW_CODE_MAP_READY: it re-derives
-        # from (legacy) sources. The projection source migrates to the
-        # canonical ledger as part of CODEX follow-up work; the current
-        # positions are preserved as reconciliation input only.
-        "backend/app/routes/material_smr.py:55",
-        "backend/app/routes/material_smr.py:87",
-        "backend/app/routes/material_smr.py:110",
-        "backend/app/routes/material_smr.py:132",
-    },
+    # CODEX C01 — ZERO production offenders. Every retired writer body
+    # has been gutted; the remaining `fifo_service.consume_fifo` serves
+    # the sales domain (out of TASK 5C scope per v6 §12.1) and is
+    # whitelisted at the module level in `ALLOWED_WRITER_MODULES`
+    # rather than entry-by-entry here.
 }
 
 

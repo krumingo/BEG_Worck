@@ -57,8 +57,12 @@ async def _load_open_layers(
     The projection is simple: every inbound to this bucket opens a layer,
     every outbound from this bucket drains layers in order. The projection
     is bounded to this bucket — no 1000-row cap, no truncation.
+
+    C09 — the order IS the ledger server-sequence, not wall-clock time
+    (two inbounds in one millisecond would otherwise tie non-deterministically).
+    Legacy rows without a `ledger_sequence` fall back to `recorded_at`
+    + `movement_id` so historical rows still participate.
     """
-    # Inbound: this location is the DESTINATION
     inbound_q = {
         "tenant_id": tenant_id,
         "item_id": item_id,
@@ -66,7 +70,6 @@ async def _load_open_layers(
         "destination.location_id": location.location_id,
         "destination.state": location.state.value,
     }
-    # Outbound: this location is the SOURCE
     outbound_q = {
         "tenant_id": tenant_id,
         "item_id": item_id,
@@ -74,21 +77,20 @@ async def _load_open_layers(
         "source.location_id": location.location_id,
         "source.state": location.state.value,
     }
-    # Loaded fully, oldest first — the whole projection is for one bucket,
-    # not the whole warehouse, so it is bounded by business volume rather
-    # than by an arbitrary cap. CODEX test for >1000 verifies this.
     cursor_in = tenant_collection.find(
         inbound_q, {"movement_id": 1, "quantity": 1, "unit_value": 1,
-                    "currency": 1, "recorded_at": 1, "_id": 0},
+                    "currency": 1, "recorded_at": 1,
+                    "ledger_sequence": 1, "_id": 0},
         session=session,
-    ).sort("recorded_at", 1)
+    ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
     inbound = [dict(doc) async for doc in cursor_in]
 
     cursor_out = tenant_collection.find(
         outbound_q, {"movement_id": 1, "layer_allocations": 1,
-                     "recorded_at": 1, "_id": 0},
+                     "recorded_at": 1,
+                     "ledger_sequence": 1, "_id": 0},
         session=session,
-    ).sort("recorded_at", 1)
+    ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
     outbound = [dict(doc) async for doc in cursor_out]
 
     # Open each inbound as a layer with its full quantity.
@@ -104,6 +106,8 @@ async def _load_open_layers(
         )
 
     # Drain layers in the order the outbound documents reference them.
+    # C09 fail-closed: an allocation that references an unknown layer is
+    # a projection skew that MUST block, not silently continue.
     for doc in outbound:
         for alloc in doc.get("layer_allocations", []):
             key = (
@@ -111,9 +115,17 @@ async def _load_open_layers(
                 int(alloc["layer_sequence"]),
             )
             if key not in layers:
-                # Allocation referencing a layer we did not see is a
-                # projection skew — skip rather than silently negative.
-                continue
+                raise NegativeStockError(
+                    "outbound allocation references an unknown source layer; "
+                    "projection is skewed from the canonical ledger",
+                    context={
+                        "item_id": item_id,
+                        "location": str(location),
+                        "missing_source": key[0],
+                        "missing_sequence": key[1],
+                        "outbound_movement_id": doc.get("movement_id"),
+                    },
+                )
             layers[key].remaining -= Decimal(str(alloc.get("quantity", "0")))
 
     # Only keep positive-remaining layers, oldest first.

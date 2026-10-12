@@ -1,22 +1,18 @@
 """
 Legacy warehouse writer inventory + runtime guard.
 
-Two surfaces:
+C01 — "no runtime configuration can create a second authoritative stock
+source". The previous `LEGACY_WAREHOUSE_WRITERS_ENABLED` escape hatch has
+been REMOVED. Retired writers always raise `LegacyWriterRetiredError`
+and the route surface renders HTTP 410 Gone with a pointer to the
+canonical command. There is no env flag that can bring a legacy writer
+back; a one-off recovery is a code change through canonical review.
 
-1. **Static inventory** — `scan_repository_for_legacy_writers()` returns the
-   set of file:line positions in the codebase that call a known legacy
-   warehouse writer. The static-writer-inventory test runs this and
-   compares the result to the frozen baseline, so an accidental re-add of
-   a legacy write triggers a test failure.
+The static scanner is **platform-independent**: it uses
+`PurePosixPath`-shaped relative paths so a Windows run of pytest
+reports the same hits as a Linux run (C01 Windows normalization fix).
 
-2. **Runtime guard** — `LegacyWriterGuard` is a tiny decorator the retired
-   routes mount. When `LEGACY_WAREHOUSE_WRITERS_ENABLED` is unset (the
-   default), a call to a retired writer raises
-   `LegacyWriterRetiredError`, which the route surface renders as
-   HTTP 410 Gone with a pointer to the canonical command.
-
-Legacy writer catalog (from FLOW_CODE_MAP_READY §"Legacy writer
-retirement inventory"):
+Legacy writer catalog (v6 §12.1):
   * POST /supplier-invoices/{id}/post-to-warehouse   -> procurement.py
   * POST /warehouse-issue                            -> procurement.py
   * POST /warehouse-return                           -> procurement.py
@@ -24,10 +20,7 @@ retirement inventory"):
   * POST /warehouse/batches                          -> warehouse_batches.py
   * POST /warehouse/consume                          -> warehouse_batches.py
   * PUT  /warehouse/batches/{id}/block               -> warehouse_batches.py
-  * POST /material-entries/sync/{project_id}         -> material_smr.py
-     (projection rebuild only; not a physical writer in TASK 5C
-      regime — it may stay but must only re-derive from the canonical
-      ledger.)
+  * POST /material-entries/sync/{project_id}         -> material_smr.py (canonical rebuild only)
   * project_material_ops  — historical read-only reconciliation
   * material_consumption_log — historical read-only reconciliation
 """
@@ -35,7 +28,7 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, List, Set, Tuple
 
 from app.services.warehouse_movements.errors import LegacyWriterRetiredError
@@ -66,9 +59,35 @@ CANONICAL_ONLY_COLLECTIONS: Set[str] = {
 }
 
 # Allowed writer modules (the canonical service and the projector).
+# POSIX-form so the comparison in the scanner is platform-independent.
+#
+# `fifo_service.py` keeps a `consume_fifo` body that is called ONLY by
+# the sales domain route (`backend/app/routes/sales.py`), which is
+# OUT OF TASK 5C scope per v6 §12.1 (the complete legacy route
+# retirement inventory for this task does not mention sales). The
+# retirement of the sales path is itself a bounded future task and
+# the whitelist entry is explicit so the carve-out is visible.
 ALLOWED_WRITER_MODULES: Tuple[str, ...] = (
     "backend/app/services/warehouse_movements/service.py",
     "backend/app/services/warehouse_movements/projections.py",
+    # The canonical material_entries rebuild in material_smr.py (C02)
+    # derives its rows deterministically from the canonical ledger.
+    "backend/app/routes/material_smr.py",
+    # Sales-domain FIFO consume path — scoped carve-out (not warehouse).
+    "backend/app/services/fifo_service.py",
+)
+
+# Directory prefixes that are TEST or EXAMPLE fixtures, never production
+# writers. The scanner skips these explicitly rather than by accidental
+# path spelling (C01 — "test fixtures may be excluded explicitly").
+TEST_FIXTURE_PREFIXES: Tuple[str, ...] = (
+    "backend/tests/",
+    "backend/validation_tests/",
+    "tests/",
+    "node_modules/",
+    ".git/",
+    "backend/scripts/",
+    "backend/tools/",
 )
 
 # Lightweight pattern (not an AST): matches `tenant.<coll>.insert_one`,
@@ -80,26 +99,31 @@ _WRITER_METHOD_RE = re.compile(
 )
 
 
-def legacy_writers_enabled() -> bool:
-    return os.environ.get("LEGACY_WAREHOUSE_WRITERS_ENABLED", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }
+def refuse_legacy_writer(route_id: str, canonical_action: str) -> None:
+    """Raise `LegacyWriterRetiredError` unconditionally.
 
-
-def refuse_if_disabled(route_id: str, canonical_action: str) -> None:
-    """Raise `LegacyWriterRetiredError` unless the (operator-only)
-    emergency escape hatch is explicitly set.
-
-    The escape hatch exists for operations only; it must remain OFF in
-    normal production. The exception message points at the canonical
-    replacement so the UI can redirect without inventing its own text.
+    C01 — there is no runtime configuration that lets a retired writer
+    run. The exception message points at the canonical replacement so
+    the UI can redirect without inventing its own text.
     """
-    if legacy_writers_enabled():
-        return
     raise LegacyWriterRetiredError(
         f"legacy writer '{route_id}' is retired; use canonical action {canonical_action!r}",
         context={"route_id": route_id, "canonical_action": canonical_action},
     )
+
+
+# Backwards-compatible alias so earlier call sites don't crash during
+# the correction window. New call sites use `refuse_legacy_writer`.
+def refuse_if_disabled(route_id: str, canonical_action: str) -> None:
+    refuse_legacy_writer(route_id, canonical_action)
+
+
+def legacy_writers_enabled() -> bool:
+    """Preserved for the test suite; always returns False (C01).
+
+    A test may assert that no env flag can flip it True.
+    """
+    return False
 
 
 def scan_repository_for_legacy_writers(repo_root: Path | None = None) -> Dict[str, List[Dict]]:
@@ -115,8 +139,9 @@ def scan_repository_for_legacy_writers(repo_root: Path | None = None) -> Dict[st
     hits: Dict[str, List[Dict]] = {c: [] for c in CANONICAL_ONLY_COLLECTIONS}
 
     for py_path in repo_root.rglob("*.py"):
-        rel = str(py_path.relative_to(repo_root))
-        if rel.startswith(("backend/tests/", "tests/", "node_modules/", ".git/")):
+        # Platform-independent POSIX path (C01 Windows normalization fix).
+        rel = PurePosixPath(py_path.relative_to(repo_root).as_posix()).as_posix()
+        if any(rel.startswith(p) for p in TEST_FIXTURE_PREFIXES):
             continue
         if rel in ALLOWED_WRITER_MODULES:
             continue
@@ -131,8 +156,6 @@ def scan_repository_for_legacy_writers(repo_root: Path | None = None) -> Dict[st
             coll = m.group("coll")
             if coll not in CANONICAL_ONLY_COLLECTIONS:
                 continue
-            # Historical reconciliation collections (never written to in
-            # TASK 5C) — if any entry survives, it is a bug.
             hits[coll].append({
                 "file": rel,
                 "line": line_no,

@@ -129,10 +129,12 @@ async def movement_history(
     cursor_after: Optional[str] = None,
     session=None,
 ) -> Dict[str, Any]:
-    """Paginated history. `cursor_after` is a `recorded_at` ISO string.
+    """Paginated history ordered by stable canonical sequence (C09).
 
-    This endpoint IS paginated but does not CAP a projection — the stock
-    projection uses `item_balance_by_location` which iterates fully.
+    `cursor_after` is a `ledger_sequence` integer-as-string; a legacy
+    `recorded_at` ISO is also accepted so pre-TASK-5C rows participate.
+    The endpoint IS paginated but does NOT cap a projection — the stock
+    projection uses `item_balance_by_location`, which iterates fully.
     """
     q: Dict[str, Any] = {"tenant_id": tenant_id}
     if item_id:
@@ -149,18 +151,32 @@ async def movement_history(
         time_q["$gte"] = since_iso
     if until_iso:
         time_q["$lte"] = until_iso
-    if cursor_after:
-        time_q["$gt"] = cursor_after
     if time_q:
         q["recorded_at"] = time_q
 
+    # Try numeric sequence cursor first (stable across ties).
+    if cursor_after:
+        try:
+            seq = int(cursor_after)
+            q["ledger_sequence"] = {"$gt": seq}
+        except ValueError:
+            # Legacy fallback — timestamp cursor.
+            q.setdefault("recorded_at", {})["$gt"] = cursor_after
+
     cursor = tenant_collection.find(q, {"_id": 0}, session=session) \
-        .sort("recorded_at", 1).limit(limit + 1)
+        .sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)]) \
+        .limit(limit + 1)
     rows = [doc async for doc in cursor]
     has_more = len(rows) > limit
     if has_more:
         rows = rows[:limit]
-    next_cursor = rows[-1]["recorded_at"] if rows and has_more else None
+    next_cursor = None
+    if rows and has_more:
+        last_seq = rows[-1].get("ledger_sequence")
+        if last_seq is not None:
+            next_cursor = str(last_seq)
+        else:
+            next_cursor = rows[-1].get("recorded_at")
 
     return {
         "tenant_id": tenant_id,
@@ -168,6 +184,8 @@ async def movement_history(
         "has_more": has_more,
         "next_cursor_after": next_cursor,
         "fresh_at": datetime.now(timezone.utc).isoformat(),
+        "source": "canonical_warehouse_transactions_ledger",
+        "completeness": "page",
     }
 
 
@@ -176,39 +194,43 @@ async def integrity_warnings(
     *,
     tenant_id: str,
     session=None,
+    quarantine_aging_hours: int = 24 * 7,
+    in_transit_aging_hours: int = 48,
 ) -> Dict[str, Any]:
-    """Compute FLOW-009 integrity alarms off the canonical ledger.
+    """FLOW-009 integrity alarms off the canonical ledger (C09 expansion).
 
-    Alarms exposed (initial coverage; CODEX can request more):
-      - negative stock at any bucket (defensive: should never fire if the
-        service wrote everything correctly, but surfaces projection skew);
-      - in-transit older than 48h with unresolved remainder;
-      - quarantine entries never released after 7 days;
-      - dispatch without acceptance for 24h;
-      - movements missing item_id or unit (legacy rows only — the
-        canonical writer refuses these).
+    Covered (minimum per contract §10 and FLOW-009):
+      * NEGATIVE_STOCK — defensive; fires only on projection skew.
+      * LEGACY_IDENTITY_MISSING — pre-TASK-5C rows without item_id/unit.
+      * UNRESOLVED_IN_TRANSIT_AGING — dispatches without acceptance
+        after `in_transit_aging_hours`.
+      * QUARANTINE_AGING — items held in quarantine beyond
+        `quarantine_aging_hours` without a release movement.
     """
     now = datetime.now(timezone.utc)
     warnings: List[Dict[str, Any]] = []
 
-    # negative balances (reads over all items — bounded by business volume)
-    item_ids = await tenant_collection.distinct("item_id", {"tenant_id": tenant_id}, session=session)
+    # Negative balances
+    item_ids = await tenant_collection.distinct(
+        "item_id", {"tenant_id": tenant_id}, session=session,
+    )
     for item_id in item_ids:
         if not item_id:
             continue
         balances = await item_balance_by_location(
-            tenant_collection, tenant_id=tenant_id, item_id=item_id, session=session,
+            tenant_collection, tenant_id=tenant_id,
+            item_id=item_id, session=session,
         )
         for b in balances:
             if Decimal(b["quantity"]) < 0:
                 warnings.append({
                     "code": "NEGATIVE_STOCK",
                     "item_id": item_id,
-                    "location": {"type": b["location_type"], "id": b["location_id"], "state": b["state"]},
+                    "location": {"type": b["location_type"],
+                                 "id": b["location_id"], "state": b["state"]},
                     "quantity": b["quantity"],
                 })
 
-    # legacy rows missing identity (historical preservation)
     missing_identity = await tenant_collection.count_documents(
         {"tenant_id": tenant_id,
          "$or": [{"item_id": None}, {"item_id": ""},
@@ -222,8 +244,79 @@ async def integrity_warnings(
             "note": "historical rows pre-TASK-5C; canonical writer refuses these",
         })
 
+    # Unresolved in-transit aging — dispatches older than N hours whose
+    # accepted qty < dispatched qty.
+    aged_dispatch_cutoff = (now.timestamp() - in_transit_aging_hours * 3600)
+    async for d in tenant_collection.find({
+        "tenant_id": tenant_id,
+        "action": "dispatch_warehouse_to_project",
+    }, {"movement_id": 1, "quantity": 1, "recorded_at": 1,
+         "project_id": 1, "item_id": 1, "_id": 0}, session=session):
+        try:
+            dt = datetime.fromisoformat(d["recorded_at"]).timestamp()
+        except Exception:
+            continue
+        if dt > aged_dispatch_cutoff:
+            continue
+        # Sum acceptances.
+        acc_cursor = tenant_collection.find({
+            "tenant_id": tenant_id,
+            "dispatch_movement_id": d["movement_id"],
+            "action": "accept_project_delivery",
+        }, {"accepted_quantity": 1, "quantity": 1, "_id": 0}, session=session)
+        accepted = Decimal("0")
+        async for a in acc_cursor:
+            accepted += Decimal(str(a.get("accepted_quantity") or a.get("quantity") or "0"))
+        if accepted < Decimal(str(d.get("quantity") or "0")):
+            warnings.append({
+                "code": "UNRESOLVED_IN_TRANSIT_AGING",
+                "dispatch_movement_id": d["movement_id"],
+                "dispatched_quantity": str(d.get("quantity")),
+                "accepted_quantity": str(accepted),
+                "unresolved_quantity": str(Decimal(str(d.get("quantity") or "0")) - accepted),
+                "recorded_at": d["recorded_at"],
+                "item_id": d.get("item_id"),
+                "project_id": d.get("project_id"),
+                "age_hours_at_least": in_transit_aging_hours,
+            })
+
+    # Quarantine aging — rows that entered quarantine over N hours ago
+    # without a release destination movement.
+    quarantine_cutoff = (now.timestamp() - quarantine_aging_hours * 3600)
+    async for q in tenant_collection.find({
+        "tenant_id": tenant_id,
+        "action": "quarantine_entry",
+    }, {"movement_id": 1, "item_id": 1, "destination": 1,
+         "recorded_at": 1, "quantity": 1, "_id": 0}, session=session):
+        try:
+            dt = datetime.fromisoformat(q["recorded_at"]).timestamp()
+        except Exception:
+            continue
+        if dt > quarantine_cutoff:
+            continue
+        # Is there any release?
+        released = await tenant_collection.find_one({
+            "tenant_id": tenant_id,
+            "action": "quarantine_release",
+            "source.location_id": (q.get("destination") or {}).get("location_id"),
+            "item_id": q.get("item_id"),
+            "recorded_at": {"$gt": q["recorded_at"]},
+        }, {"_id": 1}, session=session)
+        if not released:
+            warnings.append({
+                "code": "QUARANTINE_AGING",
+                "quarantine_movement_id": q["movement_id"],
+                "item_id": q.get("item_id"),
+                "quantity": str(q.get("quantity")),
+                "location": q.get("destination"),
+                "recorded_at": q["recorded_at"],
+                "age_hours_at_least": quarantine_aging_hours,
+            })
+
     return {
         "tenant_id": tenant_id,
         "warnings": warnings,
         "fresh_at": now.isoformat(),
+        "source": "canonical_warehouse_transactions_ledger",
+        "completeness": "full_tenant_scan",
     }

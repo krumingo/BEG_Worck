@@ -32,9 +32,26 @@ def test_each_retired_route_refuses_by_default(route_id):
     assert excinfo.value.context["canonical_action"] == "canonical_replacement"
 
 
-def test_escape_hatch_lets_calls_through():
-    os.environ["LEGACY_WAREHOUSE_WRITERS_ENABLED"] = "1"
-    try:
-        refuse_if_disabled("procurement.post_to_warehouse", "receive_from_supplier")
-    finally:
-        del os.environ["LEGACY_WAREHOUSE_WRITERS_ENABLED"]
+def test_no_env_flag_reopens_legacy_writers():
+    """CODEX C01 — no runtime configuration can bring a retired writer
+    back. The former `LEGACY_WAREHOUSE_WRITERS_ENABLED` escape hatch is
+    gone; setting any value for the variable must not matter."""
+    for value in ("1", "true", "yes", "on", "", "0", "false"):
+        os.environ["LEGACY_WAREHOUSE_WRITERS_ENABLED"] = value
+        try:
+            with pytest.raises(LegacyWriterRetiredError):
+                refuse_if_disabled("procurement.post_to_warehouse",
+                                   "receive_from_supplier")
+        finally:
+            del os.environ["LEGACY_WAREHOUSE_WRITERS_ENABLED"]
+
+
+def test_legacy_writers_enabled_returns_false_regardless_of_env():
+    """`legacy_writers_enabled()` always returns False (C01 contract)."""
+    for value in ("1", "true", "yes", "on", "0", "false", ""):
+        os.environ["LEGACY_WAREHOUSE_WRITERS_ENABLED"] = value
+        try:
+            assert legacy_writers_enabled() is False, \
+                f"legacy_writers_enabled must stay False even with env={value!r}"
+        finally:
+            del os.environ["LEGACY_WAREHOUSE_WRITERS_ENABLED"]

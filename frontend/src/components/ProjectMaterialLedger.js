@@ -1,5 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import API from "@/lib/api";
+// LIVE-OPS-01 / TASK 5C C08 — canonical write path.
+import {
+  ACTIONS as CANONICAL_ACTIONS,
+  LOCATION_TYPES, STATES, postMovement,
+} from "@/lib/warehouseCanonicalApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -50,10 +55,37 @@ export default function ProjectMaterialLedger({ projectId }) {
   const handleIssue = async () => {
     setSaving(true);
     try {
-      await API.post("/warehouse-issue", { project_id: projectId, lines: opLines });
+      // C08: canonical dispatch per line; acceptance is a separate
+      // canonical command run from the receiving side. The caller
+      // confirms the two-phase handoff and does not auto-accept.
+      for (const line of opLines) {
+        const qty = parseFloat(line.qty_issued);
+        if (!qty || qty <= 0 || !line.item_id || !line.warehouse_id) continue;
+        await postMovement({
+          action: CANONICAL_ACTIONS.DISPATCH_WAREHOUSE_TO_PROJECT,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(qty),
+          source: {
+            location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+            location_id: line.warehouse_id,
+            state: STATES.FREE,
+          },
+          destination: {
+            location_type: LOCATION_TYPES.IN_TRANSIT,
+            // one in_transit bucket per dispatch — the server also
+            // writes the mirrored row.
+            location_id: `dispatch_${projectId}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            state: STATES.IN_TRANSIT,
+          },
+          project_id: projectId,
+        });
+      }
       setIssueOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 
@@ -69,10 +101,28 @@ export default function ProjectMaterialLedger({ projectId }) {
     setSaving(true);
     try {
       const valid = opLines.filter(l => parseFloat(l.qty_consumed) > 0);
-      await API.post("/project-consumption", { project_id: projectId, lines: valid });
+      for (const line of valid) {
+        if (!line.item_id) continue;
+        await postMovement({
+          action: CANONICAL_ACTIONS.CONSUME_TO_SMR,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(parseFloat(line.qty_consumed)),
+          source: {
+            location_type: LOCATION_TYPES.PROJECT,
+            location_id: projectId,
+            state: STATES.FREE,
+          },
+          project_id: projectId,
+          smr_id: line.smr_id,
+          work_package_id: line.work_package_id,
+        });
+      }
       setConsumeOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 
@@ -88,10 +138,35 @@ export default function ProjectMaterialLedger({ projectId }) {
     setSaving(true);
     try {
       const valid = opLines.filter(l => parseFloat(l.qty_returned) > 0);
-      await API.post("/warehouse-return", { project_id: projectId, lines: valid });
+      // C04/C08: returned material enters QUARANTINE first.
+      // The receiving warehouse releases it after inspection via a
+      // dedicated `quarantine_release` command.
+      for (const line of valid) {
+        if (!line.item_id || !line.warehouse_id) continue;
+        await postMovement({
+          action: CANONICAL_ACTIONS.QUARANTINE_ENTRY,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(parseFloat(line.qty_returned)),
+          source: {
+            location_type: LOCATION_TYPES.PROJECT,
+            location_id: projectId,
+            state: STATES.FREE,
+          },
+          destination: {
+            location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+            location_id: line.warehouse_id,
+            state: STATES.QUARANTINE,
+          },
+          project_id: projectId,
+          reason: line.reason || "project return — awaiting inspection",
+        });
+      }
       setReturnOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 

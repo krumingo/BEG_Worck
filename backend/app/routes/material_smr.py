@@ -30,109 +30,115 @@ router = APIRouter(tags=["Material Cost by SMR"])
 
 @router.post("/material-entries/sync/{project_id}")
 async def sync_material_entries(project_id: str, user: dict = Depends(require_m2)):
-    """Sync material entries from warehouse transactions + consumption ops, linking to execution packages"""
+    """Rebuild `material_entries` deterministically from the canonical
+    `warehouse_transactions` ledger ONLY (CODEX C02).
+
+    No legacy `project_material_ops` input. No silent cap: the rebuild
+    iterates the full tenant+project ledger. The projection is marked
+    `projection_source=canonical_warehouse_service` so a static scan /
+    reconciliation tool can distinguish canonical rows from historical
+    legacy rows (the latter are preserved read-only but not deleted
+    unless they themselves are `projection_source=canonical_...`).
+
+    Deterministic rebuild parity:
+      * iteration order is `ledger_sequence ASC`;
+      * one `material_entries` row per canonical ledger row whose
+        action is one of ACCEPT_PROJECT_DELIVERY, CONSUME_TO_SMR,
+        TRANSFER_PROJECT_TO_PROJECT, TRANSFER_PROJECT_TO_WAREHOUSE,
+        REVISION_ADJUSTMENT, WRITE_OFF — i.e. the actions that affect
+        project material cost under Rule B;
+      * two rebuilds over the same ledger return the same set.
+    """
     tenant = _tenant(user)
     org_id = user["org_id"]
 
-    # Load execution packages for mapping
-    exec_pkgs = await tenant.execution_packages.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "id": 1, "activity_name": 1, "offer_line_id": 1}
-    ).to_list(200)
-
-    # Load planned materials for mapping (material_name → execution_package_id)
+    # Planned material mapping is still useful for UX linkage; it does
+    # not become a source — material_name is only a display label.
     planned = await tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
-        {"_id": 0, "id": 1, "material_name": 1, "execution_package_id": 1, "offer_line_id": 1}
-    ).to_list(500)
-    planned_by_name = {}
+        {"_id": 0, "id": 1, "item_id": 1, "material_name": 1,
+         "execution_package_id": 1, "offer_line_id": 1}
+    ).to_list(5000)
+    planned_by_item: dict = {}
+    planned_by_name: dict = {}
     for pm in planned:
+        if pm.get("item_id"):
+            planned_by_item[pm["item_id"]] = pm
         name = (pm.get("material_name") or "").lower().strip()
         if name:
-            planned_by_name[name] = pm
+            planned_by_name.setdefault(name, pm)
 
-    # Clear old synced entries
-    await tenant.material_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "sync"})
+    # Delete only the canonical-sourced rows; legacy rows are kept
+    # read-only for reconciliation.
+    await tenant.material_entries.delete_many({
+        "org_id": org_id, "project_id": project_id,
+        "projection_source": "canonical_warehouse_service",
+    })
 
     now = datetime.now(timezone.utc).isoformat()
     created = 0
 
-    # Process warehouse issues
-    issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0}
-    ).to_list(200)
-    for txn in issues:
-        for line in txn.get("lines", []):
-            name = line.get("material_name", "")
-            name_lower = name.lower().strip()
-            pm = planned_by_name.get(name_lower)
+    # The canonical ledger: iterate ALL rows for this project, ordered
+    # by stable sequence (fail-closed on a missing sequence? no — legacy
+    # rows join via recorded_at as a tie-break; the aggregation is
+    # still deterministic because `movement_id` is a third key).
+    CANONICAL_ACTIONS = {
+        "accept_project_delivery": ("accept", 1),
+        "consume_to_smr": ("consume", 1),
+        "transfer_project_to_warehouse": ("transfer_out", -1),
+        "transfer_project_to_project": ("transfer", 1),
+        "revision_adjustment": ("revision", 1),
+        "write_off": ("write_off", -1),
+    }
 
-            entry = {
-                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
-                "execution_package_id": pm["execution_package_id"] if pm else None,
-                "planned_material_id": pm["id"] if pm else None,
-                "offer_line_id": pm.get("offer_line_id") if pm else None,
-                "material_name": name,
-                "qty": float(line.get("qty_issued", 0)),
-                "unit": line.get("unit", ""),
-                "unit_cost": float(line.get("unit_price", 0)) if line.get("unit_price") else None,
-                "total_cost": float(line.get("total_price", 0)) if line.get("total_price") else None,
-                "movement_type": "issue",
-                "source_doc_type": "warehouse_transaction",
-                "source_doc_id": txn.get("id"),
-                "date": txn.get("issue_date", txn.get("created_at", "")[:10]),
-                "mapped": pm is not None,
-                "source": "sync", "created_at": now,
-            }
-            await tenant.material_entries.insert_one(entry)
-            created += 1
+    cursor = tenant.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id,
+         "action": {"$in": list(CANONICAL_ACTIONS.keys())}},
+        {"_id": 0},
+    ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
+    async for row in cursor:
+        action = row.get("action")
+        kind, sign = CANONICAL_ACTIONS[action]
+        qty = float(row.get("accepted_quantity") or row.get("quantity") or 0) * sign
+        pm = (planned_by_item.get(row.get("item_id"))
+              or planned_by_name.get((row.get("item_id") or "").lower().strip()))
+        unit_value = row.get("unit_value")
+        try:
+            unit_value_f = float(unit_value) if unit_value is not None else None
+        except (TypeError, ValueError):
+            unit_value_f = None
+        entry = {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "project_id": project_id,
+            "execution_package_id": pm["execution_package_id"] if pm else None,
+            "planned_material_id": pm["id"] if pm else None,
+            "offer_line_id": pm.get("offer_line_id") if pm else None,
+            "item_id": row.get("item_id"),
+            "material_name": pm.get("material_name") if pm else row.get("item_id"),
+            "unit": row.get("unit"),
+            "qty": qty,
+            "unit_cost": unit_value_f,
+            "total_cost": (unit_value_f * qty) if unit_value_f is not None else None,
+            "movement_type": kind,
+            "source_doc_type": "warehouse_transactions",
+            "source_doc_id": row.get("movement_id"),
+            "ledger_sequence": row.get("ledger_sequence"),
+            "date": (row.get("recorded_at") or "")[:10],
+            "mapped": pm is not None,
+            "projection_source": "canonical_warehouse_service",
+            "created_at": now,
+        }
+        await tenant.material_entries.insert_one(entry)
+        created += 1
 
-    # Process returns
-    returns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "return"}, {"_id": 0}
-    ).to_list(200)
-    for txn in returns:
-        for line in txn.get("lines", []):
-            name = line.get("material_name", "")
-            pm = planned_by_name.get(name.lower().strip())
-            entry = {
-                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
-                "execution_package_id": pm["execution_package_id"] if pm else None,
-                "planned_material_id": pm["id"] if pm else None,
-                "material_name": name, "qty": -float(line.get("qty_returned", 0)),
-                "unit": line.get("unit", ""), "unit_cost": None,
-                "total_cost": -(float(line.get("total_price", 0)) or 0),
-                "movement_type": "return",
-                "source_doc_type": "warehouse_transaction", "source_doc_id": txn.get("id"),
-                "date": txn.get("return_date", txn.get("created_at", "")[:10]),
-                "mapped": pm is not None, "source": "sync", "created_at": now,
-            }
-            await tenant.material_entries.insert_one(entry)
-            created += 1
-
-    # Process consumption
-    consumptions = await tenant.project_material_ops.find(
-        {"org_id": org_id, "project_id": project_id, "type": "consumption"}, {"_id": 0}
-    ).to_list(200)
-    for op in consumptions:
-        for line in op.get("lines", []):
-            name = line.get("material_name", "")
-            pm = planned_by_name.get(name.lower().strip())
-            entry = {
-                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
-                "execution_package_id": pm["execution_package_id"] if pm else None,
-                "planned_material_id": pm["id"] if pm else None,
-                "material_name": name, "qty": float(line.get("qty_consumed", 0)),
-                "unit": line.get("unit", ""), "unit_cost": None, "total_cost": None,
-                "movement_type": "consumption",
-                "source_doc_type": "project_material_op", "source_doc_id": op.get("id"),
-                "date": op.get("date", op.get("created_at", "")[:10]),
-                "mapped": pm is not None, "source": "sync", "created_at": now,
-            }
-            await tenant.material_entries.insert_one(entry)
-            created += 1
-
-    return {"ok": True, "synced": created, "project_id": project_id}
+    return {
+        "ok": True,
+        "synced": created,
+        "project_id": project_id,
+        "source": "canonical_warehouse_transactions_ledger",
+        "deterministic": True,
+    }
 
 
 @router.get("/material-entries")

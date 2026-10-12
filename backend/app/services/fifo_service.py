@@ -55,36 +55,19 @@ async def add_batch(
     batch_number: str = None,
     received_at: str = None,
 ) -> dict:
-    tenant = TenantData.for_resolved_org(db, org_id)
-    now = datetime.now(timezone.utc).isoformat()
-    if not batch_number:
-        batch_number = await generate_batch_number(org_id)
+    """LIVE-OPS-01 / TASK 5C — RETIRED physical writer.
 
-    batch = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "item_id": item_id,
-        "warehouse_id": warehouse_id,
-        "batch_number": batch_number,
-        "source_type": source_type,
-        "supplier_id": supplier_id,
-        "invoice_number": invoice_number,
-        "invoice_date": invoice_date,
-        "ordered_by": ordered_by,
-        "initial_qty": round(qty, 4),
-        "remaining_qty": round(qty, 4),
-        "unit_cost": round(unit_cost, 4),
-        "currency": currency,
-        "received_at": received_at or now,
-        "expires_at": expires_at,
-        "status": "active",
-        "notes": notes,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await tenant.warehouse_batches.insert_one(batch)
-    clean = {k: v for k, v in batch.items() if k != "_id"}
-    return clean
+    `warehouse_batches` is a projection over the canonical ledger.
+    Every production caller has been retired to the canonical command
+    service. Any residual call now fails CLOSED instead of writing a
+    second stock source (C01).
+    """
+    from app.services.warehouse_movements.errors import LegacyWriterRetiredError
+    raise LegacyWriterRetiredError(
+        "fifo_service.add_batch is retired; use the canonical command service",
+        context={"route_id": "fifo_service.add_batch",
+                 "canonical_action": "receive_from_supplier"},
+    )
 
 
 async def consume_fifo(
