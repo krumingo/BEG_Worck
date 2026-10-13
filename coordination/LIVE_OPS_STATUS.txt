@@ -79,17 +79,19 @@
 📊 АКТУАЛНА ЗАДАЧА
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
-Task: TASK-5B — Material Requests Safe-Write Core
-Stage: STAGING_PREPARATION
-Responsible: CODEX
-Next: prepare private-LAN staging acceptance package
-PR: #54 draft/open/unmerged
-Base: merged main 79af297612f57c055bb7caef3f0c48493800d1b6
-Verdict: PASS_CANDIDATE
-Acceptance: OWNER_PENDING
-Correction loops: 2
-Blockers: NONE
-Last update: 2026-10-10T21:49:45Z
+Task: TASK-5C — Canonical Warehouse / Stock Core
+Stage: CLAUDE_C11_CORRECTION_RUNNING
+Responsible: CLAUDE
+PR: #55 draft/open/unmerged
+Branch: task5c/live-ops-01-canonical-stock-core
+Current reviewed head: 7e929a3dab269a24a2e3907c76d0e81bc30f0bbe
+Verdict: CHANGES_REQUESTED
+Real Mongo last independent result: 52 passed / 16 failed / 0 skipped / exit 1
+C11 handoff: SENT ONCE / SUCCESS
+GitHub event: Issue #52 comment 6138562286
+Next: CLAUDE corrections + tests + HANDOFF_PUBLISHED_C11 → CODEX independent re-review
+Owner decision: NONE
+Krum action: NONE
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 ПРАВИЛО
@@ -252,3 +254,15 @@ Next:
 CODEX → direct bounded correction handoff to CLAUDE → corrected exact head → CODEX fresh independent re-review.
 
 No merge / deploy / migration / staging / production activation.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟡 TASK 5C — C11 ACTIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ CODEX → CLAUDE C11 handoff sent exactly once
+✅ Computer Use confirmation visible once in target CLAUDE conversation
+🟡 CLAUDE state: Running
+⚪ Await: corrected exact head + DB-free + Real Mongo RS + frontend/build evidence
+⚪ Then: CODEX independent re-review
+
+No merge / deploy / migration / staging.
