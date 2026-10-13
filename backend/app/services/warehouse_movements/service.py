@@ -110,7 +110,29 @@ logger = logging.getLogger("warehouse.canonical")
 # Transient / retryable errors — Mongo raises these when a write conflict
 # aborts a tx. The service retries the whole transaction a bounded number
 # of times before giving up (contract §4.3).
-_MAX_RETRIES = 3
+_MAX_RETRIES = 5
+
+
+_SEQUENCE_INDEX_NAMES = {
+    "wh_movements_unique_sequence",
+    "wh_audit_unique_sequence",
+    "wh_movements_unique_acceptance_line",
+    "wh_movements_unique_movement_id",
+    "wh_audit_unique_event_id",
+    "wh_movements_unique_supplier_origin",
+}
+
+
+def _is_sequence_duplicate_error(exc: Exception) -> bool:
+    """True iff `exc` is a Mongo duplicate-key error on a sequence-ish
+    index that two concurrent writers would both allocate (read-max+1)."""
+    name = type(exc).__name__
+    if name not in {"DuplicateKeyError", "WriteError", "WriteFailure", "OperationFailure"}:
+        return False
+    msg = str(exc)
+    if "duplicate key" not in msg.lower() and "E11000" not in msg:
+        return False
+    return any(idx in msg for idx in _SEQUENCE_INDEX_NAMES)
 
 
 # -----------------------------------------------------------------------
@@ -500,8 +522,14 @@ class CommandService:
         # Index verification once per db (fail-closed).
         await self._ensure_indexes(tenant_db)
 
-        # Retry wrapper covers transient tx errors (write conflict,
-        # audit sequence collision retried once) — contract §4.3.
+        # Retry wrapper (CODEX C11.6):
+        # - `TransientTransactionError` / `UnknownTransactionCommitResult`
+        #   are driver-labelled retries;
+        # - duplicate-key collisions on `(tenant_id, ledger_sequence)` or
+        #   `(tenant_id, sequence)` (audit chain) are also retryable:
+        #   two concurrent writers computed read-max+1 and both tried
+        #   to insert the same ordinal. The unique index catches it,
+        #   the tx rolls back, and the retry sees the newer tail.
         attempt = 0
         last_exc: Optional[Exception] = None
         while attempt < _MAX_RETRIES:
@@ -511,13 +539,11 @@ class CommandService:
                     ctx, tenant_db, tenant_collection, inp,
                 )
             except (WarehouseMovementError, IdempotencyConflict) as exc:
-                # Business errors — do not retry.
                 if isinstance(exc, IdempotencyConflict):
                     raise IdempotencyConflictError(str(exc), context={
                         "action": action.value, "key": inp.idempotency_key}) from exc
                 raise
             except Exception as exc:
-                # Treat as transient only if the driver labels it so.
                 labels = getattr(exc, "has_error_label", None)
                 is_transient = (
                     callable(labels) and (
@@ -525,7 +551,8 @@ class CommandService:
                         or labels("UnknownTransactionCommitResult")
                     )
                 )
-                if not is_transient:
+                is_dup_sequence = _is_sequence_duplicate_error(exc)
+                if not (is_transient or is_dup_sequence):
                     raise AuditChainWriteError(
                         f"transaction failed: {exc}"
                     ) from exc
@@ -619,6 +646,26 @@ class CommandService:
         ledger_sequence = await self._next_ledger_sequence(
             tenant_collection, tenant_id=tenant_id, session=session,
         )
+
+        # CODEX C11.9: server-issued transit location_id. If the caller
+        # sent `destination.location_id="pending"` with an in-transit
+        # state, the server replaces it with the service-generated
+        # movement_id. The caller never fabricates a transit ID.
+        # Likewise for the `source.location_id` on
+        # ACCEPT_PROJECT_DELIVERY — it must point at the real dispatch.
+        if (
+            inp.destination is not None
+            and inp.destination.state == MovementState.IN_TRANSIT
+            and inp.destination.location_id == "pending"
+        ):
+            # The destination's `location_id` becomes the dispatch's
+            # own `movement_id` so later acceptance can resolve it.
+            inp.destination = LocationKey(
+                LocationType.IN_TRANSIT,
+                location_id="__movement_self__",
+                state=MovementState.IN_TRANSIT,
+            )
+            # Marker handled below after movement_id is assigned.
 
         # ------------------------------------------------------------
         # Pre-build the base envelope (identity + unit are server-derived).
@@ -807,6 +854,16 @@ class CommandService:
         )
         validate_envelope(env)
 
+        # CODEX C11.9: resolve server-issued transit location_id now
+        # that movement_id is known. The marker `__movement_self__`
+        # becomes the movement's own id so later acceptance resolves it
+        # against the actual dispatch.
+        if (
+            env.destination
+            and env.destination.get("location_id") == "__movement_self__"
+        ):
+            env.destination["location_id"] = env.movement_id
+
         # Append ledger row (append-only). ledger_sequence pins order.
         ledger_row = env.to_dict()
         ledger_row["ledger_sequence"] = ledger_sequence
@@ -881,11 +938,22 @@ class CommandService:
 
         # Projections (same session). The `warehouse_in_transit`
         # projection is advisory only — the ledger is the source of
-        # truth (C07).
+        # truth (C07). The service passes original dispatch metadata so
+        # the projector can close in-transit on acceptance correctly.
         from app.services.warehouse_movements.projections import apply_projection
-        await apply_projection(tenant_db, env, session=session,
-                               extra_rows=({"unresolved_mv_id": unresolved_mv_id,
-                                            "allocations": allocations} if unresolved_mv_id else None))
+        projection_hints: Dict[str, Any] = {}
+        if unresolved_mv_id:
+            projection_hints["unresolved_discrepancy_movement_id"] = unresolved_mv_id
+            projection_hints["unresolved_layer_allocations"] = [
+                a.to_dict() for a in allocations
+            ]
+        if acceptance_line_id:
+            projection_hints["acceptance_line_id"] = acceptance_line_id
+        await apply_projection(
+            tenant_db, env,
+            session=session,
+            hints=projection_hints or None,
+        )
 
         # Complete idempotency (same session).
         await _idem_complete_with_session(
@@ -928,20 +996,30 @@ class CommandService:
                 raise QuarantineStateViolationError(
                     "quarantine_release must source state=quarantine",
                 )
+            # CODEX C11.5 — release destination MUST be free (or
+            # redirect to another non-quarantine state). Dropping back
+            # into quarantine is a no-op; the resolver must pick a real
+            # disposition.
+            if dest is None or dest.state == MovementState.QUARANTINE:
+                raise QuarantineStateViolationError(
+                    "quarantine_release destination must leave quarantine",
+                )
         # Project → warehouse returns MUST land in quarantine first
-        # (C04 / FLOW-009 "Връщане и карантина"). A free-stock destination
-        # is forbidden; use `quarantine_entry` instead when the goods
-        # need inspection, or `transfer_project_to_warehouse` is only
-        # permitted for already-canonical layers.
+        # (C04 / FLOW-009 "Връщане и карантина"). The caller uses
+        # QUARANTINE_ENTRY for an inspection-required return. The
+        # TRANSFER_PROJECT_TO_WAREHOUSE action is reserved for an
+        # already-canonical straight transfer; destination MUST be a
+        # real warehouse location in FREE state.
         if action == CanonicalAction.TRANSFER_PROJECT_TO_WAREHOUSE:
             if dest is None:
                 raise InvariantViolationError(
                     "transfer_project_to_warehouse requires a destination",
                 )
-            # Both quarantine and free are permitted here — the stricter
-            # quarantine-first path is handled by having the caller call
-            # QUARANTINE_ENTRY. Enforce that the destination is a real
-            # warehouse location.
+            if dest.state == MovementState.QUARANTINE:
+                raise QuarantineStateViolationError(
+                    "transfer_project_to_warehouse cannot target quarantine; "
+                    "use quarantine_entry for inspection-required returns",
+                )
             if dest.location_type not in {
                 LocationType.CENTRAL_WAREHOUSE,
                 LocationType.SMALL_WAREHOUSE,
@@ -966,12 +1044,20 @@ class CommandService:
         self, tenant_collection, *, session, tenant_id: str,
         dispatch_movement_id: str, accepted_qty: Decimal,
     ):
-        """Rule B C03 — split dispatch layers proportionally.
+        """Rule B / F-09=B — split REMAINING dispatch layers proportionally
+        (CODEX C11.4 cumulative-partial correction).
 
-        `accepted_qty / dispatch_qty` fraction of each original layer
-        goes to the destination. Prior partial acceptances for the same
-        dispatch are summed and the remainder of each layer is split
-        from what is left.
+        Semantics:
+          * dispatch recorded N original layers summing to `dispatched_qty`;
+          * prior partial acceptances against this dispatch consumed a
+            subset of those layers (per their own `layer_allocations`);
+          * this acceptance must take `accepted_qty` units from what is
+            LEFT, proportionally to each layer's REMAINING capacity.
+
+        A naive "accepted_qty / dispatched_qty" fraction (the C01 code)
+        broke the second partial — e.g. 10 dispatched, accept 8 then
+        accept 2: the first takes 8/10 of each layer, the second would
+        again take 2/10 of the ORIGINAL layers = wrong provenance.
         """
         dispatch = await tenant_collection.find_one(
             {"movement_id": dispatch_movement_id}, session=session,
@@ -986,53 +1072,100 @@ class CommandService:
                 "dispatch has zero quantity",
                 context={"dispatch_movement_id": dispatch_movement_id})
 
-        # Prior acceptances against this dispatch — in-tx read.
-        cursor = tenant_collection.find({
-            "tenant_id": tenant_id,
-            "dispatch_movement_id": dispatch_movement_id,
-            "action": CanonicalAction.ACCEPT_PROJECT_DELIVERY.value,
-        }, session=session)
-        prior_accepted = Decimal("0")
-        async for d in cursor:
-            prior_accepted += Decimal(str(d.get("accepted_quantity") or d.get("quantity") or "0"))
-
-        if prior_accepted + accepted_qty > dispatched:
-            raise OriginAcceptanceOverrunError(
-                "accepted + resolutions exceed dispatched quantity",
-                context={"dispatched": str(dispatched),
-                         "already_resolved": str(prior_accepted),
-                         "proposed_accept": str(accepted_qty)})
-
-        # Original dispatch layers (from the ledger row).
         orig_layers = dispatch.get("layer_allocations", [])
         if not orig_layers:
             raise InvariantViolationError(
                 "dispatch has no layer_allocations to split",
                 context={"dispatch_movement_id": dispatch_movement_id})
 
-        # Scale each original layer by the fraction `accepted_qty / dispatched`.
-        # Any rounding remainder is absorbed into the final layer so
-        # Σ(qty) == accepted_qty exactly (deterministic rounding — see §4.5).
-        split_fraction = accepted_qty / dispatched
+        # Current per-layer remaining capacity: orig - sum(prior acceptances on it).
+        remaining_per_layer: Dict = {}
+        for layer in orig_layers:
+            key = (str(layer["source_movement_id"]), int(layer["layer_sequence"]))
+            remaining_per_layer[key] = {
+                "remaining": Decimal(str(layer["quantity"])),
+                "unit_value": Decimal(str(layer["unit_value"])),
+                "currency": str(layer.get("currency", "BGN")),
+                "source_movement_id": key[0],
+                "layer_sequence": key[1],
+            }
+
+        # Scan prior acceptances for this dispatch and subtract their
+        # per-layer consumption.
+        prior_total = Decimal("0")
+        cursor = tenant_collection.find({
+            "tenant_id": tenant_id,
+            "dispatch_movement_id": dispatch_movement_id,
+            "action": CanonicalAction.ACCEPT_PROJECT_DELIVERY.value,
+        }, session=session)
+        async for d in cursor:
+            prior_total += Decimal(str(d.get("accepted_quantity")
+                                       or d.get("quantity") or "0"))
+            for alloc in d.get("layer_allocations", []):
+                k = (str(alloc["source_movement_id"]),
+                     int(alloc["layer_sequence"]))
+                if k in remaining_per_layer:
+                    remaining_per_layer[k]["remaining"] -= Decimal(
+                        str(alloc["quantity"]))
+
+        if prior_total + accepted_qty > dispatched:
+            raise OriginAcceptanceOverrunError(
+                "accepted + resolutions exceed dispatched quantity",
+                context={"dispatched": str(dispatched),
+                         "already_resolved": str(prior_total),
+                         "proposed_accept": str(accepted_qty)})
+
+        # Available = Σ remaining across all layers.
+        available = sum(
+            (v["remaining"] for v in remaining_per_layer.values()
+             if v["remaining"] > 0),
+            Decimal("0"),
+        )
+        if accepted_qty > available:
+            # Should be caught by prior_total guard, but defend
+            # explicitly in case of projection skew.
+            raise OriginAcceptanceOverrunError(
+                "requested acceptance exceeds remaining dispatch capacity",
+                context={"available": str(available),
+                         "requested": str(accepted_qty)})
+
+        # Split proportionally over REMAINING layers (ordered by original
+        # layer_sequence so FIFO provenance is preserved).
         split: List[LayerAllocation] = []
         total_value = Decimal("0")
         total_qty = Decimal("0")
-        for i, layer in enumerate(orig_layers):
-            orig_qty = Decimal(str(layer["quantity"]))
-            unit_value = Decimal(str(layer["unit_value"]))
-            take = (orig_qty * split_fraction).quantize(Decimal("0.0001"))
-            if i == len(orig_layers) - 1:
-                # Last layer absorbs rounding remainder.
+        keys = sorted(remaining_per_layer.keys(),
+                      key=lambda k: (k[1], k[0]))
+        active = [k for k in keys if remaining_per_layer[k]["remaining"] > 0]
+
+        for i, k in enumerate(active):
+            info = remaining_per_layer[k]
+            rem = info["remaining"]
+            if i == len(active) - 1:
                 take = accepted_qty - total_qty
+            else:
+                # proportional share rounded to 4 dp; absorbed into last.
+                take = (rem * accepted_qty / available).quantize(Decimal("0.0001"))
+                take = min(take, rem)
+            if take <= 0:
+                continue
             split.append(LayerAllocation(
-                source_movement_id=str(layer["source_movement_id"]),
-                layer_sequence=int(layer["layer_sequence"]),
+                source_movement_id=info["source_movement_id"],
+                layer_sequence=info["layer_sequence"],
                 quantity=take,
-                unit_value=unit_value,
-                currency=str(layer.get("currency", "BGN")),
+                unit_value=info["unit_value"],
+                currency=info["currency"],
             ))
-            total_value += take * unit_value
+            total_value += take * info["unit_value"]
             total_qty += take
+
+        if total_qty != accepted_qty:
+            # Final safety: fail-closed on a split mismatch.
+            raise InvariantViolationError(
+                "Rule B split did not reconcile to accepted_qty",
+                context={"accepted": str(accepted_qty),
+                         "split_total": str(total_qty)})
+
         return split, total_value.quantize(Decimal("0.0001"))
 
     async def _open_in_transit_inbound(
@@ -1040,26 +1173,87 @@ class CommandService:
         dispatch_env: MovementEnvelope, dispatch_row: Dict[str, Any],
         allocations: Sequence[LayerAllocation],
     ) -> None:
-        """Open a mirrored IN_TRANSIT inbound row at the destination.
+        """Historical hook — no-op in C11+ (behavior moved).
 
-        This is NOT a stock-available credit — the state is
-        `in_transit`, which the FIFO allocator and projection treat as
-        unresolved. Later acceptance drains it; return/write-off closes
-        it. The row preserves the original `layer_allocations` so a
-        downstream transfer conserves provenance.
+        Prior to CODEX C11, this helper was intended to insert a
+        mirrored IN_TRANSIT inbound row. That logic now lives in the
+        projector (`projections._open_in_transit`) which reads
+        `env.layer_allocations` directly from the dispatch envelope,
+        and in `item_balance_by_location` which treats
+        `destination=in_transit` as the credit side at projection
+        time. The stub remains to document the migration — any new
+        call site should use the projector path.
         """
-        # NOTE: the DISPATCH row itself has `destination=IN_TRANSIT` set
-        # by the caller (route-provided). We additionally insert a
-        # non-moving `supplier_delivery_origin`-style record so stock
-        # projections can read it directly.
-        pass  # the dispatch row already records destination=in_transit
+        return None
 
     async def _open_transit_discrepancy(
         self, tenant_collection, *, session, env: MovementEnvelope,
         missing_quantity: Decimal, dispatch_movement_id: str,
     ) -> str:
-        """Append a non-moving `transit_discrepancy` row for the unresolved
-        remainder of a partial acceptance (contract §4.4)."""
+        """Append a non-moving `transit_discrepancy` row for the
+        unresolved remainder of a partial acceptance (contract §4.4).
+
+        CODEX C11.4 — the row MUST carry proportional original
+        value/layers so the unresolved value is traceable; a bare
+        `unit_value=0` with empty allocations loses the layer provenance
+        a later resolution needs. We compute remainder layers from the
+        dispatch's recorded layer_allocations minus prior acceptances
+        minus the current acceptance's share.
+        """
+        dispatch = await tenant_collection.find_one(
+            {"movement_id": dispatch_movement_id}, session=session,
+        )
+        remainder_layers = []
+        remainder_value = Decimal("0")
+        if dispatch:
+            # Remaining capacity per layer AFTER the just-written
+            # acceptance has consumed its share.
+            remaining_per_layer: Dict = {}
+            for layer in dispatch.get("layer_allocations", []):
+                key = (str(layer["source_movement_id"]),
+                       int(layer["layer_sequence"]))
+                remaining_per_layer[key] = {
+                    "remaining": Decimal(str(layer["quantity"])),
+                    "unit_value": Decimal(str(layer["unit_value"])),
+                    "currency": str(layer.get("currency", "BGN")),
+                    "source_movement_id": key[0],
+                    "layer_sequence": key[1],
+                }
+            # Subtract every prior acceptance (including this one — it
+            # has already been inserted in the same session).
+            cursor = tenant_collection.find({
+                "tenant_id": env.tenant_id,
+                "dispatch_movement_id": dispatch_movement_id,
+                "action": CanonicalAction.ACCEPT_PROJECT_DELIVERY.value,
+            }, session=session)
+            async for d in cursor:
+                for alloc in d.get("layer_allocations", []):
+                    k = (str(alloc["source_movement_id"]),
+                         int(alloc["layer_sequence"]))
+                    if k in remaining_per_layer:
+                        remaining_per_layer[k]["remaining"] -= Decimal(
+                            str(alloc["quantity"]))
+
+            for key in sorted(remaining_per_layer.keys(), key=lambda x: (x[1], x[0])):
+                info = remaining_per_layer[key]
+                if info["remaining"] <= 0:
+                    continue
+                remainder_layers.append({
+                    "source_movement_id": info["source_movement_id"],
+                    "layer_sequence": info["layer_sequence"],
+                    "quantity": str(info["remaining"]),
+                    "unit_value": str(info["unit_value"]),
+                    "currency": info["currency"],
+                })
+                remainder_value += info["remaining"] * info["unit_value"]
+
+        # Weighted average remainder unit value (preserve `pending`
+        # value_status for FLOW-009 Rule B when layers are also pending).
+        unit_value = (
+            (remainder_value / missing_quantity).quantize(Decimal("0.0001"))
+            if missing_quantity > 0 else Decimal("0")
+        )
+
         mv_id = f"mv_{uuid.uuid4().hex}"
         row = {
             "movement_id": mv_id,
@@ -1070,7 +1264,7 @@ class CommandService:
             "item_id": env.item_id,
             "unit": env.unit,
             "quantity": str(missing_quantity),
-            "unit_value": "0",
+            "unit_value": str(unit_value),
             "currency": env.currency,
             "source": {"location_type": LocationType.IN_TRANSIT.value,
                        "location_id": dispatch_movement_id,
@@ -1082,14 +1276,17 @@ class CommandService:
             "idempotency_key": f"{env.idempotency_key}:unresolved",
             "project_id": env.project_id,
             "status": "under_investigation",
-            # Not valued (`value_status=pending_investigation`).
-            "value_status": "pending_investigation",
+            # v6 §4.1: `pending_invoice` is for invoice-flow timing;
+            # here we use `under_investigation` because the quantity is
+            # physically unresolved — value provenance is preserved on
+            # `layer_allocations`.
+            "value_status": "under_investigation",
             "ledger_sequence": None,     # patched below
-            "layer_allocations": [],
+            "layer_allocations": remainder_layers,
+            "total_value": str(remainder_value.quantize(Decimal("0.0001"))),
             "file_ids": [],
             "notes": "unresolved partial-acceptance remainder (Rule B)",
         }
-        # Allocate a fresh ledger_sequence for the discrepancy row.
         seq = await self._next_ledger_sequence(
             tenant_collection, tenant_id=env.tenant_id, session=session,
         )

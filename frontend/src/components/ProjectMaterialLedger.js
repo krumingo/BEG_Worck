@@ -55,12 +55,27 @@ export default function ProjectMaterialLedger({ projectId }) {
   const handleIssue = async () => {
     setSaving(true);
     try {
-      // C08: canonical dispatch per line; acceptance is a separate
-      // canonical command run from the receiving side. The caller
-      // confirms the two-phase handoff and does not auto-accept.
+      // CODEX C11.9: no silent skip — every line must be a valid
+      // canonical dispatch, or the submission is refused with the
+      // exact per-line reason.
+      const blockers = [];
+      opLines.forEach((line, i) => {
+        if (!line.item_id) blockers.push(`Ред ${i + 1}: липсва item_id (мапнете материала)`);
+        if (!line.warehouse_id) blockers.push(`Ред ${i + 1}: липсва warehouse_id`);
+        const q = parseFloat(line.qty_issued);
+        if (!q || q <= 0) blockers.push(`Ред ${i + 1}: невалидно количество`);
+      });
+      if (blockers.length > 0) {
+        alert(blockers.join("\n"));
+        return;
+      }
+      // CODEX C11.9: transit location_id is SERVER-ISSUED — pass a
+      // short per-line transit "handle" (`pending_<nonce>`) and the
+      // canonical service rewrites it into `in_transit:<movement_id>`
+      // on write. The response envelope carries the resolved
+      // destination.
       for (const line of opLines) {
         const qty = parseFloat(line.qty_issued);
-        if (!qty || qty <= 0 || !line.item_id || !line.warehouse_id) continue;
         await postMovement({
           action: CANONICAL_ACTIONS.DISPATCH_WAREHOUSE_TO_PROJECT,
           item_id: line.item_id,
@@ -73,9 +88,7 @@ export default function ProjectMaterialLedger({ projectId }) {
           },
           destination: {
             location_type: LOCATION_TYPES.IN_TRANSIT,
-            // one in_transit bucket per dispatch — the server also
-            // writes the mirrored row.
-            location_id: `dispatch_${projectId}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            location_id: "pending",   // server rewrites to movement_id
             state: STATES.IN_TRANSIT,
           },
           project_id: projectId,

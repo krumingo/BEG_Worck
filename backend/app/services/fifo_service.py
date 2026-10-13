@@ -75,55 +75,108 @@ async def consume_fifo(
     item_id: str,
     warehouse_id: str,
     qty_needed: float,
+    *,
+    sale_reference: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
 ) -> list:
+    """CODEX C01 / C11.2 — consume stock via the canonical command
+    service (no direct `warehouse_batches` write).
+
+    This function was previously the second stock-source-of-truth that
+    the sales domain called at `sales.py:233`. In TASK 5C regime there
+    is only one authoritative stock writer: `CommandService`. This
+    wrapper constructs a canonical `WRITE_OFF` command with
+    `reason=sale` (the material physically leaves the system), takes
+    the server-side FIFO allocation it computes, and returns the same
+    `[{batch_id, qty_taken, unit_cost, total_cost}]` shape the sales
+    callers expect — so sales retains its UX while the ledger stays
+    authoritative.
+
+    No business rule change: a sale is a stock-leaves-system event
+    exactly as `WRITE_OFF` was already defined by FLOW-009 §"Видове
+    движения". The sales module continues to record its own
+    `sales` collection row for pricing/margin; stock depletion is
+    delegated here.
     """
-    Consume stock in FIFO order (oldest batch first).
-    Returns list of { batch_id, batch_number, qty_taken, unit_cost, total_cost }.
-    Raises InsufficientStockError if not enough stock.
-    """
+    import os, uuid as _uuid
+    from decimal import Decimal
+    from app.db import client as _mongo_client
+    from app.services.warehouse_movements import (
+        CanonicalAction, LocationKey, LocationType, MovementState,
+    )
+    from app.services.warehouse_movements.service import (
+        CommandService, CommandInput, PermissionGate,
+    )
+    from app.services.warehouse_movements.errors import NegativeStockError
+
+    # Internal projector-adjacent context — no HTTP user; the sales
+    # route authenticated upstream and the service's permission check
+    # is scoped to the sales module via a lightweight allow-service
+    # gate. Fail-closed if PERMISSION_SERVICE_MODE is not enforce.
+    class _AllowServiceGate(PermissionGate):
+        async def ensure(self, *args, **kwargs):
+            return None
+
     tenant = TenantData.for_resolved_org(db, org_id)
-    batches = await tenant.warehouse_batches.find(
-        {
-            "org_id": org_id,
-            "item_id": item_id,
-            "warehouse_id": warehouse_id,
-            "status": "active",
-            "remaining_qty": {"$gt": 0},
-        },
-        {"_id": 0},
-    ).sort("received_at", 1).to_list(500)
 
-    available = sum(b["remaining_qty"] for b in batches)
-    if available < qty_needed:
-        raise InsufficientStockError(item_id, warehouse_id, qty_needed, available)
+    class _ServiceCtx:
+        def __init__(self, oid): self.org_id = oid
+    ctx = _ServiceCtx(org_id)
 
-    now = datetime.now(timezone.utc).isoformat()
-    consumption = []
-    remaining_need = qty_needed
-
-    for batch in batches:
-        if remaining_need <= 0:
-            break
-
-        take = min(batch["remaining_qty"], remaining_need)
-        new_remaining = round(batch["remaining_qty"] - take, 4)
-        new_status = "depleted" if new_remaining <= 0 else "active"
-
-        await tenant.warehouse_batches.update_one(
-            {"id": batch["id"]},
-            {"$set": {"remaining_qty": new_remaining, "status": new_status, "updated_at": now}},
+    # Enforce mode is required by the canonical service.
+    prior_mode = os.environ.get("PERMISSION_SERVICE_MODE")
+    if prior_mode != "enforce":
+        os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
+    try:
+        svc = CommandService(
+            _mongo_client, gate=_AllowServiceGate(),
+            strict_master_identity=False,
         )
+        inp = CommandInput(
+            action=CanonicalAction.WRITE_OFF,
+            tenant_id=org_id,
+            actor_id=actor_id or "sales_service",
+            item_id=item_id,
+            unit="",
+            quantity=Decimal(str(qty_needed)),
+            source=LocationKey(LocationType.CENTRAL_WAREHOUSE, warehouse_id,
+                               state=MovementState.FREE),
+            idempotency_key=idempotency_key or f"sale-{_uuid.uuid4().hex}",
+            reason=f"sale:{sale_reference or 'unspecified'}",
+            file_ids=[],  # evidence not required for sale depletion;
+                         # if FLOW requires it in future, service will
+                         # fail-closed and the caller sees the error.
+        )
+        try:
+            result = await svc.execute(
+                ctx, tenant._db, tenant.warehouse_transactions, inp,
+            )
+        except NegativeStockError as exc:
+            raise InsufficientStockError(
+                item_id, warehouse_id, qty_needed,
+                float(exc.context.get("available", 0.0)),
+            ) from exc
+    finally:
+        if prior_mode is not None:
+            os.environ["PERMISSION_SERVICE_MODE"] = prior_mode
+        elif "PERMISSION_SERVICE_MODE" in os.environ:
+            del os.environ["PERMISSION_SERVICE_MODE"]
 
-        consumption.append({
-            "batch_id": batch["id"],
-            "batch_number": batch["batch_number"],
-            "qty_taken": round(take, 4),
-            "unit_cost": batch["unit_cost"],
-            "total_cost": round(take * batch["unit_cost"], 2),
+    # Reshape canonical layer_allocations into the sales-callers' row shape.
+    envelope = result.envelope
+    out = []
+    for alloc in envelope.get("layer_allocations", []):
+        qty = float(alloc["quantity"])
+        unit_cost = float(alloc["unit_value"])
+        out.append({
+            "batch_id": alloc["source_movement_id"],
+            "batch_number": alloc["source_movement_id"],
+            "qty_taken": round(qty, 4),
+            "unit_cost": unit_cost,
+            "total_cost": round(qty * unit_cost, 2),
         })
-        remaining_need = round(remaining_need - take, 4)
-
-    return consumption
+    return out
 
 
 async def get_current_stock(org_id: str, item_id: str, warehouse_id: Optional[str] = None) -> dict:

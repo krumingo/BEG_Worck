@@ -15,6 +15,32 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
+
+async def ledger_checkpoint(tenant_collection, *, tenant_id: str, session=None) -> Dict[str, Any]:
+    """Return the current ledger checkpoint (CODEX C11.10): the max
+    `ledger_sequence` seen for the tenant plus the recorded_at of that
+    row. Readers surface this as `provenance` so UI can tell a stale
+    snapshot from a fresh one — freshness is no longer "response time"."""
+    tail = await tenant_collection.find(
+        {"tenant_id": tenant_id, "ledger_sequence": {"$exists": True}},
+        {"ledger_sequence": 1, "recorded_at": 1, "movement_id": 1, "_id": 0},
+        session=session,
+    ).sort("ledger_sequence", -1).limit(1).to_list(1)
+    if not tail:
+        return {
+            "ledger_sequence": 0,
+            "movement_id": None,
+            "recorded_at": None,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    row = tail[0]
+    return {
+        "ledger_sequence": int(row.get("ledger_sequence") or 0),
+        "movement_id": row.get("movement_id"),
+        "recorded_at": row.get("recorded_at"),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
 from app.services.warehouse_movements.envelope import (
     LocationKey,
     LocationType,
@@ -36,7 +62,12 @@ async def stock_at(
     location: LocationKey,
     session=None,
 ) -> Dict[str, Any]:
-    """Free balance + layers for one bucket; complete."""
+    """Free balance + layers for one bucket; complete.
+
+    `generated_at` is wall-clock; `ledger_checkpoint` records the
+    highest ledger sequence seen, which is the honest freshness
+    provenance (CODEX C11.10).
+    """
     bal = await free_balance(
         tenant_collection,
         tenant_id=tenant_id, item_id=item_id,
@@ -50,6 +81,7 @@ async def stock_at(
     total_value = sum(
         ((l.quantity * l.unit_value) for l in layers), Decimal("0")
     ).quantize(Decimal("0.0001"))
+    checkpoint = await ledger_checkpoint(tenant_collection, tenant_id=tenant_id, session=session)
     return {
         "tenant_id": tenant_id,
         "item_id": item_id,
@@ -58,7 +90,8 @@ async def stock_at(
         "total_value": str(total_value),
         "layer_count": len(layers),
         "layers": [l.to_dict() for l in layers],
-        "fresh_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "ledger_checkpoint": checkpoint,
         "truncated": False,
     }
 
@@ -68,42 +101,71 @@ async def item_balance_by_location(
     *,
     tenant_id: str,
     item_id: str,
+    allowed_locations: Optional[List[Tuple[str, str]]] = None,
     session=None,
 ) -> List[Dict[str, Any]]:
-    """All buckets holding this item, with free balance each. Complete."""
-    # One pass over all movements for this item; buckets are built in memory.
+    """All buckets holding this item, with free balance each. Complete.
+
+    CODEX C11.7 — if `allowed_locations` is given, rows whose location
+    is not in the set are omitted (the caller's authorization scope).
+
+    CODEX C11.10 — balances now observe:
+      * ACCEPT_PROJECT_DELIVERY opens destination layers (source is
+        in_transit; the acceptance CLOSES in-transit by the accepted
+        qty, not by the dispatched qty);
+      * `transit_discrepancy` rows are a NON-moving fact; they are
+        skipped here (they document unresolved quantity, not a bucket
+        balance);
+      * DISPATCH_WAREHOUSE_TO_PROJECT and the three transfer actions
+        drain their SOURCE by the dispatched qty and CREDIT their
+        destination bucket (in_transit) by the same qty, so the pair
+        sums to zero system-wide at the dispatch moment. Acceptance
+        then shifts the quantity from in_transit→destination.
+      * QUARANTINE_ENTRY/RELEASE drain source + credit destination.
+    """
+    allowed_set = {tuple(x) for x in allowed_locations} if allowed_locations else None
+
     cursor = tenant_collection.find({
         "tenant_id": tenant_id,
         "item_id": item_id,
     }, {
-        "source": 1, "destination": 1, "quantity": 1,
+        "source": 1, "destination": 1, "quantity": 1, "accepted_quantity": 1,
         "layer_allocations": 1, "action": 1, "_id": 0,
     }, session=session)
 
     balances: Dict[Tuple[str, str, str], Decimal] = defaultdict(lambda: Decimal("0"))
     async for doc in cursor:
+        action = doc.get("action")
+        # Non-moving documentation facts — exclude.
+        if action == "transit_discrepancy":
+            continue
         dest = doc.get("destination")
         src = doc.get("source")
-        qty = Decimal(str(doc.get("quantity", "0")))
+        qty = Decimal(str(doc.get("accepted_quantity")
+                          if action == "accept_project_delivery"
+                          and doc.get("accepted_quantity") is not None
+                          else (doc.get("quantity") or "0")))
+        # Credit destination
         if dest:
             key = (dest["location_type"], dest["location_id"], dest.get("state", "free"))
             balances[key] += qty
-        if src and doc.get("layer_allocations"):
-            # Source side consumed by this outbound: sum its allocation quantities
-            total_out = sum(
-                (Decimal(str(a["quantity"])) for a in doc["layer_allocations"]),
-                Decimal("0"),
-            )
+        # Drain source (either by accepted qty — acceptance drains
+        # in_transit — or by sum of layer allocations — outbound FIFO
+        # drain).
+        if src:
+            if action == "accept_project_delivery":
+                drain = qty  # drain in_transit by accepted qty
+            elif doc.get("layer_allocations"):
+                drain = sum(
+                    (Decimal(str(a["quantity"])) for a in doc["layer_allocations"]),
+                    Decimal("0"),
+                )
+            else:
+                drain = qty
             key = (src["location_type"], src["location_id"], src.get("state", "free"))
-            balances[key] -= total_out
-        elif src and not dest:
-            # Pure outbound without allocations (should not happen for ledger
-            # rows written by the canonical service; included for defensive
-            # reads on historical rows)
-            key = (src["location_type"], src["location_id"], src.get("state", "free"))
-            balances[key] -= qty
+            balances[key] -= drain
 
-    return [
+    rows = [
         {
             "location_type": lt,
             "location_id": lid,
@@ -113,6 +175,20 @@ async def item_balance_by_location(
         for (lt, lid, st), q in sorted(balances.items())
         if q != 0
     ]
+    if allowed_set is not None:
+        # allowed_set is a set of (scope_type, scope_id) from the
+        # Permission Service RoleAssignments — "location" or "project".
+        # A balance row's `location_id` must appear as any `scope_id`
+        # in that set. in_transit / supplier / unresolved locations
+        # are always included because they are not scope-protected
+        # buckets (they document origin / unresolved remainder).
+        allowed_ids = {sid for (_t, sid) in allowed_set}
+        rows = [
+            r for r in rows
+            if r["location_id"] in allowed_ids
+            or r["location_type"] in {"in_transit", "supplier", "unresolved"}
+        ]
+    return rows
 
 
 async def movement_history(
@@ -178,12 +254,14 @@ async def movement_history(
         else:
             next_cursor = rows[-1].get("recorded_at")
 
+    checkpoint = await ledger_checkpoint(tenant_collection, tenant_id=tenant_id, session=session)
     return {
         "tenant_id": tenant_id,
         "rows": rows,
         "has_more": has_more,
         "next_cursor_after": next_cursor,
-        "fresh_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "ledger_checkpoint": checkpoint,
         "source": "canonical_warehouse_transactions_ledger",
         "completeness": "page",
     }
@@ -313,10 +391,12 @@ async def integrity_warnings(
                 "age_hours_at_least": quarantine_aging_hours,
             })
 
+    checkpoint = await ledger_checkpoint(tenant_collection, tenant_id=tenant_id, session=session)
     return {
         "tenant_id": tenant_id,
         "warnings": warnings,
-        "fresh_at": now.isoformat(),
+        "generated_at": now.isoformat(),
+        "ledger_checkpoint": checkpoint,
         "source": "canonical_warehouse_transactions_ledger",
         "completeness": "full_tenant_scan",
     }

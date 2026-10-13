@@ -82,8 +82,15 @@ export default function BatchesTab() {
   }, []);
 
   const handleCreate = async () => {
-    if (!form.item_id || !form.warehouse_id || !form.qty || !form.unit_cost) {
-      toast.error("Попълнете задължителните полета"); return;
+    // CODEX C11.9: explicit per-field reason rather than a generic toast.
+    const missing = [];
+    if (!form.item_id) missing.push("Артикул (item_id)");
+    if (!form.warehouse_id) missing.push("Склад (warehouse_id)");
+    if (!form.qty) missing.push("Количество");
+    if (!form.unit_cost) missing.push("Единична стойност");
+    if (missing.length > 0) {
+      toast.error(`Задължителни полета: ${missing.join(", ")}`);
+      return;
     }
     setSaving(true);
     try {

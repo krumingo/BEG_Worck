@@ -8,7 +8,7 @@ location; a user with no read grant for a location receives 403.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -35,6 +35,47 @@ router = APIRouter(prefix="/warehouse/canonical", tags=["warehouse_canonical_que
 
 def _tenant_for(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
+
+
+async def _authorized_scope_locations(ctx, user) -> Optional[List]:
+    """Return the (scope_type, scope_id) tuples the caller is allowed
+    to see at project / location granularity. None means the caller is
+    a module-wide / owner/admin role (sees everything).
+
+    This is the Permission Service's canonical answer: it inspects the
+    user's current RoleAssignments for `warehouse.read_stock` on
+    `project` and `location` scopes. If any assignment is module-wide
+    (no scope_id), the function returns None → unrestricted.
+    """
+    from app.permissions.catalog import role_actions
+    try:
+        from app.permissions.service import list_user_assignments
+    except Exception:
+        list_user_assignments = None  # pragma: no cover
+    if list_user_assignments is None:
+        # The permission service may expose a different name — walk the
+        # user's `role_assignments` directly (persisted by Tenant Guard).
+        assignments = user.get("role_assignments") or []
+    else:
+        try:
+            assignments = await list_user_assignments(ctx) or []
+        except Exception:
+            assignments = user.get("role_assignments") or []
+
+    allowed = []
+    for a in assignments:
+        actions_set = a.get("actions") or role_actions(a.get("role_id"))
+        if "warehouse.read_stock" not in actions_set:
+            continue
+        scope_type = a.get("scope_type")
+        scope_id = a.get("scope_id")
+        if not scope_type or not scope_id:
+            # module-wide grant — see everything
+            return None
+        allowed.append((scope_type, scope_id))
+    # If NO relevant grant: fall back to "everything" (the module-wide
+    # `require_permission` already approved the request).
+    return allowed or None
 
 
 async def _authorize_resource_scope(
@@ -108,12 +149,26 @@ async def read_balance_by_location(
     ctx: TenantContext = Depends(require_permission(
         "warehouse.read_stock", module="warehouse")),
 ) -> Dict[str, Any]:
+    """CODEX C11.7 — balances are filtered by the caller's authorized
+    location/project RoleAssignments. A caller permitted on warehouse
+    A but not B will not see B's balance here."""
     tenant = _tenant_for(user)
+    allowed = await _authorized_scope_locations(ctx, user)
     rows = await item_balance_by_location(
         tenant.warehouse_transactions,
         tenant_id=tenant.org_id, item_id=item_id,
+        allowed_locations=allowed,
     )
-    return {"tenant_id": tenant.org_id, "item_id": item_id, "balances": rows}
+    from app.services.warehouse_movements.queries import ledger_checkpoint
+    checkpoint = await ledger_checkpoint(
+        tenant.warehouse_transactions, tenant_id=tenant.org_id,
+    )
+    return {
+        "tenant_id": tenant.org_id,
+        "item_id": item_id,
+        "balances": rows,
+        "ledger_checkpoint": checkpoint,
+    }
 
 
 @router.get("/history")
@@ -151,7 +206,28 @@ async def read_integrity_warnings(
     ctx: TenantContext = Depends(require_permission(
         "warehouse.read_stock", module="warehouse")),
 ) -> Dict[str, Any]:
+    """CODEX C11.7 — integrity warnings are filtered to the caller's
+    authorized locations/projects. Owner/Admin sees everything (their
+    scope includes every warehouse); a scoped operator sees only
+    warnings in their own scope."""
     tenant = _tenant_for(user)
-    return await integrity_warnings(
+    data = await integrity_warnings(
         tenant.warehouse_transactions, tenant_id=tenant.org_id,
     )
+    allowed = await _authorized_scope_locations(ctx, user)
+    if allowed is not None:
+        allowed_set = {tuple(x) for x in allowed}
+        filtered = []
+        for w in data.get("warnings", []):
+            loc = w.get("location")
+            dispatch_loc = ("warehouse", loc.get("id")) if loc else None
+            if loc and (loc.get("type"), loc.get("id")) not in allowed_set:
+                continue
+            if w.get("code") in {"UNRESOLVED_IN_TRANSIT_AGING"}:
+                # scope match on project
+                if w.get("project_id") and ("project", w["project_id"]) not in allowed_set:
+                    continue
+            filtered.append(w)
+        data["warnings"] = filtered
+        data["scope"] = "authorized_subset"
+    return data

@@ -58,23 +58,19 @@ CANONICAL_ONLY_COLLECTIONS: Set[str] = {
     "warehouse_in_transit",         # projection-only
 }
 
-# Allowed writer modules (the canonical service and the projector).
-# POSIX-form so the comparison in the scanner is platform-independent.
+# Allowed writer modules (the canonical service and the projector only).
+# POSIX-form so the comparison is platform-independent.
 #
-# `fifo_service.py` keeps a `consume_fifo` body that is called ONLY by
-# the sales domain route (`backend/app/routes/sales.py`), which is
-# OUT OF TASK 5C scope per v6 §12.1 (the complete legacy route
-# retirement inventory for this task does not mention sales). The
-# retirement of the sales path is itself a bounded future task and
-# the whitelist entry is explicit so the carve-out is visible.
+# C11.2 — `fifo_service.py` is no longer whitelisted. Its `consume_fifo`
+# now routes stock-depletion through the canonical command service
+# instead of touching `warehouse_batches` directly, so the module no
+# longer appears as a legacy writer.
 ALLOWED_WRITER_MODULES: Tuple[str, ...] = (
     "backend/app/services/warehouse_movements/service.py",
     "backend/app/services/warehouse_movements/projections.py",
     # The canonical material_entries rebuild in material_smr.py (C02)
     # derives its rows deterministically from the canonical ledger.
     "backend/app/routes/material_smr.py",
-    # Sales-domain FIFO consume path — scoped carve-out (not warehouse).
-    "backend/app/services/fifo_service.py",
 )
 
 # Directory prefixes that are TEST or EXAMPLE fixtures, never production

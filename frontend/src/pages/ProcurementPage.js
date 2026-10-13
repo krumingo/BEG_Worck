@@ -109,60 +109,31 @@ export default function ProcurementPage() {
     finally { setSaving(false); }
   };
 
-  // Post to warehouse — CODEX C08.
-  // The retired `/supplier-invoices/{id}/post-to-warehouse` legacy
-  // endpoint has been replaced. The button now dispatches one canonical
-  // `receive_from_supplier` command per invoice line. Multi-destination
-  // allocation uses the canonical warehouse page (one movement per
-  // destination) to meet v6 §4.6 line-sum constraints.
+  // CODEX C11.9 — the invoice-to-warehouse post has been retired here
+  // in favor of the canonical warehouse page. v6 §4.6 requires full
+  // typed invoice allocation with Σ(qty) and Σ(value) line-sum
+  // constraints and double-post protection; posting one supplier
+  // receipt per invoice line with a client-derived price bypasses
+  // that contract. The button now opens the canonical warehouse page
+  // with the invoice preselected for proper per-destination
+  // acceptance under Rule B.
   const postToWarehouse = async (invId) => {
-    if (!window.confirm("Потвърдете приемане в Основен склад (каноничен поток)?")) return;
-    setPosting(true);
-    try {
-      const inv = invoices.find((i) => i.id === invId);
-      if (!inv) throw new Error("Invoice not found");
-      const centralWh = (await API.get("/warehouses")).data?.items?.find?.(
-        (w) => w.type === "central"
-      );
-      if (!centralWh) throw new Error("Няма централен склад — създайте такъв преди приемане");
-      const { postMovement, ACTIONS, LOCATION_TYPES, STATES } =
-        await import("@/lib/warehouseCanonicalApi");
-      for (const line of (inv.lines || [])) {
-        if (!line.item_id) {
-          alert(`Линия без item_id: '${line.material_name}'. Моля първо мапнете материала.`);
-          continue;
-        }
-        const qty = parseFloat(line.qty || 0);
-        if (qty <= 0) continue;
-        await postMovement({
-          action: ACTIONS.RECEIVE_FROM_SUPPLIER,
-          item_id: line.item_id,
-          unit: line.unit || "бр",
-          quantity: String(qty),
-          unit_value: String(parseFloat(line.final_unit_price || line.unit_price || 0)),
-          currency: inv.currency || "BGN",
-          source: {
-            location_type: LOCATION_TYPES.SUPPLIER,
-            location_id: inv.supplier_id || "unknown_supplier",
-            state: STATES.FREE,
-          },
-          destination: {
-            location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
-            location_id: centralWh.id,
-            state: STATES.FREE,
-          },
-          invoice_id: inv.id,
-          invoice_line_id: line.id,
-          project_id: line.project_id || inv.project_id,
-          request_id: line.linked_request_id || inv.linked_request_id,
-        });
+    const inv = invoices.find((i) => i.id === invId);
+    if (!inv) { alert("Фактурата не е намерена"); return; }
+    const explanation =
+      "Приемането в склад минава през каноничния склад (FLOW-009 §4.6).\n\n" +
+      "Отворете каноничната страница и за всеки ред на фактурата запишете " +
+      "приемане към съответната дестинация (склад / обект). Директното " +
+      "посткване от тази страница е спряно, защото не покрива правилата за " +
+      "типизирана алокация и двойно постване.";
+    if (window.confirm(`${explanation}\n\nДа отворя каноничната страница?`)) {
+      try {
+        const url = `/warehouse/canonical?invoice_id=${encodeURIComponent(inv.id)}`;
+        window.open(url, "_blank", "noopener");
+      } catch (err) {
+        alert(err?.message || "Грешка при отваряне");
       }
-      setReviewOpen(false);
-      fetchData();
-    } catch (err) {
-      alert(err.response?.data?.detail?.message || err.response?.data?.detail || err.message || "Грешка");
     }
-    finally { setPosting(false); }
   };
 
   // Review line helpers

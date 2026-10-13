@@ -54,11 +54,13 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
 
     # Planned material mapping is still useful for UX linkage; it does
     # not become a source — material_name is only a display label.
-    planned = await tenant.planned_materials.find(
+    # CODEX C11.3 — no .to_list cap; iterate the full collection.
+    _planned_cursor = tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0, "id": 1, "item_id": 1, "material_name": 1,
          "execution_package_id": 1, "offer_line_id": 1}
-    ).to_list(5000)
+    )
+    planned = [row async for row in _planned_cursor]
     planned_by_item: dict = {}
     planned_by_name: dict = {}
     for pm in planned:
@@ -107,8 +109,11 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
             unit_value_f = float(unit_value) if unit_value is not None else None
         except (TypeError, ValueError):
             unit_value_f = None
+        mv_id = row.get("movement_id")
         entry = {
-            "id": str(uuid.uuid4()),
+            # CODEX C11.3 — DETERMINISTIC id: one row per ledger
+            # movement, so two rebuilds yield identical rows (parity).
+            "id": f"me_{mv_id}",
             "org_id": org_id,
             "project_id": project_id,
             "execution_package_id": pm["execution_package_id"] if pm else None,
@@ -122,14 +127,17 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
             "total_cost": (unit_value_f * qty) if unit_value_f is not None else None,
             "movement_type": kind,
             "source_doc_type": "warehouse_transactions",
-            "source_doc_id": row.get("movement_id"),
+            "source_doc_id": mv_id,
             "ledger_sequence": row.get("ledger_sequence"),
             "date": (row.get("recorded_at") or "")[:10],
             "mapped": pm is not None,
             "projection_source": "canonical_warehouse_service",
             "created_at": now,
         }
-        await tenant.material_entries.insert_one(entry)
+        # Upsert on deterministic id so re-run is pure replay parity.
+        await tenant.material_entries.update_one(
+            {"id": entry["id"]}, {"$set": entry}, upsert=True,
+        )
         created += 1
 
     return {
@@ -151,7 +159,9 @@ async def list_material_entries(
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if planned_material_id: q["planned_material_id"] = planned_material_id
-    return await tenant.material_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    # CODEX C11.3 — no silent cap. Iterate the full projection.
+    cursor = tenant.material_entries.find(q, {"_id": 0}).sort("date", -1)
+    return [row async for row in cursor]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -167,9 +177,11 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    entries = await tenant.material_entries.find(
+    # CODEX C11.3 — no silent 500 cap.
+    cursor = tenant.material_entries.find(
         {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
-    ).sort("date", -1).to_list(500)
+    ).sort("date", -1)
+    entries = [row async for row in cursor]
 
     by_material = {}
     total_issued_qty = 0
