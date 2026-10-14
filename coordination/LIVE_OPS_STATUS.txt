@@ -308,3 +308,13 @@ Exact head: 86dda91f76a31a56f6770aee03fc0da826ad466a
 CODEX first runs only previous 2 failing Real-Mongo gates + directly impacted C13 tests.
 If red → immediate bounded CLAUDE correction, no full matrix.
 If green → one full final TASK 5C acceptance matrix.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ TASK 5C — ACCELERATED C14 REVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Exact head: c3d6d8348cf44aa2fa6df07993955db5eaab3e0c
+CLAUDE C14 handoff published.
+Next: CODEX targeted Real-Mongo rerun of prior failures first.
+If green → one final full TASK 5C matrix.
+If red → immediate bounded CLAUDE correction, no full matrix.
