@@ -47,11 +47,35 @@ from app.services.warehouse_movements.service import (
     CommandService, CommandInput,
 )
 from app.services.warehouse_movements.errors import (
-    LegacyWriterRetiredError,
+    LegacyWriterRetiredError, PermissionDeniedError,
 )
 
 
 pytestmark = pytest.mark.asyncio
+
+# ─── Shared conftest ───
+pytest_plugins = ["tests.warehouse_canonical_conftest"]
+
+
+# ───────────────────── CODEX C14.2 — real TenantContext ─────────────────────
+#
+# PermissionGate.ensure() refuses `ctx=None` under enforce mode with
+# `PermissionDeniedError: missing tenant context`. Even
+# `allow_always_gate` requires a non-null ctx because the service
+# calls `ensure()` before invoking the decision function.
+#
+# The ctx must carry at minimum `org_id` (read by the service when
+# resolving the tenant data path), `tenant_id` (canonical identity),
+# and `user_id` (actor-attribution). The Permission Service's own
+# `evaluate_permission` further reads `ctx.tenant_id`; the allow-all
+# decision bypasses the decision itself but NEVER the ctx contract.
+
+class _TestCtx:
+    """Minimal TenantContext-shaped object for the C13 real-Mongo tests."""
+    def __init__(self, tenant_id: str, user_id: str = "u-test"):
+        self.tenant_id = tenant_id
+        self.org_id = tenant_id        # legacy identity = canonical id in tests
+        self.user_id = user_id
 
 
 # ─────────────────── C13.1 — audit chain under concurrency ───────────────────
@@ -90,7 +114,7 @@ async def test_c13_1_cross_item_audit_chain_no_fork_under_ten_concurrent_writes(
             reason=f"c13.1 concurrent write {i}",
             file_ids=["ev-1"],
         )
-        return await svc.execute(None, db, db["warehouse_transactions"], inp)
+        return await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], inp)
 
     results = await asyncio.gather(*[_one(i) for i in range(10)])
     assert len(results) == 10
@@ -155,7 +179,7 @@ async def test_c13_1_audit_failure_rolls_back_movement_and_counters(
         file_ids=["ev-1"],
     )
     with pytest.raises(Exception):
-        await svc.execute(None, db, db["warehouse_transactions"], inp)
+        await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], inp)
 
     monkeypatch.setattr(svc_mod, "_record_event_in_session", orig)
 
@@ -188,7 +212,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         {"tenant_id": "T", "id": "I", "canonical_unit": "бр"}
     )
     # 1. Receive 10 to central warehouse.
-    await svc.execute(None, db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
         action=CanonicalAction.RECEIVE_FROM_SUPPLIER,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("10"), unit_value=Decimal("10"),
@@ -197,7 +221,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         idempotency_key="recv:1", reason="seed", file_ids=["f"],
     ))
     # 2. Dispatch 10 to project.
-    dispatch = await svc.execute(None, db, db["warehouse_transactions"],
+    dispatch = await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"],
         CommandInput(
             action=CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT,
             tenant_id="T", actor_id="u", item_id="I", unit="бр",
@@ -212,7 +236,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
     disp_mv = dispatch.movement_id
 
     # 3. Accept 3.
-    await svc.execute(None, db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("3"), accepted_quantity=Decimal("3"),
@@ -223,7 +247,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         idempotency_key="acc:1", reason="accept 3", file_ids=["f"],
     ))
     # 4. Accept 4.
-    await svc.execute(None, db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("4"), accepted_quantity=Decimal("4"),
@@ -234,7 +258,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         idempotency_key="acc:2", reason="accept 4", file_ids=["f"],
     ))
     # 5. Accept 3 (closes lot).
-    await svc.execute(None, db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("3"), accepted_quantity=Decimal("3"),
@@ -315,7 +339,7 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
 
     # Receive + dispatch + accept the whole lot so the projector
     # emits one material_entries row via ACCEPT_PROJECT_DELIVERY.
-    await svc.execute(None, db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
         action=CanonicalAction.RECEIVE_FROM_SUPPLIER,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("5"), unit_value=Decimal("10"),
@@ -323,7 +347,7 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
                                 state=MovementState.FREE),
         idempotency_key="recv:1", reason="r", file_ids=["f"],
     ))
-    disp = await svc.execute(None, db, db["warehouse_transactions"],
+    disp = await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"],
         CommandInput(
             action=CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT,
             tenant_id="T", actor_id="u", item_id="I", unit="бр",
@@ -335,7 +359,7 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
             project_id="p1",
             idempotency_key="disp:1", reason="d", file_ids=["f"],
         ))
-    await svc.execute(None, db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("5"), accepted_quantity=Decimal("5"),

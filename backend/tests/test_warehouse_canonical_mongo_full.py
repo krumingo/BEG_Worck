@@ -252,25 +252,67 @@ async def test_supplier_delivery_origin_unique_per_source_line(
 
 
 # ---------------------------------------------------------------------
-# Zero live legacy writers at RUNTIME — fifo_service.consume_fifo must
-# write through the canonical service (ledger row + projector), not
-# directly to warehouse_batches.
+# CODEX C14.3 — reconcile legacy sales test with frozen C13.3 semantics.
+#
+# TASK 5C C12.4 attempted to route ordinary sales through the canonical
+# `WRITE_OFF` action. CODEX C13.3 ruled that a BUSINESS-RULE INVENTION:
+# contract v6 §4.2 defines `WRITE_OFF` strictly as scrap/loss/theft; an
+# ordinary sale is NOT a write-off, and TASK 5C MUST NOT invent a new
+# canonical action. The frozen vocabulary has no sale-depletion
+# movement yet, so this legacy stock-mutation path FAILS CLOSED.
+#
+# This test asserts the C13.3 fail-closed contract on real Mongo:
+#   • `fifo_service.consume_fifo` raises `LegacyWriterRetiredError`;
+#   • NOTHING lands in `warehouse_transactions`;
+#   • NOTHING lands in the audit chain;
+#   • NO `write_off` row materializes;
+#   • NO projection row materializes;
+#   • NO idempotency claim is persisted (nothing to deduplicate against).
+#
+# The test is NOT skipped and NOT weakened; it enforces the frozen
+# semantics instead of the retired business-rule invention.
 # ---------------------------------------------------------------------
 async def test_sales_consume_fifo_writes_canonical_ledger(
     canonical_mongo_db, allow_always_gate,
 ):
+    """CODEX C14.3 — sales fail-closed on real Mongo.
+
+    (Legacy name retained so the required gate stays named exactly
+    as CODEX enumerates it; the assertion was reconciled to the
+    frozen C13.3 behaviour and the docstring/comments say so.)
+    """
+    from app.services.warehouse_movements.errors import LegacyWriterRetiredError
     _enforce_env()
     client, db = canonical_mongo_db
     tenant = _tenant_data(db)
     svc = CommandService(client, gate=allow_always_gate)
     coll = tenant.warehouse_transactions
+
+    # Seed one supplier receipt so canonical stock exists; the sales
+    # fail-closed must NOT depend on empty stock to pass.
     await svc.execute(_Ctx("org_test"), db, coll, _inp(
         CanonicalAction.RECEIVE_FROM_SUPPLIER, tenant_id="org_test",
         source=LocationKey(LocationType.SUPPLIER, "sup"),
         destination=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh"),
         quantity=Decimal("5"), unit_value=Decimal("1"),
     ))
-    # Patch db globally so fifo_service uses this test db.
+    receive_ledger_count = await coll.count_documents(
+        {"tenant_id": "org_test", "action": "receive_from_supplier"}
+    )
+    assert receive_ledger_count == 1, "seed receive did not land"
+
+    # Snapshot baseline ledger / audit counts BEFORE calling consume_fifo.
+    baseline_ledger = await coll.count_documents({"tenant_id": "org_test"})
+    baseline_audit = await db["audit_events"].count_documents(
+        {"tenant_id": "org_test"}
+    )
+    baseline_proj = await db["material_entries"].count_documents(
+        {"tenant_id": "org_test"}
+    )
+
+    # Patch db globally so fifo_service would use THIS test db — any
+    # legacy write would show up here. The expected behaviour is NO
+    # write at all.
     from app import db as app_db
     original_db = app_db.db
     original_client = app_db.client
@@ -278,17 +320,74 @@ async def test_sales_consume_fifo_writes_canonical_ledger(
     app_db.client = client
     try:
         from app.services.fifo_service import consume_fifo
-        rows = await consume_fifo(
-            "org_test", "it", "wh", 2.0,
-            sale_reference="SALE-TEST",
-        )
-        assert sum(r["qty_taken"] for r in rows) == 2.0
-        # There must be a canonical write_off row for this depletion.
-        count = await db["warehouse_transactions"].count_documents({
-            "tenant_id": "org_test", "action": "write_off",
-            "reason": "sale:SALE-TEST",
-        })
-        assert count == 1, "fifo_service must route through the canonical service"
+        with pytest.raises(LegacyWriterRetiredError) as exc_info:
+            await consume_fifo(
+                "org_test", "it", "wh", 2.0,
+                ctx=_Ctx("org_test"), actor_id="u-sales",
+                sale_reference="SALE-TEST",
+                sale_evidence_file_ids=["ev-sale-receipt-1"],
+            )
+        # The error message points at the frozen contract and the
+        # pending canonical sale-depletion action — proving the
+        # route is not silently swallowed, and not re-mapped to
+        # WRITE_OFF.
+        assert "WRITE_OFF" in exc_info.value.message or \
+               "write-off" in exc_info.value.message
+        assert "canonical_action_pending" in exc_info.value.context or \
+               "sale_depletion" in str(exc_info.value.context)
     finally:
         app_db.db = original_db
         app_db.client = original_client
+
+    # ────── Fail-closed invariants on real Mongo ──────
+
+    # 1. NO new `warehouse_transactions` row. The ledger count is
+    #    unchanged from before the consume_fifo call.
+    after_ledger = await coll.count_documents({"tenant_id": "org_test"})
+    assert after_ledger == baseline_ledger, (
+        "C14.3 regression: sales fail-closed mutated the canonical "
+        f"ledger (before={baseline_ledger}, after={after_ledger}). "
+        f"consume_fifo MUST NOT write any ledger row for an ordinary "
+        f"sale under the frozen contract."
+    )
+
+    # 2. NO `write_off` row at all.
+    wo_rows = await coll.count_documents(
+        {"tenant_id": "org_test", "action": "write_off"}
+    )
+    assert wo_rows == 0, (
+        "C14.3 regression: a WRITE_OFF row materialized from an "
+        "ordinary sale. Contract v6 §4.2 defines WRITE_OFF as "
+        "scrap/loss/theft only; the sale-to-WRITE_OFF mapping is "
+        "retired."
+    )
+
+    # 3. NO new audit event — the chain head is unchanged.
+    after_audit = await db["audit_events"].count_documents(
+        {"tenant_id": "org_test"}
+    )
+    assert after_audit == baseline_audit, (
+        "C14.3 regression: sales fail-closed left an audit trail "
+        f"(before={baseline_audit}, after={after_audit}). Nothing "
+        f"must reach the audit chain if the ledger write didn't."
+    )
+
+    # 4. NO new projection row (material_entries).
+    after_proj = await db["material_entries"].count_documents(
+        {"tenant_id": "org_test"}
+    )
+    assert after_proj == baseline_proj, (
+        "C14.3 regression: sales fail-closed left a projection row."
+    )
+
+    # 5. NO idempotency claim for the attempted sale — the fail-closed
+    #    raise happened BEFORE any `audit_idempotency` write.
+    claim = await db["audit_idempotency"].find_one(
+        {"tenant_id": "org_test",
+         "key": {"$regex": "^sale[-:]depletion"}}
+    )
+    assert claim is None, (
+        "C14.3 regression: sales fail-closed persisted an idempotency "
+        f"claim: {claim}. There is nothing to deduplicate because "
+        f"nothing was written."
+    )

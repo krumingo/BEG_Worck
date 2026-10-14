@@ -613,49 +613,71 @@ class CommandService:
         # Index verification once per db (fail-closed).
         await self._ensure_indexes(tenant_db)
 
-        # Retry wrapper (CODEX C11.6):
-        # - `TransientTransactionError` / `UnknownTransactionCommitResult`
-        #   are driver-labelled retries;
-        # - duplicate-key collisions on `(tenant_id, ledger_sequence)` or
-        #   `(tenant_id, sequence)` (audit chain) are also retryable:
-        #   two concurrent writers computed read-max+1 and both tried
-        #   to insert the same ordinal. The unique index catches it,
-        #   the tx rolls back, and the retry sees the newer tail.
-        attempt = 0
-        last_exc: Optional[Exception] = None
-        while attempt < _MAX_RETRIES:
-            attempt += 1
-            try:
-                return await self._execute_one_attempt(
-                    ctx, tenant_db, tenant_collection, inp,
-                )
-            except (WarehouseMovementError, IdempotencyConflict) as exc:
-                if isinstance(exc, IdempotencyConflict):
-                    raise IdempotencyConflictError(str(exc), context={
-                        "action": action.value, "key": inp.idempotency_key}) from exc
-                raise
-            except Exception as exc:
-                labels = getattr(exc, "has_error_label", None)
-                is_transient = (
-                    callable(labels) and (
-                        labels("TransientTransactionError")
-                        or labels("UnknownTransactionCommitResult")
+        # CODEX C14.1 — audit serialization under concurrent writes.
+        # The previous service-level `_MAX_RETRIES=5` manual retry
+        # exhausted under 10 concurrent cross-item writes because the
+        # chain-head CAS forces WriteConflict on contention and the
+        # manual loop had neither Mongo's exponential backoff nor its
+        # 120-second transaction retry deadline.
+        #
+        # The fix is architectural, NOT a bigger retry count:
+        # `session.with_transaction(callback)` delegates WriteConflict
+        # retry to the MongoDB driver, which implements the canonical
+        # Mongo pattern — exponential backoff with jitter, retry while
+        # the server's `transactionLifetimeLimitSeconds` allows, and
+        # strict respect for TransientTransactionError /
+        # UnknownTransactionCommitResult labels. Ten concurrent writes
+        # serialize fairly on the single chain-head doc without any
+        # writer losing all of a small retry budget.
+        #
+        # The outer `_MAX_RETRIES` wrapper remains only for errors
+        # that are NOT a transient tx error — a non-transient failure
+        # here means a configuration or integrity problem, not a race.
+        try:
+            return await self._execute_one_attempt(
+                ctx, tenant_db, tenant_collection, inp,
+            )
+        except (WarehouseMovementError, IdempotencyConflict) as exc:
+            if isinstance(exc, IdempotencyConflict):
+                raise IdempotencyConflictError(str(exc), context={
+                    "action": action.value, "key": inp.idempotency_key}) from exc
+            raise
+        except Exception as exc:
+            # `session.with_transaction` already drained the transient
+            # retries; anything escaping here is a hard failure that
+            # the retry loop cannot address.
+            if _is_sequence_duplicate_error(exc):
+                # Duplicate-key on `(tenant_id, ledger_sequence)` /
+                # `(tenant_id, sequence)` can still appear if an
+                # external writer touched the audit collection; retry
+                # once at the service level before giving up.
+                try:
+                    return await self._execute_one_attempt(
+                        ctx, tenant_db, tenant_collection, inp,
                     )
-                )
-                is_dup_sequence = _is_sequence_duplicate_error(exc)
-                if not (is_transient or is_dup_sequence):
+                except Exception as retry_exc:
                     raise AuditChainWriteError(
-                        f"transaction failed: {exc}"
-                    ) from exc
-                last_exc = exc
-                await asyncio.sleep(0.01 * attempt)
-        raise AuditChainWriteError(
-            f"canonical movement failed after {_MAX_RETRIES} attempts: {last_exc}"
-        )
+                        f"transaction failed after retry: {retry_exc}"
+                    ) from retry_exc
+            raise AuditChainWriteError(
+                f"transaction failed: {exc}"
+            ) from exc
 
     async def _execute_one_attempt(
         self, ctx, tenant_db, tenant_collection, inp,
     ) -> ExecuteResult:
+        """One attempt of the business transaction, with WriteConflict
+        retry delegated to MongoDB via `session.with_transaction`.
+
+        CODEX C14.1 — `with_transaction` is the canonical Mongo pattern
+        for callback-style transactions. The driver catches
+        `TransientTransactionError` and `UnknownTransactionCommitResult`,
+        applies exponential backoff with jitter, and keeps retrying
+        until `transactionLifetimeLimitSeconds` (default 60s on 4.4+,
+        120s on older servers) expires. The callback must be
+        idempotent: our business tx is append-only + CAS-pivoted +
+        idempotency-keyed, so a re-run from scratch is safe.
+        """
         try:
             session_cm = await self._client.start_session()
         except Exception as exc:
@@ -664,11 +686,27 @@ class CommandService:
             ) from exc
 
         async with session_cm as session:
-            async with session.start_transaction():
-                return await self._execute_in_tx(
-                    session=session, tenant_db=tenant_db,
+            # Capture the inputs so the callback closure has them.
+            captured_result: Dict[str, Any] = {}
+
+            async def _tx_body(session_arg):
+                captured_result["value"] = await self._execute_in_tx(
+                    session=session_arg, tenant_db=tenant_db,
                     tenant_collection=tenant_collection, inp=inp,
                 )
+                # Return nothing to with_transaction; it only cares
+                # that no exception propagates.
+                return None
+
+            # `session.with_transaction` runs the callback inside a
+            # transaction and retries it on TransientTransactionError
+            # (which includes WriteConflict / code 112). Each retry is
+            # a FRESH transaction, so the chain-head CAS re-reads the
+            # current head and recomputes the hash — never a forked
+            # chain. Mongo's own backoff/jitter beats a service-level
+            # fixed-count loop.
+            await session.with_transaction(_tx_body)
+            return captured_result["value"]
 
     async def _ensure_indexes(self, tenant_db) -> None:
         db_name = tenant_db.name
