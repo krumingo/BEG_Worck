@@ -23,6 +23,17 @@
 
 **FLOW-FIRST Е МЕТОДЪТ, НЕ ЗАМЕСТИТЕЛ НА ПЛАНА.**
 
+### ⚡ ACCELERATION MODE
+
+- При correction loop CODEX първо пуска само предишните failing Real-Mongo тестове + директно засегнатите тестове.
+- Пълен acceptance matrix се пуска само след като bounded failing tests станат зелени.
+- Пълен FLOW/v6 reread не се повтаря при всяка микро-корекция; четат се засегнатите clauses, освен при ново противоречие.
+- Изолираната Mongo replica-set среда се преизползва между correction cycles, когато е технически възможно.
+- Бъдещите implementation tasks се режат на по-малки dependency-safe блокове, целево до 1–2 correction cycles.
+- CLAUDE не маркира runtime условие като затворено, ако не е било реално изпълнено.
+- PASS остава само след пълен финален gate: 0 failed / 0 errors / 0 skipped / exit 0.
+
+
 ## 🧩 Правила за работа
 
 - Този план стои като постоянен checklist за LIVE-OPS.
