@@ -396,21 +396,54 @@ async def _idem_complete_with_session(
 async def _record_event_in_session(tenant_db, event, *, session):
     """Append an AuditEvent inside the business transaction.
 
-    The chain head is read inside the session so a concurrent tx cannot
-    insert a conflicting `sequence`; the unique index
-    `wh_audit_unique_sequence` catches any residual race, which the
-    outer retry loop handles.
+    CODEX C12.3 — the per-tenant `sequence` is allocated through an
+    atomic counter (`warehouse_ledger_counters` with name
+    `audit_sequence`) rather than read-max+1. This matches the ledger
+    sequence fix and makes 10+ concurrent cross-item writes complete
+    without retry exhaustion. The hash chain's `previous_hash` still
+    comes from a tail read inside the session: when two writers race,
+    both compute the same `previous_hash` but only one wins the unique
+    `(tenant_id, sequence)` index; the other retries from the service
+    wrapper and reads a fresh tail.
     """
+    from pymongo import ReturnDocument
     from app.audit.envelope import validate_event
     from app.audit.store import AUDIT_COLLECTION, chain_hashes
     validate_event(event)
-    previous = await tenant_db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": event["tenant_id"]},
-        {"_id": 0},
-        sort=[("sequence", -1)],
+    # Atomic sequence allocation
+    counters = tenant_db["warehouse_ledger_counters"]
+    seq_doc = await counters.find_one_and_update(
+        {"tenant_id": event["tenant_id"], "name": "audit_sequence"},
+        {"$inc": {"value": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
         session=session,
     )
+    seq = int(seq_doc["value"])
+
+    # Previous event for hash chain — read inside session.
+    previous = await tenant_db[AUDIT_COLLECTION].find_one(
+        {"tenant_id": event["tenant_id"], "sequence": seq - 1},
+        {"_id": 0},
+        session=session,
+    )
+    if previous is None and seq > 1:
+        # Rare case: the previous event was written in a later-committed
+        # concurrent tx. Fall back to max tail read within session.
+        previous = await tenant_db[AUDIT_COLLECTION].find_one(
+            {"tenant_id": event["tenant_id"]},
+            {"_id": 0},
+            sort=[("sequence", -1)],
+            session=session,
+        )
     chained = chain_hashes(event, previous)
+    # chain_hashes derived `sequence` from previous+1; override with the
+    # counter-allocated seq so the index insert cannot collide.
+    chained["sequence"] = seq
+    # Re-hash because sequence changed.
+    from app.audit.store import canonical_hash
+    chained["integrity_hash"] = canonical_hash(chained)
+
     await tenant_db[AUDIT_COLLECTION].insert_one(dict(chained), session=session)
     event.update(chained)
     return chained
@@ -792,7 +825,23 @@ class CommandService:
                 requested_quantity = Decimal(str(dispatch_row.get("quantity", "0")))
             else:
                 requested_quantity = Decimal(str(inp.requested_quantity))
-            missing_qty = requested_quantity - accepted_qty
+
+            # CODEX C12.1 — missing_quantity is CUMULATIVE: requested
+            # minus ALL accepted so far (including this acceptance).
+            # The naive `requested - this_accept` opened a bogus second
+            # discrepancy on 10→8 then 10→2 (final acceptance claims
+            # remainder=8 because it thinks "I accepted 2 out of 10").
+            prior_accepted = Decimal("0")
+            prior_cursor = tenant_collection.find({
+                "tenant_id": tenant_id,
+                "dispatch_movement_id": inp.dispatch_movement_id,
+                "action": CanonicalAction.ACCEPT_PROJECT_DELIVERY.value,
+            }, session=session)
+            async for d in prior_cursor:
+                prior_accepted += Decimal(str(d.get("accepted_quantity")
+                                              or d.get("quantity") or "0"))
+            total_accepted = prior_accepted + accepted_qty
+            missing_qty = max(requested_quantity - total_accepted, Decimal("0"))
 
             base_env.requested_quantity = requested_quantity
             base_env.accepted_quantity = accepted_qty
@@ -1032,13 +1081,28 @@ class CommandService:
     async def _next_ledger_sequence(
         self, tenant_collection, *, tenant_id: str, session,
     ) -> int:
-        """Monotonic per-tenant sequence for ledger ordering."""
-        tail = await tenant_collection.find(
-            {"tenant_id": tenant_id, "ledger_sequence": {"$exists": True}},
-            {"ledger_sequence": 1, "_id": 0},
+        """Monotonic per-tenant sequence for ledger ordering.
+
+        CODEX C12.3 — switched from read-max+1 to an atomic counter
+        via `find_one_and_update` on a per-tenant counter doc. Prior
+        implementation raced under 10+ concurrent writes and exhausted
+        `_MAX_RETRIES` (test_cross_item_audit_chain_integrity).
+
+        The counter doc lives in a dedicated `warehouse_ledger_counters`
+        collection. The `$inc` is atomic even inside a replica-set
+        transaction: concurrent writers each see their own
+        monotonically distinct value with no gaps and no duplicates.
+        """
+        from pymongo import ReturnDocument
+        counters = tenant_collection._scope._db["warehouse_ledger_counters"]  # pylint: disable=protected-access
+        doc = await counters.find_one_and_update(
+            {"tenant_id": tenant_id, "name": "ledger_sequence"},
+            {"$inc": {"value": 1}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
             session=session,
-        ).sort("ledger_sequence", -1).limit(1).to_list(1)
-        return (tail[0]["ledger_sequence"] + 1) if tail else 1
+        )
+        return int(doc["value"]) if doc else 1
 
     async def _split_dispatch_for_acceptance(
         self, tenant_collection, *, session, tenant_id: str,

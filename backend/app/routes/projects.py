@@ -1402,7 +1402,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         warehouse_txns = await tenant.warehouse_transactions.find(
             {"project_id": project_id, "org_id": org_id},
             {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
-        ).to_list(1000)
+        ).to_list(None)
         materials_ex_vat = sum(t.get("total_ex_vat", 0) or 0 for t in warehouse_txns)
         materials_vat = sum(t.get("total_vat", 0) or 0 for t in warehouse_txns)
         materials_inc_vat = sum(t.get("total_inc_vat", 0) or 0 for t in warehouse_txns)
@@ -2129,7 +2129,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         txns = await tenant.warehouse_transactions.find(
             {"org_id": org_id, "project_id": {"$in": pids}},
             {"_id": 0, "total_ex_vat": 1, "total_inc_vat": 1},
-        ).to_list(5000)
+        ).to_list(None)
         ex_vat = round(sum(t.get("total_ex_vat", 0) or 0 for t in txns), 2)
         inc_vat = round(sum(t.get("total_inc_vat", 0) or 0 for t in txns), 2)
         return {"ex_vat": ex_vat, "inc_vat": inc_vat, "count": len(txns)}

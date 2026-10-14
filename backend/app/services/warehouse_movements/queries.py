@@ -123,7 +123,13 @@ async def item_balance_by_location(
         then shifts the quantity from in_transit→destination.
       * QUARANTINE_ENTRY/RELEASE drain source + credit destination.
     """
-    allowed_set = {tuple(x) for x in allowed_locations} if allowed_locations else None
+    # CODEX C12.7 — distinguish NONE (unrestricted) from empty list
+    # (no grant = deny). `allowed_locations is None` → unrestricted.
+    # Empty list → set() → fail-closed empty balances.
+    if allowed_locations is None:
+        allowed_set = None
+    else:
+        allowed_set = {tuple(x) for x in allowed_locations}
 
     cursor = tenant_collection.find({
         "tenant_id": tenant_id,
@@ -134,6 +140,14 @@ async def item_balance_by_location(
     }, session=session)
 
     balances: Dict[Tuple[str, str, str], Decimal] = defaultdict(lambda: Decimal("0"))
+    # CODEX C12.5 — EXTERNAL location types are NOT part of internal
+    # stock. The ledger still records supplier origins (preserving
+    # value provenance for invoice allocation), but balance projections
+    # must not subtract from them. "External" means supplier (origin
+    # outside the tenant) and unresolved (non-moving investigation
+    # record). in_transit is INTERNAL (it is our own trucks/transit).
+    _EXTERNAL_LOCATION_TYPES = {"supplier", "unresolved"}
+
     async for doc in cursor:
         action = doc.get("action")
         # Non-moving documentation facts — exclude.
@@ -145,14 +159,16 @@ async def item_balance_by_location(
                           if action == "accept_project_delivery"
                           and doc.get("accepted_quantity") is not None
                           else (doc.get("quantity") or "0")))
-        # Credit destination
-        if dest:
+        # Credit destination (unless destination is external — supplier
+        # returns credit supplier balance which we don't track as
+        # internal stock).
+        if dest and dest["location_type"] not in _EXTERNAL_LOCATION_TYPES:
             key = (dest["location_type"], dest["location_id"], dest.get("state", "free"))
             balances[key] += qty
-        # Drain source (either by accepted qty — acceptance drains
-        # in_transit — or by sum of layer allocations — outbound FIFO
-        # drain).
-        if src:
+        # Drain source (unless source is external — a supplier is NOT
+        # our internal stock bucket, so a receive-from-supplier does
+        # not create a negative supplier balance in our projection).
+        if src and src["location_type"] not in _EXTERNAL_LOCATION_TYPES:
             if action == "accept_project_delivery":
                 drain = qty  # drain in_transit by accepted qty
             elif doc.get("layer_allocations"):
@@ -176,17 +192,18 @@ async def item_balance_by_location(
         if q != 0
     ]
     if allowed_set is not None:
-        # allowed_set is a set of (scope_type, scope_id) from the
-        # Permission Service RoleAssignments — "location" or "project".
-        # A balance row's `location_id` must appear as any `scope_id`
-        # in that set. in_transit / supplier / unresolved locations
-        # are always included because they are not scope-protected
-        # buckets (they document origin / unresolved remainder).
+        # CODEX C12.7 — allowed_set is explicit:
+        #   None   → unrestricted (owner/admin / company grant)
+        #   set()  → NO grant → empty result (fail-closed)
+        #   {...}  → exact authorized ids
+        # in_transit / unresolved are not scope-protected (origin/
+        # investigation markers). Supplier is excluded entirely from
+        # internal balances (C12.5) so it is not shown either way.
         allowed_ids = {sid for (_t, sid) in allowed_set}
         rows = [
             r for r in rows
             if r["location_id"] in allowed_ids
-            or r["location_type"] in {"in_transit", "supplier", "unresolved"}
+            or r["location_type"] in {"in_transit", "unresolved"}
         ]
     return rows
 

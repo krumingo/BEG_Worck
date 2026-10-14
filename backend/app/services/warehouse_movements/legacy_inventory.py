@@ -123,38 +123,97 @@ def legacy_writers_enabled() -> bool:
 
 
 def scan_repository_for_legacy_writers(repo_root: Path | None = None) -> Dict[str, List[Dict]]:
-    """Scan the repo and return a dict:
-         {collection_name: [{"file": "...", "line": 123, "snippet": "..."}, ...]}
-    reporting every write-shaped call on a canonical-only collection.
+    """Scan the repo and return offenders by category.
 
-    The caller (test) then diffs this against a frozen baseline. New
-    entries outside `ALLOWED_WRITER_MODULES` are failures.
+    CODEX C12.10 — expanded coverage:
+
+      * Direct writes to canonical-only collections (original scope).
+      * Service-level permission bypasses (an in-module class or
+        function overriding `PermissionGate.ensure` to always allow).
+      * Direct `PERMISSION_SERVICE_MODE` env mutation.
+      * Capped reads (`.to_list(500)` / `.to_list(5000)`) on canonical
+        collections — a cap on authoritative stock data silently
+        truncates.
+      * Random idempotency key generation when caller stability is
+        required (`uuid` fallback inside the sales/consume path).
+
+    New entries outside `ALLOWED_WRITER_MODULES` are failures.
     """
     if repo_root is None:
         repo_root = Path(__file__).resolve().parents[4]
     hits: Dict[str, List[Dict]] = {c: [] for c in CANONICAL_ONLY_COLLECTIONS}
+    # Extra buckets for non-collection offenders.
+    hits.setdefault("__permission_bypass__", [])
+    hits.setdefault("__permission_mode_mutation__", [])
+    hits.setdefault("__capped_canonical_reads__", [])
+    hits.setdefault("__random_idempotency_key__", [])
 
+    canonical_coll_names = CANONICAL_ONLY_COLLECTIONS | {"warehouse_transactions"}
+
+    SELF_FILE = "backend/app/services/warehouse_movements/legacy_inventory.py"
     for py_path in repo_root.rglob("*.py"):
-        # Platform-independent POSIX path (C01 Windows normalization fix).
         rel = PurePosixPath(py_path.relative_to(repo_root).as_posix()).as_posix()
         if any(rel.startswith(p) for p in TEST_FIXTURE_PREFIXES):
             continue
         if rel in ALLOWED_WRITER_MODULES:
+            continue
+        if rel == SELF_FILE:
+            # The scanner itself contains the detection patterns as
+            # string literals; those must not count as offenders.
             continue
         try:
             text = py_path.read_text(encoding="utf-8")
         except Exception:
             continue
         for line_no, line in enumerate(text.splitlines(), start=1):
+            # Direct writes to canonical collections
             m = _WRITER_METHOD_RE.search(line)
-            if not m:
-                continue
-            coll = m.group("coll")
-            if coll not in CANONICAL_ONLY_COLLECTIONS:
-                continue
-            hits[coll].append({
-                "file": rel,
-                "line": line_no,
-                "snippet": line.strip(),
-            })
+            if m:
+                coll = m.group("coll")
+                if coll in CANONICAL_ONLY_COLLECTIONS:
+                    hits[coll].append({
+                        "file": rel, "line": line_no,
+                        "snippet": line.strip(),
+                    })
+            stripped = line.strip()
+            # Permission bypass patterns
+            if ("class _AllowService" in line
+                    or "class _AllowAll" in line
+                    or ("async def ensure" in line and "return None" in line
+                        and "PermissionGate" not in line and "pass" not in line)):
+                hits["__permission_bypass__"].append({
+                    "file": rel, "line": line_no, "snippet": stripped,
+                })
+            # PERMISSION_SERVICE_MODE env mutation outside the service
+            if ("PERMISSION_SERVICE_MODE" in line
+                    and ("os.environ[" in line or "setdefault" in line)
+                    and not stripped.startswith("#")):
+                hits["__permission_mode_mutation__"].append({
+                    "file": rel, "line": line_no, "snippet": stripped,
+                })
+            # Capped canonical reads
+            for coll_name in canonical_coll_names:
+                if f".{coll_name}.find(" in line or f".{coll_name}.aggregate(" in line:
+                    # Peek the next ~3 lines for a .to_list(N) cap
+                    for ahead in range(0, 4):
+                        try:
+                            peek = line if ahead == 0 else text.splitlines()[line_no - 1 + ahead]
+                        except IndexError:
+                            break
+                        if any(f".to_list({n})" in peek for n in ("100", "200", "500", "1000", "5000")):
+                            hits["__capped_canonical_reads__"].append({
+                                "file": rel, "line": line_no + ahead,
+                                "snippet": peek.strip(),
+                                "collection": coll_name,
+                            })
+                            break
+            # Random idempotency key fallback inside warehouse/sale paths
+            # — a caller-stable key is required (CODEX C12.4).
+            if ("idempotency_key" in line
+                    and ("warehouse" in rel or "fifo" in rel or "sale" in rel)
+                    and ("uuid.uuid4" in line or "uuid4()" in line)
+                    and "or " in line):
+                hits["__random_idempotency_key__"].append({
+                    "file": rel, "line": line_no, "snippet": stripped,
+                })
     return hits

@@ -205,7 +205,7 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
     wh_txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "type": 1, "lines": 1}
-    ).to_list(200)
+    ).to_list(None)
 
     stocked_by_name = {}
     issued_by_name = {}
@@ -322,14 +322,14 @@ async def get_project_material_summary(project_id: str, user: dict = Depends(req
     wh_issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "total": 1, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     issued_value = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
 
     # Returns value
     wh_returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     returned_value = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
 
     net_material_cost = round(issued_value - returned_value, 2)

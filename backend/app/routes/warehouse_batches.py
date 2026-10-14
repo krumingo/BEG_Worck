@@ -116,10 +116,12 @@ async def item_stock_summary(item_id: str, warehouse_id: str = "", user: dict = 
 @router.get("/warehouse/items/{item_id}/batches")
 async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    batches = await tenant.warehouse_batches.find(
+    cursor = tenant.warehouse_batches.find(
         {"org_id": user["org_id"], "item_id": item_id, "status": {"$in": ["active", "blocked"]}},
         {"_id": 0},
-    ).sort("received_at", 1).to_list(200)
+    ).sort("received_at", 1)
+    # CODEX C12.10 — no silent cap on canonical/projection reads.
+    batches = [row async for row in cursor]
     return {"batches": batches, "total": len(batches)}
 
 

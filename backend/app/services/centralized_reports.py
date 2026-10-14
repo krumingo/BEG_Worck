@@ -314,12 +314,13 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     draft_clean = round(sum(e["amount_clean_labor"] for e in entries if e["approval_status"] == "draft"), 2)
     draft_oh = round(sum(e["amount_overhead"] for e in entries if e["approval_status"] == "draft"), 2)
 
-    # Materials from warehouse
-    issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0, "lines": 1}
-    ).to_list(200)
+    # Materials from warehouse — CODEX C12.10 no silent cap.
     total_materials = 0
-    for t in issues:
+    _cursor = tenant.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id, "type": "issue"},
+        {"_id": 0, "lines": 1},
+    )
+    async for t in _cursor:
         for ln in t.get("lines", []):
             total_materials += float(ln.get("unit_cost", 0)) * float(ln.get("qty_issued", 0))
     total_materials = round(total_materials, 2)

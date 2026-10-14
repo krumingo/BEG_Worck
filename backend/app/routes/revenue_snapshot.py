@@ -134,13 +134,13 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
     mat_entries = await tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id, "movement_type": {"$in": ["issue", "return"]}},
         {"_id": 0, "date": 1, "total_cost": 1}
-    ).to_list(5000)
+    ).to_list(None)
 
     # Subcontract by month (from acts)
     sub_acts = await tenant.subcontractor_acts.find(
         {"org_id": org_id, "project_id": project_id, "status": "confirmed"},
         {"_id": 0, "act_date": 1, "certified_total": 1}
-    ).to_list(200)
+    ).to_list(None)
 
     # Overhead by month
     oh_allocs = await tenant.project_overhead_alloc.find(
@@ -317,7 +317,7 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
     issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1}
-    ).to_list(200)
+    ).to_list(None)
     issued_by_name = {}
     for wt in issues:
         for wl in wt.get("lines", []):

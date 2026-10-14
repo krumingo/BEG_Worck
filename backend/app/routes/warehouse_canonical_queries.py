@@ -39,43 +39,45 @@ def _tenant_for(user: dict) -> TenantData:
 
 async def _authorized_scope_locations(ctx, user) -> Optional[List]:
     """Return the (scope_type, scope_id) tuples the caller is allowed
-    to see at project / location granularity. None means the caller is
-    a module-wide / owner/admin role (sees everything).
+    to see at project / location granularity, computed via the REAL
+    Permission Service API (CODEX C12.7).
 
-    This is the Permission Service's canonical answer: it inspects the
-    user's current RoleAssignments for `warehouse.read_stock` on
-    `project` and `location` scopes. If any assignment is module-wide
-    (no scope_id), the function returns None → unrestricted.
+    * `None` means the caller holds a company-level (module-wide) grant
+      for `warehouse.read_stock` — they see everything.
+    * `[]` means the caller holds NO relevant grant — they see
+      NOTHING. The caller must deny or return empty; NOT fall back to
+      unrestricted (which would be fail-open).
+    * `[(scope_type, scope_id), ...]` is the exact authorized set.
+
+    No JWT-embedded assignments; no `role_assignments` on the user
+    dict. Only `app.permissions.service._load_assignments` is the
+    source of truth.
     """
+    from app.permissions.service import _load_assignments
     from app.permissions.catalog import role_actions
-    try:
-        from app.permissions.service import list_user_assignments
-    except Exception:
-        list_user_assignments = None  # pragma: no cover
-    if list_user_assignments is None:
-        # The permission service may expose a different name — walk the
-        # user's `role_assignments` directly (persisted by Tenant Guard).
-        assignments = user.get("role_assignments") or []
-    else:
-        try:
-            assignments = await list_user_assignments(ctx) or []
-        except Exception:
-            assignments = user.get("role_assignments") or []
-
+    user_id = user.get("id") or user.get("_id")
+    tenant_id = ctx.org_id if ctx is not None else user.get("org_id")
+    if not user_id or not tenant_id:
+        # No session → no grant.
+        return []
+    assignments = await _load_assignments(user_id, tenant_id)
     allowed = []
     for a in assignments:
-        actions_set = a.get("actions") or role_actions(a.get("role_id"))
+        if a.get("status") != "active":
+            continue
+        perms = a.get("permissions") or []
+        actions_set = set(perms) or role_actions(a.get("role_id") or "")
         if "warehouse.read_stock" not in actions_set:
             continue
         scope_type = a.get("scope_type")
         scope_id = a.get("scope_id")
-        if not scope_type or not scope_id:
-            # module-wide grant — see everything
+        if scope_type in (None, "company"):
+            # Company-level grant = unrestricted (owner/admin).
             return None
-        allowed.append((scope_type, scope_id))
-    # If NO relevant grant: fall back to "everything" (the module-wide
-    # `require_permission` already approved the request).
-    return allowed or None
+        if scope_type and scope_id:
+            allowed.append((scope_type, scope_id))
+    # Deny-by-default: empty list means empty result, NOT unrestricted.
+    return allowed
 
 
 async def _authorize_resource_scope(

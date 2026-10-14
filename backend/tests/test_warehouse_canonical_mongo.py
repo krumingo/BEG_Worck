@@ -205,9 +205,22 @@ async def test_fifo_outbound_server_derives_unit_value_and_rejects_client_value(
     ))
     env = r.envelope
     assert len(env["layer_allocations"]) == 2
+    # CODEX C12 — FIFO 10@10 + 2@20 = 100 + 40 = 140 (not 120).
     total = sum(Decimal(a["quantity"]) * Decimal(a["unit_value"])
                 for a in env["layer_allocations"])
-    assert total == Decimal("120")
+    assert total == Decimal("140"), (
+        f"FIFO value math: 10 units from layer 1 (unit_value=10) "
+        f"+ 2 units from layer 2 (unit_value=20) must sum to 140; got {total}"
+    )
+    # Exact quantity/value/layer conservation:
+    #   Σ allocations.quantity == requested_quantity (12)
+    #   Σ allocations.quantity * unit_value == total_value (140)
+    #   each layer's quantity ≤ its original dispatch unit_value capacity
+    assert sum(Decimal(a["quantity"]) for a in env["layer_allocations"]) == Decimal("12")
+    # Layer 1 fully drained (10 units); layer 2 partially drained (2 of 10).
+    layer_qty = {a["unit_value"]: Decimal(a["quantity"]) for a in env["layer_allocations"]}
+    assert layer_qty["10"] == Decimal("10")
+    assert layer_qty["20"] == Decimal("2")
 
 
 async def test_rule_b_partial_acceptance_project_cost_and_unresolved(

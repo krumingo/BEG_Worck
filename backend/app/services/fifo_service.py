@@ -3,7 +3,7 @@ FIFO Warehouse Service — Batch-based stock management.
 All stock operations go through batches ordered by received_at (FIFO).
 """
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 import uuid
 import logging
 
@@ -76,94 +76,91 @@ async def consume_fifo(
     warehouse_id: str,
     qty_needed: float,
     *,
-    sale_reference: Optional[str] = None,
-    actor_id: Optional[str] = None,
+    ctx=None,
+    actor_id: str,
+    sale_reference: str,
+    sale_evidence_file_ids: List[str],
     idempotency_key: Optional[str] = None,
+    unit: str = "бр",
 ) -> list:
-    """CODEX C01 / C11.2 — consume stock via the canonical command
-    service (no direct `warehouse_batches` write).
+    """CODEX C01 / C11.2 / C12.4 — consume stock via the canonical
+    command service, enforce-mode authorization, caller-stable
+    idempotency, real evidence.
 
-    This function was previously the second stock-source-of-truth that
-    the sales domain called at `sales.py:233`. In TASK 5C regime there
-    is only one authoritative stock writer: `CommandService`. This
-    wrapper constructs a canonical `WRITE_OFF` command with
-    `reason=sale` (the material physically leaves the system), takes
-    the server-side FIFO allocation it computes, and returns the same
-    `[{batch_id, qty_taken, unit_cost, total_cost}]` shape the sales
-    callers expect — so sales retains its UX while the ledger stays
-    authoritative.
+    This wrapper is called from `routes/sales.py:commit_sale` **inside**
+    an authenticated FastAPI request. It REQUIRES:
 
-    No business rule change: a sale is a stock-leaves-system event
-    exactly as `WRITE_OFF` was already defined by FLOW-009 §"Видове
-    движения". The sales module continues to record its own
-    `sales` collection row for pricing/margin; stock depletion is
-    delegated here.
+      * `ctx` — the `TenantContext` the route resolved via
+        `require_permission("warehouse.write_command")` BEFORE calling
+        this wrapper. The sales route is responsible for its own
+        authorization gate; this wrapper then delegates to the
+        canonical service's per-action gate (`warehouse.write_off`)
+        which runs under the real Permission Service.
+      * `actor_id` — the authenticated user id. Never a fallback name.
+      * `sale_reference` — the stable sale id. Used to derive a
+        caller-stable `idempotency_key`: `sale-depletion:<ref>`. A
+        retry of the SAME sale returns the SAME result.
+      * `sale_evidence_file_ids` — the File Registry id(s) of the sale
+        receipt. `WRITE_OFF` is evidence-required (contract §4.2); the
+        sale receipt IS the evidence. No weakening of the gate.
+
+    Returns `[{batch_id, qty_taken, unit_cost, total_cost}]` shape the
+    legacy sales UI expects.
     """
-    import os, uuid as _uuid
     from decimal import Decimal
     from app.db import client as _mongo_client
     from app.services.warehouse_movements import (
         CanonicalAction, LocationKey, LocationType, MovementState,
     )
     from app.services.warehouse_movements.service import (
-        CommandService, CommandInput, PermissionGate,
+        CommandService, CommandInput,
     )
     from app.services.warehouse_movements.errors import NegativeStockError
 
-    # Internal projector-adjacent context — no HTTP user; the sales
-    # route authenticated upstream and the service's permission check
-    # is scoped to the sales module via a lightweight allow-service
-    # gate. Fail-closed if PERMISSION_SERVICE_MODE is not enforce.
-    class _AllowServiceGate(PermissionGate):
-        async def ensure(self, *args, **kwargs):
-            return None
+    if ctx is None:
+        raise InsufficientStockError(
+            item_id, warehouse_id, qty_needed, 0.0,
+        )  # defensive: wrong caller contract
+    if not actor_id:
+        raise ValueError("actor_id is required (authenticated user id)")
+    if not sale_reference:
+        raise ValueError("sale_reference is required for caller-stable idempotency")
+    if not sale_evidence_file_ids:
+        raise ValueError(
+            "sale_evidence_file_ids is required — WRITE_OFF is evidence-required "
+            "per v6 §4.2 (the sale receipt is the evidence); the gate is not weakened"
+        )
 
     tenant = TenantData.for_resolved_org(db, org_id)
-
-    class _ServiceCtx:
-        def __init__(self, oid): self.org_id = oid
-    ctx = _ServiceCtx(org_id)
-
-    # Enforce mode is required by the canonical service.
-    prior_mode = os.environ.get("PERMISSION_SERVICE_MODE")
-    if prior_mode != "enforce":
-        os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
+    svc = CommandService(
+        _mongo_client,
+        # Default `PermissionGate` runs the REAL Permission Service.
+        strict_master_identity=False,
+    )
+    inp = CommandInput(
+        action=CanonicalAction.WRITE_OFF,
+        tenant_id=org_id,
+        actor_id=actor_id,
+        item_id=item_id,
+        unit=unit,
+        quantity=Decimal(str(qty_needed)),
+        source=LocationKey(LocationType.CENTRAL_WAREHOUSE, warehouse_id,
+                           state=MovementState.FREE),
+        # Caller-stable: identical input → identical idempotency_key.
+        idempotency_key=idempotency_key or f"sale-depletion:{sale_reference}",
+        reason=f"sale:{sale_reference}",
+        file_ids=list(sale_evidence_file_ids),
+    )
     try:
-        svc = CommandService(
-            _mongo_client, gate=_AllowServiceGate(),
-            strict_master_identity=False,
+        result = await svc.execute(
+            ctx, tenant._db, tenant.warehouse_transactions, inp,
         )
-        inp = CommandInput(
-            action=CanonicalAction.WRITE_OFF,
-            tenant_id=org_id,
-            actor_id=actor_id or "sales_service",
-            item_id=item_id,
-            unit="",
-            quantity=Decimal(str(qty_needed)),
-            source=LocationKey(LocationType.CENTRAL_WAREHOUSE, warehouse_id,
-                               state=MovementState.FREE),
-            idempotency_key=idempotency_key or f"sale-{_uuid.uuid4().hex}",
-            reason=f"sale:{sale_reference or 'unspecified'}",
-            file_ids=[],  # evidence not required for sale depletion;
-                         # if FLOW requires it in future, service will
-                         # fail-closed and the caller sees the error.
-        )
-        try:
-            result = await svc.execute(
-                ctx, tenant._db, tenant.warehouse_transactions, inp,
-            )
-        except NegativeStockError as exc:
-            raise InsufficientStockError(
-                item_id, warehouse_id, qty_needed,
-                float(exc.context.get("available", 0.0)),
-            ) from exc
-    finally:
-        if prior_mode is not None:
-            os.environ["PERMISSION_SERVICE_MODE"] = prior_mode
-        elif "PERMISSION_SERVICE_MODE" in os.environ:
-            del os.environ["PERMISSION_SERVICE_MODE"]
+    except NegativeStockError as exc:
+        raise InsufficientStockError(
+            item_id, warehouse_id, qty_needed,
+            float(exc.context.get("available", 0.0)),
+        ) from exc
 
-    # Reshape canonical layer_allocations into the sales-callers' row shape.
     envelope = result.envelope
     out = []
     for alloc in envelope.get("layer_allocations", []):
@@ -184,8 +181,8 @@ async def get_current_stock(org_id: str, item_id: str, warehouse_id: Optional[st
     query = {"org_id": org_id, "item_id": item_id, "status": "active", "remaining_qty": {"$gt": 0}}
     if warehouse_id:
         query["warehouse_id"] = warehouse_id
-
-    batches = await tenant.warehouse_batches.find(query, {"_id": 0}).to_list(500)
+    # CODEX C12.10 — no silent cap on canonical/projection reads.
+    batches = [row async for row in tenant.warehouse_batches.find(query, {"_id": 0})]
 
     total_qty = sum(b["remaining_qty"] for b in batches)
     total_value = sum(b["remaining_qty"] * b["unit_cost"] for b in batches)
@@ -203,10 +200,11 @@ async def get_current_stock(org_id: str, item_id: str, warehouse_id: Optional[st
 
 async def get_stock_value(org_id: str, warehouse_id: str) -> dict:
     tenant = TenantData.for_resolved_org(db, org_id)
-    batches = await tenant.warehouse_batches.find(
+    # CODEX C12.10 — no silent cap on canonical/projection reads.
+    batches = [row async for row in tenant.warehouse_batches.find(
         {"org_id": org_id, "warehouse_id": warehouse_id, "status": "active", "remaining_qty": {"$gt": 0}},
         {"_id": 0, "remaining_qty": 1, "unit_cost": 1, "item_id": 1},
-    ).to_list(5000)
+    )]
 
     total = round(sum(b["remaining_qty"] * b["unit_cost"] for b in batches), 2)
     items_count = len(set(b["item_id"] for b in batches))

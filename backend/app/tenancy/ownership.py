@@ -101,7 +101,14 @@ ORG_KEYED: Dict[str, str] = {
               "overhead_snapshots", "overhead_transactions", "revenue_snapshots"),
     **_family(FAMILY_WAREHOUSE,
               "warehouses", "location_nodes", "warehouse_transactions", "warehouse_batches",
-              "stock_thresholds", "deliveries"),
+              "stock_thresholds", "deliveries",
+              # LIVE-OPS-01 / TASK 5C
+              #   • warehouse_in_transit — Rule B transit-lot projection written
+              #     by the canonical movement projector.
+              #   • warehouse_ledger_counters — tenant-scoped atomic counter for
+              #     canonical ledger sequence allocation (C12.3, under
+              #     `_next_ledger_sequence`); never read by business code.
+              "warehouse_in_transit", "warehouse_ledger_counters"),
     **_family(FAMILY_MATERIALS,
               "items", "material_requests", "material_entries", "material_prices",
               "material_waste_entries", "material_consumption_log", "planned_materials",

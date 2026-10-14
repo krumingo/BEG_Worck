@@ -111,8 +111,12 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
             unit_value_f = None
         mv_id = row.get("movement_id")
         entry = {
-            # CODEX C11.3 — DETERMINISTIC id: one row per ledger
-            # movement, so two rebuilds yield identical rows (parity).
+            # CODEX C11.3 / C12.6 — DETERMINISTIC id and VOLATILE-FREE
+            # body: a rebuild on the same ledger yields byte-identical
+            # rows (modulo Mongo's own _id). `created_at` is NOT
+            # written; the ledger's `recorded_at` is the only time the
+            # projection carries. Readers that need "when rebuilt last"
+            # should query `ledger_checkpoint`.
             "id": f"me_{mv_id}",
             "org_id": org_id,
             "project_id": project_id,
@@ -132,7 +136,7 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
             "date": (row.get("recorded_at") or "")[:10],
             "mapped": pm is not None,
             "projection_source": "canonical_warehouse_service",
-            "created_at": now,
+            "projection_version": 2,
         }
         # Upsert on deterministic id so re-run is pure replay parity.
         await tenant.material_entries.update_one(
@@ -155,7 +159,12 @@ async def list_material_entries(
     planned_material_id: Optional[str] = None, user: dict = Depends(require_m2),
 ):
     tenant = _tenant(user)
-    q = {"org_id": user["org_id"]}
+    # CODEX C12.6 — authoritative read is CANONICAL ROWS ONLY. Legacy
+    # rows (pre-TASK-5C projection runs with mixed sources) stay in
+    # the collection for reconciliation but must not double-count the
+    # ledger-derived rows.
+    q = {"org_id": user["org_id"],
+         "projection_source": "canonical_warehouse_service"}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if planned_material_id: q["planned_material_id"] = planned_material_id
@@ -178,8 +187,12 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
         raise HTTPException(status_code=404, detail="Execution package not found")
 
     # CODEX C11.3 — no silent 500 cap.
+    # CODEX C12.6 — authoritative read is CANONICAL rows only.
     cursor = tenant.material_entries.find(
-        {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
+        {"org_id": org_id,
+         "execution_package_id": pkg_id,
+         "projection_source": "canonical_warehouse_service"},
+        {"_id": 0},
     ).sort("date", -1)
     entries = [row async for row in cursor]
 

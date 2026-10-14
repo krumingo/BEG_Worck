@@ -472,7 +472,7 @@ async def list_warehouse_transactions(
     if project_id: query["project_id"] = project_id
     if warehouse_id: query["warehouse_id"] = warehouse_id
     
-    txns = await tenant.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    txns = await tenant.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(None)
     return txns
 
 
@@ -491,7 +491,7 @@ async def get_warehouse_stock(org_id: str, warehouse_id: str = None) -> dict:
     txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "warehouse_id": warehouse_id},
         {"_id": 0, "type": 1, "lines": 1}
-    ).to_list(1000)
+    ).to_list(None)
     
     stock = {}  # key = material_name|unit -> qty
     for txn in txns:
@@ -622,7 +622,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
     intakes = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "intake"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     for txn in intakes:
         for line in txn.get("lines", []):
             key = line.get("material_name", "")
@@ -636,7 +636,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
     issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     for txn in issues:
         for line in txn.get("lines", []):
             key = line.get("material_name", "")
@@ -660,7 +660,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
     returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     for txn in returns:
         for line in txn.get("lines", []):
             key = line.get("material_name", "")
@@ -752,7 +752,7 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     recent_txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "created_at": {"$gte": cutoff}},
         {"_id": 0, "type": 1, "lines": 1, "created_at": 1}
-    ).to_list(500)
+    ).to_list(None)
     
     intake_count = sum(1 for t in recent_txns if t["type"] == "intake")
     issue_count = sum(1 for t in recent_txns if t["type"] == "issue")

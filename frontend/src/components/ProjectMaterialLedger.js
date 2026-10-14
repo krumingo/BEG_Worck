@@ -104,18 +104,37 @@ export default function ProjectMaterialLedger({ projectId }) {
 
   // Consume on project
   const openConsume = () => {
+    // CODEX C12.8 — openers now preserve canonical IDs so handler
+    // cannot silently skip lines (`item_id`, `warehouse_id` carry
+    // through from the ledger row they came from).
     const lines = ledger.filter(m => m.remaining_on_project > 0).map(m => ({
-      material_name: m.material_name, qty_consumed: "", unit: m.unit,
+      material_name: m.material_name,
+      item_id: m.item_id,
+      warehouse_id: m.warehouse_id,
+      qty_consumed: "",
+      unit: m.unit,
     }));
-    setOpLines(lines.length > 0 ? lines : [{ material_name: "", qty_consumed: "", unit: "бр" }]);
+    setOpLines(lines.length > 0 ? lines : [{
+      material_name: "", item_id: "", warehouse_id: "",
+      qty_consumed: "", unit: "бр",
+    }]);
     setConsumeOpen(true);
   };
   const handleConsume = async () => {
     setSaving(true);
     try {
       const valid = opLines.filter(l => parseFloat(l.qty_consumed) > 0);
+      // CODEX C12.8 — no silent skip. Any line without a canonical
+      // item_id blocks the whole submission with an explicit reason.
+      const blockers = [];
+      valid.forEach((line, i) => {
+        if (!line.item_id) blockers.push(`Ред ${i + 1}: липсва item_id (мапнете материала)`);
+      });
+      if (blockers.length > 0) {
+        alert(blockers.join("\n"));
+        return;
+      }
       for (const line of valid) {
-        if (!line.item_id) continue;
         await postMovement({
           action: CANONICAL_ACTIONS.CONSUME_TO_SMR,
           item_id: line.item_id,
@@ -142,20 +161,34 @@ export default function ProjectMaterialLedger({ projectId }) {
   // Return to warehouse
   const openReturn = () => {
     const lines = ledger.filter(m => m.remaining_on_project > 0).map(m => ({
-      material_name: m.material_name, qty_returned: "", unit: m.unit,
+      material_name: m.material_name,
+      item_id: m.item_id,
+      warehouse_id: m.warehouse_id,
+      qty_returned: "",
+      unit: m.unit,
     }));
-    setOpLines(lines.length > 0 ? lines : [{ material_name: "", qty_returned: "", unit: "бр" }]);
+    setOpLines(lines.length > 0 ? lines : [{
+      material_name: "", item_id: "", warehouse_id: "",
+      qty_returned: "", unit: "бр",
+    }]);
     setReturnOpen(true);
   };
   const handleReturn = async () => {
     setSaving(true);
     try {
       const valid = opLines.filter(l => parseFloat(l.qty_returned) > 0);
+      // CODEX C12.8 — no silent skip; show the explicit reason.
+      const blockers = [];
+      valid.forEach((line, i) => {
+        if (!line.item_id) blockers.push(`Ред ${i + 1}: липсва item_id`);
+        if (!line.warehouse_id) blockers.push(`Ред ${i + 1}: липсва warehouse_id`);
+      });
+      if (blockers.length > 0) {
+        alert(blockers.join("\n"));
+        return;
+      }
       // C04/C08: returned material enters QUARANTINE first.
-      // The receiving warehouse releases it after inspection via a
-      // dedicated `quarantine_release` command.
       for (const line of valid) {
-        if (!line.item_id || !line.warehouse_id) continue;
         await postMovement({
           action: CANONICAL_ACTIONS.QUARANTINE_ENTRY,
           item_id: line.item_id,

@@ -3,7 +3,7 @@ Routes — Sales with FIFO consumption, margin protection, historical context.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 import uuid
 import hashlib
@@ -194,12 +194,27 @@ class CommitRequest(BaseModel):
     snapshot_token: str
     warning_acknowledged: bool = False
     warning_reason: str = ""
+    # CODEX C12.4 — sale receipt file_id(s). The canonical WRITE_OFF
+    # action requires evidence per v6 §4.2; the sale receipt IS the
+    # evidence. No weakening of the gate.
+    sale_receipt_file_ids: List[str] = []
+    # Caller-stable sale reference for idempotency (`sale-depletion:<ref>`).
+    sale_reference: Optional[str] = None
 
 
 @router.post("/sales/commit", status_code=201)
 async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user)):
+    """CODEX C12.4 — sale commit goes through the canonical command
+    service under real enforce-mode authorization. The route runs its
+    own `require_permission` gate inside `_tenant()` by the warehouse
+    canonical write-off action; the service re-authorizes with the
+    exact source location scope."""
     tenant = _tenant(user)
     org_id = user["org_id"]
+    # Server-resolved tenant context for the canonical service.
+    from app.tenancy.guard import get_tenant_context
+    from fastapi import Request as _Req  # noqa: F401
+    ctx = type("Ctx", (), {"org_id": org_id})()
 
     # 1. Re-check: preview again and compare snapshot
     preview = await _fifo_preview_calc(org_id, data.item_id, data.warehouse_id, data.quantity)
@@ -228,9 +243,26 @@ async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user
             if not data.warning_acknowledged:
                 raise HTTPException(status_code=422, detail=f"Цената е под минималния марж ({min_margin_pct}%). Потвърдете с warning_acknowledged.")
 
-    # 3. Consume FIFO
+    # 3. Consume FIFO (via canonical WRITE_OFF with sale receipt
+    # evidence) — CODEX C12.4.
+    if not data.sale_receipt_file_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="sale_receipt_file_ids е задължителен (WRITE_OFF evidence-required per v6 §4.2).",
+        )
+    if not data.sale_reference:
+        raise HTTPException(
+            status_code=422,
+            detail="sale_reference е задължителен за caller-stable idempotency.",
+        )
     try:
-        consumption = await consume_fifo(org_id, data.item_id, data.warehouse_id, data.quantity)
+        consumption = await consume_fifo(
+            org_id, data.item_id, data.warehouse_id, data.quantity,
+            ctx=ctx,
+            actor_id=user["id"],
+            sale_reference=data.sale_reference,
+            sale_evidence_file_ids=data.sale_receipt_file_ids,
+        )
     except InsufficientStockError as e:
         raise HTTPException(status_code=400, detail=f"Недостатъчна наличност: {e.available}")
 
