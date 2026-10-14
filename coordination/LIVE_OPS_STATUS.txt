@@ -299,3 +299,12 @@ No merge / deploy / migration / staging.
 🟡 CODEX independent re-review is now the active next step
 
 No merge / deploy / migration / staging.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ TASK 5C — ACCELERATED C13 REVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Exact head: 86dda91f76a31a56f6770aee03fc0da826ad466a
+CODEX first runs only previous 2 failing Real-Mongo gates + directly impacted C13 tests.
+If red → immediate bounded CLAUDE correction, no full matrix.
+If green → one full final TASK 5C acceptance matrix.
