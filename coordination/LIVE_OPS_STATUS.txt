@@ -80,16 +80,17 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave: LIVE-OPS-01
 Task: TASK-5C — Canonical Warehouse / Stock Core
-Stage: CLAUDE_C11_CORRECTION_RUNNING
-Responsible: CLAUDE
+Stage: CODEX_C12_REVIEW_PENDING
+Responsible: CODEX
 PR: #55 draft/open/unmerged
 Branch: task5c/live-ops-01-canonical-stock-core
-Current reviewed head: 7e929a3dab269a24a2e3907c76d0e81bc30f0bbe
-Verdict: CHANGES_REQUESTED
-Real Mongo last independent result: 52 passed / 16 failed / 0 skipped / exit 1
-C11 handoff: SENT ONCE / SUCCESS
-GitHub event: Issue #52 comment 6138562286
-Next: CLAUDE corrections + tests + HANDOFF_PUBLISHED_C11 → CODEX independent re-review
+Current head: 1076f0facc9c393ba62c6d76ea5daf003141b8a0
+Prior reviewed head: 5eddc0d83a297ffb7969a8579586fb2776ab7823
+Last independent verdict: CHANGES_REQUESTED
+Last independent Real Mongo result: 18 passed / 6 failed / 0 skipped / exit 1
+CLAUDE C12 handoff: PUBLISHED
+GitHub event: Issue #52 comment 6163729977
+Next: CODEX independent re-review on exact head 1076f0f...
 Owner decision: NONE
 Krum action: NONE
 
@@ -264,5 +265,21 @@ No merge / deploy / migration / staging / production activation.
 🟡 CLAUDE state: Running
 ⚪ Await: corrected exact head + DB-free + Real Mongo RS + frontend/build evidence
 ⚪ Then: CODEX independent re-review
+
+No merge / deploy / migration / staging.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟡 TASK 5C — C12 HANDOFF COMPLETE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ CLAUDE C12 corrections committed and pushed
+✅ HANDOFF_PUBLISHED_C12
+✅ Exact head: 1076f0facc9c393ba62c6d76ea5daf003141b8a0
+✅ DB-free: 69 passed / 3 skipped / 0 failed
+✅ Frontend: 5 + 4 passed
+✅ Standard build: PASS
+✅ Static writer inventory: 0 offender entries
+⚪ Real Mongo gate NOT RUN by CLAUDE
+🟡 CODEX independent re-review is now the active next step
 
 No merge / deploy / migration / staging.
