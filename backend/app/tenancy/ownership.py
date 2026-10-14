@@ -108,7 +108,13 @@ ORG_KEYED: Dict[str, str] = {
               #   • warehouse_ledger_counters — tenant-scoped atomic counter for
               #     canonical ledger sequence allocation (C12.3, under
               #     `_next_ledger_sequence`); never read by business code.
-              "warehouse_in_transit", "warehouse_ledger_counters"),
+              "warehouse_in_transit", "warehouse_ledger_counters",
+              # LIVE-OPS-01 / TASK 5C — CODEX C13.1
+              #   • audit_chain_head — per-tenant pivot document that
+              #     serializes the canonical audit chain under
+              #     concurrent writes via CAS; never read by business
+              #     code.
+              "audit_chain_head"),
     **_family(FAMILY_MATERIALS,
               "items", "material_requests", "material_entries", "material_prices",
               "material_waste_entries", "material_consumption_log", "planned_materials",

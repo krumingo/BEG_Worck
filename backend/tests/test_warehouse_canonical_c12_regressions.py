@@ -112,48 +112,36 @@ def test_c12_3_ledger_sequence_uses_atomic_counter_not_read_max_plus_one():
 # ────────────────────────────── C12.4 ──────────────────────────────
 
 def test_c12_4_sales_consume_fifo_requires_evidence_and_reference():
-    """Sales canonical write must enforce evidence + reference + ctx.
+    """Sales canonical write — SUPERSEDED by CODEX C13.3 fail-closed.
 
-    `ctx` has a `None` sentinel default and is immediately rejected
-    inside the function; `actor_id`, `sale_reference` and
-    `sale_evidence_file_ids` are keyword-only mandatory arguments.
+    C12.4 required sale_evidence_file_ids + sale_reference because
+    the C12 cycle routed sales through the canonical `WRITE_OFF`
+    action. CODEX C13.3 reversed that: `WRITE_OFF` is scrap/loss/
+    theft only (contract v6 §4.2); mapping ordinary sales onto it
+    was a business-rule invention. The route now FAILS CLOSED and
+    `consume_fifo` raises `LegacyWriterRetiredError` for ANY call.
+
+    This gate now asserts the C13.3 fail-closed signature instead.
     """
     from app.services.fifo_service import consume_fifo
-
     sig = inspect.signature(consume_fifo)
-    required_kw = {
-        name for name, p in sig.parameters.items()
-        if p.kind in (
-            inspect.Parameter.KEYWORD_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        )
-        and p.default is inspect.Parameter.empty
-        and name != "self"
-    }
-    assert "actor_id" in required_kw
-    assert "sale_reference" in required_kw
-    assert "sale_evidence_file_ids" in required_kw, (
-        "C12.4 regression: sale evidence file ids must be a required "
-        "argument. The WRITE_OFF domain path accepts the sale receipt "
-        "as evidence; it must not be optional."
-    )
-    # `ctx` is accepted as kw with a `None` sentinel so bad callers
-    # get the raise, not a crash on the first `ctx.<attr>` access.
-    assert "ctx" in sig.parameters, (
-        "consume_fifo must accept a ctx keyword (even if validated "
-        "inside the body with a None sentinel)."
-    )
+    # The function still accepts the full C12.4 kwarg shape so
+    # callers that adopted it get a precise error, not a crash on
+    # the first attribute access.
+    assert "actor_id" in sig.parameters
+    assert "sale_reference" in sig.parameters
+    assert "sale_evidence_file_ids" in sig.parameters
+    assert "ctx" in sig.parameters
 
-    # Validate the body actually enforces each of them:
+    # Validate the body is the C13.3 fail-closed raise:
     src = Path("app/services/fifo_service.py").read_text()
-    assert "if ctx is None" in src, (
-        "C12.4 regression: ctx=None must raise, not silently work."
+    assert "LegacyWriterRetiredError" in src, (
+        "C12.4/C13.3 regression: consume_fifo must raise "
+        "LegacyWriterRetiredError (not perform a canonical write)."
     )
-    assert "sale_reference is required" in src, (
-        "C12.4 regression: sale_reference falsy must raise."
-    )
-    assert "sale_evidence_file_ids is required" in src, (
-        "C12.4 regression: WRITE_OFF evidence must not be weakenable."
+    assert "WRITE_OFF" in src and "scrap/loss/theft" in src, (
+        "C12.4/C13.3 regression: the error must say WRITE_OFF is "
+        "scrap/loss/theft only; a sale is NOT a write-off."
     )
 
 
@@ -171,11 +159,25 @@ def test_c12_4_sales_consume_fifo_has_no_permission_bypass():
 
 
 def test_c12_4_sales_consume_fifo_idempotency_is_caller_stable():
-    """Idempotency key must derive from the sale reference, not uuid4."""
+    """SUPERSEDED by C13.3 — no canonical write path from sales.
+
+    C12.4 required a caller-stable `sale-depletion:{ref}` idempotency
+    key because the sales path performed a canonical WRITE_OFF.
+    CODEX C13.3 removed that mapping entirely; the route now FAILS
+    CLOSED so there is no canonical write to deduplicate.
+    """
     src = Path("app/services/fifo_service.py").read_text()
-    assert "sale-depletion:" in src, (
-        "C12.4 regression: sales idempotency must be caller-stable. "
-        "A per-call uuid4 falls back to a one-shot replay guard."
+    # No idempotency key is formed — the function raises before
+    # reaching the canonical service.
+    assert "LegacyWriterRetiredError" in src, (
+        "C13.3 regression: the fail-closed raise is gone; a canonical "
+        "write path would re-introduce the sale→WRITE_OFF rule."
+    )
+    # And the old business-rule-inventing `sale-depletion:` prefix is
+    # not retained as an active idempotency pattern:
+    assert "idempotency_key or f\"sale-depletion:" not in src, (
+        "C13.3 regression: the sale-depletion idempotency pattern is "
+        "back; it meant a canonical write was happening."
     )
 
 

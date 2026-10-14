@@ -396,55 +396,113 @@ async def _idem_complete_with_session(
 async def _record_event_in_session(tenant_db, event, *, session):
     """Append an AuditEvent inside the business transaction.
 
-    CODEX C12.3 — the per-tenant `sequence` is allocated through an
-    atomic counter (`warehouse_ledger_counters` with name
-    `audit_sequence`) rather than read-max+1. This matches the ledger
-    sequence fix and makes 10+ concurrent cross-item writes complete
-    without retry exhaustion. The hash chain's `previous_hash` still
-    comes from a tail read inside the session: when two writers race,
-    both compute the same `previous_hash` but only one wins the unique
-    `(tenant_id, sequence)` index; the other retries from the service
-    wrapper and reads a fresh tail.
-    """
-    from pymongo import ReturnDocument
-    from app.audit.envelope import validate_event
-    from app.audit.store import AUDIT_COLLECTION, chain_hashes
-    validate_event(event)
-    # Atomic sequence allocation
-    counters = tenant_db["warehouse_ledger_counters"]
-    seq_doc = await counters.find_one_and_update(
-        {"tenant_id": event["tenant_id"], "name": "audit_sequence"},
-        {"$inc": {"value": 1}},
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-        session=session,
-    )
-    seq = int(seq_doc["value"])
+    CODEX C13.1 — audit sequence + hash chain are serialized through
+    the per-tenant **chain-head CAS** on `audit_chain_head`. The
+    atomic counter alone (C12.3) was not enough: a hash chain cannot
+    be built in parallel because each event's `previous_hash` depends
+    on the previous event's hash, and two concurrent writers that
+    each read the tail at `seq=N-1` would both chain against `H_{N-1}`
+    and produce a forked chain even though their counter values
+    (seq=N and seq=N+1) differ.
 
-    # Previous event for hash chain — read inside session.
-    previous = await tenant_db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": event["tenant_id"], "sequence": seq - 1},
-        {"_id": 0},
-        session=session,
+    The new mechanism uses one pivot document per tenant:
+
+        {tenant_id, sequence, integrity_hash, last_event_id,
+         last_updated_at}
+
+    Each write:
+      1. Reads the current head inside the session (snapshot
+         isolation — one consistent view of the chain's tail).
+      2. Computes `sequence = head.sequence + 1` and
+         `previous_hash = head.integrity_hash`.
+      3. Inserts the new event with that sequence/previous_hash.
+      4. CAS-updates the head to `(new_seq, new_hash)` iff the head is
+         still at `(old_seq, old_hash)`. On replica-set transactions
+         Mongo serializes updates to this single document; a
+         conflicting update raises Mongo code 112 `WriteConflict`,
+         which `session.with_transaction(...)` retries automatically
+         with full business-op rollback — no partial state remains.
+
+    The first write per tenant has no head yet. It inserts the head
+    row atomically; a concurrent "first write" loses the insert on
+    the unique `(tenant_id,)` index and is retried as above.
+    """
+    from app.audit.envelope import validate_event
+    from app.audit.store import AUDIT_COLLECTION, chain_hashes, canonical_hash
+    validate_event(event)
+
+    chain_head_coll = tenant_db["audit_chain_head"]
+    tenant_id = event["tenant_id"]
+
+    # 1. Snapshot the chain head inside this session.
+    head = await chain_head_coll.find_one(
+        {"tenant_id": tenant_id}, session=session,
     )
-    if previous is None and seq > 1:
-        # Rare case: the previous event was written in a later-committed
-        # concurrent tx. Fall back to max tail read within session.
-        previous = await tenant_db[AUDIT_COLLECTION].find_one(
-            {"tenant_id": event["tenant_id"]},
-            {"_id": 0},
-            sort=[("sequence", -1)],
-            session=session,
-        )
-    chained = chain_hashes(event, previous)
-    # chain_hashes derived `sequence` from previous+1; override with the
-    # counter-allocated seq so the index insert cannot collide.
-    chained["sequence"] = seq
-    # Re-hash because sequence changed.
-    from app.audit.store import canonical_hash
+    if head is None:
+        prev_sequence = 0
+        prev_hash = None
+        prev_event = None
+    else:
+        prev_sequence = int(head.get("sequence", 0))
+        prev_hash = head.get("integrity_hash")
+        # chain_hashes needs a minimal "previous event" shape.
+        prev_event = {"sequence": prev_sequence,
+                      "integrity_hash": prev_hash}
+
+    new_sequence = prev_sequence + 1
+
+    # 2. Compute the chained envelope.
+    chained = chain_hashes(event, prev_event)
+    chained["sequence"] = new_sequence
     chained["integrity_hash"] = canonical_hash(chained)
 
+    # 3. Append the event inside the business tx.
     await tenant_db[AUDIT_COLLECTION].insert_one(dict(chained), session=session)
+
+    # 4. CAS the chain head. One of three paths:
+    #    a) head existed → `update_one` with the exact (seq, hash)
+    #       filter: Mongo serializes concurrent updates to this one
+    #       document, and a concurrent writer that already advanced
+    #       the head will cause this update to WriteConflict (code
+    #       112) → `with_transaction` retries the whole operation.
+    #    b) head did not exist → `insert_one` with upsert semantics.
+    #       A concurrent first-write loses on the unique index and
+    #       is retried the same way.
+    new_head_doc = {
+        "sequence": new_sequence,
+        "integrity_hash": chained["integrity_hash"],
+        "last_event_id": chained.get("event_id"),
+        "last_updated_at": chained.get("recorded_at"),
+    }
+    if head is None:
+        try:
+            await chain_head_coll.insert_one(
+                {"tenant_id": tenant_id, **new_head_doc},
+                session=session,
+            )
+        except Exception as exc:  # DuplicateKey + WriteConflict both retry
+            # Re-raise so with_transaction retries from the top.
+            raise
+    else:
+        res = await chain_head_coll.update_one(
+            {"tenant_id": tenant_id,
+             "sequence": prev_sequence,
+             "integrity_hash": prev_hash},
+            {"$set": new_head_doc},
+            session=session,
+        )
+        if res.matched_count == 0:
+            # The head moved under us. Raise a WriteConflict-equivalent
+            # so `with_transaction` rolls back and retries from scratch.
+            from pymongo.errors import OperationFailure
+            raise OperationFailure(
+                "audit_chain_head CAS failed: head advanced; retrying",
+                code=112,  # Mongo WriteConflict
+                details={"tenant_id": tenant_id,
+                         "expected_sequence": prev_sequence,
+                         "expected_hash": prev_hash},
+            )
+
     event.update(chained)
     return chained
 
@@ -843,6 +901,23 @@ class CommandService:
             total_accepted = prior_accepted + accepted_qty
             missing_qty = max(requested_quantity - total_accepted, Decimal("0"))
 
+            # CODEX C13.2 — When the cumulative acceptance CLOSES the
+            # lot (missing_qty == 0) AND prior partial acceptances had
+            # already opened unresolved discrepancies, collect those
+            # discrepancy movement ids so an append-only resolution
+            # fact can clear the in-transit projection without
+            # mutating ledger history.
+            discrepancies_to_resolve: List[str] = []
+            if missing_qty == 0 and prior_accepted > 0:
+                _disc_cursor = tenant_collection.find({
+                    "tenant_id": tenant_id,
+                    "dispatch_movement_id": inp.dispatch_movement_id,
+                    "action": "transit_discrepancy",
+                    "discrepancy_status": {"$ne": "resolved"},
+                }, {"movement_id": 1, "_id": 0}, session=session)
+                async for d in _disc_cursor:
+                    discrepancies_to_resolve.append(d.get("movement_id"))
+
             base_env.requested_quantity = requested_quantity
             base_env.accepted_quantity = accepted_qty
             base_env.missing_quantity = missing_qty
@@ -942,6 +1017,29 @@ class CommandService:
                 dispatch_movement_id=inp.dispatch_movement_id,
             )
 
+        # CODEX C13.2 — Rule B RESOLUTION FACT (append-only).
+        # When the cumulative acceptance closes the lot and prior
+        # discrepancies exist, append one non-moving
+        # `discrepancy_resolved` ledger row per open discrepancy. The
+        # ledger stays append-only (no mutation of the original
+        # discrepancy rows); the projector consumes these rows to
+        # clear `warehouse_in_transit.unresolved_discrepancies` and
+        # mark the discrepancy rows as resolved in the projection.
+        resolved_discrepancy_mv_ids: List[str] = []
+        if (action == CanonicalAction.ACCEPT_PROJECT_DELIVERY
+                and base_env.missing_quantity == 0
+                and discrepancies_to_resolve):
+            for disc_mv_id in discrepancies_to_resolve:
+                if not disc_mv_id:
+                    continue
+                resolution_mv_id = await self._append_discrepancy_resolution(
+                    tenant_collection, session=session, env=env,
+                    dispatch_movement_id=inp.dispatch_movement_id,
+                    resolved_discrepancy_movement_id=disc_mv_id,
+                    resolving_acceptance_movement_id=env.movement_id,
+                )
+                resolved_discrepancy_mv_ids.append(resolution_mv_id)
+
         # AuditEvent inside the same tx.
         retention = (
             RETENTION_R1_CRITICAL_BUSINESS
@@ -998,6 +1096,16 @@ class CommandService:
             ]
         if acceptance_line_id:
             projection_hints["acceptance_line_id"] = acceptance_line_id
+        # CODEX C13.2 — carry the resolution set so the projector can
+        # clear the active in-transit `unresolved_discrepancies` map
+        # for this dispatch.
+        if resolved_discrepancy_mv_ids:
+            projection_hints["resolved_discrepancy_movement_ids"] = list(
+                resolved_discrepancy_mv_ids,
+            )
+            projection_hints["resolving_dispatch_movement_id"] = (
+                inp.dispatch_movement_id
+            )
         await apply_projection(
             tenant_db, env,
             session=session,
@@ -1350,6 +1458,77 @@ class CommandService:
             "total_value": str(remainder_value.quantize(Decimal("0.0001"))),
             "file_ids": [],
             "notes": "unresolved partial-acceptance remainder (Rule B)",
+        }
+        seq = await self._next_ledger_sequence(
+            tenant_collection, tenant_id=env.tenant_id, session=session,
+        )
+        row["ledger_sequence"] = seq
+        await tenant_collection.insert_one(row, session=session)
+        return mv_id
+
+    async def _append_discrepancy_resolution(
+        self, tenant_collection, *, session, env: MovementEnvelope,
+        dispatch_movement_id: str,
+        resolved_discrepancy_movement_id: str,
+        resolving_acceptance_movement_id: str,
+    ) -> str:
+        """CODEX C13.2 — Append-only Rule B resolution fact.
+
+        When the cumulative acceptance of a dispatch has closed the
+        lot (`missing_quantity == 0`), each previously open
+        `transit_discrepancy` row for that dispatch is CLOSED by an
+        append-only `discrepancy_resolved` ledger row.
+
+        The ledger stays immutable — no update to the original
+        discrepancy row. The projector observes `discrepancy_resolved`
+        rows and:
+          * removes the matching entry from
+            `warehouse_in_transit.unresolved_discrepancies`;
+          * flips the `discrepancy_status` field on the matching
+            `transit_discrepancy` projection shim to `"resolved"`
+            (projection-side flag only; the ledger row keeps
+            `status="under_investigation"` as its historical fact).
+
+        The row is itself part of the per-tenant hash chain via its
+        own ledger_sequence; a replay sees acceptance → discrepancy →
+        resolution in the same order and the active projection
+        rebuilds correctly.
+        """
+        mv_id = f"mv_{uuid.uuid4().hex}"
+        row = {
+            "movement_id": mv_id,
+            "tenant_id": env.tenant_id,
+            "action": "discrepancy_resolved",
+            "recorded_at": _now_iso(),
+            "occurred_at": _now_iso(),
+            "item_id": env.item_id,
+            "unit": env.unit,
+            "quantity": "0",
+            "unit_value": "0",
+            "currency": env.currency,
+            "source": None,
+            "destination": None,
+            "dispatch_movement_id": dispatch_movement_id,
+            "resolves_discrepancy_movement_id": resolved_discrepancy_movement_id,
+            "resolved_by_acceptance_movement_id": resolving_acceptance_movement_id,
+            "actor_id": env.actor_id,
+            "idempotency_key": (
+                f"{env.idempotency_key}:resolve:"
+                f"{resolved_discrepancy_movement_id}"
+            ),
+            "project_id": env.project_id,
+            "status": "resolved",
+            "value_status": "resolved",
+            "ledger_sequence": None,
+            "layer_allocations": [],
+            "total_value": "0",
+            "file_ids": [],
+            "notes": (
+                f"Rule B closure: cumulative acceptance of dispatch "
+                f"{dispatch_movement_id} reached requested quantity; "
+                f"discrepancy {resolved_discrepancy_movement_id} is "
+                f"resolved (append-only fact)."
+            ),
         }
         seq = await self._next_ledger_sequence(
             tenant_collection, tenant_id=env.tenant_id, session=session,

@@ -28,13 +28,20 @@ DEFAULT_MARGINS = {"low": 20, "medium": 30, "high": 50, "minimum": 15}
 # ── Helpers ──
 
 async def _fifo_preview_calc(org_id, item_id, warehouse_id, quantity):
-    """Read-only FIFO simulation — does NOT modify DB."""
+    """Read-only FIFO simulation — does NOT modify DB.
+
+    LIVE-OPS-01 / TASK 5C — CODEX C13.6 — uncapped canonical/projection
+    read. Any `.to_list(N)` cap here could silently truncate the FIFO
+    simulation for items with >N active batches and produce an
+    arithmetically wrong preview total.
+    """
     tenant = TenantData.for_resolved_org(db, org_id)
-    batches = await tenant.warehouse_batches.find(
+    _cursor = tenant.warehouse_batches.find(
         {"org_id": org_id, "item_id": item_id, "warehouse_id": warehouse_id,
          "status": "active", "remaining_qty": {"$gt": 0}},
         {"_id": 0},
-    ).sort("received_at", 1).to_list(500)
+    ).sort("received_at", 1)
+    batches = [row async for row in _cursor]
 
     available = sum(b["remaining_qty"] for b in batches)
     if available < quantity:
@@ -109,10 +116,13 @@ async def historical_context(item_id: str, months: int = 12, user: dict = Depend
     org_id = user["org_id"]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=months * 30)).isoformat()
 
-    sales = await tenant.sales.find(
+    # CODEX C13.6 — no silent cap on tenant-scoped reads that feed
+    # pricing/sales analytics.
+    _hist_cursor = tenant.sales.find(
         {"org_id": org_id, "item_id": item_id, "created_at": {"$gte": cutoff}},
         {"_id": 0, "unit_sale_price": 1, "quantity": 1, "created_at": 1},
-    ).sort("created_at", 1).to_list(500)
+    ).sort("created_at", 1)
+    sales = [row async for row in _hist_cursor]
 
     if len(sales) < 3:
         return {"item_id": item_id, "period_months": months, "insufficient_data": True,
@@ -194,83 +204,64 @@ class CommitRequest(BaseModel):
     snapshot_token: str
     warning_acknowledged: bool = False
     warning_reason: str = ""
-    # CODEX C12.4 — sale receipt file_id(s). The canonical WRITE_OFF
-    # action requires evidence per v6 §4.2; the sale receipt IS the
-    # evidence. No weakening of the gate.
+    # CODEX C13.3 — fields kept for backward-compat body-schema parity.
+    # The route itself FAILS CLOSED; nothing is read from them.
     sale_receipt_file_ids: List[str] = []
-    # Caller-stable sale reference for idempotency (`sale-depletion:<ref>`).
     sale_reference: Optional[str] = None
 
 
-@router.post("/sales/commit", status_code=201)
+@router.post("/sales/commit", status_code=410)
 async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user)):
-    """CODEX C12.4 — sale commit goes through the canonical command
-    service under real enforce-mode authorization. The route runs its
-    own `require_permission` gate inside `_tenant()` by the warehouse
-    canonical write-off action; the service re-authorizes with the
-    exact source location scope."""
+    """LIVE-OPS-01 / TASK 5C — CODEX C13.3 — **FAIL CLOSED**.
+
+    The C12.4 canonical mapping routed every sale through `WRITE_OFF`.
+    That was a business-rule invention: contract v6 §4.2 defines
+    `WRITE_OFF` strictly as scrap/loss/theft. An ordinary sale is NOT
+    a write-off. TASK 5C MUST NOT invent a new canonical action, and
+    the frozen vocabulary does not yet carry an ordinary
+    sale-depletion movement.
+
+    Until the frozen contract adds a canonical sale-depletion
+    movement (future owner decision, out of TASK 5C scope), this
+    legacy route:
+      * does NOT mutate stock,
+      * does NOT create a sale row,
+      * does NOT contact the canonical ledger,
+      * does NOT touch the Permission Service.
+
+    It returns HTTP 410 Gone with a pointer to the canonical endpoint
+    that will take over once the extension ships. This closes the
+    fake `Ctx(org_id)` call site, the non-atomic sale+stock pair, and
+    the WRITE_OFF mis-mapping of sale receipts.
+    """
+    # Mark the arguments as explicitly unused — body is accepted so
+    # the HTTP 410 is returned instead of a 422 schema failure.
+    _unused = (data, user)
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+            "message": (
+                "Продажбата (намаление на складова наличност при обикновена "
+                "продажба) чака канонично движение в замразения договор. "
+                "Контракт v6 §4.2 дефинира WRITE_OFF само като брак/загуба/"
+                "кражба; обикновена продажба не е WRITE_OFF. TASK 5C не "
+                "може да въведе ново движение без решение на собственика "
+                "(FLOW-043 D-решение)."
+            ),
+            "canonical_action_pending": "sale_depletion",
+            "canonical_endpoint_pending": (
+                "POST /api/warehouse/canonical/movements (when a canonical "
+                "sale-depletion action ships; see FLOW-009 extension)"
+            ),
+            "ticket_reference": "LIVE-OPS-01 / TASK 5C / CODEX C13.3",
+        },
+    )
+    # Unreachable — kept to preserve the lint-known identifiers used
+    # by legacy call sites (none in production code).
     tenant = _tenant(user)
     org_id = user["org_id"]
-    # Server-resolved tenant context for the canonical service.
-    from app.tenancy.guard import get_tenant_context
-    from fastapi import Request as _Req  # noqa: F401
-    ctx = type("Ctx", (), {"org_id": org_id})()
-
-    # 1. Re-check: preview again and compare snapshot
-    preview = await _fifo_preview_calc(org_id, data.item_id, data.warehouse_id, data.quantity)
-    if not preview["available"]:
-        raise HTTPException(status_code=400, detail=f"Недостатъчна наличност: налични {preview['total_qty_in_stock']}")
-    if preview["snapshot_token"] != data.snapshot_token:
-        raise HTTPException(status_code=409, detail="Наличността се промени, презаредете preview-то")
-
-    # 2. Margin protection
-    total_cost = preview["total_cost"]
-    unit_cost = preview["weighted_avg_cost"]
-    margins = await _get_margins(org_id)
-    min_margin_pct = margins.get("minimum", 15)
-
-    if data.quantity > 0:
-        min_price = round(unit_cost * (1 + min_margin_pct / 100), 2)
-
-        if data.unit_sale_price < unit_cost:
-            # Below cost — require ack + reason
-            if not data.warning_acknowledged:
-                raise HTTPException(status_code=422, detail="Цената е под себестойност. Потвърдете с warning_acknowledged.")
-            if len(data.warning_reason.strip()) < 10:
-                raise HTTPException(status_code=422, detail="При продажба под себестойност е необходима причина (мин. 10 символа).")
-        elif data.unit_sale_price < min_price:
-            # Below minimum margin — require ack
-            if not data.warning_acknowledged:
-                raise HTTPException(status_code=422, detail=f"Цената е под минималния марж ({min_margin_pct}%). Потвърдете с warning_acknowledged.")
-
-    # 3. Consume FIFO (via canonical WRITE_OFF with sale receipt
-    # evidence) — CODEX C12.4.
-    if not data.sale_receipt_file_ids:
-        raise HTTPException(
-            status_code=422,
-            detail="sale_receipt_file_ids е задължителен (WRITE_OFF evidence-required per v6 §4.2).",
-        )
-    if not data.sale_reference:
-        raise HTTPException(
-            status_code=422,
-            detail="sale_reference е задължителен за caller-stable idempotency.",
-        )
-    try:
-        consumption = await consume_fifo(
-            org_id, data.item_id, data.warehouse_id, data.quantity,
-            ctx=ctx,
-            actor_id=user["id"],
-            sale_reference=data.sale_reference,
-            sale_evidence_file_ids=data.sale_receipt_file_ids,
-        )
-    except InsufficientStockError as e:
-        raise HTTPException(status_code=400, detail=f"Недостатъчна наличност: {e.available}")
-
-    # 4. Create sale record
     now = datetime.now(timezone.utc).isoformat()
-    profit = round((data.unit_sale_price * data.quantity) - total_cost, 2)
-    margin_pct = round((data.unit_sale_price - unit_cost) / unit_cost * 100, 1) if unit_cost > 0 else 0
-
     sale = {
         "id": str(uuid.uuid4()),
         "org_id": org_id,
@@ -278,18 +269,6 @@ async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user
         "warehouse_id": data.warehouse_id,
         "quantity": data.quantity,
         "unit_sale_price": data.unit_sale_price,
-        "total_sale_amount": round(data.unit_sale_price * data.quantity, 2),
-        "cost_at_sale": total_cost,
-        "unit_cost_at_sale": unit_cost,
-        "profit_amount": profit,
-        "margin_percent": margin_pct,
-        "currency": data.currency,
-        "client_id": data.client_id,
-        "project_id": data.project_id,
-        "fifo_allocations": consumption,
-        "warning_flag": data.unit_sale_price < unit_cost,
-        "warning_reason": data.warning_reason if data.unit_sale_price < unit_cost else "",
-        "sold_by": user["id"],
         "created_at": now,
     }
     await tenant.sales.insert_one(sale)

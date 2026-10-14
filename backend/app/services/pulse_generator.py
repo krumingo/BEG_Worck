@@ -56,12 +56,14 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         smr_map[st]["workers"].add(s["worker_id"])
     smr_summary = [{"smr_type": k, "total_hours": round(v["hours"], 2), "total_cost": round(v["cost"], 2), "workers_count": len(v["workers"])} for k, v in smr_map.items()]
 
-    # c. Materials from warehouse transactions
-    txns = await tenant.warehouse_transactions.find(
+    # c. Materials from warehouse transactions — CODEX C13.6
+    # no silent cap on canonical ledger reads that feed cost math.
+    _txns_cursor = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": site_id, "type": "issue",
          "created_at": {"$gte": ds, "$lte": de}},
         {"_id": 0, "lines": 1},
-    ).to_list(100)
+    )
+    txns = [row async for row in _txns_cursor]
     materials = []
     mat_cost = 0
     for t in txns:

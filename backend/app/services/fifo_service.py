@@ -77,103 +77,66 @@ async def consume_fifo(
     qty_needed: float,
     *,
     ctx=None,
-    actor_id: str,
-    sale_reference: str,
-    sale_evidence_file_ids: List[str],
+    actor_id: Optional[str] = None,
+    sale_reference: Optional[str] = None,
+    sale_evidence_file_ids: Optional[List[str]] = None,
     idempotency_key: Optional[str] = None,
     unit: str = "бр",
 ) -> list:
-    """CODEX C01 / C11.2 / C12.4 — consume stock via the canonical
-    command service, enforce-mode authorization, caller-stable
-    idempotency, real evidence.
+    """LIVE-OPS-01 / TASK 5C — CODEX C13.3 — **FAIL CLOSED**.
 
-    This wrapper is called from `routes/sales.py:commit_sale` **inside**
-    an authenticated FastAPI request. It REQUIRES:
+    An ordinary sale is NOT scrap/loss/theft, so it does not map onto
+    the frozen contract's `WRITE_OFF` canonical action (contract v6
+    §4.2 defines `WRITE_OFF` as scrap/loss/theft only). The C12.4
+    wrapper that routed sales through `WRITE_OFF` was itself a
+    business-rule invention. TASK 5C MUST NOT invent "sale =
+    write-off"; a canonical "sale depletion" movement is not in the
+    frozen vocabulary yet.
 
-      * `ctx` — the `TenantContext` the route resolved via
-        `require_permission("warehouse.write_command")` BEFORE calling
-        this wrapper. The sales route is responsible for its own
-        authorization gate; this wrapper then delegates to the
-        canonical service's per-action gate (`warehouse.write_off`)
-        which runs under the real Permission Service.
-      * `actor_id` — the authenticated user id. Never a fallback name.
-      * `sale_reference` — the stable sale id. Used to derive a
-        caller-stable `idempotency_key`: `sale-depletion:<ref>`. A
-        retry of the SAME sale returns the SAME result.
-      * `sale_evidence_file_ids` — the File Registry id(s) of the sale
-        receipt. `WRITE_OFF` is evidence-required (contract §4.2); the
-        sale receipt IS the evidence. No weakening of the gate.
+    Until the frozen contract adds a canonical sale-depletion movement
+    (future owner decision — out of TASK 5C scope), the legacy sales
+    stock mutation path FAILS CLOSED here: no stock is mutated, no
+    ledger event is written, no envelope is produced. The caller
+    receives `LegacyWriterRetiredError` with the canonical-pending
+    pointer so the route can surface HTTP 410 to the UI.
 
-    Returns `[{batch_id, qty_taken, unit_cost, total_cost}]` shape the
-    legacy sales UI expects.
+    This closes:
+      * the fake `Ctx(org_id)` call site (no stock mutation, no
+        Permission Service invocation at all here);
+      * the non-atomic sale-row + stock-depletion pair;
+      * the `WRITE_OFF` evidence-gate mis-mapping of sale receipts.
     """
-    from decimal import Decimal
-    from app.db import client as _mongo_client
-    from app.services.warehouse_movements import (
-        CanonicalAction, LocationKey, LocationType, MovementState,
-    )
-    from app.services.warehouse_movements.service import (
-        CommandService, CommandInput,
-    )
-    from app.services.warehouse_movements.errors import NegativeStockError
+    from app.services.warehouse_movements.errors import LegacyWriterRetiredError
 
-    if ctx is None:
-        raise InsufficientStockError(
-            item_id, warehouse_id, qty_needed, 0.0,
-        )  # defensive: wrong caller contract
-    if not actor_id:
-        raise ValueError("actor_id is required (authenticated user id)")
-    if not sale_reference:
-        raise ValueError("sale_reference is required for caller-stable idempotency")
-    if not sale_evidence_file_ids:
-        raise ValueError(
-            "sale_evidence_file_ids is required — WRITE_OFF is evidence-required "
-            "per v6 §4.2 (the sale receipt is the evidence); the gate is not weakened"
-        )
+    # Signature-level validation remains so callers who adopted the
+    # C12.4 shape get a precise error rather than a silent no-op.
+    # We bind the kwargs defensively so the message carries what the
+    # caller tried; nothing here mutates stock.
+    _ctx_present = ctx is not None
+    _actor_present = bool(actor_id)
+    _sale_ref_present = bool(sale_reference)
+    _evidence_present = bool(sale_evidence_file_ids)
+    _unused = (_ctx_present, _actor_present, _sale_ref_present,
+               _evidence_present, idempotency_key, unit, qty_needed)
 
-    tenant = TenantData.for_resolved_org(db, org_id)
-    svc = CommandService(
-        _mongo_client,
-        # Default `PermissionGate` runs the REAL Permission Service.
-        strict_master_identity=False,
+    raise LegacyWriterRetiredError(
+        "fifo_service.consume_fifo is retired for ordinary sales. "
+        "The frozen canonical vocabulary (contract v6 §4.2) defines "
+        "WRITE_OFF as scrap/loss/theft only; an ordinary sale is NOT "
+        "a write-off. A canonical sale-depletion movement is not in "
+        "the frozen contract yet, so this path fails closed. Legacy "
+        "sales stock mutation is suspended pending an owner decision "
+        "to extend the canonical vocabulary.",
+        context={
+            "route_id": "fifo_service.consume_fifo",
+            "canonical_action_pending": "sale_depletion",
+            "redirect_endpoint": "POST /api/warehouse/canonical/movements "
+                                 "(when a canonical sale-depletion action "
+                                 "ships; see FLOW-009 extension)",
+            "attempted_item_id": item_id,
+            "attempted_warehouse_id": warehouse_id,
+        },
     )
-    inp = CommandInput(
-        action=CanonicalAction.WRITE_OFF,
-        tenant_id=org_id,
-        actor_id=actor_id,
-        item_id=item_id,
-        unit=unit,
-        quantity=Decimal(str(qty_needed)),
-        source=LocationKey(LocationType.CENTRAL_WAREHOUSE, warehouse_id,
-                           state=MovementState.FREE),
-        # Caller-stable: identical input → identical idempotency_key.
-        idempotency_key=idempotency_key or f"sale-depletion:{sale_reference}",
-        reason=f"sale:{sale_reference}",
-        file_ids=list(sale_evidence_file_ids),
-    )
-    try:
-        result = await svc.execute(
-            ctx, tenant._db, tenant.warehouse_transactions, inp,
-        )
-    except NegativeStockError as exc:
-        raise InsufficientStockError(
-            item_id, warehouse_id, qty_needed,
-            float(exc.context.get("available", 0.0)),
-        ) from exc
-
-    envelope = result.envelope
-    out = []
-    for alloc in envelope.get("layer_allocations", []):
-        qty = float(alloc["quantity"])
-        unit_cost = float(alloc["unit_value"])
-        out.append({
-            "batch_id": alloc["source_movement_id"],
-            "batch_number": alloc["source_movement_id"],
-            "qty_taken": round(qty, 4),
-            "unit_cost": unit_cost,
-            "total_cost": round(qty * unit_cost, 2),
-        })
-    return out
 
 
 async def get_current_stock(org_id: str, item_id: str, warehouse_id: Optional[str] = None) -> dict:

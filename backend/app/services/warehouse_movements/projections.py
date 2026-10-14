@@ -154,6 +154,25 @@ async def apply_projection(
             layer_allocations=hints.get("unresolved_layer_allocations") or [],
         )
 
+    # 9. CODEX C13.2 — Rule B resolution facts. When the acceptance
+    # cumulatively closed the lot, the service appended
+    # `discrepancy_resolved` ledger rows; the projector reflects them
+    # by removing the matching entries from the active
+    # `warehouse_in_transit.unresolved_discrepancies` map. This
+    # satisfies the lifecycle requirement that `10→3→4→3` AND
+    # `10→8→2` end with zero active unresolved quantity/value/layers
+    # and no duplicate/open discrepancy on the projection.
+    resolved_mv_ids = hints.get("resolved_discrepancy_movement_ids") or []
+    resolving_dispatch_mv_id = hints.get("resolving_dispatch_movement_id")
+    if (resolved_mv_ids
+            and resolving_dispatch_mv_id
+            and act == CanonicalAction.ACCEPT_PROJECT_DELIVERY.value):
+        await _close_unresolved_discrepancies(
+            tenant_db, env, session=session,
+            dispatch_movement_id=resolving_dispatch_mv_id,
+            resolved_discrepancy_movement_ids=list(resolved_mv_ids),
+        )
+
 
 async def _open_batch(tenant_db, env: MovementEnvelope, *, session=None) -> None:
     """Open a single-layer batch row for a new inbound movement.
@@ -429,18 +448,59 @@ async def _record_unresolved_layers(
     These are stored on the dedicated transit_discrepancy ledger row by
     the command service, but also surfaced on the in-transit projection
     so a resolution UI/report can see them without a second query.
+
+    CODEX C13.2 — fixed to use `$set` with a dotted field path so
+    adding a second discrepancy for the same dispatch APPENDS instead
+    of overwriting the first entry; the active map now carries every
+    open discrepancy keyed by its movement_id.
     """
     if not env.dispatch_movement_id:
         return
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
         {"tenant_id": env.tenant_id,
          "dispatch_movement_id": env.dispatch_movement_id},
-        {"$set": {"unresolved_discrepancies": {
-            unresolved_movement_id: {
+        {"$set": {
+            f"unresolved_discrepancies.{unresolved_movement_id}": {
                 "layer_allocations": list(layer_allocations or []),
                 "recorded_at": env.recorded_at,
             },
-        }}},
+        }},
+        session=session,
+    )
+
+
+async def _close_unresolved_discrepancies(
+    tenant_db, env: MovementEnvelope, *, session=None,
+    dispatch_movement_id: str,
+    resolved_discrepancy_movement_ids: list,
+) -> None:
+    """CODEX C13.2 — reflect append-only `discrepancy_resolved` ledger
+    rows on the active `warehouse_in_transit` projection.
+
+    For each resolved discrepancy movement_id, remove its entry from
+    the `unresolved_discrepancies` map so the active projection
+    returns zero open discrepancies when the cumulative acceptance
+    closes the lot. The ledger row that originally opened the
+    discrepancy is NOT mutated — the resolution is a new append-only
+    fact; `rebuild_from_ledger` replays acceptance → discrepancy →
+    resolution in sequence and reaches the same active state.
+    """
+    if not dispatch_movement_id or not resolved_discrepancy_movement_ids:
+        return
+    unset_doc = {
+        f"unresolved_discrepancies.{mv_id}": ""
+        for mv_id in resolved_discrepancy_movement_ids if mv_id
+    }
+    if not unset_doc:
+        return
+    await tenant_db[IN_TRANSIT_COLLECTION].update_one(
+        {"tenant_id": env.tenant_id,
+         "dispatch_movement_id": dispatch_movement_id},
+        {"$unset": unset_doc,
+         "$set": {
+             "last_resolved_at": env.recorded_at,
+             "last_resolving_acceptance_movement_id": env.movement_id,
+         }},
         session=session,
     )
 
@@ -466,15 +526,60 @@ async def rebuild_from_ledger(tenant_db, *, tenant_id: str, session=None) -> Dic
             session=session,
         )
 
+    # CODEX C13.2 — rebuild processes:
+    #   * canonical actions normally;
+    #   * `transit_discrepancy` rows re-create the unresolved map
+    #     entry on `warehouse_in_transit` (append-only replay);
+    #   * `discrepancy_resolved` rows close the matching entry so
+    #     the active projection converges to the exact post-ledger
+    #     state (identical for any permutation that reaches full
+    #     cumulative acceptance).
     cursor = tenant_db["warehouse_transactions"].find(
-        {"tenant_id": tenant_id,
-         "action": {"$ne": "transit_discrepancy"}},  # discrepancies are read-only facts
+        {"tenant_id": tenant_id},
         {"_id": 0},
         session=session,
     ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
 
     rebuilt = 0
     async for row in cursor:
+        act = row.get("action")
+        if act == "transit_discrepancy":
+            # Shim path — rebuild the unresolved map entry.
+            dispatch_mv_id = row.get("dispatch_movement_id")
+            disc_mv_id = row.get("movement_id")
+            if dispatch_mv_id and disc_mv_id:
+                await tenant_db[IN_TRANSIT_COLLECTION].update_one(
+                    {"tenant_id": tenant_id,
+                     "dispatch_movement_id": dispatch_mv_id},
+                    {"$set": {
+                        f"unresolved_discrepancies.{disc_mv_id}": {
+                            "layer_allocations": row.get("layer_allocations") or [],
+                            "recorded_at": row.get("recorded_at"),
+                        },
+                    }},
+                    session=session,
+                )
+            rebuilt += 1
+            continue
+        if act == "discrepancy_resolved":
+            dispatch_mv_id = row.get("dispatch_movement_id")
+            resolved_mv_id = row.get("resolves_discrepancy_movement_id")
+            if dispatch_mv_id and resolved_mv_id:
+                await tenant_db[IN_TRANSIT_COLLECTION].update_one(
+                    {"tenant_id": tenant_id,
+                     "dispatch_movement_id": dispatch_mv_id},
+                    {"$unset": {
+                        f"unresolved_discrepancies.{resolved_mv_id}": "",
+                    }, "$set": {
+                        "last_resolved_at": row.get("recorded_at"),
+                        "last_resolving_acceptance_movement_id": (
+                            row.get("resolved_by_acceptance_movement_id")
+                        ),
+                    }},
+                    session=session,
+                )
+            rebuilt += 1
+            continue
         # Reconstruct a minimal MovementEnvelope-shaped object so we can
         # reuse the regular projector. Use the row dict directly where
         # the projector accepts dot-attribute access via a tiny shim.
