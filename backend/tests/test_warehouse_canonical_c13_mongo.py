@@ -78,6 +78,35 @@ class _TestCtx:
         self.user_id = user_id
 
 
+# ───────────────────── CODEX C15.1 — tenant-scoped collection ─────────────────────
+#
+# `CommandService.execute(ctx, tenant_db, tenant_collection, inp)`
+# requires the production tenant-scoped `TenantCollection` wrapper.
+# `_next_ledger_sequence` reads `tenant_collection._scope._db` to
+# resolve the per-tenant counter collection; a raw
+# `AsyncIOMotorCollection` (`db["warehouse_transactions"]`) has no
+# `._scope` and the service raises `AuditChainWriteError` wrapping
+# `AttributeError` BEFORE any business assertion can run.
+#
+# Every test here must build the collection through `TenantData`
+# — the same way production routes and the established canonical
+# Mongo suite do — so the tests actually exercise the audit chain /
+# Rule B behaviour they claim to prove.
+
+def _tenant_coll(db, tenant_id: str = "T"):
+    """Return `tenant.warehouse_transactions` for `tenant_id`.
+
+    This is the production path: `TenantData.for_resolved_org(db, org_id)`
+    returns a `TenantData` object whose `.warehouse_transactions`
+    attribute is a `TenantCollection` wrapping the raw motor
+    collection with the tenant scope. The service relies on this
+    wrapper's `._scope._db` to find per-tenant counters.
+    """
+    from app.tenancy.data_access import TenantData
+    tenant = TenantData.for_resolved_org(db, tenant_id)
+    return tenant.warehouse_transactions
+
+
 # ─────────────────── C13.1 — audit chain under concurrency ───────────────────
 
 async def test_c13_1_cross_item_audit_chain_no_fork_under_ten_concurrent_writes(
@@ -114,7 +143,7 @@ async def test_c13_1_cross_item_audit_chain_no_fork_under_ten_concurrent_writes(
             reason=f"c13.1 concurrent write {i}",
             file_ids=["ev-1"],
         )
-        return await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], inp)
+        return await svc.execute(_TestCtx("T"), db, _tenant_coll(db), inp)
 
     results = await asyncio.gather(*[_one(i) for i in range(10)])
     assert len(results) == 10
@@ -155,17 +184,56 @@ async def test_c13_1_audit_failure_rolls_back_movement_and_counters(
         {"tenant_id": "T", "id": "item-A", "canonical_unit": "бр"}
     )
 
-    # Patch the chain-head CAS to always raise so the business tx
-    # fully rolls back. The service's _record_event_in_session uses
-    # a module-level helper; patching the module import point is
-    # cheaper than monkey-patching the whole service.
+    # CODEX C15.2 — tightened rollback proof.
+    #
+    # The pre-C15 test accepted `pytest.raises(Exception)` which was
+    # satisfied by the pre-audit `_scope` AttributeError (C15.1) and
+    # therefore did NOT prove rollback. The hardened contract is:
+    #
+    #   (a) `_record_event_in_session` is monkey-patched to a sentinel
+    #       `_boom` that records its invocation count AND raises a
+    #       UNIQUE sentinel exception class (`_C15AuditSentinel`);
+    #   (b) `svc.execute(...)` MUST raise `_C15AuditSentinel` — any
+    #       other exception means we failed before reaching the
+    #       audit write and the test proves nothing;
+    #   (c) `boom_called` MUST be ≥ 1 — proves the patched function
+    #       was actually invoked;
+    #   (d) only then are the four residue invariants asserted (ledger,
+    #       projection, audit, idempotency);
+    #   (e) sequence counters MUST NOT have advanced past their
+    #       pre-call snapshot — proves the counter was rolled back
+    #       with the tx and no "gap" survived.
     import app.services.warehouse_movements.service as svc_mod
     orig = svc_mod._record_event_in_session
 
-    async def _boom(*a, **k):
-        raise RuntimeError("simulated audit failure (C13.1b)")
+    class _C15AuditSentinel(Exception):
+        """Unique marker so pytest.raises can discriminate the
+        INJECTED audit failure from any upstream error (e.g. a
+        pre-audit AttributeError that `pytest.raises(Exception)`
+        would wrongly accept)."""
+
+    boom_calls: list = []
+
+    async def _boom(tenant_db, event, *, session):
+        boom_calls.append({
+            "tenant_id": event.get("tenant_id"),
+            "action": event.get("action"),
+            "entity_id": event.get("entity_id"),
+        })
+        raise _C15AuditSentinel(
+            "C15.2 injected audit failure — must be the ONLY exception "
+            "that escapes svc.execute if rollback is being tested"
+        )
 
     monkeypatch.setattr(svc_mod, "_record_event_in_session", _boom)
+
+    # Snapshot BOTH counters so we can prove no advance survived.
+    pre_ledger_counter = await db["warehouse_ledger_counters"].find_one(
+        {"tenant_id": "T", "name": "ledger_sequence"}) or {}
+    pre_ledger_val = int(pre_ledger_counter.get("value", 0))
+    pre_chain_head = await db["audit_chain_head"].find_one(
+        {"tenant_id": "T"}) or {}
+    pre_chain_seq = int(pre_chain_head.get("sequence", 0))
 
     inp = CommandInput(
         action=CanonicalAction.RECEIVE_FROM_SUPPLIER,
@@ -175,25 +243,81 @@ async def test_c13_1_audit_failure_rolls_back_movement_and_counters(
         destination=LocationKey(LocationType.CENTRAL_WAREHOUSE,
                                 "wh-main", state=MovementState.FREE),
         idempotency_key="recv:item-A:rollback-probe",
-        reason="C13.1b audit failure rollback",
+        reason="C15.2 audit failure rollback probe",
         file_ids=["ev-1"],
     )
-    with pytest.raises(Exception):
-        await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], inp)
+    # (b) specific sentinel must bubble, not any Exception.
+    with pytest.raises(Exception) as exc_info:
+        await svc.execute(_TestCtx("T"), db, _tenant_coll(db), inp)
+    # Unwrap AuditChainWriteError if the service wraps the sentinel.
+    raised = exc_info.value
+    is_sentinel = isinstance(raised, _C15AuditSentinel)
+    if not is_sentinel:
+        cause = raised.__cause__
+        while cause is not None and not isinstance(cause, _C15AuditSentinel):
+            cause = cause.__cause__
+        is_sentinel = isinstance(cause, _C15AuditSentinel)
+    assert is_sentinel, (
+        "C15.2 regression: svc.execute did NOT raise (or wrap) the "
+        f"injected _C15AuditSentinel. Got: {type(raised).__name__}: "
+        f"{raised}. The rollback test proves nothing unless the "
+        "patched audit write was the cause of failure — any other "
+        "exception means we failed BEFORE reaching the audit write."
+    )
+    # (c) prove the patch was actually invoked.
+    assert len(boom_calls) >= 1, (
+        "C15.2 regression: `_record_event_in_session` was NEVER "
+        "invoked under the monkeypatch, so this test did not reach "
+        "the audit write at all. The business tx must have failed "
+        "earlier (ctx shape, tenant collection, idempotency begin). "
+        f"Fix that first — the rollback invariant is unverified."
+    )
+    # Prove the invocation was FOR this tenant / action / entity:
+    first_call = boom_calls[0]
+    assert first_call["tenant_id"] == "T"
+    assert first_call["action"] == f"warehouse.{CanonicalAction.RECEIVE_FROM_SUPPLIER.value}"
 
     monkeypatch.setattr(svc_mod, "_record_event_in_session", orig)
 
-    # Zero orphan state:
+    # (d) Zero orphan state — ledger / projection / audit / idempotency.
     assert await db["warehouse_transactions"].count_documents(
-        {"tenant_id": "T"}) == 0
+        {"tenant_id": "T"}) == 0, (
+        "C15.2 regression: ledger row survived audit-failure rollback."
+    )
     assert await db["warehouse_batches"].count_documents(
-        {"tenant_id": "T"}) == 0
+        {"tenant_id": "T"}) == 0, (
+        "C15.2 regression: projection row survived rollback."
+    )
     assert await db["audit_events"].count_documents(
-        {"tenant_id": "T"}) == 0
-    # Idempotency claim released or never persisted:
+        {"tenant_id": "T"}) == 0, (
+        "C15.2 regression: audit event survived rollback (the "
+        "patched function raised BEFORE insert, so there must be "
+        "zero rows)."
+    )
+    # Idempotency claim released or never persisted.
     claim = await db["audit_idempotency"].find_one(
         {"tenant_id": "T", "key": "recv:item-A:rollback-probe"})
-    assert claim is None or claim.get("status") != "completed"
+    assert claim is None or claim.get("status") != "completed", (
+        "C15.2 regression: a completed idempotency claim survived "
+        f"rollback: {claim}. The claim must be absent or non-completed."
+    )
+
+    # (e) Counters did not advance past the snapshot.
+    post_ledger_counter = await db["warehouse_ledger_counters"].find_one(
+        {"tenant_id": "T", "name": "ledger_sequence"}) or {}
+    post_ledger_val = int(post_ledger_counter.get("value", 0))
+    assert post_ledger_val == pre_ledger_val, (
+        f"C15.2 regression: ledger_sequence counter advanced from "
+        f"{pre_ledger_val} to {post_ledger_val} across an aborted "
+        f"transaction. The counter MUST be rolled back with the tx."
+    )
+    post_chain_head = await db["audit_chain_head"].find_one(
+        {"tenant_id": "T"}) or {}
+    post_chain_seq = int(post_chain_head.get("sequence", 0))
+    assert post_chain_seq == pre_chain_seq, (
+        f"C15.2 regression: audit chain-head sequence advanced from "
+        f"{pre_chain_seq} to {post_chain_seq} across an aborted tx."
+    )
 
 
 # ─────────────────── C13.2 — Rule B lifecycle 10→3→4→3 ───────────────────
@@ -212,7 +336,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         {"tenant_id": "T", "id": "I", "canonical_unit": "бр"}
     )
     # 1. Receive 10 to central warehouse.
-    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.RECEIVE_FROM_SUPPLIER,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("10"), unit_value=Decimal("10"),
@@ -221,7 +345,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         idempotency_key="recv:1", reason="seed", file_ids=["f"],
     ))
     # 2. Dispatch 10 to project.
-    dispatch = await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"],
+    dispatch = await svc.execute(_TestCtx("T"), db, _tenant_coll(db),
         CommandInput(
             action=CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT,
             tenant_id="T", actor_id="u", item_id="I", unit="бр",
@@ -236,7 +360,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
     disp_mv = dispatch.movement_id
 
     # 3. Accept 3.
-    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("3"), accepted_quantity=Decimal("3"),
@@ -247,7 +371,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         idempotency_key="acc:1", reason="accept 3", file_ids=["f"],
     ))
     # 4. Accept 4.
-    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("4"), accepted_quantity=Decimal("4"),
@@ -258,7 +382,7 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
         idempotency_key="acc:2", reason="accept 4", file_ids=["f"],
     ))
     # 5. Accept 3 (closes lot).
-    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("3"), accepted_quantity=Decimal("3"),
@@ -339,7 +463,7 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
 
     # Receive + dispatch + accept the whole lot so the projector
     # emits one material_entries row via ACCEPT_PROJECT_DELIVERY.
-    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.RECEIVE_FROM_SUPPLIER,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("5"), unit_value=Decimal("10"),
@@ -347,7 +471,7 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
                                 state=MovementState.FREE),
         idempotency_key="recv:1", reason="r", file_ids=["f"],
     ))
-    disp = await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"],
+    disp = await svc.execute(_TestCtx("T"), db, _tenant_coll(db),
         CommandInput(
             action=CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT,
             tenant_id="T", actor_id="u", item_id="I", unit="бр",
@@ -359,7 +483,7 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
             project_id="p1",
             idempotency_key="disp:1", reason="d", file_ids=["f"],
         ))
-    await svc.execute(_TestCtx("T"), db, db["warehouse_transactions"], CommandInput(
+    await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.ACCEPT_PROJECT_DELIVERY,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
         quantity=Decimal("5"), accepted_quantity=Decimal("5"),
