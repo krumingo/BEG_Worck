@@ -22,6 +22,15 @@
 - Могат да се отложат за commercial hardening: детайлни role matrices, multi-tenant adversarial cases, external-user navigation hardening и SaaS abuse-resistance, когато не влияят на owner-only pilot.
 - Работим breadth-first през всички FLOW модули, за да достигнем по-бързо до end-to-end използваема програма.
 
+
+### 👥 Mandatory pilot roles
+- **Admin** — full administrative access within company scope.
+- **Office** — full operational access needed for office work, but without owner-only aggregate financial parameters/executive dashboards.
+- **Technician** — dedicated phone-first UI; recurring field reports/actions should be achievable in ~2 taps where feasible; voice reporting is first-class.
+- **Driver** — dedicated phone-first UI; trips/loading/delivery/receipt actions in ~2 taps where feasible; voice reporting is first-class.
+- Technician/Driver voice flow: speech → structured draft → user confirmation → canonical write.
+- A shrunk desktop UI does not satisfy the Technician/Driver mobile requirement.
+
 ## 🧭 Управляващ принцип
 
 - GPT носи отговорност за последователността на плана.
