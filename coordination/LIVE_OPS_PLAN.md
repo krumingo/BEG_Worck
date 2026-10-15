@@ -13,6 +13,15 @@
 > Source of truth: this file + Issue #52.
 > Important: FLOW behavior is NOT rewritten here. Existing approved FLOWs remain authoritative. Only a CODEX+CLAUDE-confirmed logical/technical inconsistency may trigger a proposed FLOW correction, and that requires Krum's decision.
 
+## 🚀 OWNER-FIRST USABLE PILOT
+
+- Цел №1: Крум да може да използва цялата програма възможно най-рано за собствената си фирма.
+- Първата година се приема owner-only/private-LAN pilot, не commercial SaaS rollout.
+- FLOW-complete business functionality има приоритет пред fine-grained multi-user hardening.
+- Не се отлагат: коректност на пари/склад/количества, canonical source of truth, релации, backup/restore, no double-counting и non-destructive history.
+- Могат да се отложат за commercial hardening: детайлни role matrices, multi-tenant adversarial cases, external-user navigation hardening и SaaS abuse-resistance, когато не влияят на owner-only pilot.
+- Работим breadth-first през всички FLOW модули, за да достигнем по-бързо до end-to-end използваема програма.
+
 ## 🧭 Управляващ принцип
 
 - GPT носи отговорност за последователността на плана.
