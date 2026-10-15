@@ -82,6 +82,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `overhead_costs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `overhead_snapshots` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `overhead_transactions` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `password_reset_tokens` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `pay_run_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `pay_runs` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `payment_allocations` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -125,7 +126,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `subcontractors` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:96<br>app/routes/billing.py:126 |
 | `supplier_invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:70<br>app/routes/auth.py:242<br>app/routes/auth.py:283<br>app/routes/auth.py:283<br>app/routes/platform.py:312<br>app/tenancy/onboarding.py:104 |
+| `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:70<br>app/routes/auth.py:338<br>app/routes/auth.py:380<br>app/routes/auth.py:380<br>app/routes/platform.py:312<br>app/tenancy/onboarding.py:104 |
 | `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouse_transactions` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouses` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -151,11 +152,10 @@ Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out 
 | `app/core/seed.py` | 1 | 0 |
 | `app/routes/activity_budgets.py` | 1 | 0 |
 | `app/routes/assets_intake_pending.py` | 1 | 1 |
-| `app/routes/auth.py` | 1 | 0 |
 | `app/routes/items.py` | 2 | 1 |
 | `app/routes/platform.py` | 1 | 0 |
 | `app/routes/sales.py` | 2 | 0 |
-| `app/tenancy/data_access.py` | 1 | 0 |
+| `app/tenancy/data_access.py` | 2 | 0 |
 | `app/tenancy/onboarding.py` | 1 | 0 |
 | `app/tenancy/project_team.py` | 1 | 0 |
 
@@ -166,7 +166,6 @@ app/core/seed.py:43 users.find_one in seed_data()
 app/routes/activity_budgets.py:77 activity_budgets.find in list_activity_budgets()
 app/routes/assets_intake_pending.py:183 asset_intake_pending.find_one in approve_intake()
 app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in approve_intake()
-app/routes/auth.py:74 users.find_one in login()
 app/routes/items.py:88 items.count_documents in list_items()
 app/routes/items.py:95 items.find in list_items()
 app/routes/items.py:181 items.update_one in delete_item()
@@ -174,6 +173,7 @@ app/routes/platform.py:242 users.find_one in bootstrap_create_platform_admin()
 app/routes/sales.py:316 items.find in sales_history()
 app/routes/sales.py:386 items.find_one in sale_details()
 app/tenancy/data_access.py:398 offers.find in resolve_review_token()
+app/tenancy/data_access.py:427 users.find in resolve_identities_by_email()
 app/tenancy/onboarding.py:81 users.find_one in onboard_tenant()
 app/tenancy/project_team.py:267 project_team.count_documents in ownerless_row_count()
 ```
