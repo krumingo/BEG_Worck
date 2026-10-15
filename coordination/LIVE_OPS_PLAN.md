@@ -118,6 +118,14 @@
 - [x] 4.11 CLAUDE independent contract review
 - [x] 4.12 Krum resolves only true business decisions
 
+## 🔐 AUTH-01 — Owner access recovery / Forgot Password MVP
+- [ ] AUTH-01.1 Local owner recovery command
+- [ ] AUTH-01.2 Forgot Password backend
+- [ ] AUTH-01.3 Reset Password frontend
+- [ ] AUTH-01.4 SMTP provider MVP
+- [ ] AUTH-01.5 CODEX focused review
+- [ ] AUTH-01.6 Owner login restored
+
 ## 🛠️ 5. FLOW-first implementation на последователни функционални блокове
 
 > Правило: owner staging acceptance не затваря частичен екран. То идва след завършен релевантен FLOW scope.
