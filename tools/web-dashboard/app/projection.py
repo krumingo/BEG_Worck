@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime as dt
 
 from .redact import redact
+from .forecast import project_forecast
 from .refresh import DashboardState
 from .status import Link, Status
 
@@ -103,6 +104,13 @@ def project(state: DashboardState) -> dict:
         if verified_snapshot is not None
         else [],
     }
+    payload["management"] = project_forecast(
+        verified_snapshot.snapshot.forecast if verified_snapshot else None,
+        control,
+        control_verified=is_verified,
+        repository=state.settings.repository,
+        branch=state.settings.branch,
+    )
 
     if control is None:
         payload["header"] = _unavailable_header(state)
@@ -405,7 +413,8 @@ def _relay(control: dict, is_verified: bool) -> dict:
         "verified": is_verified,
         "last_agent": relay.get("last_agent"),
         "last_agent_name": AGENT_DISPLAY.get(str(relay.get("last_agent")), relay.get("last_agent")),
-        "last_action": f"{relay.get('last_event')} / {relay.get('last_result')}",
+        "last_action": relay.get("last_event"),
+        "last_result": relay.get("last_result"),
         "last_updated": relay.get("updated_at"),
         "now": now,
         "transition_phase": (control.get("transition") or {}).get("phase"),
@@ -439,6 +448,8 @@ def _agent(control: dict, name: str) -> dict:
             card.get("state"), card.get("state") or "UNKNOWN"),
         "work_id": card.get("work_id"),
         "waiting_for": card.get("waiting_for"),
+        "reason": (card.get("waiting_for") or control.get("waiting_for") or control.get("requires_krum_reason"))
+        if card.get("state") == "BLOCKED" else None,
         "updated_at": card.get("updated_at"),
         "is_current": control.get("current_agent") == name,
     }

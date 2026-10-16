@@ -124,6 +124,26 @@ code {
 .relay__fact dt { font-size: 0.72rem; color: var(--fg-2); text-transform: uppercase; }
 .relay__fact dd { margin: 3px 0 0; font-weight: 600; }
 
+.management {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+  margin: var(--gap) 0;
+}
+.management__card {
+  padding: 17px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+.management__card h2 { margin: 0 0 11px; color: var(--fg-2); font-size: .8rem; letter-spacing: .08em; }
+.management__card p { margin: 5px 0; }
+.management__hero { display: block; font-size: clamp(1.1rem, 2vw, 1.5rem); line-height: 1.25; }
+.management__note, .management__empty { color: var(--fg-2); }
+.management__count { color: var(--gpt); font-weight: 700; }
+.management__stages { margin: 8px 0; padding-left: 21px; font-size: .88rem; }
+@media (max-width: 900px) { .management { grid-template-columns: 1fr; } }
+
 /* ---------------------------------------------------------- synthetic banner */
 
 .synthetic {

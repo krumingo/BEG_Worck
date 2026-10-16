@@ -69,6 +69,7 @@ class TwoPhaseTests(unittest.TestCase):
                      current_work_id=f"{task_cycle}/CX", state="REVIEW",
                      pipeline_step="REVIEW", next_agent="GPT", now="Codex reviewing Claude",
                      pr_number=99, pr_head_sha=HEAD, pr_draft=True,
+                     last_review=None,
                      last_handoff={"url": HANDOFF, "head_sha": HEAD, "at": state["updated_at"]})
         state["agent_states"]["GPT"].update(state="WAITING", waiting_for="Codex verdict")
         state["agent_states"]["CODEX"].update(state="REVIEWING", waiting_for=None)

@@ -21,6 +21,7 @@ from app.github import GitHubReadOnlyClient, TransportError
 from app.refresh import Refresher
 from app.server import make_server
 from app.settings import Settings
+from app.settings import FORECAST_PATH
 
 playwright_api = pytest.importorskip("playwright.sync_api", reason="playwright is not installed")
 
@@ -115,6 +116,36 @@ def open_diagnostics(page):
     page.wait_for_selector("#f-findings", state="visible", timeout=5_000)
 
 
+def test_management_progress_is_visible_without_invented_hours(browser, served, published_state):
+    """The management view displays business closure and lifecycle, not fake effort %."""
+    model = {
+        "repository": "krumingo/BEG_Worck", "source_branch": "codex/claude-queue",
+        "status": "INCOMPLETE_ESTIMATION", "current_wave": "W0",
+        "business_flow": {"business_locked": 49, "total": 50,
+                          "legacy": [{"id": "FLOW-018", "absorbed_by": "FLOW-039"}]},
+        "current_task": {"task_id": "W0-03C", "cycle_id": "C03",
+                         "exact_head": published_state["pr_head_sha"], "name": "Master Data uniqueness",
+                         "status": "MERGED / PASS", "next_step": "Architect decision",
+                         "completed_lifecycle_stages": 4, "total_lifecycle_stages": 6,
+                         "lifecycle": [{"stage": str(i), "status": "COMPLETED" if i < 4 else "PENDING"}
+                                       for i in range(6)]},
+        "rows": [{"wave": "W0", "canonical_item": "W0-03", "deliverable": "C — uniqueness",
+                  "status": "COMPLETED", "estimated_total_hours": None, "estimated_remaining_hours": 0}],
+    }
+    served.github.set_file(FORECAST_PATH, json.dumps(model).encode())
+    served.refresher.tick()
+    for viewport in ("desktop", "phone"):
+        page, errors = open_page(browser, served, viewport)
+        assert "49 / 50 FLOW Business Locked" in page.inner_text("#f-overall")
+        assert "NOT ESTIMATED" in page.inner_text("#f-overall")
+        assert "4 of 6 lifecycle stages complete" in page.inner_text("#f-current-task")
+        assert "NOT ESTIMATED" in page.inner_text("#f-current-wave")
+        assert not errors
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        shoot(page, f"management-{viewport}")
+        page.close()
+
+
 def shoot(page, name):
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     target = SCREENSHOT_DIR / f"{name}.png"
@@ -137,7 +168,8 @@ def test_the_dashboard_renders_the_control_state_with_no_script_errors(browser, 
     assert page.inner_text("#f-status-value") == "VALID"
     assert page.inner_text("#f-link-value") == "LIVE"
     assert page.locator("#f-krum").is_hidden()
-    assert "LAST: CODEX — PR #20 MERGED / PASS" in page.inner_text("#f-relay")
+    assert "LAST COMPLETED AGENT: CODEX" in page.inner_text("#f-relay")
+    assert "PR #20 MERGED" in page.inner_text("#f-relay")
     assert "RECEIVED BY ChatGPT" in page.inner_text("#f-relay")
     assert "ChatGPT deciding next W0-03C stage" in page.inner_text("#f-relay")
     assert "Pending ChatGPT decision" in page.inner_text("#f-relay")

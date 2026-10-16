@@ -22,10 +22,20 @@ and never emits an operational record.**
 | Findings | every verification finding, with its severity and a stable code |
 | Evidence | ACTIVE, independent review, Draft PR, HANDOFF, canonical docs — cited identity *and* observed identity, each linked |
 | History | append-only event list, newest first, each row linked to its evidence |
+| Management progress | FLOW business closure, Wave/task deliverable counts and lifecycle stages from `coordination/FORECAST.json`; implementation hours and percentages only with a complete approved baseline |
 
 Agent cards are read from `agent_states` only. History is evidence, never a status
 source: the newest Claude event in the current snapshot is a `HANDOFF`, and its card
 correctly reads `NOT_ACTIVE`.
+
+The management forecast is an advisory read model, separate from the operational
+control verdict. It is withheld when the control snapshot is unverified, the forecast
+blob is corrupt, or its Task/Cycle/exact PR head differs. `49 / 50` is Business Lock,
+not implementation credit. A `4 / 6` lifecycle checklist is not an effort percentage.
+Hours and weighted percentages require every in-scope row to have an estimate plus an
+explicit approved estimate record (`approval.status=APPROVED` and a GitHub source URL);
+otherwise the dashboard says `NOT ESTIMATED` and draws no effort bar. The current
+`FORECAST.json` is intentionally `INCOMPLETE_ESTIMATION`.
 
 ### The four statuses, and OFFLINE
 
@@ -78,7 +88,8 @@ Four properties make it safe to ship:
 
 ## How a round is verified
 
-Six conditional `GET`s per round, issued serially, then six checks whose worst result
+Seven conditional `GET`s per round, issued serially (the seventh is the advisory
+forecast), then six control checks whose worst result
 wins:
 
 1. **Schema** — against `CONTROL_STATE.schema.json` fetched from the same branch in the

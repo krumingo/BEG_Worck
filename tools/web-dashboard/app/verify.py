@@ -21,7 +21,7 @@ from . import invariants, schema
 from .github import FetchedFile, GitHubReadOnlyClient, PullRequestInfo, TransportError
 from .gitblob import sha_equal, short
 from .redact import redact
-from .settings import CONTROL_BOARD_PATH, CONTROL_SCHEMA_PATH, CONTROL_STATE_PATH, Settings
+from .settings import CONTROL_BOARD_PATH, CONTROL_SCHEMA_PATH, CONTROL_STATE_PATH, FORECAST_PATH, Settings
 from .status import CLEAN, Finding, Status, Verdict
 
 
@@ -33,6 +33,7 @@ class Snapshot:
     control_state: FetchedFile
     control_schema: FetchedFile
     board: FetchedFile | None = None
+    forecast: FetchedFile | None = None
     active: FetchedFile | None = None
     review: FetchedFile | None = None
     pull_request: PullRequestInfo | None = None
@@ -71,6 +72,10 @@ def read_snapshot(
     control_schema = client.file(CONTROL_SCHEMA_PATH, settings.branch)
 
     board = _optional(client, CONTROL_BOARD_PATH, settings.branch, notes)
+    # Advisory management forecast is independent of the operational control verdict.
+    # A missing forecast must not turn a valid control snapshot into a false failure.
+    forecast_notes: list[str] = []
+    forecast = _optional(client, FORECAST_PATH, settings.branch, forecast_notes)
 
     state: dict | None = None
     try:
@@ -97,12 +102,13 @@ def read_snapshot(
                 notes.append(redact(f"PR #{number} metadata could not be read: {error}"))
 
     requests = client.request_log[before:]
-    hits = sum(1 for item in (control_state, control_schema, board, active, review) if getattr(item, "from_cache", False))
+    hits = sum(1 for item in (control_state, control_schema, board, forecast, active, review) if getattr(item, "from_cache", False))
     return Snapshot(
         fetched_at=fetched_at,
         control_state=control_state,
         control_schema=control_schema,
         board=board,
+        forecast=forecast,
         active=active,
         review=review,
         pull_request=pull_request,

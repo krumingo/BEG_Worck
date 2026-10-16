@@ -159,12 +159,13 @@ function renderAlerts(data) {
     alertNode.hidden = false;
     const count = (data.findings || []).length;
     text(el('f-statusalert-text'),
+      `${data.aged || data.link === 'OFFLINE' ? 'STATE MAY BE STALE. ' : ''}` +
       `This round did not verify (${data.control_state_status}). ` +
       `${count} finding${count === 1 ? '' : 's'} — open “Verification & evidence” below. ` +
       'Treat every value on this page as unconfirmed.');
   } else {
-    alertNode.hidden = true;
-    text(el('f-statusalert-text'), '');
+    alertNode.hidden = !(data.aged || data.link === 'OFFLINE');
+    text(el('f-statusalert-text'), alertNode.hidden ? '' : 'STATE MAY BE STALE — last successful read is not current.');
   }
 }
 
@@ -177,14 +178,67 @@ function renderRelay(data) {
     return;
   }
   text(el('f-relay-headline'),
-    `LAST: ${relay.last_agent} — ${relay.last_action}${relay.verified ? '' : ' (UNVERIFIED)'}`);
+    `LAST COMPLETED AGENT: ${relay.last_agent || DASH}${relay.verified ? '' : ' (UNVERIFIED)'}`);
+  row(host, 'relay__fact', 'Last action', relay.last_action);
+  row(host, 'relay__fact', 'Last result', relay.last_result);
   row(host, 'relay__fact', 'Last updated', relay.last_updated);
   row(host, 'relay__fact', 'Relay', relay.status_display);
   if (relay.transition_phase) row(host, 'relay__fact', 'Evidence phase', relay.transition_phase);
-  row(host, 'relay__fact', 'Now', relay.now);
-  row(host, 'relay__fact', 'Krum next action', relay.krum_next_action);
+  row(host, 'relay__fact', 'NOW', relay.now);
+  row(host, 'relay__fact', 'NEXT', relay.next_execution_agent);
+  row(host, 'relay__fact', 'KRUM ACTION', relay.krum_next_action);
   row(host, 'relay__fact', 'Send to', relay.send_to);
   row(host, 'relay__fact', 'Next execution agent', relay.next_execution_agent);
+}
+
+/* Management numbers are never inferred in the browser. A lifecycle count is a
+ * checklist, not an implementation percentage; null estimates stay visibly null. */
+function renderManagement(data) {
+  const view = data.management || {};
+  const overall = el('f-overall');
+  const wave = el('f-current-wave');
+  const task = el('f-current-task');
+  for (const [node, heading] of [[overall, 'BEG_WORK OVERALL'], [wave, 'CURRENT WAVE'], [task, 'CURRENT TASK']]) {
+    node.textContent = '';
+    node.appendChild(make('h2', null, heading));
+  }
+  if (!view.verified) {
+    for (const node of [overall, wave, task]) node.appendChild(make('p', 'management__empty', view.reason || 'Forecast unverified'));
+    return;
+  }
+  const o = view.overall;
+  const w = view.current_wave;
+  const t = view.current_task;
+  const b = view.business;
+  const formatEstimate = (value, unit) => value === null || value === undefined
+    ? 'NOT ESTIMATED' : `${value}${unit} · ESTIMATE / FORECAST`;
+  const countText = (counts) => `${counts.completed} completed / ${counts.partial} partial / ${counts.not_started} not started / ${counts.unverified} unverified`;
+
+  overall.appendChild(make('strong', 'management__hero', `${b.closed} / ${b.total} FLOW Business Locked`));
+  overall.appendChild(make('p', 'management__note', 'Business closure is not implementation completion.'));
+  overall.appendChild(make('p', null, `Legacy: ${(b.legacy || []).map(item => `${item.id} → ${item.absorbed_by}`).join(', ') || 'none'}`));
+  overall.appendChild(make('p', null, `Current Wave: ${o.current_wave}`));
+  overall.appendChild(make('p', null, `Implementation: ${formatEstimate(o.percent, '%')}`));
+  overall.appendChild(make('p', null, `Total effort: ${formatEstimate(o.total_hours, ' h')}`));
+  overall.appendChild(make('p', null, `Remaining effort: ${formatEstimate(o.remaining_hours, ' h')}`));
+
+  wave.appendChild(make('strong', 'management__hero', w.id));
+  wave.appendChild(make('p', null, countText(w.counts)));
+  wave.appendChild(make('p', null, `Implementation: ${formatEstimate(w.percent, '%')}`));
+  wave.appendChild(make('p', null, `Remaining effort: ${formatEstimate(w.remaining_hours, ' h')}`));
+
+  task.appendChild(make('strong', 'management__hero', `${t.id} / ${t.cycle}`));
+  task.appendChild(make('p', null, t.name));
+  task.appendChild(make('p', null, `Status: ${t.status}`));
+  task.appendChild(make('p', 'management__count', `${t.completed_stages} of ${t.total_stages} lifecycle stages complete — not an effort %`));
+  const stages = make('ol', 'management__stages');
+  (t.lifecycle || []).forEach(item => {
+    const label = item.status === 'COMPLETED' ? '✓' : '⏳';
+    stages.appendChild(make('li', null, `${label} ${item.stage} — ${item.status}`));
+  });
+  task.appendChild(stages);
+  task.appendChild(make('p', null, `Implementation: ${formatEstimate(t.percent, '%')}`));
+  task.appendChild(make('p', null, `Next: ${t.next_step || DASH}`));
 }
 
 /* ----------------------------------------------------------- agent cards */
@@ -213,6 +267,7 @@ function renderAgents(data) {
     const rows = make('dl', 'agent__rows');
     row(rows, 'agent__row', 'Work-ID', agent.work_id, true);
     row(rows, 'agent__row', 'Waiting for', agent.waiting_for);
+    if (agent.state === 'BLOCKED') row(rows, 'agent__row', 'BLOCKED reason', agent.reason || 'reason not recorded');
     row(rows, 'agent__row', 'Updated', agent.updated_at, true);
     card.appendChild(rows);
 
@@ -588,6 +643,7 @@ function render(data) {
   renderMasthead(data);
   renderRelay(data);
   renderAlerts(data);
+  renderManagement(data);
   renderAgents(data);
   renderFocus(data);
   renderNextSteps(data);
