@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>BegWork.Dashboard.Core</AssemblyName>
+    <RootNamespace>BegWork.Dashboard.Core</RootNamespace>
+    <!-- Core is deliberately platform-neutral so the read-model, validation and
+         projection can be built and unit-tested on any CI host, including Linux.
+         Only the WPF/Win32 shell is Windows-only. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BegWork.Dashboard.Core.Tests" />
+  </ItemGroup>
+
+</Project>
