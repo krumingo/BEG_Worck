@@ -1,0 +1,25 @@
+{
+  "base_branch": "feat/w0-03c-uniqueness-readiness",
+  "base_sha": "be8cd207c94388e81b24173af6d690d69abcea00",
+  "claude_state": "ENDED_RECORDED",
+  "codex_review_state": "BLOCKED",
+  "dispatch_state": "BLOCKED",
+  "last_event": "CODEX_BLOCKED",
+  "last_event_at": "2026-09-22T06:17:02Z",
+  "next_action": "WAIT_KRUM",
+  "pr_head_sha": "ed588e9420e241f58c14146de6f0c890b38b3743",
+  "pr_number": 20,
+  "progress_percent": null,
+  "requires_krum": true,
+  "requires_krum_reason": "The bounded 1-of-1 correction has been consumed; a further correction needs a newly authorized technical cycle or an explicit design decision about how to handle ambiguous `create_index` results without deleting someone else's index.",
+  "schema_version": 1,
+  "source_versions": {
+    "active_commit_sha": "4ddea223e7eccb29eb9f81e9c4eeca952b9bd5c1",
+    "handoff_comment_url": "https://github.com/krumingo/BEG_Worck/pull/20#issuecomment-5771922130",
+    "review_commit_sha": "3b991fae892f7a22fdeb3e9d0f0920aa71841f19",
+    "waves_commit_sha": "89762fe0c0953d0bbed6874ee1a232fd6f704c95"
+  },
+  "task_id": "W0-03C",
+  "task_status": "BLOCKED",
+  "wave": 0
+}
