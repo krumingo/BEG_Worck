@@ -3,9 +3,10 @@ Routes — Pay Runs (Payroll settlement with multi-pay-type earned engine + paym
 Formula: remaining = earned + bonuses - deductions - previously_paid - paid_now
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from datetime import datetime, timezone, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
+import math
 import uuid
 
 from app.db import db
@@ -61,6 +62,17 @@ def _validate_no_overpayment(row_or_rows):
     deductions = _money_float(row.get("deductions_amount"))
     previously_paid = _money_float(row.get("previously_paid"))
     paid_now = round(_money_float(row.get("paid_now_amount")), 2)
+
+    # R0-05-C01 (F-01): NaN/±Infinity compare False with everything, so the checks below
+    # would let them through into the totals. Refuse them before any arithmetic.
+    for field, value in (("earned_amount", earned), ("bonuses_amount", bonuses),
+                         ("deductions_amount", deductions), ("previously_paid", previously_paid),
+                         ("paid_now_amount", paid_now)):
+        if not math.isfinite(value):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid money value: employee_id={employee_id}; {field} must be a finite number",
+            )
 
     gross_payable = round(earned + bonuses - deductions, 2)
     remaining_before_payment = round(gross_payable - previously_paid, 2)
@@ -233,23 +245,53 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
 
 # ── Models ─────────────────────────────────────────────────────────
 
+def _refuse_non_finite_money(value, info: ValidationInfo):
+    """R0-05-C01 (F-01): request-side payroll money is finite-only. Raised as a 422 whose body
+    does not echo the value: FastAPI's default validation response would try to JSON-encode
+    the NaN/Infinity input and fail with a 500 instead of a 4xx."""
+    detail = f"Invalid money value: {info.field_name} must be a finite number"
+    try:
+        number = float(value)
+    except OverflowError:  # R0-05-C02 (F-01a): an integer too large for a float, e.g. 1e400 written out
+        raise HTTPException(status_code=422, detail=detail)
+    except (TypeError, ValueError):
+        return value  # not a number at all: Pydantic's own float check reports it
+    if not math.isfinite(number):
+        raise HTTPException(status_code=422, detail=detail)
+    return value
+
+
+# allow_inf_nan=False stays as a second layer for any path that skips the validator above.
+FiniteMoney = Annotated[float, BeforeValidator(_refuse_non_finite_money), Field(allow_inf_nan=False)]
+
+# R0-05-C01 (F-02): technical maximum of selected_report_ids per employee per Pay Run.
+# A report is one employee × project × day line; a weekly run has ≤ 7 days and even a
+# monthly run (≤ 31 days) at an unusually dense 16 lines a day stays under 500. The
+# preview itself reads at most 5000 lines for the whole tenant per period
+# (fetch_normalized_report_lines), so 500 per employee never cuts a real selection while
+# bounding the query and the size of the frozen row / slip documents.
+MAX_SELECTED_REPORT_IDS = 500
+
+
 class AdjustmentRow(BaseModel):
     type: str = "deduction"  # bonus | advance | loan | loan_repayment | deduction | manual_correction
     title: str = ""
-    amount: float = 0
+    amount: FiniteMoney = 0
     note: str = ""
     ref_id: Optional[str] = None  # links an advance/loan deduction to a specific db.advances record
 
 
 class PayRunRowInput(BaseModel):
     employee_id: str
-    paid_now_amount: float = 0
+    paid_now_amount: FiniteMoney = 0
     adjustments: List[AdjustmentRow] = []
     notes: str = ""
     # P0-2A.2: optional list of explicit report_ids to pay for this employee.
     # If empty/missing → backend uses all unpaid approved reports for the period (old behavior).
     # If provided → backend filters to only these report_ids (precise per-report selection).
-    # Backend always cross-checks against P0-1 guard (paid/batched are excluded regardless).
+    # R0-05: every id must be an approved, not paid/batched report of THIS employee in this
+    # tenant and period, else 400; earned is then computed from these reports only.
+    # R0-05-C01: no duplicates and at most MAX_SELECTED_REPORT_IDS, else 400.
     selected_report_ids: List[str] = []
 
 
@@ -266,6 +308,146 @@ class PayRunCreateInput(BaseModel):
 class PayRunReopenInput(BaseModel):
     employee_ids: List[str] = []  # empty = reopen all
     reason: str = ""
+
+
+# ── R0-05 (AUD-023): selected employees / selected reports only ─────
+
+async def _selected_pay_run_rows(tenant: TenantData, org_id: str, preview: dict, input_rows: list,
+                                 fallback_report_ids: Optional[dict] = None) -> list:
+    """
+    Resolve the rows a Pay Run create/update may process: ONLY the employees sent in
+    `input_rows` (never every employee of the preview). Validates everything before any
+    write and returns [(effective_preview_row, input_row, selected_report_ids)] in preview order.
+
+    - empty `input_rows` → 400 (empty is not "all");
+    - an employee twice, or not in the preview for the period → 400;
+    - `selected_report_ids` (from the input row, else `fallback_report_ids[eid]`) must all be
+      eligible reports of THIS employee in THIS tenant and period, else 400; when given,
+      earned / hours / days / day_cells are computed from those reports only.
+    """
+    if not input_rows:
+        raise HTTPException(status_code=400, detail="No employees selected (rows is empty)")
+    preview_map = {r["employee_id"]: r for r in preview.get("rows", [])}
+    input_map = {}
+    for ir in input_rows:
+        eid = ir.employee_id
+        if eid in input_map:
+            raise HTTPException(status_code=400, detail=f"Duplicate employee_id in rows: {eid}")
+        if eid not in preview_map:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"employee_id={eid} is not in the pay run preview for "
+                        f"{preview.get('period_start')}..{preview.get('period_end')}"),
+            )
+        input_map[eid] = ir
+
+    # R0-05-C01 (F-02): every selection is checked before ANY report query.
+    picked = []
+    for row in preview["rows"]:
+        eid = row["employee_id"]
+        ir = input_map.get(eid)
+        if ir is None:
+            continue
+        report_ids = list(ir.selected_report_ids or (fallback_report_ids or {}).get(eid) or [])
+        _check_selected_report_ids(eid, report_ids)
+        picked.append((row, ir, report_ids))
+
+    selected = []
+    for row, ir, report_ids in picked:
+        if report_ids:
+            row = await _row_for_selected_reports(
+                tenant, org_id, row, report_ids, preview["period_start"], preview["period_end"])
+        selected.append((row, ir, report_ids))
+    return selected
+
+
+def _check_selected_report_ids(eid: str, report_ids: list) -> None:
+    """R0-05-C01 (F-02): the selection is canonical and bounded BEFORE any database work, so
+    the list used for earned is exactly the list that is persisted."""
+    if len(report_ids) > MAX_SELECTED_REPORT_IDS:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"selected_report_ids for employee_id={eid} has {len(report_ids)} ids; "
+                    f"the maximum is {MAX_SELECTED_REPORT_IDS}"),
+        )
+    if len(set(report_ids)) != len(report_ids):
+        dupes = sorted({rid for rid in report_ids if report_ids.count(rid) > 1})
+        raise HTTPException(
+            status_code=400,
+            detail=f"selected_report_ids for employee_id={eid} contains duplicates: {dupes}",
+        )
+
+
+async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, report_ids: list,
+                                    period_start: str, period_end: str) -> dict:
+    """Copy of a preview row whose earned/hours/days/day_cells cover only `report_ids`.
+    Same lines and calc_earned as generate_pay_run, restricted to the selected reports."""
+    eid = row["employee_id"]
+    wanted = list(report_ids)  # canonical: _check_selected_report_ids ran first
+    lines = await fetch_normalized_report_lines(
+        org_id=org_id, date_from=period_start, date_to=period_end, worker_id=eid,
+        status_filter="APPROVED", payroll_filter=["!paid", "!batched"],
+    )
+    by_id = {ln["id"]: ln for ln in lines if ln.get("id") and ln.get("worker_id") == eid}
+    missing = [rid for rid in wanted if rid not in by_id]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"selected_report_ids are not eligible approved reports of employee_id={eid} "
+                    f"for {period_start}..{period_end}: {missing}"),
+        )
+    sel = [enrich_hours(by_id[rid]) for rid in wanted]
+
+    prof = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": eid}, {"_id": 0}) or {}
+    period_days = (datetime.strptime(period_end, "%Y-%m-%d") - datetime.strptime(period_start, "%Y-%m-%d")).days + 1
+    total_hours = round(sum(ln["hours"] for ln in sel), 1)
+    approved_days = len({ln["date"] for ln in sel})
+    e = calc_earned(prof, total_hours, approved_days, period_days)
+
+    keep = set(wanted)
+    day_cells = []
+    for dc in row.get("day_cells") or []:
+        reports = [r for r in (dc.get("reports") or []) if r.get("report_id") in keep]
+        if not reports:
+            continue
+        hours = sum(by_id[r["report_id"]]["hours"] for r in reports)
+        rids = [r["report_id"] for r in reports]
+        sites = []
+        for r in reports:
+            if r.get("project_name") and r["project_name"] not in sites:
+                sites.append(r["project_name"])
+        cell = dict(dc)
+        cell.update({
+            "hours": round(hours, 1),
+            "value": round(hours * e["hourly_rate"], 2),
+            "sites": sites,
+            "report_ids": rids,
+            "report_count": len(rids),
+            "reports": reports,
+            "selectable_report_ids": rids,
+            "locked_report_ids": [],
+            "selectable_hours": round(sum(r.get("hours", 0) for r in reports), 1),
+            "selectable_value": round(sum(r.get("value", 0) for r in reports), 2),
+        })
+        day_cells.append(cell)
+
+    prev_paid = row.get("previously_paid", 0)
+    out = dict(row)
+    out.update({
+        "hourly_rate": e["hourly_rate"],
+        "daily_rate": e["daily_rate"],
+        "rate_type": e["rate_type"],
+        "approved_days": approved_days,
+        "approved_hours": total_hours,
+        "normal_hours": round(sum(ln.get("normal_hours", 0) for ln in sel), 1),
+        "overtime_hours": round(sum(ln.get("overtime_hours", 0) for ln in sel), 1),
+        "earned_amount": e["earned"],
+        "earned_formula": e.get("formula", ""),
+        "remaining_after_payment": round(e["earned"] - prev_paid, 2),
+        "sites": sorted({s for dc in day_cells for s in dc["sites"]}),
+        "day_cells": day_cells,
+    })
+    return out
 
 
 # ── Generate Pay Run (preview) ─────────────────────────────────────
@@ -549,7 +731,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     now = datetime.now(timezone.utc).isoformat()
 
     preview = await generate_pay_run(user, period_start=data.period_start, period_end=data.period_end)
-    override_map = {r.employee_id: r for r in data.rows}
+    # R0-05 (AUD-023): only the selected employees; validated before any write.
+    selected_rows = await _selected_pay_run_rows(tenant, org_id, preview, data.rows)
 
     employee_rows = []
     slips = []
@@ -566,24 +749,23 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
 
     run_id = str(uuid.uuid4())
 
-    for row in preview["rows"]:
+    for row, ovr, selected_report_ids in selected_rows:
         eid = row["employee_id"]
-        ovr = override_map.get(eid)
 
         # Adjustments from input
         adj_list = []
         total_bonuses = 0
         total_deductions = 0
-        if ovr:
-            for a in ovr.adjustments:
-                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note, "ref_id": a.ref_id})
-                if a.type == "bonus":
-                    total_bonuses += a.amount
-                else:
-                    total_deductions += a.amount
+        for a in ovr.adjustments:
+            adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note, "ref_id": a.ref_id})
+            if a.type == "bonus":
+                total_bonuses += a.amount
+            else:
+                total_deductions += a.amount
 
-        paid_now = round(_money_float(ovr.paid_now_amount if ovr else row["remaining_after_payment"]), 2)
-        notes = ovr.notes if ovr else ""
+        # R0-05: no amount sent → 0 (never the whole remaining amount).
+        paid_now = round(_money_float(ovr.paid_now_amount), 2)
+        notes = ovr.notes
 
         _validate_no_overpayment({
             "employee_id": eid,
@@ -626,7 +808,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "day_cells": row.get("day_cells", []),
             "notes": notes,
             # P0-2A.2: explicit per-report selection. Empty means "use day-level fallback" (old behavior).
-            "selected_report_ids": list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids) else [],
+            "selected_report_ids": selected_report_ids,
         }
         employee_rows.append(frozen_row)
 
@@ -1076,30 +1258,30 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
 
     now = datetime.now(timezone.utc).isoformat()
     preview = await generate_pay_run(user, period_start=data.period_start, period_end=data.period_end)
-    override_map = {r.employee_id: r for r in data.rows}
     existing_row_map = {er.get("employee_id"): er for er in run.get("employee_rows", [])}
+    # R0-05 (AUD-023): only the selected employees; validated before any write.
+    # A row without selected_report_ids keeps the ones already stored on the run (as before).
+    selected_rows = await _selected_pay_run_rows(
+        tenant, org_id, preview, data.rows,
+        fallback_report_ids={eid: er.get("selected_report_ids") for eid, er in existing_row_map.items()},
+    )
 
     employee_rows = []
     grand = {"earned": 0, "bonuses": 0, "deductions": 0, "paid": 0, "remaining": 0}
 
-    for row in preview["rows"]:
+    for row, ovr, selected_report_ids in selected_rows:
         eid = row["employee_id"]
-        ovr = override_map.get(eid)
         adj_list, total_bonuses, total_deductions = [], 0, 0
-        if ovr:
-            for a in ovr.adjustments:
-                adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note, "ref_id": a.ref_id})
-                if a.type == "bonus":
-                    total_bonuses += a.amount
-                else:
-                    total_deductions += a.amount
-        paid_now = round(_money_float(ovr.paid_now_amount if ovr else row["remaining_after_payment"]), 2)
+        for a in ovr.adjustments:
+            adj_list.append({"type": a.type, "title": a.title, "amount": a.amount, "note": a.note, "ref_id": a.ref_id})
+            if a.type == "bonus":
+                total_bonuses += a.amount
+            else:
+                total_deductions += a.amount
+        # R0-05: no amount sent → 0 (never the whole remaining amount).
+        paid_now = round(_money_float(ovr.paid_now_amount), 2)
         remaining = round(row["earned_amount"] + total_bonuses - total_deductions - row["previously_paid"] - paid_now, 2)
         existing_row = existing_row_map.get(eid, {}) or {}
-        selected_report_ids = (
-            list(ovr.selected_report_ids) if (ovr and ovr.selected_report_ids)
-            else list(row.get("selected_report_ids") or existing_row.get("selected_report_ids") or [])
-        )
         day_cells = row.get("day_cells") or existing_row.get("day_cells") or []
 
         frozen_row = {
@@ -1119,7 +1301,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
             "previously_paid": row["previously_paid"],
             "paid_now_amount": round(paid_now, 2),
             "remaining_after_payment": remaining,
-            "sites": row.get("sites", []), "notes": ovr.notes if ovr else "",
+            "sites": row.get("sites", []), "notes": ovr.notes,
             "day_cells": day_cells,
             "selected_report_ids": selected_report_ids,
         }
