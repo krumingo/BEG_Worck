@@ -1,10 +1,11 @@
 """
 Authentication routes - /api/auth/*
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Request
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
+import logging
 import uuid
 
 from app.db import db
@@ -14,10 +15,13 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
+from app.utils.email_identity import email_match_filter, mask_email, normalize_email
+from app.services import auth_events, password_reset, rate_limit
+from app.utils.client_ip import client_ip
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
-from app.tenancy.data_access import TenantData
+from app.tenancy.data_access import TenantData, resolve_identities_by_email
 from app.permissions.deps import require_permission, MODE_SHADOW, MODE_ENFORCE
 from app.permissions.sync import grant_company_role, shadow_sync
 from app.permissions.workflow import (
@@ -30,6 +34,10 @@ def _tenant(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger("beg.auth")
+
+#: F-03: neutral refusal for an email already used in another organization.
+EMAIL_NOT_AVAILABLE = "This email cannot be used. Choose a different email."
 
 # Pydantic models
 class LoginRequest(BaseModel):
@@ -70,13 +78,31 @@ class ModuleToggle(BaseModel):
 
 # Auth routes
 @router.post("/auth/login")
-async def login(req: LoginRequest):
-    user = await db.users.find_one({"email": req.email}, {"_id": 0})
+async def login(req: LoginRequest, request: Request):
+    # AUTH-01: the email is compared case-insensitively (strip().lower()) and
+    # must name exactly ONE user. A case-only duplicate is ambiguous: refused
+    # like a wrong password, never resolved to "the first one", and reported
+    # in the server log and as a durable security event for the operator
+    # (scripts/auth_duplicate_emails_report.py lists the colliding rows).
+    matches = await resolve_identities_by_email(db, req.email, {"_id": 0})
+    if len(matches) > 1:
+        logger.warning("LOGIN_REFUSED_AMBIGUOUS_EMAIL: %d users share %s up to letter case "
+                       "(user_ids=%s)", len(matches), mask_email(req.email),
+                       [m.get("id") for m in matches])
+        await auth_events.record(
+            db, auth_events.LOGIN_AMBIGUOUS, ip=client_ip(request),
+            subject=auth_events.keyed_ref(normalize_email(req.email)),
+            detail={"candidates": len(matches)})
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    user = matches[0] if matches else None
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account disabled")
-    token = create_token({"user_id": user["id"], "org_id": user["org_id"], "role": user["role"]})
+    # AUTH-01 C01 (F-02): the token carries the user's auth_version; a password
+    # reset or owner recovery increments it, which ends every older session.
+    token = create_token({"user_id": user["id"], "org_id": user["org_id"], "role": user["role"],
+                          "av": int(user.get("auth_version", 0) or 0)})
     await log_audit(user["org_id"], user["id"], user["email"], "login", "auth")
     return {"token": token, "user": {k: v for k, v in user.items() if k != "password_hash"}}
 
@@ -174,6 +200,83 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     return {"ok": True}
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTH-01 — Forgot Password / Reset Password (no session)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(max_length=320)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(max_length=password_reset.TOKEN_MAX_LENGTH)
+    new_password: str = Field(max_length=256)
+
+
+# AUTH-01 C01 (F-04): shared per-IP limits (MongoDB counters, all workers).
+# The per-email forgot limit lives in password_reset.process_forgot_request.
+FORGOT_IP_LIMIT, RESET_IP_LIMIT, IP_WINDOW_SECONDS = 10, 20, 900
+
+
+def _too_many_requests():
+    return HTTPException(status_code=429, detail="Too many requests. Try again later.")
+
+
+async def _ip_allowed(scope: str, ip: str, limit: int) -> bool:
+    hit = await rate_limit.hit(db, scope, ip, limit, IP_WINDOW_SECONDS)
+    if not hit.allowed and hit.first_rejection:
+        await auth_events.record(db, auth_events.RATE_LIMITED_IP, ip=ip, detail={"scope": scope})
+    return hit.allowed
+
+
+@router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, request: Request,
+                          background_tasks: BackgroundTasks):
+    """Always the same answer — it never says whether the account exists.
+
+    Before the response this does the SAME work for every email (F-05): the
+    shared per-IP limit and scheduling one background task. Everything that
+    depends on the account — the per-email limit, the lookup, the token, the
+    audit and the e-mail — runs after the response in
+    ``password_reset.process_forgot_request``.
+    """
+    ip = client_ip(request)
+    if not await _ip_allowed("forgot_ip", ip, FORGOT_IP_LIMIT):
+        raise _too_many_requests()
+    background_tasks.add_task(password_reset.process_forgot_request, db, data.email, ip)
+    return {"ok": True, "message": password_reset.GENERIC_REQUEST_MESSAGE}
+
+
+@router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest, request: Request):
+    """Set a new password with a one-time token from the e-mailed link.
+
+    The password policy is checked first (same rules as change-password); then
+    an unknown, expired, used or superseded token, or a disabled user, all get
+    one generic 400. 400 rather than 401: the frontend treats 401 as "session
+    expired" and would leave the page.
+    """
+    ip = client_ip(request)
+    if not await _ip_allowed("reset_ip", ip, RESET_IP_LIMIT):
+        raise _too_many_requests()
+    is_valid, error_msg = validate_password_strength(data.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    try:
+        await password_reset.reset_password(db, data.token, hash_password(data.new_password),
+                                            requested_ip=ip)
+    except password_reset.ResetFailed:
+        raise HTTPException(status_code=400, detail={
+            "error_code": "RESET_TOKEN_INVALID",
+            "message": password_reset.GENERIC_RESET_FAILURE})
+    except password_reset.ResetNotCompleted:
+        # F-01: the transaction was aborted — the password and the link are unchanged.
+        raise HTTPException(status_code=503, detail={
+            "error_code": "RESET_NOT_COMPLETED",
+            "message": password_reset.RESET_NOT_COMPLETED_MESSAGE})
+    return {"ok": True}
+
+
 # Organization routes
 @router.get("/organization")
 async def get_organization(user: dict = Depends(get_current_user)):
@@ -222,7 +325,7 @@ async def create_user(
         return {
             "id": str(uuid.uuid4()),
             "org_id": org_id,
-            "email": data.email,
+            "email": data.email.strip(),
             "password_hash": hash_password(data.password),
             "first_name": data.first_name,
             "last_name": data.last_name,
@@ -233,10 +336,24 @@ async def create_user(
             "updated_at": now,
         }
 
+    # AUTH-01: the duplicate check ignores letter case and surrounding spaces,
+    # so a case variant of an existing login cannot be created (it would make
+    # login ambiguous, which is refused).
+    normalized_email = normalize_email(data.email)
+    if normalized_email is None:
+        raise HTTPException(status_code=400, detail="Invalid email")
+    # AUTH-01 C01 (F-03): one email = one login across the installation (the
+    # rule tenant onboarding already applies). An address used by a user of
+    # ANOTHER organization is refused without naming that organization; the
+    # same-organization case keeps its existing answer below.
+    if any(m.get("org_id") != org_id for m in await resolve_identities_by_email(
+            db, normalized_email, {"_id": 0, "id": 1, "org_id": 1, "email": 1})):
+        raise HTTPException(status_code=400, detail=EMAIL_NOT_AVAILABLE)
+
     if ctx.mode != MODE_ENFORCE:
         # ---- legacy path (off / shadow): unchanged business behavior ----------
         await enforce_limit(org_id, "users", db_handle=tdb)
-        if await tdb.users.find_one({"email": data.email, "org_id": org_id}):
+        if await tdb.users.find_one({**email_match_filter(normalized_email), "org_id": org_id}):
             raise HTTPException(status_code=400, detail="Email already exists in this organization")
         new_user = _new_user_doc()
         await tdb.users.insert_one(new_user)
@@ -251,7 +368,8 @@ async def create_user(
         return _public(new_user)
 
     # ---- enforce: recoverable idempotent workflow (PR-05) ---------------------
-    existing = await tdb.users.find_one({"email": data.email, "org_id": org_id}, {"_id": 0})
+    existing = await tdb.users.find_one(
+        {**email_match_filter(normalized_email), "org_id": org_id}, {"_id": 0})
     try:
         wf = await RecoverableWrite(
             tdb, tenant_id=ctx.tenant_id, action="user.create",

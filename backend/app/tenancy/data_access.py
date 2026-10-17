@@ -100,15 +100,17 @@ class TenantCollection:
         return self._scope._db[self.name]
 
     # ---------------------------------------------------------------- reads
-    async def get(self, record_id: Any, projection: Optional[Mapping] = None) -> Optional[Dict]:
+    async def get(self, record_id: Any, projection: Optional[Mapping] = None,
+                  **kw) -> Optional[Dict]:
         """The tenant's record with this ``id``; ``None`` when absent here.
 
         ``None`` also for an empty/absent id: a missing relation is never
-        resolved to anything.
+        resolved to anything. ``kw`` passes driver options (e.g. ``session``).
         """
         if record_id in (None, ""):
             return None
-        return await self._raw.find_one(self._scope.scoped({"id": record_id}), _proj(projection))
+        return await self._raw.find_one(self._scope.scoped({"id": record_id}), _proj(projection),
+                                        **kw)
 
     async def require(self, record_id: Any, projection: Optional[Mapping] = None,
                       detail: str = "Not found") -> Dict:
@@ -139,12 +141,12 @@ class TenantCollection:
         """A motor cursor over the tenant's matching documents."""
         return self._raw.find(self._scope.scoped(flt), _proj(projection), **kw)
 
-    async def count(self, flt: Optional[Mapping] = None) -> int:
-        return await self._raw.count_documents(self._scope.scoped(flt))
+    async def count(self, flt: Optional[Mapping] = None, **kw) -> int:
+        return await self._raw.count_documents(self._scope.scoped(flt), **kw)
 
-    async def count_documents(self, flt: Optional[Mapping] = None) -> int:
+    async def count_documents(self, flt: Optional[Mapping] = None, **kw) -> int:
         """The motor name, so a converted call site reads like the original."""
-        return await self.count(flt)
+        return await self.count(flt, **kw)
 
     async def distinct(self, key: str, flt: Optional[Mapping] = None) -> List:
         return await self._raw.distinct(key, self._scope.scoped(flt))
@@ -155,11 +157,11 @@ class TenantCollection:
         return self._raw.aggregate([{"$match": {TENANT_KEY: self._scope.org_id}}] + checked)
 
     # --------------------------------------------------------------- writes
-    async def insert_one(self, doc: Dict):
-        return await self._raw.insert_one(self._own(doc))
+    async def insert_one(self, doc: Dict, **kw):
+        return await self._raw.insert_one(self._own(doc), **kw)
 
-    async def insert_many(self, docs: List[Dict]):
-        return await self._raw.insert_many([self._own(d) for d in docs])
+    async def insert_many(self, docs: List[Dict], **kw):
+        return await self._raw.insert_many([self._own(d) for d in docs], **kw)
 
     async def update_one(self, flt: Mapping, update: Mapping, **kw):
         return await self._raw.update_one(self._scope.scoped(flt), update, **kw)
@@ -399,6 +401,34 @@ async def resolve_review_token(db, token: Any, projection: Optional[Mapping] = N
     if len(docs) != 1 or not isinstance(docs[0].get(TENANT_KEY), str) or not docs[0][TENANT_KEY]:
         return None, None
     return TenantData.for_owner_of(db, docs[0]), docs[0]
+
+
+# ------------------------------------------------------------------ login email
+async def resolve_identities_by_email(db, email: Any,
+                                      projection: Optional[Mapping] = None) -> List[Dict]:
+    """Every ``users`` row whose email equals ``email`` up to case/whitespace.
+
+    AUTH-01. Login, forgot-password and the local recovery command start from an
+    email and no session, so — like the public review token above — there is no
+    tenant yet: the matched row is what says which tenant this is about. This is
+    the one place that reads ``users`` by email across the installation.
+
+    It returns the candidates and DECIDES NOTHING: the caller must treat zero rows
+    as "no account" and more than one row as AMBIGUOUS (fail closed), never as
+    "take the first". An unusable email (see ``normalize_email``) returns ``[]``.
+    The read is bounded (``MATCH_LIMIT``) and the pattern is escaped and anchored.
+    """
+    from app.utils.email_identity import (
+        MATCH_LIMIT, email_match_filter, matching, normalize_email)
+    normalized = normalize_email(email)
+    if normalized is None:
+        return []
+    proj = _proj(projection)
+    if proj is not None and any(v for k, v in proj.items() if k != "_id") and "email" not in proj:
+        proj = {**proj, "email": 1}
+    docs = await db["users"].find(email_match_filter(normalized), proj) \
+        .limit(MATCH_LIMIT).to_list(MATCH_LIMIT)
+    return matching(docs, normalized)
 
 
 # ------------------------------------------------------------------ project team

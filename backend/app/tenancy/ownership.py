@@ -81,7 +81,7 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_PEOPLE,
               "users", "persons", "employee_profiles", "brigades", "attendance_entries",
               "work_sessions", "employee_daily_reports", "daily_work_logs", "work_reports",
-              "labor_entries", "reminder_logs", "notifications"),
+              "labor_entries", "reminder_logs", "notifications", "password_reset_tokens"),
     **_family(FAMILY_PARTIES,
               "companies", "clients", "counterparties", "subcontractors",
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",
@@ -140,8 +140,12 @@ TENANT_ID_KEYED: FrozenSet[str] = frozenset({
 #: The tenant root: one document per organization; its ``id`` is the tenant key.
 TENANT_ROOT = "organizations"
 
-#: Database-level bookkeeping with no tenant meaning (W0-03C index ledger).
-TECHNICAL: FrozenSet[str] = frozenset({"md_uniqueness_runs"})
+#: Database-level bookkeeping with no tenant meaning (W0-03C index ledger;
+#: AUTH-01 C01 pre-session rate-limit counters and security events — an unknown
+#: email or a throttled IP belongs to no tenant, and neither collection holds a
+#: business record, a raw email, a token or a password).
+TECHNICAL: FrozenSet[str] = frozenset({
+    "md_uniqueness_runs", "auth_rate_limits", "auth_security_events"})
 
 #: Collections a PLATFORM principal (not a tenant) legitimately writes rows to:
 #: the platform administrator's own user record and its security log

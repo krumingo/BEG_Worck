@@ -74,7 +74,8 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@begwork.com"
+                autoComplete="email"
+                placeholder={t("auth.enterEmail")}
                 required
                 className="bg-background border-border"
                 data-testid="login-email-input"
@@ -82,12 +83,18 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm text-muted-foreground">{t("auth.password")}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="password" className="text-sm text-muted-foreground">{t("auth.password")}</Label>
+                <Link to="/forgot-password" className="text-sm text-primary hover:underline" data-testid="forgot-password-link">
+                  {t("auth.forgotPassword")}
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 placeholder={t("auth.enterPassword")}
                 required
                 className="bg-background border-border"
@@ -115,9 +122,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <p className="text-center text-xs text-muted-foreground mt-4">
-            {t("auth.demo")}: admin@begwork.com / admin123
-          </p>
         </div>
       </div>
     </div>
