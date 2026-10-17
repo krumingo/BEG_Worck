@@ -661,6 +661,18 @@ async def _finish_event(tenant: TenantData, event_id: str, token: str, fields: d
     return True
 
 
+async def _resolve_rejection(event_id: str, org_id: str):
+    """Mark an earlier refusal of this event as settled — idempotent.
+
+    Called only after the event is terminally ``processed`` for ``org_id``, the
+    tenant the SERVER resolved. Safe to repeat: a row already resolved is not
+    touched again (R0-01-C02 F-04).
+    """
+    await db.billing_webhook_rejections.update_one(
+        {"stripe_event_id": event_id, "resolved_at": None},
+        {"$set": {"resolved_at": _utcnow(), "resolved_org_id": org_id}})
+
+
 @router.post("/billing/webhook")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events — signed, tenant-resolved server-side, once."""
@@ -705,6 +717,13 @@ async def stripe_webhook(request: Request):
     
     token = await _claim_event(tenant, event_id, event_type)
     if token is None:
+        row = await tenant.billing_webhook_events.find_one(
+            {"stripe_event_id": event_id}, {"_id": 0, "status": 1})
+        if row and row.get("status") == "processed":
+            # R0-01-C02 F-04: repair bookkeeping a previous delivery could not
+            # finish (a failure between "processed" and "resolved_at"). A live
+            # "processing" claim is left alone: its owner has not finished.
+            await _resolve_rejection(event_id, tenant.org_id)
         logger.info(f"Stripe webhook {event_id} already processed or in progress; no-op")
         return {"status": "duplicate"}
     
@@ -713,14 +732,19 @@ async def stripe_webhook(request: Request):
         await apply(tenant, ctx, obj, now)
     except Exception:
         logger.exception(f"Stripe webhook {event_id} ({event_type}) failed")
-        await _finish_event(tenant, event_id, token, {"status": "failed", "failed_at": _utcnow()})
+        if not await _finish_event(tenant, event_id, token,
+                                   {"status": "failed", "failed_at": _utcnow()}):
+            # R0-01-C02 F-02: a newer attempt owns the event; leave it to finish.
+            raise HTTPException(status_code=503, detail="Billing event is being processed by another attempt")
         raise HTTPException(status_code=500, detail="Webhook processing failed")
     
-    await _finish_event(tenant, event_id, token, {"status": "processed", "processed_at": _utcnow()})
+    # R0-01-C02 F-02: only the attempt that still holds the lease may report
+    # success or settle a rejection. A stale worker answers a retryable 503.
+    if not await _finish_event(tenant, event_id, token,
+                               {"status": "processed", "processed_at": _utcnow()}):
+        raise HTTPException(status_code=503, detail="Billing event is being processed by another attempt")
     # An earlier "unresolved" refusal of this event is now settled.
-    await db.billing_webhook_rejections.update_one(
-        {"stripe_event_id": event_id, "resolved_at": None},
-        {"$set": {"resolved_at": _utcnow(), "resolved_org_id": tenant.org_id}})
+    await _resolve_rejection(event_id, tenant.org_id)
     return {"status": "received"}
 
 

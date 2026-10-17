@@ -880,3 +880,150 @@ def test_19_F06_report_wrapper_is_an_allowlist_and_refuses_out_and_merge(backend
         async with _Db(backend) as db:
             await scenario(db)
     asyncio.run(body())
+
+
+# ═══════════════════════════════════════════════════════ R0-01-C02 (Codex re-review)
+async def _unresolved_then_recorded(c, op, event_id, session_id):
+    """An event first refused as unresolved, then made resolvable by restoring the
+    local checkout record (the F-03 cutover path)."""
+    payload = _checkout_completed(event_id=event_id, session_id=session_id)
+    r = await _post_event(c, payload)
+    assert r.status_code == 503, r.text
+    await op.billing_checkout_sessions.insert_one({
+        "id": "bcs-" + session_id, "org_id": ORG_A, "stripe_session_id": session_id,
+        "stripe_customer_id": CUS_A, "plan_id": "pro", "status": "open"})
+    return payload
+
+
+def test_20_F02_a_stale_worker_cannot_acknowledge_or_resolve(monkeypatch, backend):
+    """Interleaving: worker A claims and applies; meanwhile its lease expires and
+    worker B re-claims. A must answer a retryable 503, must not mark the event
+    processed and must not settle the rejection. Only B reaches the terminal state."""
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
+    from datetime import timedelta
+    from app.routes import billing
+    from app.tenancy.data_access import TenantData
+    resolve, apply = billing._WEBHOOK_HANDLERS["checkout.session.completed"]
+    seen = {}
+
+    async def interleaved_apply(tenant, ctx, obj, now):
+        if not seen:                                   # worker A, mid-flight
+            await tenant.billing_webhook_events.update_one(
+                {"stripe_event_id": "evt_stale"}, {"$set": {
+                    "processing_started_at": billing._utcnow() - timedelta(seconds=301)}})
+            seen["token_b"] = await billing._claim_event(tenant, "evt_stale", "checkout")
+            assert seen["token_b"]                     # worker B now owns the event
+        return await apply(tenant, ctx, obj, now)
+
+    async def scenario(c, op):
+        payload = await _unresolved_then_recorded(c, op, "evt_stale", "cs_stale")
+        monkeypatch.setitem(billing._WEBHOOK_HANDLERS, "checkout.session.completed",
+                            (resolve, interleaved_apply))
+        r = await _post_event(c, payload)              # worker A
+        assert r.status_code == 503, r.text            # no 200 from a stale worker
+        row = await op.billing_webhook_events.find_one({"stripe_event_id": "evt_stale"})
+        assert row["status"] == "processing" and row["attempt_token"] == seen["token_b"]
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_stale"})
+        assert rej.get("resolved_at") is None          # A did not settle it
+
+        # B (the owner) is still live: Stripe's redelivery is a duplicate, unsettled
+        r = await _post_event(c, payload)
+        assert r.json() == {"status": "duplicate"}, r.text
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_stale"})
+        assert rej.get("resolved_at") is None
+
+        # only B reaches the terminal state
+        a = TenantData.for_resolved_org(op, ORG_A)
+        assert await billing._finish_event(a, "evt_stale", seen["token_b"],
+                                           {"status": "processed"}) is True
+        r = await _post_event(c, payload)              # next delivery settles bookkeeping
+        assert r.json() == {"status": "duplicate"}, r.text
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_stale"})
+        assert rej["resolved_at"] is not None and rej["resolved_org_id"] == ORG_A
+    run(monkeypatch, scenario, backend)
+
+
+def test_20b_F02_a_stale_worker_failing_cannot_mark_failed(monkeypatch, backend):
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
+    from datetime import timedelta
+    from app.routes import billing
+    resolve, _apply = billing._WEBHOOK_HANDLERS["checkout.session.completed"]
+    seen = {}
+
+    async def failing_after_takeover(tenant, ctx, obj, now):
+        await tenant.billing_webhook_events.update_one(
+            {"stripe_event_id": "evt_stale_fail"}, {"$set": {
+                "processing_started_at": billing._utcnow() - timedelta(seconds=301)}})
+        seen["token_b"] = await billing._claim_event(tenant, "evt_stale_fail", "checkout")
+        raise RuntimeError("worker A fails after losing the lease")
+    monkeypatch.setitem(billing._WEBHOOK_HANDLERS, "checkout.session.completed",
+                        (resolve, failing_after_takeover))
+
+    async def scenario(c, op):
+        r = await _post_event(c, _checkout_completed(event_id="evt_stale_fail"))
+        assert r.status_code == 503, r.text
+        row = await op.billing_webhook_events.find_one({"stripe_event_id": "evt_stale_fail"})
+        assert row["status"] == "processing" and row["attempt_token"] == seen["token_b"]
+    run(monkeypatch, scenario, backend)
+
+
+def test_21_F04_a_failure_between_processed_and_resolved_is_repaired_once(monkeypatch, backend):
+    """Fault injection exactly between the terminal ``processed`` write and
+    ``resolved_at``: the next delivery repairs the rejection, once."""
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
+    from app.routes import billing
+    real_resolve = billing._resolve_rejection
+    faults = {"left": 1}
+
+    async def faulty_resolve(event_id, org_id):
+        if faults["left"]:
+            faults["left"] -= 1
+            raise RuntimeError("injected fault after processed, before resolved_at")
+        return await real_resolve(event_id, org_id)
+    monkeypatch.setattr(billing, "_resolve_rejection", faulty_resolve)
+
+    async def scenario(c, op):
+        payload = await _unresolved_then_recorded(c, op, "evt_fault", "cs_fault")
+        with pytest.raises(RuntimeError, match="injected fault"):
+            await _post_event(c, payload)              # the request fails (500 in production)
+        row = await op.billing_webhook_events.find_one({"stripe_event_id": "evt_fault"})
+        assert row["status"] == "processed"
+        assert (await op.subscriptions.find_one({"org_id": ORG_A}))["plan_id"] == "pro"
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_fault"})
+        assert rej.get("resolved_at") is None          # the fault left it unsettled
+
+        r = await _post_event(c, payload)              # Stripe's retry repairs it
+        assert r.json() == {"status": "duplicate"}, r.text
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_fault"})
+        assert rej["resolved_at"] is not None and rej["resolved_org_id"] == ORG_A
+        first_resolved = rej["resolved_at"]
+
+        r = await _post_event(c, payload)              # ...exactly once
+        assert r.json() == {"status": "duplicate"}, r.text
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_fault"})
+        assert rej["resolved_at"] == first_resolved
+        assert await op.billing_webhook_events.count_documents({"stripe_event_id": "evt_fault"}) == 1
+        assert (await op.billing_webhook_events.find_one({"stripe_event_id": "evt_fault"}))[
+            "attempts"] == 1                           # never re-applied
+    run(monkeypatch, scenario, backend)
+
+
+def test_21b_F04_a_live_processing_claim_does_not_settle_the_rejection(monkeypatch, backend):
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", SECRET)
+    from app.routes import billing
+    from app.tenancy.data_access import TenantData
+
+    async def scenario(c, op):
+        payload = await _unresolved_then_recorded(c, op, "evt_live", "cs_live")
+        a = TenantData.for_resolved_org(op, ORG_A)
+        assert await billing._claim_event(a, "evt_live", "checkout")    # live owner elsewhere
+        r = await _post_event(c, payload)
+        assert r.json() == {"status": "duplicate"}, r.text
+        rej = await op.billing_webhook_rejections.find_one({"stripe_event_id": "evt_live"})
+        assert rej.get("resolved_at") is None
+        assert (await op.subscriptions.find_one({"org_id": ORG_A}))["plan_id"] == "free"
+    run(monkeypatch, scenario, backend)
