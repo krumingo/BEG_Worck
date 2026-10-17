@@ -554,9 +554,10 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     # Check payroll not finalized for this period
     report_date = report.get("date", "")
     if report_date:
+        # R0-06-C01: a payment in progress or failed may already have moved money — locked too.
         finalized = await tenant.pay_runs.find_one({
             "org_id": user["org_id"],
-            "status": "paid",
+            "status": {"$in": ["paid", "paying", "payment_failed"]},
             "period_start": {"$lte": report_date},
             "period_end": {"$gte": report_date},
         })
