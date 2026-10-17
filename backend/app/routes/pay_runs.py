@@ -249,12 +249,15 @@ def _refuse_non_finite_money(value, info: ValidationInfo):
     """R0-05-C01 (F-01): request-side payroll money is finite-only. Raised as a 422 whose body
     does not echo the value: FastAPI's default validation response would try to JSON-encode
     the NaN/Infinity input and fail with a 500 instead of a 4xx."""
+    detail = f"Invalid money value: {info.field_name} must be a finite number"
     try:
         number = float(value)
+    except OverflowError:  # R0-05-C02 (F-01a): an integer too large for a float, e.g. 1e400 written out
+        raise HTTPException(status_code=422, detail=detail)
     except (TypeError, ValueError):
         return value  # not a number at all: Pydantic's own float check reports it
     if not math.isfinite(number):
-        raise HTTPException(status_code=422, detail=f"Invalid money value: {info.field_name} must be a finite number")
+        raise HTTPException(status_code=422, detail=detail)
     return value
 
 

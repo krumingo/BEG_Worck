@@ -581,3 +581,31 @@ def test_13b_limit_boundary_and_canonical_list_is_what_is_persisted(monkeypatch,
         slip = await op.payment_slips.find_one({"pay_run_id": r.json()["id"]}, {"_id": 0})
         assert slip["selected_report_ids"] == chosen
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════════ C02 / F-01a
+HUGE_INT = "1" + "0" * 400        # a JSON integer float() cannot hold (OverflowError)
+
+
+@pytest.mark.parametrize("where", ["paid_now_amount", "adjustment.amount"])
+@pytest.mark.parametrize("method", ["POST", "PATCH"])
+def test_14_overflowing_integer_money_is_422_and_nothing_written(monkeypatch, backend, where, method):
+    async def scenario(c, op):
+        import json
+        run_id = await _draft(c) if method == "PATCH" else None
+        before = await _snapshot(op)
+        placeholder = 1234567.891
+        raw = json.dumps(body(_money_rows(where, placeholder)))
+        assert raw.count(repr(placeholder)) == 1
+        raw = raw.replace(repr(placeholder), HUGE_INT)      # a bare integer literal in the JSON
+        assert json.loads(raw)["rows"][0] and HUGE_INT in raw
+        headers = dict(H["admin-a"](), **{"Content-Type": "application/json"})
+        if run_id:
+            r = await c.patch("/api/pay-runs/" + run_id, content=raw, headers=headers)
+        else:
+            r = await c.post("/api/pay-runs", content=raw, headers=headers)
+        assert r.status_code == 422, (r.status_code, r.text[:300])
+        field = "paid_now_amount" if where == "paid_now_amount" else "amount"
+        assert r.json() == {"detail": "Invalid money value: %s must be a finite number" % field}
+        assert await _snapshot(op) == before
+    run(monkeypatch, scenario, backend)
