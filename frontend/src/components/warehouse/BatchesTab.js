@@ -82,22 +82,50 @@ export default function BatchesTab() {
   }, []);
 
   const handleCreate = async () => {
-    if (!form.item_id || !form.warehouse_id || !form.qty || !form.unit_cost) {
-      toast.error("Попълнете задължителните полета"); return;
+    // CODEX C11.9: explicit per-field reason rather than a generic toast.
+    const missing = [];
+    if (!form.item_id) missing.push("Артикул (item_id)");
+    if (!form.warehouse_id) missing.push("Склад (warehouse_id)");
+    if (!form.qty) missing.push("Количество");
+    if (!form.unit_cost) missing.push("Единична стойност");
+    if (missing.length > 0) {
+      toast.error(`Задължителни полета: ${missing.join(", ")}`);
+      return;
     }
     setSaving(true);
     try {
-      await API.post("/warehouse/batches", {
-        ...form,
-        qty: parseFloat(form.qty),
-        unit_cost: parseFloat(form.unit_cost),
-        source_type: "purchase",
+      // CODEX C08 — route batch creation through the canonical
+      // `receive_from_supplier` command. The projection (`warehouse_batches`)
+      // is updated by the server from the canonical ledger line.
+      const { postMovement, ACTIONS, LOCATION_TYPES, STATES } =
+        await import("@/lib/warehouseCanonicalApi");
+      await postMovement({
+        action: ACTIONS.RECEIVE_FROM_SUPPLIER,
+        item_id: form.item_id,
+        unit: form.unit || "бр",
+        quantity: String(parseFloat(form.qty)),
+        unit_value: String(parseFloat(form.unit_cost)),
+        currency: form.currency || "BGN",
+        source: {
+          location_type: LOCATION_TYPES.SUPPLIER,
+          location_id: form.supplier_id || "unknown_supplier",
+          state: STATES.FREE,
+        },
+        destination: {
+          location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+          location_id: form.warehouse_id,
+          state: STATES.FREE,
+        },
+        invoice_id: form.invoice_number || undefined,
+        notes: form.notes,
       });
-      toast.success("Партида създадена");
+      toast.success("Партида създадена (канонично)");
       setNewOpen(false);
       setForm({ item_id: "", warehouse_id: "", qty: "", unit_cost: "", currency: "EUR", supplier_id: "", invoice_number: "", invoice_date: "", notes: "" });
       load();
-    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 
@@ -105,10 +133,39 @@ export default function BatchesTab() {
     const action = batch.status === "blocked" ? "разблокирате" : "блокирате";
     if (!window.confirm(`Сигурни ли сте, че искате да ${action} партида ${batch.batch_number}?`)) return;
     try {
-      await API.put(`/warehouse/batches/${batch.id}/block`);
-      toast.success(`Партида ${batch.status === "blocked" ? "разблокирана" : "блокирана"}`);
+      // C08 — direct batch block is retired. Use canonical quarantine
+      // entry/release instead so the state change is on the ledger.
+      const { postMovement, ACTIONS, LOCATION_TYPES, STATES } =
+        await import("@/lib/warehouseCanonicalApi");
+      const payload = {
+        action: ACTIONS.QUARANTINE_ENTRY,
+        item_id: batch.item_id,
+        unit: batch.unit || "бр",
+        quantity: String(parseFloat(batch.remaining_qty || batch.qty || 0)),
+        source: {
+          location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+          location_id: batch.warehouse_id,
+          state: STATES.FREE,
+        },
+        destination: {
+          location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+          location_id: batch.warehouse_id,
+          state: STATES.QUARANTINE,
+        },
+        reason: `operator block of batch ${batch.batch_number}`,
+      };
+      if (batch.status === "blocked") {
+        payload.action = ACTIONS.QUARANTINE_RELEASE;
+        payload.source.state = STATES.QUARANTINE;
+        payload.destination.state = STATES.FREE;
+        payload.reason = `operator unblock of batch ${batch.batch_number}`;
+      }
+      await postMovement(payload);
+      toast.success(batch.status === "blocked" ? "Партида разблокирана" : "Партида блокирана");
       load();
-    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
   };
 
   const openTrace = async (batch) => {

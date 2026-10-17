@@ -464,14 +464,14 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     wh_issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "total": 1, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     material_cost = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
 
     # Returns reduce material cost
     wh_returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     material_returns = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
     net_material_cost = round(material_cost - material_returns, 2)
 

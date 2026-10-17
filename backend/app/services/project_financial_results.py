@@ -74,12 +74,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     effective_cash_labor = paid_labor_expense
 
     # Supplier/material payments
-    issues = await tenant.warehouse_transactions.find(
+    # CODEX C12.10 — no silent cap on canonical ledger reads.
+    paid_materials = 0
+    _cursor = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1},
-    ).to_list(500)
-    paid_materials = 0
-    for t in issues:
+    )
+    async for t in _cursor:
         for ln in t.get("lines", []):
             paid_materials += float(ln.get("unit_cost", 0)) * float(ln.get("qty_issued", 0))
     paid_materials = round(paid_materials, 2)

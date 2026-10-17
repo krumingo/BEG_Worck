@@ -55,19 +55,20 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                 e["unit"] = ln["unit"]
 
     # ── C. Delivered (warehouse receipts) ───────────────────────
-    receipts = await tenant.warehouse_transactions.find(
+    # CODEX C12.10: no silent cap on canonical ledger reads.
+    _cursor_c = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "receipt"}, {"_id": 0, "lines": 1}
-    ).to_list(200)
-    for t in receipts:
+    )
+    async for t in _cursor_c:
         for ln in t.get("lines", []):
             e = _get(ln.get("material_name", ""))
             e["delivered"] += float(ln.get("qty_received", 0) or ln.get("qty_issued", 0) or 0)
 
     # ── D. Issued (warehouse issues to project) ─────────────────
-    issues = await tenant.warehouse_transactions.find(
+    _cursor_d = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0, "lines": 1}
-    ).to_list(500)
-    for t in issues:
+    )
+    async for t in _cursor_d:
         for ln in t.get("lines", []):
             e = _get(ln.get("material_name", ""))
             e["issued"] += float(ln.get("qty_issued", 0) or 0)
@@ -75,10 +76,10 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                 e["unit"] = ln["unit"]
 
     # ── E. Returns ──────────────────────────────────────────────
-    returns = await tenant.warehouse_transactions.find(
+    _cursor_e = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"}, {"_id": 0, "lines": 1}
-    ).to_list(100)
-    for t in returns:
+    )
+    async for t in _cursor_e:
         for ln in t.get("lines", []):
             e = _get(ln.get("material_name", ""))
             e["returned"] += float(ln.get("qty_issued", 0) or ln.get("qty_returned", 0) or 0)

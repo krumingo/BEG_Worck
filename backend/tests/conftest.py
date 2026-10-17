@@ -56,21 +56,34 @@ async def _ensure_test_seed_data():
     """
     Ensure minimal seed data exists for tests to run.
     This is idempotent - safe to call multiple times.
-    
+
     IMPORTANT: Uses VALID_ADMIN_PASSWORD and VALID_TECH_PASSWORD which pass policy.
+
+    LIVE-OPS-01 / TASK 5C: when Mongo is unreachable (no local server
+    AND no CI replica set), the autouse seed is skipped with a notice
+    rather than failing session startup. Tests that genuinely need Mongo
+    reach for their own fixture; tests that don't (envelope/action/
+    permission/legacy/migration/static) must still be able to run.
     """
     from motor.motor_asyncio import AsyncIOMotorClient
     from passlib.context import CryptContext
     from dotenv import load_dotenv
-    
+
     load_dotenv()
-    
+
     mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
     db_name = os.environ.get('DB_NAME', 'test_database')
-    
-    client = AsyncIOMotorClient(mongo_url)
+
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=1500)
     db = client[db_name]
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    try:
+        await client.admin.command("ping")
+    except Exception as exc:
+        print(f"\n[conftest] Mongo unreachable at {mongo_url}; seed skipped ({exc.__class__.__name__})")
+        client.close()
+        return
     
     # Module definitions
     MODULES = {
@@ -229,7 +242,18 @@ def ensure_seed_data():
     """
     Session-scoped fixture that ensures seed data exists before any tests run.
     This runs automatically (autouse=True) at the start of the test session.
+
+    LIVE-OPS-01 / TASK 5C: uses a fresh event loop (the pytest-asyncio
+    strict/auto migration deprecates `asyncio.get_event_loop()` on a
+    sync fixture); unreachable Mongo is handled inside the coroutine.
     """
-    asyncio.get_event_loop().run_until_complete(_ensure_test_seed_data())
-    # Reset rate limiter after seed
+    try:
+        asyncio.run(_ensure_test_seed_data())
+    except RuntimeError:
+        # If an event loop is already running (older pytest-asyncio),
+        # fall back to the legacy call.
+        try:
+            asyncio.get_event_loop().run_until_complete(_ensure_test_seed_data())
+        except Exception as exc:
+            print(f"[conftest] seed skipped: {exc.__class__.__name__}")
     reset_bootstrap_rate_limiter()
