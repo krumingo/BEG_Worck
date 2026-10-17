@@ -43,6 +43,9 @@
 
 18. [Табло за изпълнение — реален W0 статус](../project-recovery/2026-07-20/06_WAVE_STATUS_DASHBOARD.md)
 
+19. [Master Recovery & FLOW Integration Plan — 17.10.2026](MASTER_RECOVERY_AND_FLOW_INTEGRATION_PLAN_2026-10-17.md)  
+   Каноничен execution plan след пълния одит: recovery + FLOW integration → usable application → real-work pilot → remaining FLOW coverage.
+
 ## Текущ бизнес статус
 
 - Общо FLOW-ове: **50**
