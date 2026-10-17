@@ -239,10 +239,13 @@ async def bootstrap_create_platform_admin(
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 4: Check if user already exists (idempotency)
     # ─────────────────────────────────────────────────────────────────────────
-    existing_user = await db.users.find_one(
-        {"email": data.email},
-        {"_id": 0, "id": 1, "email": 1, "is_platform_admin": 1}
-    )
+    # AUTH-01 C01 (F-03): the same case-insensitive identity rule as login and
+    # user creation; any match (one or several) means "exists" — never create a
+    # second login for the same address.
+    from app.tenancy.data_access import resolve_identities_by_email
+    _matches = await resolve_identities_by_email(
+        db, data.email, {"_id": 0, "id": 1, "email": 1, "is_platform_admin": 1})
+    existing_user = _matches[0] if _matches else None
     
     if existing_user:
         # User exists - DO NOT change password or roles

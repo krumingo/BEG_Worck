@@ -396,9 +396,12 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
-    # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used).
-    from app.services import password_reset
+    # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
+    # shared rate-limit counters and durable auth security events (both TTL).
+    from app.services import auth_events, password_reset, rate_limit
     await password_reset.ensure_indexes(db)
+    await rate_limit.ensure_indexes(db)
+    await auth_events.ensure_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

@@ -1,49 +1,117 @@
 # AUTH-01 — Owner access recovery + Forgot Password MVP
 
 > Scope: OWNER-FIRST PILOT (Issue #52, package comment 6196842918). Not commercial SaaS hardening.
-> Status: implementation on a Draft PR, awaiting CODEX independent review. Not a production PASS.
+> C01: corrections to CODEX review CHANGES_REQUESTED F-01…F-08 (PR #56 comment 6216184918).
+> Status: Draft PR #56, awaiting CODEX independent re-review. Not a production PASS.
 
-## What exists after AUTH-01
+## What exists
 
 | Path | Who | What |
 |---|---|---|
-| `backend/scripts/reset_user_password.py` | operator, server shell only | sets ONE active user's password; dry run first |
-| `POST /api/auth/forgot-password` | anyone | always the same 200 answer; mints a 30-min one-time token for exactly one active user and e-mails the link |
-| `POST /api/auth/reset-password` | holder of the link | consumes the token once and sets the password |
-| `POST /api/auth/change-password` | logged-in user | unchanged |
-| `POST /api/admin/set-password/{id}` | Admin/Owner, for ANOTHER user | unchanged (self is still refused) |
-| `/forgot-password`, `/reset-password?token=…` | browser | new screens; login shows "Забравена парола?", demo credentials removed |
+| `backend/scripts/reset_user_password.py` | operator, server shell only | sets ONE active user's password; dry run first; hidden prompt only |
+| `backend/scripts/auth_duplicate_emails_report.py` | operator | READ-ONLY list of emails shared by several users (case-insensitive) |
+| `POST /api/auth/forgot-password` | anyone | always the same 200 answer; all account-dependent work runs after the response |
+| `POST /api/auth/reset-password` | holder of the link | consumes the token once and sets the password, atomically |
+| `POST /api/auth/change-password` | logged-in user | unchanged (does not end other sessions) |
+| `POST /api/admin/set-password/{id}` | Admin/Owner, for ANOTHER user | unchanged (self still refused; does not end sessions) |
+| `/forgot-password`, `/reset-password?token=…` | browser | screens; login shows "Забравена парола?", demo credentials removed |
 
 There is **no** HTTP recovery endpoint that bypasses the token. The CLI is the emergency path.
 
+## Owner decisions applied in C01
+
+* **One email = one login across the installation** (F-03). Compared `strip().lower()`. Tenant onboarding
+  already applied this; now `POST /users` and the platform bootstrap do too. Existing collisions are
+  listed by the report script and stay refused at login/forgot/recovery until fixed by hand. No automatic
+  merge or migration.
+* **Security events kept 180 days** (F-08, TTL).
+
+## Atomicity (F-01) — MongoDB transactions
+
+`app/services/auth_tx.py` runs each multi-document auth change in ONE transaction:
+
+| Operation | In one transaction |
+|---|---|
+| reset-password | conditional token claim · new hash · `$inc auth_version` · revoke remaining tokens · audit `password_reset_completed` |
+| recovery CLI | new hash + marker `LOCAL_RECOVERY_CLI` · `$inc auth_version` · revoke open tokens · audit `password_recovery_cli` |
+| forgot (mint) | insert `pending` token · audit `password_reset_requested` |
+| forgot (settle) | delivered: mark `sent` + revoke OLDER tokens + audit · not delivered: revoke ONLY the new token + audit |
+
+A failure inside leaves everything as it was. The API answers **503 `RESET_NOT_COMPLETED`** ("the password
+was not changed"); the CLI exits **6** ("NOTHING CHANGED"). Transactions need a **replica set**
+(MongoDB Atlas is one). On a standalone `mongod` these operations are refused before any write
+(API 503, CLI exit **7**). For local development run `mongod --replSet rs0` + `rs.initiate()`.
+
+## Sessions end after recovery (F-02)
+
+`users.auth_version` (absent = 0). Every JWT carries `av`. `get_current_user` refuses a token whose `av`
+differs from the user's `auth_version` (401 "Session expired"). Self-service reset and the recovery CLI
+increment it, so every session issued before the recovery stops working. Tokens and users that predate
+this are both version 0 and keep working.
+
 ## Recovery command (server shell)
 
-Inside the backend container (`begwork-backend`, workdir `/app`):
+Inside the backend container:
 
 ```
 python scripts/reset_user_password.py --email Krum@begfull.bg --dry-run   # look, write nothing
-python scripts/reset_user_password.py --email Krum@begfull.bg             # asks the password twice, hidden
+python scripts/reset_user_password.py --email Krum@begfull.bg             # hidden prompt, twice
 ```
 
-Exit codes: 0 ok · 1 usage · 2 not found · 3 ambiguous (case-only duplicate) · 4 disabled/unusable ·
-5 invalid password · 6 write did not apply. It never prints the password or a hash. It writes
-`password_reset_at`, `password_reset_by = LOCAL_RECOVERY_CLI`, revokes the user's open reset links and
-adds an `audit_logs` row `password_recovery_cli`.
+The password can be entered **only** at the hidden prompt (F-07). There is no argument or stdin option,
+and the command refuses to run without a terminal: use `docker exec -it`. Exit codes: 0 ok · 1 usage/no
+terminal · 2 not found · 3 ambiguous · 4 disabled/unusable · 5 invalid password · 6 nothing changed (no
+commit) · 7 nothing changed (no transactions). It never prints the password or a hash.
 
-## Tokens
+Fast-path files for a container that does not yet include this PR: `scripts/reset_user_password.py`,
+`app/utils/email_identity.py`, `app/services/auth_tx.py` (all three are standalone).
 
-Collection `password_reset_tokens` (org-keyed, classified in `app/tenancy/ownership.py`):
-`id, org_id, user_id, token_hash, requested_at, expires_at, used_at, requested_ip` (+ `revoked_reason`).
+## Forgot / reset flow
 
-* plaintext = `secrets.token_urlsafe(32)`; stored = SHA-256 hex only;
-* indexes (created at startup, `password_reset.ensure_indexes`): unique `token_hash`,
-  TTL `expires_at` (`expireAfterSeconds=0`), `(user_id, used_at)`;
-* a new request revokes the user's older open tokens; a successful reset revokes all remaining ones;
-* single use = one conditional `find_one_and_update` on `used_at: None` and not expired;
-* the token is claimed BEFORE the password write — a crash in between leaves the old password and a spent
-  link (ask again), never a reusable link behind a changed password.
+1. **Before the response (F-05):** the shared per-IP limit and scheduling one background task. The
+   handler does identical work for every email.
+2. **After the response** (`password_reset.process_forgot_request`): per-email limit → exactly one active
+   user (else a security event) → mint a `pending` token (SHA-256 stored only) → send → settle.
+3. **Delivery (F-06):** `delivery_status` is `pending → sent | dev_logged | failed | not_configured`.
+   A failed or unconfigured delivery revokes only the new token; the user's older links stay usable.
+   No automatic retry; the user asks again (3 per 15 min).
+4. **Reset:** policy check → token pre-checks (each failure is one generic 400 + a security event) →
+   the transaction above.
 
-## E-mail (provider abstraction, `app/services/mailer.py`)
+Collection `password_reset_tokens` (org-keyed): `id, org_id, user_id, token_hash, requested_at,
+expires_at, used_at, requested_ip, delivery_status` (+ `revoked_reason`). Indexes: unique `token_hash`,
+TTL `expires_at`, `(user_id, used_at)`.
+
+## Rate limits (F-04)
+
+`app/services/rate_limit.py`: shared atomic counters in MongoDB (`auth_rate_limits`, fixed window,
+`$inc`+upsert, TTL). All workers/instances on the same database share them. Keys are keyed HMACs.
+Fail closed.
+
+| Limit | Value | Over the limit |
+|---|---|---|
+| forgot per IP | 10 / 15 min | 429 |
+| forgot per email | 3 / 15 min | silent (same 200) |
+| reset per IP | 20 / 15 min | 429 |
+
+`app/utils/client_ip.py`: the client IP is the socket peer. `X-Forwarded-For` / `X-Real-IP` count
+**only** when the peer is in `TRUSTED_PROXIES` (comma-separated IPs/CIDRs). The chain is walked from the
+right. **Synology:** set `TRUSTED_PROXIES` to the docker network of the nginx container (e.g.
+`172.16.0.0/12`). Without it every visitor shares nginx's IP: safe, but the per-IP limits then apply to
+everyone together.
+
+## Security events (F-08)
+
+`app/services/auth_events.py` → `auth_security_events` (TECHNICAL, TTL 180 days): `id, ts, expires_at,
+event, ip, subject (keyed HMAC of the email), token_ref (token row id or keyed HMAC), org_id, user_id,
+detail`. No email, token or password is stored. HMAC key: `AUTH_EVENT_HMAC_KEY`, else `JWT_SECRET`.
+
+Events: `forgot_no_match`, `forgot_ambiguous`, `forgot_not_eligible`, `forgot_processing_failed`,
+`rate_limited_ip`, `rate_limited_email` (once per window), `reset_token_invalid`, `reset_token_expired`,
+`reset_token_replay`, `reset_user_inactive`, `reset_not_completed`, `reset_delivery_failed`,
+`reset_delivery_not_configured`, `login_ambiguous`. Successful actions stay in the tenant's `audit_logs`.
+
+## E-mail (`app/services/mailer.py`)
 
 | Variable | Meaning |
 |---|---|
@@ -52,34 +120,13 @@ Collection `password_reset_tokens` (org-keyed, classified in `app/tenancy/owners
 | `SMTP_FROM` | sender, e.g. `BEG_Work <no-reply@begfull.bg>` |
 | `SMTP_SECURITY` | optional `ssl` / `starttls` / `none` (default: `ssl` on 465, else `starttls`) |
 | `APP_PUBLIC_URL` | browser origin; the link is `APP_PUBLIC_URL/reset-password?token=…` |
-| `PASSWORD_RESET_DEV_LOG_URL=1` | LOCAL DEV ONLY: print the link to the console when no e-mail is configured; ignored with `ENV=production` |
-
-Without `SMTP_HOST`/`SMTP_FROM`/`APP_PUBLIC_URL` the API answers exactly the same and the server logs
-`PASSWORD_RESET_EMAIL_NOT_SENT` (no token, no link). Delivery runs after the response (background task),
-and a provider failure is logged as `PASSWORD_RESET_EMAIL_FAILED` without the link.
-
-## E-mail comparison
-
-`app/utils/email_identity.py`: `strip().lower()`, bounded (254), escaped + anchored case-insensitive
-regex, re-checked in Python. Used by login, forgot-password, the CLI and the user-create duplicate check
-(per organization, as before). Nothing stored is rewritten. **More than one row matching up to letter
-case = ambiguous → refused** (login 401 + server warning `LOGIN_REFUSED_AMBIGUOUS_EMAIL`, no token,
-CLI exit 3 listing the rows).
-
-## Rate limits (MVP, existing in-memory `RateLimiter`, per process)
-
-forgot-password: 10 / 15 min per IP (429) and 3 / 15 min per e-mail (silent, same 200);
-reset-password: 20 / 15 min per IP (429).
+| `PASSWORD_RESET_DEV_LOG_URL=1` | LOCAL DEV ONLY: print the link when no e-mail is configured; ignored with `ENV=production` |
 
 ## Known limits / debt (recorded, not fixed here)
 
-1. Rate limits are in-memory per process and keyed on `get_client_ip`, which trusts `X-Forwarded-For`.
-2. Login and forgot-password read `users` by email across the installation; e-mail uniqueness is still
-   per organization (unchanged business rule). The same address in two organizations is now refused as
-   ambiguous instead of resolved to whichever row MongoDB returned first.
-3. Audit rows use the legacy `log_audit` (`audit_logs`) like the existing auth routes, not the W0-04
-   canonical AuditEvent envelope.
-4. The password write and the token revocation are separate writes (no multi-document transaction);
-   the ordering above keeps the failure mode safe.
-5. A known account does a few more database writes than an unknown one before the identical response;
-   the e-mail itself is sent after the response.
+1. `app/routes/platform.py` bootstrap still uses its own in-memory limiter and trusts `X-Forwarded-For`
+   (outside AUTH-01 scope).
+2. Email uniqueness is enforced in application code; no unique index on a normalized field yet (would
+   need a backfill migration). Two simultaneous creates of the same new email could still race.
+3. Auth auditing uses the legacy `audit_logs`, not the W0-04 canonical AuditEvent envelope.
+4. Change Password and Admin Reset do not end other sessions (kept as before, per review).

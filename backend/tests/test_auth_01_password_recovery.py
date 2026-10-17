@@ -18,11 +18,18 @@ is set):
 * the local recovery CLI: dry run writes nothing, the real run changes exactly
   one user, and 0 / >1 / disabled / weak password all exit non-zero.
 
+The C01 corrections (CODEX F-01…F-08) are proven in
+``tests/test_auth_01_c01_corrections.py`` on this same harness.
+
+Transactions: against ``mongomock`` (no sessions) the multi-document writes run
+through :func:`_snapshot_transaction`, a test double that restores the touched
+collections when the body raises. With ``W0_03_REAL_MONGO_URL`` pointing at a
+REPLICA SET the production ``auth_tx.run_in_transaction`` is used unchanged.
+
     pytest tests/test_auth_01_password_recovery.py -v --noconftest
-    W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27018 pytest ... --noconftest
+    W0_03_REAL_MONGO_URL='mongodb://127.0.0.1:27018/?replicaSet=rs0' pytest ... --noconftest
 """
 import asyncio
-import io
 import json
 import logging
 import os
@@ -85,6 +92,67 @@ async def _seed(op, sysdb):
     ])
 
 
+REAL_MONGO = bool(os.environ.get("W0_03_REAL_MONGO_URL", ""))
+_TX_COLLECTIONS = ("users", "password_reset_tokens", "audit_logs")
+
+
+async def _snapshot_transaction(db, body):
+    """mongomock has no sessions: emulate commit-or-nothing for the tests.
+
+    Snapshots the collections an auth transaction touches and restores them if
+    ``body`` raises — the all-or-nothing contract the real transaction gives.
+    """
+    from app.services import auth_tx
+    if not await auth_tx.transactions_supported(db):
+        raise auth_tx.TransactionsUnavailable("emulated: transactions unavailable")
+    snap = {name: await db[name].find({}).to_list(None) for name in _TX_COLLECTIONS}
+    try:
+        return await body(None)
+    except BaseException:
+        for name, docs in snap.items():
+            await db[name].delete_many({})
+            if docs:
+                await db[name].insert_many(docs)
+        raise
+
+
+def install_transactions(monkeypatch):
+    """Point every auth transaction at the real driver (replica set) or the test double."""
+    from app.services import auth_tx, password_reset
+    from scripts import reset_user_password as cli
+    if REAL_MONGO:
+        return
+
+    async def supported(db):
+        return True
+    monkeypatch.setattr(auth_tx, "transactions_supported", supported)
+    for module in (password_reset, cli):
+        monkeypatch.setattr(module, "run_in_transaction", _snapshot_transaction)
+
+
+def force_no_transactions(monkeypatch):
+    """Make the deployment look like a standalone mongod (no transactions)."""
+    from app.services import auth_tx, password_reset
+    from scripts import reset_user_password as cli
+
+    async def unsupported(db):
+        return False
+    monkeypatch.setattr(auth_tx, "transactions_supported", unsupported)
+    if REAL_MONGO:
+        return
+    for module in (password_reset, cli):
+        monkeypatch.setattr(module, "run_in_transaction", _snapshot_transaction)
+
+
+class Outbox(list):
+    """Captures reset mails; ``outcome`` is what the fake delivery reports."""
+    outcome = "sent"
+
+    def deliver(self, mail):
+        self.append(mail)
+        return self.outcome
+
+
 def _app(monkeypatch, op, sysdb, outbox):
     from fastapi import FastAPI
 
@@ -105,10 +173,8 @@ def _app(monkeypatch, op, sysdb, outbox):
     monkeypatch.setattr(registry, "system_db", sysdb)
     for name in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
         monkeypatch.setattr(registry, name, sysdb[name])
-    for limiter in (auth.forgot_password_ip_limiter, auth.forgot_password_email_limiter,
-                    auth.reset_password_ip_limiter):
-        limiter.reset()
-    monkeypatch.setattr(password_reset, "deliver", outbox.append)
+    install_transactions(monkeypatch)
+    monkeypatch.setattr(password_reset, "deliver", outbox.deliver)
 
     app = FastAPI()
     app.include_router(auth.router, prefix="/api")
@@ -123,7 +189,7 @@ def scenario(monkeypatch, body):
         op, sysdb, cleanup = await _database()
         try:
             await _seed(op, sysdb)
-            outbox = []
+            outbox = Outbox()
             app = _app(monkeypatch, op, sysdb, outbox)
             transport = httpx.ASGITransport(app=app)
             async with httpx.AsyncClient(transport=transport, base_url="http://auth01") as c:
@@ -471,7 +537,7 @@ def test_the_per_email_limit_is_silent_and_the_ip_limit_is_429(monkeypatch):
 # ═══════════════════════════════════════════════════════ 6. delivery
 def _mail(token="tok-plain-0123456789-abcdefghij"):
     from app.services.password_reset import ResetMail
-    return ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A, token=token)
+    return ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A, token_id="t-1", token=token)
 
 
 def _clear_mail_env(monkeypatch):
@@ -484,7 +550,7 @@ def test_unconfigured_mail_logs_a_warning_without_the_token(monkeypatch, caplog)
     from app.services import password_reset
     _clear_mail_env(monkeypatch)
     with caplog.at_level(logging.INFO):
-        assert password_reset.deliver(_mail()) is False
+        assert password_reset.deliver(_mail()) == password_reset.DELIVERY_NOT_CONFIGURED
     assert "PASSWORD_RESET_EMAIL_NOT_SENT" in caplog.text
     assert "tok-plain" not in caplog.text
 
@@ -494,12 +560,12 @@ def test_the_dev_flag_prints_the_url_only_outside_production(monkeypatch, caplog
     _clear_mail_env(monkeypatch)
     monkeypatch.setenv("PASSWORD_RESET_DEV_LOG_URL", "1")
     with caplog.at_level(logging.INFO):
-        password_reset.deliver(_mail())
+        assert password_reset.deliver(_mail()) == password_reset.DELIVERY_DEV_LOGGED
     assert "/reset-password?token=tok-plain" in caplog.text
     caplog.clear()
     monkeypatch.setenv("ENV", "production")
     with caplog.at_level(logging.INFO):
-        password_reset.deliver(_mail())
+        assert password_reset.deliver(_mail()) == password_reset.DELIVERY_NOT_CONFIGURED
     assert "tok-plain" not in caplog.text and "PASSWORD_RESET_EMAIL_NOT_SENT" in caplog.text
 
 
@@ -518,7 +584,7 @@ def test_configured_mail_sends_the_public_reset_link(monkeypatch, caplog):
             sent.append((to, subject, text))
     monkeypatch.setattr(password_reset, "get_mail_provider", lambda: Fake())
     with caplog.at_level(logging.INFO):
-        assert password_reset.deliver(_mail()) is True
+        assert password_reset.deliver(_mail()) == password_reset.DELIVERY_SENT
     (to, subject, text), = sent
     assert to == OWNER
     assert "https://work.begfull.bg/reset-password?token=tok-plain-0123456789-abcdefghij" in text
@@ -541,7 +607,7 @@ def test_a_failing_provider_is_logged_not_raised(monkeypatch, caplog):
             raise ConnectionError("boom tok-plain")
     monkeypatch.setattr(password_reset, "get_mail_provider", lambda: Broken())
     with caplog.at_level(logging.INFO):
-        assert password_reset.deliver(_mail()) is False
+        assert password_reset.deliver(_mail()) == password_reset.DELIVERY_FAILED
     assert "PASSWORD_RESET_EMAIL_FAILED" in caplog.text and "tok-plain" not in caplog.text
 
 
@@ -564,6 +630,14 @@ def _cli_args(*argv):
     return parse_args(list(argv))
 
 
+def type_password(monkeypatch, *answers):
+    """A terminal on stdin and these answers typed at the hidden prompts."""
+    from scripts import reset_user_password as cli
+    it = iter(answers or (NEW_PW, NEW_PW))
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(it))
+
+
 def test_cli_dry_run_finds_the_owner_and_writes_nothing(monkeypatch, capsys):
     from scripts import reset_user_password as cli
 
@@ -584,8 +658,8 @@ def test_cli_resets_exactly_one_user_and_prints_no_secret(monkeypatch, capsys):
         await _forgot(c, OWNER)                             # an open e-mail link
         others = {u["id"]: u for u in await op.users.find(
             {"id": {"$ne": "u-owner"}}, {"_id": 0}).to_list(None)}
-        monkeypatch.setattr("sys.stdin", io.StringIO(NEW_PW + "\n"))
-        code = await cli.run(op, _cli_args("--email", " krum@begfull.bg", "--password-stdin"))
+        type_password(monkeypatch)
+        code = await cli.run(op, _cli_args("--email", " krum@begfull.bg"))
         assert code == cli.EXIT_OK
         owner = await op.users.find_one({"id": "u-owner"}, {"_id": 0})
         assert owner["password_reset_by"] == cli.RECOVERY_MARKER and owner["password_reset_at"]
@@ -614,8 +688,8 @@ def test_cli_fails_closed(monkeypatch, capsys, email, expected):
         await op.users.insert_many([_user("u-dup1", ORG_A, "dup@a.bg"),
                                     _user("u-dup2", ORG_B, "Dup@A.bg")])
         before = await op.users.find({}, {"_id": 0}).sort("id", 1).to_list(None)
-        for argv in (("--email", email, "--dry-run"),
-                     ("--email", email, "--new-password", NEW_PW)):
+        type_password(monkeypatch, NEW_PW, NEW_PW)
+        for argv in (("--email", email, "--dry-run"), ("--email", email)):
             assert await cli.run(op, _cli_args(*argv)) == getattr(cli, expected)
         assert await op.users.find({}, {"_id": 0}).sort("id", 1).to_list(None) == before
         assert NEW_PW not in capsys.readouterr().out
@@ -627,7 +701,8 @@ def test_cli_refuses_a_weak_password_before_touching_anything(monkeypatch, capsy
 
     async def body(op, c, outbox):
         before = await op.users.find_one({"id": "u-owner"}, {"_id": 0})
-        code = await cli.run(op, _cli_args("--email", OWNER, "--new-password", "weakpass"))
+        type_password(monkeypatch, "weakpass", "weakpass")
+        code = await cli.run(op, _cli_args("--email", OWNER))
         assert code == cli.EXIT_INVALID_PASSWORD
         assert await op.users.find_one({"id": "u-owner"}, {"_id": 0}) == before
         assert "weakpass" not in capsys.readouterr().out
@@ -636,8 +711,7 @@ def test_cli_refuses_a_weak_password_before_touching_anything(monkeypatch, capsy
 
 def test_cli_rejects_mismatched_prompt_entries(monkeypatch):
     from scripts import reset_user_password as cli
-    answers = iter([NEW_PW, NEW_PW + "x"])
-    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(answers))
+    type_password(monkeypatch, NEW_PW, NEW_PW + "x")
 
     async def body(op, c, outbox):
         assert await cli.run(op, _cli_args("--email", OWNER)) == cli.EXIT_INVALID_PASSWORD
@@ -647,8 +721,9 @@ def test_cli_rejects_mismatched_prompt_entries(monkeypatch):
 def test_cli_usage_errors_exit_non_zero():
     from scripts import reset_user_password as cli
     assert cli.main([]) == cli.EXIT_USAGE                       # --email is required
-    assert cli.main(["--email", "x@y.bg", "--password-stdin", "--new-password", "a"]) \
-        == cli.EXIT_USAGE
+    # F-07: there is no option that takes a password at all
+    assert cli.main(["--email", "x@y.bg", "--new-password", "a"]) == cli.EXIT_USAGE
+    assert cli.main(["--email", "x@y.bg", "--password-stdin"]) == cli.EXIT_USAGE
 
 
 def test_no_public_recovery_endpoint_exists():

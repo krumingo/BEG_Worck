@@ -5,7 +5,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, 
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
-import hashlib
 import logging
 import uuid
 
@@ -17,8 +16,8 @@ from app.deps.auth import (
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
 from app.utils.email_identity import email_match_filter, mask_email, normalize_email
-from app.services import password_reset
-from app.routes.platform import RateLimiter, get_client_ip
+from app.services import auth_events, password_reset, rate_limit
+from app.utils.client_ip import client_ip
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
@@ -36,6 +35,9 @@ def _tenant(user: dict) -> TenantData:
 
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger("beg.auth")
+
+#: F-03: neutral refusal for an email already used in another organization.
+EMAIL_NOT_AVAILABLE = "This email cannot be used. Choose a different email."
 
 # Pydantic models
 class LoginRequest(BaseModel):
@@ -76,24 +78,31 @@ class ModuleToggle(BaseModel):
 
 # Auth routes
 @router.post("/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     # AUTH-01: the email is compared case-insensitively (strip().lower()) and
     # must name exactly ONE user. A case-only duplicate is ambiguous: refused
     # like a wrong password, never resolved to "the first one", and reported
-    # in the server log for the operator (scripts/reset_user_password.py
-    # --dry-run lists the colliding rows).
+    # in the server log and as a durable security event for the operator
+    # (scripts/auth_duplicate_emails_report.py lists the colliding rows).
     matches = await resolve_identities_by_email(db, req.email, {"_id": 0})
     if len(matches) > 1:
         logger.warning("LOGIN_REFUSED_AMBIGUOUS_EMAIL: %d users share %s up to letter case "
                        "(user_ids=%s)", len(matches), mask_email(req.email),
                        [m.get("id") for m in matches])
+        await auth_events.record(
+            db, auth_events.LOGIN_AMBIGUOUS, ip=client_ip(request),
+            subject=auth_events.keyed_ref(normalize_email(req.email)),
+            detail={"candidates": len(matches)})
         raise HTTPException(status_code=401, detail="Invalid credentials")
     user = matches[0] if matches else None
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account disabled")
-    token = create_token({"user_id": user["id"], "org_id": user["org_id"], "role": user["role"]})
+    # AUTH-01 C01 (F-02): the token carries the user's auth_version; a password
+    # reset or owner recovery increments it, which ends every older session.
+    token = create_token({"user_id": user["id"], "org_id": user["org_id"], "role": user["role"],
+                          "av": int(user.get("auth_version", 0) or 0)})
     await log_audit(user["org_id"], user["id"], user["email"], "login", "auth")
     return {"token": token, "user": {k: v for k, v in user.items() if k != "password_hash"}}
 
@@ -204,14 +213,20 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(max_length=256)
 
 
-# MVP limits on the existing in-memory limiter (per process; see platform.py).
-forgot_password_ip_limiter = RateLimiter(max_requests=10, window_seconds=900)
-forgot_password_email_limiter = RateLimiter(max_requests=3, window_seconds=900)
-reset_password_ip_limiter = RateLimiter(max_requests=20, window_seconds=900)
+# AUTH-01 C01 (F-04): shared per-IP limits (MongoDB counters, all workers).
+# The per-email forgot limit lives in password_reset.process_forgot_request.
+FORGOT_IP_LIMIT, RESET_IP_LIMIT, IP_WINDOW_SECONDS = 10, 20, 900
 
 
 def _too_many_requests():
     return HTTPException(status_code=429, detail="Too many requests. Try again later.")
+
+
+async def _ip_allowed(scope: str, ip: str, limit: int) -> bool:
+    hit = await rate_limit.hit(db, scope, ip, limit, IP_WINDOW_SECONDS)
+    if not hit.allowed and hit.first_rejection:
+        await auth_events.record(db, auth_events.RATE_LIMITED_IP, ip=ip, detail={"scope": scope})
+    return hit.allowed
 
 
 @router.post("/auth/forgot-password")
@@ -219,24 +234,16 @@ async def forgot_password(data: ForgotPasswordRequest, request: Request,
                           background_tasks: BackgroundTasks):
     """Always the same answer — it never says whether the account exists.
 
-    For exactly one active user with this email (case-insensitive) a 30-minute
-    one-time link is created and e-mailed after the response. Unknown, disabled
-    or ambiguous emails, the per-email limit and a delivery problem all end in
-    the same 200 body.
+    Before the response this does the SAME work for every email (F-05): the
+    shared per-IP limit and scheduling one background task. Everything that
+    depends on the account — the per-email limit, the lookup, the token, the
+    audit and the e-mail — runs after the response in
+    ``password_reset.process_forgot_request``.
     """
-    client_ip = get_client_ip(request)
-    if not forgot_password_ip_limiter.is_allowed(client_ip):
+    ip = client_ip(request)
+    if not await _ip_allowed("forgot_ip", ip, FORGOT_IP_LIMIT):
         raise _too_many_requests()
-    normalized = normalize_email(data.email)
-    email_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest() if normalized else None
-    if email_key and forgot_password_email_limiter.is_allowed(email_key):
-        try:
-            mail = await password_reset.request_reset(db, normalized, client_ip)
-        except Exception as exc:
-            logger.error("PASSWORD_RESET_REQUEST_FAILED error=%s", type(exc).__name__)
-            mail = None
-        if mail is not None:
-            background_tasks.add_task(password_reset.deliver, mail)
+    background_tasks.add_task(password_reset.process_forgot_request, db, data.email, ip)
     return {"ok": True, "message": password_reset.GENERIC_REQUEST_MESSAGE}
 
 
@@ -249,17 +256,24 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
     one generic 400. 400 rather than 401: the frontend treats 401 as "session
     expired" and would leave the page.
     """
-    if not reset_password_ip_limiter.is_allowed(get_client_ip(request)):
+    ip = client_ip(request)
+    if not await _ip_allowed("reset_ip", ip, RESET_IP_LIMIT):
         raise _too_many_requests()
     is_valid, error_msg = validate_password_strength(data.new_password)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
     try:
-        await password_reset.reset_password(db, data.token, hash_password(data.new_password))
+        await password_reset.reset_password(db, data.token, hash_password(data.new_password),
+                                            requested_ip=ip)
     except password_reset.ResetFailed:
         raise HTTPException(status_code=400, detail={
             "error_code": "RESET_TOKEN_INVALID",
             "message": password_reset.GENERIC_RESET_FAILURE})
+    except password_reset.ResetNotCompleted:
+        # F-01: the transaction was aborted — the password and the link are unchanged.
+        raise HTTPException(status_code=503, detail={
+            "error_code": "RESET_NOT_COMPLETED",
+            "message": password_reset.RESET_NOT_COMPLETED_MESSAGE})
     return {"ok": True}
 
 
@@ -328,6 +342,13 @@ async def create_user(
     normalized_email = normalize_email(data.email)
     if normalized_email is None:
         raise HTTPException(status_code=400, detail="Invalid email")
+    # AUTH-01 C01 (F-03): one email = one login across the installation (the
+    # rule tenant onboarding already applies). An address used by a user of
+    # ANOTHER organization is refused without naming that organization; the
+    # same-organization case keeps its existing answer below.
+    if any(m.get("org_id") != org_id for m in await resolve_identities_by_email(
+            db, normalized_email, {"_id": 0, "id": 1, "org_id": 1, "email": 1})):
+        raise HTTPException(status_code=400, detail=EMAIL_NOT_AVAILABLE)
 
     if ctx.mode != MODE_ENFORCE:
         # ---- legacy path (off / shadow): unchanged business behavior ----------

@@ -182,6 +182,20 @@ test("a server-side policy message is shown as it came", async () => {
   expect(await screen.findByTestId("reset-error")).toHaveTextContent("at least one digit");
 });
 
+test("a reset the server could not commit keeps the form and says to try again", async () => {
+  mockSearch = "?token=tok-123456789012345678901234567890";
+  API.post.mockRejectedValue(httpError(503, {
+    error_code: "RESET_NOT_COMPLETED",
+    message: "The password was not changed. Please try again.",
+  }));
+  render(<ResetPasswordPage />);
+  await fill(GOOD);
+  await userEvent.click(screen.getByTestId("reset-submit-button"));
+  expect(await screen.findByTestId("reset-error")).toHaveTextContent("Опитайте отново");
+  expect(screen.queryByTestId("reset-link-invalid")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("reset-password-success")).not.toBeInTheDocument();
+});
+
 // ───────────────────────────────────────────────────────────────── mobile
 test.each([
   ["forgot", () => <ForgotPasswordPage />, "forgot-password-page"],

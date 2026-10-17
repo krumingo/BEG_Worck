@@ -141,7 +141,7 @@ async def signup_organization(data: OrgSignupRequest):
         await db.feature_flags.insert_one(flag)
     
     # Create token for auto-login
-    token = create_token({"user_id": user_id, "org_id": org_id, "role": "Owner"})
+    token = create_token({"user_id": user_id, "org_id": org_id, "role": "Owner", "av": 0})
     
     await log_audit(org_id, user_id, data.owner_email, "signup", "organization", org_id, {"name": data.org_name})
     

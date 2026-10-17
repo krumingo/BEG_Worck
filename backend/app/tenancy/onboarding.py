@@ -78,7 +78,10 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
         raise OnboardingRefused("owner email is required", "BAD_REQUEST")
     if not owner_password_hash:
         raise OnboardingRefused("owner password hash is required", "BAD_REQUEST")
-    if await op_db["users"].find_one({"email": email}, {"_id": 1}):
+    # AUTH-01 C01 (F-03): one email = one login across the installation, compared
+    # case-insensitively like login itself (a legacy "Owner@x" blocks "owner@x").
+    from app.tenancy.data_access import resolve_identities_by_email
+    if await resolve_identities_by_email(op_db, email, {"_id": 0, "id": 1, "email": 1}):
         raise OnboardingRefused("Email already registered", "EMAIL_EXISTS")
 
     now = _now()

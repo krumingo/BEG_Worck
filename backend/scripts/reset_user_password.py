@@ -10,12 +10,11 @@ not, and must never become, an HTTP endpoint.
     # 1) look first — no write, no password needed
     python scripts/reset_user_password.py --email Krum@begfull.bg --dry-run
 
-    # 2) set it — the password is asked twice, hidden
+    # 2) set it — the password is asked twice, hidden (needs a terminal:
+    #    docker exec -it ...). There is deliberately NO way to pass the password
+    #    as an argument or through a pipe (AUTH-01 C01, F-07): it would land in
+    #    shell history, process listings or CI logs.
     python scripts/reset_user_password.py --email Krum@begfull.bg
-
-    # non-interactive alternatives (prefer stdin; an argument lands in shell history)
-    printf '%s' "$NEW_PW" | python scripts/reset_user_password.py --email X --password-stdin
-    python scripts/reset_user_password.py --email X --new-password '...'
 
 What it guarantees:
 
@@ -25,15 +24,18 @@ What it guarantees:
   non-zero exit and nothing written;
 * the password passes the same ``validate_password_strength`` the API uses and
   is hashed with the same ``hash_password``;
-* exactly that one user document is updated (filter on its ``id`` AND
-  ``org_id``); ``password_reset_at`` and an explicit recovery marker
-  (``password_reset_by = LOCAL_RECOVERY_CLI``) are recorded, and the user's
-  outstanding self-service reset links are invalidated;
-* an audit row is written in the user's own tenant;
+* ONE MongoDB transaction (AUTH-01 C01, F-01) updates exactly that one user
+  document (filter on its ``id`` AND ``org_id``) — new hash,
+  ``password_reset_at``, the recovery marker ``password_reset_by =
+  LOCAL_RECOVERY_CLI`` and ``$inc auth_version`` (F-02: every session issued
+  before the recovery stops working) — revokes the user's open self-service
+  reset links and writes the audit row. All of it commits or none of it does;
 * neither the password nor any hash is ever printed.
 
-Exit codes: 0 ok · 1 usage · 2 not found · 3 ambiguous · 4 inactive / unusable
-record · 5 invalid password · 6 write did not apply.
+Exit codes: 0 ok · 1 usage / no terminal · 2 not found · 3 ambiguous ·
+4 inactive / unusable record · 5 invalid password · 6 nothing changed (the
+transaction did not commit) · 7 nothing changed (this MongoDB cannot run
+transactions — a replica set is required).
 """
 import argparse
 import asyncio
@@ -46,11 +48,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.services.auth_tx import TransactionsUnavailable, run_in_transaction  # noqa: E402
 from app.utils.email_identity import (  # noqa: E402
     MATCH_LIMIT, email_match_filter, matching, normalize_email)
 
 EXIT_OK, EXIT_USAGE, EXIT_NOT_FOUND, EXIT_AMBIGUOUS = 0, 1, 2, 3
-EXIT_INACTIVE, EXIT_INVALID_PASSWORD, EXIT_WRITE_FAILED = 4, 5, 6
+EXIT_INACTIVE, EXIT_INVALID_PASSWORD, EXIT_WRITE_FAILED, EXIT_NO_TRANSACTIONS = 4, 5, 6, 7
 
 RECOVERY_MARKER = "LOCAL_RECOVERY_CLI"
 _PROJECTION = {"_id": 0, "id": 1, "org_id": 1, "email": 1, "role": 1, "is_active": 1,
@@ -76,47 +79,62 @@ async def find_candidates(db, email: str):
     return normalized, matching(docs, normalized)
 
 
-async def apply_reset(db, target: dict, password_hash: str) -> bool:
-    """Write the new hash to exactly ``target`` — nothing else."""
+class _NotExactlyOne(Exception):
+    """Inside the transaction: the target is no longer exactly one active user."""
+
+
+async def apply_reset(db, target: dict, password_hash: str) -> None:
+    """Write the new hash to exactly ``target`` — in ONE transaction, or not at all.
+
+    Raises :class:`_NotExactlyOne` / :class:`TransactionsUnavailable` / any driver
+    error; in every one of those cases nothing was committed.
+    """
     uid, org_id = target["id"], target["org_id"]
-    if await db.users.count_documents({"id": uid, "org_id": org_id}) != 1:
-        return False
     now = datetime.now(timezone.utc)
     stamp = now.isoformat()
-    result = await db.users.update_one(
-        {"id": uid, "org_id": org_id},
-        {"$set": {
-            "password_hash": password_hash,
-            "updated_at": stamp,
-            "password_reset_at": stamp,
-            "password_reset_by": RECOVERY_MARKER,
-        }})
-    if result.matched_count != 1:
-        return False
-    # Any self-service reset link still in flight for this user is now stale.
-    await db.password_reset_tokens.update_many(
-        {"org_id": org_id, "user_id": uid, "used_at": None},
-        {"$set": {"used_at": now, "revoked_reason": "local_recovery_cli"}})
-    await db.audit_logs.insert_one({
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "user_id": "system",
-        "user_email": "system",
-        "action": "password_recovery_cli",
-        "entity_type": "user",
-        "entity_id": uid,
-        "changes": {"method": RECOVERY_MARKER, "host": socket.gethostname()},
-        "timestamp": stamp,
-    })
-    return True
+
+    async def body(session):
+        if await db.users.count_documents({"id": uid, "org_id": org_id},
+                                          session=session) != 1:
+            raise _NotExactlyOne()
+        result = await db.users.update_one(
+            {"id": uid, "org_id": org_id, "is_active": {"$ne": False}},
+            {"$set": {
+                "password_hash": password_hash,
+                "updated_at": stamp,
+                "password_reset_at": stamp,
+                "password_reset_by": RECOVERY_MARKER,
+            }, "$inc": {"auth_version": 1}}, session=session)
+        if result.matched_count != 1:
+            raise _NotExactlyOne()
+        # Any self-service reset link still in flight for this user is now stale.
+        await db.password_reset_tokens.update_many(
+            {"org_id": org_id, "user_id": uid, "used_at": None},
+            {"$set": {"used_at": now, "revoked_reason": "local_recovery_cli"}},
+            session=session)
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "user_id": "system",
+            "user_email": "system",
+            "action": "password_recovery_cli",
+            "entity_type": "user",
+            "entity_id": uid,
+            "changes": {"method": RECOVERY_MARKER, "host": socket.gethostname()},
+            "timestamp": stamp,
+        }, session=session)
+
+    await run_in_transaction(db, body)
 
 
-def _read_password(args) -> str:
-    if args.new_password is not None:
-        _out("WARNING: a password given as an argument can remain in shell history.")
-        return args.new_password
-    if args.password_stdin:
-        return sys.stdin.readline().rstrip("\r\n")
+class _NoTerminal(Exception):
+    pass
+
+
+def _read_password() -> str:
+    """Hidden interactive entry, twice. Refused without a terminal (no echo/pipe path)."""
+    if not sys.stdin.isatty():
+        raise _NoTerminal()
     first = getpass.getpass("New password: ")
     second = getpass.getpass("Repeat new password: ")
     if first != second:
@@ -131,7 +149,12 @@ async def run(db, args) -> int:
     password = None
     if not args.dry_run:
         try:
-            password = _read_password(args)
+            password = _read_password()
+        except _NoTerminal:
+            _out("ERROR: the new password is entered only at a hidden prompt. Run this in a "
+                 "terminal, e.g. `docker exec -it begwork-backend python "
+                 "scripts/reset_user_password.py --email ...`. Nothing changed.")
+            return EXIT_USAGE
         except (ValueError, EOFError, KeyboardInterrupt) as exc:
             _out(f"ERROR: {exc or 'no password entered'}")
             return EXIT_INVALID_PASSWORD
@@ -166,8 +189,18 @@ async def run(db, args) -> int:
         _out("DRY RUN — exactly one active user matches; nothing written:\n  " + _describe(target))
         return EXIT_OK
 
-    if not await apply_reset(db, target, hash_password(password)):
-        _out("ERROR: the update did not apply to exactly that user. Nothing reported as done.")
+    try:
+        await apply_reset(db, target, hash_password(password))
+    except TransactionsUnavailable:
+        _out("ERROR: this MongoDB cannot run transactions (a replica set is required), so "
+             "the reset was refused. NOTHING CHANGED.")
+        return EXIT_NO_TRANSACTIONS
+    except _NotExactlyOne:
+        _out("ERROR: the user changed while resetting (no longer exactly one active match). "
+             "NOTHING CHANGED.")
+        return EXIT_WRITE_FAILED
+    except Exception as exc:
+        _out(f"ERROR: the reset did not commit ({type(exc).__name__}). NOTHING CHANGED.")
         return EXIT_WRITE_FAILED
     _out("OK: password reset for\n  " + _describe(target))
     _out("The user can log in with the new password now.")
@@ -179,11 +212,6 @@ def parse_args(argv):
         description="Reset ONE active user's password from the server shell (AUTH-01).")
     p.add_argument("--email", required=True, help="the user's email (letter case ignored)")
     p.add_argument("--dry-run", action="store_true", help="look the user up, write nothing")
-    src = p.add_mutually_exclusive_group()
-    src.add_argument("--password-stdin", action="store_true",
-                     help="read the new password from the first line of stdin")
-    src.add_argument("--new-password", default=None,
-                     help="the new password (discouraged: visible in shell history)")
     return p.parse_args(argv)
 
 
