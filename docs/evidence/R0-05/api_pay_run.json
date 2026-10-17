@@ -1,0 +1,36 @@
+{
+  "pay_run": {
+    "id": "5c8fa5b6-73bb-42b9-805d-1d188696afb3",
+    "number": "PR-0001",
+    "status": "paid",
+    "totals": {
+      "employees": 1,
+      "hours": 40,
+      "earned": 500,
+      "bonuses": 0,
+      "deductions": 0,
+      "paid": 500,
+      "remaining": 0
+    },
+    "employee_rows": [
+      {
+        "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+        "name": "Ivan Alpha",
+        "earned_amount": 500,
+        "paid_now_amount": 500,
+        "remaining_after_payment": 0
+      }
+    ]
+  },
+  "payment_slips": [
+    {
+      "slip_number": "SL-00001",
+      "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+      "pay_run_id": "5c8fa5b6-73bb-42b9-805d-1d188696afb3",
+      "paid_now_amount": 500
+    }
+  ],
+  "allocations_employee_ids": [
+    "06e357b8-039e-48d2-8cf9-5b54c82c3ce4"
+  ]
+}
