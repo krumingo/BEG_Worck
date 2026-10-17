@@ -18,13 +18,22 @@ have left behind, so Krum can decide on any correction (step 1.9) from facts:
   this is a candidate list ("a paid plan BEG_Work never saw a checkout for"),
   not proof of a forged event.
 
-It never writes. There is no apply mode: the database handle is wrapped so that
-every write method raises before it reaches the server, and ``build_report``
-itself contains no write call (the A2C guard proves it — READ_ONLY_DIAGNOSTIC).
-No e-mail addresses, secrets or connection strings are printed.
+It never writes. There is no apply mode. The database handle is wrapped in an
+ALLOWLIST (R0-01-C01 F-06): only ``find``, ``find_one``, ``count_documents``,
+``distinct``, ``aggregate``, ``list_indexes`` and ``list_collection_names``
+reach the server; every other attribute raises before it does. ``aggregate``
+refuses any pipeline that contains ``$out`` or ``$merge`` at any depth.
+``build_report`` itself contains no write call (the A2C guard proves it —
+READ_ONLY_DIAGNOSTIC). No e-mail addresses, secrets or connection strings are
+printed.
 
-Running it against PRODUCTION needs Krum's approval (R0-01 step 1.0). A
-non-local target is refused unless ``--allow-remote`` is given.
+The wrapper is the inner boundary. The OUTER boundary for any non-local run is
+the credential: connect with a MongoDB user that has only the ``read`` role on
+the target database, so that even a defect in this script cannot write.
+
+Running it against PRODUCTION needs Krum's approval (R0-01 step 1.0) and that
+read-only user. A non-local target is refused unless ``--allow-remote`` is
+given.
 
 Usage:
     python scripts/r0_01_billing_exposure_report.py --db begwork [--mongo-url URL] \
@@ -43,17 +52,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-WRITE_METHODS = ("insert_one", "insert_many", "update_one", "update_many", "replace_one",
-                 "delete_one", "delete_many", "find_one_and_update", "find_one_and_delete",
-                 "find_one_and_replace", "bulk_write", "create_index", "create_indexes",
-                 "drop", "drop_index", "drop_indexes", "rename")
+#: The only collection methods that reach the server. Everything else is refused.
+READ_METHODS = frozenset({"find", "find_one", "count_documents", "distinct", "aggregate",
+                          "list_indexes"})
+#: Aggregation stages that write. Refused wherever they appear in a pipeline.
+WRITE_STAGES = frozenset({"$out", "$merge"})
 
 PAID_PLAN_IDS = ("pro", "enterprise")
 ROW_LIMIT = 10000
 
 
 class ReadOnlyDb:
-    """Refuses every write method before it reaches the server."""
+    """Hands out read-only collection proxies; nothing else of the database."""
 
     def __init__(self, db):
         self._db = db
@@ -61,19 +71,44 @@ class ReadOnlyDb:
     def __getitem__(self, name):
         return _ReadOnlyColl(self._db[name], name)
 
+    def __getattr__(self, attr):
+        raise PermissionError("read-only report: database attribute %r refused" % attr)
+
     @property
     def name(self):
         return self._db.name
 
+    async def list_collection_names(self):
+        return await self._db.list_collection_names()
+
+
+def _write_stage_in(node) -> bool:
+    """True when ``$out``/``$merge`` appears anywhere inside a pipeline value."""
+    if isinstance(node, dict):
+        return any(k in WRITE_STAGES or _write_stage_in(v) for k, v in node.items())
+    if isinstance(node, (list, tuple)):
+        return any(_write_stage_in(v) for v in node)
+    return False
+
 
 class _ReadOnlyColl:
+    """Allowlist proxy: only READ_METHODS reach the collection."""
+
     def __init__(self, coll, name):
         self._coll, self._name = coll, name
 
     def __getattr__(self, attr):
-        if attr in WRITE_METHODS:
+        if attr not in READ_METHODS:
             raise PermissionError("read-only report: %s.%s refused" % (self._name, attr))
+        if attr == "aggregate":
+            return self._aggregate
         return getattr(self._coll, attr)
+
+    def _aggregate(self, pipeline, *args, **kwargs):
+        if _write_stage_in(pipeline):
+            raise PermissionError("read-only report: %s.aggregate with $out/$merge refused"
+                                  % self._name)
+        return self._coll.aggregate(pipeline, *args, **kwargs)
 
 
 def _sub_row(doc):

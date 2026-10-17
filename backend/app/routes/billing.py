@@ -10,9 +10,15 @@ R0-01 (AUD-009 / AUD-045, FLOW-050):
 * The tenant of a webhook event is resolved from a record BEG_Work wrote itself
   (``billing_checkout_sessions`` for a checkout, ``subscriptions`` for a Stripe
   subscription id) and cross-checked against the event's customer and
-  ``metadata.org_id``. Any mismatch writes nothing and logs a security event.
+  ``metadata.org_id``/``metadata.plan_id``. Only a paid subscription checkout
+  activates a plan (R0-01-C01 F-01, F-05).
+* A refused event writes nothing to any tenant. It leaves a sanitized row in
+  the system collection ``billing_webhook_rejections`` and a security log;
+  ``unresolved`` (no local record yet) answers 503 so Stripe retries, the other
+  classes answer 200 (R0-01-C01 F-03, F-04).
 * Every processed event id is claimed once in ``billing_webhook_events``
-  (unique index), so a replayed event is a 200 no-op.
+  (unique index, lease + attempt token), so a replayed event is a 200 no-op and
+  a crashed attempt is re-claimable after the lease (R0-01-C01 F-02).
 * Mock billing runs only when ``app.core.stripe_config.billing_mode()`` says so
   (``BILLING_PROVIDER=mock`` and ``ENV`` development/test). Outside mock the
   plan changes only from a verified webhook; checkout and the portal are
@@ -64,6 +70,7 @@ async def _ensure_billing_indexes():
     """
     await db.billing_webhook_events.create_index("stripe_event_id", unique=True)
     await db.billing_checkout_sessions.create_index("stripe_session_id", unique=True)
+    await db.billing_webhook_rejections.create_index("stripe_event_id", unique=True)
 
 
 # ── Public Endpoints ───────────────────────────────────────────────
@@ -376,6 +383,40 @@ async def create_portal_session(user: dict = Depends(require_admin)):
 
 # ── Webhook ────────────────────────────────────────────────────────
 
+#: R0-01-C01 (F-04): why an event was refused. ``unresolved`` means BEG_Work has
+#: no local record for it YET (cutover, ordering) -> 503 so Stripe retries; the
+#: other classes are final for that event -> 200 once the durable record exists.
+REJECT_UNRESOLVED = "unresolved"
+REJECT_MISMATCH = "mismatch"
+REJECT_NOT_PAID = "not_paid"
+REJECT_MALFORMED = "malformed"
+
+#: R0-01-C01 (F-02): a "processing" claim older than this may be re-claimed.
+DEFAULT_WEBHOOK_LEASE_SECONDS = 300
+
+
+class _WebhookRejected(Exception):
+    """A verified event that must not change any tenant's billing state."""
+
+    def __init__(self, reason_class: str, reason: str, object_id=None, org_id: str = None):
+        super().__init__(reason)
+        self.reason_class, self.reason = reason_class, reason
+        self.object_id, self.org_id = object_id, org_id
+
+
+def _webhook_lease_seconds() -> int:
+    try:
+        value = int(os.environ.get("BILLING_WEBHOOK_LEASE_SECONDS", DEFAULT_WEBHOOK_LEASE_SECONDS))
+    except (TypeError, ValueError):
+        return DEFAULT_WEBHOOK_LEASE_SECONDS
+    return value if value > 0 else DEFAULT_WEBHOOK_LEASE_SECONDS
+
+
+def _utcnow() -> datetime:
+    """Naive UTC, which is what MongoDB stores and returns for a BSON date."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _webhook_security_event(reason: str, event_id: str, event_type: str, org_id: str = None):
     """A refused webhook event. Ids and the reason only — never the payload."""
     log_security_event("BILLING_WEBHOOK_REJECTED", None, {
@@ -385,22 +426,58 @@ def _webhook_security_event(reason: str, event_id: str, event_type: str, org_id:
     })
 
 
+async def _record_rejection(event_id: str, event_type: str, rej: _WebhookRejected):
+    """The durable, sanitized evidence of a refused event (F-04).
+
+    ``billing_webhook_rejections`` is a SYSTEM collection (ownership TECHNICAL):
+    the event's tenant is exactly what could not be established, so the row
+    belongs to no tenant and is keyed by the Stripe event id alone. It holds ids,
+    the class and the reason — no payload, e-mail or amount. ``local_org_id`` is
+    filled only from a BEG_Work record (a mismatch), never from event metadata.
+    A redelivery updates the same row (``attempts`` + 1).
+    """
+    await _ensure_billing_indexes()
+    now = _utcnow()
+    await db.billing_webhook_rejections.update_one(
+        {"stripe_event_id": event_id},
+        {"$set": {"event_type": event_type, "reason_class": rej.reason_class,
+                  "reason": rej.reason, "stripe_object_id": rej.object_id,
+                  "local_org_id": rej.org_id, "last_received_at": now},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "received_at": now},
+         "$inc": {"attempts": 1}},
+        upsert=True)
+
+
 async def _resolve_checkout_completed(event_id: str, event_type: str, obj):
     """``checkout.session.completed`` -> the tenant whose OWN checkout record it is.
 
-    The session id must match a ``billing_checkout_sessions`` row BEG_Work wrote
-    at checkout. That row fixes the tenant, the customer and the plan; the
-    event's ``customer``, ``metadata.org_id`` and ``metadata.plan_id`` must agree
-    with it, or nothing is written.
+    Only a PAID subscription checkout may activate a plan (F-01). The session id
+    must then match a ``billing_checkout_sessions`` row BEG_Work wrote at
+    checkout. That row fixes the tenant, the customer and the plan; the event's
+    ``customer``, ``metadata.org_id`` and ``metadata.plan_id`` (all required,
+    F-05) must agree with it exactly.
     """
     session_id = obj.get("id")
     customer_id = obj.get("customer")
+    subscription_id = obj.get("subscription")
     metadata = obj.get("metadata") or {}
+
+    if not isinstance(session_id, str) or not session_id:
+        raise _WebhookRejected(REJECT_MALFORMED, "checkout session has no id")
+    if obj.get("mode") != "subscription":
+        raise _WebhookRejected(REJECT_MALFORMED, "checkout mode is not 'subscription'", session_id)
+    if not obj.get("payment_status"):
+        raise _WebhookRejected(REJECT_MALFORMED, "checkout has no payment_status", session_id)
+    if obj.get("payment_status") != "paid":
+        raise _WebhookRejected(REJECT_NOT_PAID, "checkout payment_status is not 'paid'", session_id)
+    if not isinstance(subscription_id, str) or not subscription_id:
+        raise _WebhookRejected(REJECT_MALFORMED, "checkout has no subscription id", session_id)
+
     tenant, record = await resolve_owner_by_unique_key(
         db, "billing_checkout_sessions", "stripe_session_id", session_id, {"_id": 0})
     if record is None:
-        _webhook_security_event("no BEG_Work checkout record for this session", event_id, event_type)
-        return None, None
+        raise _WebhookRejected(REJECT_UNRESOLVED, "no BEG_Work checkout record for this session",
+                               session_id)
 
     plan_id = record.get("plan_id")
     reasons = []
@@ -408,8 +485,8 @@ async def _resolve_checkout_completed(event_id: str, event_type: str, obj):
         reasons.append("metadata.org_id does not match the checkout record")
     if not customer_id or customer_id != record.get("stripe_customer_id"):
         reasons.append("customer does not match the checkout record")
-    if metadata.get("plan_id") not in (None, plan_id):
-        reasons.append("metadata.plan_id does not match the checkout record")
+    if not metadata.get("plan_id") or metadata.get("plan_id") != plan_id:
+        reasons.append("metadata.plan_id is missing or does not match the checkout record")
     if plan_id not in SUBSCRIPTION_PLANS or plan_id == "free":
         reasons.append("checkout record has no purchasable plan")
     sub = await tenant.subscriptions.find_one({"org_id": tenant.org_id}, {"_id": 0})
@@ -418,24 +495,24 @@ async def _resolve_checkout_completed(event_id: str, event_type: str, obj):
     elif sub.get("stripe_customer_id") not in (None, customer_id):
         reasons.append("customer does not match the tenant's subscription")
     if reasons:
-        _webhook_security_event("; ".join(reasons), event_id, event_type, tenant.org_id)
-        return None, None
+        raise _WebhookRejected(REJECT_MISMATCH, "; ".join(reasons), session_id, tenant.org_id)
     return tenant, {"session_id": session_id, "plan_id": plan_id, "customer_id": customer_id,
-                    "subscription_id": obj.get("subscription")}
+                    "subscription_id": subscription_id}
 
 
 async def _resolve_by_subscription(event_id: str, event_type: str, subscription_id, customer_id):
     """A Stripe subscription id -> the ONE tenant whose subscription row carries it,
     and only if the event's customer is that row's customer."""
+    if not isinstance(subscription_id, str) or not subscription_id:
+        raise _WebhookRejected(REJECT_MALFORMED, "event has no subscription id")
     tenant, sub = await resolve_owner_by_unique_key(
         db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
     if sub is None:
-        _webhook_security_event("subscription id resolves to no single tenant", event_id, event_type)
-        return None, None
+        raise _WebhookRejected(REJECT_UNRESOLVED, "subscription id resolves to no single tenant",
+                               subscription_id)
     if not customer_id or customer_id != sub.get("stripe_customer_id"):
-        _webhook_security_event("customer does not match the tenant's subscription",
-                                event_id, event_type, tenant.org_id)
-        return None, None
+        raise _WebhookRejected(REJECT_MISMATCH, "customer does not match the tenant's subscription",
+                               subscription_id, tenant.org_id)
     return tenant, {"subscription_id": subscription_id, "sub": sub}
 
 
@@ -538,30 +615,50 @@ _WEBHOOK_HANDLERS = {
 }
 
 
-async def _claim_event(tenant: TenantData, event_id: str, event_type: str, now: str) -> bool:
-    """Claim a Stripe event id once. False = already processed (or in progress).
+async def _claim_event(tenant: TenantData, event_id: str, event_type: str) -> Optional[str]:
+    """Claim a Stripe event id; the attempt token, or None if someone else owns it.
 
-    The unique index on ``stripe_event_id`` decides, so two concurrent deliveries
-    of one event cannot both pass. An attempt that failed half-way is marked
-    ``failed`` and may be re-claimed by Stripe's next retry.
+    The unique index on ``stripe_event_id`` decides the first claim, so two live
+    deliveries of one event cannot both pass. Afterwards the row is re-claimable
+    (atomically, with a NEW token) only when it is ``failed``, or ``processing``
+    with a lease older than ``BILLING_WEBHOOK_LEASE_SECONDS`` — a worker that
+    died mid-way (F-02). ``processed`` is final.
     """
     await _ensure_billing_indexes()
+    token = str(uuid.uuid4())
+    now = _utcnow()
     try:
         await tenant.billing_webhook_events.insert_one({
             "id": str(uuid.uuid4()),
             "stripe_event_id": event_id,
             "event_type": event_type,
             "status": "processing",
+            "attempt_token": token,
+            "processing_started_at": now,
             "attempts": 1,
             "received_at": now,
         })
-        return True
+        return token
     except DuplicateKeyError:
         pass
+    stale_before = now - timedelta(seconds=_webhook_lease_seconds())
     reclaimed = await tenant.billing_webhook_events.find_one_and_update(
-        {"stripe_event_id": event_id, "status": "failed"},
-        {"$set": {"status": "processing", "received_at": now}, "$inc": {"attempts": 1}})
-    return reclaimed is not None
+        {"stripe_event_id": event_id,
+         "$or": [{"status": "failed"},
+                 {"status": "processing", "processing_started_at": {"$lt": stale_before}}]},
+        {"$set": {"status": "processing", "attempt_token": token, "processing_started_at": now},
+         "$inc": {"attempts": 1}})
+    return token if reclaimed is not None else None
+
+
+async def _finish_event(tenant: TenantData, event_id: str, token: str, fields: dict) -> bool:
+    """Write the final state only if this attempt still holds the lease."""
+    result = await tenant.billing_webhook_events.update_one(
+        {"stripe_event_id": event_id, "attempt_token": token}, {"$set": fields})
+    if not result.matched_count:
+        logger.warning(f"Stripe webhook {event_id}: lease lost to a newer attempt; final state not written")
+        return False
+    return True
 
 
 @router.post("/billing/webhook")
@@ -595,29 +692,35 @@ async def stripe_webhook(request: Request):
         return {"status": "ignored"}
     resolve, apply = handler
     
-    tenant, ctx = await resolve(event_id, event_type, obj)
-    if tenant is None:
-        # Refused (already security-logged). 2xx so Stripe does not retry a
-        # forged or foreign event forever; nothing was written.
-        return {"status": "rejected"}
+    try:
+        tenant, ctx = await resolve(event_id, event_type, obj)
+    except _WebhookRejected as rej:
+        _webhook_security_event(f"{rej.reason_class}: {rej.reason}", event_id, event_type, rej.org_id)
+        await _record_rejection(event_id, event_type, rej)
+        if rej.reason_class == REJECT_UNRESOLVED:
+            # BEG_Work has no local record for it (yet): let Stripe retry.
+            raise HTTPException(status_code=503, detail="Billing event not resolvable yet")
+        # Final for this event and recorded: 2xx so Stripe stops retrying.
+        return {"status": "rejected", "reason_class": rej.reason_class}
     
-    now = datetime.now(timezone.utc).isoformat()
-    if not await _claim_event(tenant, event_id, event_type, now):
-        logger.info(f"Stripe webhook {event_id} already processed; no-op")
+    token = await _claim_event(tenant, event_id, event_type)
+    if token is None:
+        logger.info(f"Stripe webhook {event_id} already processed or in progress; no-op")
         return {"status": "duplicate"}
     
+    now = datetime.now(timezone.utc).isoformat()
     try:
         await apply(tenant, ctx, obj, now)
     except Exception:
         logger.exception(f"Stripe webhook {event_id} ({event_type}) failed")
-        await tenant.billing_webhook_events.update_one(
-            {"stripe_event_id": event_id},
-            {"$set": {"status": "failed", "failed_at": datetime.now(timezone.utc).isoformat()}})
+        await _finish_event(tenant, event_id, token, {"status": "failed", "failed_at": _utcnow()})
         raise HTTPException(status_code=500, detail="Webhook processing failed")
     
-    await tenant.billing_webhook_events.update_one(
-        {"stripe_event_id": event_id},
-        {"$set": {"status": "processed", "processed_at": datetime.now(timezone.utc).isoformat()}})
+    await _finish_event(tenant, event_id, token, {"status": "processed", "processed_at": _utcnow()})
+    # An earlier "unresolved" refusal of this event is now settled.
+    await db.billing_webhook_rejections.update_one(
+        {"stripe_event_id": event_id, "resolved_at": None},
+        {"$set": {"resolved_at": _utcnow(), "resolved_org_id": tenant.org_id}})
     return {"status": "received"}
 
 
