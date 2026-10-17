@@ -295,6 +295,7 @@ Client Portal и отделния Marketplace продукт.
 - `docs/architecture/TENANCY_MODEL.md`
 - `docs/architecture/MODERN_FIELD_EXPERIENCE_2026-08-04.md`
 - `docs/architecture/FLOW_050_FINAL_GOVERNANCE_ENVIRONMENTS_RETENTION_DECISION_2026-08-04.md`
+- `docs/architecture/MASTER_RECOVERY_AND_FLOW_INTEGRATION_PLAN_2026-10-17.md`
 
 ## 18. Работен процес Claude / ChatGPT / Emergent
 
@@ -310,3 +311,26 @@ Client Portal и отделния Marketplace продукт.
 7. Крум тества на живо; доказателство (скрийншот/видео) преди статус "Готово".
 
 Правила: технически аномалии в кода се записват като дълг, не се поправят без Крум да потвърди "боли ме в реални данни"; заключен FLOW не се променя без изрично решение на Крум, записано в канона; при конфликт между документи важи docs/flows/ + FLOW-043; сесиите започват с четене на CLAUDE.md → Gate Matrix → релевантните FLOW файлове.
+
+
+## 19. Master Recovery & FLOW Integration Plan — mandatory startup rule
+
+Before any new implementation task, correction package, UI redesign, or FLOW integration work, read:
+
+`docs/architecture/MASTER_RECOVERY_AND_FLOW_INTEGRATION_PLAN_2026-10-17.md`
+
+It defines the current execution direction after the full application audit:
+
+`healing + FLOW integration -> usable application -> real-work testing -> continued FLOW completion`.
+
+Mandatory consequences:
+
+- do not treat recovery and feature/FLOW work as unrelated projects;
+- after P0 recovery is controlled, develop by vertical business slice;
+- every new screen or structural UI change requires current-screen review + FLOW gap map + mockup + Krum approval before implementation;
+- reuse correct existing implementation; never create a parallel ledger/register/source of truth;
+- each slice requires exact-head independent review and runtime validation;
+- a page existing in UI does not mean the FLOW is done;
+- merge/deploy remain separate explicit Krum decisions.
+
+If another implementation plan conflicts with this master sequencing or mockup gate, STOP and reconcile the documents before coding.
