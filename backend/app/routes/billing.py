@@ -3,21 +3,39 @@ Routes - Billing & Subscription (M10) Endpoints.
 
 IMPORTANT: Constants (SUBSCRIPTION_PLANS, MODULES, etc.) are temporarily imported from server.py.
 After Stage 1.2 is complete, move them to app/core/billing_constants.py
+
+R0-01 (AUD-009 / AUD-045, FLOW-050):
+* The Stripe webhook fails closed: no ``STRIPE_WEBHOOK_SECRET`` -> 503 and no
+  write; the signature is always verified by ``stripe.Webhook.construct_event``.
+* The tenant of a webhook event is resolved from a record BEG_Work wrote itself
+  (``billing_checkout_sessions`` for a checkout, ``subscriptions`` for a Stripe
+  subscription id) and cross-checked against the event's customer and
+  ``metadata.org_id``. Any mismatch writes nothing and logs a security event.
+* Every processed event id is claimed once in ``billing_webhook_events``
+  (unique index), so a replayed event is a 200 no-op.
+* Mock billing runs only when ``app.core.stripe_config.billing_mode()`` says so
+  (``BILLING_PROVIDER=mock`` and ``ENV`` development/test). Outside mock the
+  plan changes only from a verified webhook; checkout and the portal are
+  Owner/Admin only.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+import logging
 import uuid
 import os
 import stripe
+from pymongo.errors import DuplicateKeyError
 
-# Temporary imports from server.py - move to core/billing_constants.py after refactor
-from server import STRIPE_API_KEY, STRIPE_MOCK_MODE
+from app.core.stripe_config import (
+    STRIPE_API_KEY, BILLING_MODE_MOCK, BILLING_MODE_STRIPE, BILLING_MODE_UNCONFIGURED,
+    billing_mode, stripe_webhook_secret,
+)
 
 from app.db import db
-from app.deps.auth import get_current_user, require_platform_admin, hash_password, create_token
+from app.deps.auth import get_current_user, require_admin, require_platform_admin, hash_password, create_token
 from app.deps.modules import SUBSCRIPTION_PLANS, LIMIT_WARNING_THRESHOLD
-from app.utils.audit import log_audit
+from app.utils.audit import log_audit, log_security_event
 from app.constants import MODULES
 from app.models.billing import OrgSignupRequest, CreateCheckoutRequest
 from app.tenancy.data_access import TenantData, resolve_owner_by_unique_key
@@ -28,12 +46,24 @@ def _tenant(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Billing"])
+logger = logging.getLogger("server")
 
 # Configure Stripe
 stripe.api_key = STRIPE_API_KEY
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # APP_BASE_URL is required for Stripe redirects - must be set in environment
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
+
+BILLING_NOT_CONFIGURED = "Billing is not configured. The plan was not changed. Contact the administrator."
+
+
+async def _ensure_billing_indexes():
+    """The unique keys the webhook relies on (idempotent; cheap when present).
+
+    ``stripe_event_id`` makes a replay a duplicate-key no-op; ``stripe_session_id``
+    makes the checkout record resolve exactly one tenant.
+    """
+    await db.billing_webhook_events.create_index("stripe_event_id", unique=True)
+    await db.billing_checkout_sessions.create_index("stripe_session_id", unique=True)
 
 
 # ── Public Endpoints ───────────────────────────────────────────────
@@ -64,14 +94,17 @@ async def get_billing_config(user: dict = Depends(require_platform_admin)):
     SECURITY: This endpoint is restricted to platform administrators only.
     Contains sensitive Stripe configuration status.
     """
+    mode = billing_mode()
     return {
-        "stripe_mock_mode": STRIPE_MOCK_MODE,
-        "stripe_configured": not STRIPE_MOCK_MODE,
+        "billing_mode": mode,
+        "billing_configured": mode != BILLING_MODE_UNCONFIGURED,
+        "stripe_mock_mode": mode == BILLING_MODE_MOCK,
+        "stripe_configured": mode == BILLING_MODE_STRIPE,
         "required_env_vars": [
             {"name": "STRIPE_API_KEY", "configured": bool(os.environ.get("STRIPE_API_KEY")) and os.environ.get("STRIPE_API_KEY") != "sk_test_emergent"},
             {"name": "STRIPE_PRICE_ID_PRO", "configured": bool(os.environ.get("STRIPE_PRICE_ID_PRO"))},
             {"name": "STRIPE_PRICE_ID_ENTERPRISE", "configured": bool(os.environ.get("STRIPE_PRICE_ID_ENTERPRISE"))},
-            {"name": "STRIPE_WEBHOOK_SECRET", "configured": bool(os.environ.get("STRIPE_WEBHOOK_SECRET"))},
+            {"name": "STRIPE_WEBHOOK_SECRET", "configured": bool(stripe_webhook_secret())},
         ]
     }
 
@@ -171,26 +204,33 @@ async def signup_organization(data: OrgSignupRequest):
 # ── Checkout & Portal ──────────────────────────────────────────────
 
 @router.post("/billing/create-checkout-session")
-async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depends(get_current_user)):
+async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depends(require_admin)):
     """
     Create Stripe checkout session for plan upgrade.
-    
-    Requires authenticated user to manage their organization's billing.
+
+    Owner/Admin only (R0-01). Outside mock this only creates the Stripe
+    session; the plan changes when the signed webhook confirms it.
     """
     tenant = _tenant(user)
-    
+
     plan = SUBSCRIPTION_PLANS.get(data.plan_id)
     if not plan:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    
+
     if data.plan_id == "free":
         raise HTTPException(status_code=400, detail="Cannot checkout for free plan")
-    
+
+    mode = billing_mode()
+    if mode == BILLING_MODE_UNCONFIGURED:
+        logger.warning("Checkout refused: billing is not configured (no Stripe config, mock not allowed)")
+        raise HTTPException(status_code=503, detail=BILLING_NOT_CONFIGURED)
+
     org_id = user["org_id"]
     sub = await tenant.subscriptions.find_one({"org_id": org_id}, {"_id": 0})
-    
-    # MOCK MODE: Simulate successful checkout without real Stripe
-    if STRIPE_MOCK_MODE:
+
+    # MOCK MODE (BILLING_PROVIDER=mock in ENV development/test only):
+    # simulate a successful checkout without real Stripe
+    if mode == BILLING_MODE_MOCK:
         now = datetime.now(timezone.utc)
         mock_session_id = f"mock_cs_{str(uuid.uuid4())[:8]}"
         
@@ -224,7 +264,7 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
             "mock_mode": True,
             "checkout_url": f"{data.origin_url}/billing/success?session_id={mock_session_id}&mock=true",
             "session_id": mock_session_id,
-            "message": "STRIPE_MOCK_MODE active. Subscription upgraded directly without payment.",
+            "message": "Mock billing active (BILLING_PROVIDER=mock). Subscription upgraded directly without payment.",
         }
     
     # REAL STRIPE MODE
@@ -273,31 +313,48 @@ async def create_checkout_session(data: CreateCheckoutRequest, user: dict = Depe
                 "plan_id": data.plan_id,
             }
         )
-        
-        await log_audit(org_id, user["id"], user["email"], "checkout_started", "billing", session.id, {"plan_id": data.plan_id})
-        
-        return {"checkout_url": session.url, "session_id": session.id, "mock_mode": False}
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
+    # R0-01: the BEG_Work-side record the webhook resolves the tenant from.
+    # metadata.org_id above is only a cross-check, never the source.
+    await _ensure_billing_indexes()
+    await tenant.billing_checkout_sessions.insert_one({
+        "id": str(uuid.uuid4()),
+        "stripe_session_id": session.id,
+        "stripe_customer_id": customer_id,
+        "plan_id": data.plan_id,
+        "status": "open",
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    await log_audit(org_id, user["id"], user["email"], "checkout_started", "billing", session.id, {"plan_id": data.plan_id})
+
+    return {"checkout_url": session.url, "session_id": session.id, "mock_mode": False}
+
 
 @router.post("/billing/create-portal-session")
-async def create_portal_session(user: dict = Depends(get_current_user)):
+async def create_portal_session(user: dict = Depends(require_admin)):
     """
     Create Stripe customer portal session.
-    
-    Requires authenticated user to manage their organization's billing.
+
+    Owner/Admin only (R0-01).
     """
     tenant = _tenant(user)
-    
+
+    mode = billing_mode()
+    if mode == BILLING_MODE_UNCONFIGURED:
+        raise HTTPException(status_code=503, detail=BILLING_NOT_CONFIGURED)
+
     sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
-    
+
     # MOCK MODE
-    if STRIPE_MOCK_MODE:
+    if mode == BILLING_MODE_MOCK:
         return {
             "mock_mode": True,
             "portal_url": None,
-            "message": "STRIPE_MOCK_MODE active. Customer portal not available. Manage subscription in app settings.",
+            "message": "Mock billing active. Customer portal not available. Manage subscription in app settings.",
         }
     
     if not sub or not sub.get("stripe_customer_id"):
@@ -319,133 +376,248 @@ async def create_portal_session(user: dict = Depends(get_current_user)):
 
 # ── Webhook ────────────────────────────────────────────────────────
 
+def _webhook_security_event(reason: str, event_id: str, event_type: str, org_id: str = None):
+    """A refused webhook event. Ids and the reason only — never the payload."""
+    log_security_event("BILLING_WEBHOOK_REJECTED", None, {
+        "action": event_type, "reason": reason,
+        "context_type": "stripe_event", "context_id": event_id,
+        "target_context_type": "org", "target_context_id": org_id,
+    })
+
+
+async def _resolve_checkout_completed(event_id: str, event_type: str, obj):
+    """``checkout.session.completed`` -> the tenant whose OWN checkout record it is.
+
+    The session id must match a ``billing_checkout_sessions`` row BEG_Work wrote
+    at checkout. That row fixes the tenant, the customer and the plan; the
+    event's ``customer``, ``metadata.org_id`` and ``metadata.plan_id`` must agree
+    with it, or nothing is written.
+    """
+    session_id = obj.get("id")
+    customer_id = obj.get("customer")
+    metadata = obj.get("metadata") or {}
+    tenant, record = await resolve_owner_by_unique_key(
+        db, "billing_checkout_sessions", "stripe_session_id", session_id, {"_id": 0})
+    if record is None:
+        _webhook_security_event("no BEG_Work checkout record for this session", event_id, event_type)
+        return None, None
+
+    plan_id = record.get("plan_id")
+    reasons = []
+    if metadata.get("org_id") != tenant.org_id:
+        reasons.append("metadata.org_id does not match the checkout record")
+    if not customer_id or customer_id != record.get("stripe_customer_id"):
+        reasons.append("customer does not match the checkout record")
+    if metadata.get("plan_id") not in (None, plan_id):
+        reasons.append("metadata.plan_id does not match the checkout record")
+    if plan_id not in SUBSCRIPTION_PLANS or plan_id == "free":
+        reasons.append("checkout record has no purchasable plan")
+    sub = await tenant.subscriptions.find_one({"org_id": tenant.org_id}, {"_id": 0})
+    if not sub:
+        reasons.append("tenant has no subscription row")
+    elif sub.get("stripe_customer_id") not in (None, customer_id):
+        reasons.append("customer does not match the tenant's subscription")
+    if reasons:
+        _webhook_security_event("; ".join(reasons), event_id, event_type, tenant.org_id)
+        return None, None
+    return tenant, {"session_id": session_id, "plan_id": plan_id, "customer_id": customer_id,
+                    "subscription_id": obj.get("subscription")}
+
+
+async def _resolve_by_subscription(event_id: str, event_type: str, subscription_id, customer_id):
+    """A Stripe subscription id -> the ONE tenant whose subscription row carries it,
+    and only if the event's customer is that row's customer."""
+    tenant, sub = await resolve_owner_by_unique_key(
+        db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
+    if sub is None:
+        _webhook_security_event("subscription id resolves to no single tenant", event_id, event_type)
+        return None, None
+    if not customer_id or customer_id != sub.get("stripe_customer_id"):
+        _webhook_security_event("customer does not match the tenant's subscription",
+                                event_id, event_type, tenant.org_id)
+        return None, None
+    return tenant, {"subscription_id": subscription_id, "sub": sub}
+
+
+async def _resolve_subscription_object(event_id, event_type, obj):
+    return await _resolve_by_subscription(event_id, event_type, obj.get("id"), obj.get("customer"))
+
+
+async def _resolve_invoice_object(event_id, event_type, obj):
+    return await _resolve_by_subscription(event_id, event_type, obj.get("subscription"), obj.get("customer"))
+
+
+async def _apply_checkout_completed(tenant: TenantData, ctx: dict, obj, now: str):
+    plan = SUBSCRIPTION_PLANS[ctx["plan_id"]]
+    await tenant.subscriptions.update_one(
+        {"org_id": tenant.org_id},
+        {"$set": {
+            "plan_id": ctx["plan_id"],
+            "status": "active",
+            "stripe_customer_id": ctx["customer_id"],
+            "stripe_subscription_id": ctx["subscription_id"],
+            "trial_ends_at": None,
+            "updated_at": now,
+        }}
+    )
+    # Update feature flags based on plan
+    allowed_modules = plan.get("allowed_modules", [])
+    for mod_code in MODULES.keys():
+        await tenant.feature_flags.update_one(
+            {"org_id": tenant.org_id, "module_code": mod_code},
+            {"$set": {"enabled": mod_code in allowed_modules}}
+        )
+    await tenant.billing_checkout_sessions.update_one(
+        {"stripe_session_id": ctx["session_id"]},
+        {"$set": {"status": "completed", "completed_at": now}})
+    logger.info(f"Subscription activated for org {tenant.org_id} with plan {ctx['plan_id']}")
+
+
+async def _apply_subscription_updated(tenant: TenantData, ctx: dict, obj, now: str):
+    subscription_id = ctx["subscription_id"]
+    status = obj.get("status")
+    period_start = obj.get("current_period_start")
+    period_end = obj.get("current_period_end")
+    update_data = {"status": status, "updated_at": now}
+    if period_start:
+        update_data["current_period_start"] = datetime.fromtimestamp(period_start, tz=timezone.utc).isoformat()
+    if period_end:
+        update_data["current_period_end"] = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
+    await tenant.subscriptions.update_one(
+        {"stripe_subscription_id": subscription_id}, {"$set": update_data})
+    logger.info(f"Subscription {subscription_id} updated to status {status}")
+
+
+async def _apply_subscription_deleted(tenant: TenantData, ctx: dict, obj, now: str):
+    subscription_id = ctx["subscription_id"]
+    # Downgrade to free plan
+    free_modules = SUBSCRIPTION_PLANS["free"]["allowed_modules"]
+    await tenant.subscriptions.update_one(
+        {"stripe_subscription_id": subscription_id},
+        {"$set": {
+            "plan_id": "free",
+            "status": "canceled",
+            "stripe_subscription_id": None,
+            "updated_at": now,
+        }}
+    )
+    for mod_code in MODULES.keys():
+        await tenant.feature_flags.update_one(
+            {"module_code": mod_code},
+            {"$set": {"enabled": mod_code in free_modules}}
+        )
+    logger.info(f"Subscription {subscription_id} canceled, downgraded to free")
+
+
+async def _apply_payment_succeeded(tenant: TenantData, ctx: dict, obj, now: str):
+    subscription_id = ctx["subscription_id"]
+    if ctx["sub"].get("status") == "past_due":
+        await tenant.subscriptions.update_one(
+            {"stripe_subscription_id": subscription_id},
+            {"$set": {"status": "active", "updated_at": now}}
+        )
+        logger.info(f"Payment succeeded, subscription {subscription_id} reactivated")
+
+
+async def _apply_payment_failed(tenant: TenantData, ctx: dict, obj, now: str):
+    subscription_id = ctx["subscription_id"]
+    await tenant.subscriptions.update_one(
+        {"stripe_subscription_id": subscription_id},
+        {"$set": {"status": "past_due", "updated_at": now}}
+    )
+    logger.info(f"Payment failed, subscription {subscription_id} marked as past_due")
+
+
+#: event type -> (tenant resolver, effect). Any other type is acknowledged, unwritten.
+_WEBHOOK_HANDLERS = {
+    "checkout.session.completed": (_resolve_checkout_completed, _apply_checkout_completed),
+    "customer.subscription.updated": (_resolve_subscription_object, _apply_subscription_updated),
+    "customer.subscription.deleted": (_resolve_subscription_object, _apply_subscription_deleted),
+    "invoice.payment_succeeded": (_resolve_invoice_object, _apply_payment_succeeded),
+    "invoice.payment_failed": (_resolve_invoice_object, _apply_payment_failed),
+}
+
+
+async def _claim_event(tenant: TenantData, event_id: str, event_type: str, now: str) -> bool:
+    """Claim a Stripe event id once. False = already processed (or in progress).
+
+    The unique index on ``stripe_event_id`` decides, so two concurrent deliveries
+    of one event cannot both pass. An attempt that failed half-way is marked
+    ``failed`` and may be re-claimed by Stripe's next retry.
+    """
+    await _ensure_billing_indexes()
+    try:
+        await tenant.billing_webhook_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "stripe_event_id": event_id,
+            "event_type": event_type,
+            "status": "processing",
+            "attempts": 1,
+            "received_at": now,
+        })
+        return True
+    except DuplicateKeyError:
+        pass
+    reclaimed = await tenant.billing_webhook_events.find_one_and_update(
+        {"stripe_event_id": event_id, "status": "failed"},
+        {"$set": {"status": "processing", "received_at": now}, "$inc": {"attempts": 1}})
+    return reclaimed is not None
+
+
 @router.post("/billing/webhook")
 async def stripe_webhook(request: Request):
-    """Handle Stripe webhook events"""
-    import logging
-    logger = logging.getLogger("server")
+    """Handle Stripe webhook events — signed, tenant-resolved server-side, once."""
+    secret = stripe_webhook_secret()
+    if not secret:
+        logger.warning("Stripe webhook refused: STRIPE_WEBHOOK_SECRET is not configured")
+        raise HTTPException(status_code=503, detail="Billing webhook is not configured")
     
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing signature")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, secret)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
     
-    # Verify webhook signature in production
-    if STRIPE_WEBHOOK_SECRET:
-        try:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe.error.SignatureVerificationError:
-            raise HTTPException(status_code=400, detail="Invalid signature")
-    else:
-        # Development mode - parse without verification
-        import json
-        try:
-            event = json.loads(payload)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    event_id = event.get("id")
+    event_type = event.get("type") or ""
+    obj = (event.get("data") or {}).get("object") or {}
+    if not isinstance(event_id, str) or not event_id:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    logger.info(f"Stripe webhook received: {event_type} {event_id}")
     
-    event_type = event.get("type", "")
-    data = event.get("data", {}).get("object", {})
+    handler = _WEBHOOK_HANDLERS.get(event_type)
+    if handler is None:
+        return {"status": "ignored"}
+    resolve, apply = handler
+    
+    tenant, ctx = await resolve(event_id, event_type, obj)
+    if tenant is None:
+        # Refused (already security-logged). 2xx so Stripe does not retry a
+        # forged or foreign event forever; nothing was written.
+        return {"status": "rejected"}
     
     now = datetime.now(timezone.utc).isoformat()
-    logger.info(f"Stripe webhook received: {event_type}")
+    if not await _claim_event(tenant, event_id, event_type, now):
+        logger.info(f"Stripe webhook {event_id} already processed; no-op")
+        return {"status": "duplicate"}
     
-    if event_type == "checkout.session.completed":
-        org_id = data.get("metadata", {}).get("org_id")
-        plan_id = data.get("metadata", {}).get("plan_id")
-        customer_id = data.get("customer")
-        subscription_id = data.get("subscription")
-        
-        if org_id and plan_id:
-            plan = SUBSCRIPTION_PLANS.get(plan_id, {})
-            await db.subscriptions.update_one(
-                {"org_id": org_id},
-                {"$set": {
-                    "plan_id": plan_id,
-                    "status": "active",
-                    "stripe_customer_id": customer_id,
-                    "stripe_subscription_id": subscription_id,
-                    "trial_ends_at": None,
-                    "updated_at": now,
-                }}
-            )
-            # Update feature flags based on plan
-            allowed_modules = plan.get("allowed_modules", [])
-            for mod_code in MODULES.keys():
-                await db.feature_flags.update_one(
-                    {"org_id": org_id, "module_code": mod_code},
-                    {"$set": {"enabled": mod_code in allowed_modules}}
-                )
-            logger.info(f"Subscription activated for org {org_id} with plan {plan_id}")
+    try:
+        await apply(tenant, ctx, obj, now)
+    except Exception:
+        logger.exception(f"Stripe webhook {event_id} ({event_type}) failed")
+        await tenant.billing_webhook_events.update_one(
+            {"stripe_event_id": event_id},
+            {"$set": {"status": "failed", "failed_at": datetime.now(timezone.utc).isoformat()}})
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
     
-    elif event_type == "customer.subscription.updated":
-        subscription_id = data.get("id")
-        status = data.get("status")
-        period_start = data.get("current_period_start")
-        period_end = data.get("current_period_end")
-        
-        # W0-03E-A2C: the Stripe id is an external key; it resolves exactly one
-        # owning row (or nothing), and every write below is that tenant's own.
-        sub_tenant, sub = await resolve_owner_by_unique_key(
-            db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
-        if sub:
-            update_data = {"status": status, "updated_at": now}
-            if period_start:
-                update_data["current_period_start"] = datetime.fromtimestamp(period_start, tz=timezone.utc).isoformat()
-            if period_end:
-                update_data["current_period_end"] = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
-            
-            await sub_tenant.subscriptions.update_one(
-                {"stripe_subscription_id": subscription_id}, {"$set": update_data})
-            logger.info(f"Subscription {subscription_id} updated to status {status}")
-    
-    elif event_type == "customer.subscription.deleted":
-        subscription_id = data.get("id")
-        sub_tenant, sub = await resolve_owner_by_unique_key(
-            db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
-        if sub:
-            # Downgrade to free plan
-            free_modules = SUBSCRIPTION_PLANS["free"]["allowed_modules"]
-            await sub_tenant.subscriptions.update_one(
-                {"stripe_subscription_id": subscription_id},
-                {"$set": {
-                    "plan_id": "free",
-                    "status": "canceled",
-                    "stripe_subscription_id": None,
-                    "updated_at": now,
-                }}
-            )
-            for mod_code in MODULES.keys():
-                await sub_tenant.feature_flags.update_one(
-                    {"module_code": mod_code},
-                    {"$set": {"enabled": mod_code in free_modules}}
-                )
-            logger.info(f"Subscription {subscription_id} canceled, downgraded to free")
-    
-    elif event_type == "invoice.payment_succeeded":
-        subscription_id = data.get("subscription")
-        if subscription_id:
-            sub_tenant, sub = await resolve_owner_by_unique_key(
-                db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
-            if sub and sub.get("status") == "past_due":
-                await sub_tenant.subscriptions.update_one(
-                    {"stripe_subscription_id": subscription_id},
-                    {"$set": {"status": "active", "updated_at": now}}
-                )
-                logger.info(f"Payment succeeded, subscription {subscription_id} reactivated")
-    
-    elif event_type == "invoice.payment_failed":
-        subscription_id = data.get("subscription")
-        if subscription_id:
-            sub_tenant, sub = await resolve_owner_by_unique_key(
-                db, "subscriptions", "stripe_subscription_id", subscription_id, {"_id": 0})
-            if sub:
-                await sub_tenant.subscriptions.update_one(
-                    {"stripe_subscription_id": subscription_id},
-                    {"$set": {"status": "past_due", "updated_at": now}}
-                )
-                logger.info(f"Payment failed, subscription {subscription_id} marked as past_due")
-    
+    await tenant.billing_webhook_events.update_one(
+        {"stripe_event_id": event_id},
+        {"$set": {"status": "processed", "processed_at": datetime.now(timezone.utc).isoformat()}})
     return {"status": "received"}
 
 
@@ -495,7 +667,7 @@ async def get_billing_subscription(user: dict = Depends(get_current_user)):
         "trial_active": is_trial_active,
         "trial_days_remaining": trial_days_remaining,
         "trial_expired": trial_expired,
-        "stripe_mock_mode": STRIPE_MOCK_MODE,
+        "stripe_mock_mode": billing_mode() == BILLING_MODE_MOCK,
     }
 
 

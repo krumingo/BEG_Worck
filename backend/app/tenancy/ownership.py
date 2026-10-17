@@ -123,7 +123,10 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",
-              "ai_cache"),
+              "ai_cache",
+              # R0-01: the checkout record a Stripe webhook resolves its tenant
+              # from, and the processed-event ledger (unique stripe_event_id).
+              "billing_checkout_sessions", "billing_webhook_events"),
 }
 
 #: The authorization relations inside :data:`ORG_KEYED` (zero ownerless rows
