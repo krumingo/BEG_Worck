@@ -1113,26 +1113,18 @@ async def quick_smr(data: QuickSMR, user: dict = Depends(get_current_user)):
 
 @router.post("/technician/material-request", status_code=201)
 async def material_request(data: MaterialRequestSubmit, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    now = datetime.now(timezone.utc).isoformat()
+    """Retired (LIVE-OPS-01 / TASK 5B, contract v6 §12.1).
 
-    lines = [{"material_name": i.item_name, "qty_requested": i.qty, "unit": i.unit, "notes": i.notes or ""} for i in data.items]
-    req = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "project_id": data.project_id,
-        "requested_by": user["id"],
-        "requested_at": now,
-        "status": "submitted" if data.urgent else "draft",
-        "is_urgent": data.urgent,
-        "lines": lines,
-        "notes": "Заявка от терена" if data.urgent else "",
-        "created_at": now,
-        "updated_at": now,
-    }
-    await tenant.material_requests.insert_one(req)
-    return {"request_id": req["id"]}
+    This path created requests — even directly ``submitted`` — without a
+    Permission Service decision, idempotency or a canonical AuditEvent. Field
+    requests now use the named commands ``POST /api/material-requests`` and
+    ``POST /api/material-requests/{id}/submit``.
+    """
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "message": "Този стар път за запис е изключен. Използвайте именуваните действия.",
+        "replacement": "POST /api/material-requests",
+    })
 
 
 # ── Photo Invoice ──────────────────────────────────────────────────

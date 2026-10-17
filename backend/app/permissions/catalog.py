@@ -66,6 +66,15 @@ ACTIONS: Set[str] = {
     # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
     # adapter write and needs this action; default deny for every other role.
     "master_data.legacy.delete",
+    # LIVE-OPS-01 / TASK 5B material request commands (contract v6 §3.2, §7.1).
+    # Owner/Admin hold them through their full set; every other role gets them
+    # only from an explicit PROJECT-scope RoleAssignment (deny by default).
+    "material_request.create",
+    "material_request.edit_draft",
+    "material_request.submit",
+    "material_request.approve",
+    "material_request.cancel",
+    "material_request.cancel_approved",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited

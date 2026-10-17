@@ -76,6 +76,7 @@ const NAV_GROUPS = [
   {
     id: "warehouse", icon: Package, labelKey: "nav.warehouseGroup",
     children: [
+      { to: "/material-requests", icon: Package, labelKey: "nav.materialRequests" },
       { to: "/procurement", icon: Package, labelKey: "nav.procurement" },
       { to: "/inventory", icon: Warehouse, labelKey: "nav.inventory" },
       { to: "/data/warehouses", icon: Warehouse, labelKey: "nav.warehouses" },
