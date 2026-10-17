@@ -462,3 +462,122 @@ def test_11_two_tenants_are_isolated(monkeypatch, backend):
         a_slips = await op.payment_slips.find({"org_id": ORG_A}, {"_id": 0}).to_list(10)
         assert [s["employee_id"] for s in a_slips] == ["emp-a1"]
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════════ C01 / F-01
+NON_FINITE = [float("nan"), float("inf"), float("-inf"), "NaN", "-Infinity"]
+NON_FINITE_IDS = ["NaN", "Infinity", "-Infinity", "str-NaN", "str--Infinity"]
+
+
+def _money_rows(where, value):
+    if where == "paid_now_amount":
+        return [row("emp-a1", paid=value)]
+    r = row("emp-a1", paid=0)
+    r["adjustments"] = [{"type": "bonus",
+                         "title": "probe", "amount": value}]
+    return [r]
+
+
+@pytest.mark.parametrize("value", NON_FINITE, ids=NON_FINITE_IDS)
+@pytest.mark.parametrize("where", ["paid_now_amount", "adjustment.amount"])
+@pytest.mark.parametrize("method", ["POST", "PATCH"])
+def test_12_non_finite_money_is_4xx_and_nothing_written(monkeypatch, backend, value, where, method):
+    async def scenario(c, op):
+        run_id = await _draft(c) if method == "PATCH" else None
+        before = await _snapshot(op)
+        # raw JSON carrying the NaN / Infinity / -Infinity literals that Python's json and
+        # Starlette accept (httpx's own json= refuses to emit them)
+        import json
+        raw = json.dumps(body(_money_rows(where, value)), allow_nan=True)
+        assert ("NaN" in raw) or ("Infinity" in raw)
+        headers = dict(H["admin-a"](), **{"Content-Type": "application/json"})
+        if run_id:
+            r = await c.patch("/api/pay-runs/" + run_id, content=raw, headers=headers)
+        else:
+            r = await c.post("/api/pay-runs", content=raw, headers=headers)
+        assert r.status_code == 422, (r.status_code, r.text[:300])
+        field = "paid_now_amount" if where == "paid_now_amount" else "amount"
+        assert r.json() == {"detail": "Invalid money value: %s must be a finite number" % field}
+        assert await _snapshot(op) == before
+    run(monkeypatch, scenario, backend)
+
+
+@pytest.mark.parametrize("value", NON_FINITE[:3], ids=NON_FINITE_IDS[:3])
+@pytest.mark.parametrize("field", ["earned_amount", "bonuses_amount", "deductions_amount",
+                                   "previously_paid", "paid_now_amount"])
+def test_12b_overpayment_guard_refuses_non_finite_without_the_model(field, value):
+    """The explicit guard holds even when a value did not come through the Pydantic model."""
+    from fastapi import HTTPException
+    from app.routes.pay_runs import _validate_no_overpayment
+    r = {"employee_id": "emp-a1", "earned_amount": 100, "bonuses_amount": 0,
+         "deductions_amount": 0, "previously_paid": 0, "paid_now_amount": 10}
+    r[field] = value
+    with pytest.raises(HTTPException) as exc:
+        _validate_no_overpayment(r)
+    assert exc.value.status_code == 400 and field in exc.value.detail
+
+
+# ═══════════════════════════════════════════════════════════════════ C01 / F-02
+def _spy_report_query(monkeypatch):
+    """Record every report query the Pay Run route makes."""
+    from app.routes import pay_runs
+    calls, real = [], pay_runs.fetch_normalized_report_lines
+
+    async def spy(*a, **k):
+        calls.append(k.get("worker_id"))
+        return await real(*a, **k)
+    monkeypatch.setattr(pay_runs, "fetch_normalized_report_lines", spy)
+    return calls
+
+
+@pytest.mark.parametrize("ids", [
+    [rid("emp-a1", DAYS[0]), rid("emp-a1", DAYS[0])],
+    [rid("emp-a1", DAYS[0]), rid("emp-a1", DAYS[1]), rid("emp-a1", DAYS[0])],
+    [rid("emp-a1", DAYS[0])] * 5000,
+    [rid("emp-a1", DAYS[0])] + ["rep-filler-%04d" % i for i in range(500)],   # 501 distinct
+], ids=["dup-2", "dup-3", "same-x5000", "over-limit-501"])
+@pytest.mark.parametrize("method", ["POST", "PATCH"])
+def test_13_duplicate_or_oversized_selection_is_400_before_the_report_query(
+        monkeypatch, backend, ids, method):
+    async def scenario(c, op):
+        run_id = await _draft(c) if method == "PATCH" else None
+        calls = _spy_report_query(monkeypatch)
+        before = await _snapshot(op)
+        # a VALID selection for emp-a1 comes first in preview order; its query must not run either
+        bad_ids = [i.replace("emp-a1", "emp-a3") for i in ids]
+        rows = [row("emp-a1", paid=0, report_ids=[rid("emp-a1", DAYS[0])]),
+                row("emp-a3", paid=0, report_ids=bad_ids)]
+        r = await (_patch(c, run_id, rows) if run_id else _create(c, rows))
+        assert r.status_code == 400, r.text[:300]
+        assert "selected_report_ids" in r.json()["detail"]
+        assert ("duplicates" in r.json()["detail"]) == (len(ids) <= 500)
+        assert "employee_id=emp-a3" in r.json()["detail"]
+        assert calls[:1] == [None]                   # the preview's own tenant-wide query ran first …
+        assert [w for w in calls if w] == [], calls  # … and NO per-employee report query ran at all
+        assert await _snapshot(op) == before
+    run(monkeypatch, scenario, backend)
+
+
+def test_13b_limit_boundary_and_canonical_list_is_what_is_persisted(monkeypatch, backend):
+    async def scenario(c, op):
+        r = await c.get("/api/pay-runs/generate", params={"period_start": P_START, "period_end": P_END},
+                        headers=H["admin-a"]())
+        order = [x["employee_id"] for x in r.json()["rows"]]
+        assert order.index("emp-a1") < order.index("emp-a3")   # premise of test_13
+        from app.routes.pay_runs import MAX_SELECTED_REPORT_IDS
+        assert MAX_SELECTED_REPORT_IDS == 500
+        # exactly 500 distinct ids pass the size check and reach the eligibility check
+        ids = [rid("emp-a1", DAYS[0])] + ["rep-filler-%04d" % i for i in range(499)]
+        r = await _create(c, [row("emp-a1", paid=0, report_ids=ids)])
+        assert r.status_code == 400 and "not eligible" in r.json()["detail"], r.text[:200]
+        # a valid selection is persisted exactly as validated (row and slip), and earned matches it
+        chosen = [rid("emp-a1", DAYS[2]), rid("emp-a1", DAYS[0])]
+        r = await _create(c, [row("emp-a1", paid=200, report_ids=chosen)])
+        assert r.status_code == 200, r.text
+        er = r.json()["employee_rows"][0]
+        assert er["selected_report_ids"] == chosen and er["earned_amount"] == 200
+        stored = await op.pay_runs.find_one({"id": r.json()["id"]}, {"_id": 0})
+        assert stored["employee_rows"][0]["selected_report_ids"] == chosen
+        slip = await op.payment_slips.find_one({"pay_run_id": r.json()["id"]}, {"_id": 0})
+        assert slip["selected_report_ids"] == chosen
+    run(monkeypatch, scenario, backend)

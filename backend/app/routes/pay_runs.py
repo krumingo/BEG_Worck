@@ -3,9 +3,10 @@ Routes — Pay Runs (Payroll settlement with multi-pay-type earned engine + paym
 Formula: remaining = earned + bonuses - deductions - previously_paid - paid_now
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from datetime import datetime, timezone, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
+import math
 import uuid
 
 from app.db import db
@@ -61,6 +62,17 @@ def _validate_no_overpayment(row_or_rows):
     deductions = _money_float(row.get("deductions_amount"))
     previously_paid = _money_float(row.get("previously_paid"))
     paid_now = round(_money_float(row.get("paid_now_amount")), 2)
+
+    # R0-05-C01 (F-01): NaN/±Infinity compare False with everything, so the checks below
+    # would let them through into the totals. Refuse them before any arithmetic.
+    for field, value in (("earned_amount", earned), ("bonuses_amount", bonuses),
+                         ("deductions_amount", deductions), ("previously_paid", previously_paid),
+                         ("paid_now_amount", paid_now)):
+        if not math.isfinite(value):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid money value: employee_id={employee_id}; {field} must be a finite number",
+            )
 
     gross_payable = round(earned + bonuses - deductions, 2)
     remaining_before_payment = round(gross_payable - previously_paid, 2)
@@ -233,17 +245,42 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
 
 # ── Models ─────────────────────────────────────────────────────────
 
+def _refuse_non_finite_money(value, info: ValidationInfo):
+    """R0-05-C01 (F-01): request-side payroll money is finite-only. Raised as a 422 whose body
+    does not echo the value: FastAPI's default validation response would try to JSON-encode
+    the NaN/Infinity input and fail with a 500 instead of a 4xx."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return value  # not a number at all: Pydantic's own float check reports it
+    if not math.isfinite(number):
+        raise HTTPException(status_code=422, detail=f"Invalid money value: {info.field_name} must be a finite number")
+    return value
+
+
+# allow_inf_nan=False stays as a second layer for any path that skips the validator above.
+FiniteMoney = Annotated[float, BeforeValidator(_refuse_non_finite_money), Field(allow_inf_nan=False)]
+
+# R0-05-C01 (F-02): technical maximum of selected_report_ids per employee per Pay Run.
+# A report is one employee × project × day line; a weekly run has ≤ 7 days and even a
+# monthly run (≤ 31 days) at an unusually dense 16 lines a day stays under 500. The
+# preview itself reads at most 5000 lines for the whole tenant per period
+# (fetch_normalized_report_lines), so 500 per employee never cuts a real selection while
+# bounding the query and the size of the frozen row / slip documents.
+MAX_SELECTED_REPORT_IDS = 500
+
+
 class AdjustmentRow(BaseModel):
     type: str = "deduction"  # bonus | advance | loan | loan_repayment | deduction | manual_correction
     title: str = ""
-    amount: float = 0
+    amount: FiniteMoney = 0
     note: str = ""
     ref_id: Optional[str] = None  # links an advance/loan deduction to a specific db.advances record
 
 
 class PayRunRowInput(BaseModel):
     employee_id: str
-    paid_now_amount: float = 0
+    paid_now_amount: FiniteMoney = 0
     adjustments: List[AdjustmentRow] = []
     notes: str = ""
     # P0-2A.2: optional list of explicit report_ids to pay for this employee.
@@ -251,6 +288,7 @@ class PayRunRowInput(BaseModel):
     # If provided → backend filters to only these report_ids (precise per-report selection).
     # R0-05: every id must be an approved, not paid/batched report of THIS employee in this
     # tenant and period, else 400; earned is then computed from these reports only.
+    # R0-05-C01: no duplicates and at most MAX_SELECTED_REPORT_IDS, else 400.
     selected_report_ids: List[str] = []
 
 
@@ -300,13 +338,19 @@ async def _selected_pay_run_rows(tenant: TenantData, org_id: str, preview: dict,
             )
         input_map[eid] = ir
 
-    selected = []
+    # R0-05-C01 (F-02): every selection is checked before ANY report query.
+    picked = []
     for row in preview["rows"]:
         eid = row["employee_id"]
         ir = input_map.get(eid)
         if ir is None:
             continue
         report_ids = list(ir.selected_report_ids or (fallback_report_ids or {}).get(eid) or [])
+        _check_selected_report_ids(eid, report_ids)
+        picked.append((row, ir, report_ids))
+
+    selected = []
+    for row, ir, report_ids in picked:
         if report_ids:
             row = await _row_for_selected_reports(
                 tenant, org_id, row, report_ids, preview["period_start"], preview["period_end"])
@@ -314,12 +358,29 @@ async def _selected_pay_run_rows(tenant: TenantData, org_id: str, preview: dict,
     return selected
 
 
+def _check_selected_report_ids(eid: str, report_ids: list) -> None:
+    """R0-05-C01 (F-02): the selection is canonical and bounded BEFORE any database work, so
+    the list used for earned is exactly the list that is persisted."""
+    if len(report_ids) > MAX_SELECTED_REPORT_IDS:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"selected_report_ids for employee_id={eid} has {len(report_ids)} ids; "
+                    f"the maximum is {MAX_SELECTED_REPORT_IDS}"),
+        )
+    if len(set(report_ids)) != len(report_ids):
+        dupes = sorted({rid for rid in report_ids if report_ids.count(rid) > 1})
+        raise HTTPException(
+            status_code=400,
+            detail=f"selected_report_ids for employee_id={eid} contains duplicates: {dupes}",
+        )
+
+
 async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, report_ids: list,
                                     period_start: str, period_end: str) -> dict:
     """Copy of a preview row whose earned/hours/days/day_cells cover only `report_ids`.
     Same lines and calc_earned as generate_pay_run, restricted to the selected reports."""
     eid = row["employee_id"]
-    wanted = list(dict.fromkeys(report_ids))
+    wanted = list(report_ids)  # canonical: _check_selected_report_ids ran first
     lines = await fetch_normalized_report_lines(
         org_id=org_id, date_from=period_start, date_to=period_end, worker_id=eid,
         status_filter="APPROVED", payroll_filter=["!paid", "!batched"],
