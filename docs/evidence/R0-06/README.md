@@ -50,5 +50,42 @@ python main_contrast.py http://127.0.0.1:8001 seed.json
 W0_03_REAL_MONGO_URL='mongodb://127.0.0.1:27018/?directConnection=true' PYTHONPATH=. python ../docs/evidence/R0-06/concurrency_probe.py
 ```
 
+## R0-06-C01 — Codex F-01 / F-02
+
+### Interleavings (F-01) and an early failure (F-02) — `interleaving_probe.py` → `interleaving_probe.json`
+
+Real MongoDB replica set, fault-controlled: the first operation is parked inside its downstream sync,
+mark-paid is called, then the first operation resumes.
+
+| Scenario | 5eb0369 (R0-06) | C01 head |
+|---|---|---|
+| reopen parked in `sync_on_reopen`, then mark-paid | both 200 → run **paid**, allocations **reversed**, 2 Outflows | mark-paid **409**; run `reopened`, no Outflow |
+| PATCH draft→confirmed parked in `sync_on_confirm`, then mark-paid | both 200 → run **paid**, allocations **provisional** | mark-paid **409**; run `confirmed`, allocations `provisional`, no Outflow |
+| first payment effect fails | run **`paid`** (+`paid_effects=failed`), counted as a paid run | run **`payment_failed`**, not counted as paid |
+
+(On 5eb0369 the early failure is injected into `_apply_paid_effects`, which does not exist as separate steps there.)
+
+### Bot test — unfinished payment shown as NOT completed (`payment_failed_bot.js`)
+
+The backend runs through `fault_server.py`: the real app with one injected failure in the **last**
+payment effect (`_mark_slips_paid`), so the salary Outflows are already written when the payment breaks.
+Test-only launcher; product code is not changed.
+
+| # | Step | Result | Evidence |
+|---|---|---|---|
+| 1 | Admin creates the run in the UI, „Потвърди плащане“ | create 200; the chained mark-paid fails (the 500 carries no CORS headers, so the browser reports `net::ERR_FAILED`); toast „Грешка“ | `05_payment_failed_error_toast.png` |
+| 2 | Reload → „История“ | PASS — the row shows **„НЕзавършено плащане“** (red), not „Платен“ | `06_history_payment_failed.png` |
+| 2 | Open the run | PASS — badge „НЕзавършено плащане“, warning „Плащането НЕ е завършено — нужна е проверка. Повторно плащане е блокирано.“, rows „Незавършено“, no pay / reopen button | `07_detail_payment_not_completed_warning.png` |
+| 3 | Same session, API | PASS — list/detail `payment_failed`, `paid_effects=failed`, lock kept (token not exposed); `?status=paid` empty; audit-check **critical** `payment_incomplete`; a second mark-paid / reopen / PATCH → **409**; Outflows 3 before and 3 after (no second payment) | `08_api_payment_failed_not_paid.png`, `api_payment_failed.json`, `bot_result_payment_failed.json` |
+
+Result: **PASS**. The happy-path bot above (`01`–`04`, `bot_result.json`) was re-run on the C01 head: **PASS**.
+
+```
+# from backend/: the fault-injecting launcher instead of server:app
+PYTHONPATH=. python -m uvicorn --app-dir ../docs/evidence/R0-06 fault_server:app --host 127.0.0.1 --port 8001
+python seed_pay_run.py http://127.0.0.1:8001 > seed.json
+NODE_PATH=$(npm root -g) node payment_failed_bot.js http://127.0.0.1:3000 http://127.0.0.1:8001 seed.json .
+```
+
 The password in the seed and bot scripts is a throwaway value for a disposable local database. It is not a credential.
 After the runs the local MongoDB held only `admin,config,local`.

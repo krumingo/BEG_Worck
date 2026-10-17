@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-10-17T14:59:03.153Z",
+  "started_at": "2026-10-17T15:44:23.035Z",
   "steps": [
     {
       "step": "1 POST /api/pay-runs is 200",
@@ -17,7 +17,7 @@
         "body": {
           "ok": true,
           "status": "paid",
-          "paid_at": "2026-10-17T14:59:07.634765+00:00",
+          "paid_at": "2026-10-17T15:44:26.261100+00:00",
           "payment_method": "cash",
           "payment_reference": ""
         }
@@ -104,9 +104,9 @@
         "outflows": 3,
         "paid_rows": 3,
         "perEmployee": {
-          "7c6452fa-0145-4ae1-a5a4-678cabda919a": 1,
-          "f6aa343b-697d-4df3-b3a6-7a1fc6fdd680": 1,
-          "82213641-5dc5-4f18-afc2-9bd2d936e277": 1
+          "65809e02-4364-446d-82ca-4902c6eeaf66": 1,
+          "73c6a8de-e58e-4b84-a290-55d18e3ea87d": 1,
+          "dd8eaed4-94dd-4b71-b19d-0949a7304484": 1
         }
       }
     },
@@ -119,13 +119,13 @@
       ]
     }
   ],
-  "pay_run_id": "b01d9b00-a27e-4c47-b4f6-2a4e8a1bbdf9",
+  "pay_run_id": "f7e286d3-4729-45ca-b42b-ab05cab405a5",
   "api_record": {
     "pay_run": {
-      "id": "b01d9b00-a27e-4c47-b4f6-2a4e8a1bbdf9",
+      "id": "f7e286d3-4729-45ca-b42b-ab05cab405a5",
       "number": "PR-0001",
       "status": "paid",
-      "paid_at": "2026-10-17T14:59:07.634765+00:00",
+      "paid_at": "2026-10-17T15:44:26.261100+00:00",
       "paid_effects": "done",
       "version": 1,
       "history_actions": [
@@ -134,19 +134,19 @@
       ],
       "rows": [
         {
-          "employee_id": "7c6452fa-0145-4ae1-a5a4-678cabda919a",
+          "employee_id": "65809e02-4364-446d-82ca-4902c6eeaf66",
           "name": "Ivan Alpha",
           "paid_now_amount": 500,
           "row_status": "included"
         },
         {
-          "employee_id": "f6aa343b-697d-4df3-b3a6-7a1fc6fdd680",
+          "employee_id": "73c6a8de-e58e-4b84-a290-55d18e3ea87d",
           "name": "Petar Bravo",
           "paid_now_amount": 500,
           "row_status": "included"
         },
         {
-          "employee_id": "82213641-5dc5-4f18-afc2-9bd2d936e277",
+          "employee_id": "dd8eaed4-94dd-4b71-b19d-0949a7304484",
           "name": "Georgi Charlie",
           "paid_now_amount": 400,
           "row_status": "included"
@@ -188,31 +188,31 @@
     },
     "salary_outflows_for_this_run": [
       {
-        "id": "61ae0f9d-51b7-5cee-9b15-afd694a396b0",
-        "user_id": "7c6452fa-0145-4ae1-a5a4-678cabda919a",
+        "id": "b8f0a49a-5c4f-5856-bdfc-de4fe6033fee",
+        "user_id": "65809e02-4364-446d-82ca-4902c6eeaf66",
         "counterparty_name": "Ivan Alpha",
         "amount": 500,
-        "account_id": "4c0daaeb-8c16-4e94-88ab-a61bd6472473",
+        "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
         "method": "Cash"
       },
       {
-        "id": "1e957da1-923f-585d-a7d4-b955cba106de",
-        "user_id": "f6aa343b-697d-4df3-b3a6-7a1fc6fdd680",
+        "id": "28a7eb52-f123-5e85-89ea-0add77065c73",
+        "user_id": "73c6a8de-e58e-4b84-a290-55d18e3ea87d",
         "counterparty_name": "Petar Bravo",
         "amount": 500,
-        "account_id": "4c0daaeb-8c16-4e94-88ab-a61bd6472473",
+        "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
         "method": "Cash"
       },
       {
-        "id": "80ee2946-7181-5e08-87f0-2ed6878f1e1e",
-        "user_id": "82213641-5dc5-4f18-afc2-9bd2d936e277",
+        "id": "18d3bce8-3818-594b-8a62-1f87598f7e12",
+        "user_id": "dd8eaed4-94dd-4b71-b19d-0949a7304484",
         "counterparty_name": "Georgi Charlie",
         "amount": 400,
-        "account_id": "4c0daaeb-8c16-4e94-88ab-a61bd6472473",
+        "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
         "method": "Cash"
       }
     ]
   },
-  "finished_at": "2026-10-17T14:59:09.584Z",
+  "finished_at": "2026-10-17T15:44:28.373Z",
   "result": "PASS"
 }

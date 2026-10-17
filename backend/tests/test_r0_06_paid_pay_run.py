@@ -18,8 +18,16 @@ positive and forbidden:
     does not touch B;
 11. only Admin/Owner; other roles → 403.
 
-Plus: a failure in the side effects after the transition leaves the run paid with
-``paid_effects="failed"`` and a retry is refused — never a second payment.
+R0-06-C01 (Codex F-01/F-02):
+
+12–15. one operation per run (``op_lock``): reopen / PATCH / create still running their
+       downstream effects block mark-paid, and a mark-paid in its effects blocks reopen /
+       PATCH (fault-controlled interleavings, both orders); the end state is consistent;
+16.    only a confirmed run is paid;
+17.    a failure early / middle / late in the payment effects → ``payment_failed``: no
+       paid consumer counts it, list / detail / audit-check show it, no second payment;
+18.    a completed payment is still counted by the consumers;
+19.    an operation that crashed keeps the run locked (fail closed) and is flagged.
 
 Case 3 is meaningful on the REAL MongoDB only: mongomock_motor executes each call
 synchronously, so its "concurrent" requests are effectively serial and prove nothing
@@ -335,25 +343,226 @@ def test_11_only_admin_owner(monkeypatch, backend):
     run(monkeypatch, scenario, backend)
 
 
-# ═══════════════════════════════════════════════════════════════════ failure after the transition
-def test_12_failed_side_effects_never_pay_twice(monkeypatch, backend):
+# ═══════════════════════════════════════════════════════════════════ R0-06-C01
+# F-01: one operation per run (op_lock) — fault-controlled interleavings, both orders.
+# F-02: paying → paid | payment_failed; an unfinished payment is never "paid".
+
+def _pause(monkeypatch, name):
+    """Replace pay_runs.<name> by a wrapper that parks its FIRST call until ``resume``."""
+    from app.routes import pay_runs
+    orig = getattr(pay_runs, name)
+    state = {"entered": asyncio.Event(), "resume": asyncio.Event(), "first": True}
+
+    async def wrapped(*a, **kw):
+        if state["first"]:
+            state["first"] = False
+            state["entered"].set()
+            await state["resume"].wait()
+        return await orig(*a, **kw)
+    monkeypatch.setattr(pay_runs, name, wrapped)
+    return state
+
+
+def _fail(monkeypatch, name, exc=RuntimeError):
     from app.routes import pay_runs
 
     async def boom(*a, **kw):
-        raise RuntimeError("downstream sync down")
+        raise exc("injected failure in %s" % name)
+    monkeypatch.setattr(pay_runs, name, boom)
+
+
+async def _assert_paid_consistent(op, run_id):
+    """A completed payment: money once AND every downstream record says paid/active."""
+    await _assert_paid_once(op, run_id)
+    pr = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
+    assert pr["paid_effects"] == "done" and pr.get("op_lock") is None, pr.get("op_lock")
+    allocs = await op.payroll_payment_allocations.find({"source_pay_run_id": run_id}, {"_id": 0}).to_list(100)
+    live = [a for a in allocs if a["status"] != "reversed"]
+    assert live and all(a["status"] == "active" for a in live), [a["status"] for a in allocs]
+    reports = await op.employee_daily_reports.find({"payroll_source": "pay_run:" + run_id},
+                                                   {"_id": 0}).to_list(100)
+    assert reports and all(r["payroll_status"] == "paid" for r in reports)
+    slips = await op.payment_slips.find({"pay_run_id": run_id}, {"_id": 0}).to_list(100)
+    assert slips and all(sl["status"] == "paid" for sl in slips)
+
+
+async def _start(coro):
+    return asyncio.ensure_future(coro)
+
+
+def test_12_reopen_in_flight_blocks_mark_paid_then_consistent(monkeypatch, backend):
+    """Codex F-01 order 1: reopen won its write and is inside sync_on_reopen → mark-paid 409."""
+    async def scenario(c, op):
+        run_id = await _create(c)
+        gate = _pause(monkeypatch, "sync_on_reopen")
+        task = await _start(_reopen(c, run_id))
+        await gate["entered"].wait()
+        r = await _mark_paid(c, run_id)
+        assert r.status_code == 409, r.text
+        assert "в ход" in r.json()["detail"]
+        held = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        assert held["op_lock"]["op"] == "reopen"
+        assert await op.finance_payments.count_documents({}) == 0
+        gate["resume"].set()
+        assert (await task).status_code == 200
+        pr = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        assert pr["status"] == "reopened" and pr.get("op_lock") is None and not pr.get("paid_at")
+        allocs = await op.payroll_payment_allocations.find({"source_pay_run_id": run_id}).to_list(100)
+        assert allocs and all(a["status"] == "reversed" for a in allocs)
+        # a reopened run is not paid as it is (C01) — re-confirm first, then pay once
+        assert (await _mark_paid(c, run_id)).status_code == 409
+        assert (await _patch(c, run_id, "confirmed")).status_code == 200
+        assert (await _mark_paid(c, run_id)).status_code == 200
+        await _assert_paid_consistent(op, run_id)
+    run(monkeypatch, scenario, backend)
+
+
+def test_13_patch_in_flight_blocks_mark_paid_then_consistent(monkeypatch, backend):
+    """Codex F-01 order 1 for PATCH: PATCH draft→confirmed is inside sync_on_confirm → mark-paid 409."""
+    async def scenario(c, op):
+        run_id = await _create(c, "draft")
+        gate = _pause(monkeypatch, "sync_on_confirm")
+        task = await _start(_patch(c, run_id, "confirmed"))
+        await gate["entered"].wait()
+        r = await _mark_paid(c, run_id)
+        assert r.status_code == 409, r.text
+        held = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        assert held["status"] == "confirmed" and held["op_lock"]["op"] == "update"
+        assert await op.finance_payments.count_documents({}) == 0
+        gate["resume"].set()
+        assert (await task).status_code == 200
+        assert (await _mark_paid(c, run_id)).status_code == 200
+        await _assert_paid_consistent(op, run_id)
+    run(monkeypatch, scenario, backend)
+
+
+def test_14_mark_paid_in_flight_blocks_reopen_and_patch(monkeypatch, backend):
+    """Order 2: mark-paid claimed and is inside its effects → reopen / PATCH 409, nothing written."""
+    async def scenario(c, op):
+        run_id = await _create(c)
+        gate = _pause(monkeypatch, "sync_on_paid")
+        task = await _start(_mark_paid(c, run_id))
+        await gate["entered"].wait()
+        held = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        assert held["status"] == "paying" and held["op_lock"]["op"] == "mark_paid"
+        before = await _snapshot(op)
+        for ids in ([], ["emp-a1"]):
+            assert (await _reopen(c, run_id, ids)).status_code == 409
+        assert (await _patch(c, run_id)).status_code == 409
+        assert (await _mark_paid(c, run_id)).status_code == 409
+        assert await _snapshot(op) == before
+        # while paying it is not paid for any consumer
+        r = await c.get("/api/pay-runs", headers=H["admin-a"]())
+        item = next(i for i in r.json()["items"] if i["id"] == run_id)
+        assert item["status"] == "paying" and item["paid_effects"] == "pending"
+        gate["resume"].set()
+        assert (await task).status_code == 200
+        await _assert_paid_consistent(op, run_id)
+    run(monkeypatch, scenario, backend)
+
+
+def test_15_create_in_flight_blocks_mark_paid(monkeypatch, backend):
+    """create holds the lock until its allocations/sync exist — a mark-paid in between → 409."""
+    async def scenario(c, op):
+        gate = _pause(monkeypatch, "sync_on_confirm")
+        task = await _start(_create(c))
+        await gate["entered"].wait()
+        held = await op.pay_runs.find_one({}, {"_id": 0})
+        assert (await _mark_paid(c, held["id"])).status_code == 409
+        assert held["op_lock"]["op"] == "create"
+        gate["resume"].set()
+        run_id = await task
+        assert (await op.pay_runs.find_one({"id": run_id}, {"_id": 0})).get("op_lock") is None
+        assert (await _mark_paid(c, run_id)).status_code == 200
+        await _assert_paid_consistent(op, run_id)
+    run(monkeypatch, scenario, backend)
+
+
+def test_16_only_confirmed_is_paid(monkeypatch, backend):
+    async def scenario(c, op):
+        draft = await _create(c, "draft")
+        before = await _snapshot(op)
+        r = await _mark_paid(c, draft)
+        assert r.status_code == 409 and "confirmed" in r.json()["detail"], r.text
+        assert await _snapshot(op) == before
+    run(monkeypatch, scenario, backend)
+
+
+async def _paid_consumers(monkeypatch, op, c):
+    """What every paid-run consumer reports for tenant A."""
+    from app.services import paid_labor
+    monkeypatch.setattr(paid_labor, "db", op)
+    return {
+        "paid_labor_v3": await paid_labor.paid_labor_v3(ORG_A, "2026-01-01", "2026-12-31"),
+        "paid_alloc_rows": await paid_labor._paid_alloc_rows(ORG_A),
+        "list_status_paid": (await c.get("/api/pay-runs", params={"status": "paid"},
+                                         headers=H["admin-a"]())).json()["items"],
+    }
+
+
+@pytest.mark.parametrize("stage", ["early:_reduce_advances", "middle:sync_on_paid", "late:_mark_slips_paid"])
+def test_17_failed_payment_is_never_paid(monkeypatch, backend, stage):
+    """F-02: a failure early / middle / late in the effects → payment_failed, excluded from
+    every paid consumer, flagged to the operator, no second payment, lock kept."""
+    target = stage.split(":")[1]
 
     async def scenario(c, op):
         run_id = await _create(c)
-        monkeypatch.setattr(pay_runs, "sync_on_paid", boom)
+        _fail(monkeypatch, target)
         with pytest.raises(RuntimeError):
             await _mark_paid(c, run_id)
         pr = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
-        assert pr["status"] == "paid" and pr["paid_effects"] == "failed"
-        assert pr["paid_effects_error"] == "RuntimeError"
+        assert pr["status"] == "payment_failed" and pr["paid_effects"] == "failed", pr["status"]
+        assert pr["paid_effects_error"] == "RuntimeError" and pr["op_lock"]["op"] == "mark_paid"
+        assert [h["action"] for h in pr["history"]].count("payment_failed") == 1
+        assert "marked_paid" not in [h["action"] for h in pr["history"]]
+        # consumers: nothing counted as paid
+        got = await _paid_consumers(monkeypatch, op, c)
+        assert got == {"paid_labor_v3": [], "paid_alloc_rows": [], "list_status_paid": []}, got
+        assert await op.pay_runs.count_documents({"status": "paid"}) == 0
+        # operator sees it: list, detail, audit-check
+        item = (await c.get("/api/pay-runs", headers=H["admin-a"]())).json()["items"][0]
+        assert item["status"] == "payment_failed" and item["paid_effects"] == "failed"
+        detail = (await c.get("/api/pay-runs/" + run_id, headers=H["admin-a"]())).json()
+        assert detail["status"] == "payment_failed" and "token" not in detail["op_lock"]
+        audit = (await c.get("/api/pay-runs/audit-check", headers=H["admin-a"]())).json()
+        assert any(i["type"] == "payment_incomplete" and i["severity"] == "critical"
+                   for i in audit["issues"]), audit
+        # no second payment, no edit, no reopen — nothing written
         before = await _snapshot(op)
-        r = await _mark_paid(c, run_id)
-        assert r.status_code == 409, r.text
+        assert (await _mark_paid(c, run_id)).status_code == 409
         assert (await _reopen(c, run_id)).status_code == 409
+        assert (await _patch(c, run_id)).status_code == 409
         assert await _snapshot(op) == before
-        assert await op.finance_payments.count_documents({}) == len(EXPECTED_OUTFLOWS)
+        assert await op.finance_payments.count_documents({}) <= len(EXPECTED_OUTFLOWS)
+    run(monkeypatch, scenario, backend)
+
+
+def test_18_completed_payment_is_counted(monkeypatch, backend):
+    """The consumer filter is not over-strict: a completed payment is paid labor."""
+    async def scenario(c, op):
+        run_id = await _paid_run(c)
+        got = await _paid_consumers(monkeypatch, op, c)
+        assert sorted(r["net_salary"] for r in got["paid_labor_v3"]) == [300, 450]
+        assert sorted({r["worker_id"] for r in got["paid_alloc_rows"]}) == ["emp-a1", "emp-a2"]
+        assert [i["id"] for i in got["list_status_paid"]] == [run_id]
+        audit = (await c.get("/api/pay-runs/audit-check", headers=H["admin-a"]())).json()
+        assert not [i for i in audit["issues"] if i["type"] in ("payment_incomplete", "operation_stuck")]
+    run(monkeypatch, scenario, backend)
+
+
+def test_19_crashed_reopen_keeps_run_locked(monkeypatch, backend):
+    """Fail closed: an operation that dies mid-way keeps its lock; nothing else runs on the run."""
+    async def scenario(c, op):
+        run_id = await _create(c)
+        _fail(monkeypatch, "sync_on_reopen")
+        with pytest.raises(RuntimeError):
+            await _reopen(c, run_id)
+        before = await _snapshot(op)
+        for call in (_mark_paid(c, run_id), _reopen(c, run_id), _patch(c, run_id)):
+            r = await call
+            assert r.status_code == 409 and "в ход или е прекъсната" in r.json()["detail"], r.text
+        assert await _snapshot(op) == before
+        audit = (await c.get("/api/pay-runs/audit-check", headers=H["admin-a"]())).json()
+        assert any(i["type"] == "operation_stuck" for i in audit["issues"]), audit
     run(monkeypatch, scenario, backend)
