@@ -205,6 +205,7 @@ OPERATOR_SCRIPTS: Tuple[str, ...] = (
     "scripts/promote_platform_admin.py",
     "scripts/seed_finance_data.py",
     "scripts/smoke_test.py",
+    "scripts/r0_01_billing_exposure_report.py",
 )
 
 #: The one module that legitimately builds a ``$lookup`` stage: it is the
@@ -269,6 +270,9 @@ READ_ONLY_DIAGNOSTIC: Dict[str, Tuple[str, ...]] = {
     # The read-only database wrapper of the legacy migration report: its
     # __getitem__ hands back a collection proxy that refuses every write method.
     "scripts/w0_03e_legacy_migration_report.py": ("__getitem__",),
+    # R0-01 billing exposure report: lists mock subscriptions / checkout_mock audit
+    # rows across the installation through the same write-refusing wrapper.
+    "scripts/r0_01_billing_exposure_report.py": ("__getitem__", "build_report"),
 }
 
 #: Identity-bearing collections: raw access refused outside the two tiers.

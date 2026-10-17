@@ -123,7 +123,10 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",
-              "ai_cache"),
+              "ai_cache",
+              # R0-01: the checkout record a Stripe webhook resolves its tenant
+              # from, and the processed-event ledger (unique stripe_event_id).
+              "billing_checkout_sessions", "billing_webhook_events"),
 }
 
 #: The authorization relations inside :data:`ORG_KEYED` (zero ownerless rows
@@ -141,7 +144,15 @@ TENANT_ID_KEYED: FrozenSet[str] = frozenset({
 TENANT_ROOT = "organizations"
 
 #: Database-level bookkeeping with no tenant meaning (W0-03C index ledger).
-TECHNICAL: FrozenSet[str] = frozenset({"md_uniqueness_runs"})
+#:
+#: ``billing_webhook_rejections`` (R0-01-C01 F-04) is the platform's record of
+#: Stripe events it REFUSED. A refusal is exactly the case where no tenant could
+#: be established (unknown session/subscription) or the event's tenant claim
+#: contradicts BEG_Work's own records, so the row cannot be owned by a tenant
+#: without trusting the event: it is keyed by the Stripe event id alone, holds
+#: ids/class/reason only (no payload, e-mail or amount) and is never read back
+#: into any tenant's view. It must not be backfilled to a tenant either.
+TECHNICAL: FrozenSet[str] = frozenset({"md_uniqueness_runs", "billing_webhook_rejections"})
 
 #: Collections a PLATFORM principal (not a tenant) legitimately writes rows to:
 #: the platform administrator's own user record and its security log
