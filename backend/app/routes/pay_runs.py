@@ -9,6 +9,8 @@ from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
 import math
 import uuid
 
+from pymongo import ReturnDocument
+
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
@@ -1149,6 +1151,22 @@ class MarkPaidInput(BaseModel):
     payment_note: str = ""
 
 
+# R0-06 (AUD-043): a Pay Run is paid at most once. "Ever paid" = status paid, or a
+# paid_at left behind by a reopen-after-paid on main before R0-06 (money is out).
+MARK_PAID_FROM = ("draft", "confirmed", "reopened")
+PAID_RUN_LOCKED = ("Платен Pay Run не се отваря и не се променя — "
+                   "корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична")
+
+
+def _ever_paid(run: dict) -> bool:
+    return run.get("status") == "paid" or bool(run.get("paid_at"))
+
+
+def _salary_payment_id(run_id: str, employee_id) -> str:
+    """Deterministic id of the one salary Outflow per (run, employee) — idempotency key."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-pay-run:%s:salary:%s" % (run_id, employee_id)))
+
+
 @router.post("/pay-runs/{run_id}/mark-paid")
 async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
@@ -1158,8 +1176,10 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
     run = await tenant.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
-    if run.get("status") == "paid":
-        raise HTTPException(status_code=400, detail="Already paid")
+    if _ever_paid(run):
+        raise HTTPException(status_code=409, detail="Already paid")
+    if run.get("status") not in MARK_PAID_FROM:
+        raise HTTPException(status_code=409, detail="Cannot mark a %s pay run as paid" % run.get("status"))
 
     now = datetime.now(timezone.utc).isoformat()
     payment_info = {
@@ -1170,7 +1190,49 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
         "payment_reference": (body.payment_reference if body else "") or "",
         "payment_note": (body.payment_note if body else "") or "",
     }
-    await tenant.pay_runs.update_one({"id": run_id}, {"$set": payment_info})
+    # R0-06: ONE atomic conditional transition. Only the request that wins it runs the
+    # side effects below; a concurrent or repeated request matches nothing → 409, no writes.
+    # The history entry rides the same write, so it is recorded exactly once.
+    run = await tenant.pay_runs.find_one_and_update(
+        {"id": run_id, "org_id": org_id, "status": {"$in": list(MARK_PAID_FROM)}, "paid_at": None},
+        {"$set": dict(payment_info, paid_effects="pending"),
+         "$push": {"history": {
+             "version": (run.get("version") or 1) + 1,
+             "action": "marked_paid",
+             "changed_by": user["id"],
+             "changed_at": now,
+             "reason": payment_info["payment_note"],
+             "payment_method": payment_info["payment_method"],
+             "payment_reference": payment_info["payment_reference"],
+             "totals_snapshot": run.get("totals", {}),
+         }}},
+        projection={"_id": 0},
+        # the document exactly as it was transitioned — its rows are what gets paid
+        return_document=ReturnDocument.BEFORE,
+    )
+    if not run:
+        raise HTTPException(status_code=409, detail="Already paid")
+
+    # No multi-document transaction in the tenant layer: the run is claimed first, so a
+    # failure below can never lead to a second payment. It leaves paid_effects="failed"
+    # (visible, not retried automatically); every effect is keyed by run (+ employee /
+    # adjustment), so a later resume can complete it without doubling anything.
+    try:
+        await _apply_paid_effects(tenant, org_id, run, payment_info, now)
+    except Exception as exc:
+        await tenant.pay_runs.update_one({"id": run_id, "org_id": org_id}, {"$set": {
+            "paid_effects": "failed", "paid_effects_error": type(exc).__name__}})
+        raise
+    await tenant.pay_runs.update_one({"id": run_id, "org_id": org_id}, {"$set": {"paid_effects": "done"}})
+
+    return {"ok": True, "status": "paid", "paid_at": now,
+            "payment_method": payment_info["payment_method"],
+            "payment_reference": payment_info["payment_reference"]}
+
+
+async def _apply_paid_effects(tenant: TenantData, org_id: str, run: dict, payment_info: dict, now: str):
+    """Side effects of the paid transition; called only by the request that won it."""
+    run_id = run["id"]
 
     # Update v3 slips
     await tenant.payment_slips.update_many(
@@ -1180,35 +1242,25 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
                   "payment_reference": payment_info["payment_reference"]}},
     )
 
-    # Add to version history
-    await tenant.pay_runs.update_one({"id": run_id}, {"$push": {"history": {
-        "version": (run.get("version") or 1) + 1,
-        "action": "marked_paid",
-        "changed_by": user["id"],
-        "changed_at": now,
-        "reason": payment_info["payment_note"],
-        "payment_method": payment_info["payment_method"],
-        "payment_reference": payment_info["payment_reference"],
-        "totals_snapshot": run.get("totals", {}),
-    }}})
-
     # Reduce advance/loan balances for deductions linked to a specific advance (ref_id).
     # Only adjustments that carry a ref_id are touched, so runs without linked advances are unaffected.
     for er in run.get("employee_rows", []):
-        for adj in er.get("adjustments", []) or []:
+        for idx, adj in enumerate(er.get("adjustments", []) or []):
             if adj.get("type") in ("advance", "loan") and adj.get("ref_id") and (adj.get("amount") or 0) > 0:
                 adv = await tenant.advances.find_one({"id": adj["ref_id"], "org_id": org_id})
                 if adv and adv.get("status") != "Closed":
                     new_remaining = round((adv.get("remaining_amount") or 0) - adj["amount"], 2)
                     if new_remaining < 0:
                         new_remaining = 0
+                    deduction_key = "%s:%s:%d" % (run_id, er.get("employee_id"), idx)
                     await tenant.advances.update_one(
-                        {"id": adj["ref_id"], "org_id": org_id},
+                        {"id": adj["ref_id"], "org_id": org_id, "deductions.key": {"$ne": deduction_key}},
                         {"$set": {"remaining_amount": new_remaining,
                                   "status": "Closed" if new_remaining <= 0 else "Open",
                                   "updated_at": now},
                          "$push": {"deductions": {"amount": adj["amount"], "date": now[:10],
-                                                  "pay_run_id": run_id, "at": now}}},
+                                                  "pay_run_id": run_id, "at": now,
+                                                  "key": deduction_key}}},
                     )
 
     # Salary leaves Каса/Банка — one cash movement per employee (with name + avatar in the register)
@@ -1223,22 +1275,23 @@ async def mark_pay_run_paid(run_id: str, body: Optional[MarkPaidInput] = None, u
             if paid <= 0:
                 continue
             emp_name = (" ".join(filter(None, [er.get("first_name"), er.get("last_name")])) or "Служител").strip()
-            await tenant.finance_payments.insert_one({
-                "id": str(uuid.uuid4()), "org_id": org_id, "direction": "Outflow",
-                "amount": paid, "currency": "EUR", "date": now[:10],
-                "method": "BankTransfer" if acc_type == "Bank" else "Cash",
-                "account_id": account["id"], "counterparty_name": emp_name,
-                "user_id": er.get("employee_id"),
-                "reference": run_id, "note": run_label, "category": "Заплата",
-                "created_at": now, "updated_at": now,
-            })
+            # R0-06: one Outflow per (run, employee) — upsert on a deterministic id.
+            await tenant.finance_payments.update_one(
+                {"id": _salary_payment_id(run_id, er.get("employee_id")), "org_id": org_id},
+                {"$setOnInsert": {
+                    "direction": "Outflow",
+                    "amount": paid, "currency": "EUR", "date": now[:10],
+                    "method": "BankTransfer" if acc_type == "Bank" else "Cash",
+                    "account_id": account["id"], "counterparty_name": emp_name,
+                    "user_id": er.get("employee_id"),
+                    "reference": run_id, "note": run_label, "category": "Заплата",
+                    "created_at": now, "updated_at": now,
+                }},
+                upsert=True,
+            )
 
     # Sync downstream
     await sync_on_paid(run, org_id, now)
-
-    return {"ok": True, "status": "paid", "paid_at": now,
-            "payment_method": payment_info["payment_method"],
-            "payment_reference": payment_info["payment_reference"]}
 
 
 # ── Update Draft ───────────────────────────────────────────────────
@@ -1253,6 +1306,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
     run = await tenant.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
+    if _ever_paid(run):
+        raise HTTPException(status_code=409, detail=PAID_RUN_LOCKED)
     if run.get("status") not in ("draft", "reopened"):
         raise HTTPException(status_code=400, detail="Can only edit draft or reopened pay runs")
 
@@ -1327,7 +1382,9 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         },
     }
 
-    await tenant.pay_runs.update_one({"id": run_id}, {
+    # R0-06: written only while still editable and unpaid (a concurrent mark-paid wins).
+    res = await tenant.pay_runs.update_one(
+        {"id": run_id, "org_id": org_id, "status": {"$in": ["draft", "reopened"]}, "paid_at": None}, {
         "$set": {
             "employee_rows": employee_rows,
             "version": new_version,
@@ -1347,6 +1404,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         },
         "$push": {"history": history_entry},
     })
+    if res.matched_count == 0:
+        raise HTTPException(status_code=409, detail=PAID_RUN_LOCKED)
 
     # Generate slips if confirming
     if data.status == "confirmed":
@@ -1408,6 +1467,8 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
     run = await tenant.pay_runs.find_one({"id": run_id, "org_id": org_id})
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
+    if _ever_paid(run):
+        raise HTTPException(status_code=409, detail=PAID_RUN_LOCKED)
     if run.get("status") == "cancelled":
         raise HTTPException(status_code=400, detail="Cannot reopen cancelled batch")
 
@@ -1434,7 +1495,9 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
 
     new_status = "reopened" if reopen_all else run.get("status", "confirmed")
 
-    await tenant.pay_runs.update_one({"id": run_id}, {
+    # R0-06: written only while unpaid and not cancelled (a concurrent mark-paid wins).
+    res = await tenant.pay_runs.update_one(
+        {"id": run_id, "org_id": org_id, "status": {"$nin": ["paid", "cancelled"]}, "paid_at": None}, {
         "$set": {
             "status": new_status,
             "version": new_version,
@@ -1443,6 +1506,8 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
         },
         "$push": {"history": history_entry},
     })
+    if res.matched_count == 0:
+        raise HTTPException(status_code=409, detail=PAID_RUN_LOCKED)
 
     # Mark affected slips as superseded
     if reopen_all:
