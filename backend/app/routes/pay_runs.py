@@ -15,6 +15,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
+from app.services.slip_payment_state import effective_slip, effective_slip_one, effective_slips, slip_status_clause
 from app.tenancy.data_access import TenantData
 
 
@@ -1682,11 +1683,13 @@ async def list_payment_slips(
     if employee_id:
         q["employee_id"] = employee_id
     if status:
-        q["status"] = status
+        # R0-06-C02: filter on the EFFECTIVE status (paid only with a completed Pay Run).
+        q.update(await slip_status_clause(tenant, [status]))
     total = await tenant.payment_slips.count_documents(q)
     slips = await tenant.payment_slips.find(
         q, {"_id": 0},
     ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    slips = await effective_slips(tenant, slips)
     return {"items": slips, "total": total, "page": page, "page_size": page_size}
 
 
@@ -1704,7 +1707,7 @@ async def get_payment_slip(slip_id: str, user: dict = Depends(get_current_user))
             raise HTTPException(status_code=404, detail="Slip not found")
     elif user["role"] not in ("Admin", "Owner", "Accountant"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    return slip
+    return await effective_slip_one(tenant, slip)
 
 
 @router.get("/payment-slips/{slip_id}/pdf")
@@ -1718,6 +1721,7 @@ async def export_slip_pdf(slip_id: str, user: dict = Depends(get_current_user)):
     slip = await tenant.payment_slips.find_one({"id": slip_id, "org_id": org_id}, {"_id": 0})
     if not slip:
         raise HTTPException(status_code=404, detail="Slip not found")
+    slip = await effective_slip_one(tenant, slip)   # R0-06-C02: no paid date unless completed
 
     org = await tenant.own_organization({"_id": 0, "name": 1, "eik": 1, "address": 1, "city": 1})
     org_name = (org or {}).get("name", "")
@@ -1914,8 +1918,10 @@ async def get_payroll_weeks(
             # Find associated slip
             slip = await tenant.payment_slips.find_one(
                 {"org_id": org_id, "pay_run_id": run["id"], "employee_id": er["employee_id"]},
-                {"_id": 0, "id": 1, "slip_number": 1, "status": 1},
+                {"_id": 0, "id": 1, "slip_number": 1, "status": 1, "pay_run_id": 1},
             )
+            # R0-06-C02: the parent run is this row's run — same effective-status rule.
+            slip = effective_slip(slip, run.get("status")) if slip else None
             row["slip_id"] = slip["id"] if slip else None
             row["slip_number"] = slip["slip_number"] if slip else None
             row["slip_status"] = slip["status"] if slip else None

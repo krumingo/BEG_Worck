@@ -87,5 +87,25 @@ python seed_pay_run.py http://127.0.0.1:8001 > seed.json
 NODE_PATH=$(npm root -g) node payment_failed_bot.js http://127.0.0.1:3000 http://127.0.0.1:8001 seed.json .
 ```
 
+## R0-06-C02 — Codex F-02a: a slip is paid only when its Pay Run is paid
+
+`slip_readers_probe.py` → `slip_readers_probe.json`: the payment breaks AFTER the slip update committed
+(slips really written `paid`), real MongoDB replica set.
+
+| Reader | f9fe490 (C01) | C02 head |
+|---|---|---|
+| run status | `payment_failed` | `payment_failed` |
+| raw `payment_slips.status` | paid, paid | paid, paid (unchanged — recorded value kept) |
+| HR `legacy_payslips` / `legacy_payslip_one` | **Paid**, Paid | Generated, Generated (+ `payment_incomplete`) |
+| `GET /payment-slips`, `/payment-slips/{id}` | **paid** | confirmed (+ `payment_incomplete`, `recorded_status=paid`) |
+| `GET /payment-slips?status=paid` | **2** | 0 |
+| `GET /payroll-weeks` slip status | **paid** | confirmed |
+| `GET /my-pay-summary` owed (Ivan) | **0** | 450 |
+| cashflow payroll estimate | **dropped** | 950 |
+| paid labor (`paid_labor_v3`, `_paid_alloc_rows`) | 0 / 0 (C01) | 0 / 0 |
+
+No bot test for C02: no UI file changed. The UI reads these APIs, which now return the effective
+status; the C01 bot already shows the run as „НЕзавършено плащане“.
+
 The password in the seed and bot scripts is a throwaway value for a disposable local database. It is not a credential.
 After the runs the local MongoDB held only `admin,config,local`.

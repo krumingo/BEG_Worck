@@ -566,3 +566,139 @@ def test_19_crashed_reopen_keeps_run_locked(monkeypatch, backend):
         audit = (await c.get("/api/pay-runs/audit-check", headers=H["admin-a"]())).json()
         assert any(i["type"] == "operation_stuck" for i in audit["issues"]), audit
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════════ R0-06-C02
+# F-02a: a slip counts / shows as paid only when its parent Pay Run is "paid".
+
+def _fail_after_slips(monkeypatch):
+    """The real slip update commits, THEN the payment breaks (Codex F-02a)."""
+    from app.routes import pay_runs
+    orig = pay_runs._mark_slips_paid
+
+    async def after(*a, **kw):
+        await orig(*a, **kw)
+        raise RuntimeError("injected failure after the slip update")
+    monkeypatch.setattr(pay_runs, "_mark_slips_paid", after)
+
+
+def run_c02(monkeypatch, scenario, backend="mongomock"):
+    """``run`` plus the settings router and every module that reads payment_slips."""
+    import httpx
+    from app.routes import settings as settings_routes
+    from app.services import cashflow_forecast, legacy_payslips, paid_labor
+
+    async def go():
+        async with _Db(backend) as op:
+            await _seed(op)
+            await _seed_money(op)
+            await op.organizations.update_one({"id": ORG_A}, {"$set": {"workers_see_pay": True}})
+            app = _app(monkeypatch, op)
+            for module in (settings_routes, cashflow_forecast, legacy_payslips, paid_labor):
+                monkeypatch.setattr(module, "db", op)
+            app.include_router(settings_routes.router, prefix="/api")
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                         base_url="http://r006") as c:
+                return await scenario(c, op)
+    return asyncio.run(go())
+
+
+async def _slip_views(c, op, run_id):
+    """What every payment_slips reader reports for tenant A."""
+    from app.deps.auth import create_token
+    from app.services import cashflow_forecast, legacy_payslips, paid_labor
+    worker = {"Authorization": "Bearer " + create_token(
+        {"user_id": "emp-a1", "org_id": ORG_A, "role": "Worker"})}
+    slip_ids = [s["id"] for s in await op.payment_slips.find({"pay_run_id": run_id}).to_list(10)]
+    forecast = await cashflow_forecast.build_cashflow_forecast(ORG_A, days=30, start_date="2026-10-12")
+    weeks = (await c.get("/api/payroll-weeks", headers=H["admin-a"]())).json()
+    return {
+        "legacy": await legacy_payslips.legacy_payslips(ORG_A),
+        "legacy_paid": await legacy_payslips.legacy_payslips(ORG_A, v1_statuses=["Paid"]),
+        "legacy_generated": await legacy_payslips.legacy_payslips(ORG_A, v1_statuses=["Generated"]),
+        "legacy_one": [await legacy_payslips.legacy_payslip_one(ORG_A, i) for i in slip_ids],
+        "api_list": (await c.get("/api/payment-slips", headers=H["admin-a"]())).json(),
+        "api_paid": (await c.get("/api/payment-slips", params={"status": "paid"}, headers=H["admin-a"]())).json(),
+        "api_confirmed": (await c.get("/api/payment-slips", params={"status": "confirmed"},
+                                      headers=H["admin-a"]())).json(),
+        "api_one": [(await c.get("/api/payment-slips/" + i, headers=H["admin-a"]())).json() for i in slip_ids],
+        "my_pay": (await c.get("/api/my-pay-summary", headers=worker)).json(),
+        "payroll_items": [i for i in forecast["outgoing"] if i["source_type"] == "payroll"],
+        "week_slip_statuses": sorted({r.get("slip_status") for r in weeks["items"] if r.get("slip_id")}),
+        "paid_labor_v3": await paid_labor.paid_labor_v3(ORG_A, "2026-01-01", "2026-12-31"),
+        "paid_alloc_rows": await paid_labor._paid_alloc_rows(ORG_A),
+    }
+
+
+def test_20_failure_after_slip_update_is_not_paid_anywhere(monkeypatch, backend):
+    async def scenario(c, op):
+        run_id = await _create(c)
+        _fail_after_slips(monkeypatch)
+        with pytest.raises(RuntimeError):
+            await _mark_paid(c, run_id)
+        # 1. the run is payment_failed, although the slips were really written "paid"
+        pr = await op.pay_runs.find_one({"id": run_id}, {"_id": 0})
+        assert pr["status"] == "payment_failed" and pr["op_lock"]["op"] == "mark_paid"
+        raw = await op.payment_slips.find({"pay_run_id": run_id}, {"_id": 0}).to_list(10)
+        assert len(raw) == 2 and all(s["status"] == "paid" and s["paid_at"] for s in raw)
+        v = await _slip_views(c, op, run_id)
+        # 2. legacy / HR payslips: never "Paid"; owed ("Generated") and flagged
+        assert [p["status"] for p in v["legacy"]] == ["Generated", "Generated"]
+        assert all(p["payment_incomplete"] and p["paid_at"] is None for p in v["legacy"])
+        assert v["legacy_paid"] == []
+        assert [p["status"] for p in v["legacy_one"]] == ["Generated", "Generated"]
+        # the slip API (list, ?status=, one) — same rule
+        assert v["api_paid"]["total"] == 0 and v["api_paid"]["items"] == []
+        assert v["api_confirmed"]["total"] == 2
+        for s in v["api_list"]["items"] + v["api_one"]:
+            assert s["status"] == "confirmed" and s["paid_at"] is None, s
+            assert s["payment_incomplete"] and s["recorded_status"] == "paid" and s["recorded_paid_at"]
+            assert s["pay_run_status"] == "payment_failed"
+        assert v["week_slip_statuses"] == ["confirmed"]
+        # 3. /my-pay-summary: still owed (500 earned − 50 advance), not paid
+        assert v["my_pay"]["owed"] == 450, v["my_pay"]
+        assert [s["status"] for s in v["my_pay"]["slips"]] == ["confirmed"]
+        assert v["my_pay"]["slips"][0]["payment_incomplete"] is True
+        # 4. cashflow: the unresolved salary is NOT silently dropped (net 450 + 500)
+        assert [i["amount"] for i in v["payroll_items"]] == [950], v["payroll_items"]
+        # 5. paid labor: excluded
+        assert v["paid_labor_v3"] == [] and v["paid_alloc_rows"] == []
+        # 6. no second payment
+        before = await _snapshot(op)
+        assert (await _mark_paid(c, run_id)).status_code == 409
+        assert await _snapshot(op) == before
+        assert await op.finance_payments.count_documents({}) == len(EXPECTED_OUTFLOWS)
+    run_c02(monkeypatch, scenario, backend)
+
+
+def test_21_completed_payment_is_paid_everywhere(monkeypatch, backend):
+    """Positive: a completed payment reads as paid in every slip reader, as before."""
+    async def scenario(c, op):
+        run_id = await _paid_run(c)
+        v = await _slip_views(c, op, run_id)
+        assert [p["status"] for p in v["legacy"]] == ["Paid", "Paid"]
+        assert not any(p.get("payment_incomplete") for p in v["legacy"])
+        assert len(v["legacy_paid"]) == 2 and v["legacy_generated"] == []
+        assert [p["status"] for p in v["legacy_one"]] == ["Paid", "Paid"]
+        assert v["api_paid"]["total"] == 2 and v["api_confirmed"]["total"] == 0
+        for s in v["api_list"]["items"] + v["api_one"]:
+            assert s["status"] == "paid" and s["paid_at"] and "payment_incomplete" not in s, s
+        assert v["week_slip_statuses"] == ["paid"]
+        assert v["my_pay"]["owed"] == 0 and [s["status"] for s in v["my_pay"]["slips"]] == ["paid"]
+        assert v["payroll_items"] == []
+        assert sorted(r["net_salary"] for r in v["paid_labor_v3"]) == [300, 450]
+        assert sorted({r["worker_id"] for r in v["paid_alloc_rows"]}) == ["emp-a1", "emp-a2"]
+    run_c02(monkeypatch, scenario, backend)
+
+
+def test_22_slip_of_another_tenant_never_resolves_a_run(monkeypatch, backend):
+    """The parent run is looked up in the slip's own tenant only."""
+    async def scenario(c, op):
+        from app.services.slip_payment_state import effective_slips, paid_run_ids
+        from app.tenancy.data_access import TenantData
+        run_id = await _paid_run(c)
+        tb = TenantData.for_resolved_org(op, ORG_B)
+        assert await paid_run_ids(tb) == set()
+        forged = [{"id": "x", "org_id": ORG_B, "pay_run_id": run_id, "status": "paid", "paid_at": "t"}]
+        assert (await effective_slips(tb, forged))[0]["status"] == "confirmed"
+    run_c02(monkeypatch, scenario, backend)

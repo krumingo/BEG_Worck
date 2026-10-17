@@ -10,6 +10,7 @@ Mapping mirrors what payroll_sync used to write into payroll_payments:
 Only paid slips with a non-zero amount are returned (same as the old sync).
 """
 from app.db import db
+from app.services.slip_payment_state import paid_run_ids
 from app.tenancy.data_access import TenantData
 
 
@@ -30,9 +31,7 @@ async def paid_labor_v3(org_id: str, date_from: str, date_to: str) -> list[dict]
     ).to_list(10000)
     # R0-06-C01: only slips of a COMPLETED payment (run status "paid"); a run still
     # "paying" or "payment_failed" is not paid labor.
-    run_ids = sorted({s.get("pay_run_id") for s in slips if s.get("pay_run_id")})
-    paid_runs = set(await tenant.pay_runs.distinct(
-        "id", {"org_id": org_id, "id": {"$in": run_ids}, "status": "paid"})) if run_ids else set()
+    paid_runs = await paid_run_ids(tenant, (s.get("pay_run_id") for s in slips))
     out = []
     for s in slips:
         if s.get("pay_run_id") not in paid_runs:

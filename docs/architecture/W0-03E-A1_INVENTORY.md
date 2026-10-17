@@ -295,7 +295,6 @@
 | app/routes/assets_batch_intake.py:_match_existing_item | (helper) | asset_items | find(is_active) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/assets_batch_intake.py:recognize | POST /assets/batch-intake/recognize | asset_item_types | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/services/paid_labor.py:paid_labor_v3 | (helper) | payment_slips | find(status, archived, paid_at) | TenantData org_id (session) | scoped@base | SAFE |
-| app/services/paid_labor.py:paid_labor_v3 | (helper) | pay_runs | distinct('id') | TenantData org_id (session) | new read | SAFE |
 | app/services/paid_labor.py:_paid_alloc_rows | (helper) | projects | find_one(name) | TenantData org_id (session) | scoped@base | SAFE |
 | app/services/paid_labor.py:_paid_alloc_rows | (helper) | pay_runs | find(status, archived) | TenantData org_id (session) | scoped@base | SAFE |
 | app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
@@ -373,4 +372,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 358 accesses — FIXED 130, SAFE 228
+Totals: 357 accesses — FIXED 130, SAFE 227
