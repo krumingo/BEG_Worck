@@ -59,7 +59,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `invoice_settings` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `invoice_versions` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `items` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/items.py:134 |
+| `items` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `labor_entries` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `location_nodes` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `machines` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -146,7 +146,7 @@ _No report given (`--report`)._
 
 ## 3. Residual debt — raw tenant-owned access without a literal tenant filter
 
-Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out of W0-03E). Under colliding ids these are cross-tenant reads/writes. The routes on the Issue #38 matrix (project/team, finance, offers, reports, payments, Master/legacy reads, warehouses, items) were fixed where the matrix exercises them; the rest is listed here as debt for the decision that authorizes a REAL second tenant. Reads: 12, writes: 2.
+Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out of W0-03E). Under colliding ids these are cross-tenant reads/writes. The routes on the Issue #38 matrix (project/team, finance, offers, reports, payments, Master/legacy reads, warehouses, items) were fixed where the matrix exercises them; the rest is listed here as debt for the decision that authorizes a REAL second tenant. Reads: 8, writes: 1.
 
 | module | unscoped reads | unscoped writes |
 |---|---|---|
@@ -154,9 +154,7 @@ Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out 
 | `app/routes/activity_budgets.py` | 1 | 0 |
 | `app/routes/assets_intake_pending.py` | 1 | 1 |
 | `app/routes/auth.py` | 1 | 0 |
-| `app/routes/items.py` | 2 | 1 |
 | `app/routes/platform.py` | 1 | 0 |
-| `app/routes/sales.py` | 2 | 0 |
 | `app/tenancy/data_access.py` | 1 | 0 |
 | `app/tenancy/onboarding.py` | 1 | 0 |
 | `app/tenancy/project_team.py` | 1 | 0 |
@@ -169,12 +167,7 @@ app/routes/activity_budgets.py:77 activity_budgets.find in list_activity_budgets
 app/routes/assets_intake_pending.py:183 asset_intake_pending.find_one in approve_intake()
 app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in approve_intake()
 app/routes/auth.py:74 users.find_one in login()
-app/routes/items.py:88 items.count_documents in list_items()
-app/routes/items.py:95 items.find in list_items()
-app/routes/items.py:181 items.update_one in delete_item()
 app/routes/platform.py:242 users.find_one in bootstrap_create_platform_admin()
-app/routes/sales.py:316 items.find in sales_history()
-app/routes/sales.py:386 items.find_one in sale_details()
 app/tenancy/data_access.py:398 offers.find in resolve_review_token()
 app/tenancy/onboarding.py:81 users.find_one in onboard_tenant()
 app/tenancy/project_team.py:267 project_team.count_documents in ownerless_row_count()

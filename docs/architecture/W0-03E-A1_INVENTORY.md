@@ -365,7 +365,7 @@
 | app/routes/auth.py:update_user | PUT /users/{user_id} | users | update_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/auth.py:delete_user | DELETE /users/{user_id} | users | get(id = user_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/auth.py:delete_user | DELETE /users/{user_id} | users | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/items.py:get_item | GET /items/{item_id} | items | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
+| app/routes/items.py:get_item | GET /items/{item_id} | items | require(id = item_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/subcontractors.py:get_subcontractor | GET /subcontractors/{sub_id} | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | get(id = warehouse_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |

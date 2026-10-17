@@ -313,8 +313,9 @@ async def sales_history(
     item_ids = list(set(s.get("item_id") for s in sales if s.get("item_id")))
     items_map = {}
     if item_ids:
-        items_list = await db.items.find({"id": {"$in": item_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
-        items_map = {i["id"]: i["name"] for i in items_list}
+        # R0-02: only this tenant's items name a sale line; a foreign id stays unnamed.
+        found = await tenant.items.get_many(item_ids, {"_id": 0, "id": 1, "name": 1})
+        items_map = {i: d.get("name") for i, d in found.items()}
 
     wh_ids = list(set(s.get("warehouse_id") for s in sales if s.get("warehouse_id")))
     wh_map = {}
@@ -383,6 +384,6 @@ async def sale_details(sale_id: str, user: dict = Depends(get_current_user)):
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     # Enrich item name
-    item = await db.items.find_one({"id": sale.get("item_id")}, {"_id": 0, "name": 1})
+    item = await tenant.items.get(sale.get("item_id"), {"_id": 0, "name": 1})
     sale["item_name"] = item["name"] if item else ""
     return sale
