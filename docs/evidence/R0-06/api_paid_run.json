@@ -1,0 +1,93 @@
+{
+  "pay_run": {
+    "id": "f7e286d3-4729-45ca-b42b-ab05cab405a5",
+    "number": "PR-0001",
+    "status": "paid",
+    "paid_at": "2026-10-17T15:44:26.261100+00:00",
+    "paid_effects": "done",
+    "version": 1,
+    "history_actions": [
+      "created_confirmed",
+      "marked_paid"
+    ],
+    "rows": [
+      {
+        "employee_id": "65809e02-4364-446d-82ca-4902c6eeaf66",
+        "name": "Ivan Alpha",
+        "paid_now_amount": 500,
+        "row_status": "included"
+      },
+      {
+        "employee_id": "73c6a8de-e58e-4b84-a290-55d18e3ea87d",
+        "name": "Petar Bravo",
+        "paid_now_amount": 500,
+        "row_status": "included"
+      },
+      {
+        "employee_id": "dd8eaed4-94dd-4b71-b19d-0949a7304484",
+        "name": "Georgi Charlie",
+        "paid_now_amount": 400,
+        "row_status": "included"
+      }
+    ]
+  },
+  "refused_attempts": {
+    "reopen_all": {
+      "status": 409,
+      "body": {
+        "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+      }
+    },
+    "reopen_row": {
+      "status": 409,
+      "body": {
+        "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+      }
+    },
+    "patch": {
+      "status": 409,
+      "body": {
+        "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+      }
+    },
+    "mark_paid_again": {
+      "status": 409,
+      "body": {
+        "detail": "Already paid"
+      }
+    },
+    "mark_paid_parallel_statuses": [
+      409,
+      409,
+      409,
+      409,
+      409
+    ]
+  },
+  "salary_outflows_for_this_run": [
+    {
+      "id": "b8f0a49a-5c4f-5856-bdfc-de4fe6033fee",
+      "user_id": "65809e02-4364-446d-82ca-4902c6eeaf66",
+      "counterparty_name": "Ivan Alpha",
+      "amount": 500,
+      "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
+      "method": "Cash"
+    },
+    {
+      "id": "28a7eb52-f123-5e85-89ea-0add77065c73",
+      "user_id": "73c6a8de-e58e-4b84-a290-55d18e3ea87d",
+      "counterparty_name": "Petar Bravo",
+      "amount": 500,
+      "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
+      "method": "Cash"
+    },
+    {
+      "id": "18d3bce8-3818-594b-8a62-1f87598f7e12",
+      "user_id": "dd8eaed4-94dd-4b71-b19d-0949a7304484",
+      "counterparty_name": "Georgi Charlie",
+      "amount": 400,
+      "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
+      "method": "Cash"
+    }
+  ]
+}
