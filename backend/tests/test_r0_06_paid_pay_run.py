@@ -702,3 +702,68 @@ def test_22_slip_of_another_tenant_never_resolves_a_run(monkeypatch, backend):
         forged = [{"id": "x", "org_id": ORG_B, "pay_run_id": run_id, "status": "paid", "paid_at": "t"}]
         assert (await effective_slips(tb, forged))[0]["status"] == "confirmed"
     run_c02(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════════ R0-06-C03
+# F-03: the A1 tenant-access guard covers slip_payment_state.py (it reads pay_runs).
+# DB-free; modelled on tests/test_w0_03e_a1_static_guard.py.
+
+SLIP_STATE = "app/services/slip_payment_state.py"
+SLIP_ANCHOR = '    return set(await tenant.pay_runs.distinct("id", flt))'
+BARE_READS = (
+    '    leaked = await db.pay_runs.find({"status": "paid"}).to_list(None)\n',
+    '    leaked = await db.pay_runs.distinct("id", {"status": "paid"})\n',
+    '    leaked = await db["pay_runs"].find_one({"id": "x"})\n',
+)
+
+
+def _a1_guard():
+    import sys
+    from tests.test_r0_05_pay_run_selected_only import BACKEND
+    sys.path.insert(0, str(BACKEND / "scripts"))
+    import w0_03e_a1_tenant_access_guard as guard
+    return guard, BACKEND
+
+
+def _inject_bare(src, snippet):
+    assert src.count(SLIP_ANCHOR) == 1
+    return src.replace(SLIP_ANCHOR, snippet + SLIP_ANCHOR)
+
+
+def test_23_a1_guard_covers_slip_payment_state():
+    guard, backend = _a1_guard()
+    assert SLIP_STATE in guard.HELPER_MODULES
+    src = (backend / SLIP_STATE).read_text(encoding="utf-8")
+    assert guard.check_source(src, SLIP_STATE, helper=SLIP_STATE in guard.HELPER_MODULES) == []
+
+
+@pytest.mark.parametrize("snippet", BARE_READS)
+def test_24_a1_guard_rejects_a_bare_pay_runs_read_in_slip_payment_state(snippet):
+    guard, backend = _a1_guard()
+    bad = _inject_bare((backend / SLIP_STATE).read_text(encoding="utf-8"), snippet)
+    found = guard.check_source(bad, SLIP_STATE, helper=SLIP_STATE in guard.HELPER_MODULES)
+    assert "A1-UNSCOPED" in {v[2] for v in found}, found
+
+
+def test_25_a1_surface_scan_fails_on_the_injected_module(monkeypatch):
+    """End to end: the whole-surface scan (what the script runs) reports the injected read."""
+    from pathlib import Path
+    guard, backend = _a1_guard()
+    target = (backend / SLIP_STATE).resolve()
+    bad = _inject_bare(target.read_text(encoding="utf-8"), BARE_READS[1])
+    real_read = Path.read_text
+
+    def read_text(self, *a, **kw):
+        return bad if Path(self).resolve() == target else real_read(self, *a, **kw)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    units, violations = guard.check_protected_surface()
+    hits = [v for v in violations if v[0] == SLIP_STATE]
+    assert hits and {v[2] for v in hits} == {"A1-UNSCOPED"}, violations
+
+
+def test_26_a1_inventory_lists_both_slip_state_reads():
+    _, backend = _a1_guard()
+    doc = (backend.parent / "docs" / "architecture" / "W0-03E-A1_INVENTORY.md").read_text(encoding="utf-8")
+    rows = [line for line in doc.splitlines() if line.startswith("| " + SLIP_STATE)]
+    assert any("paid_run_ids" in r and "distinct" in r for r in rows), rows
+    assert any("_run_statuses" in r and "find" in r for r in rows), rows

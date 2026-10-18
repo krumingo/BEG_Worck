@@ -297,6 +297,8 @@
 | app/services/paid_labor.py:paid_labor_v3 | (helper) | payment_slips | find(status, archived, paid_at) | TenantData org_id (session) | scoped@base | SAFE |
 | app/services/paid_labor.py:_paid_alloc_rows | (helper) | projects | find_one(name) | TenantData org_id (session) | scoped@base | SAFE |
 | app/services/paid_labor.py:_paid_alloc_rows | (helper) | pay_runs | find(status, archived) | TenantData org_id (session) | scoped@base | SAFE |
+| app/services/slip_payment_state.py:paid_run_ids | (helper) | pay_runs | distinct('id') | TenantData org_id (session) | new read | SAFE |
+| app/services/slip_payment_state.py:_run_statuses | (helper) | pay_runs | find(id) | TenantData org_id (session) | new read | SAFE |
 | app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | update_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/deps/modules.py:get_plan_limits | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
@@ -372,4 +374,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 357 accesses — FIXED 130, SAFE 227
+Totals: 359 accesses — FIXED 130, SAFE 229
