@@ -4,7 +4,7 @@ Task: `docs/architecture/tasks/R0-07_DEV_RESET_DEV_TEST_ONLY.md` (on `claude/hap
 
 ## Change
 - `backend/app/routes/warehouses.py`: `POST /api/dev/reset-warehouses` has a route dependency that runs **before authentication**: unless `ENV` is explicitly `development` or `test` (trimmed, case-insensitive) → **404**, nothing read or written. `ENVIRONMENT` is no longer used. Roles: only Admin/Owner, others 403. `guarded_identity_delete` is kept. The route stays registered (the check is per request, so the behaviour follows the environment without an import-time snapshot).
-- `backend/app/core/stripe_config.py`: new `is_dev_or_test_env()` (same `ENV` + `MOCK_ALLOWED_ENVS` as billing); `is_mock_billing_allowed()` now calls it — same result.
+- `backend/app/core/stripe_config.py`: **unchanged** (back to main; see C01).
 - `backend/tests/test_w0_03e_legacy_routes.py`: the two existing reset tests now set `ENV=test` (they relied on the old fail-open default).
 
 ## Tests
@@ -28,3 +28,9 @@ Backend `uvicorn server:app` on 127.0.0.1:8001 with Docker MongoDB, built fronte
 3. `warehouse_permission` and the other warehouse routes are untouched.
 
 Not run: production access, migrations, merge, deploy.
+
+## C01 (Codex F-01) — strict ENV
+`is_dev_or_test_env()` normalized `ENV` (`strip().lower()`), so `TEST`, `Development`, `" test "` opened the destructive route. Now the route checks the RAW `os.environ.get("ENV")` against `("development", "test")` — no strip, no lower; anything else → 404 before auth/DB. The helper was removed and `stripe_config.py` is back to main's text: billing (`is_mock_billing_allowed`) normalizes on purpose (R0-01), so the reset got its own strict check in `warehouses.py` rather than a flag on a shared helper.
+- Tests: `TEST`, `Test`, `Development`, `DEVELOPMENT`, `" test "`, `" development "`, `"test\n"`, `"development\n"`, `"\ttest"`, `"test "` → 404, byte-equal (mongomock + real Mongo); removed from positive cases. Billing normalization still holds (`test_08`).
+- R0-07 + R0-01 billing + legacy-routes: 240 passed (mongomock + real). Mutation vs `af88f29`: 21 failed (20 strict-env cases + test_08), `mutation_C01_on_af88f29.txt`. W0 DB-free 1085/15/50, same 15 as main. A1/A2C guards 46 passed.
+- No bot re-run: the bot's cases (unset `ENV`, `ENV=test` exact) behave exactly as before; only non-exact spellings changed, covered by the HTTP-level tests above.

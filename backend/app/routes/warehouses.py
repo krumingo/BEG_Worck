@@ -4,6 +4,7 @@ Routes - Warehouses (Inventory locations) with pagination and filters.
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
+import os
 import uuid
 import re
 
@@ -12,7 +13,6 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
-from app.core.stripe_config import is_dev_or_test_env
 from ..models.warehouse import (
     WAREHOUSE_TYPES,
     WarehouseCreate, WarehouseUpdate
@@ -288,10 +288,18 @@ async def get_warehouse_types():
 
 # ── DEV-ONLY Endpoints ─────────────────────────────────────────────
 
+DEV_RESET_ENVS = ("development", "test")
+
+
 def _require_dev_or_test_env():
     """R0-07 (AUD-039): fail-closed. Runs before authentication, so outside an explicit
-    ENV=development|test the route answers 404 and reads/writes nothing."""
-    if not is_dev_or_test_env():
+    ENV=development|test the route answers 404 and reads/writes nothing.
+
+    R0-07-C01: the RAW value must equal "development" or "test" — no strip, no lower.
+    Billing's is_mock_billing_allowed() normalizes ENV on purpose (R0-01) and stays as
+    is; this destructive route gets its own strict check so "TEST", " test " or
+    "test\n" never open it."""
+    if os.environ.get("ENV") not in DEV_RESET_ENVS:
         raise HTTPException(status_code=404, detail="Not Found")
 
 

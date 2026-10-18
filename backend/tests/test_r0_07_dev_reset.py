@@ -108,7 +108,9 @@ def test_01_env_unset_is_404(monkeypatch, backend):
     _refused(monkeypatch, backend, "admin-a", 404)
 
 
-@pytest.mark.parametrize("value", ["production", "staging", "prod", "", "  ", "dev", "Production", "banana"])
+@pytest.mark.parametrize("value", ["production", "staging", "prod", "", "  ", "dev", "Production", "banana",
+                                   "TEST", "Test", "Development", "DEVELOPMENT", " test ", " development ",
+                                   "test\n", "development\n", "\ttest", "test "])
 def test_02_other_env_is_404(monkeypatch, backend, value):
     _env(monkeypatch, value)
     _refused(monkeypatch, backend, "admin-a", 404)
@@ -127,7 +129,7 @@ def test_03b_environment_cannot_override_env(monkeypatch, backend):
     _refused(monkeypatch, backend, "owner-a", 404)
 
 
-@pytest.mark.parametrize("env", ["development", "test", "TEST", " development "])
+@pytest.mark.parametrize("env", ["development", "test"])
 @pytest.mark.parametrize("who", ["admin-a", "owner-a"])
 def test_04_dev_test_admin_owner_works(monkeypatch, backend, env, who):
     _env(monkeypatch, env)
@@ -175,11 +177,19 @@ def test_07_env_gate_runs_before_authentication(monkeypatch, backend):
     run(monkeypatch, backend, scenario)
 
 
-def test_08_helper_matches_billing_rule(monkeypatch):
-    from app.core.stripe_config import is_dev_or_test_env, is_mock_billing_allowed
+def test_08_billing_still_normalizes_env_but_reset_does_not(monkeypatch):
+    from app.core.stripe_config import is_mock_billing_allowed
+    from app.routes.warehouses import _require_dev_or_test_env
+    from fastapi import HTTPException
     monkeypatch.setenv("BILLING_PROVIDER", "mock")
-    for value, ok in [("development", True), ("test", True), ("production", False), ("", False)]:
-        monkeypatch.setenv("ENV", value)
-        assert is_dev_or_test_env() is ok and is_mock_billing_allowed() is ok
+    monkeypatch.setenv("ENV", " TEST ")
+    assert is_mock_billing_allowed() is True          # R0-01 behaviour, untouched
+    with pytest.raises(HTTPException) as e:
+        _require_dev_or_test_env()                    # R0-07-C01: strict
+    assert e.value.status_code == 404
+    for ok in ("development", "test"):
+        monkeypatch.setenv("ENV", ok)
+        assert _require_dev_or_test_env() is None
     monkeypatch.delenv("ENV")
-    assert is_dev_or_test_env() is False and is_mock_billing_allowed() is False
+    with pytest.raises(HTTPException):
+        _require_dev_or_test_env()
