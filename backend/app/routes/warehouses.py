@@ -260,22 +260,78 @@ async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict 
 
 @router.delete("/warehouses/{warehouse_id}")
 async def delete_warehouse(warehouse_id: str, user: dict = Depends(get_current_user)):
-    """Delete warehouse (soft delete by setting active=false)"""
+    """Archive warehouse (soft delete by setting active=false).
+
+    CODEX C08 — warehouse archive now refuses when the warehouse has
+    ANY of: open stock, open reservation, open quarantine, open
+    in-transit remainder, or a pending movement/mapping that references
+    this warehouse (v6 §5.1 and FLOW-009 "Какво НЕ трябва да позволява").
+    The TODO is closed.
+    """
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    warehouse = await _tenant(user).warehouses.get(warehouse_id)
+
+    tenant = _tenant(user)
+    warehouse = await tenant.warehouses.get(warehouse_id)
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    
-    # Check if warehouse has inventory
-    # TODO: Add inventory check when inventory module is implemented
-    
-    await _tenant(user).warehouses.update_one(
-        {"id": warehouse_id},
-        {"$set": {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+
+    # Dependency guards — scan the canonical ledger for any row still
+    # anchored to this warehouse at a non-closed state.
+    org = user["org_id"]
+    wh_id = warehouse_id
+
+    # 1. Any outstanding stock (unconsumed inbound minus outbound against
+    # this warehouse). We piggyback on `item_balance_by_location` by
+    # distinct-item + per-item balance scan.
+    distinct_items = await tenant.warehouse_transactions.distinct(
+        "item_id", {"org_id": org}
     )
-    
+    from app.services.warehouse_movements.queries import item_balance_by_location
+    from decimal import Decimal
+    for item_id in distinct_items:
+        if not item_id:
+            continue
+        rows = await item_balance_by_location(
+            tenant.warehouse_transactions, tenant_id=org, item_id=item_id,
+        )
+        for r in rows:
+            if r["location_id"] == wh_id and Decimal(r["quantity"]) != 0:
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "WAREHOUSE_HAS_STOCK",
+                    "message": "Warehouse has open stock; archive refused",
+                    "item_id": item_id,
+                    "state": r["state"],
+                    "quantity": r["quantity"],
+                })
+
+    # 2. Any pending reservation / in-transit referencing this warehouse
+    # as source or destination.
+    pending = await tenant.warehouse_transactions.find_one({
+        "org_id": org,
+        "$or": [
+            {"source.location_id": wh_id,
+             "action": {"$in": ["reserve", "quarantine_entry",
+                                "dispatch_warehouse_to_project"]}},
+            {"destination.location_id": wh_id,
+             "destination.state": {"$in": ["reserved", "quarantine",
+                                           "in_transit"]}},
+        ],
+    })
+    if pending:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "WAREHOUSE_HAS_PENDING_MOVEMENTS",
+            "message": "Open reservation/quarantine/in-transit refuses archive",
+            "pending_movement_id": pending.get("movement_id") or pending.get("id"),
+        })
+
+    await tenant.warehouses.update_one(
+        {"id": warehouse_id},
+        {"$set": {"active": False,
+                  "archived_at": datetime.now(timezone.utc).isoformat(),
+                  "archived_by": user["id"],
+                  "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
     return {"ok": True}
 
 
@@ -292,17 +348,31 @@ async def dev_reset_warehouses(request: Request, user: dict = Depends(get_curren
     """
     DEV ONLY: Delete all warehouses for the current organization.
     Used for testing the "first warehouse" flow.
-    Blocked in production.
+    Blocked in production AND when canonical ledger history exists —
+    CODEX C08: "dev reset must never destroy canonical ledger/history".
     """
     import os
-    
+
     # Block in production
     env = os.environ.get("ENVIRONMENT", "development")
     if env == "production":
         raise HTTPException(status_code=403, detail="This endpoint is not available in production")
-    
+
     if not warehouse_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    # C08: refuse when any canonical ledger row exists for this tenant —
+    # the dev reset must never destroy auditable history.
+    tenant = _tenant(user)
+    ledger_count = await tenant.warehouse_transactions.count_documents({
+        "org_id": user["org_id"],
+    })
+    if ledger_count > 0:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "CANONICAL_LEDGER_PRESENT",
+            "message": "dev reset refused — canonical warehouse ledger history exists",
+            "ledger_rows": ledger_count,
+        })
     
     # W0-03E: no org-wide delete_many. Each warehouse is deleted by its own id,
     # scoped to this org, through the identity delete guard: in

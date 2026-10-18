@@ -77,13 +77,13 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     material_cost_invoices = round(sum(l.get("line_total_ex_vat", 0) for l in inv_lines), 2)
     input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
 
-    # From warehouse issue transactions
-    issues = await tenant.warehouse_transactions.find(
+    # From warehouse issue transactions — CODEX C12.10 no silent cap.
+    material_cost_warehouse = 0
+    _cursor = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1},
-    ).to_list(200)
-    material_cost_warehouse = 0
-    for txn in issues:
+    )
+    async for txn in _cursor:
         for line in txn.get("lines", []):
             material_cost_warehouse += float(line.get("unit_cost", 0)) * float(line.get("qty_issued", 0))
     material_cost_warehouse = round(material_cost_warehouse, 2)

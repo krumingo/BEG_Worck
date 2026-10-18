@@ -128,6 +128,17 @@ from app.routes.warehouses import router as warehouses_router
 api_router.include_router(warehouses_router)
 from app.routes.warehouse_batches import router as warehouse_batches_router
 api_router.include_router(warehouse_batches_router)
+# LIVE-OPS-01 / TASK 5C — Canonical warehouse / stock core.
+# The three routers below are the only writers / readers on the canonical
+# ledger; the legacy routes above remain mounted so historical data is still
+# readable, but their writer bodies are retired (fail-close) when
+# LEGACY_WAREHOUSE_WRITERS_ENABLED is not set.
+from app.routes.warehouse_canonical import router as warehouse_canonical_router
+from app.routes.warehouse_canonical_queries import router as warehouse_canonical_queries_router
+from app.routes.warehouse_migration import router as warehouse_migration_router
+api_router.include_router(warehouse_canonical_router)
+api_router.include_router(warehouse_canonical_queries_router)
+api_router.include_router(warehouse_migration_router)
 from app.routes.sales import router as sales_router
 api_router.include_router(sales_router)
 

@@ -16,11 +16,42 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
+# LIVE-OPS-01 / TASK 5C — Legacy warehouse writer fail-close guard.
+# The four writer endpoints below (post-to-warehouse, warehouse-issue,
+# warehouse-return, project-consumption) are retired physical writers per
+# FLOW_CODE_MAP_READY and must redirect to the canonical command service.
+from app.services.warehouse_movements.legacy_inventory import (
+    refuse_if_disabled as _refuse_legacy_warehouse_writer,
+)
+from app.services.warehouse_movements.errors import (
+    LegacyWriterRetiredError as _LegacyWriterRetiredError,
+)
 
 
 def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
+
+
+def _guard_legacy_warehouse_writer(route_id: str, canonical_action: str) -> None:
+    """Raise HTTP 410 Gone unless the LEGACY_WAREHOUSE_WRITERS_ENABLED
+    emergency escape hatch is set. TASK 5C fail-close.
+
+    The response names the canonical replacement so the UI never has to
+    invent its own redirect text (FLOW-002 — direct URL cannot bypass).
+    """
+    try:
+        _refuse_legacy_warehouse_writer(route_id, canonical_action)
+    except _LegacyWriterRetiredError as exc:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "context": exc.context,
+                "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+            },
+        ) from exc
 
 router = APIRouter(tags=["Procurement"])
 
@@ -407,101 +438,25 @@ async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(
 
 @router.post("/supplier-invoices/{inv_id}/post-to-warehouse", status_code=201)
 async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2)):
-    """Post reviewed supplier invoice lines to Main Warehouse"""
-    tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
-    if not inv:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    if inv.get("posted_to_warehouse"):
-        raise HTTPException(status_code=400, detail="Already posted to warehouse")
-    if not inv.get("lines"):
-        raise HTTPException(status_code=400, detail="No lines to post")
-    
-    # Find or create Main Warehouse
-    main_wh = await tenant.warehouses.find_one({"org_id": user["org_id"], "type": "main"})
-    if not main_wh:
-        main_wh = {
-            "id": str(uuid.uuid4()),
-            "org_id": user["org_id"],
-            "name": "Основен склад",
-            "type": "main",
-            "location": "",
-            "active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await tenant.warehouses.insert_one(main_wh)
-    
-    now = datetime.now(timezone.utc).isoformat()
-    
-    # Create warehouse intake transaction
-    intake_lines = []
-    for line in inv["lines"]:
-        intake_lines.append({
-            "id": str(uuid.uuid4()),
-            "material_name": line.get("material_name", ""),
-            "qty_received": float(line.get("qty", 0)),
-            "unit": line.get("unit", "бр"),
-            "dimension_spec": line.get("dimension_spec"),
-            "unit_price": float(line.get("unit_price", 0)),
-            "discount_percent": float(line.get("discount_percent", 0)),
-            "final_unit_price": float(line.get("final_unit_price", line.get("unit_price", 0))),
-            "total_price": float(line.get("total_price", 0)),
-            "project_id": line.get("project_id") or inv.get("project_id"),
-            "linked_request_id": line.get("linked_request_id") or inv.get("linked_request_id"),
-            "linked_offer_id": line.get("linked_offer_id"),
-        })
-    
-    transaction = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "warehouse_id": main_wh["id"],
-        "type": "intake",
-        "source_type": "supplier_invoice",
-        "source_invoice_id": inv_id,
-        "supplier_id": inv.get("supplier_id"),
-        "supplier_name": inv.get("supplier_name"),
-        "invoice_number": inv.get("invoice_number"),
-        "invoice_date": inv.get("invoice_date"),
-        "digital_invoice_url": inv.get("original_file_url"),
-        "project_id": inv.get("project_id"),
-        "received_at": now,
-        "received_by": user["id"],
-        "purchased_by": inv.get("purchased_by"),
-        "lines": intake_lines,
-        "subtotal": inv.get("subtotal", 0),
-        "vat_amount": inv.get("vat_amount", 0),
-        "total": inv.get("total", 0),
-        "created_at": now,
-    }
-    await tenant.warehouse_transactions.insert_one(transaction)
-    
-    # Update invoice status
-    await tenant.supplier_invoices.update_one({"id": inv_id}, {"$set": {
-        "posted_to_warehouse": True,
-        "posted_at": now,
-        "posted_by": user["id"],
-        "warehouse_transaction_id": transaction["id"],
-        "status": "posted_to_warehouse",
-        "updated_at": now,
-    }})
-    
-    # Update material request fulfillment if linked
-    if inv.get("linked_request_id"):
-        req = await tenant.material_requests.find_one({"id": inv["linked_request_id"]})
-        if req:
-            # Simple: mark as fulfilled
-            await tenant.material_requests.update_one(
-                {"id": req["id"]},
-                {"$set": {"status": "fulfilled", "updated_at": now}}
-            )
-    
-    await log_audit(user["org_id"], user["id"], user.get("email", ""), "warehouse_intake", "warehouse_transaction", transaction["id"],
-                    {"invoice_number": inv.get("invoice_number"), "lines_count": len(intake_lines)})
-    
-    return {k: v for k, v in transaction.items() if k != "_id"}
+    """Post reviewed supplier invoice lines to Main Warehouse
+
+    LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    Replaced by canonical ``receive_from_supplier`` /
+    ``receive_from_supplier_to_project`` commands at
+    ``POST /api/warehouse/canonical/movements``.
+
+    CODEX C01: no runtime fallback. The handler body contains no
+    physical-stock write code so no second writer can ever be
+    accidentally reactivated.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.post_to_warehouse", "receive_from_supplier",
+    )
+    # Unreachable — the guard raises HTTP 410 unconditionally.
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Warehouse Transactions List ────────────────────────────────────
@@ -517,7 +472,7 @@ async def list_warehouse_transactions(
     if project_id: query["project_id"] = project_id
     if warehouse_id: query["warehouse_id"] = warehouse_id
     
-    txns = await tenant.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    txns = await tenant.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(None)
     return txns
 
 
@@ -536,7 +491,7 @@ async def get_warehouse_stock(org_id: str, warehouse_id: str = None) -> dict:
     txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "warehouse_id": warehouse_id},
         {"_id": 0, "type": 1, "lines": 1}
-    ).to_list(1000)
+    ).to_list(None)
     
     stock = {}  # key = material_name|unit -> qty
     for txn in txns:
@@ -588,200 +543,60 @@ async def get_next_issue_number(org_id: str) -> str:
 
 @router.post("/warehouse-issue", status_code=201)
 async def issue_to_project(data: dict, user: dict = Depends(require_m2)):
-    """Issue materials from Main Warehouse to a project"""
-    tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "SiteManager", "Warehousekeeper"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    org_id = user["org_id"]
-    project_id = data.get("project_id")
-    if not project_id:
-        raise HTTPException(status_code=400, detail="project_id required")
-    
-    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    from app.services.project_guards import check_project_writable
-    await check_project_writable(project_id, org_id, "складови изписвания")
+    """Issue materials from Main Warehouse to a project
 
-    lines_input = data.get("lines", [])
-    if not lines_input:
-        raise HTTPException(status_code=400, detail="No lines to issue")
-    
-    # Stock validation
-    stock = await get_warehouse_stock(org_id)
-    for line in lines_input:
-        key = f"{line.get('material_name', '')}|{line.get('unit', '')}"
-        available = stock.get(key, {}).get("qty", 0)
-        requested = float(line.get("qty_issued", 0))
-        if requested > available + 0.01:
-            raise HTTPException(status_code=400,
-                detail=f"Недостатъчна наличност: {line.get('material_name')} — налично {available:.2f}, поискано {requested:.2f}")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    issue_no = await get_next_issue_number(org_id)
-    
-    wh = await tenant.warehouses.find_one({"org_id": org_id, "type": "main"})
-    
-    issue_lines = []
-    for line in lines_input:
-        issue_lines.append({
-            "id": str(uuid.uuid4()),
-            "material_name": line.get("material_name", ""),
-            "qty_issued": float(line.get("qty_issued", 0)),
-            "unit": line.get("unit", "бр"),
-            "dimension_spec": line.get("dimension_spec"),
-            "unit_price": float(line.get("unit_price", 0)),
-            "total_price": round(float(line.get("qty_issued", 0)) * float(line.get("unit_price", 0)), 2),
-            "notes": line.get("notes", ""),
-        })
-    
-    total = sum(l["total_price"] for l in issue_lines)
-    
-    txn = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "warehouse_id": wh["id"] if wh else None,
-        "type": "issue",
-        "issue_number": issue_no,
-        "project_id": project_id,
-        "linked_request_id": data.get("linked_request_id"),
-        "linked_offer_id": data.get("linked_offer_id"),
-        "stage_name": data.get("stage_name", ""),
-        "issued_by": user["id"],
-        "received_by": data.get("received_by", ""),
-        "issue_date": data.get("issue_date", now[:10]),
-        "notes": data.get("notes", ""),
-        "lines": issue_lines,
-        "total": round(total, 2),
-        "status": "posted",
-        "created_at": now,
-    }
-    await tenant.warehouse_transactions.insert_one(txn)
-    
-    await log_audit(org_id, user["id"], user.get("email", ""), "warehouse_issue", "warehouse_transaction", txn["id"],
-                    {"issue_number": issue_no, "project_id": project_id, "lines": len(issue_lines)})
-    
-    return {k: v for k, v in txn.items() if k != "_id"}
+    LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    Dispatch and acceptance are two separate canonical commands:
+      1. ``dispatch_warehouse_to_project`` (origin-scoped, in-transit);
+      2. ``accept_project_delivery`` (Rule B costing).
+
+    CODEX C01: handler body carries no physical-stock write code.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.warehouse_issue", "dispatch_warehouse_to_project",
+    )
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Consumption on Project ─────────────────────────────────────────
 
 @router.post("/project-consumption", status_code=201)
 async def record_consumption(data: dict, user: dict = Depends(require_m2)):
-    """Record material consumption on a project"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    project_id = data.get("project_id")
-    if not project_id:
-        raise HTTPException(status_code=400, detail="project_id required")
-    
-    lines_input = data.get("lines", [])
-    if not lines_input:
-        raise HTTPException(status_code=400, detail="No lines")
-    
-    # Check available on project
-    ledger = await compute_project_ledger(org_id, project_id)
-    for line in lines_input:
-        mat = line.get("material_name", "")
-        remaining = 0
-        for item in ledger:
-            if item["material_name"] == mat:
-                remaining = item["remaining_on_project"]
-                break
-        consume_qty = float(line.get("qty_consumed", 0))
-        if consume_qty > remaining + 0.01:
-            raise HTTPException(status_code=400,
-                detail=f"Недостатъчно по обекта: {mat} — налично {remaining:.2f}, отчитане {consume_qty:.2f}")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    
-    consumption_lines = []
-    for line in lines_input:
-        consumption_lines.append({
-            "id": str(uuid.uuid4()),
-            "material_name": line.get("material_name", ""),
-            "qty_consumed": float(line.get("qty_consumed", 0)),
-            "unit": line.get("unit", "бр"),
-            "stage_name": line.get("stage_name", data.get("stage_name", "")),
-            "notes": line.get("notes", ""),
-        })
-    
-    record = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "project_id": project_id,
-        "type": "consumption",
-        "date": data.get("date", now[:10]),
-        "recorded_by": user["id"],
-        "stage_name": data.get("stage_name", ""),
-        "notes": data.get("notes", ""),
-        "lines": consumption_lines,
-        "created_at": now,
-    }
-    await tenant.project_material_ops.insert_one(record)
-    return {k: v for k, v in record.items() if k != "_id"}
+    """Record material consumption on a project
+
+    LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    Replaced by canonical ``consume_to_smr``.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.project_consumption", "consume_to_smr",
+    )
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Return to Warehouse ────────────────────────────────────────────
 
 @router.post("/warehouse-return", status_code=201)
 async def return_to_warehouse(data: dict, user: dict = Depends(require_m2)):
-    """Return unused materials from project to Main Warehouse"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    project_id = data.get("project_id")
-    if not project_id:
-        raise HTTPException(status_code=400, detail="project_id required")
-    
-    lines_input = data.get("lines", [])
-    if not lines_input:
-        raise HTTPException(status_code=400, detail="No lines")
-    
-    # Check available on project
-    ledger = await compute_project_ledger(org_id, project_id)
-    for line in lines_input:
-        mat = line.get("material_name", "")
-        remaining = 0
-        for item in ledger:
-            if item["material_name"] == mat:
-                remaining = item["remaining_on_project"]
-                break
-        ret_qty = float(line.get("qty_returned", 0))
-        if ret_qty > remaining + 0.01:
-            raise HTTPException(status_code=400,
-                detail=f"Недостатъчно по обекта: {mat} — налично {remaining:.2f}, връщане {ret_qty:.2f}")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    wh = await tenant.warehouses.find_one({"org_id": org_id, "type": "main"})
-    
-    return_lines = []
-    for line in lines_input:
-        return_lines.append({
-            "id": str(uuid.uuid4()),
-            "material_name": line.get("material_name", ""),
-            "qty_returned": float(line.get("qty_returned", 0)),
-            "unit": line.get("unit", "бр"),
-            "notes": line.get("notes", ""),
-        })
-    
-    txn = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "warehouse_id": wh["id"] if wh else None,
-        "type": "return",
-        "project_id": project_id,
-        "returned_by": user["id"],
-        "return_date": data.get("date", now[:10]),
-        "notes": data.get("notes", ""),
-        "lines": return_lines,
-        "status": "posted",
-        "created_at": now,
-    }
-    await tenant.warehouse_transactions.insert_one(txn)
-    
-    return {k: v for k, v in txn.items() if k != "_id"}
+    """Return unused materials from project to Main Warehouse
+
+    LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    Returned material does NOT land in free stock directly; the
+    canonical path is ``quarantine_entry`` first, then
+    ``quarantine_release`` after inspection.
+    """
+    _guard_legacy_warehouse_writer(
+        "procurement.warehouse_return", "quarantine_entry",
+    )
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Project Material Ledger ────────────────────────────────────────
@@ -807,7 +622,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
     intakes = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "intake"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     for txn in intakes:
         for line in txn.get("lines", []):
             key = line.get("material_name", "")
@@ -821,7 +636,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
     issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     for txn in issues:
         for line in txn.get("lines", []):
             key = line.get("material_name", "")
@@ -845,7 +660,7 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
     returns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"},
         {"_id": 0, "lines": 1}
-    ).to_list(100)
+    ).to_list(None)
     for txn in returns:
         for line in txn.get("lines", []):
             key = line.get("material_name", "")
@@ -937,7 +752,7 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     recent_txns = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "created_at": {"$gte": cutoff}},
         {"_id": 0, "type": 1, "lines": 1, "created_at": 1}
-    ).to_list(500)
+    ).to_list(None)
     
     intake_count = sum(1 for t in recent_txns if t["type"] == "intake")
     issue_count = sum(1 for t in recent_txns if t["type"] == "issue")

@@ -30,109 +30,143 @@ router = APIRouter(tags=["Material Cost by SMR"])
 
 @router.post("/material-entries/sync/{project_id}")
 async def sync_material_entries(project_id: str, user: dict = Depends(require_m2)):
-    """Sync material entries from warehouse transactions + consumption ops, linking to execution packages"""
+    """Rebuild `material_entries` deterministically from the canonical
+    `warehouse_transactions` ledger ONLY (CODEX C02).
+
+    No legacy `project_material_ops` input. No silent cap: the rebuild
+    iterates the full tenant+project ledger. The projection is marked
+    `projection_source=canonical_warehouse_service` so a static scan /
+    reconciliation tool can distinguish canonical rows from historical
+    legacy rows (the latter are preserved read-only but not deleted
+    unless they themselves are `projection_source=canonical_...`).
+
+    Deterministic rebuild parity:
+      * iteration order is `ledger_sequence ASC`;
+      * one `material_entries` row per canonical ledger row whose
+        action is one of ACCEPT_PROJECT_DELIVERY, CONSUME_TO_SMR,
+        TRANSFER_PROJECT_TO_PROJECT, TRANSFER_PROJECT_TO_WAREHOUSE,
+        REVISION_ADJUSTMENT, WRITE_OFF — i.e. the actions that affect
+        project material cost under Rule B;
+      * two rebuilds over the same ledger return the same set.
+    """
     tenant = _tenant(user)
     org_id = user["org_id"]
 
-    # Load execution packages for mapping
-    exec_pkgs = await tenant.execution_packages.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "id": 1, "activity_name": 1, "offer_line_id": 1}
-    ).to_list(200)
-
-    # Load planned materials for mapping (material_name → execution_package_id)
-    planned = await tenant.planned_materials.find(
+    # Planned material mapping is still useful for UX linkage; it does
+    # not become a source — material_name is only a display label.
+    # CODEX C11.3 — no .to_list cap; iterate the full collection.
+    _planned_cursor = tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
-        {"_id": 0, "id": 1, "material_name": 1, "execution_package_id": 1, "offer_line_id": 1}
-    ).to_list(500)
-    planned_by_name = {}
+        {"_id": 0, "id": 1, "item_id": 1, "material_name": 1,
+         "execution_package_id": 1, "offer_line_id": 1}
+    )
+    planned = [row async for row in _planned_cursor]
+    planned_by_item: dict = {}
+    planned_by_name: dict = {}
     for pm in planned:
+        if pm.get("item_id"):
+            planned_by_item[pm["item_id"]] = pm
         name = (pm.get("material_name") or "").lower().strip()
         if name:
-            planned_by_name[name] = pm
+            planned_by_name.setdefault(name, pm)
 
-    # Clear old synced entries
-    await tenant.material_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "sync"})
+    # Delete only the canonical-sourced rows; legacy rows are kept
+    # read-only for reconciliation.
+    await tenant.material_entries.delete_many({
+        "org_id": org_id, "project_id": project_id,
+        "projection_source": "canonical_warehouse_service",
+    })
 
     now = datetime.now(timezone.utc).isoformat()
     created = 0
 
-    # Process warehouse issues
-    issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0}
-    ).to_list(200)
-    for txn in issues:
-        for line in txn.get("lines", []):
-            name = line.get("material_name", "")
-            name_lower = name.lower().strip()
-            pm = planned_by_name.get(name_lower)
+    # The canonical ledger: iterate ALL rows for this project, ordered
+    # by stable sequence (fail-closed on a missing sequence? no — legacy
+    # rows join via recorded_at as a tie-break; the aggregation is
+    # still deterministic because `movement_id` is a third key).
+    #
+    # CODEX C13.4 — UNIFIED canonical projection schema. The sync
+    # endpoint and the projector `_project_consumption` now emit the
+    # SAME field names: `tenant_id`, `quantity` (signed), `unit_value`,
+    # `total_value`, `movement_id`, `recorded_at`, `projection_source`,
+    # `projection_version`. UI linkage fields (`execution_package_id`,
+    # `planned_material_id`, `material_name`) are additive linkage,
+    # not alternate names for the same quantity/value scalars.
+    CANONICAL_ACTIONS = {
+        "accept_project_delivery": ("accept", 1),
+        "consume_to_smr": ("consume", 1),
+        "transfer_project_to_warehouse": ("transfer_out", -1),
+        "transfer_project_to_project": ("transfer", 1),
+        "revision_adjustment": ("revision", 1),
+        "write_off": ("write_off", -1),
+    }
 
-            entry = {
-                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
-                "execution_package_id": pm["execution_package_id"] if pm else None,
-                "planned_material_id": pm["id"] if pm else None,
-                "offer_line_id": pm.get("offer_line_id") if pm else None,
-                "material_name": name,
-                "qty": float(line.get("qty_issued", 0)),
-                "unit": line.get("unit", ""),
-                "unit_cost": float(line.get("unit_price", 0)) if line.get("unit_price") else None,
-                "total_cost": float(line.get("total_price", 0)) if line.get("total_price") else None,
-                "movement_type": "issue",
-                "source_doc_type": "warehouse_transaction",
-                "source_doc_id": txn.get("id"),
-                "date": txn.get("issue_date", txn.get("created_at", "")[:10]),
-                "mapped": pm is not None,
-                "source": "sync", "created_at": now,
-            }
-            await tenant.material_entries.insert_one(entry)
-            created += 1
+    cursor = tenant.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id,
+         "action": {"$in": list(CANONICAL_ACTIONS.keys())}},
+        {"_id": 0},
+    ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
+    async for row in cursor:
+        action = row.get("action")
+        kind, sign = CANONICAL_ACTIONS[action]
+        qty = float(row.get("accepted_quantity") or row.get("quantity") or 0) * sign
+        pm = (planned_by_item.get(row.get("item_id"))
+              or planned_by_name.get((row.get("item_id") or "").lower().strip()))
+        unit_value = row.get("unit_value")
+        try:
+            unit_value_f = float(unit_value) if unit_value is not None else None
+        except (TypeError, ValueError):
+            unit_value_f = None
+        mv_id = row.get("movement_id")
+        total_value = (unit_value_f * qty) if unit_value_f is not None else None
+        entry = {
+            # CODEX C11.3 / C12.6 / C13.4 — DETERMINISTIC id and
+            # VOLATILE-FREE body. A rebuild on the same ledger yields
+            # byte-identical rows (modulo Mongo's own _id).
+            # `created_at` is NOT written; `recorded_at` is the only
+            # time the projection carries.
+            "id": f"me_{mv_id}",
+            # CANONICAL identity (matches _project_consumption):
+            "tenant_id": org_id,
+            "org_id": org_id,                 # alias for legacy query
+            "project_id": project_id,
+            "movement_id": mv_id,
+            "item_id": row.get("item_id"),
+            "unit": row.get("unit"),
+            # CANONICAL quantity/value fields (match
+            # _project_consumption). Signed `quantity` carries the Rule
+            # B direction via `kind`.
+            "quantity": qty,
+            "unit_value": unit_value_f,
+            "total_value": total_value,
+            "currency": row.get("currency") or "BGN",
+            # UI linkage (not a parallel schema — purely additive):
+            "execution_package_id": pm["execution_package_id"] if pm else None,
+            "planned_material_id": pm["id"] if pm else None,
+            "offer_line_id": pm.get("offer_line_id") if pm else None,
+            "material_name": pm.get("material_name") if pm else row.get("item_id"),
+            "movement_kind": kind,
+            "mapped": pm is not None,
+            # Ledger provenance:
+            "ledger_sequence": row.get("ledger_sequence"),
+            "recorded_at": row.get("recorded_at"),
+            # Projection tagging:
+            "projection_source": "canonical_warehouse_service",
+            "projection_version": 2,
+        }
+        # Upsert on deterministic id so re-run is pure replay parity.
+        await tenant.material_entries.update_one(
+            {"id": entry["id"]}, {"$set": entry}, upsert=True,
+        )
+        created += 1
 
-    # Process returns
-    returns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "return"}, {"_id": 0}
-    ).to_list(200)
-    for txn in returns:
-        for line in txn.get("lines", []):
-            name = line.get("material_name", "")
-            pm = planned_by_name.get(name.lower().strip())
-            entry = {
-                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
-                "execution_package_id": pm["execution_package_id"] if pm else None,
-                "planned_material_id": pm["id"] if pm else None,
-                "material_name": name, "qty": -float(line.get("qty_returned", 0)),
-                "unit": line.get("unit", ""), "unit_cost": None,
-                "total_cost": -(float(line.get("total_price", 0)) or 0),
-                "movement_type": "return",
-                "source_doc_type": "warehouse_transaction", "source_doc_id": txn.get("id"),
-                "date": txn.get("return_date", txn.get("created_at", "")[:10]),
-                "mapped": pm is not None, "source": "sync", "created_at": now,
-            }
-            await tenant.material_entries.insert_one(entry)
-            created += 1
-
-    # Process consumption
-    consumptions = await tenant.project_material_ops.find(
-        {"org_id": org_id, "project_id": project_id, "type": "consumption"}, {"_id": 0}
-    ).to_list(200)
-    for op in consumptions:
-        for line in op.get("lines", []):
-            name = line.get("material_name", "")
-            pm = planned_by_name.get(name.lower().strip())
-            entry = {
-                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
-                "execution_package_id": pm["execution_package_id"] if pm else None,
-                "planned_material_id": pm["id"] if pm else None,
-                "material_name": name, "qty": float(line.get("qty_consumed", 0)),
-                "unit": line.get("unit", ""), "unit_cost": None, "total_cost": None,
-                "movement_type": "consumption",
-                "source_doc_type": "project_material_op", "source_doc_id": op.get("id"),
-                "date": op.get("date", op.get("created_at", "")[:10]),
-                "mapped": pm is not None, "source": "sync", "created_at": now,
-            }
-            await tenant.material_entries.insert_one(entry)
-            created += 1
-
-    return {"ok": True, "synced": created, "project_id": project_id}
+    return {
+        "ok": True,
+        "synced": created,
+        "project_id": project_id,
+        "source": "canonical_warehouse_transactions_ledger",
+        "deterministic": True,
+    }
 
 
 @router.get("/material-entries")
@@ -141,11 +175,18 @@ async def list_material_entries(
     planned_material_id: Optional[str] = None, user: dict = Depends(require_m2),
 ):
     tenant = _tenant(user)
-    q = {"org_id": user["org_id"]}
+    # CODEX C12.6 — authoritative read is CANONICAL ROWS ONLY. Legacy
+    # rows (pre-TASK-5C projection runs with mixed sources) stay in
+    # the collection for reconciliation but must not double-count the
+    # ledger-derived rows.
+    q = {"org_id": user["org_id"],
+         "projection_source": "canonical_warehouse_service"}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if planned_material_id: q["planned_material_id"] = planned_material_id
-    return await tenant.material_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    # CODEX C11.3 — no silent cap. Iterate the full projection.
+    cursor = tenant.material_entries.find(q, {"_id": 0}).sort("date", -1)
+    return [row async for row in cursor]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -161,9 +202,15 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    entries = await tenant.material_entries.find(
-        {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
-    ).sort("date", -1).to_list(500)
+    # CODEX C11.3 — no silent 500 cap.
+    # CODEX C12.6 — authoritative read is CANONICAL rows only.
+    cursor = tenant.material_entries.find(
+        {"org_id": org_id,
+         "execution_package_id": pkg_id,
+         "projection_source": "canonical_warehouse_service"},
+        {"_id": 0},
+    ).sort("date", -1)
+    entries = [row async for row in cursor]
 
     by_material = {}
     total_issued_qty = 0
@@ -172,30 +219,37 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
     partial_cost = False
 
     for e in entries:
+        # CODEX C13.4 — read ONLY from canonical schema; `quantity` and
+        # `total_value` are the authoritative scalars. `movement_kind`
+        # replaces the legacy `movement_type` label.
         name = e.get("material_name", "")
-        qty = float(e.get("qty", 0))
-        cost = e.get("total_cost")
-        mt = e.get("movement_type", "")
+        qty = float(e.get("quantity", 0))
+        cost = e.get("total_value")
+        mt = e.get("movement_kind", "")
 
-        if mt == "issue":
+        if mt in ("accept", "transfer"):
+            # Inflow to the project — treated as an issue in the UI.
             total_issued_qty += qty
-        elif mt == "return":
+        elif mt in ("transfer_out", "write_off", "consume"):
+            # Outflow — treated as a return/consumption in the UI.
             total_returned_qty += abs(qty)
 
         if cost is not None:
             total_cost += cost
-        elif mt in ["issue", "return"]:
+        elif mt in ("accept", "transfer", "transfer_out", "write_off", "consume"):
             partial_cost = True
 
         if name not in by_material:
-            by_material[name] = {"material_name": name, "unit": e.get("unit", ""), "issued_qty": 0, "returned_qty": 0, "consumed_qty": 0, "net_cost": 0}
-        if mt == "issue":
+            by_material[name] = {"material_name": name, "unit": e.get("unit", ""),
+                                 "issued_qty": 0, "returned_qty": 0,
+                                 "consumed_qty": 0, "net_cost": 0}
+        if mt in ("accept", "transfer"):
             by_material[name]["issued_qty"] += qty
             if cost: by_material[name]["net_cost"] += cost
-        elif mt == "return":
+        elif mt in ("transfer_out", "write_off"):
             by_material[name]["returned_qty"] += abs(qty)
             if cost: by_material[name]["net_cost"] += cost
-        elif mt == "consumption":
+        elif mt == "consume":
             by_material[name]["consumed_qty"] += qty
 
     for v in by_material.values():
@@ -230,31 +284,36 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
     """Recompute material budget and actual for execution packages"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
+    pkgs = await [row async for row in tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0})]
     if not pkgs:
         return {"ok": True, "updated": 0}
 
     # Load planned materials for budget linkage
-    planned = await tenant.planned_materials.find(
+    planned = await [row async for row in tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0, "execution_package_id": 1, "planned_total_cost": 1}
-    ).to_list(500)
+    )]
     budget_by_pkg = {}
     for pm in planned:
         ep_id = pm.get("execution_package_id")
         if ep_id:
             budget_by_pkg[ep_id] = budget_by_pkg.get(ep_id, 0) + (pm.get("planned_total_cost", 0) or 0)
 
-    # Aggregate actual from material_entries
-    entries = await tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id, "movement_type": {"$in": ["issue", "return"]}},
-        {"_id": 0, "execution_package_id": 1, "total_cost": 1}
-    ).to_list(5000)
+    # Aggregate actual from material_entries — CODEX C13.4 canonical
+    # schema; C13.6 uncapped.
+    _entries_cursor = tenant.material_entries.find(
+        {"org_id": org_id, "project_id": project_id,
+         "projection_source": "canonical_warehouse_service",
+         "movement_kind": {"$in": ["accept", "transfer_out", "write_off",
+                                   "transfer", "consume"]}},
+        {"_id": 0, "execution_package_id": 1, "total_value": 1},
+    )
+    entries = [row async for row in _entries_cursor]
     actual_by_pkg = {}
     for e in entries:
         ep_id = e.get("execution_package_id")
-        if ep_id and e.get("total_cost") is not None:
-            actual_by_pkg[ep_id] = actual_by_pkg.get(ep_id, 0) + float(e["total_cost"])
+        if ep_id and e.get("total_value") is not None:
+            actual_by_pkg[ep_id] = actual_by_pkg.get(ep_id, 0) + float(e["total_value"])
 
     updated = 0
     for pkg in pkgs:
@@ -294,10 +353,10 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
     lab_actual = pkg.get("actual_labor_cost", 0)
 
     # Subcontract for this package
-    sub_lines = await tenant.subcontractor_package_lines.find(
+    sub_lines = await [row async for row in tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "execution_package_id": pkg_id},
         {"_id": 0, "certified_total": 1}
-    ).to_list(50)
+    )]
     sub_certified = sum(l.get("certified_total", 0) for l in sub_lines)
 
     total_actual = round(mat_actual + lab_actual + sub_certified, 2)
@@ -343,13 +402,13 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
     """All execution packages financial breakdown for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0}).to_list(200)
+    pkgs = await [row async for row in tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0})]
 
     # Load subcontract by package
-    sub_lines = await tenant.subcontractor_package_lines.find(
+    sub_lines = await [row async for row in tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "execution_package_id": 1, "certified_total": 1}
-    ).to_list(500)
+    )]
     sub_by_pkg = {}
     for sl in sub_lines:
         ep_id = sl.get("execution_package_id")
@@ -396,14 +455,18 @@ async def get_material_warnings(project_id: str, user: dict = Depends(require_m2
     """Material cost warnings for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await tenant.execution_packages.find(
+    pkgs = await [row async for row in tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
-    ).to_list(200)
+    )]
 
+    # CODEX C13.4 — all count paths filter by canonical projection source.
     unmapped = await tenant.material_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+        {"org_id": org_id, "project_id": project_id,
+         "projection_source": "canonical_warehouse_service",
+         "execution_package_id": None})
     total = await tenant.material_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id})
+        {"org_id": org_id, "project_id": project_id,
+         "projection_source": "canonical_warehouse_service"})
 
     warnings = []
     for pkg in pkgs:
@@ -426,24 +489,39 @@ async def get_material_warnings(project_id: str, user: dict = Depends(require_m2
 
 
 async def get_material_summary_for_project(org_id: str, project_id: str) -> dict:
-    """Get aggregated material cost summary for profit integration"""
+    """Get aggregated material cost summary for profit integration.
+
+    CODEX C13.4 / C13.6 — canonical schema only, uncapped reads.
+    """
     tenant = TenantData.for_resolved_org(db, org_id)
-    mapped = await tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": {"$ne": None}, "movement_type": {"$in": ["issue", "return"]}},
-        {"_id": 0, "total_cost": 1}
-    ).to_list(5000)
-    mapped_cost = sum(float(e["total_cost"]) for e in mapped if e.get("total_cost") is not None)
+    _mapped_cursor = tenant.material_entries.find(
+        {"org_id": org_id, "project_id": project_id,
+         "projection_source": "canonical_warehouse_service",
+         "execution_package_id": {"$ne": None},
+         "movement_kind": {"$in": ["accept", "transfer_out", "write_off",
+                                   "transfer", "consume"]}},
+        {"_id": 0, "total_value": 1},
+    )
+    mapped = [row async for row in _mapped_cursor]
+    mapped_cost = sum(float(e["total_value"]) for e in mapped
+                      if e.get("total_value") is not None)
 
-    unmapped = await tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": None, "movement_type": {"$in": ["issue", "return"]}},
-        {"_id": 0, "total_cost": 1}
-    ).to_list(5000)
-    unmapped_cost = sum(float(e["total_cost"]) for e in unmapped if e.get("total_cost") is not None)
+    _unmapped_cursor = tenant.material_entries.find(
+        {"org_id": org_id, "project_id": project_id,
+         "projection_source": "canonical_warehouse_service",
+         "execution_package_id": None,
+         "movement_kind": {"$in": ["accept", "transfer_out", "write_off",
+                                   "transfer", "consume"]}},
+        {"_id": 0, "total_value": 1},
+    )
+    unmapped = [row async for row in _unmapped_cursor]
+    unmapped_cost = sum(float(e["total_value"]) for e in unmapped
+                        if e.get("total_value") is not None)
 
-    pkgs = await tenant.execution_packages.find(
+    pkgs = await [row async for row in tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "material_budget_total": 1}
-    ).to_list(200)
+    )]
     budget = sum(p.get("material_budget_total", 0) for p in pkgs)
 
     total = round(mapped_cost + unmapped_cost, 2)

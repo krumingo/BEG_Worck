@@ -1,5 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import API from "@/lib/api";
+// LIVE-OPS-01 / TASK 5C C08 — canonical write path.
+import {
+  ACTIONS as CANONICAL_ACTIONS,
+  LOCATION_TYPES, STATES, postMovement,
+} from "@/lib/warehouseCanonicalApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -50,48 +55,164 @@ export default function ProjectMaterialLedger({ projectId }) {
   const handleIssue = async () => {
     setSaving(true);
     try {
-      await API.post("/warehouse-issue", { project_id: projectId, lines: opLines });
+      // CODEX C11.9: no silent skip — every line must be a valid
+      // canonical dispatch, or the submission is refused with the
+      // exact per-line reason.
+      const blockers = [];
+      opLines.forEach((line, i) => {
+        if (!line.item_id) blockers.push(`Ред ${i + 1}: липсва item_id (мапнете материала)`);
+        if (!line.warehouse_id) blockers.push(`Ред ${i + 1}: липсва warehouse_id`);
+        const q = parseFloat(line.qty_issued);
+        if (!q || q <= 0) blockers.push(`Ред ${i + 1}: невалидно количество`);
+      });
+      if (blockers.length > 0) {
+        alert(blockers.join("\n"));
+        return;
+      }
+      // CODEX C11.9: transit location_id is SERVER-ISSUED — pass a
+      // short per-line transit "handle" (`pending_<nonce>`) and the
+      // canonical service rewrites it into `in_transit:<movement_id>`
+      // on write. The response envelope carries the resolved
+      // destination.
+      for (const line of opLines) {
+        const qty = parseFloat(line.qty_issued);
+        await postMovement({
+          action: CANONICAL_ACTIONS.DISPATCH_WAREHOUSE_TO_PROJECT,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(qty),
+          source: {
+            location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+            location_id: line.warehouse_id,
+            state: STATES.FREE,
+          },
+          destination: {
+            location_type: LOCATION_TYPES.IN_TRANSIT,
+            location_id: "pending",   // server rewrites to movement_id
+            state: STATES.IN_TRANSIT,
+          },
+          project_id: projectId,
+        });
+      }
       setIssueOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 
   // Consume on project
   const openConsume = () => {
+    // CODEX C12.8 — openers now preserve canonical IDs so handler
+    // cannot silently skip lines (`item_id`, `warehouse_id` carry
+    // through from the ledger row they came from).
     const lines = ledger.filter(m => m.remaining_on_project > 0).map(m => ({
-      material_name: m.material_name, qty_consumed: "", unit: m.unit,
+      material_name: m.material_name,
+      item_id: m.item_id,
+      warehouse_id: m.warehouse_id,
+      qty_consumed: "",
+      unit: m.unit,
     }));
-    setOpLines(lines.length > 0 ? lines : [{ material_name: "", qty_consumed: "", unit: "бр" }]);
+    setOpLines(lines.length > 0 ? lines : [{
+      material_name: "", item_id: "", warehouse_id: "",
+      qty_consumed: "", unit: "бр",
+    }]);
     setConsumeOpen(true);
   };
   const handleConsume = async () => {
     setSaving(true);
     try {
       const valid = opLines.filter(l => parseFloat(l.qty_consumed) > 0);
-      await API.post("/project-consumption", { project_id: projectId, lines: valid });
+      // CODEX C12.8 — no silent skip. Any line without a canonical
+      // item_id blocks the whole submission with an explicit reason.
+      const blockers = [];
+      valid.forEach((line, i) => {
+        if (!line.item_id) blockers.push(`Ред ${i + 1}: липсва item_id (мапнете материала)`);
+      });
+      if (blockers.length > 0) {
+        alert(blockers.join("\n"));
+        return;
+      }
+      for (const line of valid) {
+        await postMovement({
+          action: CANONICAL_ACTIONS.CONSUME_TO_SMR,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(parseFloat(line.qty_consumed)),
+          source: {
+            location_type: LOCATION_TYPES.PROJECT,
+            location_id: projectId,
+            state: STATES.FREE,
+          },
+          project_id: projectId,
+          smr_id: line.smr_id,
+          work_package_id: line.work_package_id,
+        });
+      }
       setConsumeOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 
   // Return to warehouse
   const openReturn = () => {
     const lines = ledger.filter(m => m.remaining_on_project > 0).map(m => ({
-      material_name: m.material_name, qty_returned: "", unit: m.unit,
+      material_name: m.material_name,
+      item_id: m.item_id,
+      warehouse_id: m.warehouse_id,
+      qty_returned: "",
+      unit: m.unit,
     }));
-    setOpLines(lines.length > 0 ? lines : [{ material_name: "", qty_returned: "", unit: "бр" }]);
+    setOpLines(lines.length > 0 ? lines : [{
+      material_name: "", item_id: "", warehouse_id: "",
+      qty_returned: "", unit: "бр",
+    }]);
     setReturnOpen(true);
   };
   const handleReturn = async () => {
     setSaving(true);
     try {
       const valid = opLines.filter(l => parseFloat(l.qty_returned) > 0);
-      await API.post("/warehouse-return", { project_id: projectId, lines: valid });
+      // CODEX C12.8 — no silent skip; show the explicit reason.
+      const blockers = [];
+      valid.forEach((line, i) => {
+        if (!line.item_id) blockers.push(`Ред ${i + 1}: липсва item_id`);
+        if (!line.warehouse_id) blockers.push(`Ред ${i + 1}: липсва warehouse_id`);
+      });
+      if (blockers.length > 0) {
+        alert(blockers.join("\n"));
+        return;
+      }
+      // C04/C08: returned material enters QUARANTINE first.
+      for (const line of valid) {
+        await postMovement({
+          action: CANONICAL_ACTIONS.QUARANTINE_ENTRY,
+          item_id: line.item_id,
+          unit: line.unit || "бр",
+          quantity: String(parseFloat(line.qty_returned)),
+          source: {
+            location_type: LOCATION_TYPES.PROJECT,
+            location_id: projectId,
+            state: STATES.FREE,
+          },
+          destination: {
+            location_type: LOCATION_TYPES.CENTRAL_WAREHOUSE,
+            location_id: line.warehouse_id,
+            state: STATES.QUARANTINE,
+          },
+          project_id: projectId,
+          reason: line.reason || "project return — awaiting inspection",
+        });
+      }
       setReturnOpen(false);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || err.response?.data?.detail || "Грешка");
+    }
     finally { setSaving(false); }
   };
 

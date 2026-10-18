@@ -66,6 +66,35 @@ ACTIONS: Set[str] = {
     # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
     # adapter write and needs this action; default deny for every other role.
     "master_data.legacy.delete",
+    # ------------------------------------------------------------------
+    # LIVE-OPS-01 / TASK 5C — Canonical warehouse/stock core (FLOW-009).
+    # Every canonical movement command is denied by default and granted
+    # only through an explicit RoleAssignment carrying the exact action
+    # + object scope. The outer route gate `warehouse.write_command` is
+    # a coarse gate kept wide; the per-action gate below is what
+    # Permission Service actually evaluates.
+    # ------------------------------------------------------------------
+    "warehouse.write_command",                      # coarse route gate (outer)
+    "warehouse.receive_from_supplier",
+    "warehouse.receive_from_supplier_to_project",
+    "warehouse.reserve",
+    "warehouse.release_reservation",
+    "warehouse.dispatch_to_project",
+    "warehouse.accept_delivery",
+    "warehouse.transfer_project_to_warehouse",
+    "warehouse.transfer_project_to_project",
+    "warehouse.transfer_warehouse_to_warehouse",
+    "warehouse.consume_smr",
+    "warehouse.return_to_supplier",
+    "warehouse.write_off",
+    "warehouse.revision_adjustment",
+    "warehouse.quarantine_entry",
+    "warehouse.quarantine_release",
+    "warehouse.read_stock",
+    "warehouse.read_history",
+    # Migration-readiness is read-only / dry-run only; execute always 405.
+    "warehouse.migration.readiness",
+    "warehouse.migration.execute",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited
@@ -104,20 +133,69 @@ CANONICAL_ROLES: Dict[str, dict] = {
     "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      # TASK 5C: site technical lead accepts deliveries
+                                                                      # and consumes stock on SMR; project scope is required.
+                                                                      "warehouse.write_command",
+                                                                      "warehouse.accept_delivery",
+                                                                      "warehouse.consume_smr",
+                                                                      "warehouse.transfer_project_to_warehouse",
+                                                                      "warehouse.transfer_project_to_project",
+                                                                      "warehouse.quarantine_entry",
+                                                                      "warehouse.read_stock",
+                                                                      "warehouse.read_history"}},
     "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      # TASK 5C: PM reads everything in scope; may authorize
+                                                                      # revisions and write-offs within their project scope.
+                                                                      "warehouse.write_command",
+                                                                      "warehouse.consume_smr",
+                                                                      "warehouse.transfer_project_to_warehouse",
+                                                                      "warehouse.transfer_project_to_project",
+                                                                      "warehouse.quarantine_entry",
+                                                                      "warehouse.quarantine_release",
+                                                                      "warehouse.write_off",
+                                                                      "warehouse.revision_adjustment",
+                                                                      "warehouse.read_stock",
+                                                                      "warehouse.read_history",
+                                                                      "warehouse.migration.readiness"}},
     "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read",
                                                                       "master_data.pending.read",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      # TASK 5C: accounting reads only, no stock writes.
+                                                                      "warehouse.read_stock",
+                                                                      "warehouse.read_history"}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      # TASK 5C: warehouse operator — stock-floor commands only.
+                                                                      # Not permitted: receive-to-project (procurement decision),
+                                                                      # return-to-supplier (procurement decision),
+                                                                      # revision (owner/admin), migration (admin).
+                                                                      "warehouse.write_command",
+                                                                      "warehouse.receive_from_supplier",
+                                                                      "warehouse.reserve",
+                                                                      "warehouse.release_reservation",
+                                                                      "warehouse.dispatch_to_project",
+                                                                      "warehouse.accept_delivery",
+                                                                      "warehouse.transfer_project_to_warehouse",
+                                                                      "warehouse.transfer_warehouse_to_warehouse",
+                                                                      "warehouse.quarantine_entry",
+                                                                      "warehouse.quarantine_release",
+                                                                      "warehouse.read_stock",
+                                                                      "warehouse.read_history"}},
     "procurement":     {"label_bg": "Снабдител",              "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      # TASK 5C: procurement handles supplier side.
+                                                                      "warehouse.write_command",
+                                                                      "warehouse.receive_from_supplier",
+                                                                      "warehouse.receive_from_supplier_to_project",
+                                                                      "warehouse.return_to_supplier",
+                                                                      "warehouse.read_stock",
+                                                                      "warehouse.read_history"}},
     "office":          {"label_bg": "Офис",                   "actions": {"user.read",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
