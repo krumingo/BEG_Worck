@@ -12,6 +12,7 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
+from app.core.stripe_config import is_dev_or_test_env
 from ..models.warehouse import (
     WAREHOUSE_TYPES,
     WarehouseCreate, WarehouseUpdate
@@ -287,23 +288,29 @@ async def get_warehouse_types():
 
 # ── DEV-ONLY Endpoints ─────────────────────────────────────────────
 
-@router.post("/dev/reset-warehouses")
+def _require_dev_or_test_env():
+    """R0-07 (AUD-039): fail-closed. Runs before authentication, so outside an explicit
+    ENV=development|test the route answers 404 and reads/writes nothing."""
+    if not is_dev_or_test_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+@router.post("/dev/reset-warehouses", dependencies=[Depends(_require_dev_or_test_env)])
 async def dev_reset_warehouses(request: Request, user: dict = Depends(get_current_user)):
     """
-    DEV ONLY: Delete all warehouses for the current organization.
+    DEV/TEST ONLY: Delete all warehouses for the current organization.
     Used for testing the "first warehouse" flow.
-    Blocked in production.
+    Works only when ENV is explicitly development or test (otherwise 404);
+    Admin/Owner only.
+
+    DEBT (not fixed here): with MASTER_DATA_MODE=off/shadow guarded_identity_delete
+    returns None and the loop below hard-deletes every warehouse of the org without a
+    usage check; only enforce archives used ones. Acceptable only because this route is
+    unreachable outside dev/test.
     """
-    import os
-    
-    # Block in production
-    env = os.environ.get("ENVIRONMENT", "development")
-    if env == "production":
-        raise HTTPException(status_code=403, detail="This endpoint is not available in production")
-    
-    if not warehouse_permission(user):
+    if user["role"] not in ("Admin", "Owner"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
+
     # W0-03E: no org-wide delete_many. Each warehouse is deleted by its own id,
     # scoped to this org, through the identity delete guard: in
     # MASTER_DATA_MODE=enforce a used or migrated warehouse is archived instead

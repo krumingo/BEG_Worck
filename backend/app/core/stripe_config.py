@@ -50,11 +50,15 @@ def stripe_webhook_secret() -> str:
     return os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
 
 
+def is_dev_or_test_env() -> bool:
+    """True only when ``ENV`` is explicitly development or test (fail-closed: unset/other = False)."""
+    return os.environ.get("ENV", "").strip().lower() in MOCK_ALLOWED_ENVS
+
+
 def is_mock_billing_allowed() -> bool:
     """Mock only on explicit request in an explicitly non-production environment."""
     provider = os.environ.get("BILLING_PROVIDER", "").strip().lower()
-    env = os.environ.get("ENV", "").strip().lower()
-    return provider == BILLING_MODE_MOCK and env in MOCK_ALLOWED_ENVS
+    return provider == BILLING_MODE_MOCK and is_dev_or_test_env()
 
 
 def billing_mode() -> str:
