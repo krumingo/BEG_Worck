@@ -144,6 +144,10 @@ async def signup_organization(data: OrgSignupRequest):
                 "work_report_deadline": "18:30", "max_reminders_per_day": 2,
                 "escalation_after_days": 2})
     except OnboardingRefused as exc:
+        if exc.code == "EMAIL_EXISTS":
+            # R0-03: the same 409 as every other creation path; no company is named.
+            raise HTTPException(status_code=409, detail={
+                "error_code": "EMAIL_EXISTS", "message": "This email is already registered"})
         raise HTTPException(status_code=400, detail=str(exc))
     org_id = created["tenant"]["id"]
     user_id = created["owner"]["id"]

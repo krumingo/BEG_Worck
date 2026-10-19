@@ -40,7 +40,10 @@ async def seed_data() -> None:
         return
 
     # Idempotent check: skip if admin already exists
-    existing = await db.users.find_one({"email": seed_email})
+    # R0-03: the seed admin is one more creation path — normalized, any spelling counts.
+    from app.tenancy.identity import email_match_filter, normalize_email
+    seed_email = normalize_email(seed_email)
+    existing = await db.users.find_one(email_match_filter(seed_email))
     if existing:
         logger.info(f"Seed data already exists for {seed_email}, skipping")
         return

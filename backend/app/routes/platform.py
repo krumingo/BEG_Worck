@@ -28,6 +28,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
 
 from app.db import db
+from app.tenancy.identity import email_match_filter, normalize_email
 
 router = APIRouter(prefix="/api/platform", tags=["Platform Bootstrap"])
 
@@ -239,8 +240,11 @@ async def bootstrap_create_platform_admin(
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 4: Check if user already exists (idempotency)
     # ─────────────────────────────────────────────────────────────────────────
+    # R0-03 (Р6): one email = one User — any existing spelling of the email
+    # (case/whitespace) is the existing identity; nothing is created then.
+    email = normalize_email(data.email)
     existing_user = await db.users.find_one(
-        {"email": data.email},
+        email_match_filter(email),
         {"_id": 0, "id": 1, "email": 1, "is_platform_admin": 1}
     )
     
@@ -312,7 +316,7 @@ async def bootstrap_create_platform_admin(
         await db.users.insert_one({
             "id": user_id,
             "org_id": org_id,
-            "email": data.email,
+            "email": email,
             "password_hash": password_hash,
             "first_name": first_name,
             "last_name": last_name,
