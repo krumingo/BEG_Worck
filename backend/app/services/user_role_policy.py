@@ -192,8 +192,11 @@ async def audit_user_change(database, *, tenant_id: str, actor_id: str, action: 
                             target_id: Optional[str], diff: Optional[Dict[str, Any]] = None,
                             reason: str, result: str = "success", actor_type: str = "human",
                             error_code: Optional[str] = None,
-                            tool_or_endpoint: Optional[str] = None) -> Dict[str, Any]:
+                            tool_or_endpoint: Optional[str] = None,
+                            session=None) -> Dict[str, Any]:
     """One canonical W0-04 AuditEvent (FLOW-040, R3 security/access) in ``database``.
+
+    ``session``: write inside the caller's MongoDB transaction (R0-04 reset/recovery).
 
     ``database`` is the same handle the business write used. ``diff`` carries
     before/after of role / is_active / email only — never a password or hash
@@ -206,4 +209,4 @@ async def audit_user_change(database, *, tenant_id: str, actor_id: str, action: 
         source_flow="FLOW-002", retention_class=RETENTION_R3_SECURITY_ACCESS, result=result,
         entity_type="user", entity_id=target_id, structured_diff=diff, reason=reason,
         error_code=error_code, tool_or_endpoint=tool_or_endpoint)
-    return await record_event(database, event)
+    return await record_event(database, event, session=session)
