@@ -1,0 +1,68 @@
+{
+  "list_item": {
+    "number": "PR-0001",
+    "status": "payment_failed",
+    "paid_effects": "failed",
+    "paid_effects_error": "RuntimeError",
+    "op_lock": {
+      "op": "mark_paid",
+      "at": "2026-10-17T15:43:54.521994+00:00"
+    }
+  },
+  "detail": {
+    "status": "payment_failed",
+    "paid_effects": "failed",
+    "op_lock": {
+      "op": "mark_paid",
+      "by": "b0dc5d0c-a90a-4927-a939-b1bbd913b903",
+      "at": "2026-10-17T15:43:54.521994+00:00"
+    },
+    "history_actions": [
+      "created_confirmed",
+      "payment_failed"
+    ]
+  },
+  "list_status_paid_ids": [],
+  "audit_issues": [
+    {
+      "type": "payment_incomplete",
+      "severity": "critical",
+      "message": "Плащането на PR-0001 НЕ е завършено (payment_failed) — нужна е проверка"
+    }
+  ],
+  "refused": {
+    "mark_paid_again": {
+      "status": 409,
+      "body": {
+        "detail": "Already paid"
+      }
+    },
+    "reopen": {
+      "status": 409,
+      "body": {
+        "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+      }
+    },
+    "patch": {
+      "status": 409,
+      "body": {
+        "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+      }
+    }
+  },
+  "salary_outflows_before": [
+    {
+      "counterparty_name": "Ivan Alpha",
+      "amount": 500
+    },
+    {
+      "counterparty_name": "Petar Bravo",
+      "amount": 500
+    },
+    {
+      "counterparty_name": "Georgi Charlie",
+      "amount": 400
+    }
+  ],
+  "salary_outflows_after": 3
+}

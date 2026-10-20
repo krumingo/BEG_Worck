@@ -1,0 +1,112 @@
+{
+  "started_at": "2026-10-20T17:17:33.763Z",
+  "steps": [
+    {
+      "step": "0 old session logged in",
+      "pass": true,
+      "detail": {
+        "url": "/"
+      }
+    },
+    {
+      "step": "1 generic confirmation shown",
+      "pass": true,
+      "detail": {
+        "url": "/forgot-password"
+      }
+    },
+    {
+      "step": "2a dev-log link present",
+      "pass": true,
+      "detail": {
+        "link": "<redacted>"
+      }
+    },
+    {
+      "step": "2b login with the new password",
+      "pass": true,
+      "detail": {
+        "url": "/"
+      }
+    },
+    {
+      "step": "2c old password refused (API)",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "3a old JWT -> 401 (API)",
+      "pass": true,
+      "detail": {
+        "status": 401
+      }
+    },
+    {
+      "step": "3b old tab sent to /login",
+      "pass": true,
+      "detail": {
+        "url": "/login"
+      }
+    },
+    {
+      "step": "4 reused link -> invalid",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "4b password unchanged by the reused link",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "5 375px login no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "scrollWidth": 375,
+        "innerWidth": 375
+      }
+    },
+    {
+      "step": "5 375px forgot no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "scrollWidth": 375,
+        "innerWidth": 375
+      }
+    },
+    {
+      "step": "5 375px reset no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "scrollWidth": 375,
+        "innerWidth": 375
+      }
+    },
+    {
+      "step": "5 1280px login no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "scrollWidth": 1280,
+        "innerWidth": 1280
+      }
+    },
+    {
+      "step": "5 1280px forgot no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "scrollWidth": 1280,
+        "innerWidth": 1280
+      }
+    },
+    {
+      "step": "5 1280px reset no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "scrollWidth": 1280,
+        "innerWidth": 1280
+      }
+    }
+  ],
+  "finished_at": "2026-10-20T17:17:53.766Z",
+  "result": "PASS"
+}

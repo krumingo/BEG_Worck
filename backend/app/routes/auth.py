@@ -15,17 +15,24 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
-from app.utils.email_identity import email_match_filter, mask_email, normalize_email
 from app.services import auth_events, password_reset, rate_limit
 from app.utils.client_ip import client_ip
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
-from app.tenancy.data_access import TenantData, resolve_identities_by_email
+from app.tenancy.data_access import TenantData
 from app.permissions.deps import require_permission, MODE_SHADOW, MODE_ENFORCE
 from app.permissions.sync import grant_company_role, shadow_sync
 from app.permissions.workflow import (
     RecoverableWrite, fingerprint_without, ERROR_SYNC_FAILED, ERROR_WRITE_INCOMPLETE,
+)
+from app.tenancy.identity import (
+    ERROR_DUPLICATE_IDENTITY, ERROR_EMAIL_EXISTS, ERROR_IDENTITY_CHECK_UNAVAILABLE,
+    IdentityCheckUnavailable, email_match_filter, installation_databases,
+    installation_databases_for, normalize_email, users_with_email,
+)
+from app.services.user_role_policy import (
+    audit_user_change, check_owner_only, check_user_update, role_audit_diff,
 )
 
 
@@ -33,11 +40,26 @@ def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
 
+def _tenant_of(tdb, ctx) -> TenantData:
+    """The context's tenant on the handle the route writes to."""
+    return TenantData.for_context(tdb, ctx)
+
+
+def identity_check_unavailable() -> HTTPException:
+    """R0-03-C01 F-03: the installation could not be fully checked — refuse, write nothing."""
+    return HTTPException(status_code=503, detail={
+        "error_code": ERROR_IDENTITY_CHECK_UNAVAILABLE,
+        "message": "The email cannot be checked right now; nothing was created"})
+
+
+def _email_exists() -> HTTPException:
+    """R0-03: the same refusal on every creation path; no company is named."""
+    return HTTPException(status_code=409, detail={
+        "error_code": ERROR_EMAIL_EXISTS, "message": "This email is already registered"})
+
+
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger("beg.auth")
-
-#: F-03: neutral refusal for an email already used in another organization.
-EMAIL_NOT_AVAILABLE = "This email cannot be used. Choose a different email."
 
 # Pydantic models
 class LoginRequest(BaseModel):
@@ -76,25 +98,43 @@ class ModuleToggle(BaseModel):
     module_code: str
     enabled: bool
 
+def _password_matches(password: str, password_hash) -> bool:
+    try:
+        return bool(password_hash) and verify_password(password, password_hash)
+    except Exception:          # malformed/unknown hash: never a match
+        return False
+
+
 # Auth routes
 @router.post("/auth/login")
 async def login(req: LoginRequest, request: Request):
-    # AUTH-01: the email is compared case-insensitively (strip().lower()) and
-    # must name exactly ONE user. A case-only duplicate is ambiguous: refused
-    # like a wrong password, never resolved to "the first one", and reported
-    # in the server log and as a durable security event for the operator
-    # (scripts/auth_duplicate_emails_report.py lists the colliding rows).
-    matches = await resolve_identities_by_email(db, req.email, {"_id": 0})
-    if len(matches) > 1:
-        logger.warning("LOGIN_REFUSED_AMBIGUOUS_EMAIL: %d users share %s up to letter case "
-                       "(user_ids=%s)", len(matches), mask_email(req.email),
-                       [m.get("id") for m in matches])
+    # R0-03 (AUTH-01 F-03): the email is normalized, and an email held by more
+    # than one User never logs into whichever one the database returns first.
+    # The login registry is the global users collection in every mode.
+    email = normalize_email(req.email)
+    candidates = [u for u in await db.users.find(email_match_filter(email), {"_id": 0}).to_list(50)
+                  if email and normalize_email(u.get("email")) == email]
+    if len(candidates) > 1:
+        # R0-04 (AUTH-01 F-08): every refused duplicate login also leaves a durable,
+        # privacy-preserving security event (keyed email ref, no email/password).
         await auth_events.record(
             db, auth_events.LOGIN_AMBIGUOUS, ip=client_ip(request),
-            subject=auth_events.keyed_ref(normalize_email(req.email)),
-            detail={"candidates": len(matches)})
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    user = matches[0] if matches else None
+            subject=auth_events.keyed_ref(email), detail={"candidates": len(candidates)})
+        # Only a caller who knows a password of one of them learns about the
+        # duplicate; anyone else gets the ordinary 401.
+        if not any(_password_matches(req.password, u.get("password_hash")) for u in candidates):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        for org_id in sorted({u.get("org_id") for u in candidates if u.get("org_id")}):
+            await audit_user_change(
+                db, tenant_id=org_id, actor_id="auth.login", actor_type="system",
+                action="auth.login_refused", target_id=None, result="denied",
+                error_code=ERROR_DUPLICATE_IDENTITY, tool_or_endpoint="POST /api/auth/login",
+                reason="login refused: the email belongs to %d users" % len(candidates))
+        raise HTTPException(status_code=409, detail={
+            "error_code": ERROR_DUPLICATE_IDENTITY,
+            "message": "This account cannot sign in until its identity is resolved. "
+                       "Contact your administrator."})
+    user = candidates[0] if candidates else None
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.get("is_active", True):
@@ -172,6 +212,12 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
         # Log failed attempt (security event)
         await log_audit(user["org_id"], user["id"], user["email"], "password_change_failed", "auth", 
                        changes={"reason": "Invalid current password"})
+        # R0-03-C01 F-04: canonical AuditEvent too — never the password or the hash.
+        await audit_user_change(db, tenant_id=user["org_id"], actor_id=user["id"],
+                                action="user.own_password_change", target_id=user["id"],
+                                result="denied", error_code="INVALID_CURRENT_PASSWORD",
+                                reason="own password change refused: current password did not match",
+                                tool_or_endpoint="POST /api/auth/change-password")
         raise HTTPException(status_code=403, detail="Current password is incorrect")
     
     # Validate new password strength
@@ -196,6 +242,10 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     
     # Log success (security event)
     await log_audit(user["org_id"], user["id"], user["email"], "password_changed", "auth")
+    await audit_user_change(db, tenant_id=user["org_id"], actor_id=user["id"],
+                            action="user.own_password_change", target_id=user["id"],
+                            reason="own password changed (no hash recorded)",
+                            tool_or_endpoint="POST /api/auth/change-password")
     
     return {"ok": True}
 
@@ -316,6 +366,26 @@ async def create_user(
     tdb = await ctx.db()
     if data.role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {', '.join(ROLES)}")
+    # R0-03 (AUD-025): nobody creates a user with a role above their own.
+    await check_user_update(_tenant_of(tdb, ctx), actor=user, target={"id": None, "role": None},
+                            update={"role": data.role}, mode=ctx.mode, tenant_id=ctx.tenant_id)
+    # R0-03 (Р6): one email = one User in the whole installation, normalized.
+    email = normalize_email(data.email)
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    # R0-03-C02: the whole installation in EVERY mode, fail closed around the full
+    # enumeration AND the search. off/shadow read tenant_registry directly (as
+    # onboarding does) — no resolver, no Permission Service (W0-02 PR-05). The
+    # write still goes to the mode-selected database (tdb).
+    try:
+        if ctx.mode == MODE_ENFORCE:
+            databases = await installation_databases(db, ctx.mode) + [tdb]
+        else:
+            from app.tenancy import registry as tenant_registry_mod
+            databases = await installation_databases_for(db, tenant_registry_mod.system_db) + [tdb]
+        matches = await users_with_email(databases, email)
+    except IdentityCheckUnavailable:
+        raise identity_check_unavailable()
 
     def _public(u):
         return {k: v for k, v in u.items() if k not in ("password_hash", "_id")}
@@ -325,7 +395,7 @@ async def create_user(
         return {
             "id": str(uuid.uuid4()),
             "org_id": org_id,
-            "email": data.email.strip(),
+            "email": email,
             "password_hash": hash_password(data.password),
             "first_name": data.first_name,
             "last_name": data.last_name,
@@ -336,29 +406,17 @@ async def create_user(
             "updated_at": now,
         }
 
-    # AUTH-01: the duplicate check ignores letter case and surrounding spaces,
-    # so a case variant of an existing login cannot be created (it would make
-    # login ambiguous, which is refused).
-    normalized_email = normalize_email(data.email)
-    if normalized_email is None:
-        raise HTTPException(status_code=400, detail="Invalid email")
-    # AUTH-01 C01 (F-03): one email = one login across the installation (the
-    # rule tenant onboarding already applies). An address used by a user of
-    # ANOTHER organization is refused without naming that organization; the
-    # same-organization case keeps its existing answer below.
-    if any(m.get("org_id") != org_id for m in await resolve_identities_by_email(
-            db, normalized_email, {"_id": 0, "id": 1, "org_id": 1, "email": 1})):
-        raise HTTPException(status_code=400, detail=EMAIL_NOT_AVAILABLE)
-
+    # AUTH-01 F-03 is covered by the R0-03 check above (``matches``: the whole
+    # installation, normalized, fail closed); R0-04 keeps that single check.
     if ctx.mode != MODE_ENFORCE:
         # ---- legacy path (off / shadow): unchanged business behavior ----------
         await enforce_limit(org_id, "users", db_handle=tdb)
-        if await tdb.users.find_one({**email_match_filter(normalized_email), "org_id": org_id}):
-            raise HTTPException(status_code=400, detail="Email already exists in this organization")
+        if matches:
+            raise _email_exists()
         new_user = _new_user_doc()
         await tdb.users.insert_one(new_user)
         await log_audit(org_id, user["id"], user["email"], "created", "user", new_user["id"],
-                        {"email": data.email, "role": data.role}, db_handle=tdb)
+                        {"email": email, "role": data.role}, db_handle=tdb)
         if ctx.mode == MODE_SHADOW:
             # Shadow: the legacy write is the truth and stays done. The sync is
             # observed only — a failure is reported, never turned into an
@@ -368,24 +426,31 @@ async def create_user(
         return _public(new_user)
 
     # ---- enforce: recoverable idempotent workflow (PR-05) ---------------------
-    existing = await tdb.users.find_one(
-        {**email_match_filter(normalized_email), "org_id": org_id}, {"_id": 0})
+    # The only match that may continue is this tenant's own user of an
+    # interrupted attempt (checked against the workflow below); any other
+    # holder of the email anywhere in the installation refuses the request.
+    own = [m for m in matches if m["_database"] == tdb.name and m.get("org_id") == org_id]
+    if len(matches) > len(own[:1]):
+        raise _email_exists()
+    existing = None
+    if own:
+        existing = await tdb.users.find_one({"id": own[0]["id"], "org_id": org_id}, {"_id": 0})
     try:
         wf = await RecoverableWrite(
             tdb, tenant_id=ctx.tenant_id, action="user.create",
-            key=f"user.create:{org_id}:{data.email.strip().lower()}",
+            key=f"user.create:{org_id}:{email}",
             fingerprint=fingerprint_without(data.model_dump(), "password")).begin()
     except HTTPException as exc:
         if exc.status_code == 409 and existing is not None:
-            # a DIFFERENT request for an email that already exists: legacy contract
-            raise HTTPException(status_code=400, detail="Email already exists in this organization")
+            # a DIFFERENT request for an email that already exists
+            raise _email_exists()
         raise
     if existing is not None and not (wf.resumed and wf.step_refs.get("business") == existing["id"]):
         # Legacy contract kept: a new request for an existing email is refused.
         # (Only the retry of an interrupted attempt may continue with its user.)
         if not wf.already_completed and not wf.resumed:
-            await wf.fail("EMAIL_EXISTS")
-        raise HTTPException(status_code=400, detail="Email already exists in this organization")
+            await wf.fail(ERROR_EMAIL_EXISTS)
+        raise _email_exists()
     if wf.already_completed:
         done = await tdb.users.find_one({"id": wf.completed_reference, "org_id": org_id}, {"_id": 0})
         if done:
@@ -406,7 +471,7 @@ async def create_user(
         await wf.step("sync", lambda: grant_company_role(ctx, new_id, data.role, actor_id=user["id"]))
         await wf.step("legacy_audit", lambda: log_audit(
             org_id, user["id"], user["email"], "created", "user", new_id,
-            {"email": data.email, "role": data.role}, db_handle=tdb))
+            {"email": email, "role": data.role}, db_handle=tdb))
     except HTTPException:
         raise
     except Exception as exc:
@@ -438,7 +503,18 @@ async def update_user(
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     if "role" in update and update["role"] not in ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
+    # R0-03 (AUD-025): no own role change, no grant above one's own rank, only an
+    # Owner touches an Owner, the last active Owner stays — refused before any write.
+    await check_user_update(tenant, actor=user, target=target, update=update,
+                            mode=ctx.mode, tenant_id=ctx.tenant_id)
+    diff = role_audit_diff(target, update)
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    async def _audit_change():
+        if diff["after"]:
+            await audit_user_change(tdb, tenant_id=org_id, actor_id=user["id"], action="user.role_status_changed",
+                                    target_id=user_id, diff=diff, reason="user role/status changed",
+                                    tool_or_endpoint="PUT /api/users/{user_id}")
 
     async def _business():
         await tenant.users.update_one({"id": user_id}, {"$set": update})
@@ -449,6 +525,7 @@ async def update_user(
         # change (no assignment to sync; single business write + legacy audit).
         await _business()
         await log_audit(org_id, user["id"], user["email"], "updated", "user", user_id, update, db_handle=tdb)
+        await _audit_change()
         if ctx.mode == MODE_SHADOW and "role" in update:
             await shadow_sync(ctx, tdb, "user.update", user_id,
                               lambda: grant_company_role(ctx, user_id, update["role"], actor_id=user["id"]))
@@ -478,6 +555,7 @@ async def update_user(
         await wf.step("business", _business, reference=lambda r: r)
         await wf.step("legacy_audit", lambda: log_audit(
             org_id, user["id"], user["email"], "updated", "user", user_id, update, db_handle=tdb))
+        await wf.step("r0_03_audit", _audit_change)
     except HTTPException:
         raise
     except Exception as exc:
@@ -495,14 +573,42 @@ async def delete_user(user_id: str, request: Request, user: dict = Depends(requi
     target = await tenant.users.get(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    # R0-03 (AUD-025): only an Owner deletes an Owner, never the last active one.
+    mode, tenant_id = await _admin_mode_and_tenant(request, user)
+    await check_owner_only(tenant, actor=user, target=target, mode=mode, tenant_id=tenant_id,
+                           deleting=True)
     # W0-03E: the delete is scoped by the org it was checked against; in
     # MASTER_DATA_MODE=enforce a used or migrated identity is archived, not deleted.
     done = await guarded_identity_delete(user, request, db, collection="users", legacy_id=user_id)
     if done is not None:
-        return done
+        return done            # the master-data adapter already wrote its canonical AuditEvent
     await tenant.users.delete_one({"id": user_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "user", user_id)
+    await _audit_delete(user, target)
     return {"ok": True}
+
+
+async def _admin_mode_and_tenant(request: Request, user: dict):
+    """Mode and tenant for the ``require_admin`` routes (they get only the user).
+
+    In enforce ``require_admin`` already resolved the same context; it is
+    resolved again here because the rank comes from that tenant's assignments.
+    """
+    from app.permissions.deps import current_mode
+    mode = current_mode()
+    if mode != MODE_ENFORCE:
+        return mode, user.get("org_id")
+    from app.tenancy.guard import get_tenant_context
+    return mode, (await get_tenant_context(request, user)).tenant_id
+
+
+async def _audit_delete(actor: dict, target: dict):
+    await audit_user_change(db, tenant_id=actor["org_id"], actor_id=actor["id"], action="user.deleted",
+                            target_id=target["id"], reason="user deleted or archived",
+                            diff={"before": {"role": target.get("role"),
+                                             "is_active": target.get("is_active", True)},
+                                  "after": {}},
+                            tool_or_endpoint="DELETE /api/users/{user_id}")
 
 # Feature flags routes (read = any user, write = platform admin)
 @router.get("/feature-flags")
@@ -539,7 +645,8 @@ class AdminSetPasswordRequest(BaseModel):
 
 
 @router.post("/admin/set-password/{user_id}")
-async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin: dict = Depends(require_admin)):
+async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, request: Request,
+                             admin: dict = Depends(require_admin)):
     """
     Admin/Owner can set a new password for any user in their organization.
     
@@ -565,6 +672,9 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin:
     target_user = await tenant.users.get(user_id, {"_id": 0})
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found in your organization")
+    # R0-03 (AUD-025): only an Owner resets an Owner's password.
+    mode, tenant_id = await _admin_mode_and_tenant(request, admin)
+    await check_owner_only(tenant, actor=admin, target=target_user, mode=mode, tenant_id=tenant_id)
     
     # Validate new password strength
     is_valid, error_msg = validate_password_strength(data.new_password)
@@ -600,6 +710,10 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, admin:
             "reset_by_role": admin["role"]
         }
     )
+    await audit_user_change(db, tenant_id=admin["org_id"], actor_id=admin["id"],
+                            action="user.admin_password_reset", target_id=user_id,
+                            reason="password set by an administrator (no hash recorded)",
+                            tool_or_endpoint="POST /api/admin/set-password/{user_id}")
     
     return {"ok": True}
 

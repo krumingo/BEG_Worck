@@ -1,0 +1,218 @@
+{
+  "started_at": "2026-10-17T15:44:23.035Z",
+  "steps": [
+    {
+      "step": "1 POST /api/pay-runs is 200",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "number": "PR-0001"
+      }
+    },
+    {
+      "step": "1 UI-chained POST mark-paid is 200",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "status": "paid",
+          "paid_at": "2026-10-17T15:44:26.261100+00:00",
+          "payment_method": "cash",
+          "payment_reference": ""
+        }
+      }
+    },
+    {
+      "step": "1 history row shows the run as „Платен“",
+      "pass": true,
+      "detail": {
+        "rowText": "PR-0001\t2026-10-05 → 2026-10-11\t41\t3\t120\t1400\t1400\t0\tПлатен\t"
+      }
+    },
+    {
+      "step": "2 paid run detail: no „Отвори за редакция“ and no „Маркирай платен“ button",
+      "pass": true,
+      "detail": {
+        "reopenButtons": 0,
+        "markPaidButtons": 0
+      }
+    },
+    {
+      "step": "2 reopen of the paid run (whole) -> 409",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "body": {
+          "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+        }
+      }
+    },
+    {
+      "step": "2 reopen of one row of the paid run -> 409",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "body": {
+          "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+        }
+      }
+    },
+    {
+      "step": "2 PATCH of the paid run -> 409",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "body": {
+          "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+        }
+      }
+    },
+    {
+      "step": "3 second mark-paid -> 409",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "body": {
+          "detail": "Already paid"
+        }
+      }
+    },
+    {
+      "step": "3 five parallel mark-paid -> all 409",
+      "pass": true,
+      "detail": [
+        409,
+        409,
+        409,
+        409,
+        409
+      ]
+    },
+    {
+      "step": "3 the run is unchanged by the refused attempts (status paid, same version, rows not reopened)",
+      "pass": true,
+      "detail": {
+        "status": "paid",
+        "version": 1
+      }
+    },
+    {
+      "step": "3 exactly one salary Outflow per employee with paid > 0, amounts equal paid_now",
+      "pass": true,
+      "detail": {
+        "outflows": 3,
+        "paid_rows": 3,
+        "perEmployee": {
+          "65809e02-4364-446d-82ca-4902c6eeaf66": 1,
+          "73c6a8de-e58e-4b84-a290-55d18e3ea87d": 1,
+          "dd8eaed4-94dd-4b71-b19d-0949a7304484": 1
+        }
+      }
+    },
+    {
+      "step": "3 one marked_paid history entry",
+      "pass": true,
+      "detail": [
+        "created_confirmed",
+        "marked_paid"
+      ]
+    }
+  ],
+  "pay_run_id": "f7e286d3-4729-45ca-b42b-ab05cab405a5",
+  "api_record": {
+    "pay_run": {
+      "id": "f7e286d3-4729-45ca-b42b-ab05cab405a5",
+      "number": "PR-0001",
+      "status": "paid",
+      "paid_at": "2026-10-17T15:44:26.261100+00:00",
+      "paid_effects": "done",
+      "version": 1,
+      "history_actions": [
+        "created_confirmed",
+        "marked_paid"
+      ],
+      "rows": [
+        {
+          "employee_id": "65809e02-4364-446d-82ca-4902c6eeaf66",
+          "name": "Ivan Alpha",
+          "paid_now_amount": 500,
+          "row_status": "included"
+        },
+        {
+          "employee_id": "73c6a8de-e58e-4b84-a290-55d18e3ea87d",
+          "name": "Petar Bravo",
+          "paid_now_amount": 500,
+          "row_status": "included"
+        },
+        {
+          "employee_id": "dd8eaed4-94dd-4b71-b19d-0949a7304484",
+          "name": "Georgi Charlie",
+          "paid_now_amount": 400,
+          "row_status": "included"
+        }
+      ]
+    },
+    "refused_attempts": {
+      "reopen_all": {
+        "status": 409,
+        "body": {
+          "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+        }
+      },
+      "reopen_row": {
+        "status": 409,
+        "body": {
+          "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+        }
+      },
+      "patch": {
+        "status": 409,
+        "body": {
+          "detail": "Платен Pay Run не се отваря и не се променя — корекцията е reversal + Approval (W0-07/FLOW-033), още не е налична"
+        }
+      },
+      "mark_paid_again": {
+        "status": 409,
+        "body": {
+          "detail": "Already paid"
+        }
+      },
+      "mark_paid_parallel_statuses": [
+        409,
+        409,
+        409,
+        409,
+        409
+      ]
+    },
+    "salary_outflows_for_this_run": [
+      {
+        "id": "b8f0a49a-5c4f-5856-bdfc-de4fe6033fee",
+        "user_id": "65809e02-4364-446d-82ca-4902c6eeaf66",
+        "counterparty_name": "Ivan Alpha",
+        "amount": 500,
+        "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
+        "method": "Cash"
+      },
+      {
+        "id": "28a7eb52-f123-5e85-89ea-0add77065c73",
+        "user_id": "73c6a8de-e58e-4b84-a290-55d18e3ea87d",
+        "counterparty_name": "Petar Bravo",
+        "amount": 500,
+        "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
+        "method": "Cash"
+      },
+      {
+        "id": "18d3bce8-3818-594b-8a62-1f87598f7e12",
+        "user_id": "dd8eaed4-94dd-4b71-b19d-0949a7304484",
+        "counterparty_name": "Georgi Charlie",
+        "amount": 400,
+        "account_id": "b274a7fb-d061-4df1-99ce-64c814294f70",
+        "method": "Cash"
+      }
+    ]
+  },
+  "finished_at": "2026-10-17T15:44:28.373Z",
+  "result": "PASS"
+}

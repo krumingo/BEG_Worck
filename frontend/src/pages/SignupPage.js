@@ -72,7 +72,8 @@ export default function SignupPage() {
       // Reload to trigger AuthContext to fetch user data
       window.location.href = "/";
     } catch (err) {
-      const msg = err.response?.data?.detail || t("toast.createFailed");
+      const detail = err.response?.data?.detail;
+      const msg = detail?.message || (typeof detail === "string" ? detail : "") || t("toast.createFailed");
       setError(msg);
     } finally {
       setLoading(false);

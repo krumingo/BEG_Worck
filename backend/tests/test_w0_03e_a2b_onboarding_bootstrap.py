@@ -105,7 +105,8 @@ def test_signup_over_http_is_the_canonical_onboarding_and_ignores_a_body_tenant(
             dup = await c.post("/api/billing/signup", json={
                 "org_name": "X", "owner_name": "X", "owner_email": "owner@b.test",
                 "password": "Secret-Pass-1!"})
-            assert dup.status_code == 400
+            # R0-03 (Р6): one email = one User — the same 409 as every creation path
+            assert dup.status_code == 409 and dup.json()["detail"]["error_code"] == "EMAIL_EXISTS"
         tid = payload["organization"]["id"]
         assert tid != BEG_ORG and payload["user"]["org_id"] == tid
         assert (await sysdb.tenant_registry.find_one({"id": tid}))["is_primary_installation"] is False

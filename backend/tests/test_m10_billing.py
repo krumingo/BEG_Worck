@@ -215,25 +215,38 @@ class TestSubscription:
 class TestCheckout:
     """Test checkout session creation"""
     
-    def test_create_checkout_session_mock_mode(self, test_user_token):
-        """In mock mode, checkout should upgrade subscription directly"""
-        # First downgrade to free to test upgrade
-        # (Note: in real test, we'd need to reset the subscription first)
+    def test_create_checkout_session_mock_mode(self, test_user_token, monkeypatch):
+        """In mock mode, checkout should upgrade subscription directly.
+
+        R0-01: mock is no longer implied by missing Stripe keys. It needs
+        BILLING_PROVIDER=mock AND ENV=development|test explicitly. They are set
+        here for this process; this live test hits API_URL, so the server under
+        test must be started with the same two variables. A server without them
+        answers 503 and the mock expectation cannot be checked -> skip (the
+        in-process proof is tests/test_r0_01_billing_p0.py).
+        """
+        monkeypatch.setenv("BILLING_PROVIDER", "mock")
+        monkeypatch.setenv("ENV", "test")
         with httpx.Client() as client:
             response = client.post(
                 f"{API_URL}/billing/create-checkout-session",
                 headers={"Authorization": f"Bearer {test_user_token}"},
                 json={"plan_id": "enterprise", "origin_url": "https://test.example.com"}
             )
-            # In mock mode, should succeed
+            if response.status_code == 503 or (response.status_code == 200
+                                               and response.json().get("mock_mode") is False):
+                pytest.skip("server under test is not running with BILLING_PROVIDER=mock ENV=test")
+            assert response.status_code == 200, response.text
             data = response.json()
-            if data.get("mock_mode"):
-                assert response.status_code == 200
-                assert data["mock_mode"] == True
-                assert "checkout_url" in data
-            else:
-                # If real Stripe is configured, may fail without valid price ID
-                pass
+            assert data["mock_mode"] == True
+            assert "checkout_url" in data
+
+            sub = client.get(
+                f"{API_URL}/billing/subscription",
+                headers={"Authorization": f"Bearer {test_user_token}"}
+            ).json()
+            assert sub["plan_id"] == "enterprise"
+            assert sub["status"] == "active"
     
     def test_checkout_free_plan_fails(self, test_user_token):
         """Cannot checkout for free plan"""

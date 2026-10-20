@@ -1,0 +1,64 @@
+{
+  "started_at": "2026-10-17T10:21:38.007Z",
+  "steps": [
+    {
+      "step": "1 A items page shows all A items",
+      "pass": true,
+      "detail": {
+        "seen": [
+          "A-CEM",
+          "A-DRL",
+          "A-GLV"
+        ]
+      }
+    },
+    {
+      "step": "1 A items page shows no B item",
+      "pass": true,
+      "detail": {
+        "leaked": []
+      }
+    },
+    {
+      "step": "2 filters=org_id=<B> is 400",
+      "pass": true,
+      "detail": {
+        "status": 400
+      }
+    },
+    {
+      "step": "2 response carries no B data",
+      "pass": true,
+      "detail": {
+        "leaked": [],
+        "body": "{\"detail\":\"Invalid filter: field 'org_id' cannot be filtered\"}"
+      }
+    },
+    {
+      "step": "3 B items page shows all B items",
+      "pass": true,
+      "detail": {
+        "seen": [
+          "B-BRK",
+          "B-SAW",
+          "B-TAP",
+          "B-SCF"
+        ]
+      }
+    },
+    {
+      "step": "3 B items page shows no A item",
+      "pass": true,
+      "detail": {
+        "leaked": []
+      }
+    }
+  ],
+  "attack": {
+    "url": "<api>/api/items?filters=org_id%3D86918df4-d4c8-4d20-a098-87f0c9b91085",
+    "status": 400,
+    "body": "{\"detail\":\"Invalid filter: field 'org_id' cannot be filtered\"}"
+  },
+  "finished_at": "2026-10-17T10:21:48.766Z",
+  "result": "PASS"
+}

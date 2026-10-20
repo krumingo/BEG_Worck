@@ -303,6 +303,7 @@ def test_an_invalid_master_data_mode_refuses_the_delete(monkeypatch):
 def test_warehouse_reset_no_longer_bulk_deletes_by_org(monkeypatch):
     import inspect
     assert 'delete_many({"org_id"' not in inspect.getsource(warehouses)
+    monkeypatch.setenv("ENV", "test")      # R0-07: the dev route exists only in dev/test
     monkeypatch.delenv(ENV_MODE, raising=False)
     db = db_with("warehouses", {"id": "w1", "org_id": ORG_A, "name": "A", "active": True},
                  {"id": "w2", "org_id": ORG_A, "name": "B", "active": True},
@@ -313,6 +314,7 @@ def test_warehouse_reset_no_longer_bulk_deletes_by_org(monkeypatch):
 
 
 def test_warehouse_reset_in_enforce_keeps_used_warehouses(monkeypatch):
+    monkeypatch.setenv("ENV", "test")      # R0-07: the dev route exists only in dev/test
     db = db_with("warehouses", {"id": "w1", "org_id": ORG_A, "name": "A", "active": True},
                  {"id": "w2", "org_id": ORG_A, "name": "B", "active": True})
     run(db["warehouse_transactions"].insert_one({"id": "t1", "org_id": ORG_A, "warehouse_id": "w1"}))

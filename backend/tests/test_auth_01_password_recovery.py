@@ -93,7 +93,7 @@ async def _seed(op, sysdb):
 
 
 REAL_MONGO = bool(os.environ.get("W0_03_REAL_MONGO_URL", ""))
-_TX_COLLECTIONS = ("users", "password_reset_tokens", "audit_logs")
+_TX_COLLECTIONS = ("users", "password_reset_tokens", "audit_logs", "audit_events")
 
 
 async def _snapshot_transaction(db, body):
@@ -426,18 +426,23 @@ def test_login_and_reset_ignore_letter_case_and_spaces(monkeypatch):
     scenario(monkeypatch, body)
 
 
-def test_a_case_only_duplicate_fails_closed(monkeypatch, caplog):
+def test_a_case_only_duplicate_fails_closed(monkeypatch):
+    """R0-04: the R0-03 login contract (401 unless the caller knows a password, then
+    409 DUPLICATE_IDENTITY) and forgot-password: generic 200, no token, an event."""
     async def body(op, c, outbox):
         await op.users.insert_many([_user("u-dup1", ORG_A, "dup@a.bg"),
                                     _user("u-dup2", ORG_B, "DUP@a.bg")])
-        with caplog.at_level(logging.WARNING):
-            for spelling in ("dup@a.bg", "DUP@a.bg"):
-                r = await _login(c, spelling)
-                assert r.status_code == 401 and r.json()["detail"] == "Invalid credentials"
-        assert "LOGIN_REFUSED_AMBIGUOUS_EMAIL" in caplog.text
-        await _forgot(c, "dup@a.bg")
+        for spelling in ("dup@a.bg", "DUP@a.bg"):
+            r = await _login(c, spelling, "Wrong-Pass-00!")
+            assert r.status_code == 401 and r.json()["detail"] == "Invalid credentials"
+            r = await _login(c, spelling)
+            assert r.status_code == 409, r.text
+            assert r.json()["detail"]["error_code"] == "DUPLICATE_IDENTITY"
+            assert "token" not in r.json()
+        await _forgot(c, "dup@a.bg")                    # asserts the generic 200 body
         assert outbox == []
         assert await op.password_reset_tokens.count_documents({}) == 0
+        assert await op.auth_security_events.count_documents({"event": "forgot_ambiguous"}) == 1
     scenario(monkeypatch, body)
 
 
@@ -451,16 +456,17 @@ def test_a_regex_shaped_email_matches_only_itself(monkeypatch):
 
 
 def test_user_create_refuses_a_case_variant_of_an_existing_email(monkeypatch):
+    """R0-03 contract kept after the R0-04 merge: 409 EMAIL_EXISTS, stored normalized."""
     async def body(op, c, outbox):
         token = (await _login(c, OTHER)).json()["token"]
         h = {"Authorization": "Bearer " + token}
         payload = {"password": PW, "first_name": "N", "last_name": "U", "role": "Viewer"}
         dup = await c.post("/api/users", json={**payload, "email": " OTHER@B.bg "}, headers=h)
-        assert dup.status_code == 400 and "already exists" in dup.json()["detail"]
+        assert dup.status_code == 409 and dup.json()["detail"]["error_code"] == "EMAIL_EXISTS"
         ok = await c.post("/api/users", json={**payload, "email": " New.User@b.bg "}, headers=h)
         assert ok.status_code == 201, ok.text
-        assert ok.json()["email"] == "New.User@b.bg"           # stored stripped, case kept
-        assert (await _login(c, "new.user@b.bg")).status_code == 200
+        assert ok.json()["email"] == "new.user@b.bg"           # R0-03: stored normalized
+        assert (await _login(c, "NEW.user@b.bg")).status_code == 200
     scenario(monkeypatch, body)
 
 

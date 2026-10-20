@@ -200,13 +200,14 @@ OPERATOR_SCRIPTS: Tuple[str, ...] = (
     "scripts/w0_03e_a2c_settings_identity_migration.py",
     "scripts/w0_03e_legacy_migration_report.py",
     "scripts/w0_04_bootstrap_audit_indexes.py",
-    "scripts/auth_duplicate_emails_report.py",
     "scripts/backfill_asset_qr.py",
     "scripts/migrate_m19_8_freeze_report_split.py",
     "scripts/promote_platform_admin.py",
     "scripts/reset_user_password.py",
     "scripts/seed_finance_data.py",
     "scripts/smoke_test.py",
+    "scripts/r0_01_billing_exposure_report.py",
+    "scripts/r0_03_email_duplicates_report.py",
 )
 
 #: The one module that legitimately builds a ``$lookup`` stage: it is the
@@ -263,6 +264,10 @@ PRE_TENANT_FUNCTIONS: Dict[str, Dict[str, FrozenSet[str]]] = {
     # One-off M19.8 migration: enumerates tenants from the tenant root, then reads
     # and writes each tenant's own reports with its ``org_id`` in every filter.
     "scripts/migrate_m19_8_freeze_report_split.py": {"main": frozenset({"organizations"})},
+    # R0-03 (Р6): one email = one User in the whole installation. The uniqueness
+    # check and the login lookup search identities by email ACROSS tenants on
+    # purpose — a per-tenant search is exactly the defect. Reads only.
+    "app/tenancy/identity.py": {"users_with_email": frozenset({"users"})},
 }
 
 #: Functions that only COUNT or REPORT across the installation. They may name any
@@ -275,9 +280,12 @@ READ_ONLY_DIAGNOSTIC: Dict[str, Tuple[str, ...]] = {
     # The read-only database wrapper of the legacy migration report: its
     # __getitem__ hands back a collection proxy that refuses every write method.
     "scripts/w0_03e_legacy_migration_report.py": ("__getitem__",),
-    # AUTH-01 C01: lists users whose emails collide up to letter case, across the
-    # installation (the login identity is installation-wide). Reads only.
-    "scripts/auth_duplicate_emails_report.py": ("report",),
+    # R0-01 billing exposure report: lists mock subscriptions / checkout_mock audit
+    # rows across the installation through the same write-refusing wrapper.
+    "scripts/r0_01_billing_exposure_report.py": ("__getitem__", "build_report"),
+    # R0-03 email duplicates report: counts users per normalized email through the
+    # R0-01 write-refusing wrapper; prints masked emails and ids only.
+    "scripts/r0_03_email_duplicates_report.py": ("build_report",),
 }
 
 #: Identity-bearing collections: raw access refused outside the two tiers.
@@ -307,8 +315,16 @@ DATABASE_API: FrozenSet[str] = frozenset({
     "read_concern", "aggregate", "watch", "get_collection", "cursor_command",
     # ordinary str/object methods seen on a handle-named variable
     "lower", "upper", "strip", "startswith", "endswith", "split", "format",
-    "encode", "decode", "replace", "join", "get", "items", "keys", "values",
+    "encode", "decode", "replace", "join", "get", "keys", "values",
 })
+
+#: R0-02 (AUD-026): names that are BOTH a real collection and a dict method. Here
+#: ``items`` was in :data:`DATABASE_API`, so ``db.items.find(...)`` was never
+#: judged and ``app/routes/items.py`` passed with raw, filter-overridable reads.
+#: Such a name is exempt only where it is CALLED directly (``database.items()``,
+#: the dict method); as an attribute — ``db.items.find(...)``, ``db.items`` as a
+#: value — it is the collection and every rule applies.
+METHOD_CALL_ONLY: FrozenSet[str] = frozenset({"items"})
 
 
 def _ownership():
@@ -332,6 +348,12 @@ def _collection_of(node: ast.AST, constants: Optional[Dict[str, str]] = None
             and isinstance(node.slice, ast.Name):
         return True, constants.get(node.slice.id)
     return is_coll, name
+
+
+def _is_method_call_only(node: ast.AST) -> bool:
+    """``<handle>.items()`` called directly — a dict method, not the ``items`` collection."""
+    return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and node.func.attr in METHOD_CALL_ONLY and a1._collection_of(node.func)[0])
 
 
 def active_backend_files() -> List[str]:
@@ -531,6 +553,8 @@ class _BoundaryChecker(ast.NodeVisitor):
     # ----------------------------------------------------------------- calls
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
+        if _is_method_call_only(node):
+            self._consumed.add(id(func))           # database.items(): the dict method
         if isinstance(func, ast.Attribute):
             is_coll, name = _collection_of(func.value, self.constants)
             if is_coll:

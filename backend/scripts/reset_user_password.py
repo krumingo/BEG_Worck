@@ -18,8 +18,8 @@ not, and must never become, an HTTP endpoint.
 
 What it guarantees:
 
-* the email is compared ``strip().lower()`` (``app.utils.email_identity``); the
-  command requires EXACTLY ONE matching user and that user must be active —
+* the email is compared ``strip().lower()`` with the R0-03 identity helper
+  (``app.tenancy.identity``, the same rule as login); the command requires EXACTLY ONE matching user and that user must be active —
   zero matches, a case-only duplicate, or a disabled user stop it with a
   non-zero exit and nothing written;
 * the password passes the same ``validate_password_strength`` the API uses and
@@ -29,7 +29,9 @@ What it guarantees:
   ``password_reset_at``, the recovery marker ``password_reset_by =
   LOCAL_RECOVERY_CLI`` and ``$inc auth_version`` (F-02: every session issued
   before the recovery stops working) — revokes the user's open self-service
-  reset links and writes the audit row. All of it commits or none of it does;
+  reset links and writes the legacy audit row and the canonical W0-04
+  AuditEvent ``user.password_recovery_cli`` (R0-04). All of it commits or none
+  of it does;
 * neither the password nor any hash is ever printed.
 
 Exit codes: 0 ok · 1 usage / no terminal · 2 not found · 3 ambiguous ·
@@ -49,8 +51,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services.auth_tx import TransactionsUnavailable, run_in_transaction  # noqa: E402
-from app.utils.email_identity import (  # noqa: E402
-    MATCH_LIMIT, email_match_filter, matching, normalize_email)
+from app.tenancy.identity import normalize_email, users_with_email  # noqa: E402
 
 EXIT_OK, EXIT_USAGE, EXIT_NOT_FOUND, EXIT_AMBIGUOUS = 0, 1, 2, 3
 EXIT_INACTIVE, EXIT_INVALID_PASSWORD, EXIT_WRITE_FAILED, EXIT_NO_TRANSACTIONS = 4, 5, 6, 7
@@ -70,13 +71,16 @@ def _describe(doc: dict) -> str:
 
 
 async def find_candidates(db, email: str):
-    """Every user whose email equals ``email`` up to case/surrounding whitespace."""
+    """Every user whose email equals ``email`` up to case/surrounding whitespace.
+
+    The login registry (global ``users``), through the one R0-03 helper; only the
+    fields in ``_PROJECTION`` are kept (no hash leaves this function).
+    """
     normalized = normalize_email(email)
-    if normalized is None:
+    if not normalized:
         return None, []
-    docs = await db.users.find(email_match_filter(normalized), _PROJECTION) \
-        .limit(MATCH_LIMIT).to_list(MATCH_LIMIT)
-    return normalized, matching(docs, normalized)
+    rows = await users_with_email([db], normalized)
+    return normalized, [{k: r[k] for k in _PROJECTION if k != "_id" and k in r} for r in rows]
 
 
 class _NotExactlyOne(Exception):
@@ -89,6 +93,7 @@ async def apply_reset(db, target: dict, password_hash: str) -> None:
     Raises :class:`_NotExactlyOne` / :class:`TransactionsUnavailable` / any driver
     error; in every one of those cases nothing was committed.
     """
+    from app.services.user_role_policy import audit_user_change
     uid, org_id = target["id"], target["org_id"]
     now = datetime.now(timezone.utc)
     stamp = now.isoformat()
@@ -123,6 +128,12 @@ async def apply_reset(db, target: dict, password_hash: str) -> None:
             "changes": {"method": RECOVERY_MARKER, "host": socket.gethostname()},
             "timestamp": stamp,
         }, session=session)
+        # R0-04: the canonical W0-04 AuditEvent in the same transaction (no password/hash).
+        await audit_user_change(
+            db, tenant_id=org_id, actor_id=RECOVERY_MARKER, actor_type="system",
+            action="user.password_recovery_cli", target_id=uid,
+            reason="password set by the local owner-recovery command (no hash recorded)",
+            tool_or_endpoint="scripts/reset_user_password.py", session=session)
 
     await run_in_transaction(db, body)
 
@@ -171,7 +182,7 @@ async def run(db, args) -> int:
         _out(f"NOT FOUND: no user with email {normalized!r} (case-insensitive). Nothing changed.")
         return EXIT_NOT_FOUND
     if len(found) > 1:
-        _out(f"AMBIGUOUS: {len(found)} users match {normalized!r} up to letter case. "
+        _out(f"AMBIGUOUS: {len(found)} users match {normalized!r} (normalized). "
              "Nothing changed — resolve the duplicate first:")
         for doc in found:
             _out("  - " + _describe(doc))

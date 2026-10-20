@@ -215,14 +215,13 @@ def test_f02_tokens_from_before_this_change_still_work(monkeypatch):
 
 # ═════════════════════════════════════════════ F-03 one email = one login
 def test_f03_an_email_of_another_organization_cannot_be_created(monkeypatch):
-    from app.routes.auth import EMAIL_NOT_AVAILABLE
-
+    """R0-04: F-03 is the R0-03 rule — 409 EMAIL_EXISTS, no company named."""
     async def body(op, c, outbox):
         h = _auth((await _login(c, OTHER)).json()["token"])             # org B owner
         payload = {"password": PW, "first_name": "N", "last_name": "U", "role": "Viewer"}
         for spelling in (OWNER, " KRUM@BEGFULL.BG "):                    # lives in org A
             r = await c.post("/api/users", json={**payload, "email": spelling}, headers=h)
-            assert r.status_code == 400 and r.json()["detail"] == EMAIL_NOT_AVAILABLE
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "EMAIL_EXISTS"
             assert ORG_A not in r.text
         assert await op.users.count_documents({"org_id": ORG_B}) == 1
         # login and recovery for the owner keep working: still exactly one row
@@ -246,24 +245,22 @@ def test_f03_onboarding_refuses_a_case_variant_of_an_existing_login(monkeypatch)
     scenario(monkeypatch, body)
 
 
-def test_f03_the_duplicate_report_finds_collisions_and_writes_nothing(monkeypatch):
-    from scripts import auth_duplicate_emails_report as report
-
-    async def body(op, c, outbox):
-        lines = []
-        assert await report.report(op, out=lines.append) == report.EXIT_CLEAN
-        await op.users.insert_many([_user("u-dupA", ORG_A, "Twin@x.bg"),
-                                    _user("u-dupB", ORG_B, "twin@X.BG")])
-        before = await op.users.find({}, {"_id": 0}).sort("id", 1).to_list(None)
-        lines = []
-        assert await report.report(op, out=lines.append) == report.EXIT_COLLISIONS
-        text = "\n".join(lines)
-        assert "'twin@x.bg'" in text and "u-dupA" in text and "u-dupB" in text
-        assert "across organizations" in text
-        assert await op.users.find({}, {"_id": 0}).sort("id", 1).to_list(None) == before
-        # and the existing collision stays fail-closed for both
-        assert (await _login(c, "twin@x.bg")).status_code == 401
-    scenario(monkeypatch, body)
+def test_f03_one_identity_implementation_and_one_duplicates_report():
+    """R0-04: R0-03 is the single source for identity; PR #56's copies are gone."""
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    assert importlib.util.find_spec("app.utils.email_identity") is None
+    assert not (root / "scripts" / "auth_duplicate_emails_report.py").exists()
+    assert (root / "scripts" / "r0_03_email_duplicates_report.py").exists()
+    from app.tenancy import data_access
+    assert not hasattr(data_access, "resolve_identities_by_email")
+    from app.services import password_reset
+    from app.tenancy import identity
+    assert password_reset.users_with_email is identity.users_with_email
+    assert password_reset.normalize_email is identity.normalize_email
+    guard = (root / "scripts" / "w0_03e_a2c_tenant_boundary_guard.py").read_text()
+    assert "auth_duplicate_emails_report" not in guard
 
 
 # ═══════════════════════════════════════════════════════════ F-04 rate limits
@@ -463,7 +460,7 @@ def test_f08_every_denial_leaves_one_durable_event(monkeypatch):
             {"user_id": "u-tech"},
             {"$set": {"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}})
         assert (await _reset(c, outbox[1].token)).status_code == 400            # expired
-        assert (await _login(c, "dup@a.bg")).status_code == 401                  # ambiguous
+        assert (await _login(c, "dup@a.bg")).status_code == 409                  # ambiguous
         expected = {"forgot_no_match": 1, "forgot_ambiguous": 1, "forgot_not_eligible": 1,
                     "reset_token_invalid": 1, "reset_token_replay": 1,
                     "reset_token_expired": 1, "login_ambiguous": 1}

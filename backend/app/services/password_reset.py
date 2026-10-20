@@ -8,8 +8,11 @@ schedules :func:`process_forgot_request`. Everything that depends on whether
 the account exists happens AFTER the response (F-05):
 
 1. per-email shared rate limit (``rate_limit``); over the limit → event, stop;
-2. exactly ONE active user must match the email case-insensitively
-   (``resolve_identities_by_email``); none / several / disabled → event, stop;
+2. exactly ONE active user must match the normalized email in the login
+   registry — the same rule and the same helper as ``POST /auth/login``
+   (R0-03 ``app.tenancy.identity``); none / disabled → event, stop. Several
+   (a legacy duplicate) → the same generic answer, no token, and a
+   ``forgot_ambiguous`` security event (R0-04);
 3. one transaction (F-01): insert a ``pending`` token (only its SHA-256 is
    stored) + audit ``password_reset_requested``. Older links are NOT touched yet;
 4. :func:`deliver` sends the link; then one transaction settles it (F-06):
@@ -26,7 +29,8 @@ failure for the security event (invalid / expired / replay / inactive user);
 then ONE transaction (F-01) does all of it or none of it: the conditional token
 claim (``used_at: None`` and not expired), the new password hash, ``$inc
 auth_version`` (F-02: every session issued before the reset stops working),
-revocation of the user's remaining open tokens, and the audit row. A failure
+revocation of the user's remaining open tokens, the legacy audit row and the
+canonical W0-04 AuditEvent ``user.password_reset`` (R0-04). A failure
 inside leaves the old password, the token unused and no audit row; it is
 reported as :class:`ResetNotCompleted` ("nothing was changed"), never as a
 success and never as a half-done state.
@@ -51,10 +55,10 @@ from typing import Optional
 from app.services import auth_events, rate_limit
 from app.services.auth_tx import run_in_transaction
 from app.services.mailer import app_public_url, get_mail_provider
-from app.tenancy.data_access import (
-    TenantData, resolve_identities_by_email, resolve_owner_by_unique_key)
+from app.services.user_role_policy import audit_user_change
+from app.tenancy.data_access import TenantData, resolve_owner_by_unique_key
+from app.tenancy.identity import normalize_email, users_with_email
 from app.utils.audit import log_audit
-from app.utils.email_identity import normalize_email
 
 logger = logging.getLogger("beg.password_reset")
 
@@ -62,6 +66,8 @@ COLLECTION = "password_reset_tokens"
 TOKEN_TTL = timedelta(minutes=30)
 TOKEN_BYTES = 32                    # 256 bits of entropy
 TOKEN_MIN_LENGTH, TOKEN_MAX_LENGTH = 20, 256
+#: RFC 5321 path limit; a longer value cannot name an account (no lookup is made).
+MAX_EMAIL_LENGTH = 254
 
 EMAIL_LIMIT, EMAIL_WINDOW_SECONDS = 3, 900
 
@@ -145,9 +151,11 @@ async def process_forgot_request(db, email: str, requested_ip: Optional[str],
     ``None`` (the value is for tests and logs only).
     """
     normalized = normalize_email(email)
-    subject = auth_events.keyed_ref(normalized)
+    if len(normalized) > MAX_EMAIL_LENGTH:
+        normalized = ""
+    subject = auth_events.keyed_ref(normalized or None)
     try:
-        if normalized is None:
+        if not normalized:
             await auth_events.record(db, auth_events.FORGOT_NO_MATCH, ip=requested_ip)
             return None
         limited = await rate_limit.hit(db, "forgot_email", normalized, EMAIL_LIMIT,
@@ -173,13 +181,14 @@ async def process_forgot_request(db, email: str, requested_ip: Optional[str],
 async def request_reset(db, email: str, requested_ip: Optional[str],
                         now: Optional[datetime] = None) -> Optional[ResetMail]:
     """Mint a ``pending`` token for the ONE active user ``email`` names; ``None`` otherwise."""
-    subject = auth_events.keyed_ref(normalize_email(email))
-    candidates = await resolve_identities_by_email(
-        db, email, {"_id": 0, "id": 1, "org_id": 1, "email": 1, "is_active": 1})
+    subject = auth_events.keyed_ref(normalize_email(email) or None)
+    # R0-03/R0-04: the login registry (global ``users``), the one R0-03 helper.
+    # A duplicate never gets a token: the requester sees the generic answer.
+    candidates = await users_with_email([db], email)
     if len(candidates) != 1:
         if candidates:
-            logger.warning("PASSWORD_RESET_REQUEST refused: %d users share this email up to "
-                           "letter case (user_ids=%s); resolve the duplicate",
+            logger.warning("PASSWORD_RESET_REQUEST refused: %d users share this email "
+                           "(user_ids=%s); resolve the duplicate (r0_03_email_duplicates_report)",
                            len(candidates), [c.get("id") for c in candidates])
         await auth_events.record(
             db, auth_events.FORGOT_AMBIGUOUS if candidates else auth_events.FORGOT_NO_MATCH,
@@ -351,6 +360,12 @@ async def reset_password(db, token: str, new_password_hash: str,
         await log_audit(tenant.org_id, uid, user.get("email"), "password_reset_completed",
                         "user", uid, {"method": "self_service_token"},
                         db_handle=db, session=session)
+        # R0-04: the canonical W0-04 AuditEvent, in the same transaction. No
+        # password, hash or token — only who, what and through which endpoint.
+        await audit_user_change(
+            db, tenant_id=tenant.org_id, actor_id=uid, action="user.password_reset",
+            target_id=uid, reason="password reset with a one-time e-mail link (no hash recorded)",
+            tool_or_endpoint="POST /api/auth/reset-password", session=session)
 
     try:
         await run_in_transaction(db, body)

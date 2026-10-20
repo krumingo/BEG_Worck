@@ -2,6 +2,7 @@
 
 > Scope: OWNER-FIRST PILOT (Issue #52, package comment 6196842918). Not commercial SaaS hardening.
 > C01: corrections to CODEX review CHANGES_REQUESTED F-01…F-08 (PR #56 comment 6216184918).
+> R0-04: merged onto `main` after R0-03 (identity) — R0-03 is the single source for the email identity.
 > Status: Draft PR #56, awaiting CODEX independent re-review. Not a production PASS.
 
 ## What exists
@@ -9,7 +10,7 @@
 | Path | Who | What |
 |---|---|---|
 | `backend/scripts/reset_user_password.py` | operator, server shell only | sets ONE active user's password; dry run first; hidden prompt only |
-| `backend/scripts/auth_duplicate_emails_report.py` | operator | READ-ONLY list of emails shared by several users (case-insensitive) |
+| `backend/scripts/r0_03_email_duplicates_report.py` (R0-03) | operator | READ-ONLY list of emails shared by several users |
 | `POST /api/auth/forgot-password` | anyone | always the same 200 answer; all account-dependent work runs after the response |
 | `POST /api/auth/reset-password` | holder of the link | consumes the token once and sets the password, atomically |
 | `POST /api/auth/change-password` | logged-in user | unchanged (does not end other sessions) |
@@ -20,10 +21,16 @@ There is **no** HTTP recovery endpoint that bypasses the token. The CLI is the e
 
 ## Owner decisions applied in C01
 
-* **One email = one login across the installation** (F-03). Compared `strip().lower()`. Tenant onboarding
-  already applied this; now `POST /users` and the platform bootstrap do too. Existing collisions are
-  listed by the report script and stay refused at login/forgot/recovery until fixed by hand. No automatic
-  merge or migration.
+* **One email = one User across the installation** (F-03, decision Р6). Since R0-04 this is exactly the
+  R0-03 implementation, `app/tenancy/identity.py` (`normalize_email`, `users_with_email`, whole-installation
+  fail-closed search): `POST /users`, onboarding, bootstrap and seed answer 409 `EMAIL_EXISTS` /
+  503 `IDENTITY_CHECK_UNAVAILABLE`. PR #56's own helper (`app/utils/email_identity.py`,
+  `resolve_identities_by_email`) and report script were removed in the merge.
+* **Existing duplicates** (listed by `scripts/r0_03_email_duplicates_report.py`) stay fail-closed until
+  fixed by hand: login keeps the R0-03 contract (401, or 409 `DUPLICATE_IDENTITY` only for a caller who
+  knows one of the passwords) and now also writes a `login_ambiguous` security event; forgot-password
+  answers the same generic 200, mints no token and writes `forgot_ambiguous`; the CLI exits 3.
+  Forgot-password and the CLI read the same registry as login (the global `users` collection).
 * **Security events kept 180 days** (F-08, TTL).
 
 ## Atomicity (F-01) — MongoDB transactions
@@ -32,8 +39,8 @@ There is **no** HTTP recovery endpoint that bypasses the token. The CLI is the e
 
 | Operation | In one transaction |
 |---|---|
-| reset-password | conditional token claim · new hash · `$inc auth_version` · revoke remaining tokens · audit `password_reset_completed` |
-| recovery CLI | new hash + marker `LOCAL_RECOVERY_CLI` · `$inc auth_version` · revoke open tokens · audit `password_recovery_cli` |
+| reset-password | conditional token claim · new hash · `$inc auth_version` · revoke remaining tokens · audit `password_reset_completed` · W0-04 AuditEvent `user.password_reset` |
+| recovery CLI | new hash + marker `LOCAL_RECOVERY_CLI` · `$inc auth_version` · revoke open tokens · audit `password_recovery_cli` · W0-04 AuditEvent `user.password_recovery_cli` |
 | forgot (mint) | insert `pending` token · audit `password_reset_requested` |
 | forgot (settle) | delivered: mark `sent` + revoke OLDER tokens + audit · not delivered: revoke ONLY the new token + audit |
 
@@ -41,6 +48,22 @@ A failure inside leaves everything as it was. The API answers **503 `RESET_NOT_C
 was not changed"); the CLI exits **6** ("NOTHING CHANGED"). Transactions need a **replica set**
 (MongoDB Atlas is one). On a standalone `mongod` these operations are refused before any write
 (API 503, CLI exit **7**). For local development run `mongod --replSet rs0` + `rs.initiate()`.
+
+### Standalone MongoDB (no replica set) — exact behaviour (R0-04)
+
+`auth_tx.transactions_supported` asks the server (`hello`: `setName` or `mongos`); on a standalone it is
+false and `run_in_transaction` raises `TransactionsUnavailable` **before the first write**:
+
+| Path | Answer | Written |
+|---|---|---|
+| `POST /auth/reset-password` | 503 `{"error_code": "RESET_NOT_COMPLETED"}` | nothing (password, token, `audit_logs`, `audit_events` unchanged); only a `reset_not_completed` security event |
+| `POST /auth/forgot-password` | the generic 200 (the work runs after the response) | no token, no mail; only a `forgot_processing_failed` security event |
+| `scripts/reset_user_password.py` | exit **7** "NOTHING CHANGED" | nothing |
+
+Login, change-password and admin reset do not use transactions and are not affected.
+**Required R0-08 production check:** prove the production MongoDB is a replica set
+(`db.hello().setName` non-empty, `isWritablePrimary: true`) before AUTH-01 is enabled; otherwise
+forgot/reset/recovery silently produce no links and every reset answers 503.
 
 ## Sessions end after recovery (F-02)
 
@@ -64,7 +87,8 @@ terminal · 2 not found · 3 ambiguous · 4 disabled/unusable · 5 invalid passw
 commit) · 7 nothing changed (no transactions). It never prints the password or a hash.
 
 Fast-path files for a container that does not yet include this PR: `scripts/reset_user_password.py`,
-`app/utils/email_identity.py`, `app/services/auth_tx.py` (all three are standalone).
+`app/tenancy/identity.py` (R0-03), `app/services/auth_tx.py` and `app/services/user_role_policy.py`
+(+ `app/audit/`). Prefer deploying the whole merged PR.
 
 ## Forgot / reset flow
 
@@ -109,7 +133,9 @@ detail`. No email, token or password is stored. HMAC key: `AUTH_EVENT_HMAC_KEY`,
 Events: `forgot_no_match`, `forgot_ambiguous`, `forgot_not_eligible`, `forgot_processing_failed`,
 `rate_limited_ip`, `rate_limited_email` (once per window), `reset_token_invalid`, `reset_token_expired`,
 `reset_token_replay`, `reset_user_inactive`, `reset_not_completed`, `reset_delivery_failed`,
-`reset_delivery_not_configured`, `login_ambiguous`. Successful actions stay in the tenant's `audit_logs`.
+`reset_delivery_not_configured`, `login_ambiguous`. Successful actions stay in the tenant's `audit_logs`;
+a successful reset / recovery also writes the canonical W0-04 AuditEvent (FLOW-040 R3, `audit_events`,
+via `user_role_policy.audit_user_change`) inside the same transaction — no password, hash or token.
 
 ## E-mail (`app/services/mailer.py`)
 
@@ -126,7 +152,12 @@ Events: `forgot_no_match`, `forgot_ambiguous`, `forgot_not_eligible`, `forgot_pr
 
 1. `app/routes/platform.py` bootstrap still uses its own in-memory limiter and trusts `X-Forwarded-For`
    (outside AUTH-01 scope).
-2. Email uniqueness is enforced in application code; no unique index on a normalized field yet (would
-   need a backfill migration). Two simultaneous creates of the same new email could still race.
-3. Auth auditing uses the legacy `audit_logs`, not the W0-04 canonical AuditEvent envelope.
-4. Change Password and Admin Reset do not end other sessions (kept as before, per review).
+2. Email uniqueness is enforced in application code (R0-03); the unique index is prepared, not created
+   (R0-09). Two simultaneous creates of the same new email could still race.
+3. Forgot-password / the CLI search the login registry (global `users`) like login does, not every tenant
+   database. Today every tenant resolves to that database; when a tenant database moves out, login and
+   recovery move together (R0-04 debt, R0-03 "Access to companies is a TenantMembership question").
+4. Mint / settle / denials still write only the legacy `audit_logs` + security events; the canonical
+   AuditEvent is written for the successful reset and recovery.
+5. Change Password and Admin Reset do not end other sessions (kept as before, per review).
+6. Transactions need a replica set — required R0-08 production check (above).

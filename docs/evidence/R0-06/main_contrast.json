@@ -1,0 +1,39 @@
+{
+  "create": 200,
+  "mark_paid": 200,
+  "reopen_paid": [
+    200,
+    {
+      "ok": true,
+      "status": "reopened",
+      "reopened_count": 3,
+      "version": 2
+    }
+  ],
+  "patch_after_reopen": 200,
+  "mark_paid_again": [
+    200,
+    {
+      "ok": true,
+      "status": "paid",
+      "paid_at": "2026-10-17T14:59:53.451915+00:00",
+      "payment_method": "cash",
+      "payment_reference": ""
+    }
+  ],
+  "salary_outflows_per_employee": {
+    "Ivan Alpha": [
+      500.0,
+      500.0
+    ],
+    "Petar Bravo": [
+      500.0,
+      500.0
+    ],
+    "Georgi Charlie": [
+      400.0,
+      400.0
+    ]
+  },
+  "salary_outflow_total": 2800.0
+}
