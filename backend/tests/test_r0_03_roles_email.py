@@ -21,6 +21,9 @@ The 17 rows of docs/architecture/tasks/R0-03_ROLES_EMAIL.md, positive and forbid
 14. two firms: nothing of A touches B, a foreign User is 404;
 15. the duplicates report on a fixture with 2 duplicates → reports them, DB byte-equal;
 16. mutation: run by hand against ``main`` (docs/evidence/R0-03);
+    R0-03-C01 (Codex F-01..F-04): enforce last-Owner from assignments (10c*),
+    bootstrap/seed/onboarding over the whole installation, fail closed (11f*-11h),
+    own password change as a canonical AuditEvent (test_16);
 17. every role row runs in ``off``, ``shadow`` and ``enforce`` with the same outcome.
 
 Runs on ``mongomock_motor`` and, when ``W0_03_REAL_MONGO_URL`` names a disposable
@@ -391,20 +394,87 @@ def test_10b_last_owner_cannot_demote_self(monkeypatch, backend, mode):
              403, "OWN_ROLE_CHANGE_FORBIDDEN", extra_seed=_single_owner)
 
 
-@pytest.mark.parametrize("method,url,body", [("PUT", "/api/users/owner-a", {"role": "Admin"}),
-                                             ("PUT", "/api/users/owner-a", {"is_active": False}),
-                                             ("DELETE", "/api/users/owner-a", None)])
-def test_10c_enforce_owner_by_assignment_cannot_remove_last_owner(monkeypatch, backend, method, url, body):
-    async def seed(op, sysdb):
-        await _boss_by_assignment(op, sysdb)
-    _hdr = _token("boss-a", ORG_A, "Admin")
+# ── R0-03-C01 F-01: in enforce "is Owner" and the remaining count come from assignments ──
+async def _assignment_only_owner(op, sysdb):
+    """enforce: ``boss-a`` (users.role "Admin") holds the ONLY owner assignment of firm A;
+    owner-a / owner2-a keep users.role "Owner" but their assignments are admin."""
+    await _boss_by_assignment(op, sysdb)
+    await op.users.update_one({"id": "owner2-a"}, {"$set": {"is_active": True}})
+    for uid in ("owner-a", "owner2-a"):
+        await sysdb.tenant_role_assignments.update_one({"id": "ra_%s_%s" % (uid, ORG_A)},
+                                                       {"$set": {"role_id": "admin"}})
 
+
+async def _guest_owner(op, sysdb):
+    """enforce: ``guest`` is an identity of firm B (its User lives in B) with an owner
+    assignment and an active membership in firm A — an Owner of A, but not a User of A."""
+    await _assignment_only_owner(op, sysdb)
+    await op.users.insert_one({"id": "guest", "org_id": ORG_B, "role": "Viewer", "is_active": True,
+                               "active_tenant_id": ORG_A, "email": "guest@r003.example",
+                               "password_hash": _hash(), "first_name": "guest", "last_name": "x"})
+    await sysdb.tenant_memberships.insert_one({"id": "tm_guest_a", "user_id": "guest", "tenant_id": ORG_A,
+                                               "status": "active"})
+    await sysdb.tenant_role_assignments.insert_one({
+        "id": "ra_guest_a", "user_id": "guest", "tenant_id": ORG_A, "role_id": "owner",
+        "scope_type": "company", "scope_id": None, "module": None, "permissions": [], "status": "active"})
+
+
+def test_10c_enforce_assignment_only_last_owner_cannot_deactivate_self(monkeypatch, backend):
     async def scenario(c, op, sysdb):
         before = await snap(op, "users", "audit_events", "audit_logs")
-        r = await c.request(method, url, json=body, headers=_hdr)
+        r = await c.put("/api/users/boss-a", json={"is_active": False}, headers=_token("boss-a", ORG_A, "Admin"))
         assert r.status_code == 409 and code_of(r) == "LAST_ACTIVE_OWNER", r.text
         assert await snap(op, "users", "audit_events", "audit_logs") == before
-    run(monkeypatch, backend, "enforce", scenario, seed)
+    run(monkeypatch, backend, "enforce", scenario, _assignment_only_owner)
+
+
+@pytest.mark.parametrize("body", [{"role": "Admin"}, {"role": "Viewer"}, {"is_active": False}])
+def test_10c2_enforce_outside_owner_cannot_remove_the_tenants_last_owner(monkeypatch, backend, body):
+    async def scenario(c, op, sysdb):
+        before = await snap(op, "users", "audit_events", "audit_logs")
+        r = await c.put("/api/users/boss-a", json=body, headers=_token("guest", ORG_B, "Viewer"))
+        assert r.status_code == 409 and code_of(r) == "LAST_ACTIVE_OWNER", r.text
+        assert await snap(op, "users", "audit_events", "audit_logs") == before
+        ra = await sysdb.tenant_role_assignments.find_one({"id": "ra_boss"}, {"_id": 0})
+        assert ra["role_id"] == "owner" and ra["status"] == "active"
+    run(monkeypatch, backend, "enforce", scenario, _guest_owner)
+
+
+def test_10c3_enforce_delete_of_the_last_assignment_owner_is_409(monkeypatch, backend):
+    """The DELETE rule (check_owner_only, deleting=True) on the same facts."""
+    from app.services.user_role_policy import check_owner_only
+    from app.tenancy.data_access import TenantData
+    from fastapi import HTTPException
+
+    async def scenario(c, op, sysdb):
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        guest = await op.users.find_one({"id": "guest"}, {"_id": 0})
+        boss = await op.users.find_one({"id": "boss-a"}, {"_id": 0})
+        with pytest.raises(HTTPException) as exc:
+            await check_owner_only(tenant, actor=guest, target=boss, mode="enforce", tenant_id=ORG_A,
+                                   deleting=True)
+        assert exc.value.status_code == 409 and exc.value.detail["error_code"] == "LAST_ACTIVE_OWNER"
+        # an active tenant User with a valid owner assignment keeps the firm owned
+        await sysdb.tenant_role_assignments.update_one({"id": "ra_owner2-a_%s" % ORG_A},
+                                                       {"$set": {"role_id": "owner"}})
+        await check_owner_only(tenant, actor=guest, target=boss, mode="enforce", tenant_id=ORG_A,
+                               deleting=True)
+        # ... but not when that assignment is expired, revoked or project-scoped
+        for patch in ({"valid_to": "2020-01-01T00:00:00+00:00"}, {"status": "revoked"},
+                      {"scope_type": "project", "scope_id": "p1"}):
+            await sysdb.tenant_role_assignments.update_one({"id": "ra_owner2-a_%s" % ORG_A},
+                                                           {"$set": dict({"valid_to": None, "status": "active",
+                                                                          "scope_type": "company",
+                                                                          "scope_id": None}, **patch)})
+            with pytest.raises(HTTPException):
+                await check_owner_only(tenant, actor=guest, target=boss, mode="enforce", tenant_id=ORG_A,
+                                       deleting=True)
+    run(monkeypatch, backend, "enforce", scenario, _guest_owner)
+
+
+def test_10c4_self_delete_is_still_refused(monkeypatch, backend, mode):
+    _refused(monkeypatch, backend, mode, "owner-a", "DELETE", "/api/users/owner-a", None, 400,
+             colls=("users", "audit_events", "audit_logs"))
 
 
 def test_10d_enforce_owner_by_assignment_may_change_owner_when_another_remains(monkeypatch, backend):
@@ -529,18 +599,207 @@ def test_11e_signup_and_onboarding_refuse_an_existing_email(monkeypatch, backend
     asyncio.run(go())
 
 
-def test_11f_platform_bootstrap_creates_nothing_for_an_existing_email(monkeypatch, backend, mode):
+# ── R0-03-C01 F-02/F-03: bootstrap, seed and onboarding check the whole installation ──
+BOOT = "/api/platform/bootstrap-create-platform-admin"
+BOOT_TOKEN = "r003-test-bootstrap-token"
+
+
+def _boot_env(monkeypatch):
     from app.routes.platform import bootstrap_rate_limiter
-    monkeypatch.setenv("PLATFORM_BOOTSTRAP_TOKEN", "r003-test-bootstrap-token")
+    monkeypatch.setenv("PLATFORM_BOOTSTRAP_TOKEN", BOOT_TOKEN)
     bootstrap_rate_limiter.reset()
 
+
+async def _other_tenant_db(monkeypatch, op, sysdb, users=(), database_name=True):
+    """Register firm C on its OWN database (optionally broken) and point the resolver at it."""
+    from app.tenancy import registry, resolver
+    other = op.client[op.name + "_c"]
+    rec = {"id": "ORG-R003-C", "status": "active"}
+    if database_name is True:
+        rec["database_name"] = other.name
+    elif database_name is not None:
+        rec["database_name"] = database_name
+    await sysdb.tenant_registry.insert_one(rec)
+    for u in users:
+        await other.users.insert_one(dict(u))
+    real = resolver.get_tenant_db
+
+    async def _get_db(tenant_id, require_operational=False):
+        if tenant_id == "ORG-R003-C":
+            t = await registry.get_tenant(tenant_id)
+            return other if registry.resolve_database_name(t) == other.name else await real(tenant_id)
+        return await real(tenant_id)
+    monkeypatch.setattr(resolver, "get_tenant_db", _get_db)
+    return other
+
+
+ALL = ("users", "organizations", "audit_logs", "audit_events")
+
+
+@pytest.mark.parametrize("email", ["IVAN@x.bg", " ivan@X.BG ", "owner-a@r003.example"])
+def test_11f_platform_bootstrap_refuses_an_existing_email(monkeypatch, backend, mode, email):
+    _boot_env(monkeypatch)
+
     async def scenario(c, op, sysdb):
-        before = await snap(op, "users", "organizations")
-        r = await c.post("/api/platform/bootstrap-create-platform-admin",
-                         headers={"X-Bootstrap-Token": "r003-test-bootstrap-token"},
-                         json={"email": "IVAN@x.bg", "password": PASSWORD})
-        assert r.status_code == 200 and r.json()["created"] is False, r.text
-        assert await snap(op, "users", "organizations") == before
+        before = await snap(op, *ALL)
+        r = await c.post(BOOT, headers={"X-Bootstrap-Token": BOOT_TOKEN}, json={"email": email, "password": PASSWORD})
+        assert r.status_code == 409 and code_of(r) == "EMAIL_EXISTS", r.text
+        assert ORG_A not in r.text and ORG_B not in r.text
+        assert await snap(op, *ALL) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_11f2_platform_bootstrap_sees_another_tenant_database(monkeypatch, backend):
+    _boot_env(monkeypatch)
+
+    async def scenario(c, op, sysdb):
+        other = await _other_tenant_db(monkeypatch, op, sysdb,
+                                       users=[{"id": "c1", "org_id": "ORG-R003-C", "email": "cross@example.com"}])
+        try:
+            before = await snap(op, *ALL)
+            r = await c.post(BOOT, headers={"X-Bootstrap-Token": BOOT_TOKEN},
+                             json={"email": "CROSS@example.com", "password": PASSWORD})
+            assert r.status_code == 409 and code_of(r) == "EMAIL_EXISTS", r.text
+            assert await snap(op, *ALL) == before and await other.users.count_documents({}) == 1
+            ok = await c.post(BOOT, headers={"X-Bootstrap-Token": BOOT_TOKEN},
+                              json={"email": "New.Platform@Example.com", "password": PASSWORD})
+            assert ok.status_code == 200 and ok.json()["created"] is True, ok.text
+            assert await op.users.count_documents({"email": "new.platform@example.com"}) == 1
+        finally:
+            await op.client.drop_database(other.name)
+    run(monkeypatch, backend, "off", scenario)
+
+
+@pytest.mark.parametrize("database_name", [None, "", "   "])
+def test_11f3_platform_bootstrap_fails_closed_on_a_broken_registry(monkeypatch, backend, database_name):
+    _boot_env(monkeypatch)
+
+    async def scenario(c, op, sysdb):
+        await _other_tenant_db(monkeypatch, op, sysdb, database_name=database_name)
+        before = await snap(op, *ALL)
+        r = await c.post(BOOT, headers={"X-Bootstrap-Token": BOOT_TOKEN},
+                         json={"email": "fresh@example.com", "password": PASSWORD})
+        assert r.status_code == 503 and code_of(r) == "IDENTITY_CHECK_UNAVAILABLE", r.text
+        assert await snap(op, *ALL) == before
+    run(monkeypatch, backend, "off", scenario)
+
+
+def test_11f4_users_enforce_fails_closed_on_a_broken_registry(monkeypatch, backend):
+    async def scenario(c, op, sysdb):
+        await _other_tenant_db(monkeypatch, op, sysdb, database_name=None)
+        before = await snap(op, *ALL)
+        r = await c.post("/api/users", json=_new("fresh@example.com"), headers=hdr("admin-a"))
+        assert r.status_code == 503 and code_of(r) == "IDENTITY_CHECK_UNAVAILABLE", r.text
+        assert await snap(op, *ALL) == before
+    run(monkeypatch, backend, "enforce", scenario)
+
+
+@pytest.mark.parametrize("case", ["other_tenant", "global_spelling", "broken_registry", "new"])
+def test_11g_seed_skips_an_existing_or_uncheckable_email(monkeypatch, backend, case, caplog):
+    from app.core import seed as seed_mod
+
+    async def scenario(c, op, sysdb):
+        monkeypatch.setattr(seed_mod, "db", op)
+        monkeypatch.setenv("SEED_ADMIN_PASSWORD", PASSWORD)
+        other = None
+        if case == "other_tenant":
+            other = await _other_tenant_db(monkeypatch, op, sysdb,
+                                           users=[{"id": "c1", "org_id": "ORG-R003-C", "email": "cross@example.com"}])
+            monkeypatch.setenv("SEED_ADMIN_EMAIL", "CROSS@example.com")
+        elif case == "global_spelling":
+            monkeypatch.setenv("SEED_ADMIN_EMAIL", " Ivan@X.BG")
+        elif case == "broken_registry":
+            await _other_tenant_db(monkeypatch, op, sysdb, database_name="")
+            monkeypatch.setenv("SEED_ADMIN_EMAIL", "fresh@example.com")
+        else:
+            monkeypatch.setenv("SEED_ADMIN_EMAIL", "Fresh.Seed@Example.com")
+        try:
+            before = await snap(op, *ALL, "feature_flags")
+            with caplog.at_level("INFO", logger="app.core.seed"):
+                await seed_mod.seed_data()
+            if case == "new":
+                assert await op.users.count_documents({"email": "fresh.seed@example.com"}) == 1
+            else:
+                assert await snap(op, *ALL, "feature_flags") == before
+                assert "cross@example.com" not in caplog.text.lower()
+                assert "ivan@x.bg" not in caplog.text.lower() and "fresh@example.com" not in caplog.text
+        finally:
+            if other is not None:
+                await op.client.drop_database(other.name)
+    run(monkeypatch, backend, "off", scenario)
+
+
+@pytest.mark.parametrize("database_name", [None, "", 7])
+def test_11h_onboarding_refuses_before_writing_on_a_broken_registry(monkeypatch, backend, database_name):
+    import httpx
+    from fastapi import FastAPI
+
+    import server  # noqa: F401 — billing imports server constants; load it first
+    from app.routes import billing
+    from app.tenancy import registry
+    from app.tenancy.onboarding import OnboardingRefused, onboard_tenant
+
+    async def go():
+        async with _Dbs(backend) as (op, sysdb):
+            await _seed(op, sysdb)
+            rec = {"id": "ORG-R003-C", "status": "active"}
+            if database_name is not None:
+                rec["database_name"] = database_name
+            await sysdb.tenant_registry.insert_one(rec)
+            monkeypatch.setattr(billing, "db", op)
+            monkeypatch.setattr(registry, "system_db", sysdb)
+
+            async def _noop(*a, **kw):
+                return None
+            monkeypatch.setattr(billing, "log_audit", _noop)
+            names = sorted(await op.list_collection_names()) + ["subscriptions", "feature_flags"]
+            before = (await snap(op, *names), await snap(sysdb, "tenant_registry", "tenant_memberships",
+                                                         "tenant_role_assignments"))
+            with pytest.raises(OnboardingRefused) as exc:
+                await onboard_tenant(op, sysdb, org_name="New Firm", owner_email="brand.new@example.com",
+                                     owner_password_hash="h", owner_first_name="x")
+            assert exc.value.code == "IDENTITY_CHECK_UNAVAILABLE"
+            app = FastAPI()
+            app.include_router(billing.router, prefix="/api")
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+                r = await c.post("/api/billing/signup", json={
+                    "org_name": "New Firm", "owner_name": "New Owner", "owner_email": "brand.new@example.com",
+                    "password": PASSWORD})
+            assert r.status_code == 503 and code_of(r) == "IDENTITY_CHECK_UNAVAILABLE", r.text
+            after = (await snap(op, *names), await snap(sysdb, "tenant_registry", "tenant_memberships",
+                                                        "tenant_role_assignments"))
+            assert after == before
+    asyncio.run(go())
+
+
+# ── R0-03-C01 F-04: own password change is a canonical AuditEvent ──
+@pytest.mark.parametrize("who", ["viewer-a", "owner-a"])
+def test_16_own_password_change_is_audited_without_secrets(monkeypatch, backend, mode, who):
+    NEW = "Brand-New-Pass-123!"
+    WRONG = "Wrong-Current-1!"
+
+    async def scenario(c, op, sysdb):
+        old_hash = (await user(op, who))["password_hash"]
+        bad = await c.post("/api/auth/change-password", headers=hdr(who),
+                           json={"current_password": WRONG, "new_password": NEW})
+        assert bad.status_code == 403, bad.text
+        assert (await user(op, who))["password_hash"] == old_hash
+        ok = await c.post("/api/auth/change-password", headers=hdr(who),
+                          json={"current_password": PASSWORD, "new_password": NEW})
+        assert ok.status_code == 200, ok.text
+        new_hash = (await user(op, who))["password_hash"]
+        ev = await events(op, "user.own_password_change")
+        assert [e["result"] for e in ev] == ["denied", "success"], ev
+        org = USERS[who][0]
+        for e in ev:
+            assert e["actor_id"] == who and e["entity_id"] == who and e["tenant_id"] == org
+            assert e["retention_class"] == "R3" and e["structured_diff"] is None
+        assert ev[0]["error_code"] == "INVALID_CURRENT_PASSWORD"
+        text = str(ev)
+        for secret in (NEW, WRONG, PASSWORD, old_hash, new_hash, "$2b$"):
+            assert secret not in text
+        legacy = await op.audit_logs.find({"user_id": who}, {"_id": 0, "action": 1}).to_list(None)
+        assert [l["action"] for l in legacy] == ["password_change_failed", "password_changed"]
     run(monkeypatch, backend, mode, scenario)
 
 

@@ -19,8 +19,12 @@ Where the roles are read (no second source of roles is created):
   ``users.role``. The Permission Service grants ``owner`` and ``admin`` the same
   action set, so it holds no hierarchy; this module adds it on top.
   The TARGET counts as an Owner when either source says so (the safe side).
-* The last-Owner count uses the tenant's ``users`` (role ``Owner``, active):
-  counting fewer Owners can only refuse more.
+* "Is this target an Owner" and the count of the OTHER active Owners for the
+  last-Owner rule (R0-03-C01 F-01) follow the mode too:
+  - ``off`` / ``shadow``: ``users.role == "Owner"`` of active tenant users;
+  - ``enforce``: active, company-scoped, currently valid ``owner``
+    RoleAssignments of the tenant whose User is an active user OF THIS TENANT
+    (an identity from another tenant does not keep this company owned).
 
 Approval (CLAUDE.md §8) for changes that touch an Owner is NOT implemented: the
 canonical DQ/Approval runtime is not built yet (W0). Until then the rule is
@@ -93,12 +97,38 @@ def _is_active(user: Mapping[str, Any]) -> bool:
     return user.get("is_active", True) is not False
 
 
-async def _assert_not_last_owner(tenant, target: Mapping[str, Any]) -> None:
+async def _enforce_owner_ids(tenant, tenant_id: Optional[str]) -> set:
+    """enforce: ids of the tenant's active users holding a valid company ``owner`` assignment."""
+    from app.tenancy import registry
+    holders = {a.get("user_id") for a in await registry.list_tenant_role_assignments(tenant_id, "owner")
+               if _assignment_counts_now(a) and a.get("user_id")}
+    if not holders:
+        return set()
+    active = await tenant.users.find(
+        {"id": {"$in": sorted(holders)}, "is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(None)
+    return {u["id"] for u in active}
+
+
+async def is_owner_for_last_rule(tenant, target: Mapping[str, Any], mode: str,
+                                 tenant_id: Optional[str]) -> bool:
+    """Does the last-Owner rule apply to ``target`` (mode-dependent, see module doc)?"""
+    from app.permissions.deps import MODE_ENFORCE
+    if mode != MODE_ENFORCE:
+        return legacy_rank(target.get("role")) >= RANK_OWNER
+    return await assignment_rank(target["id"], tenant_id) >= RANK_OWNER
+
+
+async def _assert_not_last_owner(tenant, target: Mapping[str, Any], mode: str,
+                                 tenant_id: Optional[str]) -> None:
     """409 when ``target`` is the only active Owner of its firm. ``tenant`` is a TenantData."""
+    from app.permissions.deps import MODE_ENFORCE
     if not _is_active(target):
         return
-    others = await tenant.users.count_documents(
-        {"role": OWNER, "is_active": {"$ne": False}, "id": {"$ne": target["id"]}})
+    if mode == MODE_ENFORCE:
+        others = len((await _enforce_owner_ids(tenant, tenant_id)) - {target["id"]})
+    else:
+        others = await tenant.users.count_documents(
+            {"role": OWNER, "is_active": {"$ne": False}, "id": {"$ne": target["id"]}})
     if others == 0:
         raise HTTPException(status_code=409, detail={
             "error_code": ERROR_LAST_OWNER,
@@ -112,7 +142,14 @@ async def check_user_update(tenant, *, actor: Mapping[str, Any], target: Mapping
     Called before any write. Only ``role`` and ``is_active`` are guarded; names,
     phone and avatar stay as before.
     """
+    from app.permissions.deps import MODE_ENFORCE
     role_change = "role" in update and update["role"] != target.get("role")
+    if (not role_change and "role" in update and update["role"] != OWNER and mode == MODE_ENFORCE
+            and await assignment_rank(target["id"], tenant_id) >= RANK_OWNER):
+        # enforce: the users.role mirror may already say e.g. "Admin" while the
+        # authoritative assignment is owner; the sync would revoke that owner
+        # assignment, so this IS a role change (R0-03-C01 F-01).
+        role_change = True
     active_change = "is_active" in update and bool(update["is_active"]) != _is_active(target)
     if not (role_change or active_change):
         return
@@ -124,12 +161,10 @@ async def check_user_update(tenant, *, actor: Mapping[str, Any], target: Mapping
         raise _forbidden(ERROR_ROLE_ABOVE_OWN, "You cannot grant a role above your own")
     if t_rank >= RANK_OWNER and a_rank < RANK_OWNER:
         raise _forbidden(ERROR_OWNER_ONLY, "Only an Owner can change an Owner")
-    demotes_owner = role_change and legacy_rank(target.get("role")) >= RANK_OWNER \
-        and update["role"] != OWNER
-    deactivates_owner = active_change and update["is_active"] is False \
-        and legacy_rank(target.get("role")) >= RANK_OWNER
-    if demotes_owner or deactivates_owner:
-        await _assert_not_last_owner(tenant, target)
+    removes = (role_change and update["role"] != OWNER) or \
+        (active_change and update["is_active"] is False)
+    if removes and await is_owner_for_last_rule(tenant, target, mode, tenant_id):
+        await _assert_not_last_owner(tenant, target, mode, tenant_id)
 
 
 async def check_owner_only(tenant, *, actor: Mapping[str, Any], target: Mapping[str, Any],
@@ -140,8 +175,8 @@ async def check_owner_only(tenant, *, actor: Mapping[str, Any], target: Mapping[
         return
     if await actor_rank(actor, mode, tenant_id) < RANK_OWNER:
         raise _forbidden(ERROR_OWNER_ONLY, "Only an Owner can change an Owner")
-    if deleting and legacy_rank(target.get("role")) >= RANK_OWNER:
-        await _assert_not_last_owner(tenant, target)
+    if deleting and await is_owner_for_last_rule(tenant, target, mode, tenant_id):
+        await _assert_not_last_owner(tenant, target, mode, tenant_id)
 
 
 def role_audit_diff(target: Mapping[str, Any], update: Mapping[str, Any]) -> Dict[str, Any]:

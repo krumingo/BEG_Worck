@@ -6,6 +6,8 @@ Where the User registry is
 * ``off`` / ``shadow``: every User lives in the legacy global database
   (``app.db.db``, collection ``users``). Login (``POST /auth/login``) and the
   session loader (``get_current_user``) read only that collection.
+* Platform bootstrap, the installation seed and tenant onboarding have no
+  permission mode: they always check the whole installation.
 * ``enforce``: ``POST /users`` writes into the database the Tenant Registry
   resolves for the active tenant (``ctx.db()``). Today every registered tenant
   resolves to the legacy database (onboarding writes ``database_name`` =
@@ -24,6 +26,7 @@ separate, approved step after the duplicates report (R0-09).
 """
 from __future__ import annotations
 
+import inspect
 import re
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -69,21 +72,73 @@ async def users_with_email(databases: Iterable[Any], email: Any) -> List[Dict[st
     return found
 
 
-async def installation_databases(global_db, mode: str) -> List[Any]:
-    """The databases that hold Users in this mode (see the module docstring).
+class IdentityCheckUnavailable(RuntimeError):
+    """The installation could not be fully enumerated: the uniqueness check is unknown.
 
-    ``off``/``shadow`` never touch the Tenant Registry (W0-02 PR-05).
+    Fail closed (R0-03-C01 F-03): the caller refuses the creation before its first
+    write instead of skipping a database it could not check.
+    """
+
+
+ERROR_IDENTITY_CHECK_UNAVAILABLE = "IDENTITY_CHECK_UNAVAILABLE"
+
+
+async def _scan(global_db, records: Iterable[Dict[str, Any]], open_database) -> List[Any]:
+    """The ONE enumeration: the global database + every registry record's database.
+
+    Every record must name a database (``database_name``) that ``open_database``
+    opens; anything else raises :class:`IdentityCheckUnavailable`. All records are
+    required, not only active ones — a suspended tenant's users still own their emails.
+    """
+    out = [global_db]
+    for record in records:
+        name = record.get("database_name")
+        if not isinstance(name, str) or not name.strip():
+            raise IdentityCheckUnavailable("a tenant registry record has no database_name")
+        try:
+            handle = open_database(record)
+            if inspect.isawaitable(handle):
+                handle = await handle
+        except Exception as exc:
+            raise IdentityCheckUnavailable("a tenant database cannot be opened") from exc
+        if handle is None:
+            raise IdentityCheckUnavailable("a tenant database cannot be opened")
+        out.append(handle)
+    return out
+
+
+async def installation_databases(global_db, mode: Optional[str] = None) -> List[Any]:
+    """Every database that holds Users, from the module Tenant Registry. Fail closed.
+
+    Used by ``POST /users`` (enforce), platform bootstrap and the installation seed.
+    ``POST /users`` in ``off``/``shadow`` passes its mode and gets the global
+    database only: every User lives there in those modes, and they never touch the
+    Tenant Registry (W0-02 PR-05). ``mode=None`` (no permission mode: bootstrap,
+    seed) always scans the whole installation.
     """
     from app.permissions.deps import MODE_ENFORCE
-    out = [global_db]
-    if mode != MODE_ENFORCE:
-        return out
-    # Fail closed: a registry record the resolver cannot open raises here, so the
-    # creation stops instead of skipping a database it could not check.
+    if mode is not None and mode != MODE_ENFORCE:
+        return [global_db]
     from app.tenancy import registry, resolver
-    for tenant in await registry.list_tenants():
-        out.append(await resolver.get_tenant_db(tenant["id"]))
-    return out
+    try:
+        records = await registry.list_tenants()
+    except Exception as exc:
+        raise IdentityCheckUnavailable("the tenant registry cannot be read") from exc
+    return await _scan(global_db, records, lambda r: resolver.get_tenant_db(r["id"]))
+
+
+async def installation_databases_for(op_db, system_db) -> List[Any]:
+    """Same enumeration for a caller that holds explicit handles (tenant onboarding).
+
+    The registry is read from ``system_db``; a record's database is opened by name
+    on ``op_db``'s client.
+    """
+    try:
+        records = await system_db["tenant_registry"].find(
+            {}, {"_id": 0, "id": 1, "database_name": 1}).to_list(None)
+    except Exception as exc:
+        raise IdentityCheckUnavailable("the tenant registry cannot be read") from exc
+    return await _scan(op_db, records, lambda r: op_db.client[r["database_name"]])
 
 
 async def ensure_user_email_unique_index(database) -> str:  # pragma: no cover - not run in R0-03

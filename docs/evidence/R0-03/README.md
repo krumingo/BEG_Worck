@@ -59,3 +59,21 @@ All assertions: `bot_result.json`. Duplicates report on the bot DB (dev data): *
 10. `AdminResetPasswordModal` shows its generic "password reset failed" for the 403 (it ignores non-string details) — not changed.
 
 Not run: production access, migrations, data changes, index creation, merge, deploy.
+
+## C01 (Codex F-01..F-04, review of `dcaf204`)
+- **F-01** `app/services/user_role_policy.py`: in `enforce` the decision "this target is an Owner" and the count of the OTHER active Owners come from active, company-scoped, currently valid `owner` RoleAssignments of the tenant whose User is an active user of this tenant (`registry.list_tenant_role_assignments`, new, tenant-scoped). `off`/`shadow` unchanged (`users.role`). This applies to `PUT /users` (role and `is_active`) and to `DELETE`. In enforce a `role` equal to a stale `users.role` mirror still counts as a change when the target holds an owner assignment (the sync would revoke it). Self-delete is still 400.
+- **F-02/F-03** `app/tenancy/identity.py`: one fail-closed enumeration (`_scan`). It covers the global DB plus every `tenant_registry` record's database. A record with no, empty or non-string `database_name`, or a database that cannot be opened, raises `IdentityCheckUnavailable`. Callers:
+  - `POST /users` (enforce; off/shadow still read only the global DB and never the registry, as W0-02 PR-05 requires);
+  - onboarding / signup (`installation_databases_for`; refuses before its first write, signup answers 503);
+  - platform bootstrap (any existing spelling anywhere → **409 `EMAIL_EXISTS`**, nothing written — the "already exists" audit row is gone too; uncheckable → 503);
+  - seed (skips, writes nothing; logs masked emails only).
+  - The live-server tests in `tests/test_platform_bootstrap.py` now expect 409 (not run here: they need a running server).
+- **F-04** `POST /auth/change-password`: canonical W0-04 AuditEvent `user.own_password_change` on success (`result=success`) and on a wrong current password (`result=denied`, `error_code=INVALID_CURRENT_PASSWORD`), with no diff, password or hash. The legacy `log_audit` rows stay.
+- **Tests:**
+  - `test_r0_03_roles_email.py`: **362 passed**, mongomock + real MongoDB.
+  - All `tests/test_r0_0*.py` together with `test_w0_02_pr_fixes`, A2B onboarding and legacy routes: 927 passed / 15 failed — only the pre-existing legacy-routes 15 (`c01_tests_mongomock_and_real.txt`).
+  - Mutation, the C01 test file against `dcaf204` (mongomock): 31 failed / 151 passed. Every new F-01..F-04 test fails there; the passing ones are the earlier rows plus the two positive controls (seed of a new email, self-delete still 400) (`mutation_C01_on_dcaf204.txt`).
+  - W0 DB-free: 1085 / 15 / 50, the same 15 (`w0_branch_C01_summary.txt`).
+  - A2C / A1: 0 violations.
+  - `W0-03E-A2B_INVENTORY.md` regenerated: line numbers, and two fewer raw `users` reads, because seed and bootstrap now go through `identity.users_with_email`.
+- **No UI change**, so no bot re-run.

@@ -27,7 +27,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `asset_repairs` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `asset_units` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/assets_intake_pending.py:154 |
 | `attendance_entries` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `audit_logs` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/platform.py:260<br>app/routes/platform.py:338<br>app/utils/audit.py:78 |
+| `audit_logs` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/platform.py:322<br>app/utils/audit.py:78 |
 | `billing_checkout_sessions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `billing_webhook_events` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `bonus_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -49,7 +49,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `excel_import_templates` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `execution_packages` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `extra_work_drafts` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `feature_flags` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:88<br>app/routes/billing.py:185 |
+| `feature_flags` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:96<br>app/routes/billing.py:189 |
 | `finance_payments` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `financial_accounts` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | scripts/create_company.py:65 |
 | `fixed_expenses` | payments / allocations / advances / payroll / overhead | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -125,9 +125,9 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `subcontractor_payments` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `subcontractor_performance` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `subcontractors` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:99<br>app/routes/billing.py:170 |
+| `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:107<br>app/routes/billing.py:174 |
 | `supplier_invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:73<br>app/routes/auth.py:296<br>app/routes/auth.py:346<br>app/routes/auth.py:346<br>app/routes/platform.py:316<br>app/tenancy/onboarding.py:110 |
+| `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:81<br>app/routes/auth.py:317<br>app/routes/auth.py:367<br>app/routes/auth.py:367<br>app/routes/platform.py:300<br>app/tenancy/onboarding.py:114 |
 | `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouse_transactions` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouses` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -146,15 +146,13 @@ _No report given (`--report`)._
 
 ## 3. Residual debt — raw tenant-owned access without a literal tenant filter
 
-Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out of W0-03E). Under colliding ids these are cross-tenant reads/writes. The routes on the Issue #38 matrix (project/team, finance, offers, reports, payments, Master/legacy reads, warehouses, items) were fixed where the matrix exercises them; the rest is listed here as debt for the decision that authorizes a REAL second tenant. Reads: 8, writes: 1.
+Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out of W0-03E). Under colliding ids these are cross-tenant reads/writes. The routes on the Issue #38 matrix (project/team, finance, offers, reports, payments, Master/legacy reads, warehouses, items) were fixed where the matrix exercises them; the rest is listed here as debt for the decision that authorizes a REAL second tenant. Reads: 6, writes: 1.
 
 | module | unscoped reads | unscoped writes |
 |---|---|---|
-| `app/core/seed.py` | 1 | 0 |
 | `app/routes/activity_budgets.py` | 1 | 0 |
 | `app/routes/assets_intake_pending.py` | 1 | 1 |
 | `app/routes/auth.py` | 1 | 0 |
-| `app/routes/platform.py` | 1 | 0 |
 | `app/tenancy/data_access.py` | 1 | 0 |
 | `app/tenancy/identity.py` | 1 | 0 |
 | `app/tenancy/project_team.py` | 1 | 0 |
@@ -162,14 +160,12 @@ Outside the W0-03E protected surface (W0-03 contract §6 kept these modules out 
 <details><summary>Every site (file:line collection.method in function)</summary>
 
 ```
-app/core/seed.py:46 users.find_one in seed_data()
 app/routes/activity_budgets.py:77 activity_budgets.find in list_activity_budgets()
 app/routes/assets_intake_pending.py:183 asset_intake_pending.find_one in approve_intake()
 app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in approve_intake()
-app/routes/auth.py:103 users.find in login()
-app/routes/platform.py:246 users.find_one in bootstrap_create_platform_admin()
+app/routes/auth.py:111 users.find in login()
 app/tenancy/data_access.py:398 offers.find in resolve_review_token()
-app/tenancy/identity.py:65 users.find in users_with_email()
+app/tenancy/identity.py:68 users.find in users_with_email()
 app/tenancy/project_team.py:267 project_team.count_documents in ownerless_row_count()
 ```
 

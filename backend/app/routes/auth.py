@@ -24,8 +24,9 @@ from app.permissions.workflow import (
     RecoverableWrite, fingerprint_without, ERROR_SYNC_FAILED, ERROR_WRITE_INCOMPLETE,
 )
 from app.tenancy.identity import (
-    ERROR_DUPLICATE_IDENTITY, ERROR_EMAIL_EXISTS, email_match_filter, installation_databases,
-    normalize_email, users_with_email,
+    ERROR_DUPLICATE_IDENTITY, ERROR_EMAIL_EXISTS, ERROR_IDENTITY_CHECK_UNAVAILABLE,
+    IdentityCheckUnavailable, email_match_filter, installation_databases, normalize_email,
+    users_with_email,
 )
 from app.services.user_role_policy import (
     audit_user_change, check_owner_only, check_user_update, role_audit_diff,
@@ -39,6 +40,13 @@ def _tenant(user: dict) -> TenantData:
 def _tenant_of(tdb, ctx) -> TenantData:
     """The context's tenant on the handle the route writes to."""
     return TenantData.for_context(tdb, ctx)
+
+
+def identity_check_unavailable() -> HTTPException:
+    """R0-03-C01 F-03: the installation could not be fully checked — refuse, write nothing."""
+    return HTTPException(status_code=503, detail={
+        "error_code": ERROR_IDENTITY_CHECK_UNAVAILABLE,
+        "message": "The email cannot be checked right now; nothing was created"})
 
 
 def _email_exists() -> HTTPException:
@@ -192,6 +200,12 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
         # Log failed attempt (security event)
         await log_audit(user["org_id"], user["id"], user["email"], "password_change_failed", "auth", 
                        changes={"reason": "Invalid current password"})
+        # R0-03-C01 F-04: canonical AuditEvent too — never the password or the hash.
+        await audit_user_change(db, tenant_id=user["org_id"], actor_id=user["id"],
+                                action="user.own_password_change", target_id=user["id"],
+                                result="denied", error_code="INVALID_CURRENT_PASSWORD",
+                                reason="own password change refused: current password did not match",
+                                tool_or_endpoint="POST /api/auth/change-password")
         raise HTTPException(status_code=403, detail="Current password is incorrect")
     
     # Validate new password strength
@@ -216,6 +230,10 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     
     # Log success (security event)
     await log_audit(user["org_id"], user["id"], user["email"], "password_changed", "auth")
+    await audit_user_change(db, tenant_id=user["org_id"], actor_id=user["id"],
+                            action="user.own_password_change", target_id=user["id"],
+                            reason="own password changed (no hash recorded)",
+                            tool_or_endpoint="POST /api/auth/change-password")
     
     return {"ok": True}
 
@@ -266,7 +284,10 @@ async def create_user(
     email = normalize_email(data.email)
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
-    databases = await installation_databases(db, ctx.mode) + [tdb]
+    try:
+        databases = await installation_databases(db, ctx.mode) + [tdb]
+    except IdentityCheckUnavailable:
+        raise identity_check_unavailable()
 
     def _public(u):
         return {k: v for k, v in u.items() if k not in ("password_hash", "_id")}
