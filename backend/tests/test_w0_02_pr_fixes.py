@@ -908,7 +908,7 @@ class TestPR05OffShadowFaults:
                 assigned1 = await sysdb.tenant_role_assignments.count_documents({"user_id": created["id"]})
                 # the new user has NO assignment -> denied everywhere in enforce (safe side)
                 denied = not await has_permission(MCtx(created["id"], dbb, "B"), "admin.access")
-                # a different payload for the (now existing) email: legacy 400, not a replay
+                # a different payload for the (now existing) email: 409 EMAIL_EXISTS (R0-03), not a replay
                 r_conf = await ac.post("/users", json=dict(NEWUSER, first_name="Other"))
                 fail["on"] = False
                 r2 = await ac.post("/users", json=NEWUSER)             # same request: recovery
@@ -924,10 +924,10 @@ class TestPR05OffShadowFaults:
         (c1, detail, s1, a1, denied, c_conf, c2, id2, id1, s2, users, a2, events, logs, c3) = run(go())
         assert c1 == 503 and detail["error_code"] == "PERMISSION_SYNC_FAILED" and detail["state"] == "failed"
         assert s1["status"] == "failed" and s1["steps_done"] == ["business"] and a1 == 0 and denied
-        assert c_conf == 400
+        assert c_conf == 409                                              # R0-03: EMAIL_EXISTS
         assert c2 == 201 and id2 == id1 and s2["status"] == "completed"
         assert users == 1 and a2 == 1 and events == 1 and logs == 1      # nothing done twice
-        assert c3 == 400                                                  # email exists (legacy contract)
+        assert c3 == 409                                                  # email exists (R0-03 EMAIL_EXISTS)
 
     def test_enforce_role_change_sync_first_no_stale_broad_grant(self, monkeypatch):
         async def go():

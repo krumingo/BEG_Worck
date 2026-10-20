@@ -70,15 +70,26 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
     The caller has already authenticated/authorized the request (public signup
     or an operator script) and hashed the password. No tenant value is an input.
     """
+    from app.tenancy.identity import (
+        IdentityCheckUnavailable, installation_databases_for, normalize_email, users_with_email)
     name = (org_name or "").strip()
-    email = (owner_email or "").strip().lower()
+    email = normalize_email(owner_email)
     if not name:
         raise OnboardingRefused("organization name is required", "BAD_REQUEST")
     if not email:
         raise OnboardingRefused("owner email is required", "BAD_REQUEST")
     if not owner_password_hash:
         raise OnboardingRefused("owner password hash is required", "BAD_REQUEST")
-    if await op_db["users"].find_one({"email": email}, {"_id": 1}):
+    # R0-03 (Р6): one email = one User in the whole installation — the operational
+    # database and every database the registry names, matched normalized
+    # (stored rows predate normalization). R0-03-C01 F-03: a registry record
+    # without a database that opens refuses here, before the first write.
+    try:
+        databases = await installation_databases_for(op_db, system_db)
+        taken = await users_with_email(databases, email)
+    except IdentityCheckUnavailable as exc:
+        raise OnboardingRefused(str(exc), "IDENTITY_CHECK_UNAVAILABLE")
+    if taken:
         raise OnboardingRefused("Email already registered", "EMAIL_EXISTS")
 
     now = _now()

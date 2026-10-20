@@ -206,6 +206,7 @@ OPERATOR_SCRIPTS: Tuple[str, ...] = (
     "scripts/seed_finance_data.py",
     "scripts/smoke_test.py",
     "scripts/r0_01_billing_exposure_report.py",
+    "scripts/r0_03_email_duplicates_report.py",
 )
 
 #: The one module that legitimately builds a ``$lookup`` stage: it is the
@@ -258,6 +259,10 @@ PRE_TENANT_FUNCTIONS: Dict[str, Dict[str, FrozenSet[str]]] = {
     # One-off M19.8 migration: enumerates tenants from the tenant root, then reads
     # and writes each tenant's own reports with its ``org_id`` in every filter.
     "scripts/migrate_m19_8_freeze_report_split.py": {"main": frozenset({"organizations"})},
+    # R0-03 (Р6): one email = one User in the whole installation. The uniqueness
+    # check and the login lookup search identities by email ACROSS tenants on
+    # purpose — a per-tenant search is exactly the defect. Reads only.
+    "app/tenancy/identity.py": {"users_with_email": frozenset({"users"})},
 }
 
 #: Functions that only COUNT or REPORT across the installation. They may name any
@@ -273,6 +278,9 @@ READ_ONLY_DIAGNOSTIC: Dict[str, Tuple[str, ...]] = {
     # R0-01 billing exposure report: lists mock subscriptions / checkout_mock audit
     # rows across the installation through the same write-refusing wrapper.
     "scripts/r0_01_billing_exposure_report.py": ("__getitem__", "build_report"),
+    # R0-03 email duplicates report: counts users per normalized email through the
+    # R0-01 write-refusing wrapper; prints masked emails and ids only.
+    "scripts/r0_03_email_duplicates_report.py": ("build_report",),
 }
 
 #: Identity-bearing collections: raw access refused outside the two tiers.
