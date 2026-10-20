@@ -86,9 +86,10 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
     # without a database that opens refuses here, before the first write.
     try:
         databases = await installation_databases_for(op_db, system_db)
+        taken = await users_with_email(databases, email)
     except IdentityCheckUnavailable as exc:
         raise OnboardingRefused(str(exc), "IDENTITY_CHECK_UNAVAILABLE")
-    if await users_with_email(databases, email):
+    if taken:
         raise OnboardingRefused("Email already registered", "EMAIL_EXISTS")
 
     now = _now()

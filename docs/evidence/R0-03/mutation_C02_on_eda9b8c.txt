@@ -1,0 +1,13 @@
+FAILED tests/test_r0_03_roles_email.py::test_11d_off_shadow_foreign_database_duplicate_is_409[mongomock-CROSS@example.com-off]
+FAILED tests/test_r0_03_roles_email.py::test_11d_off_shadow_foreign_database_duplicate_is_409[mongomock-CROSS@example.com-shadow]
+FAILED tests/test_r0_03_roles_email.py::test_11d_off_shadow_foreign_database_duplicate_is_409[mongomock- cross@EXAMPLE.com -off]
+FAILED tests/test_r0_03_roles_email.py::test_11d_off_shadow_foreign_database_duplicate_is_409[mongomock- cross@EXAMPLE.com -shadow]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock-None-off]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock-None-shadow]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock--off]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock--shadow]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock-  -off]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock-  -shadow]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock-7-off]
+FAILED tests/test_r0_03_roles_email.py::test_11d2_off_shadow_broken_registry_is_503_byte_equal[mongomock-7-shadow]
+12 failed, 183 passed, 193 skipped, 6 warnings in 33.74s

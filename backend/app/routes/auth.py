@@ -25,8 +25,8 @@ from app.permissions.workflow import (
 )
 from app.tenancy.identity import (
     ERROR_DUPLICATE_IDENTITY, ERROR_EMAIL_EXISTS, ERROR_IDENTITY_CHECK_UNAVAILABLE,
-    IdentityCheckUnavailable, email_match_filter, installation_databases, normalize_email,
-    users_with_email,
+    IdentityCheckUnavailable, email_match_filter, installation_databases,
+    installation_databases_for, normalize_email, users_with_email,
 )
 from app.services.user_role_policy import (
     audit_user_change, check_owner_only, check_user_update, role_audit_diff,
@@ -284,8 +284,17 @@ async def create_user(
     email = normalize_email(data.email)
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
+    # R0-03-C02: the whole installation in EVERY mode, fail closed around the full
+    # enumeration AND the search. off/shadow read tenant_registry directly (as
+    # onboarding does) — no resolver, no Permission Service (W0-02 PR-05). The
+    # write still goes to the mode-selected database (tdb).
     try:
-        databases = await installation_databases(db, ctx.mode) + [tdb]
+        if ctx.mode == MODE_ENFORCE:
+            databases = await installation_databases(db, ctx.mode) + [tdb]
+        else:
+            from app.tenancy import registry as tenant_registry_mod
+            databases = await installation_databases_for(db, tenant_registry_mod.system_db) + [tdb]
+        matches = await users_with_email(databases, email)
     except IdentityCheckUnavailable:
         raise identity_check_unavailable()
 
@@ -311,7 +320,7 @@ async def create_user(
     if ctx.mode != MODE_ENFORCE:
         # ---- legacy path (off / shadow): unchanged business behavior ----------
         await enforce_limit(org_id, "users", db_handle=tdb)
-        if await users_with_email(databases, email):
+        if matches:
             raise _email_exists()
         new_user = _new_user_doc()
         await tdb.users.insert_one(new_user)
@@ -329,7 +338,6 @@ async def create_user(
     # The only match that may continue is this tenant's own user of an
     # interrupted attempt (checked against the workflow below); any other
     # holder of the email anywhere in the installation refuses the request.
-    matches = await users_with_email(databases, email)
     own = [m for m in matches if m["_database"] == tdb.name and m.get("org_id") == org_id]
     if len(matches) > len(own[:1]):
         raise _email_exists()

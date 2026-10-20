@@ -5,7 +5,10 @@ Where the User registry is
 --------------------------
 * ``off`` / ``shadow``: every User lives in the legacy global database
   (``app.db.db``, collection ``users``). Login (``POST /auth/login``) and the
-  session loader (``get_current_user``) read only that collection.
+  session loader (``get_current_user``) read only that collection. The email
+  check of ``POST /users`` still covers the whole installation here (R0-03-C02),
+  reading ``tenant_registry`` directly like onboarding — no resolver, no
+  Permission Service (W0-02 PR-05).
 * Platform bootstrap, the installation seed and tenant onboarding have no
   permission mode: they always check the whole installation.
 * ``enforce``: ``POST /users`` writes into the database the Tenant Registry
@@ -65,7 +68,10 @@ async def users_with_email(databases: Iterable[Any], email: Any) -> List[Dict[st
         if database is None or database.name in seen:
             continue
         seen.add(database.name)
-        rows = await database.users.find(email_match_filter(norm), {"_id": 0}).to_list(50)
+        try:
+            rows = await database.users.find(email_match_filter(norm), {"_id": 0}).to_list(50)
+        except Exception as exc:       # R0-03-C02: an unreadable database is an unknown answer
+            raise IdentityCheckUnavailable("a database could not be searched") from exc
         for row in rows:
             if normalize_email(row.get("email")) == norm:
                 found.append(dict(row, _database=database.name))
@@ -110,11 +116,13 @@ async def _scan(global_db, records: Iterable[Dict[str, Any]], open_database) -> 
 async def installation_databases(global_db, mode: Optional[str] = None) -> List[Any]:
     """Every database that holds Users, from the module Tenant Registry. Fail closed.
 
-    Used by ``POST /users`` (enforce), platform bootstrap and the installation seed.
-    ``POST /users`` in ``off``/``shadow`` passes its mode and gets the global
-    database only: every User lives there in those modes, and they never touch the
-    Tenant Registry (W0-02 PR-05). ``mode=None`` (no permission mode: bootstrap,
-    seed) always scans the whole installation.
+    Used by ``POST /users`` in enforce (tenant databases through the resolver),
+    platform bootstrap and the installation seed (``mode=None``: the whole
+    installation). ``POST /users`` in ``off``/``shadow`` uses
+    :func:`installation_databases_for` instead (R0-03-C02): the same read-only
+    ``tenant_registry`` enumeration as onboarding, with no resolver and no
+    Permission Service, so W0-02 PR-05 still holds. A non-enforce ``mode`` here
+    returns the global database only and is no longer used for an email check.
     """
     from app.permissions.deps import MODE_ENFORCE
     if mode is not None and mode != MODE_ENFORCE:
@@ -128,7 +136,8 @@ async def installation_databases(global_db, mode: Optional[str] = None) -> List[
 
 
 async def installation_databases_for(op_db, system_db) -> List[Any]:
-    """Same enumeration for a caller that holds explicit handles (tenant onboarding).
+    """Same enumeration for a caller that holds explicit handles: tenant onboarding,
+    and ``POST /users`` in ``off``/``shadow`` (R0-03-C02 — no resolver involved).
 
     The registry is read from ``system_db``; a record's database is opened by name
     on ``op_db``'s client.

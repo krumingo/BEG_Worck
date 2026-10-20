@@ -77,3 +77,22 @@ Not run: production access, migrations, data changes, index creation, merge, dep
   - A2C / A1: 0 violations.
   - `W0-03E-A2B_INVENTORY.md` regenerated: line numbers, and two fewer raw `users` reads, because seed and bootstrap now go through `identity.users_with_email`.
 - **No UI change**, so no bot re-run.
+
+## C02 (Codex re-review of `eda9b8c`; F-01, F-04 closed)
+- `POST /users` now checks the email across the whole installation **in every mode**, and fails closed (503 `IDENTITY_CHECK_UNAVAILABLE`) around the full enumeration **and** the search; nothing is written in either case. The write still goes to the mode-selected database.
+  - `off`/`shadow` use `installation_databases_for(global_db, registry.system_db)`. This is the same direct read-only `tenant_registry` path as onboarding: no resolver, no Permission Service, so W0-02 PR-05 still holds.
+  - `enforce` is unchanged.
+  - `users_with_email` also turns an unreadable database into `IdentityCheckUnavailable`. Onboarding now covers its search with the same guard.
+- `test_11d` was replaced by `test_11d*` (off and shadow, mongomock + real):
+  - a foreign-DB duplicate (`CROSS@example.com` vs `cross@example.com`) → 409, no write;
+  - a registry record with no, empty or non-string `database_name` → 503, byte-equal state (operational and system DB);
+  - a fresh email with a healthy registry → 201, written to the mode's DB.
+  - Each asserts that the resolver is not called, and that the Permission Service is not called in `off`.
+- **Results:**
+  - `test_r0_03_roles_email.py`: **388 passed** (mongomock + real).
+  - All `test_r0_0*` plus W0-02 PR fixes, A2B onboarding and legacy routes: 953 passed / 15 failed — only the pre-existing legacy-routes 15 (`c02_tests_mongomock_and_real.txt`).
+  - Mutation against `eda9b8c`: 12 failed (every 11d / 11d2 case); 11d3, the fresh-email positive control, passes on both (`mutation_C02_on_eda9b8c.txt`).
+  - W0 DB-free: 1085 / 15 / 50, the same 15.
+  - A2C / A1: 0.
+  - A2B inventory regenerated (line numbers only).
+- No UI change, so no bot run.

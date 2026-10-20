@@ -24,6 +24,7 @@ The 17 rows of docs/architecture/tasks/R0-03_ROLES_EMAIL.md, positive and forbid
     R0-03-C01 (Codex F-01..F-04): enforce last-Owner from assignments (10c*),
     bootstrap/seed/onboarding over the whole installation, fail closed (11f*-11h),
     own password change as a canonical AuditEvent (test_16);
+    R0-03-C02: off/shadow ``POST /users`` checks the whole installation, fail closed (11d*);
 17. every role row runs in ``off``, ``shadow`` and ``enforce`` with the same outcome.
 
 Runs on ``mongomock_motor`` and, when ``W0_03_REAL_MONGO_URL`` names a disposable
@@ -549,17 +550,91 @@ def test_11c_enforce_checks_every_registered_tenant_database(monkeypatch, backen
     run(monkeypatch, backend, "enforce", scenario)
 
 
-def test_11d_off_never_reads_the_registry_for_the_email_check(monkeypatch, backend):
-    async def scenario(c, op, sysdb):
-        from app.tenancy import registry
+# ── R0-03-C02: off/shadow POST /users checks the whole installation too, fail closed ──
+def _forbid_resolver_and_permission_service(monkeypatch, mode):
+    """off: neither the resolver nor the Permission Service may run. shadow observes
+    through the Permission Service by design, so there only the resolver is forbidden."""
+    from app.tenancy import guard, resolver, registry
+    from app.permissions import deps as perm_deps, service as perm_service
+    calls = []
 
-        async def _boom(*a, **k):
-            raise AssertionError("registry read in off mode")
-        monkeypatch.setattr(registry, "list_tenants", _boom)
-        r = await c.post("/api/users", json=_new("solo@r003.example"), headers=hdr("admin-a"))
-        assert r.status_code == 201, r.text
-        assert (await c.post("/api/users", json=_new("ivan@x.bg"), headers=hdr("admin-a"))).status_code == 409
-    run(monkeypatch, backend, "off", scenario)
+    def _forbidden(name):
+        async def _f(*a, **k):
+            calls.append(name)
+            raise AssertionError("%s called in %s mode" % (name, mode))
+        return _f
+    for module, name in ((resolver, "get_tenant_db"), (guard, "get_tenant_db"),
+                         (registry, "list_tenants")):
+        monkeypatch.setattr(module, name, _forbidden(name))
+    if mode == "off":
+        for module in (perm_service, perm_deps):
+            monkeypatch.setattr(module, "evaluate_permission", _forbidden("evaluate_permission"))
+    return calls
+
+
+async def _register_other_db(op, sysdb, *, users=(), database_name=True):
+    other = op.client[op.name + "_c"]
+    rec = {"id": "ORG-R003-C", "status": "active"}
+    if database_name is True:
+        rec["database_name"] = other.name
+    elif database_name is not None:
+        rec["database_name"] = database_name
+    await sysdb.tenant_registry.insert_one(rec)
+    for u in users:
+        await other.users.insert_one(dict(u))
+    return other
+
+
+@pytest.mark.parametrize("mode_", ["off", "shadow"])
+@pytest.mark.parametrize("email", ["CROSS@example.com", " cross@EXAMPLE.com "])
+def test_11d_off_shadow_foreign_database_duplicate_is_409(monkeypatch, backend, mode_, email):
+    async def scenario(c, op, sysdb):
+        other = await _register_other_db(op, sysdb, users=[
+            {"id": "c1", "org_id": "ORG-R003-C", "email": "cross@example.com"}])
+        try:
+            calls = _forbid_resolver_and_permission_service(monkeypatch, mode_)
+            before = await snap(op, *ALL)
+            r = await c.post("/api/users", json=_new(email), headers=hdr("admin-a"))
+            assert r.status_code == 409 and code_of(r) == "EMAIL_EXISTS", r.text
+            assert await snap(op, *ALL) == before and await other.users.count_documents({}) == 1
+            assert calls == []
+        finally:
+            await op.client.drop_database(op.name + "_c")
+    run(monkeypatch, backend, mode_, scenario)
+
+
+@pytest.mark.parametrize("mode_", ["off", "shadow"])
+@pytest.mark.parametrize("database_name", [None, "", "  ", 7])
+def test_11d2_off_shadow_broken_registry_is_503_byte_equal(monkeypatch, backend, mode_, database_name):
+    async def scenario(c, op, sysdb):
+        await _register_other_db(op, sysdb, database_name=database_name)
+        calls = _forbid_resolver_and_permission_service(monkeypatch, mode_)
+        before = (await snap(op, *ALL, "audit_idempotency"),
+                  await snap(sysdb, "tenant_registry", "tenant_role_assignments", "tenant_memberships"))
+        r = await c.post("/api/users", json=_new("fresh@example.com"), headers=hdr("admin-a"))
+        assert r.status_code == 503 and code_of(r) == "IDENTITY_CHECK_UNAVAILABLE", r.text
+        after = (await snap(op, *ALL, "audit_idempotency"),
+                 await snap(sysdb, "tenant_registry", "tenant_role_assignments", "tenant_memberships"))
+        assert after == before and calls == []
+    run(monkeypatch, backend, mode_, scenario)
+
+
+@pytest.mark.parametrize("mode_", ["off", "shadow"])
+def test_11d3_off_shadow_fresh_email_with_healthy_registry_is_201(monkeypatch, backend, mode_):
+    async def scenario(c, op, sysdb):
+        other = await _register_other_db(op, sysdb, users=[
+            {"id": "c1", "org_id": "ORG-R003-C", "email": "cross@example.com"}])
+        try:
+            calls = _forbid_resolver_and_permission_service(monkeypatch, mode_)
+            r = await c.post("/api/users", json=_new("Fresh.Person@Example.com"), headers=hdr("admin-a"))
+            assert r.status_code == 201, r.text
+            assert r.json()["email"] == "fresh.person@example.com" and r.json()["org_id"] == ORG_A
+            assert await op.users.count_documents({"email": "fresh.person@example.com"}) == 1
+            assert await other.users.count_documents({}) == 1          # the write stays in the mode's DB
+            assert calls == []
+        finally:
+            await op.client.drop_database(op.name + "_c")
+    run(monkeypatch, backend, mode_, scenario)
 
 
 def test_11e_signup_and_onboarding_refuse_an_existing_email(monkeypatch, backend):
