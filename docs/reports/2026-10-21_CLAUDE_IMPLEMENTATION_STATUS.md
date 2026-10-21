@@ -26,10 +26,10 @@
 
 | PR | Branch | Merge в `main` (пълен SHA) |
 |---|---|---|
-| #58 R0-01 | — | `ce072b7b921522eea7d83d638cebeb5c3e873155` |
-| #59 R0-02 | — | `41f2afff99ff8845dfba9396ef090426825b628d` |
-| #60 R0-05 | `claude/r0-05-*` | `078b8e7c57c7b146ff790d4129984ec6075faa16` |
-| #61 R0-06 | `claude/r0-06-*` | `23f223ef40f93801e2dfbfb2b67b6c5c704820a0` |
+| #58 R0-01 | `claude/r0-01-billing-p0` | `ce072b7b921522eea7d83d638cebeb5c3e873155` |
+| #59 R0-02 | `claude/r0-02-items-tenant-filter` | `41f2afff99ff8845dfba9396ef090426825b628d` |
+| #60 R0-05 | `claude/r0-05-pay-run-selected-only` | `078b8e7c57c7b146ff790d4129984ec6075faa16` |
+| #61 R0-06 | `claude/r0-06-paid-pay-run` | `23f223ef40f93801e2dfbfb2b67b6c5c704820a0` |
 | #62 R0-07 | `claude/r0-07-dev-reset` | `db94561713bed714a56566391487a1593139a920` |
 | #63 R0-03 | `claude/r0-03-roles-email` (последен head `196e7b7980e2a6ef9939785bcf59bd0460dff7c7`) | `c0e34e1f3037010311d352683d519c3c9d7dcbfa` = **текущ `main`** |
 | **#56 R0-04 (отворен, draft)** | `claude/auth-owner-recovery-forgot-password-sfv359` | head `8e435a0e8823ff49d11dfe2803968b27701c688e` (merge на `main` c0e34e1 + C01 `5e9700c`), **не е слят** |
