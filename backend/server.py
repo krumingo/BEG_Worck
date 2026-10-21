@@ -183,7 +183,11 @@ api_router.include_router(extra_works_router)
 from app.routes.ai_calibration import router as ai_calibration_router
 api_router.include_router(ai_calibration_router)
 
-# Import procurement router - includes material requests, supplier invoices, warehouse posting
+# LIVE-OPS-01 / TASK 5B: material request commands + reads (the only request writer)
+from app.routes.material_request_commands import router as material_request_router
+api_router.include_router(material_request_router)
+
+# Import procurement router - supplier invoices, warehouse posting
 from app.routes.procurement import router as procurement_router
 api_router.include_router(procurement_router)
 

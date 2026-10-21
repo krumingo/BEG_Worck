@@ -68,6 +68,7 @@ import ChangeOrdersPage from "@/pages/ChangeOrdersPage";
 import AICalibrationPage from "@/pages/AICalibrationPage";
 import OfferReviewPage from "@/pages/OfferReviewPage";
 import ProcurementPage from "@/pages/ProcurementPage";
+import MaterialRequestsPage from "@/pages/MaterialRequestsPage";
 import InventoryDashboardPage from "@/pages/InventoryDashboardPage";
 import HistoricalOffersPage from "@/pages/HistoricalOffersPage";
 import EmployeeDetailPage from "@/pages/EmployeeDetailPage";
@@ -228,6 +229,10 @@ function AppRoutes() {
       <Route path="/activity-catalog" element={<AdminRoute><ActivityCatalogPage /></AdminRoute>} />
       <Route path="/ai-calibration" element={<AdminRoute><AICalibrationPage /></AdminRoute>} />
       <Route path="/procurement" element={<AdminRoute><ProcurementPage /></AdminRoute>} />
+      {/* LIVE-OPS-B: any signed-in company user may open it; the server's
+          Permission Service decides every action (no role gate in the browser). */}
+      <Route path="/material-requests" element={<CompanyProtectedRoute><MaterialRequestsPage /></CompanyProtectedRoute>} />
+      <Route path="/material-requests/:requestId" element={<CompanyProtectedRoute><MaterialRequestsPage /></CompanyProtectedRoute>} />
       <Route path="/inventory" element={<AdminRoute><InventoryDashboardPage /></AdminRoute>} />
       <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
       <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />

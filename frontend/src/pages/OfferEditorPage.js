@@ -651,11 +651,10 @@ export default function OfferEditorPage() {
             </>
           )}
           {offer && ["Accepted", "Sent"].includes(offer.status) && (
-            <Button variant="outline" size="sm" onClick={async () => {
-              try {
-                const res = await API.post(`/material-requests/from-offer/${offer.id}`, { stage_name: offer.title });
-                navigate(`/procurement?tab=requests`);
-              } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+            <Button variant="outline" size="sm" onClick={() => {
+              // LIVE-OPS-B: requests are created only through the named, audited
+              // command on the requests screen (the from-offer writer is retired).
+              navigate(`/material-requests?new=1&project=${encodeURIComponent(offer.project_id || "")}`);
             }} className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10" data-testid="create-mr-btn">
               <Package className="w-4 h-4 mr-1" /> Заявка материали
             </Button>

@@ -63,9 +63,13 @@ async def begin_idempotent(
     key: str,
     action: str,
     request_fingerprint: Optional[str] = None,
+    session=None,
 ) -> Dict[str, Any]:
     """
     Reserve an idempotency key, or report the existing reservation.
+
+    ``session`` (optional) reserves the key inside the caller's Mongo
+    transaction; without it the behavior is unchanged.
 
     Returns a dict with "status":
       - IDEMPOTENCY_STARTED   — key is new, caller must perform the write;
@@ -92,8 +96,16 @@ async def begin_idempotent(
         "completed_at": None,
     }
 
-    existing = await db[IDEMPOTENCY_COLLECTION].find_one({"id": record["id"]}, {"_id": 0})
+    extra = {"session": session} if session is not None else {}
+    existing = await db[IDEMPOTENCY_COLLECTION].find_one(
+        {"id": record["id"]}, {"_id": 0}, **extra)
     if existing is None:
+        if session is not None:
+            # Inside a transaction a duplicate-key race aborts the transaction;
+            # the caller retries the whole transaction and then reads the winner.
+            await db[IDEMPOTENCY_COLLECTION].insert_one(dict(record), session=session)
+            record.pop("_id", None)
+            return {"status": IDEMPOTENCY_STARTED, "record": record}
         try:
             await db[IDEMPOTENCY_COLLECTION].insert_one(dict(record))
             record.pop("_id", None)
@@ -156,7 +168,7 @@ async def mark_idempotent_step(
 
 
 async def complete_idempotent(
-    db, *, tenant_id: str, key: str, action: str, result_reference: str
+    db, *, tenant_id: str, key: str, action: str, result_reference: str, session=None
 ) -> None:
     """Mark a reserved key as successfully completed.
 
@@ -170,6 +182,7 @@ async def complete_idempotent(
             "result_reference": result_reference,
             "completed_at": _now_iso(),
         }},
+        **({"session": session} if session is not None else {}),
     )
 
 

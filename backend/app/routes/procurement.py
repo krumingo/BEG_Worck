@@ -29,24 +29,6 @@ UPLOAD_DIR = "/app/backend/uploads"
 
 # ── Pydantic Models ────────────────────────────────────────────────
 
-class MaterialRequestLineInput(BaseModel):
-    material_name: str
-    category: Optional[str] = None
-    qty_requested: float = 1
-    unit: str = "бр"
-    dimension_spec: Optional[str] = None
-    notes: Optional[str] = None
-    linked_offer_line_id: Optional[str] = None
-
-class MaterialRequestCreate(BaseModel):
-    project_id: str
-    source_offer_id: Optional[str] = None
-    source_offer_type: Optional[str] = None  # main / extra
-    stage_name: Optional[str] = None
-    needed_date: Optional[str] = None
-    notes: Optional[str] = None
-    lines: List[MaterialRequestLineInput] = []
-
 class SupplierInvoiceCreate(BaseModel):
     supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None
@@ -71,210 +53,10 @@ class InvoiceLineInput(BaseModel):
     notes: Optional[str] = None
 
 
-# ── Material Requests CRUD ─────────────────────────────────────────
-
-async def get_next_request_number(org_id: str) -> str:
-    tenant = TenantData.for_resolved_org(db, org_id)
-    last = await tenant.material_requests.find_one(
-        {"org_id": org_id}, {"_id": 0, "request_number": 1},
-        sort=[("created_at", -1)]
-    )
-    num = 1
-    if last and last.get("request_number"):
-        try: num = int(last["request_number"].split("-")[1]) + 1
-        except Exception as e: logger.warning(f"procurement.py error: {e}")
-    return f"MR-{num:04d}"
-
-
-@router.post("/material-requests", status_code=201)
-async def create_material_request(data: MaterialRequestCreate, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    from app.services.project_guards import check_project_writable
-    await check_project_writable(data.project_id, user["org_id"], "заявки за материали")
-
-    project = await tenant.projects.find_one({"id": data.project_id, "org_id": user["org_id"]})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    req_no = await get_next_request_number(user["org_id"])
-    
-    lines = []
-    for i, line in enumerate(data.lines):
-        lines.append({
-            "id": str(uuid.uuid4()),
-            "material_name": line.material_name,
-            "category": line.category,
-            "qty_requested": line.qty_requested,
-            "qty_fulfilled": 0,
-            "unit": line.unit,
-            "dimension_spec": line.dimension_spec,
-            "notes": line.notes,
-            "linked_offer_line_id": line.linked_offer_line_id,
-            "sort_order": i,
-        })
-    
-    req = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": data.project_id,
-        "source_offer_id": data.source_offer_id,
-        "source_offer_type": data.source_offer_type,
-        "stage_name": data.stage_name,
-        "request_number": req_no,
-        "status": "draft",
-        "needed_date": data.needed_date,
-        "notes": data.notes,
-        "lines": lines,
-        "created_at": now,
-        "updated_at": now,
-        "created_by": user["id"],
-    }
-    await tenant.material_requests.insert_one(req)
-    return {k: v for k, v in req.items() if k != "_id"}
-
-
-@router.get("/material-requests")
-async def list_material_requests(
-    project_id: Optional[str] = None,
-    status: Optional[str] = None,
-    user: dict = Depends(require_m2),
-):
-    tenant = _tenant(user)
-    query = {"org_id": user["org_id"]}
-    if project_id: query["project_id"] = project_id
-    if status: query["status"] = status
-    
-    reqs = await tenant.material_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
-    for r in reqs:
-        p = await tenant.projects.find_one({"id": r["project_id"]}, {"_id": 0, "code": 1, "name": 1})
-        r["project_code"] = p["code"] if p else ""
-        r["project_name"] = p["name"] if p else ""
-    return reqs
-
-
-@router.get("/material-requests/{req_id}")
-async def get_material_request(req_id: str, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]}, {"_id": 0})
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    return req
-
-
-@router.put("/material-requests/{req_id}")
-async def update_material_request(req_id: str, data: dict, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    
-    allowed = ["stage_name", "needed_date", "notes", "status", "lines"]
-    update = {k: v for k, v in data.items() if k in allowed and v is not None}
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.material_requests.update_one({"id": req_id}, {"$set": update})
-    return await tenant.material_requests.find_one({"id": req_id}, {"_id": 0})
-
-
-@router.post("/material-requests/{req_id}/submit")
-async def submit_material_request(req_id: str, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    if req["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Only draft requests can be submitted")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    await tenant.material_requests.update_one({"id": req_id}, {"$set": {
-        "status": "submitted", "submitted_at": now, "updated_at": now,
-    }})
-    return await tenant.material_requests.find_one({"id": req_id}, {"_id": 0})
-
-
-@router.delete("/material-requests/{req_id}")
-async def delete_material_request(req_id: str, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    req = await tenant.material_requests.find_one({"id": req_id, "org_id": user["org_id"]})
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    if req["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Only draft requests can be deleted")
-    await tenant.material_requests.delete_one({"id": req_id})
-    return {"ok": True}
-
-
-# ── Generate Material Request from Offer ───────────────────────────
-
-@router.post("/material-requests/from-offer/{offer_id}", status_code=201)
-async def create_request_from_offer(offer_id: str, data: dict, user: dict = Depends(require_m2)):
-    """Generate material request from offer's suggested materials"""
-    tenant = _tenant(user)
-    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
-    if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    req_no = await get_next_request_number(user["org_id"])
-    
-    # Gather materials from offer lines + extra work drafts
-    lines = []
-    for i, ol in enumerate(offer.get("lines", [])):
-        lines.append({
-            "id": str(uuid.uuid4()),
-            "material_name": ol.get("activity_name", ""),
-            "category": ol.get("activity_type", ""),
-            "qty_requested": ol.get("qty", 1),
-            "qty_fulfilled": 0,
-            "unit": ol.get("unit", "бр"),
-            "dimension_spec": None,
-            "notes": ol.get("note", ""),
-            "linked_offer_line_id": ol.get("id"),
-            "sort_order": i,
-        })
-    
-    # Also check for suggested materials from extra work drafts
-    if offer.get("source_batch_id"):
-        drafts = await tenant.extra_work_drafts.find(
-            {"group_batch_id": offer["source_batch_id"]},
-            {"_id": 0, "suggested_materials": 1, "title": 1}
-        ).to_list(50)
-        for draft in drafts:
-            for mat in (draft.get("suggested_materials") or []):
-                lines.append({
-                    "id": str(uuid.uuid4()),
-                    "material_name": mat.get("name", ""),
-                    "category": mat.get("category", ""),
-                    "qty_requested": mat.get("estimated_qty") or 1,
-                    "qty_fulfilled": 0,
-                    "unit": mat.get("unit", "бр"),
-                    "dimension_spec": None,
-                    "notes": f"От AI checklist: {draft.get('title', '')}",
-                    "linked_offer_line_id": None,
-                    "sort_order": len(lines),
-                })
-    
-    req = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": offer["project_id"],
-        "source_offer_id": offer_id,
-        "source_offer_type": offer.get("offer_type", "main"),
-        "stage_name": data.get("stage_name", ""),
-        "request_number": req_no,
-        "status": "draft",
-        "needed_date": data.get("needed_date"),
-        "notes": data.get("notes", f"Заявка от оферта {offer.get('offer_no', '')}"),
-        "lines": lines,
-        "created_at": now,
-        "updated_at": now,
-        "created_by": user["id"],
-    }
-    await tenant.material_requests.insert_one(req)
-    return {k: v for k, v in req.items() if k != "_id"}
+# ── Material Requests ──────────────────────────────────────────────
+# LIVE-OPS-01 / TASK 5B: every material request read and write lives in
+# app/routes/material_request_commands.py (named, permission-checked,
+# idempotent, audited commands). Nothing in this module writes the request.
 
 
 # ── Supplier Invoice Intake ────────────────────────────────────────
@@ -488,16 +270,10 @@ async def post_invoice_to_warehouse(inv_id: str, user: dict = Depends(require_m2
         "updated_at": now,
     }})
     
-    # Update material request fulfillment if linked
-    if inv.get("linked_request_id"):
-        req = await tenant.material_requests.find_one({"id": inv["linked_request_id"]})
-        if req:
-            # Simple: mark as fulfilled
-            await tenant.material_requests.update_one(
-                {"id": req["id"]},
-                {"$set": {"status": "fulfilled", "updated_at": now}}
-            )
-    
+    # LIVE-OPS-01 / TASK 5B (contract v6 §3.1, §4.6): invoice posting never
+    # marks a material request fulfilled. Request fulfilment is a derived
+    # projection of canonical line facts, not a status written here.
+
     await log_audit(user["org_id"], user["id"], user.get("email", ""), "warehouse_intake", "warehouse_transaction", transaction["id"],
                     {"invoice_number": inv.get("invoice_number"), "lines_count": len(intake_lines)})
     

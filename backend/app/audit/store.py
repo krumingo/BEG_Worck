@@ -98,23 +98,29 @@ def verify_chain(events: List[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-async def _last_event(db, tenant_id: str) -> Optional[Dict[str, Any]]:
+async def _last_event(db, tenant_id: str, session=None) -> Optional[Dict[str, Any]]:
+    extra = {"session": session} if session is not None else {}
     return await db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)]
+        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)], **extra
     )
 
 
-async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
+async def record_event(db, event: Dict[str, Any], *, session=None) -> Dict[str, Any]:
     """
     Append one validated event to the tenant's audit chain.
 
     The event must come from build_event(). Returns the stored event
     including its sequence and hashes.
+
+    ``session`` (optional) makes the append part of the caller's Mongo
+    transaction, so a domain write and its AuditEvent commit or abort
+    together (LIVE-OPS contract §4.3). Without it the behavior is unchanged.
     """
     validate_event(event)
-    previous = await _last_event(db, event["tenant_id"])
+    previous = await _last_event(db, event["tenant_id"], session=session)
     chained = chain_hashes(event, previous)
-    await db[AUDIT_COLLECTION].insert_one(dict(chained))
+    extra = {"session": session} if session is not None else {}
+    await db[AUDIT_COLLECTION].insert_one(dict(chained), **extra)
     chained.pop("_id", None)
     return chained
 
