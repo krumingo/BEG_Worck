@@ -187,6 +187,10 @@ api_router.include_router(ai_calibration_router)
 from app.routes.procurement import router as procurement_router
 api_router.include_router(procurement_router)
 
+# LIVE-OPS-01 / TASK 5A — read-only control center projection (GET only)
+from app.routes.live_ops import router as live_ops_router
+api_router.include_router(live_ops_router)
+
 # Import historical offers router
 from app.routes.historical_offers import router as historical_offers_router
 api_router.include_router(historical_offers_router)
