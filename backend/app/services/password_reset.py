@@ -15,17 +15,21 @@ the account exists happens AFTER the response (F-05):
    ``forgot_ambiguous`` security event (R0-04);
 3. one transaction (F-01): insert a ``pending`` token (only its SHA-256 is
    stored) + audit ``password_reset_requested``. Older links are NOT touched yet;
-4. :func:`deliver` sends the link; then one transaction settles it (F-06 +
-   RC-AUTH-01):
-   * delivered → token ``sent`` + audit ``password_reset_link_sent``. Other
-     open tokens of the same user stay as they are: two overlapping successful
-     deliveries must NOT revoke each other (RC-AUTH-01); a used-at-time
-     ``reset_password`` is the single point that invalidates every remaining
-     open token, and 30-minute TTL cleans up any surplus;
+4. :func:`deliver` sends the link; then one transaction settles it
+   (F-06 + RC-AUTH-01 atomic ordering):
+   * delivered → token ``sent`` ONLY if it is still pending and not already
+     consumed; audit ``password_reset_link_sent``. Then supersede every
+     STRICTLY-OLDER open token of the same user (any delivery status). This
+     yields exactly one usable link — the newer request — under either
+     completion order, and never leaves zero usable links the way the
+     pre-RC-AUTH-01 unconditional revoke-everyone did;
+   * delivered but the row was already used/revoked by a concurrent reset or a
+     newer sibling → audit ``password_reset_link_sent_but_already_resolved``;
+     no reactivation, no supersession from us;
    * not delivered (provider error / no e-mail configured) → only the NEW token
      is revoked (``delivery_failed`` / ``delivery_not_configured``) + audit +
      security event. The user's older links stay usable, so a broken mail
-     server never destroys the last working recovery link.
+     server never destroys the last working recovery link (F-06).
    No automatic retry: the user asks again (bounded by the per-email limit).
 
 ``POST /auth/reset-password`` → :func:`reset_password`. Pre-checks classify a
@@ -316,22 +320,42 @@ async def settle_delivery(db, mail: ResetMail, outcome: str, requested_ip: Optio
 
     async def body(session):
         if delivered:
-            # Mark THIS token as delivered ONLY if it is still pending and not
-            # already consumed by a concurrent action (RC-AUTH-01). If it was
-            # revoked by a successful ``reset_password``, do NOT reactivate it.
-            #
-            # We deliberately do NOT revoke other open tokens of this user on
-            # a successful delivery: overlapping successful deliveries must not
-            # revoke each other (CODEX RC-AUTH-01). Any surplus open token
-            # becomes "revoked by use" when ``reset_password`` claims one, and
-            # otherwise expires via the TTL index on ``expires_at`` (30 min).
+            # (1) Mark THIS token as delivered ONLY if it is still pending and
+            # not already consumed by a concurrent action (RC-AUTH-01 half 1).
+            # If it was revoked by a successful ``reset_password`` or by a
+            # NEWER sibling's settle (reverse completion order), we must NOT
+            # reactivate it; no sibling supersession runs from us in that case.
             upd = await tenant.password_reset_tokens.update_one(
                 {"id": mail.token_id,
                  "used_at": None,
                  "delivery_status": DELIVERY_PENDING},
                 {"$set": {"delivery_status": outcome}}, session=session)
-            action = ("password_reset_link_sent" if upd.matched_count == 1
-                      else "password_reset_link_sent_but_already_resolved")
+            if upd.matched_count != 1:
+                action = "password_reset_link_sent_but_already_resolved"
+            else:
+                action = "password_reset_link_sent"
+                # (2) Supersede ONLY strictly-OLDER open tokens of this user
+                # (any delivery_status, including a sibling already marked
+                # ``sent``). "Older" is ``requested_at < self.requested_at``
+                # (RC-AUTH-01 half 2). This is the atomic ordering fix:
+                #   * forward (A then B): settle(A) supersedes nothing;
+                #     settle(B) marks B sent and supersedes A → exactly one
+                #     usable link, the newer (B);
+                #   * reverse (B then A): settle(B) marks B sent and
+                #     supersedes A → A used/superseded; settle(A) matches
+                #     nothing (A.used_at already set), does not reactivate A
+                #     and does not touch B → exactly one usable link, the
+                #     newer (B).
+                # Preserves F-06: on FAILED delivery (the else-branch below)
+                # the older tokens are left alone, so a broken mail server
+                # never destroys the last working link.
+                await tenant.password_reset_tokens.update_many(
+                    {"user_id": mail.user_id,
+                     "used_at": None,
+                     "requested_at": {"$lt": mail.requested_at},
+                     "id": {"$ne": mail.token_id}},
+                    {"$set": {"used_at": now, "revoked_reason": "superseded"}},
+                    session=session)
         else:
             await tenant.password_reset_tokens.update_one(
                 {"id": mail.token_id, "used_at": None},

@@ -1,12 +1,21 @@
 """
 AUTH-01 RC — the CODEX INTEGRATED-RC-2026-10-25 CHANGES_REQUESTED findings on
-PR #56 head ``8e435a0e``: RC-AUTH-01 (overlapping successful deliveries must
-not revoke each other) and RC-AUTH-02 (dev-only reset-URL logging must be
-fail-closed against production markers).
+PR #56 head ``8e435a0e``.
 
-Harness is the same shared seed/HTTP double from
-``test_auth_01_password_recovery``; mongomock by default, real transactions
-when ``W0_03_REAL_MONGO_URL`` names a replica set.
+* RC-AUTH-01 — reproduction (comment 6395188427): two successful overlapping
+  reset deliveries left zero usable links because every ``settle_delivery``
+  unconditionally revoked EVERY other open token of the user. The fix is NOT
+  to drop supersession — it is to make it atomically ORDER-AWARE so that under
+  either completion order exactly one usable link remains, and it is always
+  the one from the newer request. The old F-06 behaviour "a newer-sent link
+  supersedes the older ones" is preserved (comment 6395345262).
+
+* RC-AUTH-02 — the dev-only reset-URL logging guard must be fail-closed
+  against production markers across BOTH ``ENV`` and ``ENVIRONMENT``.
+
+Harness is the shared seed/HTTP double from ``test_auth_01_password_recovery``;
+mongomock by default, real transactions when ``W0_03_REAL_MONGO_URL`` names a
+replica set.
 
     pytest tests/test_auth_01_rc_corrections.py -v --noconftest
     W0_03_REAL_MONGO_URL='mongodb://127.0.0.1:27018/?replicaSet=rs0' \
@@ -24,7 +33,7 @@ from tests.test_auth_01_password_recovery import (
 
 
 # ---------------------------------------------------------------------------
-# RC-AUTH-01 — settle_delivery must preserve overlapping delivered siblings
+# RC-AUTH-01 — ordered settlement leaves exactly one usable link from the newer
 # ---------------------------------------------------------------------------
 
 
@@ -42,84 +51,114 @@ async def _usable_delivered(op):
             and t.get("delivery_status") in ("sent", "dev_logged")]
 
 
-def test_rc_auth_01_two_overlapping_deliveries_both_remain_usable(monkeypatch):
-    """A → request B → deliver A → deliver B must leave BOTH links usable."""
+async def _mint_pair_strict_order(op, pr):
+    """Insert two deterministic pending tokens for u-owner with strictly
+    ordered ``requested_at``: A at t0, B at t0+1ms. Returns ``(a_mail, b_mail)``.
+
+    This bypasses the rate limiter (direct insert; no HTTP) and avoids the
+    clock-tick ambiguity of back-to-back real ``request_reset`` calls on
+    some backends, so the ordering tests are deterministic across both
+    mongomock and real Mongo.
+    """
+    import secrets
+    import uuid
+    from datetime import datetime, timezone, timedelta as _td
+    t0 = datetime.now(timezone.utc)
+    mails = []
+    for i, requested_at in enumerate((t0, t0 + _td(milliseconds=1))):
+        tok = secrets.token_urlsafe(pr.TOKEN_BYTES)
+        tok_id = str(uuid.uuid4())
+        await op.password_reset_tokens.insert_one({
+            "id": tok_id, "org_id": ORG_A, "user_id": "u-owner",
+            "token_hash": pr.hash_token(tok),
+            "requested_at": requested_at,
+            "expires_at": requested_at + pr.TOKEN_TTL,
+            "used_at": None, "requested_ip": "ip-x",
+            "delivery_status": pr.DELIVERY_PENDING,
+        })
+        mails.append(pr.ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A,
+                                  token_id=tok_id, requested_at=requested_at,
+                                  token=tok))
+    return mails[0], mails[1]
+
+
+def test_rc_auth_01_two_overlapping_deliveries_leave_exactly_one_usable_newer(monkeypatch):
+    """CODEX reproduction (forward order): A delivered, then B delivered →
+    the newer link (B) is the single usable one; A is superseded. The old
+    reproduction counted zero usable; the fix makes it exactly one."""
     async def body(op, c, outbox):
-        await _forgot(c, OWNER)
-        await _forgot(c, OWNER)
-        assert len(outbox) == 2
-        tokens = await _tokens_for_owner(op)
-        assert len(tokens) == 2
-        for t in tokens:
-            assert t["delivery_status"] == "sent"
-            assert t["used_at"] is None
-            assert t.get("revoked_reason") is None
+        await _forgot(c, OWNER)                                       # A sent
+        await _forgot(c, OWNER)                                       # B sent (newer)
         usable = await _usable_delivered(op)
-        assert len(usable) == 2, (
-            "Both overlapping successful deliveries must stay consumable; "
-            "RC-AUTH-01 reproduction expected ≥1 usable link, we now keep 2.")
+        assert len(usable) == 1, (
+            "Exactly one usable link must remain under forward order; "
+            "pre-RC-AUTH-01 reproduction counted zero.")
+        assert usable[0]["id"] == outbox[1].token_id                  # the newer
+
+        rows = await _tokens_for_owner(op)
+        assert rows[0]["id"] == outbox[0].token_id
+        assert rows[0]["used_at"] is not None
+        assert rows[0].get("revoked_reason") == "superseded"
+        assert rows[1]["id"] == outbox[1].token_id
+        assert rows[1]["used_at"] is None
+        assert rows[1]["delivery_status"] == "sent"
     scenario(monkeypatch, body)
 
 
-def test_rc_auth_01_reverse_order_also_keeps_both_links_usable(monkeypatch):
-    """Mint A, mint B directly, then deliver B first and A after → both usable."""
+def test_rc_auth_01_reverse_order_also_leaves_exactly_one_usable_newer(monkeypatch):
+    """Mint A, mint B, then settle B first (newer) and A after (older) →
+    still exactly one usable link, and it is the newer (B). A's late
+    settle must not reactivate itself and must not touch B."""
     async def body(op, c, outbox):
         from app.services import password_reset as pr
 
-        # Mint two tokens directly to control ``requested_at`` ordering, and
-        # settle delivery manually in reverse order (B before A).
-        a_mail = await pr.request_reset(op, OWNER, "ip-x")
-        b_mail = await pr.request_reset(op, OWNER, "ip-x")
-        assert a_mail is not None and b_mail is not None
-        assert a_mail.requested_at <= b_mail.requested_at
-        # If both were minted inside the same clock tick, give b_mail a
-        # strictly-newer requested_at by bumping its row + the ResetMail copy.
-        if a_mail.requested_at >= b_mail.requested_at:
-            later = b_mail.requested_at + timedelta(microseconds=1)
-            await op.password_reset_tokens.update_one(
-                {"id": b_mail.token_id}, {"$set": {"requested_at": later}})
-            b_mail = pr.ResetMail(to=b_mail.to, user_id=b_mail.user_id,
-                                  org_id=b_mail.org_id, token_id=b_mail.token_id,
-                                  requested_at=later, token=b_mail.token)
+        a_mail, b_mail = await _mint_pair_strict_order(op, pr)
 
         await pr.settle_delivery(op, b_mail, pr.DELIVERY_SENT, "ip-x")
         await pr.settle_delivery(op, a_mail, pr.DELIVERY_SENT, "ip-x")
 
         usable = await _usable_delivered(op)
-        assert len(usable) == 2
-        ids = sorted(t["id"] for t in usable)
-        assert ids == sorted([a_mail.token_id, b_mail.token_id])
-    scenario(monkeypatch, body)
-
-
-def test_rc_auth_01_newer_send_does_not_touch_older_pending(monkeypatch):
-    """RC-AUTH-01 counter-example of the old supersession path: a newer
-    successful delivery must NOT revoke other open tokens of the same user —
-    neither pending nor already sent. ``reset_password`` is the single point
-    that invalidates every remaining open token when the user actually uses
-    one; otherwise they survive to the TTL cutoff. This proves ``settle_delivery``
-    issues no ``update_many`` against sibling tokens."""
-    async def body(op, c, outbox):
-        from app.services import password_reset as pr
-
-        a_mail = await pr.request_reset(op, OWNER, "ip-x")               # A: pending
-        b_mail = await pr.request_reset(op, OWNER, "ip-x")               # B: pending
-        assert a_mail is not None and b_mail is not None
-
-        # Deliver only B. A is older and still pending → with the RC-AUTH-01
-        # fix it must remain pending (NOT revoked).
-        await pr.settle_delivery(op, b_mail, pr.DELIVERY_SENT, "ip-x")
+        assert len(usable) == 1
+        assert usable[0]["id"] == b_mail.token_id                      # newer
 
         tokens = {t["id"]: t for t in await _tokens_for_owner(op)}
         a, b = tokens[a_mail.token_id], tokens[b_mail.token_id]
-        assert a["used_at"] is None and a["delivery_status"] == "pending"
-        assert a.get("revoked_reason") is None
+        assert a["used_at"] is not None and a["revoked_reason"] == "superseded"
         assert b["used_at"] is None and b["delivery_status"] == "sent"
+
+        # A's late settle must have recorded an "already_resolved" audit row,
+        # NOT a plain link_sent.
+        actions = [row.get("action") for row in await op.audit_logs.find(
+            {"entity_id": "u-owner"}, {"_id": 0}).to_list(None)]
+        assert "password_reset_link_sent_but_already_resolved" in actions
+    scenario(monkeypatch, body)
+
+
+def test_rc_auth_01_concurrent_settles_never_leave_zero_usable_links(monkeypatch):
+    """The CODEX RC-AUTH-01 count check: at the end of either completion
+    order, the number of unused ``sent`` tokens for the user is >= 1."""
+    async def body(op, c, outbox):
+        from app.services import password_reset as pr
+
+        for order in (("forward",), ("reverse",)):
+            await op.password_reset_tokens.delete_many({"user_id": "u-owner"})
+            a_mail, b_mail = await _mint_pair_strict_order(op, pr)
+            if order[0] == "forward":
+                await pr.settle_delivery(op, a_mail, pr.DELIVERY_SENT, "ip-x")
+                await pr.settle_delivery(op, b_mail, pr.DELIVERY_SENT, "ip-x")
+            else:
+                await pr.settle_delivery(op, b_mail, pr.DELIVERY_SENT, "ip-x")
+                await pr.settle_delivery(op, a_mail, pr.DELIVERY_SENT, "ip-x")
+            count = await op.password_reset_tokens.count_documents(
+                {"user_id": "u-owner", "used_at": None, "delivery_status": "sent"})
+            assert count >= 1, (
+                f"RC-AUTH-01 reproduction ({order[0]} order): "
+                f"expected at least one usable link, got {count}.")
     scenario(monkeypatch, body)
 
 
 def test_rc_auth_01_smtp_failure_on_second_keeps_first_usable(monkeypatch):
-    """F-06 is preserved: a failed delivery does NOT kill the older usable link."""
+    """F-06 is preserved: a FAILED delivery does NOT kill the older usable link."""
     async def body(op, c, outbox):
         from app.services import password_reset as pr
 
@@ -128,10 +167,9 @@ def test_rc_auth_01_smtp_failure_on_second_keeps_first_usable(monkeypatch):
         outbox.outcome = "failed"
         await _forgot(c, OWNER)                                       # B: failed
 
-        a = next(t for t in await _tokens_for_owner(op)
-                 if t["id"] == outbox[0].token_id)
-        b = next(t for t in await _tokens_for_owner(op)
-                 if t["id"] == outbox[1].token_id)
+        tokens = {t["id"]: t for t in await _tokens_for_owner(op)}
+        a = tokens[outbox[0].token_id]
+        b = tokens[outbox[1].token_id]
         assert a["used_at"] is None and a["delivery_status"] == "sent"
         assert b["used_at"] is not None and b["delivery_status"] == "failed"
         assert b.get("revoked_reason") == "delivery_failed"
@@ -140,29 +178,20 @@ def test_rc_auth_01_smtp_failure_on_second_keeps_first_usable(monkeypatch):
 
 def test_rc_auth_01_settle_delivery_does_not_reactivate_a_revoked_token(monkeypatch):
     """A token already revoked by a successful reset must stay revoked and
-    must NOT touch any other token."""
+    must NOT touch any other token when a late SMTP success arrives."""
     async def body(op, c, outbox):
         from app.services import password_reset as pr
 
-        a_mail = await pr.request_reset(op, OWNER, "ip-x")               # A: pending
-        b_mail = await pr.request_reset(op, OWNER, "ip-x")               # B: pending
-        assert a_mail is not None and b_mail is not None
-        if a_mail.requested_at >= b_mail.requested_at:
-            later = b_mail.requested_at + timedelta(microseconds=1)
-            await op.password_reset_tokens.update_one(
-                {"id": b_mail.token_id}, {"$set": {"requested_at": later}})
-            b_mail = pr.ResetMail(to=b_mail.to, user_id=b_mail.user_id,
-                                  org_id=b_mail.org_id, token_id=b_mail.token_id,
-                                  requested_at=later, token=b_mail.token)
+        a_mail, b_mail = await _mint_pair_strict_order(op, pr)
 
         # Deliver B so it becomes consumable, then successfully reset with B
-        # (which revokes every other remaining open token of this user).
+        # (reset_password revokes every remaining open token of this user).
         await pr.settle_delivery(op, b_mail, pr.DELIVERY_SENT, "ip-x")
         r = await _reset(c, b_mail.token)
         assert r.status_code == 200, r.text
 
-        # Now A's late SMTP success arrives — settle_delivery must NOT
-        # resurrect A and must NOT change the state of B.
+        # A's late SMTP success — settle_delivery must NOT resurrect A and must
+        # NOT change the state of B.
         before = {t["id"]: dict(t) for t in await _tokens_for_owner(op)}
         await pr.settle_delivery(op, a_mail, pr.DELIVERY_SENT, "ip-x")
         after = {t["id"]: t for t in await _tokens_for_owner(op)}
@@ -172,8 +201,6 @@ def test_rc_auth_01_settle_delivery_does_not_reactivate_a_revoked_token(monkeypa
         assert a_after.get("delivery_status") == a_before.get("delivery_status")
         assert a_after["used_at"] == a_before["used_at"]
         assert b_after == b_before
-        # The audit row for the late delivery must mark it as already-resolved,
-        # not as a plain "link_sent".
         actions = [row.get("action") for row in await op.audit_logs.find(
             {"entity_id": "u-owner"}, {"_id": 0}).to_list(None)]
         assert "password_reset_link_sent_but_already_resolved" in actions
@@ -253,8 +280,6 @@ def test_rc_auth_02_production_never_logs_reset_url_even_with_flag(monkeypatch, 
         if environment is not None:
             monkeypatch.setenv("ENVIRONMENT", environment)
         monkeypatch.setenv("PASSWORD_RESET_DEV_LOG_URL", "1")
-        # No SMTP configured and no APP_PUBLIC_URL → the delivery path would be
-        # the one that could log the dev URL.
         for key in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD",
                     "SMTP_FROM", "SMTP_SECURITY", "APP_PUBLIC_URL"):
             monkeypatch.delenv(key, raising=False)

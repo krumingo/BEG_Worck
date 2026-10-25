@@ -350,28 +350,16 @@ def test_unknown_and_malformed_tokens_get_the_same_failure(monkeypatch):
     scenario(monkeypatch, body)
 
 
-def test_overlapping_requests_keep_every_delivered_link_until_used(monkeypatch):
-    """RC-AUTH-01: two successful deliveries BOTH stay usable. Supersession at
-    delivery time is the exact defect we removed — ``reset_password`` is now the
-    single point that invalidates every remaining open token when the user
-    actually uses one. The first use succeeds; after that, every other open
-    token is revoked (``revoked_reason: password_reset``) and the second use
-    receives the generic failure."""
+def test_a_newer_request_supersedes_the_older_token(monkeypatch):
     async def body(op, c, outbox):
         await _forgot(c, OWNER)
         await _forgot(c, OWNER)
         first, second = outbox[0].token, outbox[1].token
         assert first != second
         assert await op.password_reset_tokens.count_documents(
-            {"user_id": "u-owner", "used_at": None}) == 2
-        # Both links are consumable — either one may be used first; the other
-        # becomes revoked by the successful reset.
-        assert (await _reset(c, first)).status_code == 200
-        rows = await op.password_reset_tokens.find(
-            {"user_id": "u-owner"}, {"_id": 0}).to_list(None)
-        statuses = {r.get("revoked_reason") for r in rows if r.get("used_at")}
-        assert "password_reset" in statuses
-        assert _is_generic_reset_failure(await _reset(c, second))
+            {"user_id": "u-owner", "used_at": None}) == 1
+        assert _is_generic_reset_failure(await _reset(c, first))
+        assert (await _reset(c, second)).status_code == 200
     scenario(monkeypatch, body)
 
 
