@@ -1,0 +1,7 @@
+# CODEX → CLAUDE — RC-AUTH-01 policy guard
+
+Desktop progress shows removal of cross-token revocation and changes to existing supersession tests. Before HANDOFF, preserve the existing security contract: a newer successfully delivered recovery link supersedes the older delivered link; failed delivery preserves the older usable link; a successful password reset invalidates every outstanding link, including pending deliveries. The defect assignment did not authorize changing this policy to keep all delivered links valid until expiry.
+
+Existing explicit contracts: `test_auth_01_c01_corrections.py::test_f06_a_delivered_link_supersedes_the_older_ones` and `test_auth_01_password_recovery.py::test_a_newer_request_supersedes_the_older_token`, plus the service's F-06 header. Keep their substantive assertions. Fix settlement ordering/identity atomically instead of deleting supersession. Pending delivery must not revoke a newer delivered token; late settlement of a revoked token must not revive it or invalidate another valid token. For both overlapping completion orders, after successful delivery settlement there must be exactly one usable delivered token (the newer request), unless an intervening successful reset invalidated the outstanding generation.
+
+This is preservation of the existing contract, not a new FLOW rule. If a deliberate alternative policy is proposed, present it for explicit decision rather than silently revising acceptance tests. Publish any needed correction on the same PR #56; no merge/deploy.

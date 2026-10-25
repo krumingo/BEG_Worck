@@ -1,0 +1,17 @@
+{
+  "deployment_marker": "0b53bcd5b977ee27de8d4cee363fed41dd897482",
+  "tracked_count": 1043,
+  "byte_identical": 1043,
+  "crlf_only": 0,
+  "missing": [],
+  "different": [],
+  "bundle_bytes": 3127898,
+  "bundle_sha256": "0b2ff7788a62da4cfa2847277ee6a14e7af312694462fcc5c8e0b2cc0042fbf9",
+  "backup_name": "begwork_atlas_2026-10-25_0310.archive.gz",
+  "backup_bytes": 800989,
+  "backup_sha256": "4153a69657c97a38a3063fa5666b1a7d61ca06154b214a530a520392ec68d598",
+  "gzip_integrity": "PASS",
+  "uncompressed_bytes": 2727448,
+  "database_restore": "NOT_RUN",
+  "container_image_identity": "NOT_VERIFIED"
+}
