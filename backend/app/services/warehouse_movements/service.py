@@ -1055,7 +1055,7 @@ class CommandService:
                 dispatch_movement_id=inp.dispatch_movement_id,
             )
 
-        # CODEX C13.2 — Rule B RESOLUTION FACT (append-only).
+        # CODEX C13.2 / C16 — Rule B RESOLUTION FACT (append-only).
         # When the cumulative acceptance closes the lot and prior
         # discrepancies exist, append one non-moving
         # `discrepancy_resolved` ledger row per open discrepancy. The
@@ -1063,7 +1063,27 @@ class CommandService:
         # discrepancy rows); the projector consumes these rows to
         # clear `warehouse_in_transit.unresolved_discrepancies` and
         # mark the discrepancy rows as resolved in the projection.
+        #
+        # Two distinct identities, both preserved on the ledger:
+        #   * ``original_discrepancy_mv_id`` (``disc_mv_id``) — the
+        #     id of the original ``transit_discrepancy`` row that
+        #     opened the entry; THIS is also the key of the active
+        #     ``warehouse_in_transit.unresolved_discrepancies`` map
+        #     the projector must close, so it is also what the
+        #     projection hint must carry to the projector.
+        #   * ``new_resolution_mv_id`` (returned by
+        #     ``_append_discrepancy_resolution``) — the id of the
+        #     NEW ``discrepancy_resolved`` row; the ledger carries
+        #     both ids on that row so a rebuild has them both.
+        # CODEX C16 fix: previously the hint list carried the NEW
+        # resolution mv_id, which never matched the map key — the
+        # live projection kept the stale entry while rebuild closed
+        # it from the ledger (live/rebuild divergence). Carry the
+        # ORIGINAL disc_mv_id so live and rebuild converge to the
+        # same empty map and the resolution fact (new mv_id) is also
+        # exposed for audit/reporting.
         resolved_discrepancy_mv_ids: List[str] = []
+        resolution_mv_ids: List[str] = []
         if (action == CanonicalAction.ACCEPT_PROJECT_DELIVERY
                 and base_env.missing_quantity == 0
                 and discrepancies_to_resolve):
@@ -1076,7 +1096,8 @@ class CommandService:
                     resolved_discrepancy_movement_id=disc_mv_id,
                     resolving_acceptance_movement_id=env.movement_id,
                 )
-                resolved_discrepancy_mv_ids.append(resolution_mv_id)
+                resolved_discrepancy_mv_ids.append(disc_mv_id)
+                resolution_mv_ids.append(resolution_mv_id)
 
         # AuditEvent inside the same tx.
         retention = (
@@ -1134,12 +1155,22 @@ class CommandService:
             ]
         if acceptance_line_id:
             projection_hints["acceptance_line_id"] = acceptance_line_id
-        # CODEX C13.2 — carry the resolution set so the projector can
-        # clear the active in-transit `unresolved_discrepancies` map
-        # for this dispatch.
+        # CODEX C13.2 / C16 — carry the resolution set so the projector
+        # can clear the active in-transit `unresolved_discrepancies`
+        # map for this dispatch. ``resolved_discrepancy_movement_ids``
+        # must be the ORIGINAL discrepancy movement ids (the active
+        # map's keys); ``resolution_movement_ids`` is the new
+        # resolution rows' identities, exposed to the projector so
+        # audit/reporting can access both without re-querying the
+        # ledger. Preserves live/rebuild parity: the rebuild path
+        # already keys off ``resolves_discrepancy_movement_id`` on
+        # the ``discrepancy_resolved`` ledger row (the original id).
         if resolved_discrepancy_mv_ids:
             projection_hints["resolved_discrepancy_movement_ids"] = list(
                 resolved_discrepancy_mv_ids,
+            )
+            projection_hints["resolution_movement_ids"] = list(
+                resolution_mv_ids,
             )
             projection_hints["resolving_dispatch_movement_id"] = (
                 inp.dispatch_movement_id
