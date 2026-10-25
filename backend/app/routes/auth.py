@@ -1,10 +1,11 @@
 """
 Authentication routes - /api/auth/*
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Request
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
+import logging
 import uuid
 
 from app.db import db
@@ -14,6 +15,8 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
+from app.services import auth_events, password_reset, rate_limit
+from app.utils.client_ip import client_ip
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.constants import ROLES
 from app.tenancy.guard import TenantContext
@@ -56,6 +59,7 @@ def _email_exists() -> HTTPException:
 
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger("beg.auth")
 
 # Pydantic models
 class LoginRequest(BaseModel):
@@ -103,7 +107,7 @@ def _password_matches(password: str, password_hash) -> bool:
 
 # Auth routes
 @router.post("/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     # R0-03 (AUTH-01 F-03): the email is normalized, and an email held by more
     # than one User never logs into whichever one the database returns first.
     # The login registry is the global users collection in every mode.
@@ -111,6 +115,11 @@ async def login(req: LoginRequest):
     candidates = [u for u in await db.users.find(email_match_filter(email), {"_id": 0}).to_list(50)
                   if email and normalize_email(u.get("email")) == email]
     if len(candidates) > 1:
+        # R0-04 (AUTH-01 F-08): every refused duplicate login also leaves a durable,
+        # privacy-preserving security event (keyed email ref, no email/password).
+        await auth_events.record(
+            db, auth_events.LOGIN_AMBIGUOUS, ip=client_ip(request),
+            subject=auth_events.keyed_ref(email), detail={"candidates": len(candidates)})
         # Only a caller who knows a password of one of them learns about the
         # duplicate; anyone else gets the ordinary 401.
         if not any(_password_matches(req.password, u.get("password_hash")) for u in candidates):
@@ -130,7 +139,10 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account disabled")
-    token = create_token({"user_id": user["id"], "org_id": user["org_id"], "role": user["role"]})
+    # AUTH-01 C01 (F-02): the token carries the user's auth_version; a password
+    # reset or owner recovery increments it, which ends every older session.
+    token = create_token({"user_id": user["id"], "org_id": user["org_id"], "role": user["role"],
+                          "av": int(user.get("auth_version", 0) or 0)})
     await log_audit(user["org_id"], user["id"], user["email"], "login", "auth")
     return {"token": token, "user": {k: v for k, v in user.items() if k != "password_hash"}}
 
@@ -238,6 +250,83 @@ async def change_password(data: ChangePasswordRequest, user: dict = Depends(get_
     return {"ok": True}
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTH-01 — Forgot Password / Reset Password (no session)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(max_length=320)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(max_length=password_reset.TOKEN_MAX_LENGTH)
+    new_password: str = Field(max_length=256)
+
+
+# AUTH-01 C01 (F-04): shared per-IP limits (MongoDB counters, all workers).
+# The per-email forgot limit lives in password_reset.process_forgot_request.
+FORGOT_IP_LIMIT, RESET_IP_LIMIT, IP_WINDOW_SECONDS = 10, 20, 900
+
+
+def _too_many_requests():
+    return HTTPException(status_code=429, detail="Too many requests. Try again later.")
+
+
+async def _ip_allowed(scope: str, ip: str, limit: int) -> bool:
+    hit = await rate_limit.hit(db, scope, ip, limit, IP_WINDOW_SECONDS)
+    if not hit.allowed and hit.first_rejection:
+        await auth_events.record(db, auth_events.RATE_LIMITED_IP, ip=ip, detail={"scope": scope})
+    return hit.allowed
+
+
+@router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, request: Request,
+                          background_tasks: BackgroundTasks):
+    """Always the same answer — it never says whether the account exists.
+
+    Before the response this does the SAME work for every email (F-05): the
+    shared per-IP limit and scheduling one background task. Everything that
+    depends on the account — the per-email limit, the lookup, the token, the
+    audit and the e-mail — runs after the response in
+    ``password_reset.process_forgot_request``.
+    """
+    ip = client_ip(request)
+    if not await _ip_allowed("forgot_ip", ip, FORGOT_IP_LIMIT):
+        raise _too_many_requests()
+    background_tasks.add_task(password_reset.process_forgot_request, db, data.email, ip)
+    return {"ok": True, "message": password_reset.GENERIC_REQUEST_MESSAGE}
+
+
+@router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest, request: Request):
+    """Set a new password with a one-time token from the e-mailed link.
+
+    The password policy is checked first (same rules as change-password); then
+    an unknown, expired, used or superseded token, or a disabled user, all get
+    one generic 400. 400 rather than 401: the frontend treats 401 as "session
+    expired" and would leave the page.
+    """
+    ip = client_ip(request)
+    if not await _ip_allowed("reset_ip", ip, RESET_IP_LIMIT):
+        raise _too_many_requests()
+    is_valid, error_msg = validate_password_strength(data.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    try:
+        await password_reset.reset_password(db, data.token, hash_password(data.new_password),
+                                            requested_ip=ip)
+    except password_reset.ResetFailed:
+        raise HTTPException(status_code=400, detail={
+            "error_code": "RESET_TOKEN_INVALID",
+            "message": password_reset.GENERIC_RESET_FAILURE})
+    except password_reset.ResetNotCompleted:
+        # F-01: the transaction was aborted — the password and the link are unchanged.
+        raise HTTPException(status_code=503, detail={
+            "error_code": "RESET_NOT_COMPLETED",
+            "message": password_reset.RESET_NOT_COMPLETED_MESSAGE})
+    return {"ok": True}
+
+
 # Organization routes
 @router.get("/organization")
 async def get_organization(user: dict = Depends(get_current_user)):
@@ -317,6 +406,8 @@ async def create_user(
             "updated_at": now,
         }
 
+    # AUTH-01 F-03 is covered by the R0-03 check above (``matches``: the whole
+    # installation, normalized, fail closed); R0-04 keeps that single check.
     if ctx.mode != MODE_ENFORCE:
         # ---- legacy path (off / shadow): unchanged business behavior ----------
         await enforce_limit(org_id, "users", db_handle=tdb)

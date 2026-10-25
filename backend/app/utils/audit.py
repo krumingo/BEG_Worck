@@ -49,7 +49,7 @@ def log_security_event(event_type: str, user: dict = None, payload: dict = None)
 
 async def log_audit(org_id: str, user_id: str, user_email: str, action: str, 
                     entity_type: str, entity_id: str = None, changes: dict = None,
-                    db_handle=None):
+                    db_handle=None, session=None):
     """
     Log an audit entry to the database.
     
@@ -75,4 +75,6 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
     }
     # W0-02 PR-04: a migrated enforce route passes its tenant-resolved handle so
     # the legacy audit row lands in the SAME database as the business write.
-    await (db if db_handle is None else db_handle).audit_logs.insert_one(entry)
+    # AUTH-01 C01: ``session`` lets the audit row commit or roll back together
+    # with the business write it records (one Mongo transaction).
+    await (db if db_handle is None else db_handle).audit_logs.insert_one(entry, session=session)

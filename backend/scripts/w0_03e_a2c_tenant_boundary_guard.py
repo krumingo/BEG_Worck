@@ -203,6 +203,7 @@ OPERATOR_SCRIPTS: Tuple[str, ...] = (
     "scripts/backfill_asset_qr.py",
     "scripts/migrate_m19_8_freeze_report_split.py",
     "scripts/promote_platform_admin.py",
+    "scripts/reset_user_password.py",
     "scripts/seed_finance_data.py",
     "scripts/smoke_test.py",
     "scripts/r0_01_billing_exposure_report.py",
@@ -249,6 +250,10 @@ PRE_TENANT_FUNCTIONS: Dict[str, Dict[str, FrozenSet[str]]] = {
     # Operator tool: promotes a platform administrator by email across the
     # installation. Touches the identity record only.
     "scripts/promote_platform_admin.py": {"promote_platform_admin": frozenset({"users"})},
+    # AUTH-01 operator recovery: finds the ONE user an email names (case-insensitive,
+    # fail closed on 0 / >1) before any tenant is known. Its write is scoped by
+    # that user's own id + org_id and is judged by the normal operator rules.
+    "scripts/reset_user_password.py": {"find_candidates": frozenset({"users"})},
     # Operator seed: looks up the installation's organization to seed against.
     "scripts/seed_finance_data.py": {"seed_finance_data": frozenset({"organizations"})},
     # The settings-identity migration itself: it moves ``settings`` rows ACROSS

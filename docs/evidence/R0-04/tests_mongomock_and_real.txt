@@ -1,0 +1,7 @@
+# R0-04 — tests/test_auth_01_*.py + tests/test_r0_0*.py (PYTHONPATH=. --noconftest)
+## mongomock
+490 passed, 391 skipped in 151.75s (0:02:31)
+## real MongoDB 7.0 single-node replica set rs0 (Docker, 127.0.0.1:27019)
+881 passed in 297.12s (0:04:57)
+## per file, real MongoDB
+67 passed in 129.75s (0:02:09)

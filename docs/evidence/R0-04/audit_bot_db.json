@@ -1,0 +1,62 @@
+{
+  audit_events: [
+    {
+      tenant_id: '5d5a3b0b-8ecf-49fb-9c27-1f47ad9a26cc',
+      actor_type: 'human',
+      actor_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      action: 'user.password_reset',
+      entity_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      reason: 'password reset with a one-time e-mail link (no hash recorded)',
+      tool_or_endpoint: 'POST /api/auth/reset-password',
+      result: 'success',
+      sequence: 1
+    }
+  ],
+  legacy_audit_logs: [
+    {
+      action: 'password_reset_requested',
+      entity_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      changes: {
+        requested_ip: '127.0.0.1'
+      }
+    },
+    {
+      action: 'password_reset_link_sent',
+      entity_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      changes: {
+        delivery_status: 'dev_logged'
+      }
+    },
+    {
+      action: 'password_reset_completed',
+      entity_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      changes: {
+        method: 'self_service_token'
+      }
+    }
+  ],
+  auth_security_events: [
+    {
+      event: 'reset_token_replay',
+      user_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      detail: {
+        revoked_reason: null
+      }
+    }
+  ],
+  tokens: [
+    {
+      id: 'c07d593a-393c-4d8d-98bd-253aced236d9',
+      org_id: '5d5a3b0b-8ecf-49fb-9c27-1f47ad9a26cc',
+      user_id: '9f2fa4b8-9e2c-47ba-8d15-00a9059000f1',
+      requested_at: ISODate('2026-10-20T17:17:38.696Z'),
+      expires_at: ISODate('2026-10-20T17:47:38.696Z'),
+      used_at: ISODate('2026-10-20T17:17:40.171Z'),
+      delivery_status: 'dev_logged'
+    }
+  ],
+  user_auth_version: {
+    auth_version: 1,
+    password_reset_by: 'SELF_SERVICE_TOKEN'
+  }
+}

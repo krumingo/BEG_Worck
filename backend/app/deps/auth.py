@@ -34,6 +34,13 @@ def create_token(data: dict) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     return jwt.encode({**data, "exp": expire}, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+def _auth_version(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return -1                 # a malformed version never matches a real one
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -52,6 +59,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             raise HTTPException(status_code=401, detail="User not found")
         if not user.get("is_active", True):
             raise HTTPException(status_code=403, detail="Account disabled")
+        # AUTH-01 C01 (F-02): a self-service password reset or an owner recovery
+        # increments users.auth_version; a token signed for an older version is
+        # a session from before the recovery and is refused. Absent on both
+        # sides means 0, so every token and user that predates this keeps working.
+        if _auth_version(payload.get("av")) != _auth_version(user.get("auth_version")):
+            raise HTTPException(status_code=401, detail="Session expired")
         return user
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
