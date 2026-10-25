@@ -15,9 +15,13 @@ the account exists happens AFTER the response (F-05):
    ``forgot_ambiguous`` security event (R0-04);
 3. one transaction (F-01): insert a ``pending`` token (only its SHA-256 is
    stored) + audit ``password_reset_requested``. Older links are NOT touched yet;
-4. :func:`deliver` sends the link; then one transaction settles it (F-06):
-   * delivered → token ``sent``, the user's OLDER open tokens are revoked
-     (``superseded``) + audit ``password_reset_link_sent``;
+4. :func:`deliver` sends the link; then one transaction settles it (F-06 +
+   RC-AUTH-01):
+   * delivered → token ``sent`` + audit ``password_reset_link_sent``. Other
+     open tokens of the same user stay as they are: two overlapping successful
+     deliveries must NOT revoke each other (RC-AUTH-01); a used-at-time
+     ``reset_password`` is the single point that invalidates every remaining
+     open token, and 30-minute TTL cleans up any surplus;
    * not delivered (provider error / no e-mail configured) → only the NEW token
      is revoked (``delivery_failed`` / ``delivery_not_configured``) + audit +
      security event. The user's older links stay usable, so a broken mail
@@ -113,11 +117,17 @@ class _ClaimLost(Exception):
 
 @dataclass(frozen=True)
 class ResetMail:
-    """What :func:`deliver` needs. ``token`` is plaintext: never log this object."""
+    """What :func:`deliver` needs. ``token`` is plaintext: never log this object.
+
+    ``requested_at`` is the timestamp this token was minted; it drives the
+    ordering comparison used by :func:`settle_delivery` so overlapping
+    recovery requests cannot silently revoke each other (RC-AUTH-01).
+    """
     to: str
     user_id: str
     org_id: str
     token_id: str
+    requested_at: datetime
     token: str = field(repr=False)
 
 
@@ -225,13 +235,45 @@ async def request_reset(db, email: str, requested_ip: Optional[str],
 
     await run_in_transaction(db, body)
     return ResetMail(to=user["email"].strip(), user_id=uid, org_id=org_id,
-                     token_id=token_id, token=token)
+                     token_id=token_id, requested_at=now, token=token)
+
+
+_PRODUCTION_ENV_VALUES = frozenset({"production", "prod", "live"})
+_NON_PRODUCTION_ENV_VALUES = frozenset(
+    {"development", "dev", "local", "test", "testing", "staging", "stage"}
+)
 
 
 def _dev_url_logging_enabled() -> bool:
-    if os.environ.get("ENV", "development").strip().lower() == "production":
-        return False
-    return os.environ.get(DEV_LOG_URL_FLAG, "").strip().lower() in ("1", "true", "yes")
+    """Dev-only reset-URL logging — fail-closed on every ambiguity (RC-AUTH-02).
+
+    Returns ``True`` only when:
+    * at least one of ``ENV`` / ``ENVIRONMENT`` is set;
+    * EVERY set value is an explicit non-production label (``development``,
+      ``dev``, ``local``, ``test``, ``testing``, ``staging``, ``stage``);
+    * neither names production (``production`` / ``prod`` / ``live``);
+    * both agree (no contradiction between the two markers);
+    * the explicit opt-in flag ``PASSWORD_RESET_DEV_LOG_URL`` is set.
+
+    Everything else (missing markers, unknown value, production label on
+    either variable, contradictory markers) returns ``False``. The guard
+    cannot be bypassed by leaving one variable unset while the other names
+    production — the pre-correction behaviour that CODEX reproduced on
+    ``ENV`` unset / ``ENVIRONMENT=production``.
+    """
+    seen = []
+    for key in ("ENV", "ENVIRONMENT"):
+        raw = (os.environ.get(key) or "").strip().lower()
+        if not raw:
+            continue
+        if raw in _PRODUCTION_ENV_VALUES:
+            return False
+        if raw not in _NON_PRODUCTION_ENV_VALUES:
+            return False  # unknown label → treat as production
+        seen.append(raw)
+    if not seen:
+        return False  # fail-closed on an unlabeled deployment
+    return (os.environ.get(DEV_LOG_URL_FLAG) or "").strip().lower() in {"1", "true", "yes"}
 
 
 def deliver(mail: ResetMail) -> str:
@@ -274,13 +316,22 @@ async def settle_delivery(db, mail: ResetMail, outcome: str, requested_ip: Optio
 
     async def body(session):
         if delivered:
-            await tenant.password_reset_tokens.update_one(
-                {"id": mail.token_id, "used_at": None},
+            # Mark THIS token as delivered ONLY if it is still pending and not
+            # already consumed by a concurrent action (RC-AUTH-01). If it was
+            # revoked by a successful ``reset_password``, do NOT reactivate it.
+            #
+            # We deliberately do NOT revoke other open tokens of this user on
+            # a successful delivery: overlapping successful deliveries must not
+            # revoke each other (CODEX RC-AUTH-01). Any surplus open token
+            # becomes "revoked by use" when ``reset_password`` claims one, and
+            # otherwise expires via the TTL index on ``expires_at`` (30 min).
+            upd = await tenant.password_reset_tokens.update_one(
+                {"id": mail.token_id,
+                 "used_at": None,
+                 "delivery_status": DELIVERY_PENDING},
                 {"$set": {"delivery_status": outcome}}, session=session)
-            await tenant.password_reset_tokens.update_many(
-                {"user_id": mail.user_id, "used_at": None, "id": {"$ne": mail.token_id}},
-                {"$set": {"used_at": now, "revoked_reason": "superseded"}}, session=session)
-            action = "password_reset_link_sent"
+            action = ("password_reset_link_sent" if upd.matched_count == 1
+                      else "password_reset_link_sent_but_already_resolved")
         else:
             await tenant.password_reset_tokens.update_one(
                 {"id": mail.token_id, "used_at": None},

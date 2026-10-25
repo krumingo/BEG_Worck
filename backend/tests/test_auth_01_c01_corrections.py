@@ -409,13 +409,21 @@ def test_f06_an_undelivered_link_is_revoked_and_older_links_survive(monkeypatch,
     scenario(monkeypatch, body)
 
 
-def test_f06_a_delivered_link_supersedes_the_older_ones(monkeypatch):
+def test_f06_overlapping_deliveries_both_remain_usable(monkeypatch):
+    """RC-AUTH-01 (supersedes the old 'older_link_is_superseded' behaviour):
+    two successful deliveries must leave BOTH links consumable. The old F-06
+    semantics (newer-sent revokes older-sent) was itself the RC-AUTH-01 defect
+    and is explicitly reversed. A ``reset_password`` call still revokes every
+    remaining open token at use-time; the TTL (30 min) collects surplus."""
     async def body(op, c, outbox):
         await _forgot(c, OWNER)
         await _forgot(c, OWNER)
         rows = await op.password_reset_tokens.find({"user_id": "u-owner"}, {"_id": 0}) \
             .sort("requested_at", 1).to_list(None)
-        assert rows[0]["revoked_reason"] == "superseded" and rows[1]["used_at"] is None
+        assert [r["delivery_status"] for r in rows] == ["sent", "sent"]
+        assert rows[0]["used_at"] is None and rows[1]["used_at"] is None
+        assert rows[0].get("revoked_reason") is None
+        assert rows[1].get("revoked_reason") is None
         assert await op.audit_logs.count_documents(
             {"action": "password_reset_link_sent", "entity_id": "u-owner"}) == 2
     scenario(monkeypatch, body)

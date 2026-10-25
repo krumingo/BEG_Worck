@@ -350,16 +350,28 @@ def test_unknown_and_malformed_tokens_get_the_same_failure(monkeypatch):
     scenario(monkeypatch, body)
 
 
-def test_a_newer_request_supersedes_the_older_token(monkeypatch):
+def test_overlapping_requests_keep_every_delivered_link_until_used(monkeypatch):
+    """RC-AUTH-01: two successful deliveries BOTH stay usable. Supersession at
+    delivery time is the exact defect we removed — ``reset_password`` is now the
+    single point that invalidates every remaining open token when the user
+    actually uses one. The first use succeeds; after that, every other open
+    token is revoked (``revoked_reason: password_reset``) and the second use
+    receives the generic failure."""
     async def body(op, c, outbox):
         await _forgot(c, OWNER)
         await _forgot(c, OWNER)
         first, second = outbox[0].token, outbox[1].token
         assert first != second
         assert await op.password_reset_tokens.count_documents(
-            {"user_id": "u-owner", "used_at": None}) == 1
-        assert _is_generic_reset_failure(await _reset(c, first))
-        assert (await _reset(c, second)).status_code == 200
+            {"user_id": "u-owner", "used_at": None}) == 2
+        # Both links are consumable — either one may be used first; the other
+        # becomes revoked by the successful reset.
+        assert (await _reset(c, first)).status_code == 200
+        rows = await op.password_reset_tokens.find(
+            {"user_id": "u-owner"}, {"_id": 0}).to_list(None)
+        statuses = {r.get("revoked_reason") for r in rows if r.get("used_at")}
+        assert "password_reset" in statuses
+        assert _is_generic_reset_failure(await _reset(c, second))
     scenario(monkeypatch, body)
 
 
@@ -543,7 +555,9 @@ def test_the_per_email_limit_is_silent_and_the_ip_limit_is_429(monkeypatch):
 # ═══════════════════════════════════════════════════════ 6. delivery
 def _mail(token="tok-plain-0123456789-abcdefghij"):
     from app.services.password_reset import ResetMail
-    return ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A, token_id="t-1", token=token)
+    from datetime import datetime, timezone
+    return ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A, token_id="t-1",
+                     requested_at=datetime(2026, 1, 1, tzinfo=timezone.utc), token=token)
 
 
 def _clear_mail_env(monkeypatch):
@@ -562,14 +576,21 @@ def test_unconfigured_mail_logs_a_warning_without_the_token(monkeypatch, caplog)
 
 
 def test_the_dev_flag_prints_the_url_only_outside_production(monkeypatch, caplog):
+    """RC-AUTH-02 keeps the base case (dev env + flag → DEV_LOGGED, production →
+    NOT_CONFIGURED), with the stricter new requirement: an unlabelled env is
+    fail-closed as well, so the test must set ``ENV`` and ``ENVIRONMENT``
+    explicitly."""
     from app.services import password_reset
     _clear_mail_env(monkeypatch)
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("PASSWORD_RESET_DEV_LOG_URL", "1")
     with caplog.at_level(logging.INFO):
         assert password_reset.deliver(_mail()) == password_reset.DELIVERY_DEV_LOGGED
     assert "/reset-password?token=tok-plain" in caplog.text
     caplog.clear()
     monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("ENVIRONMENT", "production")
     with caplog.at_level(logging.INFO):
         assert password_reset.deliver(_mail()) == password_reset.DELIVERY_NOT_CONFIGURED
     assert "tok-plain" not in caplog.text and "PASSWORD_RESET_EMAIL_NOT_SENT" in caplog.text
