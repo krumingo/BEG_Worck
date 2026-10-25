@@ -503,27 +503,35 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
         "qty": 999, "total_cost": 9999,
     })
 
-    def _snapshot():
-        return list(db["material_entries"].find(
-            {"tenant_id": "T", "projection_source": "canonical_warehouse_service"},
-            {"_id": 0}).sort("id", 1))
+    async def _snapshot():
+        """C17: Motor cursors are async; materialise with ``to_list`` so the
+        snapshot is a real ``list`` of dicts and can be compared byte-for-byte.
+        The pre-C17 harness wrapped the cursor in ``list(...)`` which raised
+        ``TypeError`` before the parity assertion could run — a test defect,
+        not a parity failure."""
+        return await db["material_entries"].find(
+            {"tenant_id": "T",
+             "projection_source": "canonical_warehouse_service"},
+            {"_id": 0},
+        ).sort("id", 1).to_list(None)
 
     from app.services.warehouse_movements.projections import rebuild_from_ledger
     await rebuild_from_ledger(db, tenant_id="T")
-    first_snapshot = await _snapshot().to_list(None) if hasattr(_snapshot(), "to_list") else [
-        row async for row in db["material_entries"].find(
-            {"tenant_id": "T", "projection_source": "canonical_warehouse_service"},
-            {"_id": 0}).sort("id", 1)
-    ]
+    first_snapshot = await _snapshot()
 
     await rebuild_from_ledger(db, tenant_id="T")
-    second_snapshot = [
-        row async for row in db["material_entries"].find(
-            {"tenant_id": "T", "projection_source": "canonical_warehouse_service"},
-            {"_id": 0}).sort("id", 1)
-    ]
+    second_snapshot = await _snapshot()
     assert first_snapshot == second_snapshot, (
         "C13.4 regression: rebuild-twice is not byte-identical"
+    )
+    # Byte-identical rebuild parity also requires at least one canonical row
+    # to exist (otherwise the comparison would be trivially ``[] == []`` and
+    # could hide a projection outage). This asserts both the parity key and
+    # that the ACCEPT path actually emitted a canonical ``material_entries``
+    # row for the closed dispatch.
+    assert len(first_snapshot) >= 1, (
+        "C13.4 regression: canonical material_entries projection empty "
+        "after rebuild; expected at least one row from the closed accept."
     )
 
     # The legacy row still exists.
