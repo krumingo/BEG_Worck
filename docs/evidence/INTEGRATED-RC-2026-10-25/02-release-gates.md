@@ -54,4 +54,4 @@ Rollback triggers: identity mismatch, failed health/login, tenant/role regressio
 
 ## Current limitations / decision
 
-NOT DEPLOY_READY. #56 and #55 have reproduced defects; #54 owner feedback remains open; full cumulative workflow, role and persistence gates have not run. Canonical Payment/DQ/Approval/File Registry/schedule and other gaps in the 153-row matrix are not closed by these PRs. Financial historical remediation remains separate. Current Docker/SSH access is unavailable, so exact image rollback and today's restore proof are blocked. No RC URL or release package is represented as ready.
+NOT DEPLOY_READY. #56 and #55 have reproduced defects; #54 owner feedback remains open; full cumulative workflow, role and persistence gates have not run. Canonical Payment/DQ/Approval/File Registry/schedule and other gaps in the 216-row matrix are not closed by these PRs. Financial historical remediation remains separate. Current Docker/SSH access is unavailable, so exact image rollback and today's restore proof are blocked. No RC URL or release package is represented as ready.
