@@ -11,7 +11,7 @@ import {
   Wallet, UserCog, Landmark, Calculator, CreditCard, Smartphone,
   User, Package, Truck, RotateCcw, Settings, HelpCircle, Info,
   Menu, X, Lock, Archive, Warehouse, TrendingUp, BarChart3,
-  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode, Camera, Inbox } from "lucide-react";
+  FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode, Camera, Inbox, Eye } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
@@ -76,6 +76,7 @@ const NAV_GROUPS = [
   {
     id: "warehouse", icon: Package, labelKey: "nav.warehouseGroup",
     children: [
+      { to: "/live-ops", icon: Eye, labelKey: "nav.liveOps" },
       { to: "/procurement", icon: Package, labelKey: "nav.procurement" },
       { to: "/inventory", icon: Warehouse, labelKey: "nav.inventory" },
       { to: "/data/warehouses", icon: Warehouse, labelKey: "nav.warehouses" },
