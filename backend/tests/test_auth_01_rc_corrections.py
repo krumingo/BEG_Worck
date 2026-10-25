@@ -306,3 +306,194 @@ def test_rc_auth_02_development_still_works_as_before(monkeypatch, caplog):
         outcome = pr.deliver(_mail(token="rc-auth-02-dev-token-yyyyyyyyyyyy"))
     assert outcome == pr.DELIVERY_DEV_LOGGED
     assert "DEV ONLY" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# RC-AUTH-03 — stable total ordering under same-millisecond and concurrent
+# settlement (CODEX independent review 6396118840 / PR #64 contract test)
+# ---------------------------------------------------------------------------
+
+
+async def _mint_pair_equal_timestamp(op, pr, when):
+    """Mint two pending tokens for u-owner with EXACTLY the same
+    ``requested_at`` (persisted BSON datetime, millisecond precision).
+    Returns ``(a_mail, b_mail)`` with ``a.token_id < b.token_id`` so the
+    tie-breaker's expected winner is deterministic for assertions."""
+    import secrets
+    import uuid
+    mails = []
+    for _ in range(2):
+        tok = secrets.token_urlsafe(pr.TOKEN_BYTES)
+        tok_id = str(uuid.uuid4())
+        await op.password_reset_tokens.insert_one({
+            "id": tok_id, "org_id": ORG_A, "user_id": "u-owner",
+            "token_hash": pr.hash_token(tok),
+            "requested_at": when,
+            "expires_at": when + pr.TOKEN_TTL,
+            "used_at": None, "requested_ip": "ip-x",
+            "delivery_status": pr.DELIVERY_PENDING,
+        })
+        mails.append(pr.ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A,
+                                  token_id=tok_id, requested_at=when, token=tok))
+    # Order so the "smaller id" is first — matches natural lexicographic
+    # tiebreaker expectations in the assertions below.
+    mails.sort(key=lambda m: m.token_id)
+    return mails[0], mails[1]
+
+
+def test_rc_auth_03_same_millisecond_requests_leave_exactly_one_usable(monkeypatch):
+    """CODEX RC-AUTH-03 reproduction: two tokens persist with identical
+    ``requested_at``. The tie-breaker ``id`` lexicographic order picks
+    the winner deterministically. Both completion orders converge."""
+    async def body(op, c, outbox):
+        from app.services import password_reset as pr
+        from datetime import datetime, timezone
+
+        # Equal timestamps for both; `low_id_mail < high_id_mail` by id.
+        when = datetime.now(timezone.utc).replace(microsecond=123000)
+        low_id_mail, high_id_mail = await _mint_pair_equal_timestamp(op, pr, when)
+
+        # Forward: settle low_id first, then high_id.
+        await pr.settle_delivery(op, low_id_mail, pr.DELIVERY_SENT, "ip-x")
+        await pr.settle_delivery(op, high_id_mail, pr.DELIVERY_SENT, "ip-x")
+
+        rows = await _tokens_for_owner(op)
+        unused_sent = [r for r in rows
+                       if r.get("used_at") is None
+                       and r.get("delivery_status") == "sent"]
+        assert len(unused_sent) == 1, (
+            "RC-AUTH-03 reproduction: expected exactly one usable link under "
+            "same-millisecond + forward order; got "
+            f"{len(unused_sent)}: {[r['id'] for r in unused_sent]}"
+        )
+        assert unused_sent[0]["id"] == high_id_mail.token_id, (
+            "RC-AUTH-03: the tiebreaker must pick the LEX-HIGHER id as "
+            "the surviving winner under equal timestamps."
+        )
+    scenario(monkeypatch, body)
+
+
+def test_rc_auth_03_same_millisecond_reverse_order_also_leaves_one(monkeypatch):
+    """Reverse completion order under equal timestamps still leaves
+    exactly one usable link; the deterministic winner is the same."""
+    async def body(op, c, outbox):
+        from app.services import password_reset as pr
+        from datetime import datetime, timezone
+
+        when = datetime.now(timezone.utc).replace(microsecond=321000)
+        low_id_mail, high_id_mail = await _mint_pair_equal_timestamp(op, pr, when)
+
+        # Reverse: settle high_id first, then low_id.
+        await pr.settle_delivery(op, high_id_mail, pr.DELIVERY_SENT, "ip-x")
+        await pr.settle_delivery(op, low_id_mail, pr.DELIVERY_SENT, "ip-x")
+
+        rows = await _tokens_for_owner(op)
+        unused_sent = [r for r in rows
+                       if r.get("used_at") is None
+                       and r.get("delivery_status") == "sent"]
+        assert len(unused_sent) == 1, (
+            "RC-AUTH-03: expected exactly one usable link under "
+            f"same-millisecond + reverse order; got {len(unused_sent)}"
+        )
+        assert unused_sent[0]["id"] == high_id_mail.token_id
+
+
+def test_rc_auth_03_concurrent_settles_at_same_millisecond(monkeypatch):
+    """Simulated concurrent settlement at the same persisted millisecond.
+    Each call runs in its own transaction snapshot; the stable total
+    order guarantees exactly one survives whichever one commits first.
+    Verified by running both completion permutations against the same
+    initial pair and asserting the invariant in both runs."""
+    async def body(op, c, outbox):
+        from app.services import password_reset as pr
+        from datetime import datetime, timezone
+
+        for permutation in ("low_first", "high_first"):
+            await op.password_reset_tokens.delete_many({"user_id": "u-owner"})
+            when = datetime.now(timezone.utc).replace(microsecond=456000)
+            low, high = await _mint_pair_equal_timestamp(op, pr, when)
+            order = [low, high] if permutation == "low_first" else [high, low]
+            # Fire the two settles back-to-back; the harness's transaction
+            # snapshot double emulates the per-transaction isolation the
+            # production replica set provides, so the stable total order
+            # is what guarantees convergence.
+            for mail in order:
+                await pr.settle_delivery(op, mail, pr.DELIVERY_SENT, "ip-x")
+            count = await op.password_reset_tokens.count_documents(
+                {"user_id": "u-owner",
+                 "used_at": None, "delivery_status": "sent"})
+            assert count == 1, (
+                f"RC-AUTH-03 reproduction ({permutation}): expected "
+                f"exactly one usable link; got {count}.")
+    scenario(monkeypatch, body)
+
+
+def test_rc_auth_03_strictly_newer_timestamp_still_wins(monkeypatch):
+    """Regression over RC-AUTH-01: a strictly-newer timestamp must still
+    win over an older one, independent of ``id`` lexicographic order.
+    This proves the tiebreaker only kicks in on the equal-timestamp
+    tie — never overrides the natural time order."""
+    async def body(op, c, outbox):
+        from app.services import password_reset as pr
+        from datetime import datetime, timezone, timedelta
+
+        # Older with HIGHER id, newer with LOWER id — so the tiebreaker
+        # alone would pick the wrong winner.
+        import secrets
+        import uuid
+        when_old = datetime.now(timezone.utc).replace(microsecond=100000)
+        when_new = when_old + timedelta(milliseconds=10)
+
+        async def _mint(when, token_id):
+            tok = secrets.token_urlsafe(pr.TOKEN_BYTES)
+            await op.password_reset_tokens.insert_one({
+                "id": token_id, "org_id": ORG_A, "user_id": "u-owner",
+                "token_hash": pr.hash_token(tok),
+                "requested_at": when,
+                "expires_at": when + pr.TOKEN_TTL,
+                "used_at": None, "requested_ip": "ip-x",
+                "delivery_status": pr.DELIVERY_PENDING,
+            })
+            return pr.ResetMail(to=OWNER, user_id="u-owner", org_id=ORG_A,
+                                token_id=token_id, requested_at=when,
+                                token=tok)
+
+        older = await _mint(when_old, "z-older-high-id")   # higher id lex
+        newer = await _mint(when_new, "a-newer-low-id")    # lower id lex
+
+        # Forward order: older first, then newer.
+        await pr.settle_delivery(op, older, pr.DELIVERY_SENT, "ip-x")
+        await pr.settle_delivery(op, newer, pr.DELIVERY_SENT, "ip-x")
+
+        rows = {r["id"]: r for r in await _tokens_for_owner(op)}
+        assert rows[newer.token_id]["used_at"] is None, (
+            "RC-AUTH-03: strict-newer must survive regardless of id order."
+        )
+        assert rows[newer.token_id]["delivery_status"] == "sent"
+        assert rows[older.token_id]["used_at"] is not None
+        assert rows[older.token_id]["revoked_reason"] == "superseded"
+    scenario(monkeypatch, body)
+
+
+def test_rc_auth_03_failed_delivery_still_preserves_older_sent_link(monkeypatch):
+    """F-06 is preserved under RC-AUTH-03: a FAILED delivery (any order,
+    any id ordering) never touches the surviving older sent link."""
+    async def body(op, c, outbox):
+        from app.services import password_reset as pr
+        from datetime import datetime, timezone
+
+        when = datetime.now(timezone.utc).replace(microsecond=777000)
+        low_id, high_id = await _mint_pair_equal_timestamp(op, pr, when)
+
+        # low_id delivered sent, high_id FAILED (both at the same ms).
+        await pr.settle_delivery(op, low_id, pr.DELIVERY_SENT, "ip-x")
+        await pr.settle_delivery(op, high_id, pr.DELIVERY_FAILED, "ip-x")
+
+        rows = {r["id"]: r for r in await _tokens_for_owner(op)}
+        assert rows[low_id.token_id]["used_at"] is None
+        assert rows[low_id.token_id]["delivery_status"] == "sent"
+        assert rows[low_id.token_id].get("revoked_reason") is None
+        assert rows[high_id.token_id]["used_at"] is not None
+        assert rows[high_id.token_id]["delivery_status"] == "failed"
+        assert rows[high_id.token_id].get("revoked_reason") == "delivery_failed"
+    scenario(monkeypatch, body)

@@ -16,13 +16,18 @@ the account exists happens AFTER the response (F-05):
 3. one transaction (F-01): insert a ``pending`` token (only its SHA-256 is
    stored) + audit ``password_reset_requested``. Older links are NOT touched yet;
 4. :func:`deliver` sends the link; then one transaction settles it
-   (F-06 + RC-AUTH-01 atomic ordering):
+   (F-06 + RC-AUTH-01 atomic ordering + RC-AUTH-03 stable total order):
    * delivered → token ``sent`` ONLY if it is still pending and not already
      consumed; audit ``password_reset_link_sent``. Then supersede every
-     STRICTLY-OLDER open token of the same user (any delivery status). This
-     yields exactly one usable link — the newer request — under either
-     completion order, and never leaves zero usable links the way the
-     pre-RC-AUTH-01 unconditional revoke-everyone did;
+     older open token of the same user, where "older" is defined by the
+     lexicographic key ``(requested_at, id)`` — strictly earlier
+     ``requested_at``, or an equal ``requested_at`` with a lexicographically
+     lower ``id``. The ``id`` tiebreaker is the fix for RC-AUTH-03:
+     persisted BSON datetimes are only millisecond-precise, so two
+     requests inside the same millisecond would otherwise be mutually
+     unordered and both stay usable. The compound key gives a stable
+     total order so exactly one usable link remains under both
+     completion orders and under concurrent settlement.
    * delivered but the row was already used/revoked by a concurrent reset or a
      newer sibling → audit ``password_reset_link_sent_but_already_resolved``;
      no reactivation, no supersession from us;
@@ -334,26 +339,30 @@ async def settle_delivery(db, mail: ResetMail, outcome: str, requested_ip: Optio
                 action = "password_reset_link_sent_but_already_resolved"
             else:
                 action = "password_reset_link_sent"
-                # (2) Supersede ONLY strictly-OLDER open tokens of this user
-                # (any delivery_status, including a sibling already marked
-                # ``sent``). "Older" is ``requested_at < self.requested_at``
-                # (RC-AUTH-01 half 2). This is the atomic ordering fix:
-                #   * forward (A then B): settle(A) supersedes nothing;
-                #     settle(B) marks B sent and supersedes A → exactly one
-                #     usable link, the newer (B);
-                #   * reverse (B then A): settle(B) marks B sent and
-                #     supersedes A → A used/superseded; settle(A) matches
-                #     nothing (A.used_at already set), does not reactivate A
-                #     and does not touch B → exactly one usable link, the
-                #     newer (B).
-                # Preserves F-06: on FAILED delivery (the else-branch below)
-                # the older tokens are left alone, so a broken mail server
-                # never destroys the last working link.
+                # (2) Supersede OLDER open tokens under a STABLE TOTAL
+                # ORDERING (RC-AUTH-03). BSON datetimes are only
+                # millisecond-precise on the wire, so two requests that
+                # arrive within the same millisecond share the same
+                # persisted ``requested_at``. Using ``requested_at < ours``
+                # alone would leave both links usable, which breaks the
+                # single-usable-link invariant. The lexicographic key
+                # ``(requested_at, id)`` extends the natural time order
+                # with a deterministic tiebreaker: within a shared
+                # millisecond the token with the lower ``id`` is "older"
+                # and is superseded by the one with the higher ``id``.
+                # Both completion orders converge to the same outcome.
+                # Preserves F-06: on FAILED delivery (the else-branch
+                # below) older tokens are left alone, so a broken mail
+                # server never destroys the last working link.
                 await tenant.password_reset_tokens.update_many(
                     {"user_id": mail.user_id,
                      "used_at": None,
-                     "requested_at": {"$lt": mail.requested_at},
-                     "id": {"$ne": mail.token_id}},
+                     "id": {"$ne": mail.token_id},
+                     "$or": [
+                         {"requested_at": {"$lt": mail.requested_at}},
+                         {"requested_at": mail.requested_at,
+                          "id": {"$lt": mail.token_id}},
+                     ]},
                     {"$set": {"used_at": now, "revoked_reason": "superseded"}},
                     session=session)
         else:
