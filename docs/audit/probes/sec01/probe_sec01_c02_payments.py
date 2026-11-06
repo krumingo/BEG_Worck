@@ -23,6 +23,9 @@ with TestClient(app, raise_server_exceptions=False) as tc:
     c = tc.portal.call(lambda: AsyncIOMotorClient(os.environ["MONGO_URL"]))
     op, sysdb = c[os.environ["DB_NAME"]], c[os.environ["BEG_SYSTEM_DB"]]
     rep = tc.portal.call(lambda: seed_mod.seed(op, sysdb, PW))
+    if os.environ.get("PROBE_CREATE_IDEM_INDEX") == "1":   # what scripts/w0_04_bootstrap_audit_indexes.py --apply creates
+        tc.portal.call(lambda: op["audit_idempotency"].create_index("id", unique=True))
+    print("audit_idempotency indexes:", sorted(tc.portal.call(lambda: op["audit_idempotency"].index_information()).keys()))
     T = {t["key"]: t for t in rep["tenants"]}; UA = {u["key"]: u for u in T["A"]["users"]}
     A, B = T["A"]["tenant_id"], T["B"]["tenant_id"]
     tc.portal.call(lambda: op["subcontractor_packages"].insert_one({
