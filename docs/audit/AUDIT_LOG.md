@@ -1127,3 +1127,44 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 | #55 × #70 | clean |
 | #55 × #56 | conflict: `data_access.py`, A2B inventory |
 | #55 × #69 | conflict: `catalog.py`, `procurement.py`, `sales.py` |
+
+
+---
+
+## 2026-11-06 ~21:00 — #55 @ `71c11da` (5C-C26 Addendum A delta only; full audit at the C26b head)
+
+Scope:
+- FG-21 → Р27 write-off rights (`write_off_policy.py`);
+- FG-23 → Р20 money only for finance roles (`warehouse_canonical_queries.py`, `_values_for` / `strip_values`);
+- Bulgarian labels.
+
+### Read in code
+
+**Р27 policy:**
+- owner / admin / accountant on every project; project_manager on their own project scope or as an in-date member; site_manager and technician only as an in-date member (a local `_member_in_date` until #69's dated `membership_filter` lands); everyone else 403.
+- Fails closed on an unreadable date.
+- The orchestrator says Accountant and member Technician get 201 only in Addendum B, through a dedicated action. Not probed now.
+
+**Р20 value hiding:**
+- `strip_values` drops `unit_value`, `total_value`, `movement_value`, `value`, `line_value` and `layer_value`, recursively, for any caller without an active owner/admin/accountant (or procurement, kept unchanged and noted in the HANDOFF) RoleAssignment.
+- It is applied **only to `GET /stock/{item}` and `GET /history`**.
+
+### Probe `docs/audit/probes/pr55/probe_pr55_c26a_value_leak.py` (PROVED)
+
+Real `server.app`, ST-01 seed, **enforce**, real JWT. The Admin receives 10 @10 into tenant A's warehouse, then the **Warehousekeeper** (`role_id` `warehouse`, not a finance role) calls every canonical read and one write:
+
+| Call | Status | Money in the response |
+|---|---|---|
+| GET `/warehouse/canonical/stock/I1` | 200 | none (`values_hidden: true`) ✔ |
+| GET `/warehouse/canonical/history` | 200 | none (`values_hidden: true`) ✔ |
+| GET `/warehouse/canonical/balance/I1` | 200 | none (quantities only) ✔ |
+| GET `/warehouse/canonical/integrity-warnings` | 200 | none in this scenario ✔ |
+| **POST `/warehouse/canonical/movements` (dispatch, response)** | 200 | **`envelope.unit_value` and `envelope.layer_allocations[*].unit_value`**: the server's FIFO valuation |
+
+**C26A-1 — MEDIUM (Р20, PROVED).**
+- The write response (`MovementCommandResponse.envelope`, `routes/warehouse_canonical.py:233-238`) returns the full envelope, including the FIFO unit values of the layers drawn, to a non-finance role.
+- A Warehousekeeper who dispatches, accepts, transfers or consumes learns the stock cost that Р20 hides on the read side.
+- Fix: pass the envelope through the same `_values_for(ctx, …)` before returning it, including on a replay.
+- Not checked (SUSPICION): Path B integrity warnings with value fields (none fired here). `strip_values` would not drop `counted_value` / `covered_value` if such keys reach that response.
+
+Gates not re-run for this intermediate head. They will run on the C26b head.
