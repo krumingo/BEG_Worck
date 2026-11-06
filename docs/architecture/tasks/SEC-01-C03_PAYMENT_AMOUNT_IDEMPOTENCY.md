@@ -18,3 +18,8 @@
 
 ## Допълнение A (06.11) — Р29
 - Money POST без `Idempotency-Key` → 428 (или 400) `IDEMPOTENCY_KEY_REQUIRED`, нищо записано. Всички money POST-ове в #69. Фронтендът на всички тези форми праща ключ (провери). Тестове: без ключ → отказ, 0 реда; трите режима.
+
+## Допълнение B (06.11) — FLOW Guard pass 4 (FG-15, FG-47, FG-29) — #69 трябва да може да се слее сам
+- **FG-15:** POST `/labor-entries` и Idempotency replay (`labor_smr.py:91,97`) да не връщат `hourly_rate`/`labor_cost` на роли без финансово право (както в #71) — #69 може да се слее преди #71.
+- **FG-47:** правилото за сума — като в #70 (`money_amount.py`): само JSON число; низ „12“, bool, списък → 422. Ако #70 вече го има, ползвай същия модул по същия път (бъдещ merge без конфликт) или същата логика.
+- **FG-29:** price-modifiers / material-waste / labor-entries / subcontractor payment: `project_id` трябва да съществува в този tenant, иначе 404/422 и нищо записано.
