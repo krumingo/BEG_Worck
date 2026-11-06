@@ -5,7 +5,7 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 import uuid
 import io
 import logging
@@ -1194,78 +1194,80 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     async def work():
         org_id = user["org_id"]
         tenant = _tenant(user)
-        invoice = await tenant.invoices.get(invoice_id)
-        if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
-    
-        if invoice["status"] in ["Draft", "Cancelled"]:
-            raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
-    
-    
-        remaining = invoice.get("remaining_amount", invoice["total"])
-        if amount > remaining + 0.01:  # small tolerance for rounding
-            raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
-    
-        method = data.get("method") or data.get("payment_method", "BankTransfer")
-        # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
-        account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
-        account = await tenant.financial_accounts.get(account_id)
-        if not account:
-            raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    
-        payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
-        payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-        reference = data.get("reference") or data.get("payment_reference", "")
-        note = data.get("note") or data.get("notes", "")
-    
-        now = datetime.now(timezone.utc).isoformat()
-    
-        # Create payment
-        payment = {
-            "id": str(uuid.uuid4()),
-            "org_id": org_id,
-            "direction": payment_direction,
-            "amount": amount,
-            "currency": invoice.get("currency", "EUR"),
-            "date": payment_date,
-            "method": method,
-            "account_id": account_id,
-            "counterparty_name": invoice.get("counterparty_name", ""),
-            "reference": reference,
-            "note": note or f"Плащане по ф-ра {invoice.get('invoice_no', '')}",
-            "created_at": now,
-            "updated_at": now,
-        }
-        await tenant.finance_payments.insert_one(payment)
-    
-        # Create allocation
-        allocation = {
-            "id": str(uuid.uuid4()),
-            "org_id": org_id,
-            "payment_id": payment["id"],
-            "invoice_id": invoice_id,
-            "amount_allocated": amount,
-            "allocated_at": now,
-        }
-        await tenant.payment_allocations.insert_one(allocation)
-    
-        # Update invoice status
-        await update_invoice_status(tenant, invoice_id)
-    
-        await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
-                        {"amount": amount, "payment_id": payment["id"]})
-    
-        # Return updated invoice
-        updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
+        # Addendum C: the remaining check and the writes run under the invoice lock, so two
+        # concurrent payments (quick-pay or allocate) can never pay more than the invoice.
+        async with _invoice_lock(tenant, invoice_id):
+            ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key)
+        updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})   # read after the unlock
         return {
             "ok": True,
-            "payment_id": payment["id"],
-            "allocation_id": allocation["id"],
+            "payment_id": ids["payment_id"],
+            "allocation_id": ids["allocation_id"],
             "amount": amount,
             "invoice": updated_invoice,
         }
 
     return await _once(user, key, "finance.invoice_payment.create", {"invoice_id": invoice_id, "body": data}, work)
+
+
+async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, data: dict,
+                            amount: float, key: str) -> dict:
+    """The quick-pay write, run while the invoice row is locked. The payment and allocation ids
+    are derived from the idempotency key and written as upserts (D5 rule): a retry of the same
+    key after a failure between the two writes never adds a second payment."""
+    org_id = user["org_id"]
+    invoice = await tenant.invoices.get(invoice_id)
+    if invoice["status"] in ["Draft", "Cancelled"]:
+        raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
+
+    payment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-quick-pay:%s:%s:%s" % (org_id, invoice_id, key)))
+    allocation_id = _allocation_id(org_id, payment_id, key, 0)
+    remaining = await _invoice_remaining(tenant, invoice, [allocation_id])
+    if amount > remaining + 0.01:  # small tolerance for rounding
+        raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
+
+    method = data.get("method") or data.get("payment_method", "BankTransfer")
+    # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
+    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+    account = await tenant.financial_accounts.get(account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Сметката не е намерена")
+
+    payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
+    payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    reference = data.get("reference") or data.get("payment_reference", "")
+    note = data.get("note") or data.get("notes", "")
+    now = datetime.now(timezone.utc).isoformat()
+
+    payment = {
+        "id": payment_id,
+        "org_id": org_id,
+        "direction": payment_direction,
+        "amount": amount,
+        "currency": invoice.get("currency", "EUR"),
+        "date": payment_date,
+        "method": method,
+        "account_id": account_id,
+        "counterparty_name": invoice.get("counterparty_name", ""),
+        "reference": reference,
+        "note": note or f"Плащане по ф-ра {invoice.get('invoice_no', '')}",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tenant.finance_payments.update_one({"id": payment_id}, {"$setOnInsert": payment}, upsert=True)
+    allocation = {
+        "id": allocation_id,
+        "org_id": org_id,
+        "payment_id": payment_id,
+        "invoice_id": invoice_id,
+        "amount_allocated": amount,
+        "allocated_at": now,
+    }
+    await tenant.payment_allocations.update_one({"id": allocation_id}, {"$setOnInsert": allocation}, upsert=True)
+    await update_invoice_status(tenant, invoice_id)
+    await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
+                    {"amount": amount, "payment_id": payment_id})
+    return {"payment_id": payment_id, "allocation_id": allocation_id}
 
 
 # ── PAY-01: reversal instead of delete (FLOW-006 §Корекции, FG-34) ──────────────
@@ -1355,29 +1357,57 @@ async def _ensure_reversal_row(tenant: TenantData, user: dict, original: dict, n
 
 
 PAYMENT_LOCK_STALE_SECONDS = 30
+ROW_LOCK_FIELD = "allocation_lock"
 
 
 @asynccontextmanager
-async def _payment_lock(tenant: TenantData, payment_id: str):
-    """C01A-1: a short exclusive lock on one payment row (one atomic conditional write).
-    A second holder gets 409 PAYMENT_BUSY and writes nothing; a lock older than
-    PAYMENT_LOCK_STALE_SECONDS (a crashed holder) can be taken over. Always released."""
+async def _row_lock(update, exists, row_id: str, busy_code: str, busy_message: str, not_found: str):
+    """C01A-1 / Addendum C: a short exclusive lock on ONE row (payment or invoice), taken with
+    one atomic conditional write. A concurrent holder → 409 ``busy_code``, nothing written;
+    a missing row → 404; a lock older than PAYMENT_LOCK_STALE_SECONDS (crashed holder) can
+    be taken over. Always released (by its own token). ``update(filter, change)`` and
+    ``exists()`` are the caller's TenantData calls (so every access stays tenant-scoped)."""
     token = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     stale = (now - timedelta(seconds=PAYMENT_LOCK_STALE_SECONDS)).isoformat()
-    won = await tenant.finance_payments.update_one(
-        {"id": payment_id, "$or": [{"allocation_lock": {"$exists": False}},
-                                   {"allocation_lock.at": {"$lt": stale}}]},
-        {"$set": {"allocation_lock": {"token": token, "at": now.isoformat()}}})
+    won = await update(
+        {"id": row_id, "$or": [{ROW_LOCK_FIELD: {"$exists": False}},
+                               {ROW_LOCK_FIELD + ".at": {"$lt": stale}}]},
+        {"$set": {ROW_LOCK_FIELD: {"token": token, "at": now.isoformat()}}})
     if won.modified_count != 1:
-        raise HTTPException(status_code=409, detail={
-            "error_code": "PAYMENT_BUSY",
-            "message": "Плащането се обработва от друга заявка — опитайте отново"})
+        if not await exists():
+            raise HTTPException(status_code=404, detail=not_found)
+        raise HTTPException(status_code=409, detail={"error_code": busy_code, "message": busy_message})
     try:
         yield
     finally:
-        await tenant.finance_payments.update_one(
-            {"id": payment_id, "allocation_lock.token": token}, {"$unset": {"allocation_lock": ""}})
+        await update({"id": row_id, ROW_LOCK_FIELD + ".token": token},
+                     {"$unset": {ROW_LOCK_FIELD: ""}})
+
+
+def _payment_lock(tenant: TenantData, payment_id: str):
+    return _row_lock(lambda flt, change: tenant.finance_payments.update_one(flt, change),
+                     lambda: tenant.finance_payments.get(payment_id, {"_id": 0, "id": 1}),
+                     payment_id, "PAYMENT_BUSY",
+                     "Плащането се обработва от друга заявка — опитайте отново", "Payment not found")
+
+
+def _invoice_lock(tenant: TenantData, invoice_id: str):
+    return _row_lock(lambda flt, change: tenant.invoices.update_one(flt, change),
+                     lambda: tenant.invoices.get(invoice_id, {"_id": 0, "id": 1}),
+                     invoice_id, "INVOICE_BUSY",
+                     "Фактурата се обработва от друга заявка — опитайте отново",
+                     "Invoice %s not found" % invoice_id)
+
+
+async def _invoice_remaining(tenant: TenantData, invoice: dict, exclude_ids=()) -> float:
+    """Open amount of an invoice from its ACTIVE allocations (the rule of update_invoice_status),
+    read under the invoice lock — never from the stored, possibly stale remaining_amount."""
+    flt = {"invoice_id": invoice["id"]}
+    if exclude_ids:
+        flt["id"] = {"$nin": list(exclude_ids)}
+    paid = await tenant.payment_allocations.find(active_allocations(flt)).to_list(1000)
+    return round(invoice["total"] - sum(a.get("amount_allocated", 0) for a in paid), 2)
 
 
 async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: str,
@@ -1702,60 +1732,65 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
              index) and written with an upsert: a retry of the same key (after a failure
              between the writes) finds the rows it already wrote and never adds a second."""
         tenant = _tenant(user)
-        payment = await tenant.finance_payments.get(payment_id)
-        if not payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
-        if not payment_counts(payment):
-            raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
+        # Addendum C (D5-R1/R2): the "available" checks and the writes are atomic against the
+        # payment AND every invoice — both rows are locked (sorted order, try-lock: a
+        # concurrent request gets 409 PAYMENT_BUSY / INVOICE_BUSY and writes nothing).
+        async with AsyncExitStack() as locks:
+            await locks.enter_async_context(_payment_lock(tenant, payment_id))
+            for inv_id in sorted({a.invoice_id for a in data.allocations}):
+                await locks.enter_async_context(_invoice_lock(tenant, inv_id))
+            payment = await tenant.finance_payments.get(payment_id)
+            if not payment:
+                raise HTTPException(status_code=404, detail="Payment not found")
+            if not payment_counts(payment):
+                raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
 
-        own_ids = [_allocation_id(user["org_id"], payment_id, key, i) for i in range(len(amounts))]
-        # rows this same key already wrote (a failed earlier attempt) do not count against it
-        existing_allocs = await tenant.payment_allocations.find(
-            active_allocations({"payment_id": payment_id, "id": {"$nin": own_ids}})).to_list(1000)
-        available = payment["amount"] - sum(a.get("amount_allocated", 0) for a in existing_allocs)
+            own_ids = [_allocation_id(user["org_id"], payment_id, key, i) for i in range(len(amounts))]
+            # rows this same key already wrote (a failed earlier attempt) do not count against it
+            existing_allocs = await tenant.payment_allocations.find(
+                active_allocations({"payment_id": payment_id, "id": {"$nin": own_ids}})).to_list(1000)
+            available = payment["amount"] - sum(a.get("amount_allocated", 0) for a in existing_allocs)
 
-        # 1. validate everything first
-        planned_by_invoice = {}
-        invoices = {}
-        for alloc, amount in zip(data.allocations, amounts):
-            if amount > available + 1e-9:
-                raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({round(available, 2)})")
-            invoice = invoices.get(alloc.invoice_id) or await tenant.invoices.get(alloc.invoice_id)
-            if not invoice:
-                raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
-            if invoice["status"] == "Cancelled":
-                raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
-            expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
-            if payment["direction"] != expected_dir:
-                raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
-            if alloc.invoice_id not in invoices:
-                invoices[alloc.invoice_id] = invoice
-                paid = await tenant.payment_allocations.find(active_allocations(
-                    {"invoice_id": alloc.invoice_id, "id": {"$nin": own_ids}})).to_list(1000)
-                invoice["_remaining"] = round(invoice["total"] - sum(a.get("amount_allocated", 0) for a in paid), 2)
-            remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
-            if amount > remaining + 1e-9:
-                raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
-            planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount
-            available -= amount
+            # 1. validate everything first
+            planned_by_invoice = {}
+            invoices = {}
+            for alloc, amount in zip(data.allocations, amounts):
+                if amount > available + 1e-9:
+                    raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({round(available, 2)})")
+                invoice = invoices.get(alloc.invoice_id) or await tenant.invoices.get(alloc.invoice_id)
+                if not invoice:
+                    raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
+                if invoice["status"] == "Cancelled":
+                    raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
+                expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
+                if payment["direction"] != expected_dir:
+                    raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
+                if alloc.invoice_id not in invoices:
+                    invoices[alloc.invoice_id] = invoice
+                    invoice["_remaining"] = await _invoice_remaining(tenant, invoice, own_ids)
+                remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
+                if amount > remaining + 1e-9:
+                    raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
+                planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount
+                available -= amount
 
-        # 2. write: deterministic ids, upsert (a retry of the same key never duplicates)
-        now = datetime.now(timezone.utc).isoformat()
-        results = []
-        for i, (alloc, amount) in enumerate(zip(data.allocations, amounts)):
-            allocation = {
-                "id": own_ids[i],
-                "org_id": user["org_id"],
-                "payment_id": payment_id,
-                "invoice_id": alloc.invoice_id,
-                "amount_allocated": amount,
-                "allocated_at": now,
-            }
-            await tenant.payment_allocations.update_one(
-                {"id": own_ids[i]}, {"$setOnInsert": dict(allocation)}, upsert=True)
-            results.append(allocation)
-        for invoice_id in planned_by_invoice:
-            await update_invoice_status(tenant, invoice_id)
+            # 2. write: deterministic ids, upsert (a retry of the same key never duplicates)
+            now = datetime.now(timezone.utc).isoformat()
+            results = []
+            for i, (alloc, amount) in enumerate(zip(data.allocations, amounts)):
+                allocation = {
+                    "id": own_ids[i],
+                    "org_id": user["org_id"],
+                    "payment_id": payment_id,
+                    "invoice_id": alloc.invoice_id,
+                    "amount_allocated": amount,
+                    "allocated_at": now,
+                }
+                await tenant.payment_allocations.update_one(
+                    {"id": own_ids[i]}, {"$setOnInsert": dict(allocation)}, upsert=True)
+                results.append(allocation)
+            for invoice_id in planned_by_invoice:
+                await update_invoice_status(tenant, invoice_id)
 
         await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
                         {"allocations": len(results)})

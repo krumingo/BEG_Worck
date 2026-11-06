@@ -244,3 +244,121 @@ def test_d5_two_items_on_one_invoice_are_checked_together(monkeypatch, backend, 
         assert r.status_code == 400, r.text
         assert await op.payment_allocations.count_documents({"payment_id": pid}) == 0
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════ Addendum C: concurrency
+PARALLEL = 6
+
+
+async def _allocated(op, flt):
+    rows = await op.payment_allocations.find(dict(flt, status={"$ne": "cancelled"}), {"_id": 0}).to_list(None)
+    return round(sum(a["amount_allocated"] for a in rows), 2), len(rows)
+
+
+def _check_refusals(responses):
+    for r in responses:
+        if r.status_code not in (200, 201):
+            assert r.status_code in (400, 409), r.text
+            if r.status_code == 409:
+                assert r.json()["detail"]["error_code"] in ("PAYMENT_BUSY", "INVOICE_BUSY"), r.text
+
+
+def test_c_concurrent_allocates_never_exceed_the_payment(monkeypatch, backend, mode):
+    """D5-R1: 6 parallel allocates (different keys) of 40 each from ONE payment of 100 to
+    6 different invoices. Before: 160+ allocated on a payment of 100."""
+    import asyncio
+
+    async def scenario(c, op):
+        from tests.test_pay_01_payment_reversal import ORG_A as org
+        for i in range(PARALLEL):
+            await op.invoices.insert_one({
+                "id": "inv-p%d" % i, "org_id": org, "invoice_no": "P%d" % i, "direction": "Issued",
+                "kind": "Invoice", "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31",
+                "currency": "EUR", "lines": [], "subtotal": 100.0, "vat_percent": 0, "vat_amount": 0,
+                "total": 100.0, "paid_amount": 0, "remaining_amount": 100.0, "counterparty_name": "K"})
+        pid = await pay(c, 100.0)
+        rs = await asyncio.gather(*[
+            c.post("/api/finance/payments/%s/allocate" % pid, headers=hdr("acct-a", "k-c1-%d" % i),
+                   json={"allocations": [{"invoice_id": "inv-p%d" % i, "amount": 40}]})
+            for i in range(PARALLEL)])
+        _check_refusals(rs)
+        total, n = await _allocated(op, {"payment_id": pid})
+        assert total <= 100.0, total
+        assert n == sum(r.status_code == 200 for r in rs)          # refused → nothing written
+        p = await op.finance_payments.find_one({"id": pid}, {"_id": 0})
+        assert "allocation_lock" not in p
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_c_concurrent_allocates_never_exceed_the_invoice(monkeypatch, backend, mode):
+    """D5-R2: 6 parallel allocates of 400 from 6 different payments to ONE invoice of 1200.
+    Before: 1600+ allocated on an invoice of 1200."""
+    import asyncio
+
+    async def scenario(c, op):
+        from tests.test_pay_01_payment_reversal import ORG_A as org
+        await op.invoices.insert_one({
+            "id": "inv-big", "org_id": org, "invoice_no": "BIG", "direction": "Issued", "kind": "Invoice",
+            "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31", "currency": "EUR",
+            "lines": [], "subtotal": 1200.0, "vat_percent": 0, "vat_amount": 0, "total": 1200.0,
+            "paid_amount": 0, "remaining_amount": 1200.0, "counterparty_name": "K"})
+        pids = [await pay(c, 400.0) for _ in range(PARALLEL)]
+        rs = await asyncio.gather(*[
+            c.post("/api/finance/payments/%s/allocate" % pid, headers=hdr("acct-a", "k-c2-%d" % i),
+                   json={"allocations": [{"invoice_id": "inv-big", "amount": 400}]})
+            for i, pid in enumerate(pids)])
+        _check_refusals(rs)
+        total, n = await _allocated(op, {"invoice_id": "inv-big"})
+        assert total <= 1200.0, total
+        assert n == sum(r.status_code == 200 for r in rs)
+        inv = await op.invoices.find_one({"id": "inv-big"}, {"_id": 0})
+        assert "allocation_lock" not in inv
+        assert inv["paid_amount"] == total and inv["remaining_amount"] == round(1200.0 - total, 2)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_c_concurrent_quick_pays_never_exceed_the_invoice(monkeypatch, backend, mode):
+    """The same rule for invoice quick-pay: 6 parallel quick-pays of 40 on an invoice of 100."""
+    import asyncio
+
+    async def scenario(c, op):
+        rs = await asyncio.gather(*[
+            c.post("/api/finance/invoices/inv-a1/payments", headers=hdr("acct-a", "k-c3-%d" % i),
+                   json={"amount": 40, "method": "BankTransfer", "account_id": BANK_A})
+            for i in range(PARALLEL)])
+        _check_refusals(rs)
+        total, n = await _allocated(op, {"invoice_id": "inv-a1"})
+        assert total <= 100.0, total
+        assert n == sum(r.status_code == 201 for r in rs)
+        assert await op.finance_payments.count_documents({}) == n    # refused → no payment row
+        for r in rs:
+            if r.status_code == 201:
+                assert "allocation_lock" not in r.json()["invoice"]
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_c_quick_pay_failed_key_retry_never_duplicates(monkeypatch, backend, mode):
+    """The D5 rule for quick-pay: a failure after the payment row was written, then a retry
+    with the same key → still exactly one payment and one allocation."""
+    async def scenario(c, op):
+        from app.routes import finance as r_finance
+        real = r_finance.update_invoice_status
+        calls = {"n": 0}
+
+        async def flaky(tenant, invoice_id):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("simulated failure between the writes")
+            return await real(tenant, invoice_id)
+        monkeypatch.setattr(r_finance, "update_invoice_status", flaky)
+        body = {"amount": 30, "method": "BankTransfer", "account_id": BANK_A}
+        with pytest.raises(RuntimeError):
+            await c.post("/api/finance/invoices/inv-a1/payments", json=body, headers=hdr("acct-a", "k-c4"))
+        r = await c.post("/api/finance/invoices/inv-a1/payments", json=body, headers=hdr("acct-a", "k-c4"))
+        assert r.status_code == 201, r.text
+        assert await op.finance_payments.count_documents({}) == 1
+        assert await op.payment_allocations.count_documents({}) == 1
+        assert r.json()["invoice"]["paid_amount"] == 30
+        inv = await op.invoices.find_one({"id": "inv-a1"}, {"_id": 0})
+        assert "allocation_lock" not in inv                         # released even on the failure
+    run(monkeypatch, backend, mode, scenario)

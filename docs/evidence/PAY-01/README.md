@@ -352,3 +352,52 @@ The A1 inventory was regenerated and is identical. The A1 and A2C guards report 
 | A1 / A2C guards | 0 violations |
 
 **A1 inventory:** regenerated. The allocate insert became a tenant-scoped upsert, and a per-invoice active-allocation read was added. Totals: 368 accesses (FIXED 130, SAFE 238).
+
+## Addendum C: concurrent allocate cannot exceed a payment or an invoice (audit D5-R1/R2)
+
+Package addendum: `PAY-01-C01_AMOUNTS_REASON_SUBCONTRACTOR.md` §Допълнение C (branch `claude/happy-meitner-bmcnel` @ 4d5ab0b).
+
+**Finding (HIGH, debt from main).** Concurrent allocates with **different** keys over-allocated, 5 times out of 5:
+- 160 allocated on a payment of 100;
+- 1600 allocated on an invoice of 1200.
+
+Each request checked "available" and then wrote, with nothing between the two.
+
+**Fix**
+- **One lock helper.** `_row_lock(update, exists, …)` generalises the C01A-1 lock: one conditional `update_one` sets `allocation_lock {token, at}` on the row.
+  - A concurrent holder → 409, nothing written. A missing row → 404.
+  - A lock older than 30 s can be taken over, and the lock is always released by its token.
+  - `_payment_lock` and `_invoice_lock` pass their own `tenant.finance_payments` / `tenant.invoices` calls, so every access stays tenant-scoped (A1 guard: 0 violations).
+- **`POST /finance/payments/{id}/allocate`** locks the payment, then every distinct invoice in sorted order. All checks re-read under the locks and the writes happen there too: the payment's available amount from active allocations, and each invoice's remaining amount via `_invoice_remaining()`, computed from active allocations rather than the stored `remaining_amount`. A concurrent request gets 409 `PAYMENT_BUSY` or `INVOICE_BUSY`.
+- **`POST /finance/invoices/{id}/payments` (quick-pay)** also checks an invoice's remaining amount, so it now runs under the invoice lock. Two concurrent quick-pays, or a quick-pay and an allocate, can no longer over-pay an invoice.
+  - Same D5 rule: the payment and allocation ids are derived from the idempotency key and written as upserts, so a failed-key retry never creates a second payment.
+  - The response's invoice is read after the unlock, so it never shows the lock field.
+- **The cancel path (C01A-1)** uses the same `_payment_lock`. Allocate and cancel on one payment therefore serialise too.
+
+**IDEM-IDX-1** (the unique index on `audit_idempotency` that is missing at startup) is fixed separately in W0-04-C01. It is not duplicated here. The PAY-01 test harness now creates the W0-04 indexes exactly as the bootstrap does, by reusing `scripts/w0_04_bootstrap_audit_indexes.PLANNED_INDEXES`, on mongomock and on real Mongo.
+
+### Tests
+
+These are in `test_pay_01_c01_idempotency.py`; mongomock + real Mongo, three modes: **24 cases**.
+
+| Test | What it checks |
+|---|---|
+| R1 | 6 parallel allocates of 40 from one payment of 100, each to a different invoice → at most 100 allocated. |
+| R2 | 6 parallel allocates of 400 from 6 payments to one invoice of 1200 → at most 1200 allocated; the invoice's paid and remaining amounts match the active allocations. |
+| Concurrent quick-pays | 6 parallel quick-pays of 40 on an invoice of 100 → at most 100. |
+| Quick-pay retry | A failure after the first write, then a retry with the same key → exactly one payment and one allocation. |
+
+In every concurrent test, each refusal is 409 `PAYMENT_BUSY` or `INVOICE_BUSY`, or 400 for over the limit. Rows written = number of successes, so a refused request writes nothing, and no lock field is left behind.
+
+| Run | Result |
+|---|---|
+| Concurrent tests on 42bbdfc | **fail on real Mongo** in all three modes; R1, R2 and the quick-pay over-payment are reproduced (mongomock does not interleave the requests) |
+| Quick-pay retry on 42bbdfc | fails on both backends (duplicate payment) |
+| All `test_pay_01*` + A1 collision matrix | 491 passed |
+| A1 / A2C guards | 418 units / 206 modules, 0 violations |
+
+**A1 inventory:** regenerated. The new rows are the lock, remaining-amount and quick-pay helpers, all TenantData-scoped. Totals: 371 accesses (FIXED 129, SAFE 242).
+
+**Contract notes**
+- The quick-pay 404 for a missing invoice now reads "Invoice <id> not found", the same text allocate uses.
+- An over-limit allocate stays **400**, as before. Only a concurrent request refused by a lock is 409.

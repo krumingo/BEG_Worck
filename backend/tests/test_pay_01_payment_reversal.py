@@ -149,11 +149,20 @@ def _app(monkeypatch, op, sysdb, mode):
     return app
 
 
+async def _bootstrap_indexes(op):
+    """The W0-04 audit indexes, exactly as the bootstrap creates them (IDEM-IDX-1 itself — the
+    index missing at startup — is fixed separately in W0-04-C01; not duplicated here)."""
+    from scripts.w0_04_bootstrap_audit_indexes import PLANNED_INDEXES
+    for coll, keys, opts in PLANNED_INDEXES:
+        await op[coll].create_index(keys, **opts)
+
+
 def run(monkeypatch, backend, mode, scenario):
     import httpx
 
     async def go():
         async with _Dbs(backend) as (op, sysdb):
+            await _bootstrap_indexes(op)
             await _seed(op, sysdb)
             app = _app(monkeypatch, op, sysdb, mode)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
