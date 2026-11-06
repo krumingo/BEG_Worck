@@ -276,9 +276,48 @@ FastAPI подава само **един** `Request` на endpoint. Затова
 * Спрямо #69 @ `07faab5` — **1383 клетки** (`pm01_cells_changed.csv`).
 
 ### Дълг (SEC-02-B)
-* **SEC-02-B-D1:** `/activity-budgets` и `/budget-health` пазят досегашното си правило за достъп (W0-02 `budget.read` / `can_access_project`), затова Accountant без членство получава 403. Р20 („навсякъде“) изисква разширяване на каталога за `accountant` — оставено, защото не е поискано.
-* **SEC-02-B-D2:** в pulse SiteManager не вижда бюджета на своите обекти (по-тясно от Р20).
+* ~~SEC-02-B-D1~~, ~~SEC-02-B-D2~~ — закрити в SEC-02-C (виж Допълнение C).
 * Остават: SEC-02-A-D1…D3, FG-12 deny-overrides (W0-02).
+
+## Допълнение C (SEC-02-C, 06.11.2026) — Р31 и поправки B-D1, B-D2
+
+Пакетът @ `370c9b0`, Допълнение C (Р31: FLOW-019, FLOW-037 §3.4). B-D1 и B-D2 са по съобщението на оркестратора (Р20).
+
+### Р31 — „изхарчено“ за труд за техническия ръководител
+**Скриването по човек е задължително и е направено.** SiteManager вижда парите за труд **само като сума по СМР/обект** срещу бюджета:
+* `expected-actual`, `centralized-reports/activities`, `activities-overview`, `activity-budget-summary`, `activity-budgets`, `budget-health`, `pulse` (свои обекти) — само агрегати по СМР/обект;
+* навсякъде другаде, където има хора — `activity-reports`, `site-workers`, `work-sessions*`, досието, `all-reports`, `weekly-matrix`, `labor-entries`, работниците в pulse — **без** ставка, `labor_cost` по човек или акордна цена (R20-5M / R20-5 / D9).
+
+Доказателство:
+* harness-ът проверява, че в бюджетните отговори към SiteManager няма `hourly_rate`, `labor_cost`, `rate`, `daily_rate`. В pulse seed-ът има работник с `labor_cost` 7777, и 7777 не стига до него;
+* тестът на скенера проверява, че в `allowed_budget_view` няма път с `worker`, ставка, акорд или персонал.
+
+**Дълг SEC-02-C-D1 (по Допълнение C — описан, не пренаписан): как кодът смята „изхарчено“ днес — не по FLOW-019/FLOW-028:**
+
+| Екран | „Изхарчено“ в кода | Отклонение от Р31 |
+|---|---|---|
+| `expected-actual`, `activities-overview`, `budget-health`, `pulse.budget_snapshot` | сума на `work_sessions.labor_cost` | работни сесии, не **одобрени** отчети; без типа заплащане (акорд = количество × акордна цена) |
+| `centralized-reports/activities` | `amount_clean_labor` (+ режийни) от отчетите, **чернови и одобрени** | брои и неодобрени отчети |
+| `activity-budget-summary` | одобрени офертни редове + дневници × `default_hourly_rate` (25) | ставка по подразбиране, не реалната |
+| навсякъде | — | престоят (DOWNTIME) не е отделен ред |
+
+Бюджетът също е различен по екрани: `activity_budgets.labor_budget`, а не офертният трудов бюджет по FLOW-019. Поправката е изчисление, т.е. отделен пакет.
+
+### B-D2 — бюджет в pulse за свои обекти (Р20)
+`/pulse/today`, `/sites/{id}/pulse`, `/sites/{id}/pulse/range` → декоратор `strip_pulse_for_non_finance`, правило R20-5B:
+* финансовите роли — всичко;
+* SiteManager — за всеки обект, където е **член днес**: `budget_snapshot` (бюджет / изхарчено / остатък / %), `smr_summary` (по СМР) и общия труд на обекта; без парите по работник и без материалите. За другите обекти — без пари;
+* другите роли — без пари.
+
+`/pulse/summary` (сборове за цялата фирма) остава без пари за всички не-финансови роли. Доказателство: `results.json`, поле `sites_with_money` на `/pulse/today` — SiteManager само `P1`, финансовите роли `P1, P2`, другите роли — нищо.
+
+### B-D1 — Accountant и бюджетът на всеки обект (Р20)
+`accountant` държи `budget.read` на ниво фирма, само четене (`catalog.py`, с бележка до SCOPE RULE). Legacy проверките на `/activity-budgets` и `/budget-health` пускат финансовите роли на всеки обект.
+
+### Резултат
+* Скенерът на одита — отново **5640 извиквания, 0 попадения**; в `allowed_budget_view` вече са 10 route-а (+3 pulse).
+* PM-01 матрицата е регенерирана с harness-а: спрямо SEC-02-B @ `ba29dac` — **6 клетки** (Accountant 403 → 200 на `activity-budgets` и `budget-health` × 3 режима); спрямо #69 @ `07faab5` — **1389**.
+* Frontend: `SitePulseCard` показва „—“ вместо фалшива 0 и не показва „€“ по работник, когато сумата я няма.
 
 ## Rollback
 
