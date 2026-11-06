@@ -270,9 +270,9 @@ async def _end_to_end(op, sysdb, monkeypatch):
             assert r.status_code == 404, (mine, r.status_code)
             r = await c.get("/api/material-requests", headers=tokens[mine])
             assert r.status_code == 200
-            assert all(row["org_id"] == (await op.users.find_one(
-                {"email": seed_mod.user_email(FIXTURE["tenants"][0 if mine == "A" else 1],
-                                              {"key": "owner"})}))["org_id"] for row in r.json())
+            own_org = (await sysdb.tenant_registry.find_one({"fixture_key": mine}))["id"]
+            rows = r.json()
+            assert all(row["org_id"] == own_org for row in rows), (mine, rows)
         reqs_b = await op.material_requests.count_documents(
             {"org_id": (await sysdb.tenant_registry.find_one({"fixture_key": "B"}))["id"]})
         assert reqs_b == 0, "the runner's B-side attempts wrote into tenant B"
