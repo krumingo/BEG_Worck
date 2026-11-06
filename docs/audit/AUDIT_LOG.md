@@ -9,7 +9,7 @@
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 5C | `64418eb` | **FINDINGS (blocking): C26B-1 Р27 bypass via subproject_id (cost on wrong project)**; C26A-1 leak FIXED | 2026-11-06 |
-| #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
+| #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `8910939` | **PASS** (C01 L1/L2 closed); INT-70x69 still open (Part 2) | 2026-11-06 |
 | #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
@@ -1370,3 +1370,39 @@ INT-70x69: scratch merge of `8910939` with `07faab5`, clean. `probe_pay01_x_sec0
 - reversing the ledger row returns 200 and the account balance goes to 0;
 - but the `subcontractor_payments` row stays `completed`, and the package keeps `paid_total` 300.
 - This is still OPEN (HIGH) and planned for PAY-01 Part 2.
+
+
+## #67 ST-02-C03 @ `675faba` — 2026-11-06 ~21:10 UTC — PASS (1 low finding)
+
+Delta:
+- `release_build.py --flag-override` (non-production only) records the staging `PERMISSION_SERVICE_MODE` in the manifest's `feature_flags`.
+- The validator rejects a deployment-parameter source in production.
+- `staging_deploy.sh` no longer maps the expectation. Its precheck requires that the manifest of the target **and** of the rollback target equals the staging parameter. After the smoke, the backend must equal both the parameter and the manifest.
+- New rehearsal step 2b is a negative control.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `ops/release/tests` | **81 passed / 1 skipped** |
+| `test_st_02_staging_stack.py` | **162 passed** in 3 of 5 runs; 159 passed + 3 errors in 2 of 5 (see L1) |
+| R0 | 814 passed on re-run; first run 1 failed / 813 passed — the same unreproduced flake pattern as on #70 |
+| W0 | 1085/15/50, same FAILED list as `fail_56.txt` |
+| A2C | 0/204 |
+| A1 | 0/414 |
+| `probe_st02_isolation.py <wt67>` | MISSED none |
+
+Rehearsal: NOT re-run by me. I read the evidence `docs/evidence/ST-02/rehearsal-2026-11-06-c03/summary.json`:
+- result PASS, 45/45 checks;
+- the X bundle's `feature_flags` has PERMISSION_SERVICE_MODE `expected: shadow` and `source: deployment parameter (staging): R15 staging default; layout default off`;
+- `rehearse.log` shows the R26 precheck lines.
+
+**ST02-C03-L1 (low, test-only) — PROVED flaky.** In the fixture `r26_bundles` (`test_st_02_staging_stack.py:759`), two bundles of the same commit are built in the same second. `release_id` has one-second resolution (`rel-<YYYYMMDDTHHMMSSZ>-<sha12>`), so the second build fails with `bundle directory already exists`.
+- The 3 C03 tests then error at setup.
+- In production use the build fails closed, so this is benign there. It is a flaky gate, not a defect.
+
+Note (info): the precheck also requires the **rollback target's** manifest to record the staging mode. A staging deployed with a pre-C03 bundle (expected = layout default `off`) running shadow will therefore refuse every deploy until it is re-initialised. This is fine if no real staging exists yet; it is a rollout note for Krum.
+
+Answer to @parent's #55 contract question:
+- At #55 `64418eb`, canonical writes are enforce-only: `routes/warehouse_canonical.py` `post_project_writeoff` returns 503 `CANONICAL_WRITES_REQUIRE_ENFORCE` in off/shadow (code read), and `CommandService.execute` refuses without enforce.
+- So a shadow staging (R15 default, recorded by R26) can hold **no canonical stock**. Any warehouse rehearsal on staging needs an explicit `--permission-mode enforce`.
