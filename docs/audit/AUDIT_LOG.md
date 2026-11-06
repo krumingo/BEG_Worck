@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C19) | `d8ac3a9` | PASS (internal) — Codex still required (money) | 2026-11-06 |
+| #55 Склад 5C (C20) | `c0b3b4c` | FINDINGS (blocking: C20-1; decision: C20-2) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -365,3 +365,61 @@ Both deltas touch only `ops/` scripts, their tests and READMEs, with no app or b
 ### Integration
 
 #65 and #66 still merge cleanly with main and with #55 (checked at 14:05 on the previous heads). The deltas touch only `ops/release/*` and `ops/staging/*`, so there is no new overlap.
+
+
+---
+
+## 2026-11-06 ~15:05 — PR #55 @ `c0b3b4c` (5C-C20: finance reads canonical, F-9…F-11)
+
+Harness note: dockerd keeps dying between turns. `scratchpad/mongo_up.sh` now brings dockerd and the RS up idempotently inside the same command as each test run.
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix (enforce) | **187 / 0 / 0** |
+| R0 on real Mongo | **814 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 218 modules, 0 violations ✔ |
+| A1 | 442 units, 0 violations ✔ |
+
+### Probes (`docs/audit/probes/pr55/test_probe_pr55_c20_reports.py`, real Mongo, real CommandService, no manual sync or recompute)
+
+Flow: receive 5@10 → dispatch in_transit → accept 5 → consume 3. Canonical cost = **30**.
+
+| Report | C20-A canonical only | C20-B + legacy issue 100 |
+|---|---|---|
+| `material_smr.get_material_summary_for_project` (project-profit, full_cost) | **30** ✔ | 30 (legacy excluded) |
+| `project_pnl.compute_project_pnl` (`/projects/{id}/pnl`, summary, breakdown) | **30** ✔ | 30 (legacy excluded) |
+| `project_financial_results.compute_financial_results` → `cash.breakdown.paid_materials` | **0** ✘ | harness error (event loop), not counted |
+| `centralized_reports.build_centralized_reports` → `total_materials` (and `total_expense`) | **0** ✘ | **100** ✘ |
+| `revenue_snapshot.get_profit_by_period` → monthly `material` | **0** ✘ | **0** ✘ |
+
+**C20-1 — BLOCKING (money), PROVED. Three finance reports still read only legacy rows. For a canonical-only project they show material cost 0, so profit is overstated. With a mixed history they disagree with the P&L (100 against 30).**
+
+| Report | Source |
+|---|---|
+| `app/services/project_financial_results.py:78-86` | legacy `warehouse_transactions` with `type: "issue"` |
+| `app/services/centralized_reports.py:318-326` | the same legacy issue rows |
+| `app/routes/revenue_snapshot.py:134` | legacy `material_entries.movement_type ∈ {issue, return}`; canonical rows have no `movement_type` |
+
+- This is the same defect class as F-9, and it breaks "one screen, one number".
+- The C20 package lists pnl, package, profit, net-profit and ledger. These three were not listed, but they are project finance reports.
+- Same legacy-only pattern, not run (SUSPICION):
+  - `services/material_waste.py:69`;
+  - `services/pulse_generator.py:62`;
+  - `routes/materials_baseline.py:323`;
+  - `routes/revenue_snapshot.py:318` (procurement-alerts, quantities);
+  - `routes/procurement.py:534` (issue-number listing, not cost).
+
+**C20-2 — DECISION NEEDED (money), PROVED as behaviour. Mixed history drops the legacy cost.**
+- `canonical_material_cost.project_warehouse_material_cost`: once a project has any canonical cost row, all legacy issue cost is reported as `legacy_excluded_cost` and **not counted**.
+- In C20-B the P&L shows 30. The real total is 100 issued before the cutover plus 30 consumed after it.
+- This avoids double counting only if the legacy issues and the canonical consumes describe the same material.
+- For a project already running when the canon starts, the pre-cutover cost disappears from P&L (underreport).
+- Alternative: count legacy issue rows dated before the first canonical ledger row of the project, plus canonical after it, which is disjoint by time.
+- It is documented in the module, but it is a business rule. Krum decides; record it in the canon.
+
+### No manual sync (orchestrator question) — PROVED
+
+Every figure in the C20-A table was produced with no `POST /material-entries/sync` and no `recompute-material` call. The two canonical-aware readers show 30 directly from the consume-transaction projection row.
