@@ -115,6 +115,17 @@ def check_mode(mode):
     return mode
 
 
+def check_mode_quiet(mode):
+    if mode not in MODES:
+        raise Refused("staging.env has no valid ST02_PERMISSION_SERVICE_MODE (off/shadow/enforce)")
+    return mode
+
+
+def mode_reason(mode):
+    """R26: why the staging manifest carries this mode (R15 default or an explicit parameter)."""
+    return "R15 staging default" if mode == DEFAULT_MODE else "explicit --permission-mode (R15 default is %s)" % DEFAULT_MODE
+
+
 def port_free(port, host="127.0.0.1"):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -283,14 +294,19 @@ def mongo_up(base: Path, project):
 
 # ---------------------------------------------------------------- release bundle
 def build_bundle(base: Path, commit, reachable_from, previous: Path | None, allow_unmerged=False,
-                 deployed_by=None, approved_by=None):
-    """FG-4: the manifest's created_by is the named deployer and its approvals name the approver."""
+                 deployed_by=None, approved_by=None, manifest_mode=None):
+    """FG-4: the manifest's created_by is the named deployer and its approvals name the approver.
+    R26: the manifest's feature_flags snapshot records the staging PERMISSION_SERVICE_MODE."""
     deployed_by = check_person(deployed_by, "--deployed-by")
     approved_by = check_person(approved_by, "--approved-by")
+    mode = check_mode_quiet(read_kv(base / "staging.env").get("ST02_PERMISSION_SERVICE_MODE", ""))
+    if manifest_mode is not None:  # rehearsal negative control only: a manifest that disagrees with staging.env
+        mode = check_mode_quiet(manifest_mode)
     cmd = [sys.executable, str(RELEASE_BUILD), "--repo", str(REPO), "--commit", commit, "--environment", "staging",
            "--deployment-id", DEPLOYMENT_ID, "--out", str(base / "releases"), "--approval", APPROVAL,
            "--approval", "deploy:approved_by=%s" % approved_by, "--created-by", deployed_by,
-           "--reachable-from", reachable_from]
+           "--reachable-from", reachable_from,
+           "--flag-override", "PERMISSION_SERVICE_MODE=%s" % mode, "--flag-override-reason", mode_reason(mode)]
     if allow_unmerged:
         cmd.append("--allow-unmerged")
     cmd += ["--previous-manifest", str(previous)] if previous else ["--no-previous"]
@@ -300,6 +316,12 @@ def build_bundle(base: Path, commit, reachable_from, previous: Path | None, allo
     ver = run([sys.executable, str(RELEASE_VERIFY), "bundle", "--bundle", str(bundle)], check=False)
     if ver.returncode != 0 or "RESULT PASS" not in ver.stdout:
         raise Refused("release_verify.py bundle failed for %s:\n%s" % (bundle, ver.stdout[-2000:]))
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    flags = manifest["release"]["feature_flags"]
+    if (flags.get("PERMISSION_SERVICE_MODE") or {}).get("expected") != mode:
+        raise Refused("R26: manifest of %s does not record PERMISSION_SERVICE_MODE=%s" % (bundle, mode))
+    summary["feature_flags"] = flags
+    log("R26: manifest feature_flags PERMISSION_SERVICE_MODE=%s (%s)" % (mode, flags["PERMISSION_SERVICE_MODE"]["source"]))
     log("bundle %s commit %s tree %s verified (release_sha256 %s)" % (
         summary["release_id"], summary["commit"], summary["tree"], summary["release_sha256"]))
     summary["verify_stdout"] = ver.stdout
@@ -445,6 +467,11 @@ def check_who_and_flag(check, label, hist: Path, a):
     check("%s PERMISSION_SERVICE_MODE observed in backend == staging parameter (%s)" % (label, a.permission_mode),
           flag.get("observed_in_backend") == a.permission_mode and flag.get("staging_parameter") == a.permission_mode,
           "observed %s, manifest expectation %s" % (flag.get("observed_in_backend"), flag.get("manifest_expected")))
+    check("%s R26 Release Manifest == staging parameter == backend (%s)" % (label, a.permission_mode),
+          flag.get("manifest_expected") == a.permission_mode and flag.get("observed_equals_manifest") is True
+          and flag.get("manifest_equals_parameter") is True
+          and (srec.get("live_manifest_feature_flags") or {}).get("PERMISSION_SERVICE_MODE") == a.permission_mode,
+          "live release %s manifest %s" % (srec.get("live_release_id"), srec.get("live_manifest_feature_flags")))
 
 
 def validate_record(path: Path):
@@ -540,6 +567,9 @@ def cmd_rehearse(a):
     install_layout_files(base, bx)
     mongo_up(base, project)
     rc, hist = staging_deploy(base, bx, "initial", verify_image=a.verify_image, **who(a))
+    check("X Release Manifest feature_flags records PERMISSION_SERVICE_MODE=%s (R26)" % a.permission_mode,
+          sx["feature_flags"]["PERMISSION_SERVICE_MODE"]["expected"] == a.permission_mode,
+          sx["feature_flags"]["PERMISSION_SERVICE_MODE"]["source"])
     copy_bundle_evidence(bx, evid / "1-X" / "bundle")
     (evid / "1-X" / "bundle" / "release_verify.txt").write_text(sx["verify_stdout"], encoding="utf-8")
     copy_history(hist, evid / "1-X")
@@ -565,6 +595,9 @@ def cmd_rehearse(a):
     # --- 2. X+1 with a controlled smoke failure -> automatic exact-image rollback
     by, sy = build_bundle(base, commit_y, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged, **who(a))
     install_layout_files(base, by)
+    check("X+1 Release Manifest feature_flags records PERMISSION_SERVICE_MODE=%s (R26)" % a.permission_mode,
+          sy["feature_flags"]["PERMISSION_SERVICE_MODE"]["expected"] == a.permission_mode,
+          sy["feature_flags"]["PERMISSION_SERVICE_MODE"]["source"])
     copy_bundle_evidence(by, evid / "2-X+1-forced-failure" / "bundle")
     (evid / "2-X+1-forced-failure" / "bundle" / "release_verify.txt").write_text(sy["verify_stdout"], encoding="utf-8")
     rc, hist = staging_deploy(base, by, "deploy", force_fail=True, verify_image=a.verify_image, **who(a))
@@ -589,8 +622,7 @@ def cmd_rehearse(a):
     runtime["X+1 failed attempt (rolled back)"] = failed.get("runtime_images")
     cur = state(base)
     check("current release is still X", cur.get("COMMIT") == commit_x, cur.get("RELEASE_ID", ""))
-    running = ",".join("%s=%s" % (svc, run(["docker", "inspect", "-f", "{{.Image}}", "%s-%s" % (project, svc)]).stdout.strip())
-                       for svc in ("backend", "frontend"))
+    running = running_images(project)
     runtime["after rollback"] = running
     check("running image IDs == recorded image IDs of X", running == images_x, running)
     ident_rb = identity(a.port, commit_x)
@@ -601,6 +633,21 @@ def cmd_rehearse(a):
         json.dumps(snap_rb, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     check("synthetic data kept (per-collection counts equal)", snap_rb == snap_x)
     check("MongoDB container not recreated", run(["docker", "inspect", "-f", "{{.Id}}", project + "-mongo"]).stdout.strip() == mongo_id)
+
+    # --- 2b. R26 negative control: X+1 bundle whose manifest records another mode -> refused, nothing changed
+    other = "enforce" if a.permission_mode != "enforce" else "off"
+    bz, sz = build_bundle(base, commit_y, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged,
+                          manifest_mode=other, **who(a))
+    before = (state(base), running_images(project))
+    rc, hist = staging_deploy(base, bz, "deploy", verify_image=a.verify_image, **who(a))
+    copy_history(hist, evid / "2b-X+1-manifest-mode-mismatch")
+    rec = record_of(hist) or {}
+    check("R26 manifest PERMISSION_SERVICE_MODE=%s != staging %s -> precheck refused (exit 2, PRECHECK_FAILED)"
+          % (other, a.permission_mode), rc == 2 and rec.get("status") == "PRECHECK_FAILED"
+          and "R26" in rec.get("failure", ""), "exit %d: %s" % (rc, rec.get("failure", "")))
+    check("R26 refusal changed nothing (state and running image IDs equal)",
+          (state(base), running_images(project)) == before)
+    shutil.rmtree(str(bz), ignore_errors=True)
 
     # --- 3. X+1 without the failure
     rc, hist = staging_deploy(base, by, "deploy", verify_image=a.verify_image, **who(a))
@@ -626,6 +673,11 @@ def cmd_rehearse(a):
     return finish(evid, base, checks, {"X": sx, "X+1": sy}, project=project, port=a.port, runtime=runtime)
 
 
+def running_images(project):
+    return ",".join("%s=%s" % (svc, run(["docker", "inspect", "-f", "{{.Image}}", "%s-%s" % (project, svc)]).stdout.strip())
+                    for svc in ("backend", "frontend"))
+
+
 def finish(evid: Path, base: Path, checks, bundles, project=None, port=None, runtime=None):
     scan = secret_scan(base, evid)
     checks.append({"check": "no secret value (JWT secret, seed password) in evidence",
@@ -640,7 +692,8 @@ def finish(evid: Path, base: Path, checks, bundles, project=None, port=None, run
         "staging_root": str(base),
         "staging_parameters": read_kv(base / "staging.env"),
         "bundles": {k: {kk: v[kk] for kk in ("release_id", "release_sha256", "commit", "tree", "artifact_sha256",
-                                              "files", "services_to_rebuild", "previous")} for k, v in bundles.items()},
+                                              "files", "services_to_rebuild", "previous", "feature_flags")}
+                    for k, v in bundles.items()},
         "scenario_results": sc,
         "runtime_images": runtime or {},
         "checks": checks,

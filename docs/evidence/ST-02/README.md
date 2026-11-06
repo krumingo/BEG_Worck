@@ -6,6 +6,74 @@
 > `ops/staging/isolation_check.py` (команди: `ops/staging/README.md`, раздел ST-02).
 > Статус: доказателство за **механиката** на release → staging → rollback. Не е Implementation Gate PASS и не е production готовност.
 
+## ТЕКУЩА репетиция (ST-02-C03, Р25/Р26): `rehearsal PASS — 45/45 проверки` (`rehearsal-2026-11-06-c03/summary.json`)
+
+> Пакет `docs/architecture/tasks/ST-02-C03_MANIFEST_FLAG_REHEARSAL.md` (Р15, Р25, Р26). Само в облачния контейнер,
+> локален Docker; **Synology и production не са пипани.** `PERMISSION_SERVICE_MODE=shadow` (Р15 подразбиране),
+> deployer `claude-st02-c03`, approver `krum` (`--deployed-by` / `--approved-by`; `actor` във всеки `record.json`).
+> Тази репетиция **заменя** старата `rehearsal-2026-11-06/` (`enforce`, `actor: "unknown"`), която остава по-долу
+> само като история — не се трие.
+
+| | Commit | Release | release_sha256 | manifest `PERMISSION_SERVICE_MODE` |
+|---|---|---|---|---|
+| X (main, ST-01) | `07da9aba0711c0b0784bee8e58c5669ce81a93c1` | `rel-20261106T203417Z-07da9aba0711` | `c3fb6f37321b4296197434b8841d13a4a25d9b3f68c81b8ed12c352f123fe0a3` | `shadow` |
+| X+1 (main, PM-01) | `8e3b1901938dd4f96b792cd9234b8763f6feefc5` | `rel-20261106T203722Z-8e3b1901938d` | `edda0055ba9528261669e18833ce65621522934822b74d221d3f33b78b044bff` | `shadow` |
+
+**Р26 — режимът и Feature Flags snapshot са в Release Manifest-а на deployment-а.** Двата bundle-а са направени с
+`release_build.py --environment staging --flag-override PERMISSION_SERVICE_MODE=shadow --flag-override-reason
+"R15 staging default"`. В `manifest.json` → `release.feature_flags.PERMISSION_SERVICE_MODE`:
+`expected: "shadow"`, `source: "deployment parameter (staging): R15 staging default; layout default off; set by the
+deployment overlay, not .env"`. Схемата остава `beg.release-manifest/v1` (съществуващото поле `feature_flags`; без
+override manifest-ите и `configuration.version` са същите; за production override-ът се отказва, а validator-ът
+отхвърля такъв `source` в production manifest). `release_verify.py bundle` с инструментите **от самия commit**
+(main, без Р26 промяната) приема manifest-ите → обратна съвместимост, доказана на живо.
+`manifest.json`, `SHA256SUMS`, `build_info.json` в evidence са байт-идентични (`cmp`) с bundle-ите; `sha256sum -c` минава.
+
+Сравнение **manifest ↔ staging ↔ работещ backend** (`staging-deployment.json` до всеки `record.json`:
+`live_release_id`, `live_release_sha256`, `live_manifest_feature_flags`, `manifest_expected`, `staging_parameter`,
+`observed_in_backend`, `observed_equals_parameter` / `observed_equals_manifest` / `manifest_equals_parameter`):
+
+```text
+1.  X:   manifest shadow = staging shadow (precheck) → build → smoke → backend shadow → DEPLOYED
+         /api/version = 07da9aba…; ST-01 seed A/B; сценарии exit 0
+2.  X+1 с контролиран провал на smoke → АВТОМАТИЧЕН ROLLBACK към точните image ID-та на X (EXACT_IMAGE)
+         precheck: manifest на X+1 и на rollback target X = shadow; след rollback backend shadow = manifest на X
+         данните (бройки по колекции) същите; MongoDB контейнерът не е пресъздаден
+2b. Р26 отрицателна проба: bundle на X+1 с manifest enforce ≠ staging shadow
+         → PRECHECK_FAILED, exit 2, „Release Manifest records PERMISSION_SERVICE_MODE=enforce, staging parameter is shadow“
+         → нищо не е променено (current state и работещите image ID-та същите)
+3.  X+1 без провал: DEPLOYED, /api/version = 8e3b1901…, backend shadow = manifest = parameter,
+         rollback target = X с неговите image ID-та, данните от X налице, сценариите минават отново
+```
+
+Разминаване след smoke (backend ≠ manifest или ≠ параметъра) → `auto_rollback` (при initial — `INITIAL_FAILED`);
+разминаване manifest ≠ параметъра → отказ в precheck преди каквато и да е промяна (тестове в
+`backend/tests/test_st_02_staging_stack.py`, `test_c03_*`).
+
+| Етап | backend | frontend |
+|---|---|---|
+| X | `sha256:4bc881d7d559…` | `sha256:831a8debb497…` |
+| X+1, провален опит (върнат) | `sha256:9d4b4ee738c6…` | `sha256:4990d2f0edda…` |
+| след rollback | `sha256:4bc881d7d559…` (= X) | `sha256:831a8debb497…` (= X) |
+| X+1, успешен deploy | `sha256:34fa907cfdd8…` | `sha256:9fe29efb61e3…` |
+
+ST-01 сценарии (X и X+1): 12 сценария 0 pass / 0 fail / 12 blocked; стъпки 10 pass / 0 fail / 30 blocked — както преди.
+Base images: пак sandbox образите на облачния контейнер (`rehearsal-2026-11-06-c03/sandbox-base-images.txt`) —
+доказва механиката, не production base images. Secret scan на evidence: 0 съвпадения.
+
+**Р25:** staging ползва само собствения си MongoDB; `ST02_ALLOWED_MONGO_HOSTS` остава премахнат (зададена стойност → отказ;
+FG-6 тестовете + `test_c03_r25_no_external_mongo_option_in_the_tools`).
+
+**Известен козметичен дълг (не е поправян):** `staging_parameter_source` в `staging-deployment.json` пише
+`explicit staging parameter`, защото `staging_up.py` винаги записва режима в `staging.env`; самият manifest носи
+правилния източник `R15 staging default`.
+
+Тестове на ST-02-C03: `tests-ST-02-C03.txt`.
+
+---
+
+# ИСТОРИЯ — първата репетиция (ST-02, заменена от ST-02-C03 по-горе; не се трие)
+
 ## Резултат: `rehearsal PASS — 29/29 проверки` (`rehearsal-2026-11-06/summary.json`)
 
 | | Commit | Release | release_sha256 |
@@ -86,12 +154,12 @@
 3. Staging rebuild-ва backend и frontend при всеки release (всеки image носи свой `BUILD_INFO.json`);
    manifest-ът на X+1 казва `services_to_rebuild = [backend]` — записано в лога.
 4. Pre-deploy backup = `mongodump --gzip` на staging базата (не production backup/restore доказателство).
-5. `ops/release/` и `ops/synology/` **не са променени** (тест срещу `07da9ab`). Synology deploy още не пише
+5. `ops/release/` и `ops/synology/` **не са променени** от ST-02 (тест срещу `07da9ab`; от ST-02-C03 — само Р26 файловете на `ops/release`, без deploy/rollback инструментите). Synology deploy още не пише
    `BUILD_INFO.json` (известно от RC-01) — в staging това се прави в `staging_deploy.sh`.
 6. Демо подсказката `admin@begwork.com / admin123` на входния екран е съществуващ продуктов текст (не е от ST-02)
    — в staging базата такъв потребител няма.
 
-## Тестове — `tests-cbb8bdb.txt`
+## Тестове на първата репетиция — `tests-cbb8bdb.txt` (текущите: `tests-ST-02-C03.txt`)
 
 | Проверка | Резултат |
 |---|---|

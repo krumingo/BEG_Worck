@@ -470,6 +470,7 @@ def test_c02_fg4_deployer_and_approver_required(argv, capsys):
 
 
 def test_c02_fg4_build_bundle_names_deployer_and_approver(tmp_path, monkeypatch):
+    (tmp_path / "staging.env").write_text("ST02_PERMISSION_SERVICE_MODE=shadow\n")
     seen = []
     monkeypatch.setattr(up, "run", lambda cmd, check=True, **k: seen.append(cmd) or (_ for _ in ()).throw(up.Refused("stop")))
     with pytest.raises(up.Refused):
@@ -477,6 +478,9 @@ def test_c02_fg4_build_bundle_names_deployer_and_approver(tmp_path, monkeypatch)
     cmd = seen[0]
     assert cmd[cmd.index("--created-by") + 1] == "alice"
     assert "deploy:approved_by=krum" in cmd
+    # R26: the staging mode goes into the Release Manifest's feature_flags snapshot
+    assert cmd[cmd.index("--flag-override") + 1] == "PERMISSION_SERVICE_MODE=shadow"
+    assert cmd[cmd.index("--flag-override-reason") + 1] == "R15 staging default"
     with pytest.raises(up.Refused, match="--approved-by is required"):
         up.build_bundle(tmp_path, "HEAD", "origin/main", None, deployed_by="alice")
     with pytest.raises(up.Refused, match="--deployed-by is required"):
@@ -715,10 +719,98 @@ def test_sandbox_base_script_refuses_without_flag(tmp_path):
     assert r.returncode == 2 and "--sandbox" in r.stderr
 
 
+# R26 (ST-02-C03): the only ops/release change is the backward-compatible flag override in
+# release_build.py + its validator rule, docs and tests; deploy/rollback shell tools and ops/synology
+# stay byte-identical to main's.
+R26_RELEASE_FILES = {"ops/release/release_build.py", "ops/release/beg_release/manifest.py",
+                     "ops/release/release_manifest.schema.json", "ops/release/README.md",
+                     "ops/release/tests/test_artifact.py"}
+
+
 def test_ops_release_tools_are_not_modified_by_st02():
-    """ST-02 adapts the logic in ops/staging; the production release tools stay byte-identical to main's."""
+    """ST-02 adapts the logic in ops/staging; only the R26 manifest files of ops/release change."""
     r = subprocess.run(["git", "-C", str(REPO), "diff", "--name-only", "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
                         "--", "ops/release", "ops/synology"], capture_output=True, text=True)
     if r.returncode != 0:
         pytest.skip("base commit not available in this clone")
-    assert r.stdout.strip() == ""
+    changed = set(r.stdout.split())
+    assert changed <= R26_RELEASE_FILES, sorted(changed - R26_RELEASE_FILES)
+    assert not any(p.startswith(("ops/synology/", "ops/release/synology/")) for p in changed)
+
+
+def test_c03_r25_no_external_mongo_option_in_the_tools():
+    """R25 (Krum, 06.11.2026): staging uses only its own MongoDB. The FG-6 tests above prove a set
+    ST02_ALLOWED_MONGO_HOSTS refuses; here: no tool offers the option as a way in."""
+    assert "--allowed-mongo-hosts" not in (STAGING / "staging_up.py").read_text()
+    assert "ST02_ALLOWED_MONGO_HOSTS" not in (STAGING / "deploy" / "docker-compose.staging.yml").read_text()
+
+
+# ------------------------------------------------------------ R26: mode in the Release Manifest (real bundles)
+@pytest.fixture(scope="module")
+def r26_bundles(tmp_path_factory):
+    """Real staging bundles of HEAD: one with the staging mode, one whose manifest disagrees."""
+    if shutil.which("git") is None:
+        pytest.skip("git not available")
+    root = tmp_path_factory.mktemp("r26")
+    port = 18000 + (os.getpid() % 900)
+    base, _ = up.prepare_base(root / "st", PROJECT, port, "shadow")
+    who = {"deployed_by": "alice", "approved_by": "krum"}
+    good, gs = up.build_bundle(base, "HEAD", "HEAD", None, allow_unmerged=True, **who)
+    bad, _ = up.build_bundle(base, "HEAD", "HEAD", None, allow_unmerged=True, manifest_mode="enforce", **who)
+    up.install_layout_files(base, good)
+    return base, good, bad, gs
+
+
+def test_c03_r26_manifest_records_the_staging_mode(r26_bundles):
+    base, good, bad, gs = r26_bundles
+    for bundle, mode in ((good, "shadow"), (bad, "enforce")):
+        doc = json.loads((bundle / "manifest.json").read_text())
+        spec = doc["release"]["feature_flags"]["PERMISSION_SERVICE_MODE"]
+        assert spec["expected"] == mode
+        assert spec["source"].startswith("deployment parameter (staging): ") and "layout default off" in spec["source"]
+        assert doc["release"]["environment"] == "staging"
+    assert gs["feature_flags"]["PERMISSION_SERVICE_MODE"]["expected"] == "shadow"
+    assert "R15 staging default" in gs["feature_flags"]["PERMISSION_SERVICE_MODE"]["source"]
+
+
+def _r26_deploy(base, bundle):
+    env = dict(os.environ, BEGWORK_BASE=str(base), DOCKER="/bin/false", RELEASE_PY_MODE="local",
+               RELEASE_PYTHON=sys.executable, ST02_DEPLOYED_BY="alice", ST02_APPROVED_BY="krum")
+    return subprocess.run(["bash", str(STAGING / "staging_deploy.sh"), "--bundle", str(bundle), "--initial"],
+                          env=env, capture_output=True, text=True)
+
+
+def test_c03_r26_manifest_mode_mismatch_is_refused_before_any_change(r26_bundles):
+    base, good, bad, _ = r26_bundles
+    r = _r26_deploy(base, bad)
+    out = r.stdout + r.stderr
+    assert r.returncode == 2, out
+    assert "Release Manifest records PERMISSION_SERVICE_MODE=enforce, staging parameter is shadow" in out, out
+    assert "NOTHING WAS CHANGED" in out
+    assert not (base / "repo").exists() and not (base / "release-state" / "current.env").exists()
+    rec = sorted((base / "release-state" / "history").glob("*-deploy-*/record.json"))[-1]
+    assert json.loads(rec.read_text())["status"] == "PRECHECK_FAILED"
+
+
+def test_c03_r26_matching_manifest_passes_the_r26_precheck(r26_bundles):
+    base, good, bad, _ = r26_bundles
+    r = _r26_deploy(base, good)
+    out = r.stdout + r.stderr
+    assert "R26: Release Manifest (P) PERMISSION_SERVICE_MODE=shadow = staging parameter (explicit staging parameter)" in out, out
+    assert "Release Manifest records" not in out
+    assert r.returncode == 3  # next step: the isolation check needs Docker (here /bin/false) -> refused, nothing started
+    assert not (base / "repo").exists()
+
+
+def test_c03_r26_deploy_checks_manifest_backend_and_rollback_target():
+    sh = (STAGING / "staging_deploy.sh").read_text()
+    assert 'S_FLAG_EXPECT_PERMISSION_SERVICE_MODE="$ST_ST02_PERMISSION_SERVICE_MODE"' not in sh  # no mapping any more
+    i_p = sh.index('manifest_flag_matches P || staging_fail')
+    assert i_p < sh.index('assert_isolated || { log "REFUSED')
+    assert 'manifest_flag_matches C || staging_fail "rollback target: $STAGE_FAIL"' in sh
+    assert 'Release Manifest records ${!expect_var:-?}' in sh  # observed != manifest -> FLAG_FAIL -> rollback
+    assert 'observe_flag C ||' in sh
+    for key in ('"live_release_id"', '"live_release_sha256"', '"live_manifest_feature_flags"',
+                '"observed_equals_manifest"', '"manifest_equals_parameter"'):
+        assert key in sh
+

@@ -12,17 +12,23 @@
 #     (the production compose file stays byte-identical; the overlay renames containers, replaces the
 #     port, adds an own network and an own MongoDB replica set) and refuses to run unless
 #     `compose config` proves that isolation (assert_isolated);
-#   * the manifest's container names, smoke base URL and flag expectation describe the production
-#     layout; staging_overrides() maps them to the staging containers/port and to the staging
-#     PERMISSION_SERVICE_MODE parameter, after EVERY copy into S_* (plan, current, rollback);
+#   * the manifest's container names and smoke base URL describe the production layout;
+#     staging_overrides() maps them to the staging containers/port after EVERY copy into S_*
+#     (plan, current, rollback);
+#   * R26 (ST-02-C03): the flag expectation is NOT mapped any more — the staging bundle's own
+#     Release Manifest records PERMISSION_SERVICE_MODE (release_build.py --flag-override) and the
+#     precheck refuses (exit 2, nothing changed) unless manifest == staging parameter, for the
+#     target and for the recorded rollback target; lib.sh's smoke flag check then compares the
+#     backend against the manifest itself;
 #   * RC-01 build identity: write_build_info.py --from-bundle stamps backend/ and frontend/
 #     BUILD_INFO.json into the staged tree (declared as the only allowed extra files of the tree)
 #     and every service is rebuilt, so the UI and /api/version carry the bundle commit;
 #   * PERMISSION_SERVICE_MODE defaults to shadow (R15) when staging.env does not set it; enforce/off
 #     only as an explicit staging parameter (ST-02-C02, FG-2);
-#   * FG-3: after the smoke the flag value really running in the backend is read and must equal the
-#     staging parameter (unset = refused); staging-deployment.json next to record.json keeps the
-#     manifest expectation, the staging parameter and the observed value side by side;
+#   * FG-3/R26: after the smoke the flag value really running in the backend is read and must equal
+#     the staging parameter AND the live release's manifest (unset = refused; a mismatch after a
+#     deploy = automatic rollback); staging-deployment.json next to record.json keeps the manifest's
+#     feature_flags snapshot, the staging parameter and the observed value side by side;
 #   * FG-4: ST02_DEPLOYED_BY and ST02_APPROVED_BY are mandatory (refused otherwise); the deployer is
 #     the record's actor, both are in staging-deployment.json;
 #   * a gzip mongodump of the staging database is the pre-deploy backup;
@@ -96,7 +102,6 @@ staging_overrides() { # staging_overrides [forced] : S_* production layout value
   S_CONTAINERS="$PROJECT-backend,$PROJECT-frontend"
   S_LOG_CONTAINER="$PROJECT-backend"
   S_HEALTH_BASE_URL="http://127.0.0.1:$ST_ST02_HTTP_PORT"
-  S_FLAG_EXPECT_PERMISSION_SERVICE_MODE="$ST_ST02_PERMISSION_SERVICE_MODE"
   [ -z "${ST_ST02_RESTART_SAMPLE_SEC:-}" ] || S_RESTART_SAMPLE_SEC="$ST_ST02_RESTART_SAMPLE_SEC"
   if [ "${1:-}" = forced ]; then
     S_HTTP_PATHS="$S_HTTP_PATHS,$FORCED_PATH"
@@ -104,9 +109,22 @@ staging_overrides() { # staging_overrides [forced] : S_* production layout value
   fi
 }
 
+# R26: the Release Manifest (plan prefix P = target, C = recorded current / rollback target) must
+# record exactly the staging parameter; otherwise the deployment is refused before any change.
+manifest_flag_matches() { # manifest_flag_matches PREFIX
+  local keys_var="${1}_FLAG_KEYS" expect_var="${1}_FLAG_EXPECT_PERMISSION_SERVICE_MODE"
+  [[ ",${!keys_var:-}," == *,PERMISSION_SERVICE_MODE,* ]] \
+    || { STAGE_FAIL="the Release Manifest ($1) has no PERMISSION_SERVICE_MODE flag"; return 1; }
+  [ "${!expect_var:-}" = "$ST_ST02_PERMISSION_SERVICE_MODE" ] \
+    || { STAGE_FAIL="Release Manifest records PERMISSION_SERVICE_MODE=${!expect_var:-?}, staging parameter is $ST_ST02_PERMISSION_SERVICE_MODE (R26: build the staging bundle with the staging mode)"; return 1; }
+  log "  R26: Release Manifest ($1) PERMISSION_SERVICE_MODE=${!expect_var} = staging parameter ($MODE_SOURCE)"
+}
+
 # FG-3: the flag value the staging backend really runs with (the mode is not a secret).
-OBSERVED_FLAG=""; FLAG_FAIL=""
-observe_flag() {
+OBSERVED_FLAG=""; FLAG_FAIL=""; LIVE_PREFIX=P
+observe_flag() { # observe_flag [PREFIX of the live release's manifest, default P]
+  LIVE_PREFIX="${1:-P}"
+  local expect_var="${LIVE_PREFIX}_FLAG_EXPECT_PERMISSION_SERVICE_MODE"
   if OBSERVED_FLAG="$("$DOCKER" exec "$PROJECT-backend" printenv PERMISSION_SERVICE_MODE 2>/dev/null)"; then
     OBSERVED_FLAG="${OBSERVED_FLAG//$'\r'/}"
   else
@@ -115,13 +133,27 @@ observe_flag() {
   [[ "$OBSERVED_FLAG" =~ ^(off|shadow|enforce|UNSET)$ ]] || OBSERVED_FLAG="INVALID"
   [ "$OBSERVED_FLAG" = "$ST_ST02_PERMISSION_SERVICE_MODE" ] || {
     FLAG_FAIL="PERMISSION_SERVICE_MODE running in $PROJECT-backend is $OBSERVED_FLAG, staging parameter is $ST_ST02_PERMISSION_SERVICE_MODE"; return 1; }
-  log "  flag PERMISSION_SERVICE_MODE observed in $PROJECT-backend = $OBSERVED_FLAG (= staging parameter, $MODE_SOURCE; manifest expectation ${P_FLAG_EXPECT_PERMISSION_SERVICE_MODE:-?} is the production layout's)"
+  [ "$OBSERVED_FLAG" = "${!expect_var:-}" ] || {
+    FLAG_FAIL="PERMISSION_SERVICE_MODE running in $PROJECT-backend is $OBSERVED_FLAG, Release Manifest records ${!expect_var:-?}"; return 1; }
+  log "  flag PERMISSION_SERVICE_MODE observed in $PROJECT-backend = $OBSERVED_FLAG (= staging parameter, $MODE_SOURCE; = Release Manifest $LIVE_PREFIX)"
+}
+
+# R26: the live release's manifest feature_flags snapshot as JSON (keys/values are safe plan strings)
+flags_json() { # flags_json PREFIX
+  local keys_var="${1}_FLAG_KEYS" k v out="" sep=""
+  for k in ${!keys_var//,/ }; do
+    v="${1}_FLAG_EXPECT_$k"; out="$out$sep\"$k\": \"${!v:-}\""; sep=", "
+  done
+  printf '{%s}' "$out"
 }
 
 # staging_record STATUS : staging-deployment.json next to lib.sh's record.json (FG-3 + FG-4)
 staging_record() {
-  local eq=false
+  local eq=false meq=false pmeq=false L="${LIVE_PREFIX:-P}"
+  local lrel="${L}_RELEASE_ID" lsha="${L}_RELEASE_SHA256" lexp="${L}_FLAG_EXPECT_PERMISSION_SERVICE_MODE"
   [ "${OBSERVED_FLAG:-}" = "$ST_ST02_PERMISSION_SERVICE_MODE" ] && eq=true
+  [ "${OBSERVED_FLAG:-}" = "${!lexp:-}" ] && meq=true
+  [ "${!lexp:-}" = "$ST_ST02_PERMISSION_SERVICE_MODE" ] && pmeq=true
   cat > "$EVID/staging-deployment.json" <<JSON
 {
   "schema": "beg.st02-staging-deployment/v1",
@@ -132,14 +164,19 @@ staging_record() {
   "project": "$PROJECT",
   "deployed_by": "$ST02_DEPLOYED_BY",
   "approved_by": "$ST02_APPROVED_BY",
+  "live_release_id": "${!lrel:-}",
+  "live_release_sha256": "${!lsha:-}",
+  "live_manifest_feature_flags": $(flags_json "$L"),
   "feature_flags": {
     "PERMISSION_SERVICE_MODE": {
-      "manifest_expected": "${P_FLAG_EXPECT_PERMISSION_SERVICE_MODE:-}",
-      "manifest_expected_scope": "production layout (ops/release/synology/layout.json); staging overlay = staging_parameter",
+      "manifest_expected": "${!lexp:-}",
+      "manifest_expected_scope": "Release Manifest of the live release (R26: release_build.py --flag-override)",
       "staging_parameter": "$ST_ST02_PERMISSION_SERVICE_MODE",
       "staging_parameter_source": "$MODE_SOURCE",
       "observed_in_backend": "${OBSERVED_FLAG:-NOT_OBSERVED}",
-      "observed_equals_parameter": $eq
+      "observed_equals_parameter": $eq,
+      "observed_equals_manifest": $meq,
+      "manifest_equals_parameter": $pmeq
     }
   }
 }
@@ -214,6 +251,7 @@ copy_prefix P S
 staging_overrides
 [ "$P_ENVIRONMENT" = staging ] || staging_fail "manifest environment is $P_ENVIRONMENT; the staging stack only runs environment=staging bundles"
 [ "$P_MIGRATIONS_DECLARED" = 0 ] || staging_fail "manifest declares migrations; W0-09A never runs migrations"
+manifest_flag_matches P || staging_fail "$STAGE_FAIL"
 log "  isolation of the merged compose model:"
 assert_isolated || { log "REFUSED: compose model is not isolated (see above)"; exit 3; }
 REBUILD="$P_ALL_SERVICES"   # RC-01: each release stamps its own BUILD_INFO.json into every image
@@ -232,6 +270,7 @@ else
   [ "$P_PREVIOUS_RELEASE_ID" = "$C_RELEASE_ID" ] && [ "$P_PREVIOUS_TREE" = "$C_TREE" ] \
     || staging_fail "version mismatch: manifest expects previous $P_PREVIOUS_RELEASE_ID/${P_PREVIOUS_TREE:0:12}, live is $C_RELEASE_ID/${C_TREE:0:12}"
   [ "$C_TREE_DIR" = repo ] || staging_fail "current.env TREE_DIR is $C_TREE_DIR, expected repo"
+  manifest_flag_matches C || staging_fail "rollback target: $STAGE_FAIL"
   log "  state: current $C_RELEASE_ID (${C_COMMIT:0:12}) -> target $P_RELEASE_ID (${P_COMMIT:0:12})"
   log "  live source tree must be exactly the recorded current release (+ its BUILD_INFO.json):"
   verify_tree repo "$C_TREE" "$C_LEGACY_EXTRAS" "${C_BUNDLE_DIR:-}" || staging_fail "live $BASE/repo does not match recorded tree $C_TREE"
@@ -307,7 +346,7 @@ auto_rollback() {
     write_record deploy ROLLBACK_FAILED P "$REBUILD" PASS FAIL "$reason; post-rollback smoke: $SMOKE_FAIL" "$C_RELEASE_ID" "$C_RELEASE_ID" "" "$RUNTIME_ROLLBACK"; exit 4
   fi
   runtime_snapshot || true
-  observe_flag || log "  WARNING after rollback: $FLAG_FAIL"
+  observe_flag C || log "  WARNING after rollback: $FLAG_FAIL"
   staging_record ROLLED_BACK
   if [ "$RUNTIME_ROLLBACK" = SOURCE_REBUILD ]; then
     log "ROLLED BACK (source-exact, NOT runtime-exact: recorded image was unavailable)"

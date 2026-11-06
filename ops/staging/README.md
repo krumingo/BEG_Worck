@@ -119,8 +119,9 @@ Package: `docs/architecture/tasks/ST-02_ISOLATED_STAGING_STACK.md` (approved by 
 smoke → exact-image rollback in isolated staging". Evidence: `docs/evidence/ST-02/`.
 
 **Never Synology production, never `/volume1/docker/begwork`, never production data or
-secrets.** `ops/release/` and `ops/synology/` are not changed; production `layout.json` and
-flags are not touched.
+secrets.** `ops/synology/` and the `ops/release` deploy/rollback tools are not changed; the only
+`ops/release` change is R26's backward-compatible, non-production `--flag-override` (ST-02-C03);
+production `layout.json` and flags are not touched.
 
 | File | What it is |
 |---|---|
@@ -181,18 +182,30 @@ flags are not touched.
    smoke → record `ROLLED_BACK` / `EXACT_IMAGE`, exit 1. MongoDB is not part of a release and is
    never recreated by deploy or rollback.
 5. Staging differences from production, all explicit in the log and record:
-   * container names / smoke URL / flag expectation of the manifest describe production; they
-     are mapped to the staging project and to `--permission-mode` — **default `shadow` (R15,
-     ST-02-C02)**; `enforce` or `off` only when passed explicitly (logged as
-     `EXPLICIT --permission-mode`). The production expectation `off` stays in the immutable
-     manifest; the flag is set by the overlay (`${ST02_PERMISSION_SERVICE_MODE:-shadow}`), not `.env`;
-     `staging_deploy.sh` also falls back to `shadow` when `staging.env` has no mode;
-   * FG-3: after the smoke `staging_deploy.sh` reads `PERMISSION_SERVICE_MODE` from the running
-     backend; it must equal the staging parameter (unset or different = initial failure /
-     automatic rollback). `staging-deployment.json` next to `record.json` keeps
-     `manifest_expected` (production layout), `staging_parameter` (+ source: R15 default or
-     explicit) and `observed_in_backend` side by side. Where a staging flag overlay should live in
-     the Release Manifest itself is a decision for Krum (the manifest is not changed by ST-02);
+   * container names / smoke URL of the manifest describe production; they are mapped to the
+     staging project. `--permission-mode` — **default `shadow` (R15, ST-02-C02)**; `enforce` or
+     `off` only when passed explicitly (logged as `EXPLICIT --permission-mode`). The flag is set by
+     the overlay (`${ST02_PERMISSION_SERVICE_MODE:-shadow}`), not `.env`; `staging_deploy.sh` also
+     falls back to `shadow` when `staging.env` has no mode;
+   * **R26 (ST-02-C03): the mode is in the Release Manifest of the deployment.** `staging_up.py`
+     builds every staging bundle with `release_build.py --flag-override
+     PERMISSION_SERVICE_MODE=<mode> --flag-override-reason "R15 staging default"` (or `explicit
+     --permission-mode …`), so the manifest's `feature_flags` snapshot (CLAUDE.md §6) records
+     `expected: <mode>` with `source: deployment parameter (staging): …; layout default off; …`;
+     `build_bundle` refuses a bundle whose manifest does not. The schema stays
+     `beg.release-manifest/v1` (the existing `feature_flags` object; manifests without an
+     override are unchanged and valid; an override is refused for production). The manifest
+     expectation is **no longer mapped** in `staging_deploy.sh`:
+     - precheck: manifest of the target **and** of the recorded rollback target == staging
+       parameter, otherwise `PRECHECK_FAILED`, exit 2, nothing changed;
+     - after the smoke (FG-3): `PERMISSION_SERVICE_MODE` read from the running backend must equal
+       the staging parameter **and** the live release's manifest (unset or different = initial
+       failure / automatic rollback); lib.sh's own smoke flag check also compares against the
+       manifest;
+     - `staging-deployment.json` next to `record.json` keeps `live_release_id`,
+       `live_release_sha256`, `live_manifest_feature_flags` (the snapshot), and per flag
+       `manifest_expected`, `staging_parameter` (+ source), `observed_in_backend`,
+       `observed_equals_parameter`, `observed_equals_manifest`, `manifest_equals_parameter`;
    * FG-4: `--deployed-by` and `--approved-by` are **required** (plain identifiers, never
      `unknown`/`none`/`root`; refused before anything is built). The deployer is the manifest's
      `created_by` and the record's `actor`; the approver is a manifest approval
@@ -224,7 +237,8 @@ python3 ops/staging/staging_up.py up --base /tmp/st02/base --commit origin/main 
 python3 ops/staging/staging_up.py deploy --base /tmp/st02/base --commit <ref> [--force-smoke-fail] \
      --deployed-by <who> --approved-by <who> --verify-image mirror.gcr.io/library/python:3.11-slim
 
-# full rehearsal X -> X+1 (forced failure, exact-image rollback) -> X+1, evidence + summary.json
+# full rehearsal X -> X+1 (forced failure, exact-image rollback) -> R26 manifest-mode mismatch refused
+#   -> X+1, evidence + summary.json
 python3 ops/staging/staging_up.py rehearse --base /tmp/st02/run --from <X> --to <X+1> \
      --evidence /tmp/st02/evidence --deployed-by <who> --approved-by <who> --verify-image mirror.gcr.io/library/python:3.11-slim \
      --sandbox-base-report /tmp/st02/sandbox-base.txt
@@ -288,4 +302,9 @@ refusals before any Docker call, sandbox script refusal, `ops/release`/`ops/syno
 versus `07da9ab`. ST-02-C02: default mode `shadow` (CLI, `prepare_base`, isolation check,
 overlay, real `compose config`, `staging_deploy.sh` without a mode), `enforce` only explicit,
 FG-3 observed-flag check/record, FG-4 deployer/approver refusals and `actor`, FG-5 URL and
-bootstrap-key refusals, FG-6 allow-list refused.
+bootstrap-key refusals, FG-6 allow-list refused. ST-02-C03: R25 (no external MongoDB option),
+R26 `--flag-override` passed by `build_bundle`, real staging bundles of HEAD carry the mode in the
+manifest, a manifest/parameter mismatch is refused by `staging_deploy.sh` before any change and a
+matching one passes that precheck; `ops/release` changes limited to the R26 files (tests in
+`ops/release/tests/test_artifact.py`: override recorded/validated/verified, production refused,
+unknown key/value refused, configuration version unchanged without an override).
