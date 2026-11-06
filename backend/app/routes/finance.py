@@ -1284,9 +1284,10 @@ async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: 
         {"$set": {"status": PAYMENT_REVERSED, "reversed_by_payment_id": rev_id,
                   "reversed_at": now, "reversed_by": user["id"],
                   "reversal_reason": reason, "updated_at": now}},
-        projection={"_id": 0}, return_document=ReturnDocument.AFTER)
+        return_document=ReturnDocument.AFTER)
     if not original:
         return None
+    original.pop("_id", None)
     await _ensure_reversal_row(tenant, user, original, now)
     await _audit(user, "finance.payment.reversed", "finance.payment", payment_id, reason, {
         "status": {"before": "active", "after": PAYMENT_REVERSED},
