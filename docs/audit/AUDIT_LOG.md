@@ -8,7 +8,8 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C21) | `df48d68` | C21 scope PASS; C20-1 still open (expected in C22) | 2026-11-06 |
+| #55 Склад 5C (C22) | `a427923` | PASS (internal) — Codex still required (money) | 2026-11-06 |
+| #67 ST-02 | `55ef71d` | PASS with 1 medium finding (ST02-1) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -455,3 +456,83 @@ Re-runs of earlier probes:
 - C20 report probe: **unchanged**. `project_financial_results`, `centralized_reports` and `profit_by_period` still show 0, or 100 with a legacy row, against 30. C20-1 stays open. The orchestrator says 5C-C22 ("all finance reports from one source" + the R13 cutover split) addresses it and C20-2.
 
 **Verdict:** C21 scope (Р10/Р11) PASS (internal). #55 as a whole is still FINDINGS until C22 closes C20-1. Money, so the Codex review is still required.
+
+
+---
+
+## 2026-11-06 ~16:45 — PR #55 @ `a427923` (5C-C22: one helper for every finance report, Р13 cutover) and new PR #67 ST-02 @ `55ef71d`
+
+### #55 @ `a427923`
+
+**Suites (PROVED):**
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix | **213 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo | **881 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 219 modules, 0 violations ✔ |
+| A1 | 444 units, 0 violations ✔ |
+
+**Probes** (`docs/audit/probes/pr55/test_probe_pr55_c22.py`, plus the C20 report probe, real Mongo, real CommandService). Each test runs in its own process, because a cached loop in `resource_model` breaks multi-test runs of `financial_results` (a harness artifact).
+
+| Probe | material_smr | pnl | financial_results | centralized | profit_by_period |
+|---|---|---|---|---|---|
+| C22-1 canonical only | 30 | 30 | **30** | **30** | **30** |
+| C22-2 legacy 100 dated before cutover + 30 | 130 | 130 | 130 | 130 | 130 |
+| C22-3 legacy 100 dated after cutover + 30 | 30 | 30 | 30 | 30 | 30 |
+| C22-4 cutover per tenant (T2 cut 30 days earlier; T's legacy row between the two cutovers) | 130 | 130 | 130 | 130 | 130 |
+| C22-5 periods + undated equal the total | — | — | — | — | 130 ✔ |
+
+- **C20-1 is CLOSED.** Every report agrees.
+- **C20-2 is CLOSED by Р13**, a disjoint split by the tenant cutover. One tenant's cutover does not leak into another.
+- An undated legacy row is counted in the total and shown as `material_undated` in profit-by-period, by design and documented.
+
+C21 probes: 5/5. C19: 6/8; only the known main W0-04 concurrency pair fails.
+
+Note (low, pre-existing): legacy `type: return` rows never carried a price (`origin/main:procurement.py:760-779`), so returned legacy material still counts as issued cost. The figures are unchanged from main and C22 documents this.
+
+**Verdict:** PASS (internal). Money, so the Codex review is required.
+
+### #67 ST-02 @ `55ef71d` (isolated staging stack + rollback rehearsal) — NEW
+
+**Scope (PROVED):**
+- `git diff origin/main...pr/67` touches only `ops/staging/*`, `backend/tests/test_st_02_staging_stack.py` and `docs/evidence/ST-02/`.
+- `ops/release`, `ops/synology`, `backend/app` and `frontend` are untouched ✔.
+- Secret scan of the diff: clean. The only hit is a `"synthetic"` JWT value in a test.
+
+**Tests:**
+
+| Command | Result |
+|---|---|
+| `pytest --noconftest tests/test_st_02_staging_stack.py` | 50 passed |
+| `pytest ops/release/tests` | 78 passed, 1 skipped |
+| A2C / A1 | 0 / 0 |
+
+The live rehearsal (docker build/deploy) was not re-run by the audit; the evidence is in `docs/evidence/ST-02/rehearsal-2026-11-06/`. The PR itself says it proves the mechanics on sandbox base images, not production base images.
+
+**Probe:** `docs/audit/probes/st02/probe_st02_isolation.py`. It starts from a passing compose model and applies one hostile mutation at a time.
+
+| Mutation | Caught? |
+|---|---|
+| mongo publishes 0.0.0.0:27017 | ✔ |
+| mongo on an external volume | ✔ |
+| backend `network_mode: host` | ✔ |
+| backend `MONGO_URL` → external `mongodb+srv` production cluster | ✘ |
+| backend `MONGO_URL` → LAN IP of a production mongo | ✘ |
+| backend `DB_NAME=begwork` | ✘ |
+| backend bind-mount of `/volume1/docker/begwork` | ✘ |
+| backend mounts `/var/run/docker.sock` | ✘ |
+| backend `privileged: true` | ✘ |
+
+**ST02-1 — MEDIUM, PROVED.** `ops/staging/isolation_check.py` ("ISOLATION PASS") does not check where the backend's database points, nor bind mounts or privileges.
+- The `st02` bridge network still has outbound access, so a staging backend with a production `MONGO_URL` would write production data while the gate prints PASS.
+- The default path is safe: `staging_up.py:169-170` writes `mongodb://mongo:27017/?replicaSet=rs0` and `DB_NAME=st02_staging`. The risk is a hand-edited or copied `.env`, for example the planned "Later: Synology" run next to the production `.env`.
+- Fix (small):
+  - assert backend `MONGO_URL` host == `mongo` (the service) and `DB_NAME` not in `production_databases()` / not `begwork*`;
+  - reject backend/frontend bind mounts outside the staging root, the docker socket, and `privileged`.
+- Recommended before any Synology staging use. Not blocking for the cloud-container scope of ST-02.
+
+**Integration:**
+- #67 is clean against main, #53, #54, #55, #56 and #64.
+- #55 is clean against main. It still conflicts with #56 (`data_access.py`, A2B inventory), #53/#64 (`App.js`) and #54 (`catalog.py`, `procurement.py`, `data_access.py`).

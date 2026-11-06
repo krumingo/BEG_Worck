@@ -1,0 +1,57 @@
+"""CLAUDE AUDIT probe ST-02: does ops/staging/isolation_check.py catch non-isolated staging models?
+
+    python3 probe_st02_isolation.py <PR worktree>
+Start from a model that PASSES, apply one hostile mutation at a time, expect ISOLATION FAIL.
+"""
+import copy, sys
+sys.path.insert(0, sys.argv[1] + "/ops/staging")
+import isolation_check as ic
+
+P = "begwork-staging"
+BASE = {
+    "name": P,
+    "services": {
+        "backend": {"container_name": P + "-backend", "networks": {"st02": None},
+                    "environment": {"ENV": "staging", "PERMISSION_SERVICE_MODE": "enforce",
+                                    "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "begwork_staging",
+                                    "JWT_SECRET": "x"}},
+        "frontend": {"container_name": P + "-frontend", "networks": {"st02": None},
+                     "ports": [{"host_ip": "127.0.0.1", "published": "18080", "target": 80}]},
+        "mongo": {"container_name": P + "-mongo", "networks": {"st02": None},
+                  "command": ["--replSet", "rs0", "--bind_ip_all"],
+                  "volumes": [{"type": "volume", "source": "st02-mongo-data", "target": "/data/db"}]},
+    },
+    "networks": {"st02": {"name": P + "_net"}},
+    "volumes": {"st02-mongo-data": {"name": P + "_mongo_data"}},
+}
+assert ic.check(BASE, P, "18080", "enforce") == [], ic.check(BASE, P, "18080", "enforce")
+
+
+def mut(desc, fn):
+    m = copy.deepcopy(BASE); fn(m)
+    errs = ic.check(m, P, "18080", "enforce")
+    print("%-4s %s" % ("ok" if errs else "MISS", desc))
+    return bool(errs)
+
+
+cases = [
+    ("backend MONGO_URL -> external production cluster",
+     lambda m: m["services"]["backend"]["environment"].update(MONGO_URL="mongodb+srv://u:p@prod-cluster.mongodb.net")),
+    ("backend MONGO_URL -> host LAN address of the production mongo",
+     lambda m: m["services"]["backend"]["environment"].update(MONGO_URL="mongodb://192.168.1.10:27017")),
+    ("backend DB_NAME = production database name (begwork)",
+     lambda m: m["services"]["backend"]["environment"].update(DB_NAME="begwork")),
+    ("backend bind-mounts the production data dir /volume1/docker/begwork",
+     lambda m: m["services"]["backend"].update(volumes=[{"type": "bind", "source": "/volume1/docker/begwork", "target": "/data"}])),
+    ("backend mounts /var/run/docker.sock",
+     lambda m: m["services"]["backend"].update(volumes=[{"type": "bind", "source": "/var/run/docker.sock", "target": "/var/run/docker.sock"}])),
+    ("backend privileged: true", lambda m: m["services"]["backend"].update(privileged=True)),
+    ("mongo publishes 0.0.0.0:27017",
+     lambda m: m["services"]["mongo"].update(ports=[{"host_ip": "", "published": "27017", "target": 27017}])),
+    ("mongo data on an EXTERNAL (production) volume",
+     lambda m: m["volumes"]["st02-mongo-data"].update(external=True, name="begwork_mongo_data")),
+    ("backend network_mode host", lambda m: m["services"]["backend"].update(network_mode="host")),
+]
+missed = [d for d, f in cases if not mut(d, f)]
+print("MISSED:", missed or "none")
+sys.exit(1 if missed else 0)
