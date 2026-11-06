@@ -242,3 +242,36 @@ Scope: only `ops/staging/` and the test file, no business code ✔. Passwords co
 **PST-3 / PST-4 — PASS.** The seed refuses `begwork*` names and `$DB_NAME` even with `--allow-remote`, and refuses `mongodb+srv` without it.
 
 **Verdict:** PASS (internal), with PST-1 recommended. The role mapping (`assumption: true`) is Krum's decision, as the HANDOFF says.
+
+### Addendum — orchestrator request 13:28 (ST-01 targets / secrets / isolation; Bot defect classes)
+
+**ST-01 @ `9904524` — extra checks:**
+
+- **Targets: PROVED, see PST-2/3/4.** Seed refusals:
+  - a non-local URL without `--allow-remote`, including `mongodb+srv`;
+  - `begwork*` names and `$DB_NAME`/`$BEG_SYSTEM_DB`, even with `--allow-remote`;
+  - `--confirm-db` not equal to `--db`;
+  - any database holding non-synthetic users, organizations or registry rows.
+
+  Residual risk, by design: with `--allow-remote` and a non-`begwork` name, the seed will write to a remote server. That is the documented staging path.
+- **Secrets in Git (PROVED by grep of the PR diff):**
+  - no real secret, connection string with credentials, or key;
+  - the only literals are example URLs in tests (`user:pw@cluster0.example…`) and the synthetic test password `PASSWORD = "ST01-Synthetic-Pass-2026!"` in `backend/tests/test_st_01_staging_fixtures.py:37`, which is used only against mongomock or a throwaway real Mongo;
+  - `ops/staging/` contains no password; the PR's own test asserts this.
+
+  Low note: an operator could reuse that constant as the staging password. The README should say "do not reuse the test constant".
+- **Isolation A/B:** `test_st_01_*` (`_end_to_end`) logs in as each owner over real ASGI HTTP and checks:
+  - the foreign project id → 404, in both directions;
+  - `/material-requests` lists only the caller's own `org_id`;
+  - B-side attempts write 0 rows into B.
+
+  The runner adds GET/PUT/submit/DELETE on A's request as B → 404, with A unchanged. Both pass on real Mongo (29/29). The seed puts both tenants in one operational DB, scoped by `org_id`. That matches how `TenantData` resolves today, so the isolation is tested in the same topology the backend uses.
+
+**New checklist items** (from the Bot findings on #55 `639ca80`, which the unit suites missed). For every head that touches persistence:
+
+1. **Startup/indexes:** is every required index created by an app startup or migration path, and not only by test fixtures? (`grep` the callers of `ensure_*indexes` outside `tests/`.)
+2. **Pre-existing data:** run the first write on a tenant that already has W0-04 `audit_events`, counters and legacy rows. A new chain or counter must not collide with an existing `(tenant_id, sequence)`.
+3. **Legacy unique indexes:** create the legacy indexes from main (for example `warehouse_batches(org_id, batch_number)`), then do two inbound writes. Rows with null fields must not collide.
+4. **Driver API on wrappers:** call every `TenantCollection` method with the kwargs the service passes (for example `distinct(..., session=)`).
+5. **Identical resend** of every command class (inbound and outbound) must return the original result, not 409.
+6. **Error-as-empty UI:** an API 500 must not render as "no alarms" or "no data".
