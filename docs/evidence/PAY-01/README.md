@@ -138,23 +138,25 @@ The rule lives in `backend/app/services/money_amount.py` (`positive_amount`). It
 | `POST /finance/transfers`, `/account-funding`, `/other-expense`, `/other-income` | NaN/inf stored (`round(nan) <= 0` is false); ≤ 0 → 400 | 422 for every bad amount, ≤ 0 included |
 | `POST /finance/payments/{id}/allocate` | NaN/inf allocated; ≤ 0 silently skipped | every item is checked **before the first write**: one bad item → 422, 0 rows |
 
-- **Refused values:** NaN, ±Infinity, 1e309 (parsed as inf), `""`, null, non-numeric text, -1 and 0. Booleans are refused on the dict-based routes; on the two Pydantic routes, Pydantic itself coerces `true` to 1.0, which is out of scope here.
-- **What is unchanged:** numeric strings such as `"12.50"` are still accepted, and the routes that rounded to 2 decimals still do (a value that rounds to 0 → 422).
+- **Refused values:** NaN, ±Infinity, 1e309 (parsed as inf), -1, 0, null, and every non-number: `""`, any string (numeric text such as `"12.5"` too), `true`/`false`, lists and objects.
+- **Only a JSON number is accepted (audit L1):** the check runs before any coercion. On the dict-based routes `positive_amount` does it. On the two Pydantic routes (`PaymentCreate.amount`, `AllocationInput.amount`), a `mode="before"` validator (`strict_number`) runs first, so `true` is no longer turned into 1.0. The frontend always sends numbers (`parseFloat`), so the UI is not affected.
+- **Rounding:** the routes that rounded to 2 decimals still do (a value that rounds to 0 → 422).
 - **Error format:** the 422 `detail` is a plain Bulgarian message, because the finance pages show `err.response.data.detail` as it is.
 - **Order of checks:** permission is checked first, so a non-finance role still gets 403.
 
 ### PAY-N2: reversal / cancellation reason
 
-`check_reason` is called from `_Request`, so it covers both `DELETE /finance/payments/{id}` and `DELETE /finance/invoices/{id}/payments/{alloc}`, with the reason in the body or in `?reason=`. A reason longer than 500 characters gets 400 `REASON_TOO_LONG`. A reason containing a control character (Unicode Cc: NUL, ESC, DEL, C1…), a bidi embedding, override or isolate, a zero-width character, a word joiner, a BOM or the Arabic letter mark gets 400 `REASON_INVALID_CHARS`. The check runs before the idempotency key is taken, so nothing is written: no row, no audit entry, no key. A reason of exactly 500 characters is accepted. The UI already shows `detail.message`.
+`check_reason` is called from `_Request`, so it covers both `DELETE /finance/payments/{id}` and `DELETE /finance/invoices/{id}/payments/{alloc}`, with the reason in the body or in `?reason=`. A reason longer than 500 characters gets 400 `REASON_TOO_LONG`. A reason containing any character of Unicode category **Cc** (NUL, ESC, DEL, C1), **Cf** (soft hyphen U+00AD, zero-width, bidi embeddings, overrides and isolates, word joiner, BOM, ALM, tag characters U+E0000–U+E007F), **Zl** (U+2028), **Zp** (U+2029) or **Cs** (lone surrogates) gets 400 `REASON_INVALID_CHARS`. Cf, Zl and Zp were added after audit L2. The check runs before the idempotency key is taken, so nothing is written: no row, no audit entry, no key. A reason of exactly 500 characters is accepted. The UI already shows `detail.message`.
 
 ### Tests
 
-`backend/tests/test_pay_01_c01_amounts_reason.py` runs on mongomock and on real Mongo (`mongo:7.0`, `rs0`), in off, shadow and enforce: **128 cases**.
+`backend/tests/test_pay_01_c01_amounts_reason.py` runs on mongomock and on real Mongo (`mongo:7.0`, `rs0`), in off, shadow and enforce: **153 cases**, after the L1/L2 fixes.
 
 | Run | Result |
 |---|---|
-| PAY-01-C01 + PAY-01 on this branch | 219 passed (128 + 91) |
-| PAY-01-C01 on a0dec8b (`finance.py` from before) | **114 failed**, 14 passed (the helper tests, 403 and the 500-character reason, which already held) |
+| PAY-01-C01 + PAY-01 on this branch | 244 passed (153 + 91) |
+| PAY-01-C01 on a0dec8b (`finance.py` from before) | first version: **114 of 128 failed** |
+| PAY-01-C01 on 61d45d3 (before the L1/L2 fixes) | **69 failed**, 84 passed: `true` / `"12.5"` accepted, Cf/Zl/Zp reasons accepted |
 | R0 (`tests/test_r0_*.py`, real Mongo) | 814 passed |
 | W0 (`tests/test_w0_*.py`, real Mongo) | 1135 passed, 15 failed, all 15 in `test_w0_03e_legacy_routes.py` (the known baseline) |
 | `w0_03e_a2c_tenant_boundary_guard.py` | 206 modules, 0 violations |

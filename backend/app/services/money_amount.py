@@ -4,11 +4,12 @@ PAY-01-C01 — money amount and reversal reason rules (CLAUDE.md §14 validation
 Pure logic, no DB access. Kept in its own module so SEC-01-C03 (#69), which applies the same
 amount rule to its own routes, does not conflict with PAY-01 (#70); the two are unified at merge.
 
-* An amount is a finite number > 0. NaN, ±Infinity, 1e309 (→ inf), "", None, booleans,
-  non-numeric text, 0 and negatives are refused with **422** — before anything is written.
-* A reversal / cancellation reason is at most 500 characters and contains no control or
-  invisible formatting characters (NUL, ESC, other C0/C1, bidi overrides/isolates,
-  zero-width characters, BOM); otherwise **400**.
+* An amount is a JSON number, finite and > 0. NaN, ±Infinity, 1e309 (→ inf), None,
+  booleans, strings (numeric text too), 0 and negatives are refused with **422** — before
+  anything is written.
+* A reversal / cancellation reason is at most 500 characters and contains no character of
+  Unicode category Cc, Cf, Zl, Zp or Cs (NUL, ESC, C1, soft hyphen, bidi, zero-width, BOM,
+  tag characters, line/paragraph separators, lone surrogates); otherwise **400**.
 """
 import math
 import unicodedata
@@ -17,6 +18,11 @@ from typing import Any, Optional
 from fastapi import HTTPException
 
 REASON_MAX_LEN = 500
+
+# Unicode categories refused in a reason: Cc control (NUL, ESC, DEL, C1), Cf format (soft
+# hyphen, zero-width, bidi, BOM, tag characters U+E0000…), Zl/Zp line/paragraph separators,
+# Cs lone surrogates (cannot be stored as UTF-8).
+_REFUSED_CATEGORIES = {"Cc", "Cf", "Zl", "Zp", "Cs"}
 
 # Invisible characters that are not Unicode category Cc but still hide or reorder text.
 _INVISIBLE = {
@@ -35,20 +41,32 @@ def _amount_error(field: str, message: str) -> HTTPException:
     return HTTPException(status_code=422, detail=message + suffix)
 
 
+def is_number(value: Any) -> bool:
+    """True only for a JSON number (int or float). Booleans, strings, None, lists... are not."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def strict_number(value: Any) -> Any:
+    """Pydantic ``mode="before"`` check: refuse a non-number BEFORE coercion (``true`` → 1.0,
+    ``"12"`` → 12.0). Raises ValueError, which Pydantic turns into 422."""
+    if not is_number(value):
+        raise ValueError("Сумата трябва да е число")
+    return value
+
+
 def positive_amount(value: Any, field: str = "amount", places: Optional[int] = None) -> float:
     """Return ``value`` as a finite float > 0 (rounded to ``places`` if given), or raise 422.
 
-    Numeric strings ("12.50") are accepted, as the existing dict-based routes did."""
-    if value is None or isinstance(value, bool):
+    Only a JSON number is accepted: booleans, strings (also numeric text), None and other
+    types are refused before any coercion (PAY-01-C01 L1)."""
+    if value is None:
         raise _amount_error(field, "Сумата е задължителна")
-    if isinstance(value, str):
-        value = value.strip()
-        if not value:
-            raise _amount_error(field, "Сумата е задължителна")
+    if not is_number(value):
+        raise _amount_error(field, "Сумата трябва да е число")
     try:
         amount = float(value)
-    except (TypeError, ValueError, OverflowError):
-        raise _amount_error(field, "Сумата трябва да е число")
+    except (OverflowError, ValueError):                       # int too large for a float
+        raise _amount_error(field, "Сумата трябва да е крайно число")
     if not math.isfinite(amount):
         raise _amount_error(field, "Сумата трябва да е крайно число")
     if places is not None:
@@ -63,7 +81,7 @@ def reason_problem(reason: str) -> Optional[str]:
     if len(reason) > REASON_MAX_LEN:
         return "REASON_TOO_LONG"
     for ch in reason:
-        if ch in _INVISIBLE or unicodedata.category(ch) == "Cc":
+        if ch in _INVISIBLE or unicodedata.category(ch) in _REFUSED_CATEGORIES:
             return "REASON_INVALID_CHARS"
     return None
 
