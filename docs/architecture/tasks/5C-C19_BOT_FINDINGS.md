@@ -23,3 +23,10 @@
 
 ## Предаване
 `HANDOFF 5C-C19` в PR #55 и съобщение `5C-C19 DONE head=<sha> tests=<summary>`. После Bot повтаря същия сценарий.
+
+## Добавка (06.11.2026, вътрешен одит на 639ca80 — част от същата задача C19)
+| # | Проблем | Поправка |
+|---|---|---|
+| F-7 | Разходът за материал по обект се брои два пъти (probe: 80 вместо 30) — `material_smr` sync мапва и ACCEPT, и CONSUME към +cost (против CLAUDE.md §7) | Разход само веднъж — при CONSUME/изписване (същият канон като C18). Тест: accept 5 + consume 3 по 10 → обектов разход точно 30 във всички отчети |
+| F-8 | 7 места `await [async listcomp]` в `material_smr.py` → TypeError (summary, financial, breakdown, warnings, full_cost / revenue_expense profit) | Правилно await/to_list; real-Mongo тест за всеки endpoint/функция (200, верни суми) |
+Източник: `docs/audit/AUDIT_LOG.md` @ `claude/audit-log` ffd543c и коментарът „CLAUDE AUDIT“ в PR #55.
