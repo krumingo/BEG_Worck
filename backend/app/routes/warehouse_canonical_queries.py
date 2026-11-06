@@ -169,6 +169,9 @@ def _tenant_from_ctx(ctx: TenantContext) -> TenantData:
 # total_value, unit_value or valued layers. Decided from the caller's active
 # RoleAssignments (same records / validity as the Permission Service).
 FINANCE_VALUE_ROLES = frozenset({"owner", "admin", "accountant"})
+# Package 5C-C26 Addendum A: procurement is NOT in Р20 — left unchanged (it
+# keeps seeing values as before); recorded in HANDOFF 5C-C26 for Крум.
+UNCHANGED_VALUE_ROLES = frozenset({"procurement"})
 VALUE_KEYS = frozenset({"unit_value", "total_value", "movement_value", "value",
                         "line_value", "layer_value"})
 
@@ -183,7 +186,8 @@ async def _sees_values(ctx) -> bool:
         return False
     active = _active_assignments(await perm._load_assignments(user_id, tenant_id),
                                  datetime.now(timezone.utc))
-    return any(a.get("role_id") in FINANCE_VALUE_ROLES for a in active)
+    return any(a.get("role_id") in FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
+               for a in active)
 
 
 def strip_values(obj: Any) -> Any:
