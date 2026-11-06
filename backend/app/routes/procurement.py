@@ -668,11 +668,40 @@ async def compute_project_ledger(org_id: str, project_id: str) -> list:
                 materials[key] = {"material_name": key, "unit": line.get("unit", ""), "requested": 0, "purchased": 0, "received_to_warehouse": 0, "issued_to_project": 0, "consumed": 0, "returned": 0}
             materials[key]["returned"] += float(line.get("qty_returned", 0))
     
+    # 6. 5C-C20 F-11 — the CANONICAL ledger (`warehouse_transactions` rows
+    # with `action`, written only by the canonical command service). The
+    # legacy sections above read `type`+`lines` rows, which canonical rows
+    # never carry, so a project with canonical stock showed nothing. The two
+    # ledgers record different physical movements (legacy writers are
+    # retired), so their quantities add up without double counting; cost is
+    # not computed here.
+    for mat in materials.values():
+        mat.setdefault("source", "legacy")
+    from app.services.canonical_material_cost import canonical_project_trail
+    trail = await canonical_project_trail(tenant, org_id, project_id)
+    for c in trail.values():
+        key = c["material_name"]
+        if key in materials:
+            mat = materials[key]
+            for k in ("issued_to_project", "consumed", "returned"):
+                mat[k] += c[k]
+            mat["dispatched_to_project"] = mat.get("dispatched_to_project", 0) + c["dispatched_to_project"]
+            mat["written_off"] = mat.get("written_off", 0) + c["written_off"]
+            mat["item_id"] = mat.get("item_id") or c["item_id"]
+            mat["source"] = "mixed"
+        else:
+            materials[key] = c
+
     # Compute remaining
+    _qty_keys = ["requested", "purchased", "received_to_warehouse", "dispatched_to_project",
+                 "issued_to_project", "consumed", "returned", "written_off"]
     result = []
     for mat in materials.values():
-        mat["remaining_on_project"] = round(mat["issued_to_project"] - mat["consumed"] - mat["returned"], 2)
-        for k in ["requested", "purchased", "received_to_warehouse", "issued_to_project", "consumed", "returned"]:
+        mat.setdefault("dispatched_to_project", 0)
+        mat.setdefault("written_off", 0)
+        mat["remaining_on_project"] = round(
+            mat["issued_to_project"] - mat["consumed"] - mat["returned"] - mat["written_off"], 2)
+        for k in _qty_keys:
             mat[k] = round(mat[k], 2)
         result.append(mat)
     

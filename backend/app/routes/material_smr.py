@@ -30,7 +30,19 @@ router = APIRouter(tags=["Material Cost by SMR"])
 # rows keep the quantity trail for the UI and the moved stock value in
 # `movement_value`, but carry `total_value = 0` and are never summed as cost.
 # Every cost reader in this module filters on COST_KINDS.
-COST_KINDS = ("consume",)
+from app.services.canonical_material_cost import (  # noqa: E402
+    COST_KINDS,
+    canonical_project_trail,
+    package_material_actual,
+    project_material_cost,
+    resolve_execution_package,
+    resolve_planned,
+)
+# 5C-C20 F-10 — every package/project material figure below is computed at
+# READ time from the canonical rows (consume rows of `material_entries`,
+# written by the command service inside the consume transaction). The
+# `/material-entries/sync` rebuild and `/execution-packages/recompute-material`
+# remain available but no report depends on having called them.
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -220,57 +232,50 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    # CODEX C11.3 — no silent 500 cap.
-    # CODEX C12.6 — authoritative read is CANONICAL rows only.
-    cursor = tenant.material_entries.find(
-        {"org_id": org_id,
-         "execution_package_id": pkg_id,
-         "projection_source": "canonical_warehouse_service"},
-        {"_id": 0},
-    ).sort("date", -1)
-    entries = [row async for row in cursor]
-
+    # 5C-C20 F-10 — read-time attribution over the canonical rows (no sync).
+    project_id = pkg.get("project_id")
     by_material = {}
-    total_issued_qty = 0
-    total_returned_qty = 0
-    total_cost = 0
+    total_issued_qty = 0.0
+    total_returned_qty = 0.0
+    total_cost = 0.0
     partial_cost = False
+    entries_count = 0
+    if project_id:
+        cost = await project_material_cost(tenant, org_id, project_id)
+        by_item, by_name = cost["by_item"], cost["by_name"]
 
-    for e in entries:
-        # CODEX C13.4 — read ONLY from canonical schema; `quantity` and
-        # `total_value` are the authoritative scalars. `movement_kind`
-        # replaces the legacy `movement_type` label.
-        name = e.get("material_name", "")
-        qty = float(e.get("quantity", 0))
-        cost = e.get("total_value")
-        mt = e.get("movement_kind", "")
+        def _row(name, unit):
+            return by_material.setdefault(name, {
+                "material_name": name, "unit": unit or "", "issued_qty": 0,
+                "returned_qty": 0, "consumed_qty": 0, "net_cost": 0})
 
-        if mt in ("accept", "transfer"):
-            # Inflow to the project — treated as an issue in the UI.
-            total_issued_qty += qty
-        elif mt in ("transfer_out", "write_off", "consume"):
-            # Outflow — treated as a return/consumption in the UI.
+        for e in cost["rows"]:
+            if resolve_execution_package(e, by_item, by_name) != pkg_id:
+                continue
+            entries_count += 1
+            pm = resolve_planned(e.get("item_id"), by_item, by_name)
+            name = e.get("material_name") or (pm or {}).get("material_name") or e.get("item_id") or ""
+            m = _row(name, e.get("unit"))
+            qty = float(e.get("quantity") or 0)
+            m["consumed_qty"] += qty
             total_returned_qty += abs(qty)
-
-        # 5C-C19 F-7: cost only from consumption rows.
-        if mt in COST_KINDS:
-            if cost is not None:
-                total_cost += float(cost)
-            else:
+            if e.get("total_value") is None:
                 partial_cost = True
+            else:
+                total_cost += float(e["total_value"])
+                m["net_cost"] += float(e["total_value"])
 
-        if name not in by_material:
-            by_material[name] = {"material_name": name, "unit": e.get("unit", ""),
-                                 "issued_qty": 0, "returned_qty": 0,
-                                 "consumed_qty": 0, "net_cost": 0}
-        if mt in ("accept", "transfer"):
-            by_material[name]["issued_qty"] += qty
-        elif mt in ("transfer_out", "write_off"):
-            by_material[name]["returned_qty"] += abs(qty)
-        elif mt == "consume":
-            by_material[name]["consumed_qty"] += qty
-        if mt in COST_KINDS and cost is not None:
-            by_material[name]["net_cost"] += float(cost)
+        # Quantity trail (arrived / left) from the canonical ledger itself.
+        trail = await canonical_project_trail(tenant, org_id, project_id)
+        for t in trail.values():
+            pm = resolve_planned(t.get("item_id"), by_item, by_name)
+            if not pm or pm.get("execution_package_id") != pkg_id:
+                continue
+            m = _row(t["material_name"], t.get("unit"))
+            m["issued_qty"] += t["issued_to_project"]
+            m["returned_qty"] += t["returned"] + t["written_off"]
+            total_issued_qty += t["issued_to_project"]
+            total_returned_qty += t["returned"] + t["written_off"]
 
     for v in by_material.values():
         for k in ["issued_qty", "returned_qty", "consumed_qty", "net_cost"]:
@@ -290,7 +295,7 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
         "net_qty": round(total_issued_qty - total_returned_qty, 2),
         "partial_cost_data": partial_cost,
         "currency": "EUR",
-        "entries_count": len(entries),
+        "entries_count": entries_count,
         "by_material": sorted(by_material.values(), key=lambda x: abs(x["net_cost"]), reverse=True),
     }
 
@@ -319,20 +324,10 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
         if ep_id:
             budget_by_pkg[ep_id] = budget_by_pkg.get(ep_id, 0) + (pm.get("planned_total_cost", 0) or 0)
 
-    # Aggregate actual from material_entries — CODEX C13.4 canonical
-    # schema; C13.6 uncapped.
-    _entries_cursor = tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id,
-         "projection_source": "canonical_warehouse_service",
-         "movement_kind": {"$in": list(COST_KINDS)}},
-        {"_id": 0, "execution_package_id": 1, "total_value": 1},
-    )
-    entries = [row async for row in _entries_cursor]
-    actual_by_pkg = {}
-    for e in entries:
-        ep_id = e.get("execution_package_id")
-        if ep_id and e.get("total_value") is not None:
-            actual_by_pkg[ep_id] = actual_by_pkg.get(ep_id, 0) + float(e["total_value"])
+    # Aggregate actual from the canonical cost rows — same read-time
+    # attribution every report uses (5C-C20 F-10), so the cached
+    # `actual_material_cost` equals what the reports compute.
+    actual_by_pkg = (await project_material_cost(tenant, org_id, project_id))["by_package"]
 
     updated = 0
     for pkg in pkgs:
@@ -368,7 +363,8 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
         raise HTTPException(status_code=404, detail="Package not found")
 
     sale = pkg.get("sale_total", 0)
-    mat_actual = pkg.get("actual_material_cost", 0)
+    # 5C-C20 F-10 — canonical material actual at read time (no recompute).
+    mat_actual = await package_material_actual(tenant, org_id, pkg)
     lab_actual = pkg.get("actual_labor_cost", 0)
 
     # Subcontract for this package
@@ -434,11 +430,16 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
         if ep_id:
             sub_by_pkg[ep_id] = sub_by_pkg.get(ep_id, 0) + sl.get("certified_total", 0)
 
+    # 5C-C20 F-10 — canonical material actual per package at read time.
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+
     breakdown = []
     for pkg in pkgs:
         pid = pkg["id"]
         sale = pkg.get("sale_total", 0)
-        mat = pkg.get("actual_material_cost", 0)
+        mat = mat_cost["by_package"].get(pid, 0.0)
+        mat_budget = pkg.get("material_budget_total", 0) or 0
+        mat_variance = round(mat - mat_budget, 2) if mat_budget > 0 else None
         lab = pkg.get("actual_labor_cost", 0)
         sub = round(sub_by_pkg.get(pid, 0), 2)
         total_actual = round(mat + lab + sub, 2)
@@ -451,7 +452,7 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
             "sale_total": sale,
             "material_budget": pkg.get("material_budget_total", 0),
             "material_actual": mat,
-            "material_variance": pkg.get("material_variance_value"),
+            "material_variance": mat_variance,
             "labor_budget": pkg.get("labor_budget_total", 0),
             "labor_actual": lab,
             "labor_variance": pkg.get("labor_variance_value"),
@@ -487,11 +488,12 @@ async def get_material_warnings(project_id: str, user: dict = Depends(require_m2
         {"org_id": org_id, "project_id": project_id,
          "projection_source": "canonical_warehouse_service"})
 
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
     warnings = []
     for pkg in pkgs:
         name = pkg.get("activity_name", "")
         budget = pkg.get("material_budget_total", 0)
-        actual = pkg.get("actual_material_cost", 0)
+        actual = mat_cost["by_package"].get(pkg["id"], 0.0)
 
         if budget == 0 and actual > 0:
             warnings.append({"type": "missing_material_budget", "package_id": pkg["id"], "activity": name,
@@ -511,29 +513,11 @@ async def get_material_summary_for_project(org_id: str, project_id: str) -> dict
     """Get aggregated material cost summary for profit integration.
 
     CODEX C13.4 / C13.6 — canonical schema only, uncapped reads.
+    5C-C20 F-10 — mapped/unmapped split uses the read-time attribution
+    (same rule as the rebuild), so it is right without a sync.
     """
     tenant = TenantData.for_resolved_org(db, org_id)
-    _mapped_cursor = tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id,
-         "projection_source": "canonical_warehouse_service",
-         "execution_package_id": {"$ne": None},
-         "movement_kind": {"$in": list(COST_KINDS)}},
-        {"_id": 0, "total_value": 1},
-    )
-    mapped = [row async for row in _mapped_cursor]
-    mapped_cost = sum(float(e["total_value"]) for e in mapped
-                      if e.get("total_value") is not None)
-
-    _unmapped_cursor = tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id,
-         "projection_source": "canonical_warehouse_service",
-         "execution_package_id": None,
-         "movement_kind": {"$in": list(COST_KINDS)}},
-        {"_id": 0, "total_value": 1},
-    )
-    unmapped = [row async for row in _unmapped_cursor]
-    unmapped_cost = sum(float(e["total_value"]) for e in unmapped
-                        if e.get("total_value") is not None)
+    cost = await project_material_cost(tenant, org_id, project_id)
 
     pkgs = [row async for row in tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
@@ -541,13 +525,13 @@ async def get_material_summary_for_project(org_id: str, project_id: str) -> dict
     )]
     budget = sum(p.get("material_budget_total", 0) for p in pkgs)
 
-    total = round(mapped_cost + unmapped_cost, 2)
+    total = cost["total_cost"]
     return {
         "total_cost": total,
-        "mapped_cost": round(mapped_cost, 2),
-        "unmapped_cost": round(unmapped_cost, 2),
+        "mapped_cost": cost["mapped_cost"],
+        "unmapped_cost": cost["unmapped_cost"],
         "budget_total": round(budget, 2),
         "variance_value": round(total - budget, 2) if budget > 0 else None,
         "currency": "EUR",
-        "has_data": len(mapped) + len(unmapped) > 0,
+        "has_data": cost["has_data"],
     }

@@ -77,16 +77,14 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     material_cost_invoices = round(sum(l.get("line_total_ex_vat", 0) for l in inv_lines), 2)
     input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
 
-    # From warehouse issue transactions — CODEX C12.10 no silent cap.
-    material_cost_warehouse = 0
-    _cursor = tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "lines": 1},
-    )
-    async for txn in _cursor:
-        for line in txn.get("lines", []):
-            material_cost_warehouse += float(line.get("unit_cost", 0)) * float(line.get("qty_issued", 0))
-    material_cost_warehouse = round(material_cost_warehouse, 2)
+    # From the warehouse path — 5C-C20 F-9: the canonical `material_entries`
+    # consumption rows are the ONE source (cost recognised once, at
+    # consumption). Legacy `warehouse_transactions` issue rows count only for
+    # a project with no canonical cost row (pre-canon history) and are never
+    # added on top of the canon. See app/services/canonical_material_cost.py.
+    from app.services.canonical_material_cost import project_warehouse_material_cost
+    wh = await project_warehouse_material_cost(tenant, org_id, project_id)
+    material_cost_warehouse = wh["material_cost"]
 
     material_cost = max(material_cost_invoices, material_cost_warehouse)
 
@@ -161,6 +159,15 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "overhead": overhead,
             "other_cost": other_cost,
             "total_expense": total_expense,
+        },
+        # 5C-C20 F-9 — where expense.material_cost came from (read-only provenance).
+        "warehouse_cost_basis": {
+            "warehouse": wh["source"],
+            "warehouse_material_cost": material_cost_warehouse,
+            "invoice_cost": material_cost_invoices,
+            "legacy_excluded_cost": wh["legacy_excluded_cost"],
+            "consumed_qty": wh["consumed_qty"],
+            "partial_cost_data": wh["partial_cost_data"],
         },
         "profit": {
             "gross_profit": gross_profit,

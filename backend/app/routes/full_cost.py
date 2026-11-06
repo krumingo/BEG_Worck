@@ -263,7 +263,9 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         raise HTTPException(status_code=404, detail="Package not found")
 
     sale = pkg.get("sale_total", 0)
-    mat = pkg.get("actual_material_cost", 0)
+    # 5C-C20 F-10 — canonical material actual at read time (no recompute).
+    from app.services.canonical_material_cost import package_material_actual
+    mat = await package_material_actual(tenant, org_id, pkg)
     lab = pkg.get("actual_labor_cost", 0)
     overhead = pkg.get("overhead_actual_allocated", 0)
 
