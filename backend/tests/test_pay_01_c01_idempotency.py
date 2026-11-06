@@ -362,3 +362,39 @@ def test_c_quick_pay_failed_key_retry_never_duplicates(monkeypatch, backend, mod
         inv = await op.invoices.find_one({"id": "inv-a1"}, {"_id": 0})
         assert "allocation_lock" not in inv                         # released even on the failure
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════ Addendum D: FG-50
+@pytest.mark.parametrize("url", ["/api/finance/other-expense", "/api/finance/other-income"])
+def test_d_project_must_exist_in_this_tenant(monkeypatch, backend, mode, url):
+    async def scenario(c, op):
+        before = await snap(op)
+        for project in ("prj-missing", "prj-b", 123, {"$ne": None}, ["prj-1"]):   # prj-b = tenant B's
+            r = await c.post(url, headers=hdr("acct-a"),
+                             json={"project_id": project, "amount": 10, "method": "Cash"})
+            assert r.status_code == 422, (project, r.text)
+            assert r.json()["detail"]["error_code"] == "PROJECT_NOT_FOUND", r.text
+        assert await snap(op) == before                     # no row, no audit, no key record
+        r = await c.post(url, headers=hdr("acct-a"), json={"project_id": "prj-1", "amount": 10, "method": "Cash"})
+        assert r.status_code == 201, r.text
+        row = await op.finance_payments.find_one({"id": r.json()["id"]}, {"_id": 0})
+        assert row["project_id"] == "prj-1" and row["org_id"] == ORG_A
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_d_other_income_without_project_is_still_allowed(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        for project in (None, ""):
+            r = await c.post("/api/finance/other-income", headers=hdr("acct-a"),
+                             json={"project_id": project, "amount": 10, "method": "Cash"})
+            assert r.status_code == 201, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_d_other_expense_without_project_is_still_400(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"),
+                         json={"amount": 10, "method": "Cash"})
+        assert r.status_code == 400, r.text
+        assert await op.finance_payments.count_documents({}) == 0
+    run(monkeypatch, backend, mode, scenario)

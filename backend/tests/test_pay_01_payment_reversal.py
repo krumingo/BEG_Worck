@@ -110,6 +110,10 @@ async def _seed(op, sysdb):
             "id": "ra_" + uid, "user_id": uid, "tenant_id": org, "role_id": LEGACY_ROLE_MAP[role],
             "scope_type": "company", "scope_id": None, "module": None, "permissions": [],
             "status": "active", "sync_source": "users.role"})
+    # FG-50: money writes may only name a project of their own tenant
+    for prj_id, org in (("prj-1", ORG_A), ("prj-a", ORG_A), ("prj-b", ORG_B)):
+        await op.projects.insert_one({"id": prj_id, "org_id": org, "code": prj_id, "name": prj_id,
+                                      "status": "Active"})
     for acc_id, org, typ in ((CASH_A, ORG_A, "Cash"), (BANK_A, ORG_A, "Bank"), (BANK_B, ORG_B, "Bank")):
         await op.financial_accounts.insert_one({
             "id": acc_id, "org_id": org, "name": acc_id, "type": typ, "currency": "EUR",

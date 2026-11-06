@@ -93,6 +93,17 @@ async def _once(user: dict, key: str, action: str, fingerprint: dict, work):
     return json.loads(stored)          # the first response is byte-for-byte what a replay returns
 
 
+async def _require_tenant_project(user: dict, project_id) -> None:
+    """FG-50 (PAY-01-C01 Addendum D): a money write that names a project must name a project
+    of THIS tenant — otherwise 422 before anything is written (no row, no key record)."""
+    if project_id is None or project_id == "":
+        return
+    if not isinstance(project_id, str) or not await _tenant(user).projects.get(project_id, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PROJECT_NOT_FOUND",
+            "message": "Обектът не съществува в тази фирма"})
+
+
 def finance_permission(user: dict) -> bool:
     """Check if user has finance access"""
     return user["role"] in ["Admin", "Owner", "Accountant"]
@@ -546,6 +557,7 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
+    await _require_tenant_project(user, data.get("project_id"))  # FG-50: unknown project → 422
 
     async def work():
         org = user["org_id"]
@@ -586,6 +598,7 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5),
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
+    await _require_tenant_project(user, data.get("project_id"))  # FG-50: unknown project → 422
 
     async def work():
         org = user["org_id"]

@@ -401,3 +401,26 @@ In every concurrent test, each refusal is 409 `PAYMENT_BUSY` or `INVOICE_BUSY`, 
 **Contract notes**
 - The quick-pay 404 for a missing invoice now reads "Invoice <id> not found", the same text allocate uses.
 - An over-limit allocate stays **400**, as before. Only a concurrent request refused by a lock is 409.
+
+## Addendum D: a money write must name a project of its own tenant (FLOW Guard FG-50)
+
+Package addendum: `PAY-01-C01_AMOUNTS_REASON_SUBCONTRACTOR.md` §Допълнение D (branch `claude/happy-meitner-bmcnel` @ 4b91217).
+
+Among the money POSTs in `finance.py`, **`/finance/other-expense`** and **`/finance/other-income`** are the only ones that take a `project_id`. Payment, quick-pay, transfer, funding and allocate take none. (`POST /finance/invoices` also takes a project, but it creates a document, not a money movement, so it is outside R29's list.)
+
+- **The rule:** `_require_tenant_project()` reads `tenant.projects` (TenantData, this tenant only). If the project is missing, belongs to another tenant, or `project_id` is not a string → **422 `PROJECT_NOT_FOUND`**.
+- **Order:** the check runs before the idempotency key is reserved, so nothing is written: no row, no AuditEvent, no key record.
+- **Unchanged:** other expense without a project still returns 400 ("Изберете обект"). Other income without a project, `null` or `""`, is still allowed.
+- **Test seed:** the PAY-01 harness now seeds the projects `prj-1` and `prj-a` (tenant A) and `prj-b` (tenant B).
+
+**Tests** (`test_pay_01_c01_idempotency.py`; mongomock + real Mongo, three modes: 24 cases)
+- **Refusals:** a missing project, tenant B's `prj-b`, a number, an operator object and a list → 422 and nothing written, on both routes. A project of this tenant → 201.
+- **Unchanged behaviour:** other income without a project → 201; other expense without a project → 400.
+
+| Run | Result |
+|---|---|
+| FG-50 tests on b5bfde2 | **12 failed** (the project checks); the 12 control cases already held |
+| All `test_pay_01*` + A1 collision matrix | 515 passed |
+| A1 / A2C guards | 0 violations |
+
+**A1 inventory:** regenerated, adding one tenant-scoped project read. Totals: 372 accesses (FIXED 129, SAFE 243).
