@@ -7,11 +7,11 @@
 
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
-| #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C24) | `dbda909` | PASS (internal) + decision D-55-PRORATA — Codex still required | 2026-11-06 |
-| #67 ST-02 | `e987892` | PASS (ST02-1 fixed) | 2026-11-06 |
+| #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
+| #55 Склад 5C (C25) | `3706611` | PASS (internal) + decision D-55-FG17 — Codex still required | 2026-11-06 |
+| #67 ST-02 | `98b18ec` | PASS (C02) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #69 SEC-01 | `aee3169` | PASS (S1/S2 closed); MEDIUM SEC-R1 (ended membership still writes) | 2026-11-06 |
+| #69 SEC-01 | `f33b2ba` | **FINDINGS (blocking): C02-P2 NaN/Inf into ledger, C02-P1 duplicate ledger rows**; SEC-R1 open | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -794,3 +794,111 @@ Other notes:
 | PUT project, name only | 200 | 200 (kept) |
 
 The implementer's claim is **confirmed and exact**: SiteManager loses only setting or changing the paying client of a project. Project create and edit otherwise stay. This is a business-visible change for Krum.
+
+
+---
+
+## 2026-11-06 ~19:40 — four new heads: #55 `3706611` (5C-C25), #56 `3234446` (AUTH-02), #69 `f33b2ba` (SEC-01-C02), #67 `98b18ec` (ST-02-C02)
+
+### #55 @ `3706611` — Р17 cost at acceptance, Р18 every move in transit / returns via quarantine, FG-17, FG-19
+
+**Suites (PROVED):**
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix + `test_codex_c23_independent.py` | **250 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo | **881 / 0 / 0** |
+| W0 DB-free | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+| yarn CanonicalWarehousePage* | 23 / 23 ✔ |
+
+**Test-weakening check:**
+- In the 11 changed test files, removed asserts number fewer than or equal to added ones, with no new skip or xfail.
+- Number changes follow Р17, for example accept 5 + consume 3 → 30 becomes **50**, and the consume row is no longer cost.
+
+**New probes** (`docs/audit/probes/pr55/test_probe_pr55_c25.py`, real Mongo, one per process) — **5 / 5 PASS:**
+
+| Probe | Result |
+|---|---|
+| C25-1: 10000@1 + 20000@2 accepted (50000); return 15000 via quarantine | project **30000** + quarantine **20000.0000** = 50000; release → free 20000.0000 ✔ |
+| C25-2: project→project 12345 of mixed layers, accept 5000 + 7345 | p1 + p2 = **50000** after dispatch, after the partial accept (44050.22 + 5949.78) and after the full accept (35310 + 14690) ✔ |
+| C25-3: accept 10@10 → return 4 → release → re-dispatch 4 → re-accept | 100 → 60 → **100** (not 140); consume 3 + write-off 2 add nothing; rebuild ×2 and sync stay at 100 ✔ |
+| C25-4: legacy 100 before cutover + accept 5@10 (consume 3) | **150** on summary, pnl, financial_results, centralized and profit_by_period ✔ |
+| C25-5: main-shape invoice line (built by main's `compute_line_totals`, ex-VAT 100) allocated to p1 + canonical accept 50 | helper total **150**; main's P&L showed `max(100, 50)` = **100** |
+
+C24 probes L-1, L-2 and F-1…F-6: all pass under C25 (F-5 total 27000, F-6 11.00). C19: the known main pair fails, plus `c19_1`, which uses a direct project→warehouse transfer that Р18 now refuses by design. My C20/C21/C22/C23 probes encode cost at consumption (pre-Р17) and are **superseded** by C25-3 and C25-4.
+
+**D-55-FG17 — DECISION for Krum (money, PROVED behaviour).**
+- FG-17 removes main's `max(invoice, warehouse)` and **sums** Path B invoice lines allocated to the project with canonical cost.
+- A line is excluded only when a canonical ledger row references its `invoice_line_id`.
+- Legacy data (before the canon) never carries that link. If a supplier invoice line allocated to the project **and** a warehouse issue describe the same goods, both are counted. The `max` rule existed to prevent exactly that.
+- Also pre-existing, as SUSPICION: selection uses the deprecated `allocation_type/allocation_ref_id`, so a line split over several projects (`allocations[]`) counts its full total on one project.
+- Krum confirms whether invoice-allocated lots and warehouse issues are disjoint in real data.
+
+### #56 @ `3234446` — AUTH-02 break-glass CLI (Р19), FG-8…11, FG-16
+
+**Suites (PROVED):**
+
+| Command | Result |
+|---|---|
+| `W0_03_REAL_MONGO_URL=… pytest --noconftest tests/test_auth_0*.py tests/test_r0_0*.py` | **936 / 0 / 0** |
+| W0 DB-free | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+
+**Probe** `docs/audit/probes/auth02/probe_auth02.py`. The #56 branch has no `ops/staging`, so the probe runs against a scratch repo: main's `ops/staging` plus a symlink to the #56 backend. **All PASS.**
+
+| Check | Result |
+|---|---|
+| A1: `validate_attribution` with hostile text | refused: blank, whitespace, zero-width only, a U+202E bidi override inside, newline, ESC, bcrypt-looking text, 5000 characters. A normal Cyrillic operator and reason are accepted ✔ |
+| A2: admin set-password (FG-11) | 200; the old session's `/auth/me` → **401**; the old password → **401**; the new password → 200; the open reset link is revoked (`admin_password_reset`); 1 canonical AuditEvent ✔ |
+| A3: tenant B's Owner sets the password of tenant A's Viewer | **404**, hash unchanged ✔ |
+
+**Verdict:** PASS (internal). Security, so the Codex review is required.
+
+### #69 @ `f33b2ba` — SEC-01-C02 (FG-24/26/27/30/31)
+
+**Tests (PROVED):**
+
+| Command | Result |
+|---|---|
+| C02 + C01 + SEC-01 + PM-01 on real Mongo | **28 / 0 / 0** |
+| R0 | 814 |
+| W0 | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+
+- `probe_sec01_siblings.py`: still PASS.
+- `probe_sec01_c01_r16.py`: R1 still **FAIL** in all three modes (SEC-R1 open).
+
+**Probe** `docs/audit/probes/sec01/probe_sec01_c02_payments.py` (real app, tenant A's Accountant, `POST /api/subcontractor-payments`):
+
+| Check | Result |
+|---|---|
+| P1: identical POST ×2 | 201, 201 → **2 Outflow rows in `finance_payments`** |
+| P2: `amount` = `"nan"` / `"inf"` / `"1e309"` | **500**, but a ledger row is written each time (`{'amount': nan}` found) |
+| P2: `amount` = `"-0"` | 400, nothing written ✔ |
+| P3: tenant B's `account_id` | 404, nothing written ✔ |
+| P4: payment of 5000 against `certified_total` 1000 | 201 (business rule, reported) |
+
+**C02-P2 — BLOCKING (money), PROVED.**
+- `subcontractors.py`, `create_subcontractor_payment`: `amount = float(...)`; `if amount <= 0` lets NaN and ±Inf through. The ledger row is inserted, then JSON serialisation fails with 500.
+- So the ledger holds a non-finite outflow while the caller sees an error.
+
+**C02-P1 — BLOCKING (money), PROVED.**
+- No idempotency on a write into the FLOW-006 ledger (the PR's debt D1). With P2 (500 after commit), an ordinary retry produces a **double payment**. This conflicts with CLAUDE.md §14.
+
+A comment was posted on #69 (CLAUDE AUDIT, internal).
+
+### #67 @ `98b18ec` — ST-02-C02 (staging defaults to shadow, R15; FG-3…6)
+
+- `pytest --noconftest tests/test_st_02_staging_stack.py` → **157 passed**.
+- Isolation probe: the baseline gains `PUBLIC_URL=http://127.0.0.1:18080` (now required) and 7 new FG-5 cases (public / lookalike `PUBLIC_URL`, `CORS_ORIGINS=*` or an external origin, external frontend `REACT_APP_BACKEND_URL`, `BOOTSTRAP_*` / `SEED_ADMIN_*` env). **25 / 25 refused** ✔.
+- **Verdict:** PASS.
+
+### Integration
+
+| Pair | Status |
+|---|---|
+| #56 × #55 | conflict (`data_access.py`, A2B inventory) |
+| #69 × #55 | conflict (`catalog.py`) |
+| #56 × main / #67 / #68 / #69 | clean |
+| #69 × main / #56 / #67 / #68 | clean |

@@ -13,7 +13,7 @@ BASE = {
     "services": {
         "backend": {"container_name": P + "-backend", "networks": {"st02": None},
                     "environment": {"ENV": "staging", "PERMISSION_SERVICE_MODE": "enforce",
-                                    "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "st02_staging",
+                                    "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "st02_staging", "PUBLIC_URL": "http://127.0.0.1:18080",
                                     "JWT_SECRET": "x"}},
         "frontend": {"container_name": P + "-frontend", "networks": {"st02": None},
                      "ports": [{"host_ip": "127.0.0.1", "published": "18080", "target": 80}]},
@@ -67,6 +67,19 @@ cases = [
      lambda m: m["services"]["mongo"].update(volumes=[{"type": "bind", "source": "/volume1/docker/begwork/mongo", "target": "/data/db"}])),
     ("backend cap_add SYS_ADMIN", lambda m: m["services"]["backend"].update(cap_add=["SYS_ADMIN"])),
     ("backend pid: host", lambda m: m["services"]["backend"].update(pid="host")),
+    # extra cases added for ST-02-C02 (FG-5)
+    ("backend PUBLIC_URL = public production address",
+     lambda m: m["services"]["backend"]["environment"].update(PUBLIC_URL="https://app.begwork.bg")),
+    ("backend PUBLIC_URL = 127.0.0.1.evil.com", lambda m: m["services"]["backend"]["environment"].update(
+        PUBLIC_URL="http://127.0.0.1.evil.com:18080")),
+    ("backend CORS_ORIGINS = *", lambda m: m["services"]["backend"]["environment"].update(CORS_ORIGINS="*")),
+    ("backend CORS_ORIGINS includes an external origin", lambda m: m["services"]["backend"]["environment"].update(
+        CORS_ORIGINS="http://127.0.0.1:18080,https://evil.example")),
+    ("frontend build arg REACT_APP_BACKEND_URL external", lambda m: m["services"]["frontend"].update(
+        build={"args": {"REACT_APP_BACKEND_URL": "https://app.begwork.bg"}})),
+    ("mongo env BOOTSTRAP_ADMIN_PASSWORD", lambda m: m["services"]["mongo"].update(
+        environment={"BOOTSTRAP_ADMIN_PASSWORD": "x"})),
+    ("backend SEED_ADMIN_EMAIL", lambda m: m["services"]["backend"]["environment"].update(SEED_ADMIN_EMAIL="a@b")),
 ]
 missed = [d for d, f in cases if not mut(d, f)]
 print("MISSED:", missed or "none")
