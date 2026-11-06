@@ -1,7 +1,7 @@
 """
 Routes - Reports (Prices, Turnover, Company Finance, etc.)
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 from calendar import monthrange
@@ -14,6 +14,7 @@ from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.permissions.money_write import require_money_write, require_finance_read
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 
 router = APIRouter(tags=["Reports"])
 
@@ -958,22 +959,30 @@ async def create_cash_transaction(
     _sec01: dict = Depends(require_money_write(
         "finance.cash_transaction.create", module="M5", resource_type="cash_transaction")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create a cash transaction (income or expense)"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.cash_transaction.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.cash_transactions.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     txn = {
-        "id": str(__import__("uuid").uuid4()),
+        "id": mw.new_id("cash_transaction"),
         "org_id": user["org_id"],
         "date": data.get("date", now[:10]),
         "type": data.get("type", "expense"),  # income or expense
-        "amount": data.get("amount", 0),
+        "amount": amount,
         "category": data.get("category", ""),
         "description": data.get("description", ""),
         "created_by": user["id"],
         "created_at": now,
     }
-    await tenant.cash_transactions.insert_one(txn)
+    async with mw:
+        if await mw.needs_insert(tenant.cash_transactions, txn["id"]):
+            await tenant.cash_transactions.insert_one(txn)
+        mw.result_id = txn["id"]
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -1016,21 +1025,29 @@ async def create_overhead_transaction(
     _sec01: dict = Depends(require_money_write(
         "finance.overhead_transaction.create", module="M5", resource_type="overhead_transaction")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create an overhead transaction"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.overhead_transaction.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.overhead_transactions.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     txn = {
-        "id": str(__import__("uuid").uuid4()),
+        "id": mw.new_id("overhead_transaction"),
         "org_id": user["org_id"],
         "date": data.get("date", now[:10]),
-        "amount": data.get("amount", 0),
+        "amount": amount,
         "category": data.get("category", ""),
         "description": data.get("description", ""),
         "created_by": user["id"],
         "created_at": now,
     }
-    await tenant.overhead_transactions.insert_one(txn)
+    async with mw:
+        if await mw.needs_insert(tenant.overhead_transactions, txn["id"]):
+            await tenant.overhead_transactions.insert_one(txn)
+        mw.result_id = txn["id"]
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -1073,21 +1090,29 @@ async def create_bonus_payment(
     _sec01: dict = Depends(require_money_write(
         "finance.bonus_payment.create", module="M5", resource_type="bonus_payment")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create a bonus payment"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.bonus_payment.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.bonus_payments.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     payment = {
-        "id": str(__import__("uuid").uuid4()),
+        "id": mw.new_id("bonus_payment"),
         "org_id": user["org_id"],
         "date": data.get("date", now[:10]),
-        "amount": data.get("amount", 0),
+        "amount": amount,
         "user_id": data.get("user_id"),
         "description": data.get("description", ""),
         "created_by": user["id"],
         "created_at": now,
     }
-    await tenant.bonus_payments.insert_one(payment)
+    async with mw:
+        if await mw.needs_insert(tenant.bonus_payments, payment["id"]):
+            await tenant.bonus_payments.insert_one(payment)
+        mw.result_id = payment["id"]
     return {k: v for k, v in payment.items() if k != "_id"}
 
 

@@ -1,0 +1,20 @@
+# SEC-01-C03 test summaries (branch claude/sec-01-money-write-permissions, local real MongoDB 7.0 replica set)
+## SEC-01-C03 + C02 + C01 + SEC-01 + PM-01, real Mongo (W0_03_REAL_MONGO_URL set)
+36 passed in 352.54s (0:05:52)
+## C03 harness (docs/evidence/SEC-01-C03/results.json)
+207 invalid-amount calls (nan, inf, -inf, 1e309, "", abc, -1, 0, missing) x 8 probes x 3 modes -> all 422, 0 business writes
+24 idempotency sequences (8 probes x 3 modes): no key -> 2 rows; same key twice -> 1 row, identical replay, no write; same key + other body -> 409 IDEMPOTENCY_CONFLICT, no write
+24 SEC-R1 calls: P1 (member, no dates) -> 201; P2 (expired Technician / future SiteManager) -> 403, nothing written; off/shadow/enforce
+## tests/test_r0_0*.py (real Mongo)
+814 passed in 156.82s (0:02:36)
+## W0 DB-free (tests/test_w0_*.py --noconftest)
+15 failed, 1085 passed, 50 skipped in 75.74s (0:01:15)
+(the same 15 test_w0_03e_legacy_routes failures as main, SEC-01, C01 and C02)
+## Guards
+W0-03E-A1 tenant access guard: 418 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 206 module(s) checked, 0 violation(s)
+(A1 inventory regenerated: +3 rows, the replay reads find_one(id) of cash/overhead/bonus, TenantData org_id, SAFE)
+## Frontend
+yarn test: 6 suites, 96 tests passed (new: src/lib/__tests__/idempotency.test.js)
+yarn build: Compiled with warnings (no warning in the changed files)
+## PM-01 matrix re-run: 54 cells changed (6 routes x 3 finance roles x 3 modes), PM-01 body has no amount -> 422, nothing written (pm01_cells_changed.csv)

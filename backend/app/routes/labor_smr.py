@@ -6,7 +6,7 @@ Phase 3: Actual labor cost by execution package
 Phase 4: Variance + progress + warnings
 Phase 5: Project/profit integration
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -19,6 +19,7 @@ from app.deps.modules import require_m2
 from app.permissions.money_write import (require_field_cost_write, require_finance_read,
                                          money_values_visible, without_keys)
 from app.permissions.finance_read import LABOR_MONEY_FIELDS
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 
 
 def _tenant(user: dict) -> TenantData:
@@ -56,10 +57,12 @@ async def create_labor_entry(
         "labor.entry.create", module="M2", resource_type="labor_entry",
         project_from="body")),  # SEC-01 + C01 (R16): before any read/write
     user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create a labor time entry linked to an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
+    hours = money_value(data.get("hours"), "hours")  # SEC-01-C03: finite > 0, else 422 before any write
     now = datetime.now(timezone.utc).isoformat()
 
     entry = {
@@ -71,7 +74,7 @@ async def create_labor_entry(
         "offer_line_id": data.get("offer_line_id"),
         "work_report_id": data.get("work_report_id"),
         "date": data.get("date", now[:10]),
-        "hours": float(data.get("hours", 0)),
+        "hours": hours,
         "activity_name": data.get("activity_name", ""),
         "note": data.get("note", ""),
         "hourly_rate": None,  # populated by aggregator
@@ -86,12 +89,22 @@ async def create_labor_entry(
         entry["hourly_rate"] = profile["hourly_rate"]
         entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
 
-    await tenant.labor_entries.insert_one(entry)
+    mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
+    # SEC-02-B (FG-15, R20-5): R16 lets a member Technician/SiteManager WRITE labor, but the
+    # employee's rate and the cost are money — the stored row keeps them; neither the
+    # response nor an Idempotency-Key REPLAY of it shows them to a caller without the
+    # finance right.
+    show_money = await money_values_visible(request, user)
+    if mw.replay_id:
+        replay = await tenant.labor_entries.find_one({"id": mw.replay_id}, {"_id": 0})
+        return replay if show_money or replay is None else without_keys(replay, LABOR_MONEY_FIELDS)
+    entry["id"] = mw.new_id("labor_entry")
+    async with mw:
+        if await mw.needs_insert(tenant.labor_entries, entry["id"]):
+            await tenant.labor_entries.insert_one(entry)
+        mw.result_id = entry["id"]
     out = {k: v for k, v in entry.items() if k != "_id"}
-    # SEC-02 (FG-15, R20-5): R16 lets a member Technician/SiteManager WRITE labor, but the
-    # employee's rate and the cost are money — the stored row keeps them, the response
-    # to a caller without the finance right does not.
-    if not await money_values_visible(request, user):
+    if not show_money:
         out = without_keys(out, LABOR_MONEY_FIELDS)
     return out
 

@@ -680,9 +680,13 @@ def test_the_subcontractor_payment_writes_the_ledger_or_nothing():
     record; no branch writes subcontractor_payments without finance_payments."""
     import inspect
     from app.routes import subcontractors
-    src = inspect.getsource(subcontractors.create_subcontractor_payment)
-    assert src.index("PAYMENT_LEDGER_ACCOUNT_REQUIRED") < src.index(".insert_one(")
+    # SEC-01-C03: the writes moved into ``_write_subcontractor_payment`` (each once
+    # per Idempotency-Key); the handler reaches it only after the account check.
+    src = (inspect.getsource(subcontractors.create_subcontractor_payment)
+           + inspect.getsource(subcontractors._write_subcontractor_payment))
+    assert src.index("PAYMENT_LEDGER_ACCOUNT_REQUIRED") < src.index("_write_subcontractor_payment(")
     assert src.index("finance_payments.insert_one") < src.index("subcontractor_payments.insert_one")
+    assert src.count(".insert_one(") == 2
     assert "if account_id:" not in src
 
 
