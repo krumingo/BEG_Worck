@@ -6,13 +6,14 @@
 ## Процес (решение на Крум R9, 06.11)
 
 Claude програмира (до 3 паралелни сесии върху различни области/FLOW), Claude Audit ревюира, Claude Bot тества. **Codex само за пари/сигурност** (плащания, заплати, складова оценка, auth/пароли, права, tenant изолация). ChatGPT е извън процеса.
-Активни имплементатори: **5C** (#55, сега C21) . **RC-01 (#65) и ST-01 (#66) са СЛЕТИ в main** (`1c01f67`, `07da9ab`).
+Активни имплементатори: **5C-C22** (#55), **ST-02** (`claude/st-02-staging-stack`: изолиран staging стек от W0-09A пакета + rollback репетиция). **RC-01 (#65) и ST-01 (#66) са СЛЕТИ в main** (`1c01f67`, `07da9ab`).
 
 ## НА РЕД Е
 
 **Codex** — (пари/сигурност) независимо ревю на **#56 @ `dae097b`** (RC-AUTH-03; няма нов вердикт след C02) и на **#55 @ `df48d68`** (склад/оценка/разходи = пари, т.е. Codex е нужен, след като Claude Audit и Bot минат C21).
-**Claude Audit / Bot** — #55 @ `df48d68`: audit на C21 (write-off = „фира“, Rule B за warehouse→warehouse); от C20 audit остава **отворен**: три финансови справки четат само legacy редове (`project_financial_results.py`, `centralized_reports.py`, `revenue_snapshot.py`; още `material_waste.py`, `pulse_generator.py`, `materials_baseline.py` без проба). C21 не ги споменава — да се провери.
-**Крум** — решения: (а) при project с канонични редове legacy разходите се отпадат изцяло (30 вместо 100+30) — дали да се раздели по време; (б) Rule B за останалите transfer-и (project→project, project→warehouse); (в) отделно действие за accept на transfer; бележки по #54; решение за #53; `PERMISSION_SERVICE_MODE`.
+**Claude Audit / Bot** — #55 @ `df48d68`: audit на C21 (write-off = „фира“, Rule B за warehouse→warehouse); от C20 audit остава **отворен**: три финансови справки четат само legacy редове (`project_financial_results.py`, `centralized_reports.py`, `revenue_snapshot.py`; още `material_waste.py`, `pulse_generator.py`, `materials_baseline.py` без проба). затваря ги 5C-C22.
+**Решени от Крум на 06.11** (в `RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md`, проверено): Р10 write-off от обект = разход на обекта („фира“); Р11 Rule B и за трансфери склад→склад; Р12 роли в ST-01 (заявител = SiteManager, одобряващ = Admin, без права = Viewer); Р13 legacy/канонични разходи се делят по дата на прехода.
+**Крум — още чака:** (а) единствен останал въпрос за accept: дали приемането на трансфер склад→склад продължава да ползва действието и правото `accept_project_delivery` (така е сега) или получава отделно действие „accept transfer“ в permission каталога; (б) Rule B за `transfer_project_to_project` и `transfer_project_to_warehouse` — Р11 покрива само склад→склад, те още приемат директна дестинация; (в) бележки по #54; (г) решение за #53; (д) режимът на `PERMISSION_SERVICE_MODE`.
 
 ## Ред на интеграция (от audit merge-tree; файловете са моя проверка по diff срещу merge-base с main)
 
@@ -39,11 +40,11 @@ Claude програмира (до 3 паралелни сесии върху р�
 | # | Задача | PR / клон | Отговорен | Статус | Head SHA | Блокира |
 |---|---|---|---|---|---|---|
 | 1 | AUTH-01: RC-AUTH-01/02/03 | #56 | Codex (re-review) | Claude приложи C01 `10ed6b5` и C02 `dae097b` (стабилно подреждане); чака вердикт | `dae097b` | — |
-| 2 | Склад 5C: C18→C21 (write-off = „фира“, Rule B за warehouse→warehouse) | #55 | Claude Audit/Bot, после Codex (пари) | C21 качена; C20 audit за 3 legacy финансови справки не е потвърдено затворен; чака audit на C21 + Bot | `df48d68` | решения на Крум (а–в по-горе); взема main отново след #56 |
+| 2 | Склад 5C: C18→C21 (write-off = „фира“, Rule B за warehouse→warehouse) | #55 | Claude Audit/Bot, после Codex (пари) | C21 качена; **5C-C22** (всички финансови справки от един източник + правилото за прехода Р13) е в работа на #55 и затваря 3-те legacy справки; чака audit на C21 + Bot | `df48d68` | решения на Крум (а–б по-горе); взема main отново след #56 |
 | 3 | RC-01 Build identity (SHA в API + UI) | #65 | Claude Code | **СЛЯТ в main** (`1c01f67`) | `1c01f67` | — |
 | 4 | #53 Control Center: съвместимост с main + тест на ролите | #53 | Codex | main-съвместимост 21 бекенд + 14 фронтенд PASS (по scope-matrix); интегриран в RC `8768c82`; чака ревю на роли/липсващи данни | `e2a07ee` | 1–2 за cumulative |
 | 5 | #54 Заявки: mockup → права → телефон 390×844 | #54 | Крум (бележки), после Claude Code | чака бележки на Крум; C01 корекции F-01..F-04 са качени | `48306ba` | бележки на Крум |
-| 6 | Staging артефакт (инструментите W0-09A са в main) + решение `PERMISSION_SERVICE_MODE` (off срещу enforce) | — | Claude + Codex | не е започнато | — | 1–4; решение на Крум за режима |
+| 6 | Staging артефакт → **ST-02 в работа** (`claude/st-02-staging-stack`) + решение `PERMISSION_SERVICE_MODE` (off срещу enforce) | — | Claude + Codex | не е започнато | — | 1–4; решение на Крум за режима |
 | 7 | Интегриран RC + кумулативни тестове | `codex/integrated-rc-2026-10-25` (PR #64) | Codex | подготовка; „NOT DEPLOY_READY“ | `3e0db8e` | 1–5 |
 | 8 | Изолиран staging + сценариите на Крум (12 сценария) | ST-01 #66 слят (`07da9ab`: синтетични фикстури + runner) | Codex / Bot | фикстури и runner са в main; самият staging не е стартиран | `07da9ab` | 6, 7, достъп до NAS |
 | 9 | Backup restore proof + rollback на точния image | — | Codex | блокирано: няма Docker socket / защитен backup | — | root/Docker достъп на Synology (одобрение от Крум) |
@@ -53,15 +54,15 @@ Claude програмира (до 3 паралелни сесии върху р�
 
 ## Следващите 3 програмируеми задачи, които НЕ са блокирани
 
-Слети и затова махнати: R0-01…R0-07, RC-01 (#65), ST-01 (#66, включва runner-а на сценариите). #55 (5C) има активна сесия — не се предлага повторно.
+Активни (не се предлагат): 5C-C22 (#55), ST-02 (staging стек = бившият „staging артефакт“). Слети: R0-01…07, RC-01, ST-01.
 
 | # | Задача | Codex нужен | Докосва (области) | Припокриване |
 |---|---|---|---|---|
-| 1 | **Staging артефакт с W0-09A инструментите** (gate 5): инструментите вече са в main (`w0-09a-release-foundation` е предшественик на main); остава да се построи артефактът — manifest, SHA256SUMS, image IDs, фиксиран build SHA от RC-01 | не | `ops/`, release tooling | независим от #55/#56; ползва build SHA от RC-01 |
-| 2 | **`PERMISSION_SERVICE_MODE` off/enforce — тестове на роли** | **да** (права) | permission service, role тестове; режимът решава Крум | `permissions/catalog.py` е и в #54/#55 — да върви след тях или с merge main |
-| 3 | **Пълно сценарийно изпълнение върху ST-01 фикстурите** (gate 7: 12-те сценария, доказателства) | не за изпълнението; Codex ревюира пари/сигурност сценариите | `tests/` runner, evidence | чака #56 и #55 в main, иначе тества несъщия код |
+| 1 | **`PERMISSION_SERVICE_MODE` off/enforce — тестове на роли** (роли по Р12) | **да** (права) | permission service, role тестове; режимът решава Крум | `permissions/catalog.py` е и в #54/#55 — merge main преди старт |
+| 2 | **W0-04: загуба на AuditEvent при конкурентен запис** (сигурност) | **да** | `backend/app/audit/` (`store.py` е и в #56 и #54) | пресича #56/#54 в `audit/store.py` — по-добре след #56 или с merge main |
+| 3 | **12-те сценария върху ST-01 фикстури + ST-02 стека** (gate 7) | не (изпълнение); Codex за пари/сигурност сценариите | `tests/` runner, evidence | стартира след ST-02 и след #56/#55 в main |
 
-Алтернатива без пресичане: **#53 ролеви тест** (read-only Control Center; Codex: не). Затваряне на 3-те legacy финансови справки (C20 audit) е част от #55 — не е нова задача.
+Алтернатива без пресичане: **#53 ролеви тест** (read-only, Codex: не).
 
 ## Блокери и рискове
 
