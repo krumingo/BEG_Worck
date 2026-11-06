@@ -11,6 +11,7 @@
 | #55 Склад 5C (C23) | `53dbd28` | PASS (internal) — Codex still required (money) | 2026-11-06 |
 | #67 ST-02 | `e987892` | PASS (ST02-1 fixed) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
+| #69 SEC-01 | `e6c0e46` | PASS in scope; HIGH scope gap SEC-S1/S2 (sibling money writes still open) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -614,3 +615,53 @@ The live rehearsal (docker build/deploy) was not re-run by the audit; the eviden
 - Label nit: write-offs from a **project** are labelled "отписване от склада".
 
 **Verdict:** PASS (internal). Codex review required (money).
+
+
+---
+
+## 2026-11-06 ~18:15 — new PR #69 SEC-01 @ `e6c0e46` (money writes only for Owner/Admin/Accountant, R14)
+
+**Scope (read):**
+- 8 endpoints from PM-01 §5.1 get `require_money_write(action)`: the W0-02 `require_permission` with a legacy role check in off/shadow, the Permission Service in enforce, plus the `require_admin` data-path guard.
+- The catalog gains 8 actions, granted to accountant only (owner/admin via the full set).
+- Handler bodies unchanged. Rule sources are cited per endpoint in `docs/evidence/SEC-01/README.md`.
+- PR #68 is merged in (clean).
+
+### Tests (PROVED)
+
+| Command | Result |
+|---|---|
+| `W0_03_REAL_MONGO_URL=… pytest --noconftest tests/test_sec_01_money_write_permissions.py tests/test_pm_01_permission_matrix.py` | **13 passed, 0 skipped** (219 s). The PM-01 matrix is re-run: exactly 120 cells changed (8 endpoints × 5 non-finance roles × 3 modes), all now 403 with nothing written |
+| R0 on real Mongo | **814 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 205 modules, 0 violations ✔ |
+| A1 | 416 units, 0 violations ✔ |
+
+### Probe `docs/audit/probes/sec01/probe_sec01_siblings.py`
+
+Real `server.app`, ST-01 seed, real JWT, all three modes. **Both checks FAIL in off, shadow and enforce.**
+
+| Check | off | shadow | enforce |
+|---|---|---|---|
+| S1: Admin PUTs project modifiers, then **Viewer** calls `DELETE /api/price-modifiers/project/{id}` | 200, config rows left **0** | same | same |
+| S2: a work report exists, then **Viewer** calls `POST /api/labor-entries/sync-from-work-reports` | 200, `labor_entries` +1 | same | same |
+
+**SEC-S1 / SEC-S2 — HIGH (security + money), PROVED. Scope gap, not an implementation defect.**
+- The task package limited SEC-01 to the 8 endpoints and forbade touching others, so the PR is correct to its scope.
+- But the protection is incomplete at the resource level:
+  - `app/routes/price_modifiers.py:126` `DELETE …/project/{id}` has only `require_m2`. A Viewer **hard-deletes** the pricing config that only finance roles may now set. That conflicts with CLAUDE.md §2.9 (no hard delete of financial records) and §14.
+  - `app/routes/labor_smr.py:73` `sync-from-work-reports` has only `require_m2`. A Viewer **creates labor cost rows** in the same `labor_entries` collection that `POST /api/labor-entries` now guards.
+- PM-01 could not see these. It calls every route with nonexistent ids or empty bodies, so DELETE-by-id and "sync from existing data" routes show 404/400 with no write.
+- More of the same class, not run (SUSPICION):
+  - `PUT /api/price-modifiers/org` (require_m2; the README says it is "Admin/Owner only" in its body; not verified);
+  - `POST /execution-packages/recompute-labor/{project_id}` (writes cached labor actuals);
+  - `POST /execution-packages/recompute-material/{project_id}` and `POST /material-entries/sync/{project_id}` on #55 (rebuild projections; deterministic, but any M2 role can run them).
+- **Recommendation:** extend SEC-01 (SEC-01-C01) to every write route on the same 8 resources. In the matrix harness, add "existing record" probes (create as Admin, then act as each role) so PM-01 can see DELETE/PUT-by-id and sync routes.
+
+**Other notes:**
+- SEC-01-D1 (the PR's own debt): `price-modifiers/project` and `material-waste` do not check that the project belongs to the caller's tenant; the row lands in the caller's tenant. That is recorded by the PR.
+- Business impact for Krum: SiteManager and Technician can no longer log material waste or labor entries from site.
+
+**Integration:**
+- #69 is clean against main, #56, #67 and #68.
+- It **conflicts with #55 in `backend/app/permissions/catalog.py`**: both add catalog actions. Resolve when the second one lands.
