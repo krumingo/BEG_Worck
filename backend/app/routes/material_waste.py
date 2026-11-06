@@ -9,6 +9,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_money_write
 from app.services.material_waste import build_material_waste_summary
 from app.tenancy.data_access import TenantData
 
@@ -55,7 +56,12 @@ async def get_compact_waste(project_id: str, user: dict = Depends(get_current_us
 
 
 @router.post("/projects/{project_id}/material-waste", status_code=201)
-async def create_waste_entry(project_id: str, data: WasteEntryCreate, user: dict = Depends(get_current_user)):
+async def create_waste_entry(
+    project_id: str,
+    data: WasteEntryCreate,
+    user: dict = Depends(require_money_write(
+        "material_waste.entry.create", module="M2", resource_type="material_waste_entry")),  # SEC-01
+):
     tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     entry = {

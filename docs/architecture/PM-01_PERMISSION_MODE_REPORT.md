@@ -136,6 +136,8 @@
 
 ### 5.1. Viewer записва (28 endpoint-а)
 
+> **SEC-01 (Р14):** 8 от тези endpoint-а (`cash-transactions`, `bonus-payments`, `overhead-transactions`, `overhead-snapshots`, `price-modifiers/project/{project_id}`, `labor-entries`, `material-waste`, `client-link`) вече връщат 403 без запис за всички роли освен Owner/Admin/Accountant, еднакво в трите режима. Таблицата по-долу е състоянието на `main` @ `07da9ab`; актуалната матрица е `docs/evidence/PM-01/matrix.csv`, разликата клетка по клетка — `docs/evidence/SEC-01/pm01_cells_closed.csv` (120 клетки).
+
 Тези извиквания **реално записаха** в базата (oplog). Последната колона показва, че Driver, Technician и Warehousekeeper могат същото.
 
 | Модул | Endpoint | Viewer статус | Записано (колекции) | Също Driver / Technician / Warehousekeeper |

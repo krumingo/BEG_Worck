@@ -18,6 +18,7 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 
@@ -103,7 +104,12 @@ async def update_employee_cost_config(data: dict, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-snapshots", status_code=201)
-async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2)):
+async def create_overhead_snapshot(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot.create", module="M2", resource_type="overhead_snapshot")),  # SEC-01: before any read/write
+    user: dict = Depends(require_m2),
+):
     """Create an overhead period snapshot entry"""
     tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()

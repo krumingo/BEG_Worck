@@ -490,7 +490,7 @@ def test_shadow_answers_like_off_and_writes_like_off_except_the_role_sync():
                for extra in write_diff.values()), write_diff
 
 
-# The only cells where enforce does something off does not (as of main @ 07da9ab): the
+# The only cells where enforce does something off does not (main @ 07da9ab + SEC-01): the
 # Permission Service refuses exactly as the legacy check did and writes a denial
 # AuditEvent, or (Owner/Admin creating a user) the FLOW-002 RoleAssignment and the
 # canonical AuditEvent are written next to the legacy user row.
@@ -498,6 +498,16 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/assets/intake/{intake_id}/approve"): "denial",
     ("POST", "/api/users"): "denial+create",
     ("PUT", "/api/users/{user_id}"): "denial",
+    # SEC-01 (R14): the eight money writes refuse every non-finance role in all three
+    # modes; in enforce the refusal is audited (app/permissions/money_write.py).
+    ("POST", "/api/finance/cash-transactions"): "denial",
+    ("POST", "/api/finance/bonus-payments"): "denial",
+    ("POST", "/api/finance/overhead-transactions"): "denial",
+    ("POST", "/api/overhead-snapshots"): "denial",
+    ("PUT", "/api/price-modifiers/project/{project_id}"): "denial",
+    ("POST", "/api/labor-entries"): "denial",
+    ("POST", "/api/projects/{project_id}/material-waste"): "denial",
+    ("PATCH", "/api/projects/{project_id}/client-link"): "denial",
 }
 
 

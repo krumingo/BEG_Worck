@@ -11,6 +11,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write
 from app.services.price_modifiers import (
     get_effective_modifiers, apply_modifiers_to_price,
     DEFAULT_MODIFIERS, DEFAULT_AUTO_RULES, MODIFIER_KEYS,
@@ -90,7 +91,13 @@ async def get_project_modifiers(project_id: str, user: dict = Depends(require_m2
 
 
 @router.put("/price-modifiers/project/{project_id}")
-async def update_project_modifiers(project_id: str, data: ModifiersUpdate, user: dict = Depends(require_m2)):
+async def update_project_modifiers(
+    project_id: str,
+    data: ModifiersUpdate,
+    _sec01: dict = Depends(require_money_write(
+        "pricing.project_modifier.update", module="M2", resource_type="price_modifiers_config")),  # SEC-01: before any read/write
+    user: dict = Depends(require_m2),
+):
     tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     update = {"updated_at": now, "updated_by": user["id"]}

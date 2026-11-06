@@ -66,6 +66,31 @@ ACTIONS: Set[str] = {
     # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
     # adapter write and needs this action; default deny for every other role.
     "master_data.legacy.delete",
+    # SEC-01 (R14, Krum 06.11.2026; PM-01 §5.1): money writes are for the finance
+    # roles only — Owner/Admin (full set) and Accountant. Same rule as the sibling
+    # writes (routes/clients.py:27-29, routes/finance.py:36-38). One action per
+    # endpoint; no other role is granted any of them.
+    "finance.cash_transaction.create",       # POST /api/finance/cash-transactions
+    "finance.overhead_transaction.create",   # POST /api/finance/overhead-transactions
+    "finance.bonus_payment.create",          # POST /api/finance/bonus-payments
+    "finance.overhead_snapshot.create",      # POST /api/overhead-snapshots
+    "pricing.project_modifier.update",       # PUT  /api/price-modifiers/project/{project_id}
+    "labor.entry.create",                    # POST /api/labor-entries
+    "material_waste.entry.create",           # POST /api/projects/{project_id}/material-waste
+    "project.client_link.update",            # PATCH /api/projects/{project_id}/client-link
+}
+
+# SEC-01: the money-write actions above, granted to Accountant (Owner/Admin get them
+# through their full set).
+MONEY_WRITE_ACTIONS: Set[str] = {
+    "finance.cash_transaction.create",
+    "finance.overhead_transaction.create",
+    "finance.bonus_payment.create",
+    "finance.overhead_snapshot.create",
+    "pricing.project_modifier.update",
+    "labor.entry.create",
+    "material_waste.entry.create",
+    "project.client_link.update",
 }
 
 # Verbs whose DENIAL is security/business significant and must be audited
@@ -111,7 +136,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "master_data.entity.read"}},
     "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read",
                                                                       "master_data.pending.read",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      *MONEY_WRITE_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read"}},

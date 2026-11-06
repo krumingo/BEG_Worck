@@ -13,6 +13,7 @@ from app.master_data.legacy_adapter import annotate_refs, require_tenant_identit
 from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
+from app.permissions.money_write import require_money_write
 
 router = APIRouter(tags=["Reports"])
 
@@ -940,6 +941,8 @@ async def list_cash_transactions(
 @router.post("/finance/cash-transactions", status_code=201)
 async def create_cash_transaction(
     data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.cash_transaction.create", module="M5", resource_type="cash_transaction")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
 ):
     """Create a cash transaction (income or expense)"""
@@ -994,6 +997,8 @@ async def list_overhead_transactions(
 @router.post("/finance/overhead-transactions", status_code=201)
 async def create_overhead_transaction(
     data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_transaction.create", module="M5", resource_type="overhead_transaction")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
 ):
     """Create an overhead transaction"""
@@ -1047,6 +1052,8 @@ async def list_bonus_payments(
 @router.post("/finance/bonus-payments", status_code=201)
 async def create_bonus_payment(
     data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.bonus_payment.create", module="M5", resource_type="bonus_payment")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
 ):
     """Create a bonus payment"""

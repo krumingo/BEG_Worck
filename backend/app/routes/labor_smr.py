@@ -16,6 +16,7 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -30,7 +31,12 @@ router = APIRouter(tags=["Labor by SMR"])
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/labor-entries", status_code=201)
-async def create_labor_entry(data: dict, user: dict = Depends(require_m2)):
+async def create_labor_entry(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "labor.entry.create", module="M2", resource_type="labor_entry")),  # SEC-01: before any read/write
+    user: dict = Depends(require_m2),
+):
     """Create a labor time entry linked to an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
