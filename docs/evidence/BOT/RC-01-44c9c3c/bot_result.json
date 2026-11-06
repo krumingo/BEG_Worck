@@ -1,0 +1,228 @@
+{
+  "task": "RC-01",
+  "sha": "44c9c3c",
+  "started": "2026-11-06T13:31:07.960Z",
+  "steps": [
+    {
+      "step": "2 /api/version returns the same full SHA as the build (no auth)",
+      "pass": true,
+      "detail": {
+        "json": {
+          "build_sha": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+          "build_time": "2026-11-06T12:56:57Z",
+          "environment_label": "test",
+          "source": "build-info-file"
+        }
+      }
+    },
+    {
+      "step": "2b /api/version has exactly the allowed keys, no secrets/paths/host",
+      "pass": true,
+      "detail": {
+        "keys": "build_sha,build_time,environment_label,source"
+      }
+    },
+    {
+      "step": "1 [1280] login screen shows first 12 chars, full SHA in tooltip, status=match",
+      "pass": true,
+      "detail": {
+        "status": "match",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "01_1_1280_login_screen_shows_first_12_chars.png"
+    },
+    {
+      "step": "1 [1280] menu (sidebar bottom) shows first 12 chars + full SHA tooltip",
+      "pass": true,
+      "detail": {
+        "status": "match",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "02_1_1280_menu_sidebar_bottom_shows_first_1.png"
+    },
+    {
+      "step": "1 [390] login screen shows first 12 chars, full SHA in tooltip, status=match",
+      "pass": true,
+      "detail": {
+        "status": "match",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "03_1_390_login_screen_shows_first_12_chars_.png"
+    },
+    {
+      "step": "5 [390] login: no horizontal scroll",
+      "pass": true,
+      "screenshot": "04_5_390_login_no_horizontal_scroll.png"
+    },
+    {
+      "step": "1 [390] mobile menu footer shows first 12 chars + full SHA tooltip",
+      "pass": true,
+      "detail": {
+        "status": "match",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "test"
+      },
+      "screenshot": "05_1_390_mobile_menu_footer_shows_first_12_.png"
+    },
+    {
+      "step": "5 [390] menu open: no horizontal scroll",
+      "pass": true,
+      "screenshot": "06_5_390_menu_open_no_horizontal_scroll.png"
+    },
+    {
+      "step": "5 [390] dashboard: no horizontal scroll",
+      "pass": true,
+      "screenshot": "07_5_390_dashboard_no_horizontal_scroll.png"
+    },
+    {
+      "step": "3.0 backend now reports a different SHA (HEAD~1)",
+      "pass": true,
+      "detail": {
+        "server": "c0e34e1f3037010311d352683d519c3c9d7dcbfa"
+      }
+    },
+    {
+      "step": "3 [1280] login: mismatch warning visible („Версията на интерфейса и сървъра се различава“) + server 12 chars",
+      "pass": true,
+      "detail": {
+        "warning": "Версията на интерфейса и сървъра се различава сървър: c0e34e1f3037",
+        "status": "mismatch",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "08_3_1280_login_mismatch_warning_visible_se.png"
+    },
+    {
+      "step": "3 [1280] after login the menu shows the mismatch warning too",
+      "pass": true,
+      "detail": {},
+      "screenshot": "09_3_1280_after_login_the_menu_shows_the_mi.png"
+    },
+    {
+      "step": "3 [390] login: mismatch warning visible („Версията на интерфейса и сървъра се различава“) + server 12 chars",
+      "pass": true,
+      "detail": {
+        "warning": "Версията на интерфейса и сървъра се различава сървър: c0e34e1f3037",
+        "status": "mismatch",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "10_3_390_login_mismatch_warning_visible_ser.png"
+    },
+    {
+      "step": "5 [390] mismatch warning: no horizontal scroll",
+      "pass": true,
+      "screenshot": "11_5_390_mismatch_warning_no_horizontal_scr.png"
+    },
+    {
+      "step": "3 [390] after login the menu shows the mismatch warning too",
+      "pass": true,
+      "detail": {},
+      "screenshot": "12_3_390_after_login_the_menu_shows_the_mis.png"
+    },
+    {
+      "step": "5 [390] menu with warning: no horizontal scroll",
+      "pass": true,
+      "screenshot": "13_5_390_menu_with_warning_no_horizontal_sc.png"
+    },
+    {
+      "step": "4a no build info on the backend: /api/version build_sha = \"unknown\", source none",
+      "pass": true,
+      "detail": {
+        "json": {
+          "build_sha": "unknown",
+          "build_time": null,
+          "environment_label": "test",
+          "source": "none"
+        }
+      }
+    },
+    {
+      "step": "4b [1280] frontend has SHA, backend unknown: status=unknown + \"Непотвърдена версия\" warning",
+      "pass": true,
+      "detail": {
+        "warning": "Непотвърдена версия: липсва build SHA",
+        "status": "unknown",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "14_4b_1280_frontend_has_SHA_backend_unknown.png"
+    },
+    {
+      "step": "4c [1280] no build info on frontend AND backend: UI shows \"unknown\"",
+      "pass": true,
+      "detail": {
+        "status": "unknown",
+        "text": "v unknown",
+        "title": "unknown",
+        "env": "TEST"
+      },
+      "screenshot": "15_4c_1280_no_build_info_on_frontend_AND_ba.png"
+    },
+    {
+      "step": "4b [390] frontend has SHA, backend unknown: status=unknown + \"Непотвърдена версия\" warning",
+      "pass": true,
+      "detail": {
+        "warning": "Непотвърдена версия: липсва build SHA",
+        "status": "unknown",
+        "text": "v 44c9c3cfa668",
+        "title": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+        "env": "TEST"
+      },
+      "screenshot": "16_4b_390_frontend_has_SHA_backend_unknown_.png"
+    },
+    {
+      "step": "4c [390] no build info on frontend AND backend: UI shows \"unknown\"",
+      "pass": true,
+      "detail": {
+        "status": "unknown",
+        "text": "v unknown",
+        "title": "unknown",
+        "env": "TEST"
+      },
+      "screenshot": "17_4c_390_no_build_info_on_frontend_AND_bac.png"
+    },
+    {
+      "step": "5 [390] unknown state: no horizontal scroll",
+      "pass": true,
+      "screenshot": "18_5_390_unknown_state_no_horizontal_scroll.png"
+    }
+  ],
+  "facts": {
+    "head": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+    "prev": "c0e34e1f3037010311d352683d519c3c9d7dcbfa"
+  },
+  "version_json_match": {
+    "build_sha": "44c9c3cfa668cf9a601f65960680eac11ef70ec7",
+    "build_time": "2026-11-06T12:56:57Z",
+    "environment_label": "test",
+    "source": "build-info-file"
+  },
+  "version_json_mismatch": {
+    "build_sha": "c0e34e1f3037010311d352683d519c3c9d7dcbfa",
+    "build_time": "2026-10-20T16:32:08Z",
+    "environment_label": "test",
+    "source": "build-info-file"
+  },
+  "version_json_unknown_backend": {
+    "build_sha": "unknown",
+    "build_time": null,
+    "environment_label": "test",
+    "source": "none"
+  },
+  "passed": 22,
+  "total": 22,
+  "no_screen": 0,
+  "verdict": "PASS",
+  "finished": "2026-11-06T13:31:48.694Z"
+}
