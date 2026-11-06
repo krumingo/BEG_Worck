@@ -251,6 +251,14 @@ async def read_history(
     )
 
 
+PROJECT_SCOPED_WARNING_CODES = frozenset({
+    "UNRESOLVED_IN_TRANSIT_AGING",
+    # 5C-C26 — Path B overlap warnings are about one project.
+    "PATH_B_LEGACY_OVERLAP_UNPROVEN", "PATH_B_LINK_QTY_UNVERIFIED",
+    "PATH_B_LINK_AMBIGUOUS",
+})
+
+
 @router.get("/integrity-warnings")
 async def read_integrity_warnings(
     ctx: TenantContext = Depends(require_permission(
@@ -267,6 +275,11 @@ async def read_integrity_warnings(
     data = await integrity_warnings(
         tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
     )
+    # 5C-C26 (FG-17 per FLOW-043 D-04) — Path A / Path B overlaps that the
+    # data cannot prove (or whose quantity cannot be verified), per project,
+    # from the same helper every finance report uses.
+    from app.services.canonical_material_cost import path_b_integrity_warnings
+    data["warnings"].extend(await path_b_integrity_warnings(tenant, ctx.tenant_id))
     allowed = await _authorized_scope_locations(ctx, user=None)
     if allowed is not None:
         allowed_set = {tuple(x) for x in allowed}
@@ -276,7 +289,7 @@ async def read_integrity_warnings(
             dispatch_loc = ("warehouse", loc.get("id")) if loc else None
             if loc and (loc.get("type"), loc.get("id")) not in allowed_set:
                 continue
-            if w.get("code") in {"UNRESOLVED_IN_TRANSIT_AGING"}:
+            if w.get("code") in PROJECT_SCOPED_WARNING_CODES:
                 # scope match on project
                 if w.get("project_id") and ("project", w["project_id"]) not in allowed_set:
                     continue

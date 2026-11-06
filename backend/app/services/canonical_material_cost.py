@@ -52,13 +52,14 @@ project's cost to SMR / execution packages for reports and budgets. A
 write-off from the project („фира", Р10) is already part of the accepted
 cost; it stays its own line by reclassifying that value out of „material".
 
-FG-17 (5C-C25): Path B — supplier invoice lines allocated straight to the
-project (``invoice_lines`` ``allocation_type=project``) — is part of THIS
-helper too, summed with Path A as separate lots. An invoice line that a
-canonical ledger row references (``invoice_line_id``) is the same lot as
-that movement and is counted only through the canon (reported as
-``invoice_linked_excluded_cost``). The P&L no longer takes
-``max(invoice, warehouse)``.
+FG-17 (5C-C25, made exact by 5C-C26 per FLOW-043 D-04 / FLOW-009): Path B —
+the quantity of a supplier invoice line allocated straight to the project —
+is part of THIS helper too, summed with Path A as separate lots. A quantity
+allocated to a warehouse is Path A (cost at ACCEPT). A canonical supplier
+receipt of the same line (``invoice_line_id``) is the same lot: the canon
+wins for the quantity it covers (``invoice_linked_excluded_cost``); an
+overlap the data cannot prove is warned, never silently changed. Full rule:
+``path_b_split``. The P&L no longer takes ``max(invoice, warehouse)``.
 """
 from __future__ import annotations
 
@@ -202,26 +203,195 @@ async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
     return [row async for row in cursor]
 
 
+# ─────────────── Path B (FG-17, 5C-C26 — FLOW-043 D-04, FLOW-009) ───────────────
+#
+# FLOW-009 „Разход по обект — без двойно броене": Path A (supplier →
+# warehouse → project, cost at ACCEPT, Р17) and Path B (supplier invoice
+# line allocated straight to the project). ONE lot can never become cost
+# along both paths.
+#
+# 5C-C26 rule, applied per invoice line L and project P (read time,
+# nothing stored):
+#   1. Only the quantity of L allocated DIRECTLY to P is Path B
+#      (``allocations[]`` entries ``type=project, ref_id=P``; a line without
+#      ``allocations[]`` keeps its deprecated single allocation
+#      ``allocation_type/allocation_ref_id`` for its whole qty). A quantity
+#      allocated to a warehouse is Path A — cost only at ACCEPT (Р17). A
+#      stale deprecated ``allocation_type=project`` on a line whose
+#      ``allocations[]`` says otherwise is NOT Path B (``/allocate`` replaces
+#      ``allocations[]`` only).
+#   2. PROVEN LINK — a canonical supplier receipt (``receive_from_supplier``
+#      to a warehouse, ``receive_from_supplier_to_project``) whose
+#      ``invoice_line_id`` is L. That receipt is the lot of L; the warehouse
+#      (canonical) side wins and L counts only for the quantity no receipt
+#      covers:
+#        covered(P) = direct receipts of L to P
+#                   + receipts of L into a warehouse beyond L's own
+#                     warehouse allocation (goods L allocated to projects but
+#                     that physically went through the warehouse) — only
+#                     when P is L's ONLY project allocation;
+#        Path B(P)  = (allocated(P) − covered(P), ≥ 0) × L's own unit price
+#                     (line_total_ex_vat / qty — no averaging across lots).
+#      Other canonical rows that reference L (no receipt does) prove the
+#      link but not the quantity: the whole P part goes through the canon.
+#      Quantities are compared only when L's unit equals the receipts'
+#      unit; otherwise (or when L has no qty) the link wins for the whole P
+#      part. No link → the two records are different lots and are summed.
+#   3. NO PROVABLE LINK where an overlap is possible — the line stays
+#      counted (no silent change of the sum) and an integrity warning is
+#      raised (``path_b_warnings``; shown by GET
+#      /warehouse/canonical/integrity-warnings):
+#        PATH_B_LEGACY_OVERLAP_UNPROVEN — a counted Path B line and a counted
+#          pre-cutover legacy issue (Р13) of the same project with the same
+#          material name: legacy issues carry no invoice-line / lot
+#          reference, so the data cannot prove or refute the overlap;
+#        PATH_B_LINK_QTY_UNVERIFIED — a link exists but the quantity cannot
+#          be compared (unit differs / no qty / non-receipt reference): the
+#          canon won for the whole P part, a remainder may be missing;
+#        PATH_B_LINK_AMBIGUOUS — warehouse receipts of L exceed its warehouse
+#          allocation but L is split over several projects: which project's
+#          part went through the warehouse is not in the data.
+
+PATH_B_RECEIPT_ACTIONS: Tuple[str, ...] = (
+    "receive_from_supplier", "receive_from_supplier_to_project")
+PATH_B_RULE = "C26_one_path_per_lot"
+
+
+def _norm_unit(unit: Any) -> str:
+    return " ".join(str(unit or "").lower().split())
+
+
+def _norm_name(name: Any) -> str:
+    return " ".join(str(name or "").casefold().split())
+
+
+def effective_allocations(line: dict) -> List[dict]:
+    """``allocations[]`` of an invoice line; a line without it keeps its
+    deprecated single allocation for the whole qty (``qty`` None = whole
+    line, quantity unknown) — the same reading as
+    ``routes.invoice_lines.normalize_allocations``."""
+    allocs = line.get("allocations") or []
+    if allocs:
+        out = []
+        for a in allocs:
+            out.append({"type": a.get("type"),
+                        "ref_id": a.get("ref_id") or a.get("refId"),
+                        "qty": _f(a.get("qty"))})
+        return out
+    if line.get("allocation_type") and line.get("allocation_ref_id"):
+        return [{"type": line["allocation_type"],
+                 "ref_id": line["allocation_ref_id"],
+                 "qty": _f(line.get("qty"))}]
+    return []
+
+
 async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
-    """FG-17 — Path B: supplier invoice lines allocated to the project (the
-    same selection the P&L always used)."""
+    """Path B candidates: supplier invoice lines with ANY allocation to the
+    project (``allocations[]`` or the deprecated single allocation)."""
     cursor = tenant.invoice_lines.find(
-        {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
+        {"org_id": org_id,
+         "$or": [
+             {"allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
+             {"allocation_type": "project", "allocation_ref_id": project_id},
+         ]},
         {"_id": 0, "id": 1, "line_total_ex_vat": 1, "description": 1, "unit": 1,
-         "qty": 1, "created_at": 1, "invoice_id": 1},
+         "qty": 1, "created_at": 1, "invoice_id": 1, "allocations": 1,
+         "allocation_type": 1, "allocation_ref_id": 1},
     )
     return [row async for row in cursor]
 
 
+async def ledger_invoice_line_links(tenant, org_id: str, ids: List[str]) -> Dict[str, List[dict]]:
+    """Canonical ledger rows that reference each invoice line
+    (``invoice_line_id``), tenant-scoped."""
+    out: Dict[str, List[dict]] = {}
+    if not ids:
+        return out
+    cursor = tenant.warehouse_transactions.find(
+        {"org_id": org_id, "action": {"$exists": True}, "invoice_line_id": {"$in": ids}},
+        {"_id": 0, "invoice_line_id": 1, "action": 1, "quantity": 1, "unit": 1,
+         "destination": 1, "movement_id": 1},
+    )
+    async for row in cursor:
+        out.setdefault(row["invoice_line_id"], []).append(row)
+    return out
+
+
 async def ledger_invoice_line_ids(tenant, org_id: str, ids: List[str]) -> set:
     """Invoice line ids that a canonical ledger row references."""
-    if not ids:
-        return set()
-    out = await tenant.warehouse_transactions.distinct(
-        "invoice_line_id",
-        {"org_id": org_id, "action": {"$exists": True}, "invoice_line_id": {"$in": ids}},
-    )
-    return {x for x in out if x}
+    return set((await ledger_invoice_line_links(tenant, org_id, ids)).keys())
+
+
+def path_b_split(line: dict, project_id: str, links: List[dict]) -> Dict[str, Any]:
+    """5C-C26 — the Path B part of one invoice line for one project.
+
+    Returns ``counted_value`` / ``covered_value`` (linked, through the
+    canon) / ``path_a_value`` (allocated elsewhere, e.g. a warehouse) and
+    ``warning`` (code or None). Pure function of the line and its links."""
+    total_value = float(line.get("line_total_ex_vat", 0) or 0)
+    line_qty = _f(line.get("qty"))
+    allocs = effective_allocations(line)
+    proj_allocs = [a for a in allocs if a["type"] == "project"]
+    mine = [a for a in proj_allocs if a["ref_id"] == project_id]
+    wh_alloc = sum(a["qty"] or 0.0 for a in allocs if a["type"] == "warehouse")
+    path_a_value = (total_value / line_qty * wh_alloc
+                    if line_qty is not None and line_qty > 0 else 0.0)
+    if not mine:
+        return {"counted_value": 0.0, "covered_value": 0.0,
+                "path_a_value": path_a_value, "allocated_qty": 0.0,
+                "counted_qty": 0.0, "warning": None, "link": "none"}
+    unit_known = line_qty is not None and line_qty > 0 \
+        and all(a["qty"] is not None for a in mine)
+    if unit_known:
+        unit_price = total_value / line_qty
+        alloc_qty = sum(a["qty"] for a in mine)
+        alloc_value = unit_price * alloc_qty
+    else:
+        unit_price = None
+        alloc_qty = line_qty or 0.0
+        alloc_value = total_value
+
+    def _out(counted_value, warning=None, link="none", counted_qty=None):
+        counted_value = max(min(counted_value, alloc_value), 0.0)
+        return {"counted_value": counted_value,
+                "covered_value": alloc_value - counted_value,
+                "path_a_value": path_a_value, "allocated_qty": alloc_qty,
+                "counted_qty": alloc_qty if counted_qty is None else counted_qty,
+                "warning": warning, "link": link}
+
+    if not links:
+        return _out(alloc_value)                     # different lot: summed
+    receipts = [r for r in links if r.get("action") in PATH_B_RECEIPT_ACTIONS]
+    line_unit = _norm_unit(line.get("unit"))
+    comparable = (unit_known and receipts
+                  and all(_norm_unit(r.get("unit")) == line_unit for r in receipts))
+    if not comparable:
+        # Proven link, quantity not comparable: the canon wins the whole part.
+        return _out(0.0, "PATH_B_LINK_QTY_UNVERIFIED", "proven", 0.0)
+
+    def _is_to(row, pid):
+        dst = row.get("destination") or {}
+        return dst.get("location_type") in PROJECT_LOCATION_TYPES \
+            and dst.get("location_id") == pid
+
+    direct_to_me = sum(_f(r.get("quantity")) or 0.0 for r in receipts
+                       if r.get("action") == "receive_from_supplier_to_project"
+                       and _is_to(r, project_id))
+    to_warehouse = sum(_f(r.get("quantity")) or 0.0 for r in receipts
+                       if r.get("action") == "receive_from_supplier")
+    excess = max(to_warehouse - wh_alloc, 0.0)
+    covered = direct_to_me
+    warning = None
+    if excess > 0:
+        only_me = all(a["ref_id"] == project_id for a in proj_allocs)
+        if only_me:
+            covered += excess
+        else:
+            warning = "PATH_B_LINK_AMBIGUOUS"
+    covered = min(covered, alloc_qty)
+    uncovered = alloc_qty - covered
+    return _out(uncovered * unit_price, warning,
+                "proven" if covered > 0 else "none", uncovered)
 
 
 async def legacy_issue_rows(tenant, org_id: str, project_id: str) -> List[dict]:
@@ -366,25 +536,66 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
             lines.append(line)
             package_lines.append(line)
 
-    # FG-17 — Path B: invoice lines allocated to the project.
+    # FG-17 / 5C-C26 — Path B: the quantity of an invoice line allocated
+    # directly to the project, minus what a canonical receipt of the same
+    # line already brought (Path A wins on a proven link).
     inv_rows = await project_invoice_lines(tenant, org_id, project_id)
-    linked = await ledger_invoice_line_ids(
+    links = await ledger_invoice_line_links(
         tenant, org_id, [r.get("id") for r in inv_rows if r.get("id")])
-    invoice_cost = invoice_linked_excluded = 0.0
+    invoice_cost = invoice_linked_excluded = invoice_path_a = 0.0
+    path_b_warnings: List[dict] = []
+    counted_invoice: List[dict] = []
     for il in inv_rows:
-        value = float(il.get("line_total_ex_vat", 0) or 0)
-        if il.get("id") in linked:
-            invoice_linked_excluded += value
+        split = path_b_split(il, project_id, links.get(il.get("id"), []))
+        invoice_linked_excluded += split["covered_value"]
+        invoice_path_a += split["path_a_value"]
+        if split["warning"]:
+            path_b_warnings.append({
+                "code": split["warning"], "project_id": project_id,
+                "invoice_line_id": il.get("id"), "invoice_id": il.get("invoice_id"),
+                "description": il.get("description"),
+                "counted_value": round(split["counted_value"], 2),
+                "linked_movement_ids": sorted(
+                    r.get("movement_id") for r in links.get(il.get("id"), [])
+                    if r.get("movement_id")),
+                "rule": PATH_B_RULE,
+            })
+        value = split["counted_value"]
+        if value <= 0:
             continue
         invoice_cost += value
         at = _moment(il.get("created_at"))
-        lines.append({
+        line = {
             "source": "invoice", "kind": "invoice_line", "waste": False,
-            "value": round(value, 4), "qty": _f(il.get("qty")) or 0.0,
+            "value": round(value, 4), "qty": split["counted_qty"],
             "item_id": None, "unit": il.get("unit"),
             "material_name": il.get("description") or "",
             "package_id": None, "at": at, "period": period_of(at),
-            "ref": il.get("id"),
+            "ref": il.get("id"), "link": split["link"],
+        }
+        lines.append(line)
+        counted_invoice.append(line)
+
+    # 5C-C26 point 3 — legacy issues carry no invoice-line / lot reference:
+    # an overlap with a counted Path B line of the same material cannot be
+    # proven or refuted from the data. Warn; never change the sum silently.
+    legacy_by_name: Dict[str, List[dict]] = {}
+    for ln in lines:
+        if ln["source"] == "legacy" and _norm_name(ln["material_name"]):
+            legacy_by_name.setdefault(_norm_name(ln["material_name"]), []).append(ln)
+    for inv in counted_invoice:
+        matches = legacy_by_name.get(_norm_name(inv["material_name"]))
+        if not matches:
+            continue
+        path_b_warnings.append({
+            "code": "PATH_B_LEGACY_OVERLAP_UNPROVEN", "project_id": project_id,
+            "invoice_line_id": inv["ref"], "description": inv["material_name"],
+            "counted_value": round(inv["value"], 2),
+            "legacy_issue_ids": sorted({m["ref"] for m in matches if m.get("ref")}),
+            "legacy_value": round(sum(m["value"] or 0 for m in matches), 2),
+            "rule": PATH_B_RULE,
+            "note": "Фактурен ред към обекта и старо изписване от склада за същия "
+                    "материал — няма връзка в данните; и двата се броят. Проверете.",
         })
 
     total = waste = 0.0
@@ -446,6 +657,11 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         "returned_cost": round(returned_cost, 2),
         "invoice_cost": round(invoice_cost, 2),
         "invoice_linked_excluded_cost": round(invoice_linked_excluded, 2),
+        # 5C-C26 — selected lines' quantity allocated elsewhere (warehouse →
+        # Path A, cost at ACCEPT; client); never project cost here.
+        "invoice_path_a_cost": round(invoice_path_a, 2),
+        "path_b_rule": PATH_B_RULE,
+        "path_b_warnings": path_b_warnings,
         "allocated_cost": round(allocated, 2),
         "unallocated_cost": round(total - allocated, 2),
         "mapped_cost": round(allocated, 2),
@@ -476,6 +692,28 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
 COST_RULE = "R17_cost_at_acceptance"
 
 
+async def path_b_integrity_warnings(tenant, org_id: str) -> List[dict]:
+    """5C-C26 point 3 — the Path B warnings of every project of the tenant
+    that has a supplier invoice line allocated to it (read-only; the same
+    ``project_material_cost`` every report uses, so the screen and the
+    reports cannot disagree)."""
+    project_ids = set()
+    cursor = tenant.invoice_lines.find(
+        {"org_id": org_id,
+         "$or": [{"allocations.type": "project"}, {"allocation_type": "project"}]},
+        {"_id": 0, "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1},
+    )
+    async for line in cursor:
+        for a in effective_allocations(line):
+            if a["type"] == "project" and a["ref_id"]:
+                project_ids.add(a["ref_id"])
+    out: List[dict] = []
+    for pid in sorted(project_ids):
+        cost = await project_material_cost(tenant, org_id, pid)
+        out.extend(cost["path_b_warnings"])
+    return out
+
+
 def cost_basis(cost: Dict[str, Any]) -> Dict[str, Any]:
     """The JSON-safe Р13 basis of a cost result (for report payloads)."""
     keys = ("total_cost", "consumption_cost", "waste_cost", "source",
@@ -485,6 +723,8 @@ def cost_basis(cost: Dict[str, Any]) -> Dict[str, Any]:
             # 5C-C25 (Р17, FG-17)
             "cost_rule", "accepted_cost", "returned_cost", "invoice_cost",
             "invoice_linked_excluded_cost", "allocated_cost",
+            # 5C-C26 (FG-17 per D-04)
+            "invoice_path_a_cost", "path_b_rule", "path_b_warnings",
             "unallocated_cost", "consumed_value")
     return {k: cost.get(k) for k in keys}
 
