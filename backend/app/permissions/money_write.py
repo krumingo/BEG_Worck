@@ -314,7 +314,8 @@ def strip_for_budget_view(fn):
             return result
         body = jsonable_encoder(result)
         if await budget_view_visible(request, user, kwargs.get("project_id")):
-            return without_keys(body, BUDGET_VIEW_HIDDEN_FIELDS)
+            return await r31_budget_view(user, kwargs.get("project_id"),
+                                         without_keys(body, BUDGET_VIEW_HIDDEN_FIELDS))
         return strip_money(body)
 
     wrapper.__signature__ = sig.replace(parameters=params)
@@ -361,9 +362,21 @@ def strip_pulse_for_non_finance(fn):
                 own[site] = await budget_view_visible(request, user, site)
             out = strip_money(pulse)
             if own[site]:
-                for key in PULSE_BUDGET_VIEW_KEYS:
-                    if key in pulse:
-                        out[key] = pulse[key]
+                from collections import defaultdict
+                from app.permissions.finance_read import r31_view, _norm
+                # the day: workers per SMR from the pulse itself (then dropped)
+                day = defaultdict(set)
+                for w in pulse.get("workers") or []:
+                    for t in w.get("smr_types") or []:
+                        day[_norm(t)].add(w.get("worker_id"))
+                n_day = len({w.get("worker_id") for w in pulse.get("workers") or []})
+                kept = {k: pulse[k] for k in ("smr_summary", "total_labor_cost") if k in pulse}
+                out.update(r31_view(kept, dict(day), n_day))
+                if "budget_snapshot" in pulse:        # cumulative: all workers of the site
+                    view = await r31_budget_view(user, site,
+                                                 {"budget_snapshot": pulse["budget_snapshot"]})
+                    out["budget_snapshot"] = view["budget_snapshot"]
+            out.pop("workers", None)
             return out
 
         if isinstance(body, dict) and isinstance(body.get("items"), list):
@@ -377,3 +390,36 @@ def strip_pulse_for_non_finance(fn):
     wrapper.sec02_budget_view = True
     wrapper.sec02_keep = ()
     return wrapper
+
+
+async def project_labor_workers(user: dict, project_id: str):
+    """SEC-02-D (R31): distinct workers per SMR of a project, and of the whole project —
+    from the work sessions and the daily reports (both feed the "spent" figures)."""
+    from collections import defaultdict
+    from app.tenancy.data_access import TenantData
+    from app.permissions.finance_read import _norm
+    tenant = TenantData.for_user(db, user)
+    org = user["org_id"]
+    by_smr, everyone = defaultdict(set), set()
+    async for s_ in tenant.work_sessions.find(
+            {"org_id": org, "site_id": project_id},
+            {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1}):
+        w = s_.get("worker_id")
+        if w:
+            everyone.add(w)
+            by_smr[_norm(s_.get("smr_type_id") or s_.get("smr_type"))].add(w)
+    async for r in tenant.employee_daily_reports.find(
+            {"org_id": org, "project_id": project_id},
+            {"_id": 0, "worker_id": 1, "smr_type": 1, "activity_type": 1}):
+        w = r.get("worker_id")
+        if w:
+            everyone.add(w)
+            by_smr[_norm(r.get("smr_type") or r.get("activity_type"))].add(w)
+    return dict(by_smr), len(everyone)
+
+
+async def r31_budget_view(user: dict, project_id: str, body):
+    """The Technical Manager's budget view of ``body`` (SEC-02-D)."""
+    from app.permissions.finance_read import r31_view
+    by_smr, n = await project_labor_workers(user, project_id)
+    return r31_view(body, by_smr, n)

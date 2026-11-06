@@ -13,7 +13,7 @@ from app.services.expected_actual import build_expected_actual
 router = APIRouter(tags=["Expected vs Actual"])
 
 
-async def _budget_view(request: Request, user: dict, full: dict) -> dict:
+async def _budget_view(request: Request, user: dict, full: dict, project_id: str) -> dict:
     """SEC-02 (R20-2B). The Technical Manager sees budget + spent + remaining per SMR
     (activity_budgets.labor_budget vs the work-session cost) — never client prices. The
     SMR-group and location amounts are sums of smr_analyses final_total (the price to
@@ -26,7 +26,9 @@ async def _budget_view(request: Request, user: dict, full: dict) -> dict:
     out["locations"] = without_keys(full["locations"], EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS)
     out["summary"] = dict(full["summary"], biggest_overrun_group=None)
     out["client_price_fields_hidden"] = True
-    return out
+    # SEC-02-D (R31, audit SEC02C-1): nothing that gives one worker's pay.
+    from app.permissions.money_write import r31_budget_view
+    return await r31_budget_view(user, project_id, out)
 
 
 @router.get("/projects/{project_id}/expected-actual")
@@ -40,7 +42,7 @@ async def get_expected_actual(
     user: dict = Depends(get_current_user),
 ):
     full = await build_expected_actual(user["org_id"], project_id, date_from, date_to)
-    return await _budget_view(request, user, full)
+    return await _budget_view(request, user, full, project_id)
 
 
 @router.get("/projects/{project_id}/expected-actual/compact")
@@ -52,12 +54,13 @@ async def get_compact_expected_actual(
     user: dict = Depends(get_current_user)):
     full = await build_expected_actual(user["org_id"], project_id)
     groups = sorted(full["groups"], key=lambda x: x.get("variance_cost", 0), reverse=True)[:3]
-    view = await _budget_view(request, user, dict(full, groups=groups,
-                                                  locations=full["locations"][:3]))
+    acts = sorted(full["activities"], key=lambda x: x["variance_cost"], reverse=True)[:3]
+    view = await _budget_view(request, user, dict(full, groups=groups, activities=acts,
+                                                  locations=full["locations"][:3]), project_id)
     return {
         "summary": view["summary"],
         "top_overruns": {
-            "activities": sorted(full["activities"], key=lambda x: x["variance_cost"], reverse=True)[:3],
+            "activities": view["activities"],   # SEC-02-D: the view, not the full rows
             "groups": view["groups"],
             "locations": view["locations"],
         },

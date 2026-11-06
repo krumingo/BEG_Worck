@@ -372,6 +372,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             if p["key"] == "labor_create":
                 kwargs["json"] = {"project_id": pid, "hours": 1, "activity_name": "SEC02",
                                   "employee_id": fx[tkey]["users"]["technician"]["id"]}
+                # R29 (#69): a money POST needs an Idempotency-Key — a fresh one per call
+                kwargs["headers"]["Idempotency-Key"] = "sec02-%s" % uuid.uuid4().hex
             if params:
                 kwargs["params"] = params
             before = tc.portal.call(lambda: pm._last_ts(oplog))
@@ -408,6 +410,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 row["leaks_7777"] = "7777" in resp.text
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
+            if p["rule"] in (R20_2B, R20_5B) and p["action"] != EMPLOYEE_FILE_ACTION \
+                    and resp.status_code == 200:
+                from app.permissions.finance_read import _is_actual
+                row["actual_keys"] = sorted({k for k in body_money_keys(body) if _is_actual(k)})
+                row["worker_detail"] = money_keys_in(body, {"workers", "workers_count"})
             if p["rule"] == R20_2B and resp.status_code == 200 and "expected-actual" in p["path"]:
                 groups = (body.get("groups") if "groups" in body
                           else body.get("top_overruns", {}).get("groups")) or []
@@ -525,6 +532,11 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
                 assert set(r["written"]) <= {"op.audit_events"}, r
             else:
                 assert r["written"] == [], r
+        if r["status"] == 200 and "actual_keys" in r and r["legacy_role"] == "SiteManager" \
+                and r["tenant"] in ("A", "B") and r["target"] in ("P1", None):
+            # SEC-02-D (audit SEC02C-1; R31): P1 has ONE worker in the seed, so the
+            # Technical Manager gets no spent / actual at all, and never worker detail.
+            assert r["actual_keys"] == [] and r["worker_detail"] == [], r
         if r["status"] == 200 or r["status"] == 201:
             if r["rule"] == R20_5B and "money_keys" in r and not exp["money"]:
                 assert r["hidden_budget_keys"] == [] and not r["leaks_7777"], r
@@ -748,13 +760,42 @@ def test_without_keys_and_the_budget_view(monkeypatch):
     async def yes(_r, _u):
         return True
     monkeypatch.setattr(expected_actual, "money_values_visible", no)
-    v = asyncio.run(expected_actual._budget_view(None, {}, full))
+
+    async def r31_as_is(_u, _p, body):        # the R31 step is tested on its own below
+        return body
+    monkeypatch.setattr(money_write, "r31_budget_view", r31_as_is)
+    v = asyncio.run(expected_actual._budget_view(None, {}, full, "P1"))
     assert v["activities"] == full["activities"]               # budget, spent, remainder
     assert v["groups"] == [{"name": "G", "planned_hours": 1}]
     assert v["locations"] == [{"name": "L", "missing_smr_count": 0}]
     assert v["summary"]["biggest_overrun_group"] is None and "7777" not in json.dumps(v)
     monkeypatch.setattr(expected_actual, "money_values_visible", yes)
-    assert asyncio.run(expected_actual._budget_view(None, {}, full)) is full
+    assert asyncio.run(expected_actual._budget_view(None, {}, full, "P1")) is full
+
+
+def test_r31_no_per_worker_pay_by_derivation():
+    """SEC-02-D (audit SEC02C-1; R31, FLOW-037 §3.4)."""
+    from app.permissions.finance_read import r31_view
+    body = {"summary": {"total_planned_cost": 5000, "total_actual_cost": 410},
+            "activities": [{"name": "Мазилка", "planned_cost": 300, "actual_cost": 200,
+                            "actual_hours": 8, "variance_cost": -100},
+                           {"name": "Шпакловка", "planned_cost": 300, "actual_cost": 210,
+                            "actual_hours": 6}],
+            "workers": [{"worker_id": "w1", "hours": 8, "smr_types": ["Мазилка"]}],
+            "smr_summary": [{"smr_type": "Мазилка", "total_cost": 200, "workers_count": 1}]}
+    # one SMR with ONE worker -> no row keeps its spent; worker detail always goes
+    v = r31_view(body, {"мазилка": {"w1"}, "шпакловка": {"w2", "w3"}}, 3)
+    assert "workers" not in v and "workers_count" not in v["smr_summary"][0]
+    assert all("actual_cost" not in a and "variance_cost" not in a for a in v["activities"])
+    assert "total_cost" not in v["smr_summary"][0]
+    assert v["activities"][0]["planned_cost"] == 300           # the budget stays
+    assert v["summary"]["total_actual_cost"] == 410            # project total, 3 workers
+    # every SMR with 2+ workers -> the per-SMR spent stays
+    v2 = r31_view(body, {"мазилка": {"w1", "w4"}, "шпакловка": {"w2", "w3"}}, 4)
+    assert [a["actual_cost"] for a in v2["activities"]] == [200, 210]
+    # the whole project has ONE worker -> no project-level spent either
+    v3 = r31_view(body, {"мазилка": {"w1"}}, 1)
+    assert "total_actual_cost" not in v3["summary"] and v3["summary"]["total_planned_cost"] == 5000
 
 
 def test_the_money_key_rule():
@@ -872,6 +913,23 @@ def _real_refusal() -> str:
         return _pm01()._real_refusal()
     except Exception as exc:                                   # noqa: BLE001
         return "refused: %s" % exc
+
+
+@pytest.mark.skipif(bool(_real_refusal()), reason=_real_refusal() or "ok")
+def test_the_audit_pulse_derive_probe_finds_nothing():
+    """SEC-02-D: the audit's own probe (claude/audit-log
+    docs/audit/probes/sec02/probe_sec02_c_pulse_derive.py, vendored unchanged as
+    tools/audit_probe_sec02_c_pulse_derive.py) in off and enforce: no per-worker pay is
+    derivable from the Technical Manager's pulse."""
+    probe = BACKEND / "tools" / "audit_probe_sec02_c_pulse_derive.py"
+    for mode in ("off", "enforce"):
+        env = dict(os.environ, MONGO_URL=os.environ["W0_03_REAL_MONGO_URL"], PROBE_MODE=mode,
+                   PYTHONPATH=str(BACKEND))
+        out = subprocess.run([sys.executable, str(probe)], cwd=str(BACKEND), env=env,
+                             capture_output=True, text=True, timeout=600)
+        assert out.returncode == 0, out.stderr[-2000:]
+        assert "FAILS: none" in out.stdout, out.stdout[-2000:]
+        assert "DERIVED per-worker (pay, rate/h): {}" in out.stdout, out.stdout[-2000:]
 
 
 @pytest.mark.skipif(bool(_real_refusal()), reason=_real_refusal() or "ok")

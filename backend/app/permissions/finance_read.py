@@ -363,5 +363,65 @@ def strip_money(value, keep=()):
     return value
 
 
+# ── SEC-02-D (audit SEC02C-1; R31, FLOW-037 §3.4): no per-worker pay by derivation ──
+# In a response that carries money for the Technical Manager:
+#   * no per-worker identity / hours (``workers`` lists, ``workers_count``);
+#   * a per-SMR "spent" (actual / spent / cost / variance / remaining / burn) is shown only
+#     when EVERY SMR row of that list has 2+ workers — one single-worker row would give
+#     that worker's pay directly, or as the project total minus the other rows;
+#   * a project-level "spent" only when the project has 2+ workers.
+# Budget / planned amounts stay (they are not anyone's pay).
+_ACTUAL = _re.compile(r"(actual|spent|cost|variance|remaining|burn|labor_value|"
+                      r"clean_labor|overrun|_pct$|percent)")
+_PLANNED = _re.compile(r"(planned|budget|^name$|_name$|^type$|subtype|smr_type|category|"
+                       r"activity|status|unit$|qty|hours|count$|is_extra|source|id$)")
+_ROW_NAME_KEYS = ("smr_type", "smr_type_id", "type", "name", "activity_name", "category")
+WORKER_DETAIL_KEYS = frozenset({"workers", "workers_count", "worker_ids", "personnel",
+                                "by_worker"})
+
+
+def _norm(v) -> str:
+    return (str(v) if v is not None else "").lower().strip()
+
+
+def _is_actual(key: str) -> bool:
+    k = key.lower()
+    return bool(_ACTUAL.search(k)) and not _PLANNED.search(k)
+
+
+def _drop_actual(d: dict) -> dict:
+    return {k: v for k, v in d.items() if not (isinstance(k, str) and _is_actual(k))}
+
+
+def r31_view(value, workers_by_smr: Dict[str, set], project_workers: int):
+    """SEC-02-D: the Technical Manager's budget view with nothing that gives one worker's
+    pay. ``workers_by_smr``: normalized SMR name -> distinct worker ids of the project;
+    ``project_workers``: distinct workers of the project."""
+    single = {k for k, v in workers_by_smr.items() if len(v) == 1}
+
+    def walk(v):
+        if isinstance(v, list):
+            rows = [x for x in v if isinstance(x, dict)]
+            names = {_norm(r.get(k)) for r in rows for k in _ROW_NAME_KEYS if r.get(k)}
+            # one single-worker SMR row -> no row of the list keeps its "spent" (else
+            # the project total minus the other rows would still give it)
+            hide = bool(names & single)
+            out = []
+            for x in v:
+                y = walk(x)
+                if hide and isinstance(y, dict):
+                    y = _drop_actual(y)
+                out.append(y)
+            return out
+        if isinstance(v, dict):
+            d = {k: walk(x) for k, x in v.items() if k not in WORKER_DETAIL_KEYS}
+            is_row = any(d.get(k) for k in _ROW_NAME_KEYS)
+            if not is_row and project_workers <= 1:
+                d = _drop_actual(d)                    # project-level total of ONE worker
+            return d
+        return v
+    return walk(value)
+
+
 def by_route() -> Dict[tuple, FinanceRead]:
     return {(e.method, e.path): e for e in FINANCE_READS}
