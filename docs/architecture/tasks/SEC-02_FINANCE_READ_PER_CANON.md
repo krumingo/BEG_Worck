@@ -23,3 +23,11 @@ Draft PR, `HANDOFF SEC-02`, съобщение `SEC-02 DONE pr=<n> head=<sha> te
 - Таблицата е потвърдена от Крум като **Р20** (виж RECOVERY_EXECUTION_PROPOSAL). Технически ръководител = canonical role_id от `catalog.py` (FG-14), вижда **бюджет + изхарчено + остатък** по обект и по СМР/група СМР на своите обекти, без печалба, себестойност, марж и цени към клиента.
 - FG-15: отговорите на POST/sync за труд връщат `hourly_rate`/`labor_cost` — също в обхвата.
 - FG-12: при съчетаване на роли важи по-ограниченото право (FLOW-002) — описва се как се прилага.
+
+## Допълнение A (06.11, след HANDOFF @ 6080165) — SEC-02-D1 и D9
+Прилагане на Р20 и FLOW-010 — без ново бизнес решение.
+- **SEC-02-D1:** всички GET-ове от списъка в `docs/evidence/SEC-02/README.md` §Дълг D1 (subcontractor-acts/packages, ai-config/hourly-rates, settings/sales-margins, sales/history, clients/{id}/invoices, projects/{id}/dashboard и invoice-details, morning-briefing, budget-freezes, progress-*, project-progress-summary, material-entries, project-material-summary, smr-analyses, offers, extra-works) → редове в същия регистър `finance_read.py` по Р20: финансови роли — всичко; SiteManager — само бюджет/изхарчено/остава на свои обекти, без себестойност, марж, цени към клиента; Viewer/Technician/Driver/Warehousekeeper — без пари (количества/статуси по членство остават). Където отговорът смесва пари и не-пари — махни парите от отговора, не целия endpoint.
+- **SEC-02-D9:** досието на служителя за SiteManager — версия без пари (часове, присъствие на свои обекти) вместо 403 на целия екран (правило 3: не-финансови данни по членство).
+- **FG-12 / D5 (deny-overrides):** не се прави тук — изисква назначение-забрана в Permission Service; остава дълг към W0-02.
+- PM-01 матрицата — регенерирай с harness-а; diff в HANDOFF. Тестове: всеки нов ред × 8 роли × 3 режима; UI не чупи при липсващи пари.
+`HANDOFF SEC-02-A`.
