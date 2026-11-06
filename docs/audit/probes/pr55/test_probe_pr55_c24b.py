@@ -99,8 +99,9 @@ async def test_f5_three_price_lifecycle(canonical_mongo_db, allow_always_gate, m
     # Total is conserved (27000). The consumption/фира split depends on how a PARTIAL acceptance values the
     # accepted part: the implementation splits dispatched layers PRO-RATA (9000/15000 → 4200@1 + 4800@2.5),
     # not in FIFO order (7000@1 + 2000@2.5) → фира 9800, not 12500. Recorded as a decision for Krum.
-    assert all(v[0] == 27000.0 for v in seen.values()), seen
-    assert len({v for v in seen.values()}) == 1, seen
+    # Р21 (Krum, D-55-PRORATA resolved): a partial acceptance takes layers OLDEST FIRST at their own price,
+    # so accept 9000 = 7000@1 + 2000@2.5, consumption 14500, фира 12500, total 27000.
+    assert all(v == (27000.0, 12500.0) for v in seen.values()), seen
     if wh is not None:
         assert wh == Decimal("24150"), wh
 

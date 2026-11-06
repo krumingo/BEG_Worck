@@ -49,6 +49,30 @@ with TestClient(app, raise_server_exceptions=False) as tc:
         if d < 300: fails.append("R3-" + mode)
     if len({v[:2] for v in res.values()}) > 1:
         fails.append("R1-modes-disagree %s" % {m: v[:2] for m, v in res.items()})
+    # SEC-R1 boundaries (added for 471eaaa): to_date = today → member; from_date = tomorrow → not; from_date = today → member
+    today = date.today().isoformat(); tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
+    for k in ("driver",):
+        pass
+    tok2 = {k: {"Authorization": "Bearer " + tc.post("/api/auth/login", json={"email": U[k]["email"], "password": PW}).json()["token"]}
+            for k in ("accountant",)}
+    tc.portal.call(lambda: op["project_team"].update_many({"user_id": U["technician"]["id"]}, {"$set": {"active": False}}))
+    cases = [("to_date=today", {"from_date": "2026-01-01", "to_date": today}, True),
+             ("from_date=tomorrow", {"from_date": tomorrow}, False),
+             ("from_date=today", {"from_date": today}, True)]
+    for name, dates, expect_ok in cases:
+        os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
+        tc.portal.call(lambda: op["project_team"].update_many({"user_id": U["technician"]["id"]}, {"$set": {"active": False}}))
+        r = tc.post("/api/projects/%s/team" % pid, json=dict({"user_id": U["technician"]["id"], "role_in_project": "Technician"}, **dates),
+                    headers=tok["admin"])
+        for mode in ("off", "shadow", "enforce"):
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            st = tc.post("/api/labor-entries", json={"project_id": pid, "hours": 1, "activity_name": "b"}, headers=tok["technician"]).status_code
+            ok = st < 300
+            print("R1b %-18s add=%s %-7s labor=%s" % (name, r.status_code, mode, st))
+            if ok != expect_ok: fails.append("R1b %s %s %s" % (name, mode, st))
+    rows = tc.portal.call(lambda: op["project_team"].count_documents({"user_id": U["technician"]["id"], "project_id": pid}))
+    print("R4 membership rows for the technician on the project after re-adds:", rows)
     tc.portal.call(lambda: cli.drop_database(os.environ["DB_NAME"])); tc.portal.call(lambda: cli.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", fails or "none")
 sys.exit(1 if fails else 0)

@@ -8,10 +8,10 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 Склад 5C (C25) | `3706611` | PASS (internal) + decision D-55-FG17 — Codex still required | 2026-11-06 |
-| #67 ST-02 | `98b18ec` | PASS (C02) | 2026-11-06 |
+| #55 Склад 5C (C25+A) | `d8923d7` | PASS (internal; Р21 FIFO partial accept verified) + D-55-FG17 — Codex still required | 2026-11-06 |
+| #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #69 SEC-01 | `f33b2ba` | **FINDINGS (blocking): C02-P2 NaN/Inf into ledger, C02-P1 duplicate ledger rows**; SEC-R1 open | 2026-11-06 |
+| #69 SEC-01 | `471eaaa` | **FINDINGS (blocking): C02-P2 NaN/Inf into ledger, C02-P1 duplicate ledger rows — unchanged**; SEC-R1 CLOSED | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -902,3 +902,111 @@ A comment was posted on #69 (CLAUDE AUDIT, internal).
 | #69 × #55 | conflict (`catalog.py`) |
 | #56 × main / #67 / #68 / #69 | clean |
 | #69 × main / #56 / #67 / #68 | clean |
+
+
+---
+
+## 2026-11-06 ~20:10 — #55 @ `d8923d7` (5C-C25 Addendum A, Р21), #69 @ `471eaaa` (SEC-01-C02 addendum A, SEC-R1), and the open checks on #56 / #67
+
+### #55 @ `d8923d7` — Р21: a partial accept takes layers oldest-first at their own price (resolves D-55-PRORATA)
+
+**Suites (PROVED):**
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix + `codex_c23_independent` | **252 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo | **881 / 0 / 0** |
+| W0 DB-free | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+| Test-weakening check on the 3 changed test files | asserts −2/+3, 0/+14, 0/+2; 0 skip/xfail ✔ |
+
+**Probes (all PASS, one test per process):**
+
+| Probe | Result |
+|---|---|
+| L-1, L-2 (real legacy shapes) | pass |
+| F-1…F-4 (mixed prices, 50000 exactly) | pass |
+| **F-5 tightened to strict FIFO** | `(total, фира)` = **(27000, 12500)** after projector, rebuild ×2 and sync; warehouse left 24150 ✔ (was 9800 pro-rata on `dbda909`/`3706611`) |
+| F-6 | layers 3 / 4 exactly, cost 11 ✔ |
+| C25-1…C25-5 | pass. C25-2's partial step is now exact: 45000 / 5000 (the first 5000 of the oldest layer) |
+
+**Package checklist (`5C-C25_COST_AT_ACCEPT_AND_FLOW_GUARD.md`):**
+- **Р17 cost at accept, returns reduce it, SMR consume is allocation only** — PROVED (C25-1, C25-3; consume and write-off add no cost).
+- **Р18 transit for every move, returns via quarantine, direct transfer refused** — PROVED (C25-1/2/3; C19-1's direct project→warehouse transfer is refused).
+- **Р21** — PROVED (F-5).
+- **FG-17: P&L reads only the shared helper, no `max()`** — read in code (`services/project_pnl.py:76,174`) and PROVED numerically (C25-5: 150, main showed 100). **D-55-FG17 stays a decision for Krum.**
+- **FG-19 (no phantom "в път")** — fixed, with a test in the C25 file.
+- **FG-22 and FG-23** — **justified, not changed**, in HANDOFF 5C-C25, as the package allows. FG-22 needs a threshold from Krum plus the W0-07 Approval runtime. FG-23 depends on FG-13 (SEC-02 rule 4 not yet decided). Both stay open for Krum.
+
+### #69 @ `471eaaa` — SEC-01-C02 addendum A (SEC-R1)
+
+**Tests (PROVED):**
+
+| Command | Result |
+|---|---|
+| C02 + C01 + SEC-01 + PM-01 on real Mongo | **30 / 0 / 0** |
+| R0 | 814 |
+| W0 | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+
+**`probe_sec01_c01_r16.py`, extended with date boundaries — PASS in off, shadow and enforce:**
+
+| Case | Result |
+|---|---|
+| Ended membership (`to_date` = yesterday) | labor 403, waste 403 |
+| `to_date` = today | 201 (still a member) ✔ |
+| `from_date` = tomorrow | 403 ✔ |
+| `from_date` = today | 201 ✔ |
+
+**SEC-R1 is CLOSED.** `probe_sec01_siblings.py` still passes.
+
+**`membership_filter` callers** (all now date-aware through `is_member` / `member_row`):
+
+| Caller | Purpose |
+|---|---|
+| `deps/auth.py:143` `can_access_project` | project read access |
+| `deps/auth.py:152` `can_manage_project` | project management |
+| `permissions/money_write.py:144` | R16 |
+| `routes/attendance.py:144,152,469,575,764` | attendance |
+| `routes/work_logs.py:149,168` | work logs |
+| `tenancy/data_access.py:429` | data access |
+| `routes/projects.py:456` | the "already on team" check |
+
+- Side effect: an expired membership no longer blocks re-adding the same user (a new row is created). That is reasonable for re-assignment.
+- Debts noted by the PR: **D5** (`assigned_project_ids`, `managed_project_ids` and `project_rows` ignore dates, so list views may still show expired projects) and **D6** (existing project-scope mirrors get the window only at the next sync or bootstrap).
+
+**Blocking findings C02-P1 / C02-P2 are UNCHANGED** on `471eaaa`. `probe_sec01_c02_payments.py`:
+
+| Check | Result |
+|---|---|
+| Identical POST ×2 | **2** Outflow rows |
+| `amount` = `"nan"` / `"inf"` / `"1e309"` | 500 **after** a ledger row is written |
+| tenant B's account | 404 ✔ |
+
+The comment on #69 still applies.
+
+### #56 @ `3234446` — the open items of the orchestrator's AUTH-02 checklist
+
+- **Operator + reason required:** probe A1, plus `tests/test_auth_02_break_glass.py:56-58` (exit usage without them).
+- **AuditEvent written:** `test_success_records_operator_reason_r1_and_notifies_every_owner` (`:105`).
+- **Owner notified:** same test, plus `test_owner_email_is_sent_after_commit_when_configured` (`:151`).
+- **No business-content access:** read in code. `scripts/reset_user_password.py` reads only `users` (the target and the tenant's Owners, `:198`) and writes only the user, reset tokens, audit and notifications. There are no project, finance or document reads.
+- **FG-8:** `test_fg8_a_non_owner_target_is_refused` (`:220`) and `…role_change_during_the_run_writes_nothing` (`:233`).
+- **FG-11:** probe A2. **FG-16:** read in code (`auth_events._key` fails closed). **FG-10:** TTL 730 days.
+
+**Verdict unchanged:** PASS (internal); security, so the Codex review is required.
+
+### #67 @ `98b18ec` — rehearsal status
+
+- C02 changed only `docs/evidence/ST-02/README.md` (a note) and `tests-ST-02-C02.txt`.
+- The README says: *"Репетицията с `shadow` (и с новите `--deployed-by`/`--approved-by`, FG-3 `staging-deployment.json`) **още не е пусната отново**"* (the rehearsal with `shadow`, the new `--deployed-by`/`--approved-by` and FG-3 `staging-deployment.json` has not been re-run yet).
+- So **the rehearsal evidence still predates C02** (`actor: "unknown"`, enforce). This stays **OPEN**: the code passes, but there is no live proof of the shadow default and FG-3/FG-4 on a real stack yet.
+
+### Integration (merge-tree)
+
+| Pair | Status |
+|---|---|
+| #55 × #69 | **conflict**: `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/routes/sales.py` (grew: sales and procurement are new) |
+| #55 × #56 | **conflict**: `backend/app/tenancy/data_access.py`, `docs/architecture/W0-03E-A2B_INVENTORY.md` |
+| #69 × #56 | clean |
+| #55, #69, #56 × main | clean |
