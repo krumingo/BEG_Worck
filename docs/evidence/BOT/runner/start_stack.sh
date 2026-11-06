@@ -10,7 +10,8 @@ mkdir -p "$RUN"
 "$HERE/stop_stack.sh" >/dev/null 2>&1 || true
 
 # 1. docker + mongo
-pgrep dockerd >/dev/null || { (nohup dockerd >/tmp/dockerd.log 2>&1 &); sleep 6; }
+pgrep dockerd >/dev/null || (nohup dockerd >/tmp/dockerd.log 2>&1 &)
+for i in $(seq 1 60); do docker ps >/dev/null 2>&1 && break; sleep 2; done
 docker run -d --rm --name botmongo -p 127.0.0.1:27019:27017 mongo:7.0 --replSet rs0 --bind_ip_all >/dev/null
 for i in $(seq 1 30); do docker exec botmongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
 docker exec botmongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})' >/dev/null
