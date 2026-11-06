@@ -162,6 +162,47 @@ def _tenant_from_ctx(ctx: TenantContext) -> TenantData:
     return TenantData.for_resolved_org(db, ctx.org_id)
 
 
+# ───────────── FG-23 (Р20) — money only for finance roles ─────────────
+# Р20 (Крум 06.11.2026): the company's money is seen only by Owner / Admin /
+# Accountant. Warehouse, site_manager, technician, viewer, driver (and every
+# other role) see the canonical stock and history as QUANTITIES only — no
+# total_value, unit_value or valued layers. Decided from the caller's active
+# RoleAssignments (same records / validity as the Permission Service).
+FINANCE_VALUE_ROLES = frozenset({"owner", "admin", "accountant"})
+VALUE_KEYS = frozenset({"unit_value", "total_value", "movement_value", "value",
+                        "line_value", "layer_value"})
+
+
+async def _sees_values(ctx) -> bool:
+    from datetime import datetime, timezone
+    from app.permissions import service as perm
+    from app.services.warehouse_movements.write_off_policy import _active_assignments
+    user_id = getattr(ctx, "user_id", None)
+    tenant_id = getattr(ctx, "tenant_id", None)
+    if not user_id or not tenant_id:
+        return False
+    active = _active_assignments(await perm._load_assignments(user_id, tenant_id),
+                                 datetime.now(timezone.utc))
+    return any(a.get("role_id") in FINANCE_VALUE_ROLES for a in active)
+
+
+def strip_values(obj: Any) -> Any:
+    """Drop every money key (recursively); quantities stay."""
+    if isinstance(obj, dict):
+        return {k: strip_values(v) for k, v in obj.items() if k not in VALUE_KEYS}
+    if isinstance(obj, list):
+        return [strip_values(v) for v in obj]
+    return obj
+
+
+async def _values_for(ctx, data: Dict[str, Any]) -> Dict[str, Any]:
+    if await _sees_values(ctx):
+        return data
+    out = strip_values(data)
+    out["values_hidden"] = True       # FG-23 / Р20 — the screen shows quantities only
+    return out
+
+
 @router.get("/stock/{item_id}")
 async def read_stock(
     item_id: str,
@@ -185,10 +226,10 @@ async def read_stock(
         location_type=location_type, location_id=location_id, project_id=None,
     )
     tenant = _tenant_from_ctx(ctx)
-    return await stock_at(
+    return await _values_for(ctx, await stock_at(
         tenant.warehouse_transactions,
         tenant_id=ctx.tenant_id, item_id=item_id, location=key,
-    )
+    ))
 
 
 @router.get("/balance/{item_id}")
@@ -242,13 +283,13 @@ async def read_history(
         project_id=project_id,
     )
     tenant = _tenant_from_ctx(ctx)
-    return await movement_history(
+    return await _values_for(ctx, await movement_history(
         tenant.warehouse_transactions,
         tenant_id=ctx.tenant_id, item_id=item_id,
         location_type=location_type, location_id=location_id,
         project_id=project_id, since_iso=since, until_iso=until,
         limit=limit, cursor_after=cursor_after,
-    )
+    ))
 
 
 PROJECT_SCOPED_WARNING_CODES = frozenset({

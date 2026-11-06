@@ -17,6 +17,7 @@ import {
   ACTIONS, LOCATION_TYPES, STATES,
   postMovement, readBalance, readHistory, readIntegrityWarnings,
 } from "@/lib/warehouseCanonicalApi";
+import { stateLabel } from "@/lib/warehouseLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   allowedCommandActions, canReadWarehouseHistory, canReadWarehouseStock,
@@ -245,7 +246,7 @@ function CommandForm({ onResult, allowedActions }) {
                  ? "Трансферът остава „в транзит“, докато целта не го приеме (Rule B, Р18)."
                  : "Изпращането остава „в транзит“, докато обектът не го приеме (Rule B)."}>
           <div className="wh-fixed" data-testid="wh-dispatch-in-transit">
-            in_transit · pending
+            {stateLabel("in_transit")} · очаква приемане
           </div>
         </Field>
       ) : null}
@@ -377,7 +378,9 @@ function StockPanel() {
         {rows.map((r, i) =>
           <div key={i} className="wh-stock-row">
             <div className="wh-stock-loc">
-              {r.location_type}:{r.location_id} <span>({r.state})</span>
+              {r.location_type === "in_transit"
+                ? stateLabel("in_transit") : r.location_type}:{r.location_id}{" "}
+              <span data-testid="wh-stock-state">({stateLabel(r.state)})</span>
             </div>
             <div className="wh-stock-qty">{r.quantity}</div>
           </div>

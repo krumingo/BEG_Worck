@@ -214,9 +214,30 @@ class PermissionGate:
     other.
     """
 
-    def __init__(self, evaluate_fn=None):
+    def __init__(self, evaluate_fn=None, assignments_loader=None):
         from app.permissions.service import evaluate_permission
         self._evaluate = evaluate_fn or evaluate_permission
+        # 5C-C26 Addendum A (Р27) — a write-off FROM A PROJECT is decided by
+        # the Р27 role × membership table (write_off_policy), not by the
+        # generic action grant. Production (no injected evaluator) always
+        # applies Р27; a test gate with an injected evaluator applies it only
+        # when it also injects the assignments loader.
+        self._r27 = evaluate_fn is None or assignments_loader is not None
+        self._assignments_loader = assignments_loader
+
+    async def ensure_project_write_off(self, ctx, tenant_db, *, org_id: str,
+                                       project_id: str) -> None:
+        """Р27 (Крум 06.11.2026, FG-21) — who may write off from a project."""
+        if not self._r27:
+            return await self.ensure(
+                ctx, action=CanonicalAction.WRITE_OFF, source=None,
+                destination=None, project_id=project_id)
+        from app.services.warehouse_movements.write_off_policy import (
+            ensure_project_write_off,
+        )
+        await ensure_project_write_off(
+            ctx, tenant_db, org_id=org_id, project_id=project_id,
+            load_assignments=self._assignments_loader)
 
     async def ensure(
         self,
@@ -644,11 +665,16 @@ class CommandService:
         # Permission (C06 — both source + destination + project scopes).
         # A transfer's physical destination is the TARGET warehouse even
         # though the row goes to in_transit, so its scope is checked now.
-        await self._gate.ensure(
-            ctx, action=action, source=inp.source,
-            destination=inp.transfer_target or inp.destination,
-            project_id=inp.project_id,
-        )
+        r27 = getattr(self._gate, "ensure_project_write_off", None)
+        if action == CanonicalAction.WRITE_OFF and inp.project_id and r27 is not None:
+            # 5C-C26 Addendum A — Р27: write-off from a project (фира).
+            await r27(ctx, tenant_db, org_id=inp.tenant_id, project_id=inp.project_id)
+        else:
+            await self._gate.ensure(
+                ctx, action=action, source=inp.source,
+                destination=inp.transfer_target or inp.destination,
+                project_id=inp.project_id,
+            )
 
         # Shape rules evaluated outside the tx so a malformed envelope
         # cannot reach Mongo.
